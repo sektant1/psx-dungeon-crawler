@@ -66,7 +66,10 @@ void main()
         depthDiff += clamp(dl - d, 0.0, 1.0);
         negDepthDiff += (d - du) + (d - dd) + (d - dr) + (d - dl);
         negDepthDiff = clamp(negDepthDiff, 0.0, 1.0);
-        negDepthDiff = clamp(smoothstep(0.5, 0.5, negDepthDiff) * 10.0, 0.0, 1.0);
+        // Godot original: smoothstep(0.5, 0.5, x) -- undefined per GLSL spec
+        // when edge0 == edge1; every driver degenerates it to step(). Written
+        // explicitly here, identical result.
+        negDepthDiff = step(0.5, negDepthDiff);
         depthDiff = smoothstep(0.2, 0.3, depthDiff);
     }
 
