@@ -81,7 +81,7 @@ int main(int, char**)
     // ------------------------------------------------------------ Room ---
     // 10m interior box stays, "Game/Room" material, floor at y=0.
     const float roomSize = 10.0f;
-    eng::MeshHandle room = r.createInteriorBox(roomSize, 1);
+    eng::MeshHandle room = r.createInteriorBox(roomSize, 7); // dense subdiv: affine (noperspective) UVs warp badly on large tris
     r.attachMesh(r.createNode(eng::kRootNode, {0.0f, roomSize / 2.0f, 0.0f}),
                  room, "Game/Room");
 
