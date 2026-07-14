@@ -191,6 +191,8 @@ fragment_program PSX_FS_LightVolume glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         // no fogColour: the BLEND_ADD fog path fades to black, so the GLSL
         // compiler eliminates that uniform
+        // no farClip either: the BLEND_ADD path writes vec4(0), so the
+        // compiler eliminates that uniform too
         param_named_auto fogParams fog_params
     }
 }
