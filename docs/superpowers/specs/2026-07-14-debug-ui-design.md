@@ -79,7 +79,7 @@ existing setters, plus getters, so panels can display current values.
 
 ## Persistence
 
-Session-only. Each panel (and a global button) serializes its current
+Session-only. A single global button serializes the current
 tweakables to a TOML snippet, copies it to the clipboard via
 `SDL_SetClipboardText`, and mirrors it through `log::info`. No config
 write path, no override layering.
