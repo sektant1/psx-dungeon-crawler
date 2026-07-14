@@ -22,7 +22,12 @@ public:
     ~RenderCore(); // calls shutdown(); safe if already shut down
     bool init(uintptr_t nativeWindowHandle, int width, int height,
               const std::string& title, const std::string& appAssetDir);
+    // Toggles the whole PSX/Stylized post chain (scene downscale + stylize +
+    // dither). Name kept from the dither-only era; the debug UI checkbox and
+    // Renderer::setDitherEnabled route here.
     void setDitherEnabled(bool enabled);
+    // Rebuilds the chain with RT sizes = window / pixelSize. Clamped 1..16.
+    void setPixelSize(int pixelSize);
     void renderFrame(float dt);
     void onResize(int width, int height);
     void writeScreenshot(const std::string& path);
@@ -40,7 +45,9 @@ private:
     Ogre::SceneManager* mSceneMgr = nullptr;
     Ogre::Camera* mCamera = nullptr;
     Ogre::Viewport* mViewport = nullptr;
-    bool mDitherAdded = false;
+    bool mChainAdded = false;
+    bool mChainEnabled = false;
+    int mPixelSize = 3;
     Ogre::OverlaySystem* mOverlaySystem = nullptr; // deleted before Root
     Ogre::ImGuiOverlay* mImGuiOverlay = nullptr;   // owned by OverlayManager
 };

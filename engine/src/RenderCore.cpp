@@ -1,11 +1,13 @@
 #include "RenderCore.h"
 
 #include <Ogre.h>
+#include <OgreCompositor.h>
 #include <OgreCompositorManager.h>
 #include <OgreImGuiOverlay.h>
 #include <OgreOverlayManager.h>
 #include <OgreOverlaySystem.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 
@@ -83,12 +85,39 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
 void RenderCore::setDitherEnabled(bool enabled)
 {
     auto& cm = Ogre::CompositorManager::getSingleton();
-    if (enabled && !mDitherAdded) {
-        cm.addCompositor(mViewport, "PSX/Dither");
-        mDitherAdded = true;
+    if (enabled && !mChainAdded) {
+        cm.addCompositor(mViewport, "PSX/Stylized");
+        mChainAdded = true;
     }
-    if (mDitherAdded)
-        cm.setCompositorEnabled(mViewport, "PSX/Dither", enabled);
+    if (mChainAdded)
+        cm.setCompositorEnabled(mViewport, "PSX/Stylized", enabled);
+    mChainEnabled = enabled;
+}
+
+void RenderCore::setPixelSize(int pixelSize)
+{
+    mPixelSize = std::clamp(pixelSize, 1, 16);
+    Ogre::CompositorPtr comp =
+        Ogre::CompositorManager::getSingleton().getByName("PSX/Stylized");
+    if (!comp)
+        return;
+    // Patch the definition; instances are rebuilt from it on re-add. Scaled
+    // (widthFactor/heightFactor) textures also track window resizes for free.
+    // Add a hair of upward rounding so the float size derivation truncates to
+    // window/pixelSize exactly (e.g. 960 * (1/3) must give 320, not 319).
+    const float f = 1.0f / float(mPixelSize) + 1e-6f;
+    Ogre::CompositionTechnique* tech = comp->getTechnique(0);
+    for (const char* name : {"mrt", "rt_post"}) {
+        auto* def = tech->getTextureDefinition(name);
+        def->widthFactor = f;
+        def->heightFactor = f;
+    }
+    if (mChainAdded) {
+        Ogre::CompositorManager::getSingleton().removeCompositor(mViewport,
+                                                                 "PSX/Stylized");
+        mChainAdded = false;
+        setDitherEnabled(mChainEnabled); // re-add + restore enable state
+    }
 }
 
 void RenderCore::renderFrame(float dt) { mRoot->renderOneFrame(dt); }
