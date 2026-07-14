@@ -8,6 +8,7 @@
 
 #include <Ogre.h>
 
+#include <algorithm>
 #include <vector>
 
 namespace eng {
@@ -247,6 +248,18 @@ void Renderer::setDitherEnabled(bool enabled)
 {
     mImpl->env.dither = enabled;
     mImpl->core.setDitherEnabled(enabled);
+}
+
+void Renderer::setPixelSize(int pixelSize)
+{
+    mImpl->env.pixelSize = std::clamp(pixelSize, 1, 16);
+    mImpl->core.setPixelSize(mImpl->env.pixelSize);
+}
+
+void Renderer::setStylizeEnabled(bool enabled)
+{
+    mImpl->env.stylize = enabled;
+    setMaterialParam("PSX/PixelStylize", "stylizeEnabled", enabled ? 1.0f : 0.0f);
 }
 
 const EnvState& Renderer::envState() const { return mImpl->env; }

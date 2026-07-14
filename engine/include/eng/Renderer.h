@@ -37,6 +37,8 @@ struct EnvState {
     float nearClip = 0.05f;
     float farClip = 4000.0f;
     bool dither = false;
+    int pixelSize = 3;       // PSX/Stylized RT = window / pixelSize
+    bool stylize = true;     // outline/highlight pass active
 };
 
 // Public renderer facade. All Ogre types stay inside engine/src.
@@ -86,6 +88,8 @@ public:
 
     // --- post + verification ---------------------------------------------
     void setDitherEnabled(bool enabled);
+    void setPixelSize(int pixelSize);      // 1..16, rebuilds the post chain
+    void setStylizeEnabled(bool enabled);  // off = pass-through (PSX look only)
     void writeScreenshot(const std::string& path);
 
 private:
