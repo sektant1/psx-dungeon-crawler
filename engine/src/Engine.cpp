@@ -22,7 +22,7 @@ struct Engine::Impl {
 };
 
 Engine::Engine() : mImpl(new Impl) {}
-Engine::~Engine() = default;
+Engine::~Engine() { shutdown(); } // defensive; shutdown() is idempotent
 
 bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
 {
@@ -35,11 +35,15 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     if (!mImpl->platform.init(title, width, height))
         return false;
     if (!detail::coreOf(mRenderer).init(mImpl->platform.nativeHandle(), width,
-                                        height, title, appAssetDir))
+                                        height, title, appAssetDir)) {
+        shutdown();
         return false;
+    }
     detail::registerRoot(mRenderer);
-    if (!mInput.loadBindings(mConfig))
+    if (!mInput.loadBindings(mConfig)) {
+        shutdown();
         return false;
+    }
 
     const char* shot = std::getenv("PSX_SCREENSHOT");
     if (shot)
@@ -57,6 +61,9 @@ float Engine::tick()
         else if (e.type == SDL_WINDOWEVENT &&
                  e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
             detail::coreOf(mRenderer).onResize(e.window.data1, e.window.data2);
+        else if (e.type == SDL_WINDOWEVENT &&
+                 e.window.event == SDL_WINDOWEVENT_CLOSE)
+            mClose = true;
         else
             mInput.mImpl->onEvent(e);
     }

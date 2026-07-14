@@ -24,7 +24,7 @@ public:
     float tick(); // pump events, update input; returns dt clamped to 0.1 s
     bool shouldClose() const { return mClose; }
     void requestClose() { mClose = true; }
-    void renderFrame(float dt);
+    void renderFrame(float dt); // may set shouldClose() (screenshot hook)
     void shutdown();
 
     Renderer& renderer() { return mRenderer; }

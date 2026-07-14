@@ -8,6 +8,8 @@
 
 namespace eng {
 
+RenderCore::~RenderCore() { shutdown(); }
+
 bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
                       const std::string& title, const std::string& appAssetDir)
 {

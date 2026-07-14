@@ -34,10 +34,10 @@ bool Platform::init(const std::string& title, int width, int height)
 
 void Platform::shutdown()
 {
-    if (mWindow) {
-        SDL_DestroyWindow(mWindow);
-        mWindow = nullptr;
-    }
+    if (!mWindow)
+        return;
+    SDL_DestroyWindow(mWindow);
+    mWindow = nullptr;
     SDL_Quit();
 }
 

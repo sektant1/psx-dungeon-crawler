@@ -17,6 +17,7 @@ namespace eng {
 class RenderCore
 {
 public:
+    ~RenderCore(); // calls shutdown(); safe if already shut down
     bool init(uintptr_t nativeWindowHandle, int width, int height,
               const std::string& title, const std::string& appAssetDir);
     void setDitherEnabled(bool enabled);
