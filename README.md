@@ -17,6 +17,10 @@ Requires system OGRE 14.x (plugins `RenderSystem_GL3Plus`, `Plugin_ParticleFX`,
 `SDL_VIDEODRIVER=x11` (XWayland). `PSX_SCREENSHOT=/path.png` renders 90 frames,
 saves a screenshot, and exits (verification hook, both targets).
 
+`F1` toggles the ImGui debug panel (stats, PSX shader tuning, camera, game
+tunables; "Copy all as TOML" puts current values on the clipboard).
+`PSX_DEBUG_UI=1` forces it open (screenshot verification).
+
 ## Layout
 
 ```
