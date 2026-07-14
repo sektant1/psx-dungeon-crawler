@@ -25,6 +25,20 @@ struct LightDesc {
     float range = 3.0f;     // point lights only
 };
 
+// Last-set environment/camera values, cached so the debug UI can display
+// and edit them. Ambient/fog colours are linear; background is raw sRGB
+// (matches the setter conventions).
+struct EnvState {
+    glm::vec3 ambient{0.0f};
+    glm::vec3 fogColour{0.0f};
+    float fogDensity = 0.0f;
+    glm::vec3 background{0.0f};
+    float fovDeg = 70.0f;    // RenderCore init defaults
+    float nearClip = 0.05f;
+    float farClip = 4000.0f;
+    bool dither = false;
+};
+
 // Public renderer facade. All Ogre types stay inside engine/src.
 // Colour convention: shading runs in linear space; callers linearise
 // sRGB-picked colours themselves (pow 2.2), as the PSX shaders expect.
@@ -68,6 +82,7 @@ public:
     void setAmbient(glm::vec3 colour);
     void setFog(glm::vec3 colour, float expDensity);
     void setBackground(glm::vec3 colour);
+    const EnvState& envState() const;
 
     // --- post + verification ---------------------------------------------
     void setDitherEnabled(bool enabled);

@@ -34,6 +34,7 @@ struct Renderer::Impl {
     std::vector<Ogre::SceneNode*> nodes; // nodes[id-1]; id 1 == scene root
     std::vector<std::string> meshNames;  // meshNames[id-1]
     int nameCounter = 0;
+    EnvState env;
 
     Ogre::SceneNode* node(NodeHandle h, const char* what)
     {
@@ -156,11 +157,14 @@ void Renderer::attachLight(NodeHandle node, const LightDesc& desc)
 
 void Renderer::setCameraFov(float degrees)
 {
+    mImpl->env.fovDeg = degrees;
     mImpl->core.camera()->setFOVy(Ogre::Degree(degrees));
 }
 
 void Renderer::setCameraClip(float nearDist, float farDist)
 {
+    mImpl->env.nearClip = nearDist;
+    mImpl->env.farClip = farDist;
     mImpl->core.camera()->setNearClipDistance(nearDist);
     mImpl->core.camera()->setFarClipDistance(farDist);
 }
@@ -222,23 +226,30 @@ void Renderer::setMaterialParam(const std::string& m, const std::string& p, glm:
 
 void Renderer::setAmbient(glm::vec3 colour)
 {
+    mImpl->env.ambient = colour;
     mImpl->core.sceneMgr()->setAmbientLight(toColour(colour));
 }
 
 void Renderer::setFog(glm::vec3 colour, float expDensity)
 {
+    mImpl->env.fogColour = colour;
+    mImpl->env.fogDensity = expDensity;
     mImpl->core.sceneMgr()->setFog(Ogre::FOG_EXP, toColour(colour), expDensity);
 }
 
 void Renderer::setBackground(glm::vec3 colour)
 {
+    mImpl->env.background = colour;
     mImpl->core.viewport()->setBackgroundColour(toColour(colour));
 }
 
 void Renderer::setDitherEnabled(bool enabled)
 {
+    mImpl->env.dither = enabled;
     mImpl->core.setDitherEnabled(enabled);
 }
+
+const EnvState& Renderer::envState() const { return mImpl->env; }
 
 void Renderer::writeScreenshot(const std::string& path)
 {
