@@ -15,6 +15,7 @@ add_library(eng STATIC
     engine/src/Renderer.cpp
     engine/src/Log.cpp
     engine/src/Config.cpp
+    engine/src/Input.cpp
 )
 target_include_directories(eng
     PUBLIC engine/include
