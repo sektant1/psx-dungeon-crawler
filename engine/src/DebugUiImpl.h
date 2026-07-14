@@ -3,6 +3,8 @@
 
 #include <SDL2/SDL.h>
 
+#include <glm/glm.hpp>
+
 #include <array>
 #include <cstddef>
 #include <utility>
@@ -30,6 +32,15 @@ struct DebugUi::Impl {
     float colDepth = 15.0f;
     bool ditherBanding = true;
 
+    // Pixel-art stylizer tunables (defaults match Stylize_FS in psx.program;
+    // colours are raw sRGB, mixed post-encode like the Godot reference).
+    bool stylizeShadows = true;
+    bool stylizeHighlights = true;
+    float shadowStrength = 0.4f;
+    float highlightStrength = 0.1f;
+    glm::vec3 shadowColor{0.0f};
+    glm::vec3 highlightColor{1.0f};
+
     void init(RenderCore* c, Renderer* r) { core = c; renderer = r; }
 
     // Feeds one SDL event to ImGui. Returns true when ImGui consumed it
@@ -43,6 +54,7 @@ struct DebugUi::Impl {
     // Widget bodies (DebugUi.cpp).
     void drawStats();
     void drawShaders();
+    void drawPixelArt();
     void drawCamera();
     void copyToml();
 };

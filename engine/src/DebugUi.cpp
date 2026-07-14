@@ -179,6 +179,8 @@ void DebugUi::Impl::buildFrame(float dt)
         drawStats();
     if (ImGui::CollapsingHeader("PSX Shaders"))
         drawShaders();
+    if (ImGui::CollapsingHeader("Pixel Art"))
+        drawPixelArt();
     if (ImGui::CollapsingHeader("Camera"))
         drawCamera();
     for (auto& [name, fn] : panels)
@@ -232,6 +234,34 @@ void DebugUi::Impl::drawShaders()
         renderer->setBackground(bg);
 }
 
+void DebugUi::Impl::drawPixelArt()
+{
+    const EnvState& env = renderer->envState();
+    int pixelSize = env.pixelSize;
+    if (ImGui::SliderInt("pixel size", &pixelSize, 1, 16))
+        renderer->setPixelSize(pixelSize);
+    bool stylize = env.stylize;
+    if (ImGui::Checkbox("stylize (outline+highlight)", &stylize))
+        renderer->setStylizeEnabled(stylize);
+    if (ImGui::Checkbox("shadows", &stylizeShadows))
+        renderer->setMaterialParam("PSX/PixelStylize", "shadowsEnabled",
+                                   stylizeShadows ? 1.0f : 0.0f);
+    if (ImGui::Checkbox("highlights", &stylizeHighlights))
+        renderer->setMaterialParam("PSX/PixelStylize", "highlightsEnabled",
+                                   stylizeHighlights ? 1.0f : 0.0f);
+    if (ImGui::SliderFloat("shadow strength", &shadowStrength, 0.0f, 1.0f))
+        renderer->setMaterialParam("PSX/PixelStylize", "shadowStrength",
+                                   shadowStrength);
+    if (ImGui::SliderFloat("highlight strength", &highlightStrength, 0.0f, 1.0f))
+        renderer->setMaterialParam("PSX/PixelStylize", "highlightStrength",
+                                   highlightStrength);
+    if (ImGui::ColorEdit3("shadow colour", &shadowColor.x))
+        renderer->setMaterialParam("PSX/PixelStylize", "shadowColor", shadowColor);
+    if (ImGui::ColorEdit3("highlight colour", &highlightColor.x))
+        renderer->setMaterialParam("PSX/PixelStylize", "highlightColor",
+                                   highlightColor);
+}
+
 void DebugUi::Impl::drawCamera()
 {
     const EnvState& env = renderer->envState();
@@ -249,13 +279,21 @@ void DebugUi::Impl::drawCamera()
 void DebugUi::Impl::copyToml()
 {
     const EnvState& env = renderer->envState();
-    char buf[768];
+    char buf[1024];
     std::snprintf(buf, sizeof(buf),
                   "[debug_tuning]\n"
                   "precision_multiplier = %.4f\n"
                   "dither = %s\n"
                   "col_depth = %.1f\n"
                   "dither_banding = %s\n"
+                  "pixel_size = %d\n"
+                  "stylize = %s\n"
+                  "stylize_shadows = %s\n"
+                  "stylize_highlights = %s\n"
+                  "shadow_strength = %.2f\n"
+                  "highlight_strength = %.2f\n"
+                  "shadow_color_srgb = [%.4f, %.4f, %.4f]\n"
+                  "highlight_color_srgb = [%.4f, %.4f, %.4f]\n"
                   "ambient_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_colour_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_density = %.4f\n"
@@ -264,7 +302,13 @@ void DebugUi::Impl::copyToml()
                   "near_clip = %.3f\n"
                   "far_clip = %.1f\n",
                   precisionMultiplier, env.dither ? "true" : "false", colDepth,
-                  ditherBanding ? "true" : "false", env.ambient.x, env.ambient.y,
+                  ditherBanding ? "true" : "false",
+                  env.pixelSize, env.stylize ? "true" : "false",
+                  stylizeShadows ? "true" : "false",
+                  stylizeHighlights ? "true" : "false", shadowStrength,
+                  highlightStrength, shadowColor.x, shadowColor.y, shadowColor.z,
+                  highlightColor.x, highlightColor.y, highlightColor.z,
+                  env.ambient.x, env.ambient.y,
                   env.ambient.z, env.fogColour.x, env.fogColour.y,
                   env.fogColour.z, env.fogDensity, env.background.x,
                   env.background.y, env.background.z, env.fovDeg, env.nearClip,
