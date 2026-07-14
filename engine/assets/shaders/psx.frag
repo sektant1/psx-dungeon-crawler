@@ -21,7 +21,12 @@ uniform float alphaScissor;
 uniform vec4 fogColour;   // scene fog colour
 uniform vec4 fogParams;   // x = density (Ogre FOG_EXP)
 
-out vec4 fragColour;
+layout(location = 0) out vec4 fragColour;
+// MRT surface 1 (PSX/Stylized compositor): view-space normal encoded
+// *0.5+0.5, alpha = linear view depth / far clip. When the scene renders
+// straight to the window (no compositor) GL discards this output.
+layout(location = 1) out vec4 fragNormalDepth;
+uniform float farClip;
 
 // Godot shades in LINEAR space and encodes to sRGB for display. Reproduce
 // that: sRGB inputs (albedo texture, source_color uniforms) are linearised,
@@ -84,4 +89,11 @@ void main()
 #endif
 
     fragColour = vec4(toSrgb(rgb), alpha);
+#ifdef BLEND_ADD
+    // Additive light volumes must not disturb edge data: adding zero is a no-op.
+    fragNormalDepth = vec4(0.0);
+#else
+    fragNormalDepth = vec4(normalize(vNormalVS) * 0.5 + 0.5,
+                           vViewDepth / farClip);
+#endif
 }

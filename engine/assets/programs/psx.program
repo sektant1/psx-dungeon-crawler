@@ -66,6 +66,7 @@ fragment_program PSX_FS_Lit glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -78,6 +79,7 @@ fragment_program PSX_FS_Unlit glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -91,6 +93,7 @@ fragment_program PSX_FS_LitMetal glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -104,6 +107,7 @@ fragment_program PSX_FS_UnlitMetal glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -117,6 +121,7 @@ fragment_program PSX_FS_LitTransparent glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -130,6 +135,7 @@ fragment_program PSX_FS_UnlitTransparent glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -144,6 +150,7 @@ fragment_program PSX_FS_LitAlphaScissor glsl
         param_named alphaScissor float 0.1
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -158,6 +165,7 @@ fragment_program PSX_FS_UnlitAlphaScissor glsl
         param_named alphaScissor float 0.1
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
@@ -170,6 +178,7 @@ fragment_program PSX_FS_LitNoTex glsl
         param_named modulateColor float4 1.0 1.0 1.0 1.0
         param_named_auto fogColour fog_colour
         param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
     }
 }
 
