@@ -16,6 +16,8 @@ add_library(eng STATIC
     engine/src/Log.cpp
     engine/src/Config.cpp
     engine/src/Input.cpp
+    engine/src/Platform.cpp
+    engine/src/Engine.cpp
 )
 target_include_directories(eng
     PUBLIC engine/include
