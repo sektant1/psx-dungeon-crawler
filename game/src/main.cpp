@@ -3,6 +3,8 @@
 
 #include "FpsController.h"
 
+#include <imgui.h>
+
 #include <eng/Engine.h>
 #include <eng/Math.h>
 
@@ -218,6 +220,12 @@ int main(int, char**)
                 float(engine.config().getNumber("player.mouse_sensitivity", 0.002)),
                 {-margin, 0.0f, -margin}, {margin, 0.0f, margin});
     engine.input().setMouseGrab(true);
+
+    engine.debugUi().addPanel("Player", [&player] {
+        ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);
+        ImGui::SliderFloat("mouse sensitivity", &player.sensitivity(), 0.0005f,
+                           0.01f, "%.4f");
+    });
 
     // ---------------------------------------------------------------- loop ---
     float animTime = 0.0f;

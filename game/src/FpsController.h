@@ -18,6 +18,9 @@ public:
               float sensitivity, glm::vec3 roomMin, glm::vec3 roomMax);
     void update(eng::Input& in, eng::Renderer& r, float dt);
 
+    float& speed() { return mSpeed; }
+    float& sensitivity() { return mSens; }
+
 private:
     eng::NodeHandle mBody{};
     eng::NodeHandle mHead{};
