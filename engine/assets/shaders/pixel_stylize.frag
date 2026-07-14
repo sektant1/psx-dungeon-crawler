@@ -23,7 +23,12 @@ out vec4 fragColour;
 
 float getDepth(vec2 suv)
 {
-    return texture(normalDepthTex, suv).a * farClip;
+    // Background pixels carry the clear alpha: 1.0 when the clear uses the
+    // viewport background (opaque), 0.0 when Ogre clears the intermediate RT
+    // to transparent black. Geometry always writes a > 0 (view depth >= near
+    // clip), so map the a == 0 case to the far plane as well.
+    float a = texture(normalDepthTex, suv).a;
+    return a <= 0.0 ? farClip : a * farClip;
 }
 
 vec3 getNormal(vec2 suv)
