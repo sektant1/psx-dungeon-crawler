@@ -1,16 +1,35 @@
-// Port of the DitherBanding stage of post_process/pp_stack.tscn:
-// the world is rendered into a 320x240 SubViewport (960x720 / stretch_shrink 3),
-// pp_band-dither.gdshader is applied there, and the result is stretched to the
-// window with nearest filtering.
-compositor PSX/Dither
+// PSX post stack: scene -> low-res MRT (colour + normal/depth) -> pixel
+// stylizer (outlines/highlights, pixelart_stylizer.gdshader port) -> dither/
+// colour-depth pass (pp_band-dither.gdshader port) -> window, nearest-upscaled.
+//
+// Texture sizes are target_width_scaled/target_height_scaled with factor
+// 1/pixelSize; RenderCore::setPixelSize patches the factors on the definition
+// and rebuilds the chain. Default factor 0.333333 = pixel size 3 (matches the
+// original Godot pp_stack stretch_shrink 3).
+//
+// mrt is FLOAT16 on both surfaces: surface 1 stores view depth / farClip in
+// alpha and 8-bit alpha would quantize edge detection to mush.
+compositor PSX/Stylized
 {
     technique
     {
-        texture rt 512 448 PF_BYTE_RGBA
+        texture mrt target_width_scaled 0.333333 target_height_scaled 0.333333 PF_FLOAT16_RGBA PF_FLOAT16_RGBA
+        texture rt_post target_width_scaled 0.333333 target_height_scaled 0.333333 PF_BYTE_RGBA
 
-        target rt
+        target mrt
         {
-            input previous      // scene renders into the low-res target
+            input previous      // scene renders into the low-res MRT
+        }
+
+        target rt_post
+        {
+            input none
+            pass render_quad
+            {
+                material PSX/PixelStylize
+                input 0 mrt 0
+                input 1 mrt 1
+            }
         }
 
         target_output
@@ -19,7 +38,7 @@ compositor PSX/Dither
             pass render_quad
             {
                 material PSX/DitherPost
-                input 0 rt
+                input 0 rt_post
             }
         }
     }
