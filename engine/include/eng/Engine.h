@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/Config.h>
+#include <eng/DebugUi.h>
 #include <eng/Input.h>
 #include <eng/Renderer.h>
 
@@ -30,6 +31,7 @@ public:
     Renderer& renderer() { return mRenderer; }
     Input& input() { return mInput; }
     Config& config() { return mConfig; }
+    DebugUi& debugUi() { return mDebugUi; }
 
 private:
     struct Impl;
@@ -37,6 +39,7 @@ private:
     Config mConfig;
     Input mInput;
     Renderer mRenderer;
+    DebugUi mDebugUi;
     bool mClose = false;
 };
 

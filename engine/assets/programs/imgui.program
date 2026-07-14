@@ -1,0 +1,21 @@
+// GPU programs for the Dear ImGui debug overlay. OGRE's stock ImGui material
+// is fixed-function; GL3Plus has no fixed-function pipeline, so RenderCore
+// swaps in these hand-written GLSL programs (keeping the engine RTSS-free).
+
+vertex_program ImGui/VS glsl
+{
+    source imgui.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program ImGui/FS glsl
+{
+    source imgui.frag
+    default_params
+    {
+        param_named fontTex int 0
+    }
+}

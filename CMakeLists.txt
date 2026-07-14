@@ -18,6 +18,7 @@ add_library(eng STATIC
     engine/src/Input.cpp
     engine/src/Platform.cpp
     engine/src/Engine.cpp
+    engine/src/DebugUi.cpp
 )
 target_include_directories(eng
     PUBLIC engine/include

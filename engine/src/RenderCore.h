@@ -32,6 +32,7 @@ public:
     Ogre::Camera* camera() const { return mCamera; }
     Ogre::Viewport* viewport() const { return mViewport; }
     Ogre::RenderWindow* window() const { return mWindow; }
+    Ogre::ImGuiOverlay* imguiOverlay() const { return mImGuiOverlay; }
 
 private:
     Ogre::Root* mRoot = nullptr;

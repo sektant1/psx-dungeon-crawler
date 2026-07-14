@@ -2,6 +2,7 @@
 
 #include <eng/Log.h>
 
+#include "DebugUiImpl.h"
 #include "InputImpl.h"
 #include "Platform.h"
 #include "RenderCore.h"
@@ -19,6 +20,7 @@ struct Engine::Impl {
     std::chrono::steady_clock::time_point prev;
     std::string screenshotPath;
     int frameCount = 0;
+    bool grabBeforeDebugUi = false;
 };
 
 Engine::Engine() : mImpl(new Impl) {}
@@ -40,6 +42,9 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
         return false;
     }
     detail::registerRoot(mRenderer);
+    mDebugUi.mImpl->init(&detail::coreOf(mRenderer), &mRenderer);
+    if (std::getenv("PSX_DEBUG_UI"))
+        mDebugUi.setVisible(true);
     if (!mInput.loadBindings(mConfig)) {
         shutdown();
         return false;
@@ -64,8 +69,23 @@ float Engine::tick()
         else if (e.type == SDL_WINDOWEVENT &&
                  e.window.event == SDL_WINDOWEVENT_CLOSE)
             mClose = true;
-        else
-            mInput.mImpl->onEvent(e);
+        else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                 e.key.keysym.sym == SDLK_F1) {
+            const bool show = !mDebugUi.visible();
+            if (show) {
+                mImpl->grabBeforeDebugUi = mInput.mouseGrabbed();
+                mInput.setMouseGrab(false);
+            } else {
+                mInput.setMouseGrab(mImpl->grabBeforeDebugUi);
+            }
+            mDebugUi.setVisible(show);
+        } else {
+            const bool consumed = mDebugUi.mImpl->onEvent(e);
+            // KEYUP always reaches Input (no stuck keys); everything else
+            // stops here when ImGui captured it.
+            if (!consumed || e.type == SDL_KEYUP)
+                mInput.mImpl->onEvent(e);
+        }
     }
     auto now = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float>(now - mImpl->prev).count();
@@ -75,6 +95,7 @@ float Engine::tick()
 
 void Engine::renderFrame(float dt)
 {
+    mDebugUi.mImpl->buildFrame(dt);
     detail::coreOf(mRenderer).renderFrame(dt);
     if (!mImpl->screenshotPath.empty() && ++mImpl->frameCount == 90) {
         detail::coreOf(mRenderer).writeScreenshot(mImpl->screenshotPath);

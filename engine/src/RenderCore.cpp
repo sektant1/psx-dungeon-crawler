@@ -60,7 +60,22 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     mSceneMgr->addRenderQueueListener(mOverlaySystem);
     mImGuiOverlay = new Ogre::ImGuiOverlay();
     mImGuiOverlay->setZOrder(300);
-    mImGuiOverlay->hide(); // shown by DebugUi after the first NewFrame()
+    // show() runs the (private) Overlay::initialise() override, which builds
+    // the ImGui font atlas and creates "ImGui/material". Without it the first
+    // ImGuiOverlay::NewFrame() dereferences an unbuilt atlas and crashes.
+    // Hide again immediately; DebugUi re-shows after its first NewFrame().
+    mImGuiOverlay->show();
+    mImGuiOverlay->hide();
+
+    // OGRE's ImGui material is fixed-function, which GL3Plus cannot render
+    // ("no Vertex Shader ... use RTSS"). Swap in the hand-written GLSL pair
+    // so the whole engine stays RTSS-free (imgui.program / imgui.{vert,frag}).
+    if (auto imguiMat = Ogre::MaterialManager::getSingleton().getByName(
+            "ImGui/material", Ogre::RGN_INTERNAL)) {
+        Ogre::Pass* pass = imguiMat->getTechnique(0)->getPass(0);
+        pass->setVertexProgram("ImGui/VS");
+        pass->setFragmentProgram("ImGui/FS");
+    }
     Ogre::OverlayManager::getSingleton().addOverlay(mImGuiOverlay);
     return true;
 }
