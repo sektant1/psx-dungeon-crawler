@@ -8,6 +8,8 @@ class RenderWindow;
 class SceneManager;
 class Camera;
 class Viewport;
+class OverlaySystem;
+class ImGuiOverlay;
 } // namespace Ogre
 
 namespace eng {
@@ -29,6 +31,7 @@ public:
     Ogre::SceneManager* sceneMgr() const { return mSceneMgr; }
     Ogre::Camera* camera() const { return mCamera; }
     Ogre::Viewport* viewport() const { return mViewport; }
+    Ogre::RenderWindow* window() const { return mWindow; }
 
 private:
     Ogre::Root* mRoot = nullptr;
@@ -37,6 +40,8 @@ private:
     Ogre::Camera* mCamera = nullptr;
     Ogre::Viewport* mViewport = nullptr;
     bool mDitherAdded = false;
+    Ogre::OverlaySystem* mOverlaySystem = nullptr; // deleted before Root
+    Ogre::ImGuiOverlay* mImGuiOverlay = nullptr;   // owned by OverlayManager
 };
 
 } // namespace eng

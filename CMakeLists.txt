@@ -23,7 +23,7 @@ target_include_directories(eng
     PUBLIC engine/include
     PRIVATE third_party
 )
-target_link_libraries(eng PUBLIC glm::glm PRIVATE OgreMain SDL2::SDL2)
+target_link_libraries(eng PUBLIC glm::glm OgreOverlay PRIVATE OgreMain SDL2::SDL2)
 target_compile_definitions(eng PRIVATE
     ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
     OGRE_PLUGIN_DIR="${OGRE_PLUGIN_DIR}"

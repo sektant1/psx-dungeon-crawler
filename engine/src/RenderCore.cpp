@@ -2,6 +2,9 @@
 
 #include <Ogre.h>
 #include <OgreCompositorManager.h>
+#include <OgreImGuiOverlay.h>
+#include <OgreOverlayManager.h>
+#include <OgreOverlaySystem.h>
 
 #include <filesystem>
 #include <string>
@@ -50,6 +53,15 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
 
     mViewport = mWindow->addViewport(mCamera);
     mViewport->setBackgroundColour(Ogre::ColourValue::Black);
+
+    // Debug UI: ImGui renders through the overlay queue. The ImGuiOverlay
+    // constructor creates the ImGui context; OverlayManager owns the overlay.
+    mOverlaySystem = new Ogre::OverlaySystem();
+    mSceneMgr->addRenderQueueListener(mOverlaySystem);
+    mImGuiOverlay = new Ogre::ImGuiOverlay();
+    mImGuiOverlay->setZOrder(300);
+    mImGuiOverlay->hide(); // shown by DebugUi after the first NewFrame()
+    Ogre::OverlayManager::getSingleton().addOverlay(mImGuiOverlay);
     return true;
 }
 
@@ -86,8 +98,13 @@ void RenderCore::shutdown()
         return;
     if (mViewport && mWindow)
         Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);
+    if (mSceneMgr && mOverlaySystem)
+        mSceneMgr->removeRenderQueueListener(mOverlaySystem);
     if (mSceneMgr)
         mRoot->destroySceneManager(mSceneMgr);
+    delete mOverlaySystem; // destroys OverlayManager + ImGuiOverlay (+ImGui ctx)
+    mOverlaySystem = nullptr;
+    mImGuiOverlay = nullptr;
     delete mRoot; // last: tears down window, render system, resource managers
     mRoot = nullptr;
     mWindow = nullptr;
