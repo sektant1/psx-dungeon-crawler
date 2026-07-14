@@ -30,9 +30,7 @@ target_compile_definitions(eng PRIVATE
 )
 
 add_executable(psx_demo samples/psx-demo/src/main.cpp)
-# Transitional: demo uses engine internals until ported to the public API.
-target_include_directories(psx_demo PRIVATE engine/src)
-target_link_libraries(psx_demo PRIVATE eng OgreMain SDL2::SDL2)
+target_link_libraries(psx_demo PRIVATE eng)
 target_compile_definitions(psx_demo PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/psx-demo/assets"
 )

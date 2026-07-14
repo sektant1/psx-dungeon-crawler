@@ -1,0 +1,9 @@
+[window]
+title = "ogre-psx-demo"
+width = 960
+height = 720
+
+[bindings]
+pause = ["Space", "Return"]
+restart = "R"
+quit = "Escape"

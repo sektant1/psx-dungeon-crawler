@@ -1,0 +1,78 @@
+06:33:24: Creating resource group General
+06:33:24: Creating resource group OgreInternal
+06:33:24: Creating resource group OgreAutodetect
+06:33:24: SceneManagerFactory for type 'DefaultSceneManager' registered.
+06:33:24: Registering ResourceManager for type Material
+06:33:24: Registering ResourceManager for type Mesh
+06:33:24: Registering ResourceManager for type Skeleton
+06:33:24: MovableObjectFactory for type 'ParticleSystem' registered.
+06:33:24: ArchiveFactory for type 'FileSystem' registered
+06:33:24: ArchiveFactory for type 'Zip' registered
+06:33:24: ArchiveFactory for type 'EmbeddedZip' registered
+06:33:24: DDS codec registering
+06:33:24: ETC codec registering
+06:33:24: ASTC codec registering
+06:33:24: Registering ResourceManager for type GpuProgram
+06:33:24: Registering ResourceManager for type Compositor
+06:33:24: MovableObjectFactory for type 'Entity' registered.
+06:33:24: MovableObjectFactory for type 'Light' registered.
+06:33:24: MovableObjectFactory for type 'BillboardSet' registered.
+06:33:24: MovableObjectFactory for type 'ManualObject' registered.
+06:33:24: MovableObjectFactory for type 'BillboardChain' registered.
+06:33:24: MovableObjectFactory for type 'RibbonTrail' registered.
+06:33:24: MovableObjectFactory for type 'StaticGeometry' registered.
+06:33:24: MovableObjectFactory for type 'Rectangle2D' registered.
+06:33:24: *-*-* OGRE Initialising
+06:33:24: *-*-* Version 14.5.2 (Tsathoggua)
+06:33:24: Loading library /usr/lib/OGRE/RenderSystem_GL3Plus.so.14.5
+06:33:24: Installing plugin: GL 3+ RenderSystem
+06:33:24: OpenGL 3+ Rendering Subsystem created.
+06:33:24: Plugin successfully installed
+06:33:24: Loading library /usr/lib/OGRE/Plugin_ParticleFX.so.14.5
+06:33:24: Installing plugin: ParticleFX
+06:33:24: Particle Emitter Type 'Point' registered
+06:33:24: Particle Emitter Type 'Box' registered
+06:33:24: Particle Emitter Type 'Ellipsoid' registered
+06:33:24: Particle Emitter Type 'Cylinder' registered
+06:33:24: Particle Emitter Type 'Ring' registered
+06:33:24: Particle Emitter Type 'HollowEllipsoid' registered
+06:33:24: Particle Affector Type 'LinearForce' registered
+06:33:24: Particle Affector Type 'ColourFader' registered
+06:33:24: Particle Affector Type 'ColourFader2' registered
+06:33:24: Particle Affector Type 'ColourImage' registered
+06:33:24: Particle Affector Type 'ColourInterpolator' registered
+06:33:24: Particle Affector Type 'Scaler' registered
+06:33:24: Particle Affector Type 'Rotator' registered
+06:33:24: Particle Affector Type 'DirectionRandomiser' registered
+06:33:24: Particle Affector Type 'DeflectorPlane' registered
+06:33:24: Particle Affector Type 'TextureAnimator' registered
+06:33:24: Plugin successfully installed
+06:33:24: Loading library /usr/lib/OGRE/Codec_STBI.so.14.5
+06:33:24: stb_image - v2.30 - public domain image loader
+06:33:24: Supported formats: jpeg,jpg,png,bmp,psd,tga,gif,pic,ppm,pgm,hdr
+06:33:24: CPU Identifier & Features
+06:33:24: -------------------------
+06:33:24:  *   CPU ID: GenuineIntel: Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz
+06:33:24:  *          SSE: yes
+06:33:24:  *         SSE2: yes
+06:33:24:  *         SSE3: yes
+06:33:24:  *        SSE41: yes
+06:33:24:  *        SSE42: yes
+06:33:24:  *          MMX: yes
+06:33:24:  *       MMXEXT: yes
+06:33:24:  *        3DNOW: no
+06:33:24:  *     3DNOWEXT: no
+06:33:24:  *         CMOV: yes
+06:33:24:  *          TSC: yes
+06:33:24:  *INVARIANT TSC: yes
+06:33:24:  *          FPU: yes
+06:33:24:  *          PRO: yes
+06:33:24:  *           HT: no
+06:33:24: -------------------------
+06:33:24: ******************************
+*** Starting EGL Subsystem ***
+******************************
+06:33:24: EGL_VENDOR = Mesa Project
+06:33:24: EGL_VERSION = 1.5
+06:33:24: EGL_EXTENSIONS = EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration EGL_EXT_device_query EGL_KHR_client_get_all_proc_addresses EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11 EGL_EXT_platform_x11 EGL_EXT_platform_device EGL_MESA_platform_surfaceless EGL_EXT_explicit_device EGL_KHR_platform_wayland EGL_EXT_platform_wayland EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_EXT_platform_xcb EGL_ANDROID_blob_cache EGL_ANDROID_native_fence_sync EGL_CHROMIUM_sync_control EGL_ANGLE_sync_control_rate EGL_EXT_buffer_age EGL_EXT_config_select_group EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import EGL_EXT_image_dma_buf_import_modifiers EGL_EXT_query_reset_notification_strategy EGL_EXT_surface_compression EGL_EXT_swap_buffers_with_damage EGL_IMG_context_priority EGL_KHR_cl_event2 EGL_KHR_config_attribs EGL_KHR_context_flush_control EGL_KHR_create_context EGL_KHR_create_context_no_error EGL_KHR_fence_sync EGL_KHR_get_all_proc_addresses EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base EGL_KHR_image_pixmap EGL_KHR_no_config_context EGL_KHR_partial_update EGL_KHR_reusable_sync EGL_KHR_surfaceless_context EGL_KHR_swap_buffers_with_damage EGL_EXT_pixel_format_float EGL_KHR_wait_sync EGL_MESA_configless_context EGL_MESA_gl_interop EGL_MESA_image_dma_buf_export EGL_MESA_query_driver EGL_MESA_x11_native_visual_id EGL_NOK_texture_from_pixmap 
+06:33:24: RenderSystem::_createRenderWindow "ogre-psx-demo", 960x720 windowed  miscParams: externalWindowHandle=94328509685392 vsync=true 
