@@ -16,7 +16,6 @@ struct Input::Impl {
     std::set<SDL_Keycode> down;
     std::set<SDL_Keycode> pressed;
     bool mouseClicked = false;
-    bool grabbed = false;
     glm::vec2 delta{0.0f};
 
     void beginTick()
@@ -48,12 +47,12 @@ struct Input::Impl {
         }
     }
 
-    const std::vector<SDL_Keycode>* find(const std::string& action) const
+    const std::vector<SDL_Keycode>& find(const std::string& action) const
     {
         auto it = bindings.find(action);
         if (it == bindings.end())
             log::fatal("Input: unbound action '%s'", action.c_str());
-        return &it->second;
+        return it->second;
     }
 };
 
@@ -62,7 +61,7 @@ Input::~Input() = default;
 
 bool Input::loadBindings(const Config& cfg)
 {
-    mImpl->bindings.clear();
+    std::map<std::string, std::vector<SDL_Keycode>> tmp;
     for (auto&& [action, keyNames] : cfg.bindings()) {
         for (const std::string& keyName : keyNames) {
             SDL_Keycode kc = SDL_GetKeyFromName(keyName.c_str());
@@ -71,17 +70,20 @@ bool Input::loadBindings(const Config& cfg)
                            "(use SDL key names, e.g. \"W\", \"Space\", "
                            "\"Return\", \"Escape\", \"Left Shift\")",
                            keyName.c_str(), action.c_str());
-                return false;
+                return false; // tmp discarded; existing bindings unchanged
             }
-            mImpl->bindings[action].push_back(kc);
+            tmp[action].push_back(kc);
         }
     }
+    mImpl->bindings = std::move(tmp);
+    mImpl->down.clear();
+    mImpl->pressed.clear();
     return true;
 }
 
 bool Input::isDown(const std::string& action) const
 {
-    for (SDL_Keycode kc : *mImpl->find(action))
+    for (SDL_Keycode kc : mImpl->find(action))
         if (mImpl->down.count(kc))
             return true;
     return false;
@@ -89,7 +91,7 @@ bool Input::isDown(const std::string& action) const
 
 bool Input::wasPressed(const std::string& action) const
 {
-    for (SDL_Keycode kc : *mImpl->find(action))
+    for (SDL_Keycode kc : mImpl->find(action))
         if (mImpl->pressed.count(kc))
             return true;
     return false;
@@ -100,10 +102,14 @@ glm::vec2 Input::mouseDelta() const { return mImpl->delta; }
 
 void Input::setMouseGrab(bool grab)
 {
-    SDL_SetRelativeMouseMode(grab ? SDL_TRUE : SDL_FALSE);
-    mImpl->grabbed = grab;
+    if (SDL_SetRelativeMouseMode(grab ? SDL_TRUE : SDL_FALSE) != 0)
+        log::error("Input: SDL_SetRelativeMouseMode(%d) failed: %s",
+                   int(grab), SDL_GetError());
 }
 
-bool Input::mouseGrabbed() const { return mImpl->grabbed; }
+bool Input::mouseGrabbed() const
+{
+    return SDL_GetRelativeMouseMode() == SDL_TRUE;
+}
 
 } // namespace eng
