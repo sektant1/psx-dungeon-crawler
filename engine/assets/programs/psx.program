@@ -219,3 +219,30 @@ fragment_program Dither_FS glsl
         param_named ditherBanding float 1.0
     }
 }
+
+vertex_program Stylize_VS glsl
+{
+    source quad.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program Stylize_FS glsl
+{
+    source pixel_stylize.frag
+    default_params
+    {
+        param_named sceneTex int 0
+        param_named normalDepthTex int 1
+        param_named_auto farClip far_clip_distance
+        param_named stylizeEnabled float 1.0
+        param_named shadowsEnabled float 1.0
+        param_named highlightsEnabled float 1.0
+        param_named shadowStrength float 0.4
+        param_named highlightStrength float 0.1
+        param_named shadowColor float3 0.0 0.0 0.0
+        param_named highlightColor float3 1.0 1.0 1.0
+    }
+}

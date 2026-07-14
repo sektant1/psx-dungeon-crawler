@@ -162,3 +162,27 @@ material PSX/DitherPost
         }
     } }
 }
+
+// pixelart_stylizer.gdshader port: depth shadow outlines + normal highlight
+// edges, applied at the low-res pixelated resolution. Units 0/1 injected by
+// the PSX/Stylized compositor (MRT surfaces 0 and 1).
+material PSX/PixelStylize
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Stylize_VS { }
+        fragment_program_ref Stylize_FS { }
+        texture_unit    // scene colour (MRT 0)
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+        texture_unit    // normal + depth (MRT 1)
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
