@@ -236,14 +236,17 @@ int main(int, char**)
         const float dt = engine.tick();
         eng::Input& in = engine.input();
         // First Esc releases the mouse, second quits; click re-grabs.
-        if (in.wasPressed("quit")) {
-            if (in.mouseGrabbed())
-                in.setMouseGrab(false);
-            else
-                engine.requestClose();
+        // Suspended while the debug panel is open (F1 owns grab then).
+        if (!engine.debugUi().visible()) {
+            if (in.wasPressed("quit")) {
+                if (in.mouseGrabbed())
+                    in.setMouseGrab(false);
+                else
+                    engine.requestClose();
+            }
+            if (!in.mouseGrabbed() && in.wasMouseClicked())
+                in.setMouseGrab(true);
         }
-        if (!in.mouseGrabbed() && in.wasMouseClicked())
-            in.setMouseGrab(true);
 
         animTime += dt;
         for (SinPan& p : sinPans)
