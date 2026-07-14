@@ -36,6 +36,7 @@ bool Config::load(const std::string& path)
                 continue;
             for (auto&& [bk, bv] : *tbl) {
                 std::vector<std::string>& keys = mBindings[std::string(bk.str())];
+                keys.clear(); // replace on re-load, don't append
                 if (auto s = bv.as_string())
                     keys.push_back(s->get());
                 else if (auto arr = bv.as_array())

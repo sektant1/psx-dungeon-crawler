@@ -9,9 +9,12 @@ namespace eng::log {
 namespace {
 void write(const char* level, const char* fmt, va_list ap)
 {
+    va_list copy;
+    va_copy(copy, ap);
     std::fprintf(stderr, "[%s] ", level);
-    std::vfprintf(stderr, fmt, ap);
+    std::vfprintf(stderr, fmt, copy);
     std::fputc('\n', stderr);
+    va_end(copy);
 }
 } // namespace
 
