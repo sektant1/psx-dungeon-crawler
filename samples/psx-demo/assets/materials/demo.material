@@ -1,0 +1,131 @@
+// ------------------------------------------------------------------------
+// Scene materials = ports of the .tres ShaderMaterials
+// ------------------------------------------------------------------------
+
+// world/floor/floor.tres (psx_lit, floor.png, uv_scale 24x24, modulate 0.66 0.7 0.8)
+material PSX/Floor
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 24.0 24.0
+        }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.66 0.7 0.8 1.0
+        }
+        texture_unit
+        {
+            texture floor.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// world/box_metal/box-metal_mat.tres (psx_lit_metal, metal-tex.png, modulate 0.95 0.6 0)
+material PSX/BoxMetal
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitMetal
+        {
+            param_named modulateColor float4 0.95 0.6 0.0 1.0
+        }
+        texture_unit
+        {
+            texture metal-tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// world/box_lit/box-lit_mat.tres (psx_lit, modulate white). Texture swapped
+// from the Godot icon to a 32x32 prototype texture (~/gamedev/textures,
+// prototyping_textures_32x32px.zip) per user request.
+material PSX/BoxLit
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture Prototype_orange_32x32px.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// world/crystal/crystal_spire_mat.tres (psx_lit, no texture -> vertex colours)
+material PSX/CrystalSpire
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitNoTex { }
+    } }
+}
+
+// world/crystal/crystal_ground_mat.tres (identical settings, separate mat as in Godot)
+material PSX/CrystalGround
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitNoTex { }
+    } }
+}
+
+// world/sparkle/sparkle_mat.tres (psx_unlit_alpha-scissor, sparkle.png,
+// billboard=true handled by Ogre's BillboardSet particle renderer)
+material PSX/Sparkle
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write on
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitAlphaScissor
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// world/shadow/shadow_mat.tres (psx_lit_transparent, shadow.png, modulate a=0.78)
+material PSX/Shadow
+{
+    technique { pass {
+        scene_blend alpha_blend
+        depth_write on            // depth_draw_always
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitTransparent
+        {
+            param_named modulateColor float4 1.0 1.0 1.0 0.78
+        }
+        texture_unit
+        {
+            texture shadow.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// world/light-shaft/light-shaft_mat.tres (psx_light-volume, modulate white)
+material PSX/LightShaft
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one    // Godot blend_add = (SRC_ALPHA, ONE)
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LightVolume { }
+    } }
+}

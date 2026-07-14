@@ -1,0 +1,21 @@
+// Approximation of the GPUParticles3D "Particles" node on BoxMetal:
+//   amount 8 (default), lifetime 1 (default) -> emission_rate 8, ttl 1
+//   sparkle_particle-process_mat.tres: spread 180, velocity 2, no gravity
+//   draw pass: 0.3 x 0.3 QuadMesh with sparkle_mat.tres, billboarded
+particle_system PSX/Sparkles
+{
+    material        PSX/Sparkle
+    particle_width  0.3
+    particle_height 0.3
+    quota           32
+    billboard_type  point
+
+    emitter Point
+    {
+        angle           180
+        direction       0 1 0
+        emission_rate   8
+        time_to_live    1
+        velocity        2
+    }
+}

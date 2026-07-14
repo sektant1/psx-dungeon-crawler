@@ -1,0 +1,210 @@
+// GPU program declarations for the PSX shader family.
+// One vertex/fragment source pair (psx.vert / psx.frag), compiled into the
+// same variants Godot builds from psx_base.gdshaderinc via #define wrappers.
+
+// ---------------------------------------------------------------- vertex ---
+
+vertex_program PSX_VS_Unlit glsl
+{
+    source psx.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto worldView worldview_matrix
+        param_named_auto invTransWorldView inverse_transpose_worldview_matrix
+        param_named_auto time time
+        param_named precisionMultiplier float 1.0
+        param_named uvScale float2 1.0 1.0
+        param_named uvOffset float2 0.0 0.0
+        param_named uvPanVelocity float2 0.0 0.0
+    }
+}
+
+vertex_program PSX_VS_Lit glsl
+{
+    source psx.vert
+    preprocessor_defines LIT=1
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto worldView worldview_matrix
+        param_named_auto invTransWorldView inverse_transpose_worldview_matrix
+        param_named_auto time time
+        param_named precisionMultiplier float 1.0
+        param_named uvScale float2 1.0 1.0
+        param_named uvOffset float2 0.0 0.0
+        param_named uvPanVelocity float2 0.0 0.0
+        param_named_auto ambientLight ambient_light_colour
+        param_named_auto lightPos light_position_view_space_array 3
+        param_named_auto lightDiffuse light_diffuse_colour_array 3
+        param_named_auto lightAtten light_attenuation_array 3
+        param_named_auto lightCount light_count
+        param_named omniAttenuation float 0.0915055
+    }
+}
+
+// -------------------------------------------------------------- fragment ---
+// Godot wrapper -> program:
+//   psx_lit.gdshader                  -> PSX_FS_Lit
+//   psx_unlit.gdshader                -> PSX_FS_Unlit
+//   psx_lit_metal.gdshader            -> PSX_FS_LitMetal
+//   psx_unlit_metal.gdshader          -> PSX_FS_UnlitMetal
+//   psx_lit_transparent.gdshader      -> PSX_FS_LitTransparent
+//   psx_unlit_transparent.gdshader    -> PSX_FS_UnlitTransparent
+//   psx_lit_alpha-scissor.gdshader    -> PSX_FS_LitAlphaScissor
+//   psx_unlit_alpha-scissor.gdshader  -> PSX_FS_UnlitAlphaScissor
+//   psx_light-volume.gdshader         -> PSX_FS_LightVolume
+//   (NO_TEXTURE, for the untextured crystal mats) -> PSX_FS_LitNoTex
+
+fragment_program PSX_FS_Lit glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_Unlit glsl
+{
+    source psx.frag
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_LitMetal glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1,METAL=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_UnlitMetal glsl
+{
+    source psx.frag
+    preprocessor_defines METAL=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_LitTransparent glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1,ALPHA_BLEND=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_UnlitTransparent glsl
+{
+    source psx.frag
+    preprocessor_defines ALPHA_BLEND=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_LitAlphaScissor glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1,ALPHA_SCISSOR=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named alphaScissor float 0.1
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_UnlitAlphaScissor glsl
+{
+    source psx.frag
+    preprocessor_defines ALPHA_SCISSOR=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named alphaScissor float 0.1
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_LitNoTex glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1,NO_TEXTURE=1
+    default_params
+    {
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+    }
+}
+
+fragment_program PSX_FS_LightVolume glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1,NO_TEXTURE=1,LIGHT_VOLUME=1,BLEND_ADD=1
+    default_params
+    {
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        // no fogColour: the BLEND_ADD fog path fades to black, so the GLSL
+        // compiler eliminates that uniform
+        param_named_auto fogParams fog_params
+    }
+}
+
+// --------------------------------------------------------- post process ---
+
+vertex_program Dither_VS glsl
+{
+    source quad.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program Dither_FS glsl
+{
+    source dither.frag
+    default_params
+    {
+        param_named sceneTex int 0
+        param_named ditherTex int 1
+        param_named colDepth float 15.0
+        param_named ditherBanding float 1.0
+    }
+}

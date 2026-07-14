@@ -1,0 +1,26 @@
+// Port of the DitherBanding stage of post_process/pp_stack.tscn:
+// the world is rendered into a 320x240 SubViewport (960x720 / stretch_shrink 3),
+// pp_band-dither.gdshader is applied there, and the result is stretched to the
+// window with nearest filtering.
+compositor PSX/Dither
+{
+    technique
+    {
+        texture rt 320 240 PF_BYTE_RGBA
+
+        target rt
+        {
+            input previous      // scene renders into the low-res target
+        }
+
+        target_output
+        {
+            input none
+            pass render_quad
+            {
+                material PSX/DitherPost
+                input 0 rt
+            }
+        }
+    }
+}

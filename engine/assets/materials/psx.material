@@ -1,0 +1,164 @@
+// ------------------------------------------------------------------------
+// Generic wrapper materials, one per Godot .gdshader wrapper. The scene
+// materials below (Godot .tres ports) use the same program combos with the
+// .tres uniform values baked in.
+//
+// Godot render_mode -> Ogre pass state:
+//   cull_back            -> cull_hardware clockwise (default)
+//   cull_disabled        -> cull_hardware none
+//   depth_draw_opaque    -> depth_write on (opaque) / off (with blending)
+//   depth_draw_always    -> depth_write on even when blended
+//   depth_prepass_alpha  -> alpha discard in shader + depth_write on
+//   blend_mix            -> scene_blend alpha_blend (when transparent)
+//   blend_add            -> scene_blend src_alpha one
+//   shadows_disabled     -> no Ogre shadow technique enabled anywhere
+// ------------------------------------------------------------------------
+
+material PSX/Lit    // psx_lit.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/Unlit    // psx_unlit.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_Unlit { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/LitMetal    // psx_lit_metal.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitMetal { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/UnlitMetal    // psx_unlit_metal.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitMetal { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/LitTransparent    // psx_lit_transparent.gdshader
+{
+    technique { pass {
+        scene_blend alpha_blend
+        depth_write on            // depth_draw_always
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitTransparent { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/UnlitTransparent    // psx_unlit_transparent.gdshader
+{
+    technique { pass {
+        scene_blend alpha_blend
+        depth_write on
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitTransparent { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/LitAlphaScissor    // psx_lit_alpha-scissor.gdshader
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write on            // depth_prepass_alpha approximation
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitAlphaScissor { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/UnlitAlphaScissor    // psx_unlit_alpha-scissor.gdshader
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write on
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitAlphaScissor { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material PSX/LightVolume    // psx_light-volume.gdshader (NO_TEXTURE + LIGHT_VOLUME)
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one    // Godot blend_add = (SRC_ALPHA, ONE)
+        depth_write off           // depth_draw_opaque + blend_add => no depth write
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LightVolume { }
+    } }
+}
+
+// post_process/dither-banding_mat.tres (pp_band-dither, psxdither.png,
+// col_depth 15, dither_banding true). Unit 0 = compositor scene target.
+material PSX/DitherPost
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref Dither_FS { }
+        texture_unit    // scene render target, injected by the compositor
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+        texture_unit
+        {
+            texture psxdither.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
