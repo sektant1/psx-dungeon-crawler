@@ -25,12 +25,12 @@ uniform vec2 uvOffset;
 uniform vec2 uvPanVelocity;
 
 #ifdef LIT
-uniform vec4 ambientLight;      // ambient_light_colour (env ambient * energy)
-uniform vec4 lightPos[3];       // view space; w == 0 -> directional (dir TO light)
-uniform vec4 lightDiffuse[3];   // light colour * energy
-uniform vec4 lightAtten[3];     // x = range
+uniform vec4 ambientLight; // ambient_light_colour (env ambient * energy)
+uniform vec4 lightPos[3]; // view space; w == 0 -> directional (dir TO light)
+uniform vec4 lightDiffuse[3]; // light colour * energy
+uniform vec4 lightAtten[3]; // x = range
 uniform float lightCount;
-uniform float omniAttenuation;  // Godot OmniLight3D.omni_attenuation exponent
+uniform float omniAttenuation; // Godot OmniLight3D.omni_attenuation exponent
 #endif
 
 noperspective out vec2 vUV;
@@ -40,15 +40,15 @@ noperspective out vec3 vNormalVS;
 noperspective out float vViewDepth;
 
 // identical to psx_base.gdshaderinc
-const vec2 base_snap_res = vec2(160.0, 120.0);
+const vec2 base_snap_res = vec2(512.0, 448.0);
 vec4 get_snapped_pos(vec4 base_pos)
 {
     vec4 snapped_pos = base_pos;
-    snapped_pos.xyz = base_pos.xyz / base_pos.w;              // to NDC
+    snapped_pos.xyz = base_pos.xyz / base_pos.w; // to NDC
     vec2 snap_res = floor(base_snap_res * precisionMultiplier);
     snapped_pos.x = floor(snap_res.x * snapped_pos.x) / snap_res.x;
     snapped_pos.y = floor(snap_res.y * snapped_pos.y) / snap_res.y;
-    snapped_pos.xyz *= base_pos.w;                            // back to clip space
+    snapped_pos.xyz *= base_pos.w; // back to clip space
     return snapped_pos;
 }
 
@@ -60,9 +60,9 @@ void main()
     vec3 vsPos = (worldView * vertex).xyz;
     vec3 vsNormal = normalize(mat3(invTransWorldView) * normal);
     vNormalVS = vsNormal;
-    vViewDepth = length(vsPos);   // Godot fog uses length(VERTEX)
+    vViewDepth = length(vsPos); // Godot fog uses length(VERTEX)
 
-#ifdef LIT
+    #ifdef LIT
     // Godot render_mode vertex_lighting + diffuse_lambert + specular_disabled.
     // (Godot pre-multiplies light energy by PI to cancel the 1/PI in its
     //  lambert BRDF, so plain NdotL * colour*energy matches 1:1.)
@@ -88,9 +88,9 @@ void main()
         light += lightDiffuse[i].rgb * max(dot(vsNormal, L), 0.0) * att;
     }
     vLight = light;
-#else
+    #else
     vLight = vec3(1.0);
-#endif
+    #endif
 
     gl_Position = get_snapped_pos(worldViewProj * vertex);
 }

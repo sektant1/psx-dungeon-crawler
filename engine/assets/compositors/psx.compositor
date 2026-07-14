@@ -6,7 +6,7 @@ compositor PSX/Dither
 {
     technique
     {
-        texture rt 320 240 PF_BYTE_RGBA
+        texture rt 512 448 PF_BYTE_RGBA
 
         target rt
         {
