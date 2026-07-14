@@ -84,6 +84,8 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
 
 void RenderCore::setDitherEnabled(bool enabled)
 {
+    if (!mViewport)
+        return;
     auto& cm = Ogre::CompositorManager::getSingleton();
     if (enabled && !mChainAdded) {
         cm.addCompositor(mViewport, "PSX/Stylized");
@@ -97,6 +99,8 @@ void RenderCore::setDitherEnabled(bool enabled)
 void RenderCore::setPixelSize(int pixelSize)
 {
     mPixelSize = std::clamp(pixelSize, 1, 16);
+    if (!mViewport)
+        return;
     Ogre::CompositorPtr comp =
         Ogre::CompositorManager::getSingleton().getByName("PSX/Stylized");
     if (!comp)
@@ -109,6 +113,8 @@ void RenderCore::setPixelSize(int pixelSize)
     Ogre::CompositionTechnique* tech = comp->getTechnique(0);
     for (const char* name : {"mrt", "rt_post"}) {
         auto* def = tech->getTextureDefinition(name);
+        if (!def)
+            continue; // compositor script and this list drifted apart
         def->widthFactor = f;
         def->heightFactor = f;
     }
