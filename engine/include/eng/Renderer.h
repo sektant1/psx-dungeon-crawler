@@ -1,0 +1,86 @@
+#pragma once
+#include <eng/Handles.h>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+#include <memory>
+#include <string>
+
+namespace eng {
+
+class RenderCore; // internal; forward-declared only, no Ogre leak
+class Renderer;
+
+namespace detail {
+// Engine-only backdoor to the internal core (defined in Renderer.cpp).
+RenderCore& coreOf(Renderer& r);
+void registerRoot(Renderer& r);
+} // namespace detail
+
+struct LightDesc {
+    enum class Type { Directional, Point };
+    Type type = Type::Point;
+    glm::vec3 colour{1.0f}; // linear, energy pre-multiplied by the caller
+    float range = 3.0f;     // point lights only
+};
+
+// Public renderer facade. All Ogre types stay inside engine/src.
+// Colour convention: shading runs in linear space; callers linearise
+// sRGB-picked colours themselves (pow 2.2), as the PSX shaders expect.
+class Renderer
+{
+public:
+    // --- meshes -----------------------------------------------------------
+    // bake, when given, is multiplied into vertex positions (normals get
+    // its inverse-transpose) -- for transforms TRS nodes can't represent.
+    MeshHandle loadObj(const std::string& path, const glm::mat4* bake = nullptr);
+    MeshHandle createInteriorBox(float size, int subdivide);
+    MeshHandle createPlane(float size);
+
+    // --- scene graph ------------------------------------------------------
+    NodeHandle createNode(NodeHandle parent, glm::vec3 position = glm::vec3(0.0f));
+    void setPosition(NodeHandle node, glm::vec3 position);
+    void setOrientation(NodeHandle node, glm::quat orientation);
+    void setScale(NodeHandle node, glm::vec3 scale);
+
+    // --- attachments ------------------------------------------------------
+    void attachMesh(NodeHandle node, MeshHandle mesh, const std::string& materialName);
+    void attachParticles(NodeHandle node, const std::string& templateName);
+    void attachCamera(NodeHandle node); // moves the single camera to this node
+    void attachLight(NodeHandle node, const LightDesc& desc);
+
+    // --- camera -----------------------------------------------------------
+    void setCameraFov(float degrees); // vertical FOV
+    void setCameraClip(float nearDist, float farDist);
+
+    // --- materials --------------------------------------------------------
+    void setMaterialParam(const std::string& materialName,
+                          const std::string& paramName, float value);
+    void setMaterialParam(const std::string& materialName,
+                          const std::string& paramName, glm::vec2 value);
+    void setMaterialParam(const std::string& materialName,
+                          const std::string& paramName, glm::vec3 value);
+    void setMaterialParam(const std::string& materialName,
+                          const std::string& paramName, glm::vec4 value);
+
+    // --- environment ------------------------------------------------------
+    void setAmbient(glm::vec3 colour);
+    void setFog(glm::vec3 colour, float expDensity);
+    void setBackground(glm::vec3 colour);
+
+    // --- post + verification ---------------------------------------------
+    void setDitherEnabled(bool enabled);
+    void writeScreenshot(const std::string& path);
+
+private:
+    friend class Engine; // Engine constructs, initialises, and drives it
+    friend RenderCore& detail::coreOf(Renderer&);
+    friend void detail::registerRoot(Renderer&);
+    Renderer();
+    ~Renderer();
+    struct Impl;
+    std::unique_ptr<Impl> mImpl;
+};
+
+} // namespace eng
