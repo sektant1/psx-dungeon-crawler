@@ -1,0 +1,15 @@
+[window]
+title = "dungeon-crawler"
+width = 960
+height = 720
+
+[player]
+speed = 3.0
+mouse_sensitivity = 0.002
+
+[bindings]
+move_forward = "W"
+move_back = "S"
+move_left = "A"
+move_right = "D"
+quit = "Escape"

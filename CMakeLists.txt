@@ -34,3 +34,12 @@ target_link_libraries(psx_demo PRIVATE eng)
 target_compile_definitions(psx_demo PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/psx-demo/assets"
 )
+
+add_executable(game
+    game/src/main.cpp
+    game/src/FpsController.cpp
+)
+target_link_libraries(game PRIVATE eng)
+target_compile_definitions(game PRIVATE
+    APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
+)

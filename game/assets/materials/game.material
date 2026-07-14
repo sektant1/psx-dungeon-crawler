@@ -1,0 +1,17 @@
+// Test-room material: PSX lit shader pair, tiled floor texture.
+material Game/Room
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 6.0 6.0
+        }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture floor.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
