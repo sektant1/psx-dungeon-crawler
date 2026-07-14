@@ -13,7 +13,9 @@ make run-demo    # PSX shader demo (port of MenacingMecha's godot-psx-style)
 ```
 
 Requires system OGRE 14.x (plugins `RenderSystem_GL3Plus`, `Plugin_ParticleFX`,
-`Codec_STBI`), SDL2, GLM, CMake >= 3.16. On Wayland the Makefile forces
+`Codec_STBI`), SDL2, GLM, CMake >= 3.16 — `make deps` installs all of it on
+any major distro (builds OGRE from source where no >= 14 package exists).
+On Wayland the Makefile forces
 `SDL_VIDEODRIVER=x11` (XWayland). `PSX_SCREENSHOT=/path.png` renders 90 frames,
 saves a screenshot, and exits (verification hook, both targets).
 

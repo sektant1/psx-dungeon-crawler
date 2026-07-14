@@ -42,7 +42,8 @@ with nearest filtering — which our PSX/Dither compositor already does at fixed
 ## Constraints and decisions (user-confirmed)
 
 - **Pixel size**: live slider. RT size = window size / pixelSize (integer 1–16,
-  default keeping current look). Changing it rebuilds the compositor chain.
+  default 3 — matches the original Godot pp_stack `stretch_shrink 3` the fixed
+  512×448 RT approximated). Changing it rebuilds the compositor chain.
 - **Normals/depth source**: **MRT from the PSX shaders** — one scene render
   writes colour to RT0 and view-space normal + linear depth to RT1. Exact match
   to the reference inputs, no second scene pass. `psx.frag` already receives
@@ -95,12 +96,13 @@ target_output: render_quad  material PSX/DitherPost   (existing dither/banding)
 
 3. **Compositor** (`psx.compositor`): rename technique to chain
    `rt_scene`+`rt_normal` (MRT target with `input previous`), stylize pass into
-   `rt_post`, dither pass to output. RT sizes declared **relative** is not
-   enough (need window/pixelSize) → RenderCore creates the compositor from C++
-   or recreates the chain with `texture rt ... <w> <h>` templated: implementer
-   choice, simplest is `CompositorManager::removeCompositorChain` + re-add
-   after patching texture defs via `CompositorTechnique` API on pixel-size
-   change (matches existing `setDitherEnabled` plumbing in RenderCore.cpp).
+   `rt_post`, dither pass to output. RT sizes must be window/pixelSize, which
+   script-relative sizes can't express → on pixel-size change RenderCore
+   patches the technique's `TextureDefinition` sizes via the
+   `CompositorTechnique` API, then removes and re-adds the viewport's
+   compositor chain (`CompositorManager::removeCompositorChain` + re-add,
+   restoring enable states) — same plumbing style as the existing
+   `setDitherEnabled` in RenderCore.cpp.
 
 4. **RenderCore/Renderer API** (`engine/src/RenderCore.*`, `Renderer.cpp`,
    `include/eng/Renderer.h`)
