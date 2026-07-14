@@ -73,8 +73,9 @@ int main(int, char**)
     r.setCameraClip(0.05f, 100.0f);
 
     // Demo environment palette (from world_env.tres).
-    r.setAmbient({lin(1.0f) * 0.15f, lin(0.67451f) * 0.15f,
-                  lin(0.988235f) * 0.15f});
+    // Ambient raised to 0.25 (demo used 0.15) so unlit wall areas remain readable.
+    r.setAmbient({lin(1.0f) * 0.25f, lin(0.67451f) * 0.25f,
+                  lin(0.988235f) * 0.25f});
     r.setFog({lin(0.670588f), lin(0.760784f), lin(1.0f)}, 0.05f);
     r.setBackground({0.670588f, 0.760784f, 1.0f});
 
@@ -90,11 +91,12 @@ int main(int, char**)
     {
         eng::NodeHandle sunNode =
             r.createNode(eng::kRootNode, {5.08833f, 2.79045f, -0.311581f});
+        // Steep top-down sun: demo's rig orbited with the camera, a static
+        // copy leaves the far walls unlit. ~75 degrees down, slight yaw so
+        // adjacent walls differ.
         r.setOrientation(sunNode,
-                         eng::quatFromBasisRows(
-                             0.999229f, -0.0247207f, 0.0305003f,
-                             0.0f, 0.776871f, 0.629659f,
-                             -0.0392604f, -0.629174f, 0.776272f));
+                         glm::angleAxis(glm::radians(30.0f), glm::vec3(0, 1, 0)) *
+                             glm::angleAxis(glm::radians(-75.0f), glm::vec3(1, 0, 0)));
         eng::LightDesc dirLight;
         dirLight.type = eng::LightDesc::Type::Directional;
         dirLight.colour = {1.5f, 1.5f, 1.5f};
@@ -144,6 +146,9 @@ int main(int, char**)
     r.attachMesh(
         r.createNode(eng::kRootNode, {0.0109267f, 2.05731f, 0.0147681f}),
         lightShaftMesh, "PSX/LightShaft");
+    // Additive shaft oversaturates in the small room; dim it game-side.
+    r.setMaterialParam("PSX/LightShaft", "modulateColor",
+                       glm::vec4(1.0f, 1.0f, 1.0f, 0.35f));
 
     // --------------------------------------------- BoxMetal + sparkles ---
     std::vector<SinPan> sinPans;
