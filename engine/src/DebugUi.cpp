@@ -13,8 +13,8 @@
 
 #include <imgui.h>
 
-#include <algorithm>
-#include <cmath>
+#include <glm/glm.hpp>
+
 #include <cstdio>
 #include <string>
 
