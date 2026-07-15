@@ -243,6 +243,9 @@ void DebugUi::Impl::drawPixelArt()
     bool stylize = env.stylize;
     if (ImGui::Checkbox("stylize (outline+highlight)", &stylize))
         renderer->setStylizeEnabled(stylize);
+    bool perPixelLighting = env.perPixelLighting;
+    if (ImGui::Checkbox("per-pixel lighting", &perPixelLighting))
+        renderer->setPerPixelLightingEnabled(perPixelLighting);
     if (ImGui::Checkbox("shadows", &stylizeShadows))
         renderer->setMaterialParam("PSX/PixelStylize", "shadowsEnabled",
                                    stylizeShadows ? 1.0f : 0.0f);
