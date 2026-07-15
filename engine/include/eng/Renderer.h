@@ -39,6 +39,7 @@ struct EnvState {
     bool dither = false;
     int pixelSize = 3;       // PSX/Stylized RT = window / pixelSize
     bool stylize = true;     // outline/highlight pass active
+    bool perPixelLighting = true; // fragment vs vertex light evaluation
 };
 
 // Public renderer facade. All Ogre types stay inside engine/src.
@@ -90,6 +91,7 @@ public:
     void setDitherEnabled(bool enabled);
     void setPixelSize(int pixelSize);      // 1..16, rebuilds the post chain
     void setStylizeEnabled(bool enabled);  // off = pass-through (PSX look only)
+    void setPerPixelLightingEnabled(bool enabled); // off = authentic vertex-lit
     void writeScreenshot(const std::string& path);
 
 private:

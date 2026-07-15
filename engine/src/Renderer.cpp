@@ -262,6 +262,28 @@ void Renderer::setStylizeEnabled(bool enabled)
     setMaterialParam("PSX/PixelStylize", "stylizeEnabled", enabled ? 1.0f : 0.0f);
 }
 
+void Renderer::setPerPixelLightingEnabled(bool enabled)
+{
+    mImpl->env.perPixelLighting = enabled;
+    const float value = enabled ? 1.0f : 0.0f;
+    auto it = Ogre::MaterialManager::getSingleton().getResourceIterator();
+    while (it.hasMoreElements()) {
+        auto mat = Ogre::static_pointer_cast<Ogre::Material>(it.getNext());
+        if (!mat || !mat->isLoaded())
+            continue; // unloaded materials keep the program default (on)
+        for (Ogre::Technique* tech : mat->getTechniques()) {
+            for (Ogre::Pass* pass : tech->getPasses()) {
+                if (!pass->hasFragmentProgram())
+                    continue;
+                auto params = pass->getFragmentProgramParameters();
+                if (params &&
+                    params->_findNamedConstantDefinition("perPixelLighting", false))
+                    params->setNamedConstant("perPixelLighting", value);
+            }
+        }
+    }
+}
+
 const EnvState& Renderer::envState() const { return mImpl->env; }
 
 void Renderer::writeScreenshot(const std::string& path)
