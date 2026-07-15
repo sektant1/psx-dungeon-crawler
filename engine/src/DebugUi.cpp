@@ -194,6 +194,10 @@ void DebugUi::Impl::drawShaders()
     if (ImGui::Checkbox("dither banding", &ditherBanding))
         renderer->setMaterialParam("PSX/DitherPost", "ditherBanding",
                                    ditherBanding ? 1.0f : 0.0f);
+    if (ImGui::SliderFloat("dither dark fade", &ditherDarkFade, 0.0f, 0.3f,
+                           "%.3f"))
+        renderer->setMaterialParam("PSX/DitherPost", "ditherDarkFade",
+                                   ditherDarkFade);
 
     // Colour widgets edit sRGB; engine stores ambient/fog linear.
     glm::vec3 c = toSrgb(env.ambient);
@@ -268,6 +272,7 @@ void DebugUi::Impl::copyToml()
                   "dither = %s\n"
                   "col_depth = %.1f\n"
                   "dither_banding = %s\n"
+                  "dither_dark_fade = %.3f\n"
                   "pixel_size = %d\n"
                   "per_pixel_lighting = %s\n"
                   "omni_attenuation = %.4f\n"
@@ -286,7 +291,7 @@ void DebugUi::Impl::copyToml()
                   "near_clip = %.3f\n"
                   "far_clip = %.1f\n",
                   precisionMultiplier, env.dither ? "true" : "false", colDepth,
-                  ditherBanding ? "true" : "false",
+                  ditherBanding ? "true" : "false", ditherDarkFade,
                   env.pixelSize, env.perPixelLighting ? "true" : "false",
                   env.omniAttenuation,
                   env.stylize ? "true" : "false",

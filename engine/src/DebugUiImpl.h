@@ -31,6 +31,7 @@ struct DebugUi::Impl {
     float precisionMultiplier = 1.0f;
     float colDepth = 15.0f;
     bool ditherBanding = true;
+    float ditherDarkFade = 0.06f;
 
     // Pixel-art stylizer tunables (defaults match Stylize_FS in psx.program;
     // colours are raw sRGB, mixed post-encode like the Godot reference).
