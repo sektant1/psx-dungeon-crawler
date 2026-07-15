@@ -9,10 +9,15 @@ uniform sampler2D ditherTex;      // shaders/psxdither.png, 4x4, nearest+repeat
 uniform float colDepth;           // 15.0
 uniform float ditherBanding;      // bool -> 1.0 / 0.0
 uniform float ditherDarkFade;     // luma below which dither fades out; 0 = off
+uniform float ditherEnabled;      // 0 = pass-through (no quantization)
 out vec4 fragColour;
 void main()
 {
     vec4 base_color = texture(sceneTex, uv);
+    if (ditherEnabled < 0.5) {
+        fragColour = vec4(base_color.rgb, 1.0);
+        return;
+    }
     vec2 dith_size = vec2(textureSize(ditherTex, 0));
     vec2 buf_size = vec2(textureSize(sceneTex, 0));
     vec3 dith = texture(ditherTex, uv * (buf_size / dith_size)).rgb - 0.5;

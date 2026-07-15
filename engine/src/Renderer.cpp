@@ -247,7 +247,10 @@ void Renderer::setBackground(glm::vec3 colour)
 void Renderer::setDitherEnabled(bool enabled)
 {
     mImpl->env.dither = enabled;
-    mImpl->core.setDitherEnabled(enabled);
+    // The post chain hosts pixelation/outlines/bloom too, so it stays on;
+    // "dither off" only bypasses the quantization inside the dither pass.
+    mImpl->core.enablePostChain();
+    setMaterialParam("PSX/DitherPost", "ditherEnabled", enabled ? 1.0f : 0.0f);
 }
 
 void Renderer::setPixelSize(int pixelSize)

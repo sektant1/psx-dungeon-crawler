@@ -82,12 +82,12 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     return true;
 }
 
-void RenderCore::setDitherEnabled(bool enabled)
+void RenderCore::enablePostChain()
 {
     if (!mViewport)
         return;
     auto& cm = Ogre::CompositorManager::getSingleton();
-    if (enabled && !mChainAdded) {
+    if (!mChainAdded) {
         // FLOAT16 MRT creation can fail on weak GL drivers; fall back to the
         // raw (post-free) output instead of crashing. Details in ogre.log.
         try {
@@ -100,9 +100,8 @@ void RenderCore::setDitherEnabled(bool enabled)
             return;
         }
     }
-    if (mChainAdded)
-        cm.setCompositorEnabled(mViewport, "PSX/Stylized", enabled);
-    mChainEnabled = enabled;
+    cm.setCompositorEnabled(mViewport, "PSX/Stylized", true);
+    mChainEnabled = true;
 }
 
 void RenderCore::setPixelSize(int pixelSize)
@@ -131,7 +130,8 @@ void RenderCore::setPixelSize(int pixelSize)
         Ogre::CompositorManager::getSingleton().removeCompositor(mViewport,
                                                                  "PSX/Stylized");
         mChainAdded = false;
-        setDitherEnabled(mChainEnabled); // re-add + restore enable state
+        if (mChainEnabled)
+            enablePostChain(); // re-add
     }
 }
 

@@ -22,10 +22,9 @@ public:
     ~RenderCore(); // calls shutdown(); safe if already shut down
     bool init(uintptr_t nativeWindowHandle, int width, int height,
               const std::string& title, const std::string& appAssetDir);
-    // Toggles the whole PSX/Stylized post chain (scene downscale + stylize +
-    // dither). Name kept from the dither-only era; the debug UI checkbox and
-    // Renderer::setDitherEnabled route here.
-    void setDitherEnabled(bool enabled);
+    // Brings up the PSX/Stylized post chain (scene downscale + stylize +
+    // dither) if not already active. Idempotent; the chain stays on once up.
+    void enablePostChain();
     // Rebuilds the chain with RT sizes = window / pixelSize. Clamped 1..16.
     void setPixelSize(int pixelSize);
     void renderFrame(float dt);

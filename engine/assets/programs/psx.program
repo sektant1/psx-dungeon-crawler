@@ -260,6 +260,7 @@ fragment_program Dither_FS glsl
         param_named colDepth float 15.0
         param_named ditherBanding float 1.0
         param_named ditherDarkFade float 0.06
+        param_named ditherEnabled float 1.0
     }
 }
 
