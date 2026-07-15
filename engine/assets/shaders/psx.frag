@@ -51,7 +51,14 @@ void main()
 {
 #ifdef METAL
     // UV from view-space normal (psx_base: "Special thanks to Adam McLaughlan")
+#if defined(LIT)
+    // Per-pixel mode: perspective-correct normal keeps the matcap glued to
+    // the surface; vertex-lit mode keeps the authentic affine swim.
+    vec3 n = perPixelLighting >= 0.5 ? normalize(vNormalSmooth)
+                                     : normalize(vNormalVS);
+#else
     vec3 n = normalize(vNormalVS);
+#endif
     vec2 texture_uv = vec2(n.x / 2.0 + 0.5, (-n.y) / 2.0 + 0.5);
 #else
     vec2 texture_uv = vUV;
