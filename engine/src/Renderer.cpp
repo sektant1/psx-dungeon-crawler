@@ -288,6 +288,35 @@ void Renderer::setPerPixelLightingEnabled(bool enabled)
     }
 }
 
+void Renderer::setGlobalMaterialParam(const std::string& paramName, float value)
+{
+    auto it = Ogre::MaterialManager::getSingleton().getResourceIterator();
+    while (it.hasMoreElements()) {
+        auto mat = Ogre::static_pointer_cast<Ogre::Material>(it.getNext());
+        if (!mat || !mat->isLoaded())
+            continue;
+        for (Ogre::Technique* tech : mat->getTechniques()) {
+            for (Ogre::Pass* pass : tech->getPasses()) {
+                Ogre::GpuProgramParametersSharedPtr sets[2];
+                if (pass->hasVertexProgram())
+                    sets[0] = pass->getVertexProgramParameters();
+                if (pass->hasFragmentProgram())
+                    sets[1] = pass->getFragmentProgramParameters();
+                for (auto& params : sets)
+                    if (params &&
+                        params->_findNamedConstantDefinition(paramName, false))
+                        params->setNamedConstant(paramName, value);
+            }
+        }
+    }
+}
+
+void Renderer::setOmniAttenuation(float exponent)
+{
+    mImpl->env.omniAttenuation = exponent;
+    setGlobalMaterialParam("omniAttenuation", exponent);
+}
+
 const EnvState& Renderer::envState() const { return mImpl->env; }
 
 void Renderer::writeScreenshot(const std::string& path)

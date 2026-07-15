@@ -7,9 +7,7 @@
 
 #include <OgreCamera.h>
 #include <OgreImGuiOverlay.h>
-#include <OgreMaterialManager.h>
 #include <OgreRenderWindow.h>
-#include <OgreTechnique.h>
 
 #include <imgui.h>
 
@@ -68,29 +66,6 @@ int toImGuiMouseButton(Uint8 sdlButton)
     case SDL_BUTTON_RIGHT: return 1;
     case SDL_BUTTON_MIDDLE: return 2;
     default: return -1;
-    }
-}
-
-// Sets a float uniform on every loaded material that declares it (the PSX
-// vertex params are per-material; this emulates a Godot global uniform).
-void setParamEverywhere(const char* name, float value)
-{
-    auto it = Ogre::MaterialManager::getSingleton().getResourceIterator();
-    while (it.hasMoreElements()) {
-        auto mat = Ogre::static_pointer_cast<Ogre::Material>(it.getNext());
-        for (Ogre::Technique* tech : mat->getTechniques()) {
-            for (Ogre::Pass* pass : tech->getPasses()) {
-                Ogre::GpuProgramParametersSharedPtr sets[2];
-                if (pass->hasVertexProgram())
-                    sets[0] = pass->getVertexProgramParameters();
-                if (pass->hasFragmentProgram())
-                    sets[1] = pass->getFragmentProgramParameters();
-                for (auto& params : sets)
-                    if (params &&
-                        params->_findNamedConstantDefinition(name, false))
-                        params->setNamedConstant(name, value);
-            }
-        }
     }
 }
 
@@ -207,7 +182,8 @@ void DebugUi::Impl::drawStats()
 void DebugUi::Impl::drawShaders()
 {
     if (ImGui::SliderFloat("vertex snap", &precisionMultiplier, 0.0f, 1.0f))
-        setParamEverywhere("precisionMultiplier", precisionMultiplier);
+        renderer->setGlobalMaterialParam("precisionMultiplier",
+                                         precisionMultiplier);
 
     const EnvState& env = renderer->envState();
     bool dither = env.dither;
@@ -243,6 +219,9 @@ void DebugUi::Impl::drawPixelArt()
     bool perPixelLighting = env.perPixelLighting;
     if (ImGui::Checkbox("per-pixel lighting", &perPixelLighting))
         renderer->setPerPixelLightingEnabled(perPixelLighting);
+    float omniAtten = env.omniAttenuation;
+    if (ImGui::SliderFloat("omni attenuation", &omniAtten, 0.05f, 2.0f, "%.3f"))
+        renderer->setOmniAttenuation(omniAtten);
     bool stylize = env.stylize;
     if (ImGui::Checkbox("stylize (outline+highlight)", &stylize))
         renderer->setStylizeEnabled(stylize);
@@ -282,7 +261,7 @@ void DebugUi::Impl::drawCamera()
 void DebugUi::Impl::copyToml()
 {
     const EnvState& env = renderer->envState();
-    char buf[1024];
+    char buf[2048];
     std::snprintf(buf, sizeof(buf),
                   "[debug_tuning]\n"
                   "precision_multiplier = %.4f\n"
@@ -291,6 +270,7 @@ void DebugUi::Impl::copyToml()
                   "dither_banding = %s\n"
                   "pixel_size = %d\n"
                   "per_pixel_lighting = %s\n"
+                  "omni_attenuation = %.4f\n"
                   "stylize = %s\n"
                   "stylize_shadows = %s\n"
                   "stylize_highlights = %s\n"
@@ -308,6 +288,7 @@ void DebugUi::Impl::copyToml()
                   precisionMultiplier, env.dither ? "true" : "false", colDepth,
                   ditherBanding ? "true" : "false",
                   env.pixelSize, env.perPixelLighting ? "true" : "false",
+                  env.omniAttenuation,
                   env.stylize ? "true" : "false",
                   stylizeShadows ? "true" : "false",
                   stylizeHighlights ? "true" : "false", shadowStrength,

@@ -39,7 +39,7 @@ vertex_program PSX_VS_Lit glsl
         param_named_auto lightDiffuse light_diffuse_colour_array 3
         param_named_auto lightAtten light_attenuation_array 3
         param_named_auto lightCount light_count
-        param_named omniAttenuation float 0.0915055
+        param_named omniAttenuation float 1.0
     }
 }
 
@@ -72,7 +72,7 @@ fragment_program PSX_FS_Lit glsl
         param_named_auto lightDiffuse light_diffuse_colour_array 3
         param_named_auto lightAtten light_attenuation_array 3
         param_named_auto lightCount light_count
-        param_named omniAttenuation float 0.0915055
+        param_named omniAttenuation float 1.0
         param_named perPixelLighting float 1.0
     }
 }
@@ -106,7 +106,7 @@ fragment_program PSX_FS_LitMetal glsl
         param_named_auto lightDiffuse light_diffuse_colour_array 3
         param_named_auto lightAtten light_attenuation_array 3
         param_named_auto lightCount light_count
-        param_named omniAttenuation float 0.0915055
+        param_named omniAttenuation float 1.0
         param_named perPixelLighting float 1.0
     }
 }
@@ -141,7 +141,7 @@ fragment_program PSX_FS_LitTransparent glsl
         param_named_auto lightDiffuse light_diffuse_colour_array 3
         param_named_auto lightAtten light_attenuation_array 3
         param_named_auto lightCount light_count
-        param_named omniAttenuation float 0.0915055
+        param_named omniAttenuation float 1.0
         param_named perPixelLighting float 1.0
     }
 }
@@ -177,7 +177,7 @@ fragment_program PSX_FS_LitAlphaScissor glsl
         param_named_auto lightDiffuse light_diffuse_colour_array 3
         param_named_auto lightAtten light_attenuation_array 3
         param_named_auto lightCount light_count
-        param_named omniAttenuation float 0.0915055
+        param_named omniAttenuation float 1.0
         param_named perPixelLighting float 1.0
     }
 }
@@ -212,7 +212,7 @@ fragment_program PSX_FS_LitNoTex glsl
         param_named_auto lightDiffuse light_diffuse_colour_array 3
         param_named_auto lightAtten light_attenuation_array 3
         param_named_auto lightCount light_count
-        param_named omniAttenuation float 0.0915055
+        param_named omniAttenuation float 1.0
         param_named perPixelLighting float 1.0
     }
 }
@@ -234,7 +234,7 @@ fragment_program PSX_FS_LightVolume glsl
         param_named_auto lightDiffuse light_diffuse_colour_array 3
         param_named_auto lightAtten light_attenuation_array 3
         param_named_auto lightCount light_count
-        param_named omniAttenuation float 0.0915055
+        param_named omniAttenuation float 1.0
         param_named perPixelLighting float 1.0
     }
 }

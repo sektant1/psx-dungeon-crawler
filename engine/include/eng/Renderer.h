@@ -40,6 +40,7 @@ struct EnvState {
     int pixelSize = 3;       // PSX/Stylized RT = window / pixelSize
     bool stylize = true;     // outline/highlight pass active
     bool perPixelLighting = true; // fragment vs vertex light evaluation
+    float omniAttenuation = 1.0f; // Godot omni falloff exponent (1 = linear)
 };
 
 // Public renderer facade. All Ogre types stay inside engine/src.
@@ -81,6 +82,10 @@ public:
     void setMaterialParam(const std::string& materialName,
                           const std::string& paramName, glm::vec4 value);
 
+    // Sets a float param on EVERY loaded material that declares it, in both
+    // vertex and fragment program params (emulates a Godot global uniform).
+    void setGlobalMaterialParam(const std::string& paramName, float value);
+
     // --- environment ------------------------------------------------------
     void setAmbient(glm::vec3 colour);
     void setFog(glm::vec3 colour, float expDensity);
@@ -92,6 +97,7 @@ public:
     void setPixelSize(int pixelSize);      // 1..16, rebuilds the post chain
     void setStylizeEnabled(bool enabled);  // off = pass-through (PSX look only)
     void setPerPixelLightingEnabled(bool enabled); // off = authentic vertex-lit
+    void setOmniAttenuation(float exponent); // omni falloff curve, 1 = linear
     void writeScreenshot(const std::string& path);
 
 private:
