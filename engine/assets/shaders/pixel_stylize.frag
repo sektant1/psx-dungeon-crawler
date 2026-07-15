@@ -57,8 +57,12 @@ void main()
     vec2 e = 1.0 / vec2(textureSize(sceneTex, 0));
 
     // Shadow outlines: centre nearer than a neighbour = exterior edge.
+    // negDepthDiff starts at 0 (not the Godot original's 0.5 seed) so a
+    // disabled shadow pass doesn't leak a flat 0.5 suppression into the
+    // highlight branch below; with shadows on, the 0.5 seed is applied
+    // inside the block and behaviour matches the reference exactly.
     float depthDiff = 0.0;
-    float negDepthDiff = 0.5;
+    float negDepthDiff = 0.0;
     if (shadowsEnabled > 0.5) {
         float d  = getDepth(uv);
         float du = getDepth(uv + vec2( 0.0, -1.0) * e);
@@ -69,7 +73,7 @@ void main()
         depthDiff += clamp(dd - d, 0.0, 1.0);
         depthDiff += clamp(dr - d, 0.0, 1.0);
         depthDiff += clamp(dl - d, 0.0, 1.0);
-        negDepthDiff += (d - du) + (d - dd) + (d - dr) + (d - dl);
+        negDepthDiff = 0.5 + (d - du) + (d - dd) + (d - dr) + (d - dl);
         negDepthDiff = clamp(negDepthDiff, 0.0, 1.0);
         // Godot original: smoothstep(0.5, 0.5, x) -- undefined per GLSL spec
         // when edge0 == edge1; every driver degenerates it to step(). Written

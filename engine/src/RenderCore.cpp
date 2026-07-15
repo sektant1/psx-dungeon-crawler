@@ -88,8 +88,17 @@ void RenderCore::setDitherEnabled(bool enabled)
         return;
     auto& cm = Ogre::CompositorManager::getSingleton();
     if (enabled && !mChainAdded) {
-        cm.addCompositor(mViewport, "PSX/Stylized");
-        mChainAdded = true;
+        // FLOAT16 MRT creation can fail on weak GL drivers; fall back to the
+        // raw (post-free) output instead of crashing. Details in ogre.log.
+        try {
+            cm.addCompositor(mViewport, "PSX/Stylized");
+            mChainAdded = true;
+        } catch (const Ogre::Exception& e) {
+            Ogre::LogManager::getSingleton().logError(
+                "PSX/Stylized compositor unavailable, post chain disabled: " +
+                e.getDescription());
+            return;
+        }
     }
     if (mChainAdded)
         cm.setCompositorEnabled(mViewport, "PSX/Stylized", enabled);
