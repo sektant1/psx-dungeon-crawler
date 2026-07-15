@@ -2,3 +2,5 @@ build/
 build-debug/
 compile_commands.json
 ogre.log
+vendor/ogre/
+.cache/

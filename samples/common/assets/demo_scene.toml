@@ -1,0 +1,91 @@
+# Shared PSX demo scene (from MenacingMecha's godot-psx-style-demo).
+# Colours tagged _srgb are linearised (pow 2.2) at load; energies are
+# multiplied after, matching Godot's linear-space shading.
+
+[env]
+ambient_srgb = [1.0, 0.67451, 0.988235]
+ambient_energy = 0.15
+fog_srgb = [0.670588, 0.760784, 1.0]
+fog_density = 0.05
+background_srgb = [0.670588, 0.760784, 1.0]
+dither = true
+
+[sun]
+position = [5.08833, 2.79045, -0.311581]
+basis_rows = [0.999229, -0.0247207, 0.0305003, 0.0, 0.776871, 0.629659, -0.0392604, -0.629174, 0.776272]
+colour = [1.5, 1.5, 1.5] # light_energy 1.5, white
+
+[omni]
+x_positions = [-4.0, 4.0]
+y = 0.784
+colour_srgb = [0.909804, 0.803922, 0.666667]
+energy = 4.75
+range = 3.0
+
+[light_shaft]
+mesh = "light_shaft.obj"
+material = "PSX/LightShaft"
+position = [0.0109267, 2.05731, 0.0147681]
+
+[boxes]
+y = 2.236
+scale = 0.613118
+metal_x = -1.0
+lit_x = 1.0
+metal_mesh = "bevel-box.obj"
+lit_mesh = "box.obj"
+metal_material = "PSX/BoxMetal"
+lit_material = "PSX/BoxLit"
+sparkles = "PSX/Sparkles"
+
+[shadows]
+plane_size = 2.0
+y = 0.05
+material = "PSX/Shadow"
+
+[crystals]
+ground_mesh = "crystal_ground.obj"
+ground_material = "PSX/CrystalGround"
+ground_offset = [-0.02274385, 0.0, 0.01232092]
+ground_scale = 0.31058314
+spire_material = "PSX/CrystalSpire"
+
+# Spire transforms (rotation * non-uniform scale) baked into vertices.
+# Either quat+scale or a raw 3x3 given as rows (tscn Transform3D order).
+[[crystals.spire]]
+mesh = "crystal_spire1.obj"
+quat = [0.99098921, 0.0, 0.0, -0.13394181] # w x y z
+scale = [0.96659988, 1.97307432, 0.96659982]
+
+[[crystals.spire]]
+mesh = "crystal_spire2.obj"
+rows = [-0.223364, -0.132712, 0.884556, -0.242743, 1.90228, -1.36255e-08, -0.852817, -0.5067, -0.231677]
+
+[[crystals.spire]]
+mesh = "crystal_spire3.obj"
+rows = [-0.689533, -0.463782, -0.375407, -0.214429, 1.90228, 3.00904e-09, 0.361937, 0.24344, -0.715194]
+
+[[crystals.spire]]
+mesh = "crystal_spire4.obj"
+quat = [0.78186893, 0.08229667, -0.60888463, -0.10567717]
+scale = [0.61454207, 1.97307408, 0.61454219]
+
+[[crystals.instance]]
+basis_rows = [0.719146, 0.0, 0.694859, 0.0, 1.0, 0.0, -0.694859, 0.0, 0.719146]
+origin = [1.93081, 0.0, 1.34372]
+
+[[crystals.instance]]
+basis_rows = [0.826285, 0.0, -0.563252, 0.0, 1.0, 0.0, 0.563252, 0.0, 0.826285]
+origin = [-1.32247, 0.0, 1.77809]
+
+[[crystals.instance]]
+basis_rows = [0.864371, 0.0, 0.502854, 0.0, 1.0, 0.0, -0.502854, 0.0, 0.864371]
+origin = [-2.32825, 0.0, -0.999177]
+
+[[crystals.instance]]
+basis_rows = [-0.632935, 0.0, 0.774205, 0.0, 1.0, 0.0, -0.774205, 0.0, -0.632935]
+origin = [2.30476, 0.0, -1.16371]
+
+[[crystals.instance]]
+basis_rows = [-0.90227, 0.0, -0.431172, 0.0, 1.0, 0.0, 0.431172, 0.0, -0.90227]
+origin = [-0.00271803, 0.0, -1.98459]
