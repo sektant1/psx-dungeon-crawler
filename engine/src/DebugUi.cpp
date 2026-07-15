@@ -240,12 +240,12 @@ void DebugUi::Impl::drawPixelArt()
     int pixelSize = env.pixelSize;
     if (ImGui::SliderInt("pixel size", &pixelSize, 1, 16))
         renderer->setPixelSize(pixelSize);
-    bool stylize = env.stylize;
-    if (ImGui::Checkbox("stylize (outline+highlight)", &stylize))
-        renderer->setStylizeEnabled(stylize);
     bool perPixelLighting = env.perPixelLighting;
     if (ImGui::Checkbox("per-pixel lighting", &perPixelLighting))
         renderer->setPerPixelLightingEnabled(perPixelLighting);
+    bool stylize = env.stylize;
+    if (ImGui::Checkbox("stylize (outline+highlight)", &stylize))
+        renderer->setStylizeEnabled(stylize);
     if (ImGui::Checkbox("shadows", &stylizeShadows))
         renderer->setMaterialParam("PSX/PixelStylize", "shadowsEnabled",
                                    stylizeShadows ? 1.0f : 0.0f);
@@ -290,6 +290,7 @@ void DebugUi::Impl::copyToml()
                   "col_depth = %.1f\n"
                   "dither_banding = %s\n"
                   "pixel_size = %d\n"
+                  "per_pixel_lighting = %s\n"
                   "stylize = %s\n"
                   "stylize_shadows = %s\n"
                   "stylize_highlights = %s\n"
@@ -306,7 +307,8 @@ void DebugUi::Impl::copyToml()
                   "far_clip = %.1f\n",
                   precisionMultiplier, env.dither ? "true" : "false", colDepth,
                   ditherBanding ? "true" : "false",
-                  env.pixelSize, env.stylize ? "true" : "false",
+                  env.pixelSize, env.perPixelLighting ? "true" : "false",
+                  env.stylize ? "true" : "false",
                   stylizeShadows ? "true" : "false",
                   stylizeHighlights ? "true" : "false", shadowStrength,
                   highlightStrength, shadowColor.x, shadowColor.y, shadowColor.z,
