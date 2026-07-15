@@ -195,11 +195,13 @@ material PSX/BloomBright
         depth_check off
         depth_write off
         cull_hardware none
+        // Dither_VS = passthrough fullscreen quad VS (outputs uv); reused by
+        // all bloom passes.
         vertex_program_ref Dither_VS { }
         fragment_program_ref BloomBright_FS { }
         texture_unit
         {
-            filtering none
+            filtering bilinear
             tex_address_mode clamp
         }
     } }
