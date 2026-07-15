@@ -29,13 +29,7 @@ uniform vec4 fogParams;   // x = density (Ogre FOG_EXP)
 uniform float farClip;
 
 #ifdef LIT
-// Same bindings as psx.vert; see psx.program LIT fragment default_params.
-uniform vec4 ambientLight;
-uniform vec4 lightPos[3];     // view space; w == 0 -> directional (dir TO light)
-uniform vec4 lightDiffuse[3];
-uniform vec4 lightAtten[3];   // x = range
-uniform float lightCount;
-uniform float omniAttenuation;
+#include <psx_lighting.glsl>
 uniform float perPixelLighting; // >= 0.5: fragment lighting, else vertex vLight
 #endif
 
@@ -95,31 +89,8 @@ void main()
     vec3 lightAmt = vLight;       // vertex-lit: ambient + lambert from VS
     if (perPixelLighting >= 0.5)
     {
-        // NOTE: duplicated from the psx.vert light loop. Keep both copies
-        // in sync.
-        vec3 nrm = normalize(vNormalSmooth); // renormalize after interpolation
-        lightAmt = ambientLight.rgb;
-        int count = int(min(lightCount, 3.0) + 0.5);
-        for (int i = 0; i < count; ++i)
-        {
-            vec3 L;
-            float att;
-            if (lightPos[i].w == 0.0)
-            {
-                L = normalize(lightPos[i].xyz);
-                att = 1.0;
-            }
-            else
-            {
-                vec3 toLight = lightPos[i].xyz - vVsPos;
-                float dist = length(toLight);
-                L = toLight / max(dist, 1e-5);
-                // Godot omni attenuation curve: pow(1 - d/range, attenuation)
-                att = pow(clamp(1.0 - dist / lightAtten[i].x, 0.0, 1.0),
-                          omniAttenuation);
-            }
-            lightAmt += lightDiffuse[i].rgb * max(dot(nrm, L), 0.0) * att;
-        }
+        // renormalize after interpolation
+        lightAmt = psxComputeLight(vVsPos, normalize(vNormalSmooth));
     }
     vec3 rgb = albedo * lightAmt;
 #else
