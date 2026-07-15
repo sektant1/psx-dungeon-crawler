@@ -273,8 +273,12 @@ void Renderer::setPerPixelLightingEnabled(bool enabled)
             continue; // unloaded materials keep the program default (on)
         for (Ogre::Technique* tech : mat->getTechniques()) {
             for (Ogre::Pass* pass : tech->getPasses()) {
+                // perPixelLighting is an FS-only branch; vertex programs
+                // never declare it, so skip them entirely.
                 if (!pass->hasFragmentProgram())
                     continue;
+                // Each loaded pass owns a clone of the program's default
+                // params, so mutating here never leaks across materials.
                 auto params = pass->getFragmentProgramParameters();
                 if (params &&
                     params->_findNamedConstantDefinition("perPixelLighting", false))
