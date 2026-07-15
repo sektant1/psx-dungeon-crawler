@@ -41,6 +41,9 @@ struct EnvState {
     bool stylize = true;     // outline/highlight pass active
     bool perPixelLighting = true; // fragment vs vertex light evaluation
     float omniAttenuation = 1.0f; // Godot omni falloff exponent (1 = linear)
+    bool bloom = true;
+    float bloomThreshold = 0.7f;
+    float bloomIntensity = 0.8f;
 };
 
 // Public renderer facade. All Ogre types stay inside engine/src.
@@ -98,6 +101,8 @@ public:
     void setStylizeEnabled(bool enabled);  // off = pass-through (PSX look only)
     void setPerPixelLightingEnabled(bool enabled); // off = authentic vertex-lit
     void setOmniAttenuation(float exponent); // omni falloff curve, 1 = linear
+    void setBloomEnabled(bool enabled);    // off = pass-through composite
+    void setBloomParams(float threshold, float intensity);
     void writeScreenshot(const std::string& path);
 
 private:

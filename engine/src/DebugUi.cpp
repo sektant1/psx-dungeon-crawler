@@ -226,6 +226,17 @@ void DebugUi::Impl::drawPixelArt()
     float omniAtten = env.omniAttenuation;
     if (ImGui::SliderFloat("omni attenuation", &omniAtten, 0.05f, 2.0f, "%.3f"))
         renderer->setOmniAttenuation(omniAtten);
+    bool bloom = env.bloom;
+    if (ImGui::Checkbox("bloom", &bloom))
+        renderer->setBloomEnabled(bloom);
+    float bloomThreshold = env.bloomThreshold;
+    float bloomIntensity = env.bloomIntensity;
+    bool bloomChanged =
+        ImGui::SliderFloat("bloom threshold", &bloomThreshold, 0.0f, 1.0f);
+    bloomChanged |=
+        ImGui::SliderFloat("bloom intensity", &bloomIntensity, 0.0f, 3.0f);
+    if (bloomChanged)
+        renderer->setBloomParams(bloomThreshold, bloomIntensity);
     bool stylize = env.stylize;
     if (ImGui::Checkbox("stylize (outline+highlight)", &stylize))
         renderer->setStylizeEnabled(stylize);
@@ -276,6 +287,9 @@ void DebugUi::Impl::copyToml()
                   "pixel_size = %d\n"
                   "per_pixel_lighting = %s\n"
                   "omni_attenuation = %.4f\n"
+                  "bloom = %s\n"
+                  "bloom_threshold = %.2f\n"
+                  "bloom_intensity = %.2f\n"
                   "stylize = %s\n"
                   "stylize_shadows = %s\n"
                   "stylize_highlights = %s\n"
@@ -294,6 +308,8 @@ void DebugUi::Impl::copyToml()
                   ditherBanding ? "true" : "false", ditherDarkFade,
                   env.pixelSize, env.perPixelLighting ? "true" : "false",
                   env.omniAttenuation,
+                  env.bloom ? "true" : "false", env.bloomThreshold,
+                  env.bloomIntensity,
                   env.stylize ? "true" : "false",
                   stylizeShadows ? "true" : "false",
                   stylizeHighlights ? "true" : "false", shadowStrength,

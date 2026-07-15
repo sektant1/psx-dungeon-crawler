@@ -186,3 +186,80 @@ material PSX/PixelStylize
         }
     } }
 }
+
+// Bloom: bright-pass -> separable blur (H, V) -> additive composite. All at
+// or below the pixelated resolution; composite runs before PSX/DitherPost.
+material PSX/BloomBright
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomBright_FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material PSX/BloomBlurH
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomBlur_FS
+        {
+            param_named blurDir float2 1.0 0.0
+        }
+        texture_unit
+        {
+            filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material PSX/BloomBlurV
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomBlur_FS
+        {
+            param_named blurDir float2 0.0 1.0
+        }
+        texture_unit
+        {
+            filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material PSX/BloomComposite
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomComposite_FS { }
+        texture_unit    // scene
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+        texture_unit    // bloom
+        {
+            filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <string>
+#include <utility>
 
 namespace eng {
 
@@ -118,13 +119,18 @@ void RenderCore::setPixelSize(int pixelSize)
     // Add a hair of upward rounding so the float size derivation truncates to
     // window/pixelSize exactly (e.g. 960 * (1/3) must give 320, not 319).
     const float f = 1.0f / float(mPixelSize) + 1e-6f;
+    const float fHalf = 0.5f / float(mPixelSize) + 1e-6f;
+    const std::pair<const char*, float> texFactors[] = {
+        {"mrt", f}, {"rt_post", f}, {"rt_final", f},
+        {"rt_bright", fHalf}, {"rt_blur", fHalf},
+    };
     Ogre::CompositionTechnique* tech = comp->getTechnique(0);
-    for (const char* name : {"mrt", "rt_post"}) {
+    for (auto& [name, factor] : texFactors) {
         auto* def = tech->getTextureDefinition(name);
         if (!def)
             continue; // compositor script and this list drifted apart
-        def->widthFactor = f;
-        def->heightFactor = f;
+        def->widthFactor = factor;
+        def->heightFactor = factor;
     }
     if (mChainAdded) {
         Ogre::CompositorManager::getSingleton().removeCompositor(mViewport,

@@ -320,6 +320,21 @@ void Renderer::setOmniAttenuation(float exponent)
     setGlobalMaterialParam("omniAttenuation", exponent);
 }
 
+void Renderer::setBloomEnabled(bool enabled)
+{
+    mImpl->env.bloom = enabled;
+    setMaterialParam("PSX/BloomComposite", "bloomEnabled",
+                     enabled ? 1.0f : 0.0f);
+}
+
+void Renderer::setBloomParams(float threshold, float intensity)
+{
+    mImpl->env.bloomThreshold = threshold;
+    mImpl->env.bloomIntensity = intensity;
+    setMaterialParam("PSX/BloomBright", "bloomThreshold", threshold);
+    setMaterialParam("PSX/BloomComposite", "bloomIntensity", intensity);
+}
+
 const EnvState& Renderer::envState() const { return mImpl->env; }
 
 void Renderer::writeScreenshot(const std::string& path)

@@ -17,6 +17,9 @@ compositor PSX/Stylized
     {
         texture mrt target_width_scaled 0.333334 target_height_scaled 0.333334 PF_FLOAT16_RGBA PF_FLOAT16_RGBA
         texture rt_post target_width_scaled 0.333334 target_height_scaled 0.333334 PF_BYTE_RGBA
+        texture rt_bright target_width_scaled 0.166667 target_height_scaled 0.166667 PF_BYTE_RGBA
+        texture rt_blur target_width_scaled 0.166667 target_height_scaled 0.166667 PF_BYTE_RGBA
+        texture rt_final target_width_scaled 0.333334 target_height_scaled 0.333334 PF_BYTE_RGBA
 
         target mrt
         {
@@ -34,13 +37,54 @@ compositor PSX/Stylized
             }
         }
 
+        target rt_bright
+        {
+            input none
+            pass render_quad
+            {
+                material PSX/BloomBright
+                input 0 rt_post
+            }
+        }
+
+        target rt_blur
+        {
+            input none
+            pass render_quad
+            {
+                material PSX/BloomBlurH
+                input 0 rt_bright
+            }
+        }
+
+        target rt_bright
+        {
+            input none
+            pass render_quad
+            {
+                material PSX/BloomBlurV
+                input 0 rt_blur
+            }
+        }
+
+        target rt_final
+        {
+            input none
+            pass render_quad
+            {
+                material PSX/BloomComposite
+                input 0 rt_post
+                input 1 rt_bright
+            }
+        }
+
         target_output
         {
             input none
             pass render_quad
             {
                 material PSX/DitherPost
-                input 0 rt_post
+                input 0 rt_final
             }
         }
     }
