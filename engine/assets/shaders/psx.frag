@@ -9,9 +9,11 @@ noperspective in vec3 vLight;
 noperspective in vec3 vNormalVS;
 noperspective in float vViewDepth;
 
+#ifdef LIT
 // Perspective-correct inputs for the per-pixel lighting path.
 smooth in vec3 vVsPos;
 smooth in vec3 vNormalSmooth;
+#endif
 
 uniform vec4 modulateColor;
 #ifndef NO_TEXTURE
@@ -95,7 +97,7 @@ void main()
     {
         // NOTE: duplicated from the psx.vert light loop. Keep both copies
         // in sync.
-        vec3 nrm = normalize(vNormalSmooth);
+        vec3 nrm = normalize(vNormalSmooth); // renormalize after interpolation
         lightAmt = ambientLight.rgb;
         int count = int(min(lightCount, 3.0) + 0.5);
         for (int i = 0; i < count; ++i)
