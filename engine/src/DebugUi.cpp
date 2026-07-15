@@ -187,7 +187,7 @@ void DebugUi::Impl::drawShaders()
 
     const EnvState& env = renderer->envState();
     bool dither = env.dither;
-    if (ImGui::Checkbox("dither compositor", &dither))
+    if (ImGui::Checkbox("dither pass", &dither))
         renderer->setDitherEnabled(dither);
     if (ImGui::SliderFloat("colour depth", &colDepth, 1.0f, 64.0f, "%.0f"))
         renderer->setMaterialParam("PSX/DitherPost", "colDepth", colDepth);

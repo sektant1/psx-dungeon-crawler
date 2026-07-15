@@ -44,8 +44,9 @@ private:
     Ogre::SceneManager* mSceneMgr = nullptr;
     Ogre::Camera* mCamera = nullptr;
     Ogre::Viewport* mViewport = nullptr;
-    bool mChainAdded = false;
-    bool mChainEnabled = false;
+    bool mChainAdded = false;   // compositor instance exists on the viewport
+    bool mChainEnabled = false; // chain was ever requested (one-way; gates the
+                                // setPixelSize re-add on cold start)
     int mPixelSize = 3;
     Ogre::OverlaySystem* mOverlaySystem = nullptr; // deleted before Root
     Ogre::ImGuiOverlay* mImGuiOverlay = nullptr;   // owned by OverlayManager
