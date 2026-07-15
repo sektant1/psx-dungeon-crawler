@@ -39,6 +39,12 @@ noperspective out vec3 vLight;
 noperspective out vec3 vNormalVS;
 noperspective out float vViewDepth;
 
+// Per-pixel lighting path (perPixelLighting uniform in psx.frag): position
+// and normal need perspective-correct interpolation -- affine-interpolated
+// positions would warp the light falloff we are trying to fix.
+smooth out vec3 vVsPos;
+smooth out vec3 vNormalSmooth;
+
 // identical to psx_base.gdshaderinc
 const vec2 base_snap_res = vec2(512.0, 448.0);
 vec4 get_snapped_pos(vec4 base_pos)
@@ -62,10 +68,15 @@ void main()
     vNormalVS = vsNormal;
     vViewDepth = length(vsPos); // Godot fog uses length(VERTEX)
 
+    vVsPos = vsPos;
+    vNormalSmooth = vsNormal;
+
     #ifdef LIT
     // Godot render_mode vertex_lighting + diffuse_lambert + specular_disabled.
     // (Godot pre-multiplies light energy by PI to cancel the 1/PI in its
     //  lambert BRDF, so plain NdotL * colour*energy matches 1:1.)
+    // NOTE: this loop is duplicated in psx.frag (per-pixel path). Keep both
+    // copies in sync.
     vec3 light = ambientLight.rgb;
     int count = int(min(lightCount, 3.0) + 0.5);
     for (int i = 0; i < count; ++i)

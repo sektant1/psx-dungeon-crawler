@@ -9,6 +9,10 @@ noperspective in vec3 vLight;
 noperspective in vec3 vNormalVS;
 noperspective in float vViewDepth;
 
+// Perspective-correct inputs for the per-pixel lighting path.
+smooth in vec3 vVsPos;
+smooth in vec3 vNormalSmooth;
+
 uniform vec4 modulateColor;
 #ifndef NO_TEXTURE
 uniform sampler2D albedoTex;
@@ -21,6 +25,17 @@ uniform float alphaScissor;
 uniform vec4 fogColour;   // scene fog colour
 uniform vec4 fogParams;   // x = density (Ogre FOG_EXP)
 uniform float farClip;
+
+#ifdef LIT
+// Same bindings as psx.vert; see psx.program LIT fragment default_params.
+uniform vec4 ambientLight;
+uniform vec4 lightPos[3];     // view space; w == 0 -> directional (dir TO light)
+uniform vec4 lightDiffuse[3];
+uniform vec4 lightAtten[3];   // x = range
+uniform float lightCount;
+uniform float omniAttenuation;
+uniform float perPixelLighting; // >= 0.5: fragment lighting, else vertex vLight
+#endif
 
 layout(location = 0) out vec4 fragColour;
 // MRT surface 1 (PSX/Stylized compositor): view-space normal encoded
@@ -75,7 +90,36 @@ void main()
 #endif
 
 #ifdef LIT
-    vec3 rgb = albedo * vLight;   // vertex-lit: ambient + lambert from VS
+    vec3 lightAmt = vLight;       // vertex-lit: ambient + lambert from VS
+    if (perPixelLighting >= 0.5)
+    {
+        // NOTE: duplicated from the psx.vert light loop. Keep both copies
+        // in sync.
+        vec3 nrm = normalize(vNormalSmooth);
+        lightAmt = ambientLight.rgb;
+        int count = int(min(lightCount, 3.0) + 0.5);
+        for (int i = 0; i < count; ++i)
+        {
+            vec3 L;
+            float att;
+            if (lightPos[i].w == 0.0)
+            {
+                L = normalize(lightPos[i].xyz);
+                att = 1.0;
+            }
+            else
+            {
+                vec3 toLight = lightPos[i].xyz - vVsPos;
+                float dist = length(toLight);
+                L = toLight / max(dist, 1e-5);
+                // Godot omni attenuation curve: pow(1 - d/range, attenuation)
+                att = pow(clamp(1.0 - dist / lightAtten[i].x, 0.0, 1.0),
+                          omniAttenuation);
+            }
+            lightAmt += lightDiffuse[i].rgb * max(dot(nrm, L), 0.0) * att;
+        }
+    }
+    vec3 rgb = albedo * lightAmt;
 #else
     vec3 rgb = albedo;            // unshaded
 #endif
