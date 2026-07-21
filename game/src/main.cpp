@@ -49,9 +49,15 @@ int main(int, char**)
     // Modular dungeon from the PSX_Modular_Medieval tile set, laid out in
     // dungeon.toml. The 'C' cell (great hall centre) sits at the world
     // origin so the shared DemoScene lands inside the hall.
+    // Procedurally generated level (PSX_GEN_SEED overrides the default seed).
+    // The generator's anchor 'C' room lands at the world origin so the shared
+    // DemoScene still sits centred inside it.
+    uint32_t seed = 1;
+    if (const char* s = std::getenv("PSX_GEN_SEED"))
+        seed = uint32_t(std::strtoul(s, nullptr, 10));
     DungeonMap dungeon;
-    if (!dungeon.load(r, assets + "/dungeon.toml", assets + "/meshes/tiles/",
-                      assets + "/meshes/props/"))
+    if (!dungeon.loadFromRows(r, gen::generate(seed), assets + "/meshes/tiles/",
+                              assets + "/meshes/props/"))
         return 1;
 
     // ------------------------------------------------------ shared scene ---
