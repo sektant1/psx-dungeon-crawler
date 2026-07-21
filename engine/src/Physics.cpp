@@ -248,6 +248,9 @@ int Physics::activeBodyCount() const {
     return int(mImpl->system.GetNumActiveBodies(EBodyType::RigidBody));
 }
 
+void Physics::setGravity(float y) { mImpl->system.SetGravity(JPH::Vec3(0, y, 0)); }
+float Physics::gravityY() const { return mImpl->system.GetGravity().GetY(); }
+
 void Physics::removeBody(BodyHandle h) {
     if (!h.valid() || h.id >= uint32_t(mImpl->bodies.size())) return;
     BodyRec& rec = mImpl->bodies[h.id];

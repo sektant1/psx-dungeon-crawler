@@ -738,6 +738,19 @@ int main(int, char**)
                                                        : (player.grounded() ? "grounded"
                                                                             : "airborne"));
     });
+    engine.debugUi().addPanel("Physics", [&physics, &player] {
+        ImGui::Text("active bodies: %d", physics.activeBodyCount());
+        float g = physics.gravityY();
+        if (ImGui::SliderFloat("gravity Y", &g, -40.0f, 0.0f, "%.1f"))
+            physics.setGravity(g);
+        ImGui::Separator();
+        ImGui::Text("grounded: %s", player.grounded() ? "yes" : "no");
+        const glm::vec3 n = player.groundNormal();
+        ImGui::Text("ground normal: %.2f %.2f %.2f", n.x, n.y, n.z);
+        ImGui::Text("horizontal speed: %.2f m/s", player.horizontalSpeed());
+        ImGui::Text("stance: %s", player.crouched() ? "crouched"
+                    : (player.sliding() ? "sliding" : "standing"));
+    });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
     engine.debugUi().addWindow([&level, &player, &editor, &r, &physics,

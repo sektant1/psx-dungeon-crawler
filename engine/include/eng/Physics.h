@@ -69,6 +69,8 @@ public:
     void applyImpulse(BodyHandle, glm::vec3 impulse, glm::vec3 atPoint);
     void setBodyKinematic(BodyHandle, bool);
     int  activeBodyCount() const;
+    void  setGravity(float y);      // sets world gravity to (0, y, 0)
+    float gravityY() const;         // current gravity y component
 
     CharacterHandle createCharacter(const CharacterDesc&);
     void removeCharacter(CharacterHandle);

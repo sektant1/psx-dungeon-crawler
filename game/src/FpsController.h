@@ -43,6 +43,8 @@ public:
     bool sprinting() const { return mSprinting; }
     bool sliding() const { return mSliding; }
     bool grounded() const { return mPhysics ? mCharGrounded : (mPos.y <= 0.001f); }
+    glm::vec3 groundNormal() const { return mGroundNormal; }
+    float horizontalSpeed() const { return glm::length(mVelocity); }
     glm::vec3 position() const { return mPos; }
     // Horizontal capsule footprint used by the dungeon's rendered-wall sweep.
     // Kept below the 0.8 m half-width arch opening for comfortable traversal.
@@ -89,6 +91,7 @@ private:
     bool mSprintExhausted = false;
     bool mSliding = false;
     bool mCharGrounded = false;
+    glm::vec3 mGroundNormal{0,1,0};
     eng::Physics* mPhysics = nullptr;
     eng::CharacterHandle mCharacter{};
 };

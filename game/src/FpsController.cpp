@@ -234,6 +234,7 @@ void FpsController::simulate(const Command& command, float dt)
         mPhysics->characterSetVelocity(mCharacter, vel);
         mPhysics->characterUpdate(mCharacter, dt);
         const eng::CharacterState st = mPhysics->characterState(mCharacter);
+        mGroundNormal = st.groundNormal;
 
         const glm::vec3 beforeMove = mPos;
         mPos = st.position; // feet position
