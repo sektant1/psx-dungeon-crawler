@@ -23,6 +23,12 @@ int main()
     require(first.spawn().valid() && first.anchor().valid() && first.exit().valid(),
             "generated markers must exist");
     require(first.roomCount() >= 6, "generated layout must contain rooms");
+    int props = 0;
+    for (const std::string& row : first.rows())
+        for (char cell : row)
+            if (cell == 'H' || cell == 'B' || cell == 'R' || cell == 'V')
+                ++props;
+    require(props >= first.roomCount(), "generated rooms should receive dressing");
     for (int i = 0; i < first.archCount(); ++i)
         require(first.arch(i).roomA >= 0, "every arch must join a room");
 

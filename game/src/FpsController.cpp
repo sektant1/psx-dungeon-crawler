@@ -142,10 +142,11 @@ void FpsController::simulate(const Command& command, float dt)
     mSprinting = wantsSprint && mSprintStamina >= kSprintStartThreshold;
     if (mSprinting) {
         mSprintStamina = std::max(0.0f, mSprintStamina - kStaminaDrain * dt);
-        // Do not re-enable sprint one frame after depletion just because the
-        // recovery branch added a tiny amount of stamina. Releasing Shift is
-        // the intentional reset for the exhausted state.
-        if (mSprintStamina <= 0.0f) {
+        // Latch exhaustion at the same threshold used to start sprinting.
+        // Previously the controller stopped at 8%, recovered just above 8%,
+        // sprinted one frame, then stopped again: a visible speed/FOV/bob
+        // stutter for as long as Shift remained held.
+        if (mSprintStamina < kSprintStartThreshold) {
             mSprintExhausted = true;
             mSprinting = false;
         }

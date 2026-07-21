@@ -8,6 +8,7 @@
 #include "DungeonMap.h"
 #include "FpsController.h"
 #include "LevelEditor.h"
+#include "SceneFactory.h"
 #include "Targeting.h"
 
 #include <DemoScene.h>
@@ -96,8 +97,8 @@ public:
     void update(eng::Renderer& r, float animationTime);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
     void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
-    glm::vec3 resolveMove(glm::vec3 from, glm::vec3 to, float radius) const
-    { return map.resolveMove(from, to, radius); }
+    glm::vec3 resolveMove(glm::vec3 from, glm::vec3 to, float radius) const;
+    std::string showcasePrompt(glm::vec3 eye, glm::vec3 forward) const;
     glm::vec3 spawnPosition() const { return spawn; }
     glm::vec3 exitPosition() const { return exit; }
     bool torchIsLit(int index) const { return map.torchLit(index); }
@@ -114,8 +115,9 @@ private:
     eng::LightHandle chestGlow{};
     glm::vec3 chestGlowColour{0.0f};
     glm::vec3 spawn{0.0f}, exit{0.0f};
-    eng::NodeHandle downPortal{};
-    eng::NodeHandle upPortal{}; // invalid at depth 0
+    PortalVisual downPortal{};
+    PortalVisual upPortal{}; // invalid at depth 0
+    std::vector<ShowcaseExhibit> exhibits;
 };
 
 // Read-only generated-grid inspector. The dungeon owns the data; this only
@@ -244,13 +246,25 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
 
     // ------------------------------------------------------ shared scene ---
     DemoScene::Options sceneOpts;
-    sceneOpts.crystals = true;     // glassy spires ring the treasure shrine
+    sceneOpts.crystals = depth == 0; // lobby-only crystal feature gallery
     sceneOpts.boxes = false;       // movers replaced by the treasure chest
     lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", eng::kRootNode,
                   sceneOpts);
 
     applyPalette(r, lv.scene);
+    if (depth == 0) {
+        // The lobby is a teaching/showcase vista: preserve atmosphere while
+        // keeping the far portal landmark readable from the arrival frame.
+        const auto lin = [](float c) { return std::pow(c, 2.2f); };
+        r.setFog({lin(0.12f), lin(0.115f), lin(0.15f)}, 0.026f);
+    }
 
+    // ------------------------------------------------- lobby showcase ---
+    // Depth zero is a deliberately authored, non-combat exhibition hall.
+    // Keep this dense staging out of procedural dungeon floors: those are
+    // dressed by DungeonMap's data-driven marker and ambient prop catalogs.
+    if (depth == 0) {
+    loadPrimitiveShowcase(r, assets + "/lobby_showcase.toml", lv.exhibits);
     // ------------------------------------------------- set dressing ---
     // Medieval props placed around the anchor room (positions authored for
     // the shared centrepiece layout at the world origin).
@@ -290,18 +304,18 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         eng::MeshHandle vase0 = mesh("prop_vase_p0.obj");
         eng::MeshHandle vase1 = mesh("prop_vase_p1.obj");
 
-        // --- entry hall (z ~ -24): a market table greets the player.
+        // --- entry hall (z ~ +24): a market table greets the player.
         eng::NodeHandle table = place2(
             mesh("prop_table_p0.obj"), "Game/PropWood",
             mesh("prop_table_p1.obj"), "Game/PropMarket",
-            {7.0f, 0.88f, -24.5f}, -60.0f, false);
+            {7.0f, 0.88f, 24.5f}, -120.0f, false);
         r.attachMesh(r.createNode(table, {0.3f, 0.53f, -0.2f}),
                      mesh("prop_bread.obj"), "Game/PropMarketMisc");
         r.attachMesh(r.createNode(table, {-0.35f, 0.59f, 0.25f}), pumpkin,
                      "Game/PropMarketMisc");
         place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
-               {-8.5f, 0.0f, -25.0f}, 30.0f);
-        place(sack, "Game/PropJute", {-5.0f, 0.0f, -22.8f}, 100.0f);
+               {-8.5f, 0.0f, 25.0f}, 30.0f);
+        place(sack, "Game/PropJute", {-5.0f, 0.0f, 22.8f}, 100.0f);
 
         // --- great hall corners (x +-10, z +-6 interior)
         place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
@@ -323,11 +337,11 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                {8.8f, 0.0f, -4.5f}, 0.0f);
         place(sack, "Game/PropJute", {9.1f, 0.0f, -3.4f}, -15.0f);
 
-        // --- vault (z ~ 18..26): sword stabbed into the floor, shield on a
+        // --- vault (z ~ -18..-26): sword stabbed into the floor, shield on a
         // barrel. The weapons-pack meshes are authored huge; scale down.
         {
             eng::NodeHandle sword =
-                r.createNode(eng::kRootNode, {0.0f, 1.15f, 24.0f});
+                r.createNode(eng::kRootNode, {0.0f, 1.15f, -24.0f});
             r.setScale(sword, glm::vec3(0.06f));
             r.setOrientation(sword,
                              glm::angleAxis(glm::radians(168.0f),
@@ -336,7 +350,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                                                 glm::vec3(1, 0, 0)));
             r.attachMesh(sword, mesh("prop_sword.obj"), "Game/PropWeapon");
 
-            const glm::vec3 b{-4.0f, 0.0f, 24.2f};
+            const glm::vec3 b{-4.0f, 0.0f, -24.2f};
             place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
                    b, 0.0f);
             eng::NodeHandle shield =
@@ -351,7 +365,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         }
         place2(mesh("prop_barrel_open_p0.obj"), "Game/PropPlanksTwoSided",
                mesh("prop_barrel_open_p1.obj"), "Game/PropBauerhausTwoSided",
-               {4.2f, 0.0f, 24.0f}, -30.0f);
+               {4.2f, 0.0f, -24.0f}, -30.0f);
 
         // --- braziers: ground the demo's two omni lamps in open barrels with
         // a fire on the rim and lift the light just above the flames.
@@ -376,7 +390,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             }
         }
         {
-            const glm::vec3 c{-4.5f, 0.0f, 20.0f};
+            const glm::vec3 c{-4.5f, 0.0f, -20.0f};
             place(crate, "Game/PropMarket", c, -20.0f, noScale, false);
             place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), 15.0f,
                   noScale, false);
@@ -418,19 +432,35 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         lv.chestGlow = r.attachLight(lv.chestBase, glow);
     }
 
-    // Portals: emissive additive cubes as waist-high floor markers. The
-    // player spawns ON the portal cell (up on descend, down on ascend), so a
-    // small low cube reads as a glow at their feet rather than engulfing the
-    // camera; from across a room it's a visible landmark to aim at.
+    }
+
+    // Portals: generated low-poly arch + animated additive membrane. The
+    // threshold remains on the cell centre so interaction/navigation stays
+    // deterministic while the tall silhouette reads across a whole room.
     {
-        eng::MeshHandle cube = r.createInteriorBox(0.8f, 0);
-        lv.downPortal = r.createNode(eng::kRootNode,
-                                     lv.exit + glm::vec3(0.0f, 0.4f, 0.0f));
-        r.attachMesh(lv.downPortal, cube, "Game/PortalDown");
+        const auto portalBlockers = [&](glm::vec3 at, const char* label) {
+            for (float side : {-1.0f, 1.0f}) {
+                ShowcaseExhibit pillar;
+                pillar.id = label;
+                pillar.label = label;
+                pillar.position = at + glm::vec3(side * 1.25f, 1.2f, 0.0f);
+                pillar.halfExtents = {0.46f, 1.2f, 0.42f};
+                pillar.blocksMovement = true;
+                lv.exhibits.push_back(std::move(pillar));
+            }
+        };
+        PortalStyle down;
+        down.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
+        down.lightColour = {0.06f, 0.42f, 0.025f};
+        lv.downPortal = createPortal(r, lv.exit, down);
+        portalBlockers(lv.exit, "Dungeon Portal — animated fel gate");
         if (depth > 0) {
-            lv.upPortal = r.createNode(eng::kRootNode,
-                                       lv.spawn + glm::vec3(0.0f, 0.4f, 0.0f));
-            r.attachMesh(lv.upPortal, cube, "Game/PortalUp");
+            PortalStyle up;
+            up.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
+            up.material = "Game/PortalUp";
+            up.lightColour = {0.18f, 0.90f, 1.35f};
+            lv.upPortal = createPortal(r, lv.spawn, up);
+            portalBlockers(lv.spawn, "Return Portal — animated arcane gate");
         }
     }
     return lv;
@@ -462,13 +492,59 @@ void LiveLevel::update(eng::Renderer& r, float animationTime)
 {
     scene.update(r, animationTime);
     map.update(r, animationTime);
-    r.setPosition(chestBase,
-                  {0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f), 0.0f});
-    r.setOrientation(chestSpin,
-                     glm::angleAxis(animationTime * 0.8f, glm::vec3(0, 1, 0)));
-    const float pulse = 0.9f + 0.1f * std::sin(animationTime * 1.7f) +
-                        0.05f * std::sin(animationTime * 4.3f);
-    r.setLightColour(chestGlow, chestGlowColour * pulse);
+    animatePortal(r, downPortal, animationTime);
+    animatePortal(r, upPortal, animationTime, -1.0f);
+    if (chestBase.valid()) {
+        r.setPosition(chestBase,
+                      {0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f),
+                       0.0f});
+        r.setOrientation(
+            chestSpin,
+            glm::angleAxis(animationTime * 0.8f, glm::vec3(0, 1, 0)));
+        const float pulse = 0.9f + 0.1f * std::sin(animationTime * 1.7f) +
+                            0.05f * std::sin(animationTime * 4.3f);
+        r.setLightColour(chestGlow, chestGlowColour * pulse);
+    }
+}
+
+glm::vec3 LiveLevel::resolveMove(glm::vec3 from, glm::vec3 to, float radius) const
+{
+    glm::vec3 out = map.resolveMove(from, to, radius);
+    const auto fits = [&](float x, float z) {
+        for (const ShowcaseExhibit& e : exhibits) {
+            if (!e.blocksMovement) continue;
+            const float nearestX = std::clamp(x, e.position.x - e.halfExtents.x,
+                                               e.position.x + e.halfExtents.x);
+            const float nearestZ = std::clamp(z, e.position.z - e.halfExtents.z,
+                                               e.position.z + e.halfExtents.z);
+            const glm::vec2 delta{x - nearestX, z - nearestZ};
+            if (glm::dot(delta, delta) < radius * radius) return false;
+        }
+        return true;
+    };
+    glm::vec3 slid = from;
+    if (fits(out.x, slid.z)) slid.x = out.x;
+    if (fits(slid.x, out.z)) slid.z = out.z;
+    slid.y = out.y;
+    return slid;
+}
+
+std::string LiveLevel::showcasePrompt(glm::vec3 eye, glm::vec3 forward) const
+{
+    const ShowcaseExhibit* best = nullptr;
+    float bestDistance = 5.0f;
+    for (const ShowcaseExhibit& e : exhibits) {
+        glm::vec3 target = e.position;
+        target.y = std::max(0.5f, e.position.y);
+        const glm::vec3 offset = target - eye;
+        const float distance = glm::length(offset);
+        if (distance >= bestDistance || distance < 0.01f ||
+            glm::dot(offset / distance, forward) < 0.88f)
+            continue;
+        best = &e;
+        bestDistance = distance;
+    }
+    return best ? best->label : std::string();
 }
 
 void LiveLevel::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos)
@@ -532,8 +608,29 @@ int main(int, char**)
     // Wipe the scene, build the level at `depth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     const auto enterLevel = [&](bool atExit) {
-        level.rebuild(r, physics, assets, seeds[size_t(depth)], depth);
-        const glm::vec3 p = atExit ? level.exitPosition() : level.spawnPosition();
+        bool loaded = false;
+        if (depth == 0) {
+            LevelDocument lobby;
+            std::string error;
+            if (lobby.loadToml(assets + "/lobby.toml", error)) {
+                loaded = level.rebuildLayout(r, physics, assets,
+                                             lobby.validated(), depth);
+            } else {
+                eng::log::error("Lobby: %s", error.c_str());
+            }
+        } else {
+            loaded = level.rebuild(r, physics, assets, seeds[size_t(depth)],
+                                   depth);
+        }
+        if (!loaded) {
+            eng::log::error("Level %d failed to load", depth);
+            return;
+        }
+        const bool portalPreview = depth == 0 &&
+                                   std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
+        const glm::vec3 p = portalPreview
+            ? level.exitPosition() + glm::vec3(0.0f, 0.0f, 6.0f)
+            : (atExit ? level.exitPosition() : level.spawnPosition());
         player.init(r, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
         player.setResolver([&level, &player](glm::vec3 from, glm::vec3 to) {
             // This lambda is rebound after init, so the controller's FPS
@@ -546,7 +643,7 @@ int main(int, char**)
                                  std::pow(0.58f, 2.2f)) * 0.95f;
         carry.range = 7.0f;
         r.attachLight(player.headNode(), carry);
-        engine.input().setMouseGrab(true);
+        engine.input().setMouseGrab(!portalPreview);
     };
     enterLevel(false); // depth 0, spawn at entry
 
@@ -632,7 +729,8 @@ int main(int, char**)
         const GameplayTarget* target = aimedTarget(
             targets, player.eyePosition(), player.forward());
         if (!target) {
-            engine.debugUi().setHudPrompt("");
+            engine.debugUi().setHudPrompt(level.showcasePrompt(
+                player.eyePosition(), player.forward()));
         } else if (target->kind == TargetKind::Torch) {
             engine.debugUi().setHudPrompt(level.torchIsLit(target->id)
                                               ? "Press [E] to snuff the torch"

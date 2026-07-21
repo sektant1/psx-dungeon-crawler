@@ -1,4 +1,5 @@
 #include "RenderCore.h"
+#include "eng/Log.h"
 
 #include <Ogre.h>
 #include <OgreCompositor.h>
@@ -49,7 +50,8 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
                             "/compositors", "/textures"})
         rgm.addResourceLocation(engBase + sub, "FileSystem", "General");
     for (const char* sub : {"/materials", "/textures", "/textures/props",
-                            "/particles"}) {
+                            "/textures/prototype", "/textures/vfx",
+                            "/textures/surfaces", "/particles"}) {
         const std::string dir = appAssetDir + sub;
         if (std::filesystem::is_directory(dir))
             rgm.addResourceLocation(dir, "FileSystem", "General");
@@ -63,8 +65,27 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
          Ogre::MaterialManager::getSingleton().getResourceIterator()) {
         auto mat = Ogre::static_pointer_cast<Ogre::Material>(it.second);
         for (Ogre::Technique* tech : mat->getTechniques())
-            for (Ogre::Pass* pass : tech->getPasses())
+            for (Ogre::Pass* pass : tech->getPasses()) {
                 pass->setMaxSimultaneousLights(16);
+                // OGRE's internal "Warning" texture is easy to mistake for
+                // broken lighting. Replace missing file-backed textures with
+                // the project's loud PINKY prototype grid and name the bad
+                // binding in the log. Compositor/render-target units are not
+                // file-backed and are intentionally ignored here.
+                for (Ogre::TextureUnitState* unit :
+                     pass->getTextureUnitStates()) {
+                    if (unit->getContentType() !=
+                        Ogre::TextureUnitState::CONTENT_NAMED)
+                        continue;
+                    const Ogre::String missing = unit->getTextureName();
+                    if (missing.empty() ||
+                        rgm.resourceExistsInAnyGroup(missing))
+                        continue;
+                    log::error("Material '%s': texture '%s' is missing; using PINKY.png",
+                               mat->getName().c_str(), missing.c_str());
+                    unit->setTextureName("PINKY.png");
+                }
+            }
     }
 
     // Hard-edged stencil shadows: period-correct (no soft filtering), work

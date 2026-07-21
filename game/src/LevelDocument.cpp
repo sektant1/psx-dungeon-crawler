@@ -62,7 +62,7 @@ void LevelDocument::replace(std::vector<std::string> rows, bool remember)
 
 bool LevelDocument::paint(int col, int row, char tile)
 {
-    static const std::string allowed = "#.ALSCX ";
+    static const std::string allowed = "#.ALSCXHBRV ";
     if (allowed.find(tile) == std::string::npos || row < 0 || row >= rows() ||
         col < 0 || col >= columns() || cell(col, row) == tile)
         return false;
@@ -151,7 +151,8 @@ bool LevelDocument::saveToml(const std::string& path, std::string& error)
         return false;
     }
     out << "# Authored with the in-game dungeon editor.\n"
-           "# # solid, . floor, A arch, L torch, S spawn, C anchor, X exit\n\n"
+           "# # wall, . floor, A arch, L torch, S spawn, C anchor, X exit\n"
+           "# H chest, B barrel, R crate, V urn\n\n"
            "[dungeon]\ncell_size = 4.0\nwall_height = 3.0\nrows = [\n";
     for (const std::string& row : mRows)
         out << "    " << std::quoted(row) << ",\n";

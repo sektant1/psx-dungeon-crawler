@@ -4,7 +4,11 @@
 //   LIT, METAL, NO_TEXTURE, ALPHA_BLEND, ALPHA_SCISSOR, LIGHT_VOLUME, BLEND_ADD,
 //   RIM (requires LIT: fresnel edge sheen for glassy materials)
 
+#ifdef AFFINE_UV
 noperspective in vec2 vUV;
+#else
+smooth in vec2 vUV;
+#endif
 noperspective in vec4 vColour;
 noperspective in vec3 vLight;
 noperspective in vec3 vNormalVS;

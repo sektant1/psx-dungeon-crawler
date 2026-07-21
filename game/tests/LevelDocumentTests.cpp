@@ -22,6 +22,9 @@ int main()
     require(doc.undo() && doc.cell(2, 1) == '.', "undo restores previous cell");
     require(doc.redo() && doc.cell(2, 1) == 'L', "redo restores edit");
 
+    require(doc.paint(2, 1, 'H'), "chest marker should be editable");
+    require(doc.validated(true).valid(), "prop markers remain walkable and valid");
+
     require(doc.paint(4, 1, 'S'), "unique marker can be moved");
     require(doc.cell(1, 1) == '.', "old unique marker becomes floor");
     require(doc.cell(4, 1) == 'S', "new unique marker is placed");

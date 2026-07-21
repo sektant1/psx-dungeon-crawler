@@ -20,5 +20,28 @@ int main()
         player.simulate(command, 1.0f / 60.0f);
     if (!player.sprinting() || player.sprintStamina() >= before)
         return EXIT_FAILURE;
+
+    // Exhaustion must latch while Shift remains held. Recovery around the
+    // start threshold used to toggle sprint every few frames and visibly
+    // stutter movement, camera bob, and FOV.
+    for (int i = 0; i < 300; ++i)
+        player.simulate(command, 1.0f / 60.0f);
+    if (player.sprinting())
+        return EXIT_FAILURE;
+    for (int i = 0; i < 120; ++i) {
+        player.simulate(command, 1.0f / 60.0f);
+        if (player.sprinting())
+            return EXIT_FAILURE;
+    }
+
+    // Releasing Shift intentionally clears the latch; after recovery a new
+    // press produces a stable sprint again.
+    command.sprint = false;
+    for (int i = 0; i < 300; ++i)
+        player.simulate(command, 1.0f / 60.0f);
+    command.sprint = true;
+    player.simulate(command, 1.0f / 60.0f);
+    if (!player.sprinting())
+        return EXIT_FAILURE;
     return EXIT_SUCCESS;
 }

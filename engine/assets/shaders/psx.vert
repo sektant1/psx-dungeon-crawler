@@ -2,11 +2,9 @@
 // Port of shaders/psx_base.gdshaderinc vertex() for Ogre GL3Plus.
 // Compiled in variants via preprocessor_defines: LIT
 //
-// Affine texture mapping: Godot does `POSITION /= abs(POSITION.w)` after the
-// snap. Here we instead mark all varyings `noperspective`, which yields the
-// same screen-linear (affine) interpolation WITHOUT destroying clip-space w,
-// so near-plane clipping and the depth buffer keep working. The vertex snap
-// itself is identical math, applied BEFORE interpolation, as in the source.
+// Perspective-correct UVs are the production default. The earlier global
+// affine path visibly stretched long triangles near screen corners. Materials
+// that deliberately want authentic PSX warping can opt into AFFINE_UV.
 
 in vec4 vertex;
 in vec3 normal;
@@ -23,13 +21,22 @@ uniform float precisionMultiplier;
 uniform vec2 uvScale;
 uniform vec2 uvOffset;
 uniform vec2 uvPanVelocity;
+// Sprite-sheet animation shared by world materials. [1,1], count 1 or rate
+// 0 keeps ordinary textures unchanged; frames advance left-to-right, top-down.
+uniform vec2 uvFrameGrid;
+uniform float uvFrameCount;
+uniform float uvFrameRate;
 
 #ifdef LIT
 // Godot render_mode vertex_lighting + diffuse_lambert + specular_disabled.
 #include <psx_lighting.glsl>
 #endif
 
+#ifdef AFFINE_UV
 noperspective out vec2 vUV;
+#else
+smooth out vec2 vUV;
+#endif
 noperspective out vec4 vColour;
 noperspective out vec3 vLight;
 noperspective out vec3 vNormalVS;
@@ -56,7 +63,12 @@ vec4 get_snapped_pos(vec4 base_pos)
 
 void main()
 {
-    vUV = uv0 * uvScale + uvOffset + uvPanVelocity * time;
+    vec2 baseUV = uv0 * uvScale + uvOffset + uvPanVelocity * time;
+    vec2 grid = max(floor(uvFrameGrid + 0.5), vec2(1.0));
+    float count = clamp(floor(uvFrameCount + 0.5), 1.0, grid.x * grid.y);
+    float frame = uvFrameRate > 0.0 ? mod(floor(time * uvFrameRate), count) : 0.0;
+    vec2 cell = vec2(mod(frame, grid.x), floor(frame / grid.x));
+    vUV = (baseUV + cell) / grid;
     vColour = colour;
 
     vec3 vsPos = (worldView * vertex).xyz;

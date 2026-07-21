@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <unordered_map>
 
 namespace {
 
@@ -115,6 +116,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     mRooms.clear();
     mArches.clear();
     mTorches.clear();
+    mPropBlockers.clear();
     mLastCurrentRooms.clear();
     mCurrentScratch.clear();
     mQueueScratch.clear();
@@ -161,6 +163,70 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     const eng::MeshHandle arch = r.loadObj(tileMeshDir + "tile_arch.obj");
     const eng::MeshHandle pillar = r.loadObj(tileMeshDir + "tile_pillar.obj");
     const eng::MeshHandle torch = r.loadObj(propMeshDir + "prop_torch.obj");
+    struct PropPart {
+        eng::MeshHandle mesh;
+        std::string material;
+        float y = 0.0f;
+    };
+    struct PropDef {
+        std::vector<PropPart> parts;
+        std::vector<std::string> roles;
+        float radius = 0.4f;
+        float height = 0.5f;
+    };
+    std::unordered_map<char, PropDef> markerProps;
+    std::vector<PropDef> ambientCatalog;
+    int ambientChance = 13;
+    std::vector<std::string> roomRoles;
+    const std::string catalogPath = propMeshDir + "../../dungeon_props.toml";
+    toml::parse_result catalogResult = toml::parse_file(catalogPath);
+    if (!catalogResult) {
+        eng::log::error("DungeonMap: prop catalog failed: %s",
+                        std::string(catalogResult.error().description()).c_str());
+        return false;
+    }
+    const toml::table& catalog = catalogResult.table();
+    ambientChance = int(catalog["ambient"]["wall_edge_chance"].value_or(13));
+    if (const toml::array* roles = catalog["ambient"]["room_roles"].as_array())
+        for (const toml::node& role : *roles)
+            if (auto name = role.value<std::string>()) roomRoles.push_back(*name);
+    if (const toml::array* definitions = catalog["prop"].as_array()) {
+        for (const toml::node& node : *definitions) {
+            const toml::table* table = node.as_table();
+            if (!table) continue;
+            const toml::array* meshes = (*table)["meshes"].as_array();
+            const toml::array* materials = (*table)["materials"].as_array();
+            if (!meshes || !materials || meshes->size() != materials->size())
+                continue;
+            const toml::array* yValues = (*table)["y"].as_array();
+            PropDef def;
+            def.radius = float((*table)["radius"].value_or(0.4));
+            def.height = float((*table)["height"].value_or(0.5));
+            if (const toml::array* roles = (*table)["roles"].as_array())
+                for (const toml::node& role : *roles)
+                    if (auto name = role.value<std::string>())
+                        def.roles.push_back(*name);
+            for (size_t i = 0; i < meshes->size(); ++i) {
+                const std::string mesh = (*meshes)[i].value_or(std::string());
+                const std::string material =
+                    (*materials)[i].value_or(std::string());
+                const float y = yValues && i < yValues->size()
+                                    ? float((*yValues)[i].value_or(0.0)) : 0.0f;
+                if (!mesh.empty() && !material.empty())
+                    def.parts.push_back({r.loadObj(propMeshDir + mesh), material, y});
+            }
+            if (def.parts.empty()) continue;
+            const std::string marker = (*table)["marker"].value_or(std::string());
+            if (marker.size() == 1)
+                markerProps[marker[0]] = def;
+            if ((*table)["ambient"].value_or(false))
+                ambientCatalog.push_back(std::move(def));
+        }
+    }
+    if (markerProps.empty() || ambientCatalog.empty()) {
+        eng::log::error("DungeonMap: prop catalog has no marker or ambient props");
+        return false;
+    }
 
     eng::StaticBatchHandle curBatch{}; // set per cell in the grid loop
     const auto put = [&](eng::MeshHandle m, glm::vec3 pos, float yawDeg) {
@@ -193,6 +259,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     warm.castShadows = true; // torches throw hard prop shadows
 
     std::set<std::pair<int, int>> pillarSpots; // corner keys, de-duplicated
+    size_t ambientProps = 0;
 
     for (int row = 0; row < mLayout.rowCount(); ++row) {
         for (int col = 0; col < mLayout.columnCount(); ++col) {
@@ -311,6 +378,72 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             if (wallS && wallW) pillarSpots.insert({col, row + 1});
             if (wallS && wallE) pillarSpots.insert({col + 1, row + 1});
 
+            // Authored and generated dressing uses one cell marker per prop.
+            // A stable grid hash selects one of four cardinal rotations, so
+            // the same layout always has the same readable silhouette.
+            if (const auto found = markerProps.find(c); found != markerProps.end()) {
+                const PropDef& def = found->second;
+                const float yaw = float((col * 17 + row * 31) & 3) * 90.0f;
+                const glm::vec3 centre{x0 + mCell * 0.5f, 0.0f,
+                                       z0 + mCell * 0.5f};
+                for (const PropPart& part : def.parts)
+                    r.addToStaticBatch(curBatch, part.mesh, part.material,
+                                       centre + glm::vec3(0, part.y, 0), yaw);
+                mPropBlockers.push_back({centre.x - def.radius,
+                                         centre.z - def.radius,
+                                         centre.x + def.radius,
+                                         centre.z + def.radius});
+                addBox({centre.x, def.height, centre.z},
+                       {def.radius, def.height, def.radius});
+            }
+
+            // Ambient dressing is deliberately not encoded in the layout.
+            // It is derived from stable cell coordinates, so BSP and hand-
+            // authored rooms gain atmosphere without polluting gameplay data.
+            // Only ordinary wall-edge floor cells qualify; the centre lane,
+            // arches, markers and explicitly placed props remain untouched.
+            const uint32_t decorHash = uint32_t(col * 73856093) ^
+                                       uint32_t(row * 19349663) ^
+                                       uint32_t(mLayout.rowCount() * 83492791);
+            if (c == '.' && (wallN || wallS || wallW || wallE) &&
+                !ambientCatalog.empty() &&
+                decorHash % uint32_t(std::max(1, ambientChance)) == 0u) {
+                glm::vec3 pos{x0 + mCell * 0.5f, 0.0f,
+                              z0 + mCell * 0.5f};
+                float yaw = 0.0f;
+                const float edge = mCell * 0.34f;
+                if (wallN) { pos.z -= edge; yaw = 0.0f; }
+                else if (wallS) { pos.z += edge; yaw = 180.0f; }
+                else if (wallW) { pos.x -= edge; yaw = 90.0f; }
+                else { pos.x += edge; yaw = -90.0f; }
+
+                const std::string role = roomRoles.empty() || rIdx < 0
+                    ? std::string()
+                    : roomRoles[size_t(rIdx) % roomRoles.size()];
+                std::vector<size_t> eligible;
+                eligible.reserve(ambientCatalog.size());
+                for (size_t i = 0; i < ambientCatalog.size(); ++i)
+                    if (ambientCatalog[i].roles.empty() || role.empty() ||
+                        std::find(ambientCatalog[i].roles.begin(),
+                                  ambientCatalog[i].roles.end(), role) !=
+                            ambientCatalog[i].roles.end())
+                        eligible.push_back(i);
+                if (eligible.empty())
+                    for (size_t i = 0; i < ambientCatalog.size(); ++i)
+                        eligible.push_back(i);
+                const size_t choice = size_t(
+                    decorHash / uint32_t(std::max(1, ambientChance))) % eligible.size();
+                const PropDef& def = ambientCatalog[eligible[choice]];
+                for (const PropPart& part : def.parts)
+                    r.addToStaticBatch(curBatch, part.mesh, part.material,
+                                       pos + glm::vec3(0, part.y, 0), yaw);
+                mPropBlockers.push_back({pos.x - def.radius, pos.z - def.radius,
+                                         pos.x + def.radius, pos.z + def.radius});
+                addBox({pos.x, def.height, pos.z},
+                       {def.radius, def.height, def.radius});
+                ++ambientProps;
+            }
+
             if (c == 'L') {
                 // Wall torch. The mesh is a purpose-built vertical wall
                 // torch: its mounting plate sits at local +z (z 0.026..
@@ -394,9 +527,9 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
         r.buildStaticBatch(ar.batch);
 
     eng::log::info("DungeonMap: %zu rows, %zu rooms, %zu arches, %zu torches, "
-                   "%zu pillar posts, cell %.1f m",
+                   "%zu ambient props, %zu pillar posts, cell %.1f m",
                    mLayout.rows().size(), mRooms.size(), mArches.size(),
-                   mTorches.size(), pillarSpots.size(), mCell);
+                   mTorches.size(), ambientProps, pillarSpots.size(), mCell);
     return true;
 }
 
@@ -555,6 +688,10 @@ bool DungeonMap::circleFits(float x, float z, float radius) const
         const float dz = z - nearZ;
         return dx * dx + dz * dz < radius * radius;
     };
+
+    for (const PropBlocker& prop : mPropBlockers)
+        if (hitsRect(prop.minX, prop.minZ, prop.maxX, prop.maxZ))
+            return false;
 
     const int colMin = int(std::floor((x - radius - mOrigin.x) / mCell));
     const int colMax = int(std::floor((x + radius - mOrigin.x) / mCell));

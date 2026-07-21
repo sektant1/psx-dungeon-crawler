@@ -29,6 +29,7 @@ class Physics;
 //   'C'  floor + scene anchor; the map is shifted so this cell's centre is
 //        the world origin (the shared DemoScene loads at fixed positions
 //        around the origin)
+//   'H'/'B'/'R'/'V' floor + chest/barrel/crate/urn set dressing
 //   ' '  void (outside the dungeon)
 //
 // Rendering: floor + ceiling tile per walkable cell, wall segments facing
@@ -141,6 +142,8 @@ private:
 
     gen::Layout mLayout;
     std::vector<Torch> mTorches;
+    struct PropBlocker { float minX, minZ, maxX, maxZ; };
+    std::vector<PropBlocker> mPropBlockers;
     float mCell = 4.0f;
     glm::vec3 mOrigin{0.0f}; // world position of cell (0,0)'s NW corner
     glm::vec3 mSpawn{0.0f};

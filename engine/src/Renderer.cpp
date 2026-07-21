@@ -137,6 +137,36 @@ MeshHandle Renderer::createPlane(float size)
     return mImpl->registerMesh(name);
 }
 
+MeshHandle Renderer::createBeveledBox(float bevel)
+{
+    const std::string name = mImpl->nextName("beveled_box");
+    ProceduralMeshes::createBeveledBox(name, bevel);
+    return mImpl->registerMesh(name);
+}
+
+MeshHandle Renderer::createCone(float radius, float height, int segments)
+{
+    const std::string name = mImpl->nextName("cone");
+    ProceduralMeshes::createCone(name, radius, height, segments);
+    return mImpl->registerMesh(name);
+}
+
+MeshHandle Renderer::createPortalRing(float outerRadius, float innerRadius,
+                                      float depth, int segments)
+{
+    const std::string name = mImpl->nextName("portal_ring");
+    ProceduralMeshes::createPortalRing(name, outerRadius, innerRadius, depth,
+                                       segments);
+    return mImpl->registerMesh(name);
+}
+
+MeshHandle Renderer::createPortalDisc(float radius, int segments)
+{
+    const std::string name = mImpl->nextName("portal_disc");
+    ProceduralMeshes::createPortalDisc(name, radius, segments);
+    return mImpl->registerMesh(name);
+}
+
 NodeHandle Renderer::createNode(NodeHandle parent, glm::vec3 position)
 {
     Ogre::SceneNode* n =

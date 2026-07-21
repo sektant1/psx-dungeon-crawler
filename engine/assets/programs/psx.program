@@ -12,11 +12,14 @@ vertex_program PSX_VS_Unlit glsl
         param_named_auto worldViewProj worldviewproj_matrix
         param_named_auto worldView worldview_matrix
         param_named_auto invTransWorldView inverse_transpose_worldview_matrix
-        param_named_auto time time
+        param_named_auto time time 1.0
         param_named precisionMultiplier float 1.0
         param_named uvScale float2 1.0 1.0
         param_named uvOffset float2 0.0 0.0
         param_named uvPanVelocity float2 0.0 0.0
+        param_named uvFrameGrid float2 1.0 1.0
+        param_named uvFrameCount float 1.0
+        param_named uvFrameRate float 0.0
     }
 }
 
@@ -29,11 +32,44 @@ vertex_program PSX_VS_Lit glsl
         param_named_auto worldViewProj worldviewproj_matrix
         param_named_auto worldView worldview_matrix
         param_named_auto invTransWorldView inverse_transpose_worldview_matrix
-        param_named_auto time time
+        param_named_auto time time 1.0
         param_named precisionMultiplier float 1.0
         param_named uvScale float2 1.0 1.0
         param_named uvOffset float2 0.0 0.0
         param_named uvPanVelocity float2 0.0 0.0
+        param_named uvFrameGrid float2 1.0 1.0
+        param_named uvFrameCount float 1.0
+        param_named uvFrameRate float 0.0
+        param_named_auto ambientLight ambient_light_colour
+        param_named_auto lightPos light_position_view_space_array 16
+        param_named_auto lightDiffuse light_diffuse_colour_array 16
+        param_named_auto lightAtten light_attenuation_array 16
+        param_named_auto lightCount light_count
+        param_named omniAttenuation float 1.0
+        param_named lightSteps float 0.0
+        param_named lightStepSoftness float 0.35
+    }
+}
+
+// Opt-in for large/elongated props whose long triangles make affine UVs
+// stretch aggressively at the edge of the camera frustum.
+vertex_program PSX_VS_LitPerspective glsl
+{
+    source psx.vert
+    preprocessor_defines LIT=1,PERSPECTIVE_UV=1
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto worldView worldview_matrix
+        param_named_auto invTransWorldView inverse_transpose_worldview_matrix
+        param_named_auto time time 1.0
+        param_named precisionMultiplier float 1.0
+        param_named uvScale float2 1.0 1.0
+        param_named uvOffset float2 0.0 0.0
+        param_named uvPanVelocity float2 0.0 0.0
+        param_named uvFrameGrid float2 1.0 1.0
+        param_named uvFrameCount float 1.0
+        param_named uvFrameRate float 0.0
         param_named_auto ambientLight ambient_light_colour
         param_named_auto lightPos light_position_view_space_array 16
         param_named_auto lightDiffuse light_diffuse_colour_array 16
@@ -62,6 +98,30 @@ fragment_program PSX_FS_Lit glsl
 {
     source psx.frag
     preprocessor_defines LIT=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+        param_named_auto farClip far_clip_distance
+        param_named_auto ambientLight ambient_light_colour
+        param_named_auto lightPos light_position_view_space_array 16
+        param_named_auto lightDiffuse light_diffuse_colour_array 16
+        param_named_auto lightAtten light_attenuation_array 16
+        param_named_auto lightCount light_count
+        param_named omniAttenuation float 1.0
+        param_named lightSteps float 0.0
+        param_named lightStepSoftness float 0.35
+        param_named perPixelLighting float 1.0
+        param_named fogDesatBoost float 0.0
+    }
+}
+
+fragment_program PSX_FS_LitPerspective glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1,PERSPECTIVE_UV=1
     default_params
     {
         param_named albedoTex int 0
@@ -388,7 +448,6 @@ fragment_program FireParticle_FS glsl
     preprocessor_defines PROCEDURAL_FLAME=1
     default_params
     {
-        param_named albedoTex int 0
         param_named alphaScissor float 0.04
     }
 }
@@ -409,7 +468,6 @@ fragment_program SmokeParticle_FS glsl
     preprocessor_defines PROCEDURAL_SMOKE=1
     default_params
     {
-        param_named albedoTex int 0
         param_named alphaScissor float 0.025
     }
 }
@@ -420,7 +478,6 @@ fragment_program BlockParticle_FS glsl
     preprocessor_defines PROCEDURAL_BLOCK=1
     default_params
     {
-        param_named albedoTex int 0
         param_named alphaScissor float 0.025
     }
 }

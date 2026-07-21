@@ -1,0 +1,76 @@
+# Dungeon prop catalog. Multi-part assets pair meshes/materials by index.
+# `marker` exposes a prop as a layout/editor cell; `ambient` allows automatic
+# wall-edge dressing on ordinary floor cells.
+
+[[prop]]
+id = "loot_chest"
+marker = "H"
+meshes = ["prop_chest.obj"]
+materials = ["Game/PropChest"]
+radius = 0.72
+height = 0.55
+
+[[prop]]
+id = "barrel"
+marker = "B"
+meshes = ["prop_barrel_p0.obj", "prop_barrel_p1.obj"]
+materials = ["Game/PropPlanks", "Game/PropBauerhaus"]
+radius = 0.52
+height = 0.55
+
+[[prop]]
+id = "crate"
+marker = "R"
+meshes = ["prop_crate.obj"]
+materials = ["Game/PropMarket"]
+radius = 0.56
+height = 0.55
+
+[[prop]]
+id = "urn"
+marker = "V"
+meshes = ["prop_vase_p0.obj", "prop_vase_p1.obj"]
+materials = ["Game/PropTerracotta", "Game/PropPlanks"]
+radius = 0.34
+height = 0.42
+
+[[prop]]
+id = "jute_sack"
+ambient = true
+roles = ["storage", "armory"]
+meshes = ["prop_jutesack.obj"]
+materials = ["Game/PropJute"]
+radius = 0.38
+height = 0.45
+
+[[prop]]
+id = "pumpkin"
+ambient = true
+roles = ["storage", "overgrown"]
+meshes = ["prop_pumpkin.obj"]
+materials = ["Game/PropMarketMisc"]
+y = [0.08]
+radius = 0.26
+height = 0.35
+
+[[prop]]
+id = "urn_cluster"
+ambient = true
+roles = ["crypt", "ritual"]
+meshes = ["prop_vase_p0.obj", "prop_vase_p1.obj"]
+materials = ["Game/PropTerracotta", "Game/PropPlanks"]
+radius = 0.30
+height = 0.42
+
+[[prop]]
+id = "hay_bale"
+ambient = true
+roles = ["storage", "overgrown"]
+meshes = ["prop_haybale.obj"]
+materials = ["Game/PropHay"]
+radius = 0.48
+height = 0.42
+
+[ambient]
+wall_edge_chance = 13
+room_roles = ["storage", "crypt", "ritual", "armory", "overgrown"]

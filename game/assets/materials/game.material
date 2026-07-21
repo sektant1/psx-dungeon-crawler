@@ -66,6 +66,23 @@ material Game/DungeonTile
     } }
 }
 
+// Imported modular arches contain visible inner/back faces. Render both sides
+// so the masonry stays complete from close first-person viewing angles.
+material Game/DungeonTileTwoSided
+{
+    technique { pass {
+        cull_hardware none
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture bauerhaus.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
 material Game/PropWood
 {
     technique { pass {
@@ -153,8 +170,8 @@ material Game/PropWeapon
 material Game/PropHay
 {
     technique { pass {
-        vertex_program_ref PSX_VS_Lit { }
-        fragment_program_ref PSX_FS_Lit { }
+        vertex_program_ref PSX_VS_LitPerspective { }
+        fragment_program_ref PSX_FS_LitPerspective { }
         texture_unit
         {
             texture hay.jpg
@@ -235,42 +252,64 @@ material Game/Singularity
     } }
 }
 
-// Descent portal: additive violet glow cube at the level's down-exit.
+// Portal masonry: warm charcoal-violet, with vertex-colour face variation
+// from the beveled primitive for a hand-painted/faceted fantasy read.
+material Game/PortalStone
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitNoTex
+        {
+            param_named modulateColor float4 0.24 0.18 0.29 1.0
+        }
+    } }
+}
+
+// Descent portal: steady emissive bloom over a continuously scrolling,
+// seamless energy surface. Scroll speed is authored per material in UV/sec.
 material Game/PortalDown
 {
     technique { pass {
         cull_hardware none
         scene_blend add
         depth_write off
-        vertex_program_ref PSX_VS_Unlit { }
+        vertex_program_ref PSX_VS_Unlit
+        {
+            param_named uvScale float2 1.35 1.35
+            param_named uvPanVelocity float2 0.075 -0.115
+        }
         fragment_program_ref PSX_FS_Unlit
         {
-            param_named modulateColor float4 0.82 0.22 1.0 1.0
+            param_named modulateColor float4 0.10 0.42 0.055 0.62
         }
         texture_unit
         {
-            texture white.png
+            texture portal_fel_flow.png
             filtering none
             tex_address_mode wrap
         }
     } }
 }
 
-// Ascent portal: additive moon-cyan glow cube at the level's entry.
+// Ascent portal: the same continuous flow reversed and recoloured arcane-blue.
 material Game/PortalUp
 {
     technique { pass {
         cull_hardware none
         scene_blend add
         depth_write off
-        vertex_program_ref PSX_VS_Unlit { }
+        vertex_program_ref PSX_VS_Unlit
+        {
+            param_named uvScale float2 1.35 1.35
+            param_named uvPanVelocity float2 -0.055 0.095
+        }
         fragment_program_ref PSX_FS_Unlit
         {
-            param_named modulateColor float4 0.30 0.82 1.0 1.0
+            param_named modulateColor float4 0.12 0.36 0.62 0.68
         }
         texture_unit
         {
-            texture white.png
+            texture portal_fel_flow.png
             filtering none
             tex_address_mode wrap
         }

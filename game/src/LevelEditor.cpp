@@ -10,7 +10,7 @@
 
 namespace {
 struct Brush { char tile; const char* label; const char* hint; ImU32 colour; };
-constexpr std::array<Brush, 7> kBrushes{{
+constexpr std::array<Brush, 11> kBrushes{{
     {'#', "Wall", "Solid rock", IM_COL32(35, 39, 43, 255)},
     {'.', "Floor", "Walkable floor", IM_COL32(67, 91, 92, 255)},
     {'A', "Arch", "Straight doorway", IM_COL32(202, 153, 61, 255)},
@@ -18,6 +18,10 @@ constexpr std::array<Brush, 7> kBrushes{{
     {'S', "Spawn", "Unique player start", IM_COL32(89, 190, 236, 255)},
     {'C', "Anchor", "Unique scene origin", IM_COL32(188, 102, 220, 255)},
     {'X', "Exit", "Unique down portal", IM_COL32(95, 210, 143, 255)},
+    {'H', "Chest", "Loot chest and blocker", IM_COL32(211, 172, 70, 255)},
+    {'B', "Barrel", "Wooden barrel and blocker", IM_COL32(139, 91, 55, 255)},
+    {'R', "Crate", "Storage crate and blocker", IM_COL32(164, 119, 67, 255)},
+    {'V', "Urn", "Breakable-style ceramic urn", IM_COL32(178, 99, 72, 255)},
 }};
 
 ImU32 tileColour(char tile)
@@ -118,7 +122,7 @@ bool LevelEditor::draw(const DungeonMap& map, glm::vec3 playerPosition)
     ImGui::SeparatorText("Palette");
     for (size_t i = 0; i < kBrushes.size(); ++i) {
         const Brush& brush = kBrushes[i];
-        if (i && i != 4) ImGui::SameLine();
+        if (i && i != 4 && i != 7) ImGui::SameLine();
         const bool selected = mBrush == brush.tile;
         if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.40f, 0.16f, 1.0f));
         char label[40];
@@ -132,7 +136,7 @@ bool LevelEditor::draw(const DungeonMap& map, glm::vec3 playerPosition)
     const int cols = mDocument.columns(), rows = mDocument.rows();
     const ImVec2 available = ImGui::GetContentRegionAvail();
     const float byWidth = (available.x - 12.0f) / float(cols);
-    const float byHeight = (available.y - (mWorkspace ? 155.0f : 0.0f)) /
+    const float byHeight = (available.y - (mWorkspace ? 185.0f : 0.0f)) /
                            float(rows);
     const float cellSize = std::clamp(mWorkspace ? std::min(byWidth, byHeight)
                                                   : byWidth,

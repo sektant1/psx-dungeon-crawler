@@ -22,6 +22,7 @@ struct Engine::Impl {
     bool hasPrev = false;
     std::string screenshotPath;
     int frameCount = 0;
+    int screenshotFrame = 90;
     int benchmarkFrames = 0;
     std::vector<float> frameSamples;
     bool grabBeforeDebugUi = false;
@@ -62,6 +63,8 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     const char* shot = std::getenv("PSX_SCREENSHOT");
     if (shot)
         mImpl->screenshotPath = shot;
+    if (const char* frame = std::getenv("PSX_SCREENSHOT_FRAME"))
+        mImpl->screenshotFrame = std::max(1, std::atoi(frame));
     if (const char* frames = std::getenv("PSX_BENCH_FRAMES")) {
         mImpl->benchmarkFrames = std::max(1, std::atoi(frames));
         mImpl->frameSamples.reserve(size_t(mImpl->benchmarkFrames));
@@ -136,7 +139,8 @@ void Engine::renderFrame(float dt)
         }
     }
     ++mImpl->frameCount;
-    if (!mImpl->screenshotPath.empty() && mImpl->frameCount == 90) {
+    if (!mImpl->screenshotPath.empty() &&
+        mImpl->frameCount == mImpl->screenshotFrame) {
         detail::coreOf(mRenderer).writeScreenshot(mImpl->screenshotPath);
         mClose = true;
     }

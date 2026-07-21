@@ -2,6 +2,9 @@
 
 #include <Ogre.h>
 
+#include <algorithm>
+#include <cmath>
+
 namespace ProceduralMeshes {
 
 void createInteriorBox(const std::string& meshName, float size, int subdivide)
@@ -77,6 +80,138 @@ void createPlane(const std::string& meshName, float size)
     // CCW seen from +Y
     mo->triangle(0, 2, 1);
     mo->triangle(1, 2, 3);
+    mo->end();
+    mo->convertToMesh(meshName);
+    delete mo;
+}
+
+void createBeveledBox(const std::string& meshName, float bevel)
+{
+    bevel = std::clamp(bevel, 0.01f, 0.24f);
+    const float h = 0.5f, core = h - bevel;
+    const float axis[4] = {-h, -core, core, h};
+    auto* mo = new Ogre::ManualObject(meshName + "_mo");
+    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
+    struct Face { int fixed, u, v; float sign; };
+    const Face faces[6] = {{0,2,1,1},{0,1,2,-1},{1,0,2,1},
+                           {1,2,0,-1},{2,0,1,1},{2,1,0,-1}};
+    Ogre::uint32 base = 0;
+    for (const Face& f : faces) {
+        for (int y = 0; y < 4; ++y) for (int x = 0; x < 4; ++x) {
+            Ogre::Vector3 p(Ogre::Vector3::ZERO);
+            p[f.fixed] = f.sign * h;
+            p[f.u] = axis[x]; p[f.v] = axis[y];
+            Ogre::Vector3 q(std::clamp(p.x, -core, core),
+                            std::clamp(p.y, -core, core),
+                            std::clamp(p.z, -core, core));
+            Ogre::Vector3 d = p - q;
+            d.normalise();
+            const Ogre::Vector3 rounded = q + d * bevel;
+            mo->position(rounded); mo->normal(d);
+            mo->textureCoord(float(x) / 3.0f, 1.0f - float(y) / 3.0f);
+            // Slight warm face tint gives hand-painted value separation even
+            // with a plain texture and reinforces the faceted silhouette.
+            const float value = 0.82f + 0.06f * float(f.fixed);
+            mo->colour(Ogre::ColourValue(value, value * 0.94f, value * 0.86f));
+        }
+        for (int y = 0; y < 3; ++y) for (int x = 0; x < 3; ++x) {
+            const Ogre::uint32 a = base + Ogre::uint32(y * 4 + x);
+            mo->triangle(a, a + 4, a + 1);
+            mo->triangle(a + 1, a + 4, a + 5);
+        }
+        base += 16;
+    }
+    mo->end(); mo->convertToMesh(meshName); delete mo;
+}
+
+void createCone(const std::string& meshName, float radius, float height,
+                int segments)
+{
+    segments = std::max(3, segments);
+    auto* mo = new Ogre::ManualObject(meshName + "_mo");
+    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
+    const float half = height * 0.5f;
+    for (int i = 0; i < segments; ++i) {
+        const float a = float(i) / float(segments) * Ogre::Math::TWO_PI;
+        const float b = float(i + 1) / float(segments) * Ogre::Math::TWO_PI;
+        const Ogre::Vector3 p0(std::cos(a) * radius, -half,
+                              std::sin(a) * radius);
+        const Ogre::Vector3 p1(std::cos(b) * radius, -half,
+                              std::sin(b) * radius);
+        const Ogre::Vector3 tip(0, half, 0);
+        Ogre::Vector3 n = (p1 - p0).crossProduct(tip - p0).normalisedCopy();
+        Ogre::uint32 k = Ogre::uint32(i * 6);
+        for (const auto& v : {p0, p1, tip}) {
+            mo->position(v); mo->normal(n); mo->textureCoord(v.y > 0 ? 0.5f : 0.0f,
+                                                               v.y > 0 ? 0.0f : 1.0f);
+            mo->colour(Ogre::ColourValue::White);
+        }
+        mo->triangle(k, k + 1, k + 2);
+        for (const auto& v : {Ogre::Vector3::ZERO + Ogre::Vector3(0,-half,0), p1, p0}) {
+            mo->position(v); mo->normal(0,-1,0); mo->textureCoord(0.5f,0.5f);
+            mo->colour(Ogre::ColourValue::White);
+        }
+        mo->triangle(k + 3, k + 4, k + 5);
+    }
+    mo->end(); mo->convertToMesh(meshName); delete mo;
+}
+
+void createPortalRing(const std::string& meshName, float outerRadius,
+                      float innerRadius, float depth, int segments)
+{
+    segments = std::max(8, segments);
+    innerRadius = std::min(innerRadius, outerRadius * 0.9f);
+    const float halfDepth = depth * 0.5f;
+    auto* mo = new Ogre::ManualObject(meshName + "_mo");
+    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
+    // Four vertices per angle: front/back outer, front/back inner. The four
+    // quad strips form a closed, shadow-safe low-poly stone/magic arch.
+    for (int i = 0; i <= segments; ++i) {
+        const float u = float(i) / float(segments);
+        const float a = u * Ogre::Math::TWO_PI;
+        const float x = std::cos(a), y = std::sin(a);
+        for (const auto& v : {Ogre::Vector3(x * outerRadius, y * outerRadius, halfDepth),
+                              Ogre::Vector3(x * outerRadius, y * outerRadius, -halfDepth),
+                              Ogre::Vector3(x * innerRadius, y * innerRadius, halfDepth),
+                              Ogre::Vector3(x * innerRadius, y * innerRadius, -halfDepth)}) {
+            mo->position(v);
+            mo->normal(x, y, 0.0f);
+            mo->textureCoord(u, (v.length() - innerRadius) /
+                                    std::max(outerRadius - innerRadius, 0.001f));
+            mo->colour(Ogre::ColourValue::White);
+        }
+    }
+    for (int i = 0; i < segments; ++i) {
+        const Ogre::uint32 a = Ogre::uint32(i * 4), b = a + 4;
+        const auto quad = [&](Ogre::uint32 i0, Ogre::uint32 i1,
+                              Ogre::uint32 i2, Ogre::uint32 i3) {
+            mo->triangle(i0, i1, i2); mo->triangle(i2, i1, i3);
+        };
+        quad(a, b, a + 2, b + 2);         // front face
+        quad(a + 1, a + 3, b + 1, b + 3); // back face
+        quad(a, a + 1, b, b + 1);         // outer wall
+        quad(a + 2, b + 2, a + 3, b + 3); // inner wall
+    }
+    mo->end();
+    mo->convertToMesh(meshName);
+    delete mo;
+}
+
+void createPortalDisc(const std::string& meshName, float radius, int segments)
+{
+    segments = std::max(8, segments);
+    auto* mo = new Ogre::ManualObject(meshName + "_mo");
+    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_FAN);
+    mo->position(0, 0, 0); mo->normal(0, 0, 1); mo->textureCoord(0.5f, 0.5f);
+    mo->colour(Ogre::ColourValue::White);
+    for (int i = 0; i <= segments; ++i) {
+        const float a = float(i) / float(segments) * Ogre::Math::TWO_PI;
+        mo->position(std::cos(a) * radius, std::sin(a) * radius, 0);
+        mo->normal(0, 0, 1);
+        mo->textureCoord(0.5f + std::cos(a) * 0.5f,
+                         0.5f + std::sin(a) * 0.5f);
+        mo->colour(Ogre::ColourValue::White);
+    }
     mo->end();
     mo->convertToMesh(meshName);
     delete mo;

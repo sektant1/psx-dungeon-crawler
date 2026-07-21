@@ -67,6 +67,15 @@ public:
     MeshHandle loadObj(const std::string& path, const glm::mat4* bake = nullptr);
     MeshHandle createInteriorBox(float size, int subdivide);
     MeshHandle createPlane(float size);
+    // Stylized outward-facing construction primitives. A unit beveled box
+    // can be non-uniformly scaled into masonry, beams, plinths, and furniture.
+    MeshHandle createBeveledBox(float bevel = 0.12f);
+    MeshHandle createCone(float radius = 0.5f, float height = 1.0f,
+                          int segments = 8);
+    // Low-poly vertical fantasy portal components (facing +/-Z).
+    MeshHandle createPortalRing(float outerRadius, float innerRadius,
+                                float depth, int segments = 20);
+    MeshHandle createPortalDisc(float radius, int segments = 20);
 
     // --- scene graph ------------------------------------------------------
     NodeHandle createNode(NodeHandle parent, glm::vec3 position = glm::vec3(0.0f));

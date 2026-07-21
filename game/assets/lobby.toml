@@ -1,0 +1,36 @@
+# The Reliquary: authored depth-zero lobby and engine/asset showcase.
+#
+# The open centre preserves a strong spawn -> shrine -> portal sightline.
+# Curated prop markers form readable exhibit bays along the walls, while the
+# runtime showcase supplies the animated chest, crystals, particles, graded
+# fog, shadow-casting fire, weapon display, market table, and stacked clutter.
+# Edit this file in the standalone level editor (`make editor`).
+
+[dungeon]
+cell_size = 4.0
+wall_height = 3.0
+rows = [
+    "#################",
+    "#V..L...X...L..V#",
+    "#...............#",
+    "#B.............R#",
+    "#...............#",
+    "#H.............H#",
+    "########A########",
+    "#L.............L#",
+    "#.......C.......#",
+    "#L.............L#",
+    "#...............#",
+    "#R.............B#",
+    "########A########",
+    "#V.............V#",
+    "#...............#",
+    "#...L...S...L...#",
+    "#################",
+]
+
+[dungeon.light]
+colour_srgb = [1.0, 0.68, 0.34]
+energy = 4.4
+range = 6.5
+y = 1.9

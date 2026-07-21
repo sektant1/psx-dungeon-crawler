@@ -186,6 +186,34 @@ struct Builder {
         g[size_t(ty)][size_t(tx)] = 'L';
     }
 
+    // Sparse room dressing: favor room edges so the critical path stays
+    // legible and large centrepiece spaces retain a strong silhouette.
+    // Markers map directly to editor/runtime props (H chest, B barrel,
+    // R crate, V urn) and remain deterministic through this builder's RNG.
+    void placeDressing(const Node& n, std::vector<std::string>& g,
+                       bool centrepiece) {
+        std::vector<std::pair<int, int>> candidates;
+        const int cx = n.rx + n.rw / 2, cy = n.ry + n.rh / 2;
+        for (int y = n.ry; y < n.ry + n.rh; ++y)
+            for (int x = n.rx; x < n.rx + n.rw; ++x) {
+                if (g[size_t(y)][size_t(x)] != '.') continue;
+                const bool edge = x == n.rx || x == n.rx + n.rw - 1 ||
+                                  y == n.ry || y == n.ry + n.rh - 1;
+                const int centreDistance = std::abs(x - cx) + std::abs(y - cy);
+                if (edge && (!centrepiece || centreDistance >= 3))
+                    candidates.push_back({x, y});
+            }
+        const int count = std::min(int(candidates.size()),
+                                   1 + (n.rw * n.rh >= 24 ? 1 : 0));
+        static constexpr char props[] = {'B', 'R', 'V', 'B', 'R', 'H'};
+        for (int i = 0; i < count; ++i) {
+            const int pick = rnd(0, int(candidates.size()) - 1);
+            const auto [x, y] = candidates[size_t(pick)];
+            candidates.erase(candidates.begin() + pick);
+            g[size_t(y)][size_t(x)] = props[rnd(0, int(sizeof(props)) - 1)];
+        }
+    }
+
     // Flood over walkable cells in g from (sx,sy); returns reached count and
     // whether (tx,ty) was reached.
     int flood(const std::vector<std::string>& g, int sx, int sy,
@@ -257,6 +285,9 @@ Layout generate(uint32_t seed)
             g[size_t(y)][size_t(x)] = 'A';
         for (const auto& n : b.nodes)
             if (n.leaf) b.placeTorch(n, g);
+        for (size_t i = 0; i < b.nodes.size(); ++i)
+            if (b.nodes[i].leaf)
+                b.placeDressing(b.nodes[i], g, int(i) == anchor);
 
         const int scx = b.nodes[size_t(entry)].rx + b.nodes[size_t(entry)].rw / 2;
         const int scy = b.nodes[size_t(entry)].ry + b.nodes[size_t(entry)].rh / 2;
@@ -313,7 +344,8 @@ char Layout::cellAt(int col, int row) const
 bool Layout::walkable(int col, int row) const
 {
     const char c = cellAt(col, row);
-    return c == '.' || c == 'A' || c == 'L' || c == 'S' || c == 'C' || c == 'X';
+    return c == '.' || c == 'A' || c == 'L' || c == 'S' || c == 'C' ||
+           c == 'X' || c == 'H' || c == 'B' || c == 'R' || c == 'V';
 }
 
 int Layout::roomAt(int col, int row) const
@@ -346,7 +378,7 @@ Layout Layout::fromRows(std::vector<std::string> rows, bool requireExit)
     }
 
     int spawnCount = 0, anchorCount = 0, exitCount = 0;
-    const std::string allowed = "#.ALSCX ";
+    const std::string allowed = "#.ALSCXHBRV ";
     for (int row = 0; row < out.rowCount(); ++row) {
         for (int col = 0; col < int(out.mRows[size_t(row)].size()); ++col) {
             const char c = out.mRows[size_t(row)][size_t(col)];

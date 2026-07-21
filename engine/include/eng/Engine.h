@@ -11,7 +11,8 @@ namespace eng {
 
 // Owns lifetime and ordering: SDL window -> Ogre Root -> (frames) ->
 // Ogre Root down -> SDL window down. Also owns the frame clock and the
-// PSX_SCREENSHOT verification hook (render 90 frames, save PNG, close).
+// PSX_SCREENSHOT verification hook (render 90 frames by default, save PNG,
+// close). PSX_SCREENSHOT_FRAME overrides the capture frame for animation tests.
 class Engine
 {
 public:
