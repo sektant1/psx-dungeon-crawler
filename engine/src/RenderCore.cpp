@@ -2,6 +2,7 @@
 
 #include <Ogre.h>
 #include <OgreCompositor.h>
+#include <OgreCompositorChain.h>
 #include <OgreCompositorManager.h>
 #include <OgreImGuiOverlay.h>
 #include <OgreOverlayManager.h>
@@ -139,6 +140,16 @@ void RenderCore::setPixelSize(int pixelSize)
         if (mChainEnabled)
             enablePostChain(); // re-add
     }
+}
+
+void RenderCore::markPostChainDirty()
+{
+    if (!mViewport || !mChainAdded)
+        return;
+    Ogre::CompositorChain* chain =
+        Ogre::CompositorManager::getSingleton().getCompositorChain(mViewport);
+    if (chain)
+        chain->_markDirty();
 }
 
 void RenderCore::renderFrame(float dt) { mRoot->renderOneFrame(dt); }

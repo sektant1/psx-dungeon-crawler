@@ -205,24 +205,28 @@ void applyMaterialParam(const std::string& materialName,
 void Renderer::setMaterialParam(const std::string& m, const std::string& p, float v)
 {
     applyMaterialParam(m, p, [&](auto& params) { params->setNamedConstant(p, v); });
+    mImpl->core.markPostChainDirty();
 }
 void Renderer::setMaterialParam(const std::string& m, const std::string& p, glm::vec2 v)
 {
     applyMaterialParam(m, p, [&](auto& params) {
         params->setNamedConstant(p, Ogre::Vector2(v.x, v.y));
     });
+    mImpl->core.markPostChainDirty();
 }
 void Renderer::setMaterialParam(const std::string& m, const std::string& p, glm::vec3 v)
 {
     applyMaterialParam(m, p, [&](auto& params) {
         params->setNamedConstant(p, Ogre::Vector3(v.x, v.y, v.z));
     });
+    mImpl->core.markPostChainDirty();
 }
 void Renderer::setMaterialParam(const std::string& m, const std::string& p, glm::vec4 v)
 {
     applyMaterialParam(m, p, [&](auto& params) {
         params->setNamedConstant(p, Ogre::Vector4(v.x, v.y, v.z, v.w));
     });
+    mImpl->core.markPostChainDirty();
 }
 
 void Renderer::setAmbient(glm::vec3 colour)
@@ -312,6 +316,7 @@ void Renderer::setGlobalMaterialParam(const std::string& paramName, float value)
             }
         }
     }
+    mImpl->core.markPostChainDirty();
 }
 
 void Renderer::setOmniAttenuation(float exponent)

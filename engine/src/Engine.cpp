@@ -18,6 +18,7 @@ namespace eng {
 struct Engine::Impl {
     Platform platform;
     std::chrono::steady_clock::time_point prev;
+    bool hasPrev = false;
     std::string screenshotPath;
     int frameCount = 0;
     bool grabBeforeDebugUi = false;
@@ -53,7 +54,7 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     const char* shot = std::getenv("PSX_SCREENSHOT");
     if (shot)
         mImpl->screenshotPath = shot;
-    mImpl->prev = std::chrono::steady_clock::now();
+    mImpl->hasPrev = false;
     return true;
 }
 
@@ -87,8 +88,13 @@ float Engine::tick()
                 mInput.mImpl->onEvent(e);
         }
     }
-    auto now = std::chrono::steady_clock::now();
-    float dt = std::chrono::duration<float>(now - mImpl->prev).count();
+    const auto now = std::chrono::steady_clock::now();
+    if (!mImpl->hasPrev) {
+        mImpl->prev = now;
+        mImpl->hasPrev = true;
+        return 0.0f;
+    }
+    const float dt = std::chrono::duration<float>(now - mImpl->prev).count();
     mImpl->prev = now;
     return std::min(dt, 0.1f);
 }

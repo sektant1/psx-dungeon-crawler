@@ -27,6 +27,9 @@ public:
     void enablePostChain();
     // Rebuilds the chain with RT sizes = window / pixelSize. Clamped 1..16.
     void setPixelSize(int pixelSize);
+    // Material edits on compositor render_quad passes need a chain recompile
+    // before the cloned pass material sees the new GPU params.
+    void markPostChainDirty();
     void renderFrame(float dt);
     void onResize(int width, int height);
     void writeScreenshot(const std::string& path);
