@@ -1,9 +1,21 @@
 #include "eng/Physics.h"
-#include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <vector>
 #include <glm/gtc/quaternion.hpp>
+
+// CHECK() is compiled out under -DNDEBUG (Release), which would make every
+// check below a no-op and the suite vacuously "pass". CHECK aborts in any
+// build configuration so these tests actually verify behaviour.
+#define CHECK(cond, msg)                                                    \
+    do {                                                                    \
+        if (!(cond)) {                                                      \
+            std::fprintf(stderr, "CHECK failed: %s\n  at %s:%d\n", msg,     \
+                         __FILE__, __LINE__);                               \
+            std::abort();                                                   \
+        }                                                                   \
+    } while (0)
 
 static void test_box_falls_and_rests_on_floor() {
     eng::Physics phys; phys.init();
@@ -17,7 +29,7 @@ static void test_box_falls_and_rests_on_floor() {
     eng::BodyHandle h = phys.createBody(box);
     for (int i = 0; i < 180; ++i) phys.update(1.0f/60.0f);
     glm::vec3 p; glm::quat q; phys.getRenderTransform(h, p, q);
-    assert(std::fabs(p.y - 0.5f) < 0.05f && "box should rest on floor at y=0.5");
+    CHECK(std::fabs(p.y - 0.5f) < 0.05f, "box should rest on floor at y=0.5");
     phys.shutdown();
     std::puts("test_box_falls_and_rests_on_floor OK");
 }
@@ -29,9 +41,9 @@ static void test_raycast_hits_static_box() {
     eng::BodyHandle wh = phys.createBody(wall);
     eng::RayHit hit;
     bool ok = phys.rayCast({0,0,0}, {1,0,0}, 10.0f, hit, eng::BodyLayer::Static);
-    assert(ok && "ray should hit wall");
-    assert(hit.body == wh && "ray should report the wall body");
-    assert(std::fabs(hit.point.x - 2.5f) < 0.05f && "hit at wall's near face");
+    CHECK(ok, "ray should hit wall");
+    CHECK(hit.body == wh, "ray should report the wall body");
+    CHECK(std::fabs(hit.point.x - 2.5f) < 0.05f, "hit at wall's near face");
     phys.shutdown();
     std::puts("test_raycast_hits_static_box OK");
 }
@@ -47,7 +59,7 @@ static void test_mesh_body_is_solid() {
     eng::BodyHandle b = phys.createBody(box);
     for (int i=0;i<180;++i) phys.update(1.0f/60.0f);
     glm::vec3 p; glm::quat q; phys.getRenderTransform(b,p,q);
-    assert(std::fabs(p.y-0.5f)<0.06f && "box should rest on the mesh floor");
+    CHECK(std::fabs(p.y-0.5f)<0.06f, "box should rest on the mesh floor");
     phys.shutdown();
     std::puts("test_mesh_body_is_solid OK");
 }
@@ -60,10 +72,19 @@ static void test_character_settles_and_is_blocked_by_wall() {
     wall.layer=eng::BodyLayer::Static; wall.dynamic=false; phys.createBody(wall);
     eng::CharacterDesc cd; cd.position={0,1.0f,0};
     eng::CharacterHandle ch = phys.createCharacter(cd);
-    for (int i=0;i<120;++i){ phys.characterSetVelocity(ch,{5,0,0}); phys.characterUpdate(ch,1.0f/60.0f); phys.update(1.0f/60.0f); }
+    // CharacterVirtual does not integrate gravity itself: the caller feeds it a
+    // velocity that includes accumulated fall speed (as FpsController does).
+    float vy = 0.0f;
+    for (int i=0;i<180;++i){
+        vy -= 18.0f/60.0f;
+        if (phys.characterState(ch).grounded() && vy < 0) vy = 0;
+        phys.characterSetVelocity(ch,{5,vy,0});
+        phys.characterUpdate(ch,1.0f/60.0f);
+        phys.update(1.0f/60.0f);
+    }
     eng::CharacterState s = phys.characterState(ch);
-    assert(s.grounded() && "character should be grounded on floor");
-    assert(s.position.x < 1.5f && "character must not pass through the wall at x=1.5");
+    CHECK(s.grounded(), "character should be grounded on floor");
+    CHECK(s.position.x < 1.5f, "character must not pass through the wall at x=1.5");
     phys.shutdown();
     std::puts("test_character_settles_and_is_blocked_by_wall OK");
 }
@@ -71,12 +92,25 @@ static void test_character_steps_small_ledge() {
     eng::Physics phys; phys.init();
     eng::BodyDesc floor; floor.halfExtents={20,0.5f,20}; floor.position={0,-0.5f,0};
     floor.layer=eng::BodyLayer::Static; floor.dynamic=false; phys.createBody(floor);
-    eng::BodyDesc step; step.halfExtents={5,0.15f,5}; step.position={5,0.15f,0}; // 0.30 m tall
+    // Leave a clear run-up. The previous box began at x=0, overlapping the
+    // character's spawn and testing penetration recovery rather than stairs.
+    // Ledge spans x=2..20 so the character climbs at x=2 and stays on it (a
+    // short ledge lets a 4 m/s walk overshoot the far edge back to the floor).
+    eng::BodyDesc step; step.halfExtents={9,0.15f,5}; step.position={11,0.15f,0}; // begins x=2, 0.30 m tall
     step.layer=eng::BodyLayer::Static; step.dynamic=false; phys.createBody(step);
     eng::CharacterDesc cd; cd.position={0,1.0f,0}; cd.stepHeight=0.4f;
     eng::CharacterHandle ch = phys.createCharacter(cd);
-    for (int i=0;i<240;++i){ phys.characterSetVelocity(ch,{4,0,0}); phys.characterUpdate(ch,1.0f/60.0f); phys.update(1.0f/60.0f); }
-    assert(phys.characterState(ch).position.y > 0.25f && "character should have stepped up onto the ledge");
+    float vy = 0.0f;
+    float maxY = cd.position.y;
+    for (int i=0;i<300;++i){
+        vy -= 18.0f/60.0f;
+        if (phys.characterState(ch).grounded() && vy < 0) vy = 0;
+        phys.characterSetVelocity(ch,{4,vy,0});
+        phys.characterUpdate(ch,1.0f/60.0f);
+        phys.update(1.0f/60.0f);
+        maxY = std::max(maxY, phys.characterState(ch).position.y);
+    }
+    CHECK(maxY > 0.25f, "character should have stepped up onto the ledge");
     phys.shutdown();
     std::puts("test_character_steps_small_ledge OK");
 }
@@ -90,9 +124,48 @@ static void test_impulse_moves_prop() {
     phys.applyImpulse(h, {20,0,0}, {0,0.4f,0});
     for(int i=0;i<60;++i) phys.update(1.0f/60.0f);
     glm::vec3 p; glm::quat q; phys.getRenderTransform(h,p,q);
-    assert(p.x > 0.3f && "impulse should shove the crate in +x");
+    CHECK(p.x > 0.3f, "impulse should shove the crate in +x");
     phys.shutdown();
     std::puts("test_impulse_moves_prop OK");
+}
+
+// Regression for the arch/portal fall-through bug: an arch cell emits two
+// side-block colliders flanking the opening PLUS a floor slab. Reproduce that
+// collider layout (mirroring DungeonMap::buildFromLayout's arch branch) and
+// confirm a character standing in the doorway rests on the floor instead of
+// dropping through the gap between the side blocks.
+static void test_arch_cell_has_floor() {
+    eng::Physics phys; phys.init();
+    const float cell = 4.0f, wallH = 3.0f, archHalf = 0.8f;
+    const float x0 = 0.0f, z0 = 0.0f;               // arch cell origin
+    const float hc = cell * 0.5f;
+    auto box = [&](glm::vec3 c, glm::vec3 he) {
+        eng::BodyDesc d; d.kind = eng::ShapeKind::Box; d.halfExtents = he;
+        d.position = c; d.layer = eng::BodyLayer::Static; d.dynamic = false;
+        phys.createBody(d);
+    };
+    // N-S arch: side blocks span [x0,lo] and [hi,x1]; opening centred on x.
+    const float mid = x0 + hc, lo = mid - archHalf, hi = mid + archHalf;
+    const float hw0 = (lo - x0) * 0.5f, hw1 = (x0 + cell - hi) * 0.5f;
+    box({x0 + hw0, wallH * 0.5f, z0 + hc}, {hw0, wallH * 0.5f, hc});
+    box({hi + hw1, wallH * 0.5f, z0 + hc}, {hw1, wallH * 0.5f, hc});
+    box({x0 + hc, -0.05f, z0 + hc}, {hc, 0.05f, hc});      // the floor slab (fix)
+
+    eng::CharacterDesc cd; cd.position = {mid, 1.0f, z0 + hc}; // in the opening
+    eng::CharacterHandle ch = phys.createCharacter(cd);
+    float vy = 0.0f;
+    for (int i = 0; i < 180; ++i) {
+        vy -= 18.0f / 60.0f;
+        if (phys.characterState(ch).grounded() && vy < 0) vy = 0;
+        phys.characterSetVelocity(ch, {0, vy, 0});
+        phys.characterUpdate(ch, 1.0f / 60.0f);
+        phys.update(1.0f / 60.0f);
+    }
+    eng::CharacterState s = phys.characterState(ch);
+    CHECK(s.grounded(), "character in the arch opening should be grounded");
+    CHECK(s.position.y > -0.5f, "character must not fall through the arch floor");
+    phys.shutdown();
+    std::puts("test_arch_cell_has_floor OK");
 }
 
 int main() {
@@ -102,5 +175,6 @@ int main() {
     test_character_settles_and_is_blocked_by_wall();
     test_character_steps_small_ledge();
     test_impulse_moves_prop();
+    test_arch_cell_has_floor();
     return 0;
 }
