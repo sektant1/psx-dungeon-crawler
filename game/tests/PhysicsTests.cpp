@@ -186,6 +186,26 @@ static void test_arch_cell_has_floor() {
     std::puts("test_arch_cell_has_floor OK");
 }
 
+static void test_shapecast_hits_prop_once() {
+    eng::Physics phys; phys.init();
+    eng::BodyDesc crate; crate.halfExtents={0.4f,0.4f,0.4f}; crate.position={1.5f,0,0};
+    crate.layer=eng::BodyLayer::Prop; crate.dynamic=false; eng::BodyHandle c=phys.createBody(crate);
+    eng::BodyDesc sweep; sweep.kind=eng::ShapeKind::Sphere; sweep.radius=0.3f;
+    std::vector<eng::ShapeHit> hits;
+    int n = phys.shapeCast(sweep, {0,0,0}, {2,0,0}, hits, eng::BodyLayer::Prop);
+    CHECK(n>=1, "sweep should hit the crate");
+    CHECK(hits[0].body==c, "sweep should report the crate body");
+    // A static wall on a different layer must be ignored by the Prop mask.
+    eng::BodyDesc wall; wall.halfExtents={0.1f,2,2}; wall.position={1.0f,0,0};
+    wall.layer=eng::BodyLayer::Static; wall.dynamic=false; phys.createBody(wall);
+    std::vector<eng::ShapeHit> hits2;
+    int n2 = phys.shapeCast(sweep, {0,0,0}, {2,0,0}, hits2, eng::BodyLayer::Prop);
+    CHECK(n2>=1, "prop mask should still hit the crate");
+    for (auto& h : hits2) CHECK(h.body==c, "prop-masked sweep must not report the static wall");
+    phys.shutdown();
+    std::puts("test_shapecast_hits_prop_once OK");
+}
+
 int main() {
     test_box_falls_and_rests_on_floor();
     test_raycast_hits_static_box();
@@ -195,5 +215,6 @@ int main() {
     test_impulse_moves_prop();
     test_arch_cell_has_floor();
     test_fast_projectile_does_not_tunnel_thin_wall();
+    test_shapecast_hits_prop_once();
     return 0;
 }

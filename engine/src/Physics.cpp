@@ -19,6 +19,9 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
+#include <Jolt/Physics/Collision/ShapeCast.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <algorithm>
 #include <cmath>
 #include <mutex>
@@ -582,8 +585,97 @@ void Physics::setBodyKinematic(BodyHandle h, bool kinematic) {
                      kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic,
                      JPH::EActivation::Activate);
 }
-int  Physics::shapeCast(const BodyDesc&, glm::vec3, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
-int  Physics::overlap(const BodyDesc&, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
+int Physics::shapeCast(const BodyDesc& shape, glm::vec3 from, glm::vec3 to,
+                       std::vector<ShapeHit>& out, BodyLayer mask) const {
+    if (!mImpl->inited) return 0;
+
+    JPH::ShapeRefC shapeRef = makeShape(shape);
+
+    // Layer filter: only collide with the requested layer.
+    struct LayerFilter final : public JPH::ObjectLayerFilter {
+        JPH::ObjectLayer want;
+        bool ShouldCollide(JPH::ObjectLayer l) const override { return l == want; }
+    } layerFilter;
+    layerFilter.want = mapLayer(mask);
+
+    JPH::Vec3 dir(to.x - from.x, to.y - from.y, to.z - from.z);
+    JPH::RShapeCast cast(
+        shapeRef.GetPtr(),
+        JPH::Vec3::sReplicate(1.0f),
+        JPH::RMat44::sTranslation(JPH::RVec3(from.x, from.y, from.z)),
+        dir);
+
+    JPH::AllHitCollisionCollector<JPH::CastShapeCollector> collector;
+    JPH::ShapeCastSettings settings;
+    mImpl->system.GetNarrowPhaseQuery().CastShape(
+        cast, settings, JPH::RVec3::sZero(),
+        collector, {}, layerFilter);
+
+    // De-dupe: one ShapeHit per body.
+    std::unordered_map<uint32_t, bool> seen;
+    for (const auto& hit : collector.mHits) {
+        uint32_t key = hit.mBodyID2.GetIndexAndSequenceNumber();
+        if (seen.count(key)) continue;
+        seen[key] = true;
+
+        auto it = mImpl->idToSlot.find(key);
+        BodyHandle bh = (it != mImpl->idToSlot.end()) ? BodyHandle{ it->second } : BodyHandle{};
+
+        JPH::RVec3 pt = cast.GetPointOnRay(hit.mFraction);
+        JPH::Vec3  n  = -hit.mPenetrationAxis.Normalized();
+
+        ShapeHit sh;
+        sh.body        = bh;
+        sh.point       = glm::vec3(float(pt.GetX()), float(pt.GetY()), float(pt.GetZ()));
+        sh.normal      = glm::vec3(n.GetX(), n.GetY(), n.GetZ());
+        sh.penetration = hit.mPenetrationDepth;
+        out.push_back(sh);
+    }
+    return int(out.size());
+}
+
+int Physics::overlap(const BodyDesc& shape, glm::vec3 at,
+                     std::vector<ShapeHit>& out, BodyLayer mask) const {
+    if (!mImpl->inited) return 0;
+
+    JPH::ShapeRefC shapeRef = makeShape(shape);
+
+    struct LayerFilter final : public JPH::ObjectLayerFilter {
+        JPH::ObjectLayer want;
+        bool ShouldCollide(JPH::ObjectLayer l) const override { return l == want; }
+    } layerFilter;
+    layerFilter.want = mapLayer(mask);
+
+    JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    mImpl->system.GetNarrowPhaseQuery().CollideShape(
+        shapeRef.GetPtr(),
+        JPH::Vec3::sReplicate(1.0f),
+        JPH::RMat44::sTranslation(JPH::RVec3(at.x, at.y, at.z)),
+        JPH::CollideShapeSettings{},
+        JPH::RVec3::sZero(),
+        collector, {}, layerFilter);
+
+    std::unordered_map<uint32_t, bool> seen;
+    for (const auto& hit : collector.mHits) {
+        uint32_t key = hit.mBodyID2.GetIndexAndSequenceNumber();
+        if (seen.count(key)) continue;
+        seen[key] = true;
+
+        auto it = mImpl->idToSlot.find(key);
+        BodyHandle bh = (it != mImpl->idToSlot.end()) ? BodyHandle{ it->second } : BodyHandle{};
+
+        JPH::Vec3 n = -hit.mPenetrationAxis.Normalized();
+        ShapeHit sh;
+        sh.body        = bh;
+        sh.point       = glm::vec3(hit.mContactPointOn2.GetX(),
+                                   hit.mContactPointOn2.GetY(),
+                                   hit.mContactPointOn2.GetZ());
+        sh.normal      = glm::vec3(n.GetX(), n.GetY(), n.GetZ());
+        sh.penetration = hit.mPenetrationDepth;
+        out.push_back(sh);
+    }
+    return int(out.size());
+}
 void Physics::setContactCallback(HitCallback cb) {
     mImpl->contactCb = std::move(cb);
 }

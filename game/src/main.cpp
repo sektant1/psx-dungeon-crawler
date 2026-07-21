@@ -10,6 +10,7 @@
 #include "LevelEditor.h"
 #include "Projectiles.h"
 #include "SceneFactory.h"
+#include "Melee.h"
 #include "Targeting.h"
 
 #include <DemoScene.h>
@@ -592,6 +593,8 @@ int main(int, char**)
     physics.init();
 
     ProjectileSystem projectiles;
+    MeleeSystem melee;
+    melee.setHitCallback([](eng::BodyHandle,glm::vec3,glm::vec3){});
 
     // Dynamic prop table: bodies spawned once for the depth-0 lobby and
     // synced to render nodes every frame while propsAlive is true.
@@ -815,6 +818,7 @@ int main(int, char**)
         while (accumulator >= kFixedDt && guard++ < 5) {
             physics.update(kFixedDt);
             projectiles.fixedUpdate(physics, r, kFixedDt);
+            melee.fixedUpdate(physics, player.eyePosition(), player.forward(), kFixedDt);
             accumulator -= kFixedDt;
         }
         physics.setInterpolationAlpha(accumulator / kFixedDt);
@@ -873,6 +877,8 @@ int main(int, char**)
                 projectiles.fireArrow(physics, r, player.eyePosition(), player.forward());
             if (in.wasPressed("cast_spell"))
                 projectiles.fireBolt(physics, r, player.eyePosition(), player.forward());
+            if (in.wasMouseClicked())
+                melee.startSwing();
         }
 
         engine.renderFrame(dt);

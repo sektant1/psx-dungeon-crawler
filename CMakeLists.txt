@@ -79,6 +79,7 @@ add_executable(game
     game/src/DungeonGen.cpp
     game/src/LevelDocument.cpp
     game/src/LevelEditor.cpp
+    game/src/Melee.cpp
     game/src/Projectiles.cpp
     game/src/SceneFactory.cpp
     game/src/Targeting.cpp
