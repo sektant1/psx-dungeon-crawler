@@ -55,6 +55,7 @@ struct DebugUi::Impl {
     float outlineNormalSens = 0.6f;
     float outlineSharpness = 0.85f;
     float outlineDistFade = 0.08f;
+    float outlineDarkFade = 0.12f; // scene luma where ink reaches full
 
     void init(RenderCore* c, Renderer* r) { core = c; renderer = r; }
 

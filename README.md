@@ -8,8 +8,8 @@ the window and loop — both fully hidden behind the `eng` public API
 ## Build & run
 
 ```sh
-make run-game    # FPS test room: WASD + mouse-look, Esc releases/quits
-make run-demo    # PSX shader demo (port of MenacingMecha's godot-psx-style)
+make game        # FPS test room: WASD + mouse-look, Esc releases/quits
+make demo        # PSX shader demo (port of MenacingMecha's godot-psx-style)
 ```
 
 Requires system OGRE 14.x (plugins `RenderSystem_GL3Plus`, `Plugin_ParticleFX`,

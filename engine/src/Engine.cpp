@@ -46,6 +46,10 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     mDebugUi.mImpl->init(&detail::coreOf(mRenderer), &mRenderer);
     if (std::getenv("PSX_DEBUG_UI"))
         mDebugUi.setVisible(true);
+    // Safe before any attachMesh: entities created later join the debug
+    // view through the attachMesh wireframe hook.
+    if (std::getenv("PSX_WIREFRAME"))
+        mRenderer.setWireframeDebug(true);
     if (!mInput.loadBindings(mConfig)) {
         shutdown();
         return false;
@@ -80,6 +84,9 @@ float Engine::tick()
                 mInput.setMouseGrab(mImpl->grabBeforeDebugUi);
             }
             mDebugUi.setVisible(show);
+        } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
+                   e.key.keysym.sym == SDLK_F2) {
+            mRenderer.setWireframeDebug(!mRenderer.envState().wireframe);
         } else {
             const bool consumed = mDebugUi.mImpl->onEvent(e);
             // KEYUP always reaches Input (no stuck keys); everything else

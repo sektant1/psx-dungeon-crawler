@@ -9,6 +9,7 @@
 #include <Ogre.h>
 
 #include <algorithm>
+#include <unordered_map>
 #include <vector>
 
 namespace eng {
@@ -37,6 +38,15 @@ struct Renderer::Impl {
     std::vector<Ogre::Light*> lights;    // lights[id-1]
     int nameCounter = 0;
     EnvState env;
+    // Original sub-entity materials, saved while the wireframe debug view
+    // holds every entity on PSX/DebugWireframe.
+    std::unordered_map<Ogre::SubEntity*, std::string> savedMaterials;
+    // Post-chain settings stashed by setWireframeDebug(true) and restored
+    // on toggle-off (the view bypasses them so lines stay crisp).
+    struct {
+        int pixelSize = 3;
+        bool stylize = true, dither = false, bloom = true, grade = false;
+    } preWireframe;
 
     Ogre::SceneNode* node(NodeHandle h, const char* what)
     {
@@ -127,6 +137,12 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
         mImpl->core.sceneMgr()->createEntity(mImpl->mesh(mesh, "attachMesh"));
     e->setMaterialName(materialName);
     e->setCastShadows(castShadows);
+    if (mImpl->env.wireframe) { // debug view active: join it immediately
+        for (Ogre::SubEntity* se : e->getSubEntities()) {
+            mImpl->savedMaterials[se] = materialName;
+            se->setMaterialName("PSX/DebugWireframe");
+        }
+    }
     mImpl->node(node, "attachMesh")->attachObject(e);
 }
 
@@ -378,6 +394,47 @@ void Renderer::setBloomParams(float threshold, float intensity)
     mImpl->env.bloomIntensity = intensity;
     setMaterialParam("PSX/BloomBright", "bloomThreshold", threshold);
     setMaterialParam("PSX/BloomComposite", "bloomIntensity", intensity);
+}
+
+void Renderer::setWireframeDebug(bool enabled)
+{
+    if (mImpl->env.wireframe == enabled)
+        return;
+    mImpl->env.wireframe = enabled;
+    for (const auto& [name, mo] : mImpl->core.sceneMgr()->getMovableObjects("Entity")) {
+        auto* e = static_cast<Ogre::Entity*>(mo);
+        for (Ogre::SubEntity* se : e->getSubEntities()) {
+            if (enabled) {
+                mImpl->savedMaterials[se] = se->getMaterial()->getName();
+                se->setMaterialName("PSX/DebugWireframe");
+            } else {
+                auto found = mImpl->savedMaterials.find(se);
+                if (found != mImpl->savedMaterials.end())
+                    se->setMaterialName(found->second);
+            }
+        }
+    }
+    if (!enabled)
+        mImpl->savedMaterials.clear();
+    // The post chain smears the 1px lines: the pixelation RT averages them
+    // away, stylize inks their depth edges, dither speckles the flat colour.
+    // Bypass every post effect while the view is up, restore after.
+    if (enabled) {
+        mImpl->preWireframe = {mImpl->env.pixelSize, mImpl->env.stylize,
+                               mImpl->env.dither, mImpl->env.bloom,
+                               mImpl->env.grade};
+        setPixelSize(1);
+        setStylizeEnabled(false);
+        setDitherEnabled(false);
+        setBloomEnabled(false);
+        setGradeEnabled(false);
+    } else {
+        setPixelSize(mImpl->preWireframe.pixelSize);
+        setStylizeEnabled(mImpl->preWireframe.stylize);
+        setDitherEnabled(mImpl->preWireframe.dither);
+        setBloomEnabled(mImpl->preWireframe.bloom);
+        setGradeEnabled(mImpl->preWireframe.grade);
+    }
 }
 
 void Renderer::setGradeEnabled(bool enabled)

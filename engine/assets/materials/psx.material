@@ -139,6 +139,19 @@ material PSX/LightVolume    // psx_light-volume.gdshader (NO_TEXTURE + LIGHT_VOL
     } }
 }
 
+// Debug view: light-blue mesh lines only. Swapped onto every entity by
+// Renderer::setWireframeDebug; depth state stays default so lines occlude
+// like the solid geometry they replace.
+material PSX/DebugWireframe
+{
+    technique { pass {
+        polygon_mode wireframe
+        cull_hardware none
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref Wire_FS { }
+    } }
+}
+
 // post_process/dither-banding_mat.tres (pp_band-dither, psxdither.png,
 // col_depth 15, dither_banding true). Unit 0 = compositor scene target.
 material PSX/DitherPost

@@ -35,6 +35,10 @@ uniform float outlineDepthSens;   // relative depth-step gain, default 15
 uniform float outlineNormalSens;  // crease line gain (0 = silhouette only), 0.6
 uniform float outlineSharpness;   // 1 = hard pixel edge, 0 = soft, default 0.85
 uniform float outlineDistFade;    // exp(-depth*fade): ink dies into the fog, 0.08
+uniform float outlineDarkFade;    // scene luma where ink reaches full, 0.12:
+                                  // contours belong to lit geometry, so ink
+                                  // fades out over shadow/darkness/fog rather
+                                  // than tracing shapes the murk should hide
 out vec4 fragColour;
 
 float getDepth(vec2 suv)
@@ -166,7 +170,11 @@ void main()
         // leaving black wires floating in the murk.
         float band = max((1.0 - outlineSharpness) * 0.5, 0.01);
         edge = smoothstep(0.5 - band, 0.5 + band, edge);
-        ink = edge * outlineOpacity * exp(-d * outlineDistFade);
+        // Luma gate: no ink over shadows/darkness/fog. Same shape as the
+        // highlight dark fade -- fully out below ~0.02, full by outlineDarkFade.
+        float inkLum = dot(original, vec3(0.2126, 0.7152, 0.0722));
+        ink = edge * outlineOpacity * exp(-d * outlineDistFade) *
+              smoothstep(0.02, max(outlineDarkFade, 0.03), inkLum);
     }
 
     vec3 final = original;

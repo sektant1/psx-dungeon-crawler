@@ -200,6 +200,12 @@ void DebugUi::Impl::drawStats()
 void DebugUi::Impl::drawShaders()
 {
     const EnvState& env = renderer->envState();
+    bool wireframe = env.wireframe;
+    if (ImGui::Checkbox("wireframe view", &wireframe))
+        renderer->setWireframeDebug(wireframe);
+    ImGui::SetItemTooltip("Debug view: every model as light-blue mesh lines\n"
+                          "(PSX/DebugWireframe); original materials restore\n"
+                          "on untick.");
     if (ImGui::SliderFloat("vertex snap", &precisionMultiplier, 0.0f, 1.0f))
         renderer->setGlobalMaterialParam("precisionMultiplier",
                                          precisionMultiplier);
@@ -347,6 +353,12 @@ void DebugUi::Impl::drawPixelArt()
     ImGui::SetItemTooltip("exp(-depth*fade): sinks far ink into the fog so\n"
                           "black wires don't float in the murk. Match the\n"
                           "scene fog density as a starting point.");
+    if (ImGui::SliderFloat("outline dark fade", &outlineDarkFade, 0.03f, 0.5f,
+                           "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineDarkFade",
+                                   outlineDarkFade);
+    ImGui::SetItemTooltip("Scene luma below which ink fades out, so outlines\n"
+                          "never draw over shadows/darkness/fog.");
 
     ImGui::SeparatorText("grade");
     bool grade = env.grade;
@@ -413,6 +425,7 @@ void DebugUi::Impl::copyToml()
                   "outline_normal_sens = %.2f\n"
                   "outline_sharpness = %.2f\n"
                   "outline_dist_fade = %.3f\n"
+                  "outline_dark_fade = %.2f\n"
                   "ambient_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_colour_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_density = %.4f\n"
@@ -443,7 +456,7 @@ void DebugUi::Impl::copyToml()
                   outlineEnabled ? "true" : "false",
                   outlineColor.x, outlineColor.y, outlineColor.z,
                   outlineOpacity, outlineDepthSens, outlineNormalSens,
-                  outlineSharpness, outlineDistFade,
+                  outlineSharpness, outlineDistFade, outlineDarkFade,
                   env.ambient.x, env.ambient.y,
                   env.ambient.z, env.fogColour.x, env.fogColour.y,
                   env.fogColour.z, env.fogDensity, env.fogDesatBoost,
