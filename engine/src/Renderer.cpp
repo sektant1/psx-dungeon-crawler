@@ -217,6 +217,14 @@ void Renderer::buildStaticBatch(StaticBatchHandle batch)
                            mImpl->env.wireframe ? "PSX/DebugWireframe" : "");
 }
 
+void Renderer::setStaticBatchVisible(StaticBatchHandle batch, bool visible)
+{
+    if (!batch.valid() || batch.id > mImpl->staticBatches.size())
+        log::fatal("Renderer: invalid batch handle %u in setStaticBatchVisible",
+                   batch.id);
+    mImpl->staticBatches[batch.id - 1].sg->setVisible(visible);
+}
+
 void Renderer::attachParticles(NodeHandle node, const std::string& templateName)
 {
     try {
