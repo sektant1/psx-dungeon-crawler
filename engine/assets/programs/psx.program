@@ -82,13 +82,13 @@ fragment_program PSX_FS_Lit glsl
     }
 }
 
-// Dungeon geometry keeps the same lighting shader but writes a sentinel into
-// the edge metadata target. This is compile-time rather than a material
-// uniform so static geometry batching cannot lose the exclusion.
+// Dungeon geometry keeps normal/depth metadata for ink and outlines, but marks
+// its depth negative so the compositor can suppress highlights on stone.
+// Compile-time selection survives static-geometry batching.
 fragment_program PSX_FS_Dungeon glsl
 {
     source psx.frag
-    preprocessor_defines LIT=1,DUNGEON_NO_STYLIZE=1
+    preprocessor_defines LIT=1,DUNGEON_NO_HIGHLIGHT=1
     default_params
     {
         param_named albedoTex int 0

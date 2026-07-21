@@ -3,6 +3,7 @@
 #   make deps       - install all build dependencies, any distro (incl. OGRE)
 #   make demo       - build then run the PSX sample (forces X11 under Wayland)
 #   make game       - build then run the game
+#   make docs       - generate browsable API docs in build/docs/html/
 #   make debug      - Debug-type build in build-debug/
 #   make clean      - remove build directories
 
@@ -10,7 +11,7 @@ BUILD_DIR   ?= build
 BUILD_TYPE  ?= Release
 JOBS        ?= $(shell nproc)
 
-.PHONY: all build deps demo game debug clean
+.PHONY: all build deps demo game docs debug clean
 
 all: build
 
@@ -28,6 +29,18 @@ demo: build
 
 game: build
 	cd $(BUILD_DIR) && SDL_VIDEODRIVER=x11 ./game
+
+docs:
+	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+	cmake --build $(BUILD_DIR) --target docs
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open "$(BUILD_DIR)/docs/html/index.html"; \
+	elif command -v open >/dev/null 2>&1; then \
+		open "$(BUILD_DIR)/docs/html/index.html"; \
+	else \
+		echo "Documentation generated at $(BUILD_DIR)/docs/html/index.html"; \
+		echo "No supported browser opener found (xdg-open or open)."; \
+	fi
 
 debug:
 	$(MAKE) build BUILD_DIR=build-debug BUILD_TYPE=Debug

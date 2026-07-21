@@ -147,15 +147,17 @@ void main()
     // swims across big low-poly triangles (crystal shards), which punches
     // metadata stays continuous across each rendered surface.
 #ifdef LIT
-#ifdef DUNGEON_NO_STYLIZE
-    fragNormalDepth = vec4(0.0);
+#ifdef DUNGEON_NO_HIGHLIGHT
+    fragNormalDepth = vec4(normalize(vNormalSmooth) * 0.5 + 0.5,
+                           -vViewDepth / farClip);
 #else
     fragNormalDepth = vec4(normalize(vNormalSmooth) * 0.5 + 0.5,
                            vViewDepth / farClip);
 #endif
 #else
-#ifdef DUNGEON_NO_STYLIZE
-    fragNormalDepth = vec4(0.0);
+#ifdef DUNGEON_NO_HIGHLIGHT
+    fragNormalDepth = vec4(normalize(vNormalVS) * 0.5 + 0.5,
+                           -vViewDepth / farClip);
 #else
     fragNormalDepth = vec4(normalize(vNormalVS) * 0.5 + 0.5,
                            vViewDepth / farClip);

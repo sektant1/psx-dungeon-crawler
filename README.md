@@ -23,6 +23,18 @@ saves a screenshot, and exits (verification hook, both targets).
 tunables; "Copy all as TOML" puts current values on the clipboard).
 `PSX_DEBUG_UI=1` forces it open (screenshot verification).
 
+## API documentation
+
+Generate the engine and gameplay API reference with:
+
+```sh
+make docs
+```
+
+The command opens `build/docs/html/index.html` in the default browser after
+generation. Doxygen is optional for normal builds; only the `docs` target
+requires it.
+
 ## Layout
 
 ```

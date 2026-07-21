@@ -8,7 +8,10 @@ uniform float outlineDepthSens, outlineNormalSens, outlineSharpness, outlineDist
 uniform float outlineDarkFade;
 uniform vec3 shadowColor, highlightColor, outlineColor;
 out vec4 fragColour;
-float depthAt(vec2 p) { float a=texture(normalDepthTex,p).a; return a<=0.0?farClip:a*farClip; }
+float depthAt(vec2 p) {
+    vec4 metadata=texture(normalDepthTex,p);
+    return length(metadata.rgb)<0.1 ? farClip : abs(metadata.a)*farClip;
+}
 vec3 normalAt(vec2 p) { return texture(normalDepthTex,p).rgb*2.0-1.0; }
 void main() {
     vec4 scene=texture(sceneTex,uv); vec3 original=scene.rgb;
@@ -25,7 +28,10 @@ void main() {
     float shadow=smoothstep(shadowThreshold-.05,shadowThreshold+.05,depthEdge)*shadowsEnabled;
     vec3 n=normalAt(uv); float normalEdge=max(max(1.-dot(n,normalAt(uv+vec2(0,-1)*e)),1.-dot(n,normalAt(uv+vec2(0,1)*e))),max(1.-dot(n,normalAt(uv+vec2(-1,0)*e)),1.-dot(n,normalAt(uv+vec2(1,0)*e))));
     float luminance=dot(original,vec3(.2126,.7152,.0722));
-    float hi=smoothstep(highlightThreshold-.3,highlightThreshold+.3,normalEdge)*highlightsEnabled*smoothstep(.02,max(highlightDarkFade,.05),luminance);
+    // Dungeon materials encode negative depth: retain their normal/depth for
+    // outlines and ink shadows, but never lay the highlight wash over stone.
+    float acceptsHighlight=step(0.0,texture(normalDepthTex,uv).a);
+    float hi=smoothstep(highlightThreshold-.3,highlightThreshold+.3,normalEdge)*highlightsEnabled*acceptsHighlight*smoothstep(.02,max(highlightDarkFade,.05),luminance);
     float rel=max(max(du+dd-2.*d,dl+dr-2.*d),0.)/max(d,.001);
     float ink=smoothstep(.5-max((1.-outlineSharpness)*.5,.01),.5+max((1.-outlineSharpness)*.5,.01),clamp(rel*outlineDepthSens+normalEdge*outlineNormalSens,0.,1.))*outlineEnabled*outlineOpacity*exp(-d*outlineDistFade)*smoothstep(.02,max(outlineDarkFade,.03),luminance);
     vec3 outc=mix(original,mix(original,highlightColor,highlightStrength),hi);
