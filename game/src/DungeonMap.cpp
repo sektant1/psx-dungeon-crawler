@@ -389,6 +389,88 @@ void DungeonMap::update(eng::Renderer& r, float t) const
     }
 }
 
+void DungeonMap::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos,
+                                  float farDist)
+{
+    // Inspector mode: wireframe shows every room regardless of culling.
+    if (r.envState().wireframe) {
+        for (const auto& rm : mRooms)
+            r.setStaticBatchVisible(rm.batch, true);
+        for (const auto& ar : mArches)
+            r.setStaticBatchVisible(ar.batch, true);
+        mVisibleRooms.clear(); // force a recompute when culling resumes
+        return;
+    }
+
+    // Current room(s): the room under the camera, or (over an arch/void) the
+    // arch's joined rooms.
+    int col, row;
+    cellOf(cameraPos.x, cameraPos.z, col, row);
+    std::vector<int> current;
+    const int rm = roomOfCell(col, row);
+    if (rm >= 0) {
+        current.push_back(rm);
+    } else if (row >= 0 && col >= 0 && row < int(mRows.size()) &&
+               col < mStride) {
+        const int ai = mCellArch[size_t(row * mStride + col)];
+        if (ai >= 0) {
+            if (mArches[size_t(ai)].roomA >= 0)
+                current.push_back(mArches[size_t(ai)].roomA);
+            if (mArches[size_t(ai)].roomB >= 0)
+                current.push_back(mArches[size_t(ai)].roomB);
+        }
+    }
+    if (current.empty()) {
+        // Camera outside all cells: show everything (never hide on-screen).
+        for (const auto& room : mRooms)
+            r.setStaticBatchVisible(room.batch, true);
+        for (const auto& ar : mArches)
+            r.setStaticBatchVisible(ar.batch, true);
+        mVisibleRooms.clear();
+        return;
+    }
+
+    // Recompute only when the current-room set changes.
+    std::sort(current.begin(), current.end());
+    if (current == mVisibleRooms)
+        return;
+    mVisibleRooms = current;
+
+    // BFS the portal graph: a room is visible if current, or reachable and its
+    // AABB is within farDist of the camera. Arch visible if either room is.
+    std::vector<char> vis(mRooms.size(), 0);
+    std::vector<int> queue = current;
+    for (int c : current)
+        vis[size_t(c)] = 1;
+    const auto aabbDist = [&](const Room& room) {
+        const glm::vec3 p = glm::clamp(cameraPos, room.aabbMin, room.aabbMax);
+        return glm::length(p - cameraPos);
+    };
+    while (!queue.empty()) {
+        const int room = queue.back();
+        queue.pop_back();
+        for (const auto& ar : mArches) {
+            int other = -1;
+            if (ar.roomA == room) other = ar.roomB;
+            else if (ar.roomB == room) other = ar.roomA;
+            if (other < 0 || vis[size_t(other)])
+                continue;
+            if (aabbDist(mRooms[size_t(other)]) <= farDist) {
+                vis[size_t(other)] = 1;
+                queue.push_back(other);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < mRooms.size(); ++i)
+        r.setStaticBatchVisible(mRooms[i].batch, vis[i] != 0);
+    for (const auto& ar : mArches) {
+        const bool show = (ar.roomA >= 0 && vis[size_t(ar.roomA)]) ||
+                          (ar.roomB >= 0 && vis[size_t(ar.roomB)]);
+        r.setStaticBatchVisible(ar.batch, show);
+    }
+}
+
 int DungeonMap::findTorch(glm::vec3 eye, glm::vec3 forward,
                           float maxDist) const
 {

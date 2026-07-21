@@ -335,6 +335,7 @@ int main(int, char**)
         animTime += dt;
         scene.update(r, animTime);
         dungeon.update(r, animTime); // torch flicker
+        dungeon.updateVisibility(r, player.eyePosition(), 30.0f);
 
         // Levitating loot: slow bob + steady yaw turn so every facet
         // catches the braziers; glow pulses like banked coals (two-sine

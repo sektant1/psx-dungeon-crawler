@@ -41,6 +41,10 @@ public:
     // Torch light flicker: call once per frame with the animation clock.
     void update(eng::Renderer& r, float t) const;
 
+    // Occlusion culling: hide rooms unreachable through visible portals within
+    // farDist of the camera. Call once per frame before rendering.
+    void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos, float farDist);
+
     // Interaction: index of the torch the player is looking at (within
     // maxDist of eye, roughly on the view axis), or -1.
     int findTorch(glm::vec3 eye, glm::vec3 forward, float maxDist) const;
