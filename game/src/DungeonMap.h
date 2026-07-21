@@ -36,6 +36,12 @@ public:
     bool load(eng::Renderer& r, const std::string& tomlPath,
               const std::string& tileMeshDir, const std::string& propMeshDir);
 
+    // Build the dungeon from an in-memory grid (e.g. from gen::generate)
+    // instead of a TOML file. Shares all geometry/segmentation/torch code.
+    bool loadFromRows(eng::Renderer& r, std::vector<std::string> rows,
+                      const std::string& tileMeshDir,
+                      const std::string& propMeshDir);
+
     glm::vec3 spawn() const { return mSpawn; }
 
     // Torch light flicker: call once per frame with the animation clock.
@@ -57,6 +63,14 @@ public:
     glm::vec3 resolveMove(glm::vec3 from, glm::vec3 to, float radius) const;
 
 private:
+    // Shared build core: assumes rows + cell/wall/light params are chosen.
+    // Both load() (TOML) and loadFromRows() (generator) funnel through here.
+    bool buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
+                       float cell, float wallH, glm::vec3 lightColour,
+                       float lightEnergy, float lightRange, float lampY,
+                       const std::string& tileMeshDir,
+                       const std::string& propMeshDir);
+
     char cellAt(int col, int row) const;
     bool walkableCell(int col, int row) const;
     // Point-level test used by resolveMove's corner sampling.

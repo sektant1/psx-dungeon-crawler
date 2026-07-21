@@ -78,26 +78,54 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
     mCell = float((*dungeon)["cell_size"].value_or(4.0));
     const float wallH = float((*dungeon)["wall_height"].value_or(3.0));
 
-    const toml::array* rows = (*dungeon)["rows"].as_array();
-    if (!rows || rows->empty()) {
+    const toml::array* rowsArr = (*dungeon)["rows"].as_array();
+    if (!rowsArr || rowsArr->empty()) {
         eng::log::error("DungeonMap: missing 'rows' array");
         return false;
     }
-    mRows.clear();
-    for (const auto& e : *rows)
-        mRows.push_back(e.value_or(std::string()));
+    std::vector<std::string> rows;
+    for (const auto& e : *rowsArr)
+        rows.push_back(e.value_or(std::string()));
 
-    // The 'C' cell's centre becomes the world origin (the shared DemoScene
-    // loads at fixed positions around the origin).
+    // Lamp light parameters ([dungeon.light], warm torch defaults).
+    glm::vec3 lightColour{lin(1.0f), lin(0.62f), lin(0.32f)};
+    float lightEnergy = 4.0f, lightRange = 6.5f, lampY = 2.55f;
+    if (const toml::table* light = (*dungeon)["light"].as_table()) {
+        if (const toml::array* c = (*light)["colour_srgb"].as_array();
+            c && c->size() == 3)
+            lightColour = {lin(float((*c)[0].value_or(1.0))),
+                           lin(float((*c)[1].value_or(1.0))),
+                           lin(float((*c)[2].value_or(1.0)))};
+        lightEnergy = float((*light)["energy"].value_or(4.0));
+        lightRange = float((*light)["range"].value_or(6.5));
+        lampY = float((*light)["y"].value_or(2.55));
+    }
+
+    return buildFromRows(r, std::move(rows), mCell, wallH, lightColour,
+                         lightEnergy, lightRange, lampY, tileMeshDir,
+                         propMeshDir);
+}
+
+bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
+                               float cell, float wallH, glm::vec3 lightColour,
+                               float lightEnergy, float lightRange, float lampY,
+                               const std::string& tileMeshDir,
+                               const std::string& propMeshDir)
+{
+    mCell = cell;
+    mRows = std::move(rows);
+    if (mRows.empty()) {
+        eng::log::error("DungeonMap: empty grid");
+        return false;
+    }
     int cCol = -1, cRow = -1, sCol = -1, sRow = -1;
-    for (int row = 0; row < int(mRows.size()); ++row) {
+    for (int row = 0; row < int(mRows.size()); ++row)
         for (int col = 0; col < int(mRows[row].size()); ++col) {
             if (mRows[row][col] == 'C') { cCol = col; cRow = row; }
             if (mRows[row][col] == 'S') { sCol = col; sRow = row; }
         }
-    }
     if (cCol < 0 || sCol < 0) {
-        eng::log::error("DungeonMap: map needs both a 'C' and an 'S' marker");
+        eng::log::error("DungeonMap: grid needs both a 'C' and an 'S' marker");
         return false;
     }
     mOrigin = {-(cCol + 0.5f) * mCell, 0.0f, -(cRow + 0.5f) * mCell};
@@ -184,20 +212,6 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
         rm.batch = r.createStaticBatch({8.0f, 8.0f, 8.0f});
     for (auto& ar : mArches)
         ar.batch = r.createStaticBatch({8.0f, 8.0f, 8.0f});
-
-    // Lamp light parameters ([dungeon.light], warm torch defaults).
-    glm::vec3 lightColour{lin(1.0f), lin(0.62f), lin(0.32f)};
-    float lightEnergy = 4.0f, lightRange = 6.5f, lampY = 2.55f;
-    if (const toml::table* light = (*dungeon)["light"].as_table()) {
-        if (const toml::array* c = (*light)["colour_srgb"].as_array();
-            c && c->size() == 3)
-            lightColour = {lin(float((*c)[0].value_or(1.0))),
-                           lin(float((*c)[1].value_or(1.0))),
-                           lin(float((*c)[2].value_or(1.0)))};
-        lightEnergy = float((*light)["energy"].value_or(4.0));
-        lightRange = float((*light)["range"].value_or(6.5));
-        lampY = float((*light)["y"].value_or(2.55));
-    }
 
     // ------------------------------------------------------------ meshes ---
     const eng::MeshHandle floor = r.loadObj(tileMeshDir + "tile_floor.obj");
@@ -372,6 +386,17 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
     eng::log::info("DungeonMap: %zu rows, %zu rooms, %zu arches, %zu pillar posts, cell %.1f m",
                    mRows.size(), mRooms.size(), mArches.size(), pillarSpots.size(), mCell);
     return true;
+}
+
+bool DungeonMap::loadFromRows(eng::Renderer& r, std::vector<std::string> rows,
+                              const std::string& tileMeshDir,
+                              const std::string& propMeshDir)
+{
+    // Generator grids use the same tile scale and warm-torch defaults as the
+    // TOML fallback (game/assets/dungeon.toml [dungeon.light]).
+    return buildFromRows(r, std::move(rows), 4.0f, 3.0f,
+                         {lin(1.0f), lin(0.58f), lin(0.28f)}, 4.0f, 6.0f, 1.9f,
+                         tileMeshDir, propMeshDir);
 }
 
 void DungeonMap::update(eng::Renderer& r, float t) const
