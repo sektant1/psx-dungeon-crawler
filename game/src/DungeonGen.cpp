@@ -155,18 +155,26 @@ struct Builder {
                 lab[size_t(yy)][size_t(xx)] = 'r';
     }
 
-    // One torch per room: a room-edge floor cell (still '.') adjacent to wall.
+    // One torch per room. DungeonMap mounts torches on walls, so the cell
+    // must be a floor ('.') with an orthogonal solid '#' neighbour -- a
+    // room-edge cell facing a doorway (arch/corridor) has none and would be
+    // skipped at load. Collect every wall-adjacent floor cell in the room and
+    // pick one via rng (deterministic, seeded); rooms ringed entirely by
+    // doorways simply get no torch.
     void placeTorch(const Node& n, std::vector<std::string>& g) {
-        for (int tries = 0; tries < 8; ++tries) {
-            const int x = rnd(n.rx, n.rx + n.rw - 1);
-            const int y = rnd(n.ry, n.ry + n.rh - 1);
-            const bool edge = (x == n.rx || x == n.rx + n.rw - 1 ||
-                               y == n.ry || y == n.ry + n.rh - 1);
-            if (edge && g[size_t(y)][size_t(x)] == '.') {
-                g[size_t(y)][size_t(x)] = 'L';
-                return;
+        std::vector<std::pair<int, int>> cand;
+        for (int y = n.ry; y < n.ry + n.rh; ++y)
+            for (int x = n.rx; x < n.rx + n.rw; ++x) {
+                if (g[size_t(y)][size_t(x)] != '.') continue;
+                if (g[size_t(y - 1)][size_t(x)] == '#' ||
+                    g[size_t(y + 1)][size_t(x)] == '#' ||
+                    g[size_t(y)][size_t(x - 1)] == '#' ||
+                    g[size_t(y)][size_t(x + 1)] == '#')
+                    cand.push_back({x, y});
             }
-        }
+        if (cand.empty()) return;
+        const auto [tx, ty] = cand[size_t(rnd(0, int(cand.size()) - 1))];
+        g[size_t(ty)][size_t(tx)] = 'L';
     }
 
     // Flood over walkable cells in g from (sx,sy); returns reached count and
