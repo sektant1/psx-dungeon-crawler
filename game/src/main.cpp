@@ -15,6 +15,7 @@
 
 #include <eng/Engine.h>
 #include <eng/Log.h>
+#include <eng/Physics.h>
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -87,8 +88,8 @@ static void applyPalette(eng::Renderer& r, const DemoScene& scene)
 // Swapped atomically on a transition (clearScene + buildLevel).
 class LiveLevel {
 public:
-    bool rebuild(eng::Renderer& r, const std::string& assets,
-                 uint32_t seed, int depth);
+    bool rebuild(eng::Renderer& r, eng::Physics& physics,
+                 const std::string& assets, uint32_t seed, int depth);
     void update(eng::Renderer& r, float animationTime);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
     void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
@@ -99,9 +100,10 @@ public:
     bool torchIsLit(int index) const { return map.torchLit(index); }
     void toggleTorch(eng::Renderer& r, int index) { map.toggleTorch(r, index); }
     const DungeonMap& dungeon() const { return map; }
+    void clearPhysics() { map.clearPhysics(); }
 
 private:
-    friend LiveLevel buildLevel(eng::Renderer&, const std::string&, uint32_t, int);
+    friend LiveLevel buildLevel(eng::Renderer&, eng::Physics&, const std::string&, uint32_t, int);
     DungeonMap map;
     DemoScene scene;
     eng::NodeHandle chestBase{}, chestSpin{};
@@ -217,15 +219,16 @@ static void drawDungeonMap(const DungeonMap& map, glm::vec3 playerPos)
 
 // Build a complete level (dungeon + demo scene + props + chest + portals)
 // into the (already-clear) scene. depth>0 adds an up-portal at the entry.
-LiveLevel buildLevel(eng::Renderer& r, const std::string& assets,
-                     uint32_t seed, int depth)
+LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
+                     const std::string& assets, uint32_t seed, int depth)
 {
     LiveLevel lv;
 
     // --------------------------------------------------------- dungeon ---
     // Procedurally generated level; the anchor 'C' room lands at the world
     // origin so the shared DemoScene sits centred inside it.
-    if (!lv.map.loadFromRows(r, gen::generate(seed), assets + "/meshes/tiles/",
+    if (!lv.map.loadFromRows(r, physics, gen::generate(seed),
+                             assets + "/meshes/tiles/",
                              assets + "/meshes/props/")) {
         eng::log::error("buildLevel: map load failed");
         return lv;
@@ -423,11 +426,13 @@ LiveLevel buildLevel(eng::Renderer& r, const std::string& assets,
     return lv;
 }
 
-bool LiveLevel::rebuild(eng::Renderer& r, const std::string& assets,
-                        uint32_t seed, int depth)
+bool LiveLevel::rebuild(eng::Renderer& r, eng::Physics& physics,
+                        const std::string& assets, uint32_t seed, int depth)
 {
+    // Free the outgoing level's collider bodies before overwriting the map.
+    map.clearPhysics();
     r.clearScene();
-    *this = buildLevel(r, assets, seed, depth);
+    *this = buildLevel(r, physics, assets, seed, depth);
     return map.debugRows() > 0;
 }
 
@@ -478,10 +483,10 @@ int main(int, char**)
     eng::Renderer& r = engine.renderer();
 
     r.setCameraFov(70.0f);
-    // Far clip rides the fog: at 30 m the exponential murk (density 0.12)
-    // passes ~2.7 % and the background matches the fog colour, so the far
-    // plane is invisible; regions beyond it frustum-cull entirely.
-    r.setCameraClip(0.05f, 30.0f);
+    // With the current 0.05 exponential fog, a 90 m far plane retains only
+    // ~1.1% scene colour. The cut is hidden without visibly popping long
+    // corridors; the 0.08 m near plane also improves depth precision.
+    r.setCameraClip(0.08f, 90.0f);
 
     uint32_t baseSeed = 1;
     if (const char* s = std::getenv("PSX_GEN_SEED"))
@@ -496,13 +501,16 @@ int main(int, char**)
     const float sens =
         float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
 
+    eng::Physics physics;
+    physics.init();
+
     LiveLevel level;
     FpsController player;
 
     // Wipe the scene, build the level at `depth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     const auto enterLevel = [&](bool atExit) {
-        level.rebuild(r, assets, seeds[size_t(depth)], depth);
+        level.rebuild(r, physics, assets, seeds[size_t(depth)], depth);
         const glm::vec3 p = atExit ? level.exitPosition() : level.spawnPosition();
         player.init(r, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
         player.setResolver([&level, &player](glm::vec3 from, glm::vec3 to) {
@@ -541,6 +549,8 @@ int main(int, char**)
     });
 
     // ---------------------------------------------------------------- loop ---
+    constexpr float kFixedDt = 1.0f / 60.0f;
+    float accumulator = 0.0f;
     float animTime = 0.0f;
     std::vector<GameplayTarget> targets;
     targets.reserve(64);
@@ -560,10 +570,21 @@ int main(int, char**)
                 in.setMouseGrab(true);
         }
 
+        // Fixed-step physics. Cap at 5 steps to prevent spiral of death.
+        accumulator += dt;
+        int guard = 0;
+        while (accumulator >= kFixedDt && guard++ < 5) {
+            physics.update(kFixedDt);
+            accumulator -= kFixedDt;
+        }
+        physics.setInterpolationAlpha(accumulator / kFixedDt);
+
         animTime += dt;
         level.update(r, animTime);
         level.updateVisibility(r, player.eyePosition());
 
+        // Player movement uses the existing resolveMove path for now;
+        // rewiring to the Jolt character controller is a later task.
         player.update(in, r, dt);
 
         targets.clear();
@@ -597,6 +618,8 @@ int main(int, char**)
 
         engine.renderFrame(dt);
     }
+    level.clearPhysics();
+    physics.shutdown();
     engine.shutdown();
     return 0;
 }
