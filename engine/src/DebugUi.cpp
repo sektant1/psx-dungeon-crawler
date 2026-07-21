@@ -199,11 +199,17 @@ void DebugUi::Impl::drawStats()
 
 void DebugUi::Impl::drawShaders()
 {
+    const EnvState& env = renderer->envState();
     if (ImGui::SliderFloat("vertex snap", &precisionMultiplier, 0.0f, 1.0f))
         renderer->setGlobalMaterialParam("precisionMultiplier",
                                          precisionMultiplier);
+    float lightSteps = env.lightSteps;
+    if (ImGui::SliderFloat("light steps", &lightSteps, 0.0f, 12.0f, "%.0f"))
+        renderer->setLightSteps(lightSteps);
+    float fogDesat = env.fogDesatBoost;
+    if (ImGui::SliderFloat("fog desat boost", &fogDesat, 0.0f, 1.0f))
+        renderer->setFogDesatBoost(fogDesat);
 
-    const EnvState& env = renderer->envState();
     bool dither = env.dither;
     if (ImGui::Checkbox("dither pass", &dither))
         renderer->setDitherEnabled(dither);
@@ -301,6 +307,61 @@ void DebugUi::Impl::drawPixelArt()
                                    highlightDarkFade);
     ImGui::SetItemTooltip("Scene luma below which edge highlights fade out,\n"
                           "so dark geometry doesn't grow glowing wires.");
+
+    ImGui::SeparatorText("ink outline");
+    if (ImGui::Checkbox("ink outline", &outlineEnabled))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineEnabled",
+                                   outlineEnabled ? 1.0f : 0.0f);
+    ImGui::SetItemTooltip("Hard contour pass (Boltgun look): silhouette ink\n"
+                          "from depth steps + interior lines from creases.\n"
+                          "Drawn over the soft shadow/highlight tinting.");
+    if (ImGui::ColorEdit3("outline colour", &outlineColor.x))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineColor",
+                                   outlineColor);
+    if (ImGui::SliderFloat("outline opacity", &outlineOpacity, 0.0f, 1.0f,
+                           "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineOpacity",
+                                   outlineOpacity);
+    if (ImGui::SliderFloat("outline depth sens", &outlineDepthSens, 1.0f,
+                           40.0f, "%.1f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineDepthSens",
+                                   outlineDepthSens);
+    ImGui::SetItemTooltip("Gain on relative depth steps ((far-near)/near):\n"
+                          "higher inks smaller ledges; silhouettes against\n"
+                          "distant walls saturate either way.");
+    if (ImGui::SliderFloat("outline normal sens", &outlineNormalSens, 0.0f,
+                           2.0f, "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineNormalSens",
+                                   outlineNormalSens);
+    ImGui::SetItemTooltip("Interior feature lines from surface creases;\n"
+                          "0 = silhouette-only ink.");
+    if (ImGui::SliderFloat("outline sharpness", &outlineSharpness, 0.0f, 1.0f,
+                           "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineSharpness",
+                                   outlineSharpness);
+    ImGui::SetItemTooltip("1 = hard pixel step, lower feathers the line.");
+    if (ImGui::SliderFloat("outline distance fade", &outlineDistFade, 0.0f,
+                           0.3f, "%.3f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineDistFade",
+                                   outlineDistFade);
+    ImGui::SetItemTooltip("exp(-depth*fade): sinks far ink into the fog so\n"
+                          "black wires don't float in the murk. Match the\n"
+                          "scene fog density as a starting point.");
+
+    ImGui::SeparatorText("grade");
+    bool grade = env.grade;
+    if (ImGui::Checkbox("colour grade", &grade))
+        renderer->setGradeEnabled(grade);
+    float gDesat = env.gradeDesaturate;
+    float gContrast = env.gradeContrast;
+    glm::vec3 gShadow = env.gradeShadowTint;
+    glm::vec3 gMid = env.gradeMidTint;
+    bool gradeChanged = ImGui::SliderFloat("desaturate", &gDesat, 0.0f, 1.0f);
+    gradeChanged |= ImGui::SliderFloat("contrast", &gContrast, 0.5f, 1.5f);
+    gradeChanged |= ImGui::ColorEdit3("shadow tint", &gShadow.x);
+    gradeChanged |= ImGui::ColorEdit3("mid tint", &gMid.x);
+    if (gradeChanged)
+        renderer->setGradeParams(gDesat, gContrast, gShadow, gMid);
 }
 
 void DebugUi::Impl::drawCamera()
@@ -320,7 +381,7 @@ void DebugUi::Impl::drawCamera()
 void DebugUi::Impl::copyToml()
 {
     const EnvState& env = renderer->envState();
-    char buf[2048];
+    char buf[4096];
     std::snprintf(buf, sizeof(buf),
                   "[debug_tuning]\n"
                   "precision_multiplier = %.4f\n"
@@ -345,13 +406,27 @@ void DebugUi::Impl::copyToml()
                   "shadow_threshold = %.2f\n"
                   "highlight_threshold = %.2f\n"
                   "highlight_dark_fade = %.2f\n"
+                  "outline_enabled = %s\n"
+                  "outline_color_srgb = [%.4f, %.4f, %.4f]\n"
+                  "outline_opacity = %.2f\n"
+                  "outline_depth_sens = %.1f\n"
+                  "outline_normal_sens = %.2f\n"
+                  "outline_sharpness = %.2f\n"
+                  "outline_dist_fade = %.3f\n"
                   "ambient_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_colour_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_density = %.4f\n"
+                  "fog_desat_boost = %.4f\n"
                   "background_srgb = [%.4f, %.4f, %.4f]\n"
+                  "light_steps = %.0f\n"
                   "fov_deg = %.1f\n"
                   "near_clip = %.3f\n"
-                  "far_clip = %.1f\n",
+                  "far_clip = %.1f\n"
+                  "colour_grade = %s\n"
+                  "grade_desaturate = %.4f\n"
+                  "grade_contrast = %.4f\n"
+                  "grade_shadow_tint = [%.4f, %.4f, %.4f]\n"
+                  "grade_mid_tint = [%.4f, %.4f, %.4f]\n",
                   precisionMultiplier, env.dither ? "true" : "false", colDepth,
                   ditherBanding, ditherDarkFade,
                   env.pixelSize, env.perPixelLighting ? "true" : "false",
@@ -365,11 +440,21 @@ void DebugUi::Impl::copyToml()
                   highlightColor.x, highlightColor.y, highlightColor.z,
                   outlineThickness, shadowThreshold, highlightThreshold,
                   highlightDarkFade,
+                  outlineEnabled ? "true" : "false",
+                  outlineColor.x, outlineColor.y, outlineColor.z,
+                  outlineOpacity, outlineDepthSens, outlineNormalSens,
+                  outlineSharpness, outlineDistFade,
                   env.ambient.x, env.ambient.y,
                   env.ambient.z, env.fogColour.x, env.fogColour.y,
-                  env.fogColour.z, env.fogDensity, env.background.x,
-                  env.background.y, env.background.z, env.fovDeg, env.nearClip,
-                  env.farClip);
+                  env.fogColour.z, env.fogDensity, env.fogDesatBoost,
+                  env.background.x, env.background.y, env.background.z,
+                  env.lightSteps, env.fovDeg, env.nearClip, env.farClip,
+                  env.grade ? "true" : "false",
+                  env.gradeDesaturate, env.gradeContrast,
+                  env.gradeShadowTint.x, env.gradeShadowTint.y,
+                  env.gradeShadowTint.z,
+                  env.gradeMidTint.x, env.gradeMidTint.y,
+                  env.gradeMidTint.z);
     SDL_SetClipboardText(buf);
     log::info("DebugUi: copied to clipboard:\n%s", buf);
 }
