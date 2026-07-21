@@ -98,6 +98,8 @@ public:
     // attachSprite uses the same clip as a camera-facing world billboard.
     std::string createSpriteMaterial(const SpriteClip& clip);
     SpriteHandle attachSprite(NodeHandle node, const SpriteClip& clip);
+    SpriteHandle attachTextSprite(NodeHandle node, const std::string& text,
+                                  const TextSpriteStyle& style = {});
     void setSpriteVisible(SpriteHandle sprite, bool visible);
 
     // Static world geometry, baked into region-batched buffers (one draw

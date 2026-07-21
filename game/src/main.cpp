@@ -457,6 +457,13 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         down.lightColour = {0.06f, 0.42f, 0.025f};
         down.yawDegrees = lv.map.exitYawDegrees();
         lv.downPortal = createPortal(r, lv.exit, down);
+        {
+            const eng::NodeHandle label = r.createNode(
+                lv.downPortal.root, {0.0f, 2.68f, 2.32f});
+            eng::TextSpriteStyle style;
+            style.worldHeight = 0.38f;
+            r.attachTextSprite(label, "DUNGEON PORTAL", style);
+        }
         portalBlockers(lv.exit, "Dungeon Portal — animated fel gate");
         if (depth > 0) {
             PortalStyle up;
@@ -464,6 +471,13 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             up.material = "Game/PortalUp";
             up.lightColour = {0.18f, 0.90f, 1.35f};
             lv.upPortal = createPortal(r, lv.spawn, up);
+            {
+                const eng::NodeHandle label = r.createNode(
+                    lv.upPortal.root, {0.0f, 2.68f, 2.32f});
+                eng::TextSpriteStyle style;
+                style.worldHeight = 0.38f;
+                r.attachTextSprite(label, "RETURN PORTAL", style);
+            }
             portalBlockers(lv.spawn, "Return Portal — animated arcane gate");
         }
     }
@@ -473,13 +487,13 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             if (exhibit.label.empty() || !labelled.insert(exhibit.id).second)
                 continue;
             const bool portal = exhibit.id.find("Portal") != std::string::npos;
-            const glm::vec3 anchor = portal
-                ? exhibit.position + glm::vec3(1.25f, 1.65f, 0.0f)
-                : exhibit.position + glm::vec3(
-                    0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f);
+            if (portal)
+                continue; // portal labels are anchored to their rotated roots
+            const glm::vec3 anchor = exhibit.position + glm::vec3(
+                0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f);
             const eng::NodeHandle labelNode = r.createNode(eng::kRootNode, anchor);
             eng::TextSpriteStyle style;
-            style.worldHeight = portal ? 0.42f : 0.32f;
+            style.worldHeight = 0.32f;
             r.attachTextSprite(labelNode, exhibit.label, style);
         }
     }

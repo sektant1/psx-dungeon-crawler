@@ -24,4 +24,12 @@ struct SpriteClip {
     SpriteBlend blend = SpriteBlend::Opaque;
 };
 
+struct TextSpriteStyle {
+    glm::vec4 textColour{1.0f, 0.90f, 0.62f, 1.0f};
+    glm::vec4 backgroundColour{0.035f, 0.025f, 0.045f, 0.90f};
+    glm::vec4 borderColour{0.42f, 0.30f, 0.12f, 1.0f};
+    float worldHeight = 0.34f;
+    int paddingPixels = 4;
+};
+
 } // namespace eng

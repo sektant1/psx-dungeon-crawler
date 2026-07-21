@@ -7,8 +7,10 @@
 #include "RenderCore.h"
 
 #include <Ogre.h>
+#include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 #include <unordered_map>
 #include <vector>
 
@@ -37,6 +39,8 @@ struct Renderer::Impl {
     std::vector<std::string> meshNames;  // meshNames[id-1]
     std::vector<Ogre::Light*> lights;    // lights[id-1]
     std::vector<Ogre::BillboardSet*> sprites; // sprites[id-1]
+    std::vector<std::string> spriteMaterials;
+    std::vector<std::string> generatedTextures;
     int nameCounter = 0;
     EnvState env;
     // Original sub-entity materials, saved while the wireframe debug view
@@ -226,7 +230,9 @@ std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
     Ogre::MaterialPtr material = source->clone(name);
     Ogre::Pass* pass = material->getTechnique(0)->getPass(0);
     std::string texture = clip.texture;
-    if (!Ogre::ResourceGroupManager::getSingleton().resourceExistsInAnyGroup(texture)) {
+    const bool generated = bool(Ogre::TextureManager::getSingleton().getByName(texture));
+    if (!generated &&
+        !Ogre::ResourceGroupManager::getSingleton().resourceExistsInAnyGroup(texture)) {
         log::error("Sprite: texture '%s' is missing; using PINKY.png",
                    texture.c_str());
         texture = "PINKY.png";
@@ -248,6 +254,7 @@ std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
                                                       clip.tint.b, clip.tint.a));
     fp->setNamedConstant("spriteAlphaCutoff", clip.alphaCutoff);
     material->load();
+    mImpl->spriteMaterials.push_back(name);
     return name;
 }
 
@@ -262,6 +269,79 @@ SpriteHandle Renderer::attachSprite(NodeHandle node, const SpriteClip& clip)
     mImpl->node(node, "attachSprite")->attachObject(set);
     mImpl->sprites.push_back(set);
     return {static_cast<uint32_t>(mImpl->sprites.size())};
+}
+
+SpriteHandle Renderer::attachTextSprite(NodeHandle node, const std::string& text,
+                                        const TextSpriteStyle& style)
+{
+    ImFontAtlas* atlas = ImGui::GetIO().Fonts;
+    ImFont* font = atlas->Fonts.empty() ? nullptr : atlas->Fonts[0];
+    if (!font)
+        log::fatal("Renderer: text sprite requested before font atlas exists");
+
+    unsigned char* atlasPixels = nullptr;
+    int atlasWidth = 0, atlasHeight = 0;
+    atlas->GetTexDataAsRGBA32(&atlasPixels, &atlasWidth, &atlasHeight);
+    const int padding = std::max(2, style.paddingPixels);
+    float advance = 0.0f;
+    for (unsigned char c : text)
+        advance += font->FindGlyph(c < 128 ? c : '?')->AdvanceX;
+    const int width = std::max(8, int(std::ceil(advance)) + padding * 2);
+    const int height = std::max(8, int(std::ceil(font->FontSize)) + padding * 2);
+    std::vector<unsigned char> pixels(size_t(width * height * 4), 0);
+    const auto byte = [](float v) {
+        return static_cast<unsigned char>(glm::clamp(v, 0.0f, 1.0f) * 255.0f);
+    };
+    const auto put = [&](int x, int y, glm::vec4 colour) {
+        if (x < 0 || y < 0 || x >= width || y >= height) return;
+        const size_t i = size_t((y * width + x) * 4);
+        pixels[i + 0] = byte(colour.r); pixels[i + 1] = byte(colour.g);
+        pixels[i + 2] = byte(colour.b); pixels[i + 3] = byte(colour.a);
+    };
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x) {
+            const bool border = x < 2 || y < 2 || x >= width - 2 || y >= height - 2;
+            put(x, y, border ? style.borderColour : style.backgroundColour);
+        }
+    float pen = float(padding);
+    for (unsigned char c : text) {
+        const ImFontGlyph* glyph = font->FindGlyph(c < 128 ? c : '?');
+        const int sx0 = int(std::round(glyph->U0 * atlasWidth));
+        const int sy0 = int(std::round(glyph->V0 * atlasHeight));
+        const int sx1 = int(std::round(glyph->U1 * atlasWidth));
+        const int sy1 = int(std::round(glyph->V1 * atlasHeight));
+        const int dx0 = int(std::round(pen + glyph->X0));
+        const int dy0 = int(std::round(float(padding) + glyph->Y0));
+        for (int sy = sy0; sy < sy1; ++sy)
+            for (int sx = sx0; sx < sx1; ++sx) {
+                const unsigned char alpha = atlasPixels[(sy * atlasWidth + sx) * 4 + 3];
+                if (!alpha) continue;
+                glm::vec4 colour = style.textColour;
+                colour.a *= float(alpha) / 255.0f;
+                put(dx0 + sx - sx0, dy0 + sy - sy0, colour);
+            }
+        pen += glyph->AdvanceX;
+    }
+
+    const std::string textureName = mImpl->nextName("text_sprite_texture");
+    Ogre::TexturePtr texture = Ogre::TextureManager::getSingleton().createManual(
+        textureName, Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+        Ogre::TEX_TYPE_2D, uint32_t(width), uint32_t(height), 0,
+        Ogre::PF_BYTE_RGBA, Ogre::TU_STATIC_WRITE_ONLY);
+    const Ogre::PixelBox source(uint32_t(width), uint32_t(height), 1,
+                                Ogre::PF_BYTE_RGBA, pixels.data());
+    texture->getBuffer()->blitFromMemory(source);
+    mImpl->generatedTextures.push_back(textureName);
+
+    SpriteClip clip;
+    clip.texture = textureName;
+    clip.worldSize = {style.worldHeight * float(width) / float(height),
+                      style.worldHeight};
+    // Text plaques are deliberately opaque: the PSX compositor consumes a
+    // second normal/depth target, and blending that target makes translucent
+    // billboards invalidate the full-screen reconstruction pass.
+    clip.blend = SpriteBlend::Opaque;
+    return attachSprite(node, clip);
 }
 
 void Renderer::setSpriteVisible(SpriteHandle sprite, bool visible)
@@ -325,6 +405,12 @@ void Renderer::clearScene()
     sm->destroyAllEntities();
     sm->destroyAllManualObjects();
     sm->destroyAllLights();
+    auto& materials = Ogre::MaterialManager::getSingleton();
+    for (const std::string& name : mImpl->spriteMaterials)
+        if (materials.getByName(name)) materials.remove(name);
+    auto& textures = Ogre::TextureManager::getSingleton();
+    for (const std::string& name : mImpl->generatedTextures)
+        if (textures.getByName(name)) textures.remove(name);
     // Entities are gone; now free their Ogre::Mesh resources (otherwise the
     // next level's loadObj collides on the same resource name). Only the
     // meshes this Renderer created are in meshNames.
@@ -339,6 +425,8 @@ void Renderer::clearScene()
     mImpl->nodes.clear();
     mImpl->lights.clear();
     mImpl->sprites.clear();
+    mImpl->spriteMaterials.clear();
+    mImpl->generatedTextures.clear();
     mImpl->staticBatches.clear();
     mImpl->savedMaterials.clear();
     mImpl->meshNames.clear();

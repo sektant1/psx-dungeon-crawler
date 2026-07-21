@@ -14,6 +14,8 @@ uniform vec2 spriteUvScale;
 uniform float spritePhase;
 
 smooth out vec2 spriteUV;
+flat out vec2 spriteCell;
+flat out vec2 spriteInvGrid;
 smooth out vec4 spriteColour;
 
 void main()
@@ -24,10 +26,11 @@ void main()
     float t = max(0.0, time + spritePhase);
     float frame = spriteFps > 0.0 ? mod(floor(t * spriteFps), count) : 0.0;
     vec2 cell = vec2(mod(frame, grid.x), floor(frame / grid.x));
-    // Wrap inside the selected atlas cell. Without this, scrolling an atlas
-    // leaks into neighbouring frames instead of animating the current frame.
-    vec2 localUV = fract(uv0 * spriteUvScale + spriteScroll * t);
-    spriteUV = (localUV + cell) / grid;
+    // Preserve 0..1 vertex endpoints. Wrapping here would turn both 0 and 1
+    // into zero and collapse an entire billboard to a single texel.
+    spriteUV = uv0 * spriteUvScale + spriteScroll * t;
+    spriteCell = cell;
+    spriteInvGrid = 1.0 / grid;
     spriteColour = colour;
     gl_Position = worldViewProj * vertex;
 }
