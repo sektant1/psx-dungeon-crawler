@@ -50,12 +50,13 @@ material Game/PropBauerhaus
     } }
 }
 
-// Dungeon geometry deliberately opts out of post-process edge ink/highlights.
+// Dungeon geometry contributes normal/depth metadata to the restrained
+// post-process edge ink and light bands.
 material Game/DungeonTile
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
-        fragment_program_ref PSX_FS_Dungeon { }
+        fragment_program_ref PSX_FS_Lit { }
         texture_unit
         {
             texture bauerhaus.png
@@ -244,7 +245,7 @@ material Game/PortalDown
         vertex_program_ref PSX_VS_Unlit { }
         fragment_program_ref PSX_FS_Unlit
         {
-            param_named modulateColor float4 0.6 0.2 1.0 1.0
+            param_named modulateColor float4 0.82 0.22 1.0 1.0
         }
         texture_unit
         {
@@ -255,7 +256,7 @@ material Game/PortalDown
     } }
 }
 
-// Ascent portal: additive pale-green glow cube at the level's entry.
+// Ascent portal: additive moon-cyan glow cube at the level's entry.
 material Game/PortalUp
 {
     technique { pass {
@@ -265,7 +266,7 @@ material Game/PortalUp
         vertex_program_ref PSX_VS_Unlit { }
         fragment_program_ref PSX_FS_Unlit
         {
-            param_named modulateColor float4 0.4 1.0 0.6 1.0
+            param_named modulateColor float4 0.30 0.82 1.0 1.0
         }
         texture_unit
         {

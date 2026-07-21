@@ -15,6 +15,11 @@ uniform float gradeDesaturate;  // 0..1 pull toward luma grey
 uniform float gradeContrast;    // contrast about 0.5 pivot (1 = neutral)
 uniform vec3  gradeShadowTint;  // multiplied into dark lumas
 uniform vec3  gradeMidTint;     // multiplied into mid/high lumas
+uniform float gradeSaturation;  // 1 = neutral; >1 pushes fantasy colour
+uniform float gradeTintStrength;// strength of shadow/mid split tone
+uniform float gradeBlackLift;   // raises crushed blacks without flattening mids
+uniform float vignetteStrength; // darkens corners after grading
+uniform vec3 vignetteColor;
 out vec4 fragColour;
 void main()
 {
@@ -22,17 +27,27 @@ void main()
     // Grade runs before the dither bypass so "dither off" still keeps the
     // palette-unifying grade with an independent toggle.
     if (gradeEnabled > 0.5) {
-        // Unify mismatched pack textures: desaturate a touch, split-tone
-        // (shadows toward the tint colour, mids/highs toward warm), then a
-        // mild contrast about mid-grey. Runs on sRGB-encoded scene colour.
+        // Moonlit storybook split-tone. Deep values bend toward indigo;
+        // readable mids toward dusty blue; highlights keep their warm torch
+        // colour. Runs on the sRGB-encoded scene colour before quantization.
         float gLuma = dot(base_color.rgb, vec3(0.2126, 0.7152, 0.0722));
         base_color.rgb = mix(base_color.rgb, vec3(gLuma), gradeDesaturate);
-        vec3 tint = mix(gradeShadowTint, gradeMidTint,
-                        smoothstep(0.0, 0.6, gLuma));
-        base_color.rgb *= tint;
+        base_color.rgb = mix(vec3(gLuma), base_color.rgb, gradeSaturation);
+        float shadowWeight = 1.0 - smoothstep(0.08, 0.48, gLuma);
+        float midWeight = smoothstep(0.08, 0.42, gLuma) *
+                          (1.0 - smoothstep(0.62, 0.95, gLuma));
+        base_color.rgb = mix(base_color.rgb, gradeShadowTint,
+                             shadowWeight * gradeTintStrength);
+        base_color.rgb = mix(base_color.rgb, gradeMidTint,
+                             midWeight * gradeTintStrength * 0.35);
+        // Preserve the oppressive dark mass, but keep its shapes legible.
+        base_color.rgb += gradeBlackLift * (1.0 - smoothstep(0.0, 0.32, gLuma));
         base_color.rgb = clamp((base_color.rgb - 0.5) * gradeContrast + 0.5,
                                0.0, 1.0);
     }
+    float vignette = smoothstep(0.22, 0.72, distance(uv, vec2(0.5)));
+    base_color.rgb = mix(base_color.rgb, base_color.rgb * vignetteColor,
+                         vignette * vignetteStrength);
     if (ditherEnabled < 0.5) {
         fragColour = vec4(base_color.rgb, 1.0);
         return;
@@ -44,5 +59,6 @@ void main()
     // are the highest-contrast ones and shimmer during camera motion.
     float luma = dot(base_color.rgb, vec3(0.299, 0.587, 0.114));
     float dithAmt = ditherBanding * smoothstep(0.0, max(ditherDarkFade, 1e-5), luma);
-    fragColour = vec4(round(base_color.rgb * colDepth + dith * dithAmt) / colDepth, 1.0);
+    fragColour = vec4(clamp(round(base_color.rgb * colDepth + dith * dithAmt) /
+                            colDepth, 0.0, 1.0), 1.0);
 }

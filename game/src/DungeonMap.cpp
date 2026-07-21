@@ -333,7 +333,7 @@ bool DungeonMap::loadFromRows(eng::Renderer& r, gen::Layout layout,
     // Generator grids use the same tile scale and warm-torch defaults as the
     // TOML fallback (game/assets/dungeon.toml [dungeon.light]).
     return buildFromLayout(r, std::move(layout), 4.0f, 3.0f,
-                         {lin(1.0f), lin(0.58f), lin(0.28f)}, 4.0f, 6.0f, 1.9f,
+                         {lin(1.0f), lin(0.68f), lin(0.34f)}, 4.4f, 6.5f, 1.9f,
                          tileMeshDir, propMeshDir);
 }
 

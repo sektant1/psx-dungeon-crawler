@@ -247,9 +247,11 @@ void DebugUi::Impl::drawShaders()
     if (ImGui::SliderFloat("vertex snap", &precisionMultiplier, 0.0f, 1.0f))
         renderer->setGlobalMaterialParam("precisionMultiplier",
                                          precisionMultiplier);
-    float lightSteps = env.lightSteps;
-    if (ImGui::SliderFloat("light steps", &lightSteps, 0.0f, 12.0f, "%.0f"))
-        renderer->setLightSteps(lightSteps);
+    if (ImGui::Checkbox("banded lighting", &bandedLightingEnabled))
+        renderer->setLightSteps(bandedLightingEnabled ? bandedLightSteps : 0.0f);
+    if (ImGui::SliderFloat("light steps", &bandedLightSteps, 1.0f, 12.0f,
+                           "%.0f") && bandedLightingEnabled)
+        renderer->setLightSteps(bandedLightSteps);
     float lightStepSoftness = env.lightStepSoftness;
     if (ImGui::SliderFloat("light step softness", &lightStepSoftness, 0.0f,
                            0.5f, "%.2f"))
@@ -299,6 +301,39 @@ void DebugUi::Impl::drawPixelArt()
     float omniAtten = env.omniAttenuation;
     if (ImGui::SliderFloat("omni attenuation", &omniAtten, 0.05f, 2.0f, "%.3f"))
         renderer->setOmniAttenuation(omniAtten);
+
+    ImGui::SeparatorText("ink and highlights");
+    if (ImGui::Checkbox("stylize pass", &stylizeEnabled))
+        renderer->setMaterialParam("PSX/PixelStylize", "stylizeEnabled",
+                                   stylizeEnabled ? 1.0f : 0.0f);
+    if (ImGui::Checkbox("ink shadows", &inkEnabled))
+        renderer->setMaterialParam("PSX/PixelStylize", "shadowsEnabled",
+                                   inkEnabled ? 1.0f : 0.0f);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("highlights", &highlightsEnabled))
+        renderer->setMaterialParam("PSX/PixelStylize", "highlightsEnabled",
+                                   highlightsEnabled ? 1.0f : 0.0f);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("outlines", &outlinesEnabled))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineEnabled",
+                                   outlinesEnabled ? 1.0f : 0.0f);
+    if (ImGui::SliderFloat("ink strength", &inkStrength, 0.0f, 1.0f, "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "shadowStrength",
+                                   inkStrength);
+    if (ImGui::SliderFloat("highlight strength", &highlightStrength, 0.0f,
+                           1.0f, "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "highlightStrength",
+                                   highlightStrength);
+    if (ImGui::SliderFloat("outline opacity", &outlineOpacity, 0.0f, 1.0f,
+                           "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineOpacity",
+                                   outlineOpacity);
+    if (ImGui::SliderFloat("outline thickness", &outlineThickness, 0.5f,
+                           4.0f, "%.1f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineThickness",
+                                   outlineThickness);
+
+    ImGui::SeparatorText("post effects");
     bool bloom = env.bloom;
     if (ImGui::Checkbox("bloom", &bloom))
         renderer->setBloomEnabled(bloom);
@@ -310,6 +345,13 @@ void DebugUi::Impl::drawPixelArt()
         ImGui::SliderFloat("bloom intensity", &bloomIntensity, 0.0f, 3.0f);
     if (bloomChanged)
         renderer->setBloomParams(bloomThreshold, bloomIntensity);
+    if (ImGui::Checkbox("vignette", &vignetteEnabled))
+        renderer->setMaterialParam("PSX/DitherPost", "vignetteStrength",
+                                   vignetteEnabled ? vignetteStrength : 0.0f);
+    if (ImGui::SliderFloat("vignette strength", &vignetteStrength, 0.0f, 1.0f,
+                           "%.2f") && vignetteEnabled)
+        renderer->setMaterialParam("PSX/DitherPost", "vignetteStrength",
+                                   vignetteStrength);
     ImGui::SeparatorText("grade");
     bool grade = env.grade;
     if (ImGui::Checkbox("colour grade", &grade))

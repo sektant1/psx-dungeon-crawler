@@ -354,6 +354,11 @@ fragment_program Dither_FS glsl
         param_named gradeContrast float 1.05
         param_named gradeShadowTint float3 0.82 1.0 0.86
         param_named gradeMidTint float3 1.0 0.96 0.88
+        param_named gradeSaturation float 1.0
+        param_named gradeTintStrength float 0.0
+        param_named gradeBlackLift float 0.0
+        param_named vignetteStrength float 0.0
+        param_named vignetteColor float3 0.35 0.32 0.5
     }
 }
 

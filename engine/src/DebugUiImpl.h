@@ -38,9 +38,21 @@ struct DebugUi::Impl {
     // Line thickness in screen pixels, faked via the pixelation RT (GL core
     // profile forbids glLineWidth > 1): render at 1/n res, nearest upscale.
     int wireThickness = 1;
-    float colDepth = 15.0f;
-    float ditherBanding = 0.5f; // pattern amplitude 0..1, not just on/off
-    float ditherDarkFade = 0.12f;
+    float colDepth = 31.0f;
+    float ditherBanding = 0.018f; // pattern amplitude 0..1, not just on/off
+    float ditherDarkFade = 0.20f;
+    bool bandedLightingEnabled = true;
+    float bandedLightSteps = 4.0f;
+    bool stylizeEnabled = true;
+    bool inkEnabled = true;
+    bool highlightsEnabled = true;
+    bool outlinesEnabled = true;
+    float inkStrength = 0.16f;
+    float highlightStrength = 0.10f;
+    float outlineOpacity = 0.26f;
+    float outlineThickness = 1.0f;
+    bool vignetteEnabled = true;
+    float vignetteStrength = 0.08f;
 
     void init(RenderCore* c, Renderer* r) { core = c; renderer = r; }
 
