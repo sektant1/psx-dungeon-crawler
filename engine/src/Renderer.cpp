@@ -48,6 +48,43 @@ struct Renderer::Impl {
         bool stylize = true, dither = false, bloom = true, grade = false;
     } preWireframe;
 
+    // Static geometry batches: records kept after build() so the wireframe
+    // debug view can rebuild with the wire material and restore.
+    struct StaticBatch {
+        Ogre::StaticGeometry* sg = nullptr;
+        struct Rec {
+            MeshHandle mesh;
+            std::string material;
+            glm::vec3 pos;
+            float yawDeg;
+        };
+        std::vector<Rec> recs;
+        bool built = false;
+    };
+    std::vector<StaticBatch> staticBatches; // staticBatches[id-1]
+
+    // (Re)fills a StaticGeometry from its records. materialOverride empty =
+    // each record's own material (normal view); non-empty = forced (wireframe).
+    void fillStaticBatch(StaticBatch& b, const std::string& materialOverride)
+    {
+        Ogre::SceneManager* sm = core.sceneMgr();
+        if (b.built)
+            b.sg->reset();
+        for (const auto& rec : b.recs) {
+            const std::string& mat =
+                materialOverride.empty() ? rec.material : materialOverride;
+            Ogre::Entity* e = sm->createEntity(mesh(rec.mesh, "staticBatch"));
+            e->setMaterialName(mat);
+            e->setCastShadows(false);
+            b.sg->addEntity(e, toOgre(rec.pos),
+                            Ogre::Quaternion(Ogre::Degree(rec.yawDeg),
+                                             Ogre::Vector3::UNIT_Y));
+            sm->destroyEntity(e);
+        }
+        b.sg->build();
+        b.built = true;
+    }
+
     Ogre::SceneNode* node(NodeHandle h, const char* what)
     {
         if (!h.valid() || h.id > nodes.size())
@@ -144,6 +181,40 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
         }
     }
     mImpl->node(node, "attachMesh")->attachObject(e);
+}
+
+StaticBatchHandle Renderer::createStaticBatch(glm::vec3 regionSize)
+{
+    Impl::StaticBatch b;
+    b.sg = mImpl->core.sceneMgr()->createStaticGeometry(
+        mImpl->nextName("staticbatch"));
+    b.sg->setRegionDimensions(toOgre(regionSize));
+    b.sg->setCastShadows(false); // tiles receive shadows, never cast
+    mImpl->staticBatches.push_back(std::move(b));
+    return {static_cast<uint32_t>(mImpl->staticBatches.size())};
+}
+
+void Renderer::addToStaticBatch(StaticBatchHandle batch, MeshHandle mesh,
+                                const std::string& materialName,
+                                glm::vec3 pos, float yawDeg)
+{
+    if (!batch.valid() || batch.id > mImpl->staticBatches.size())
+        log::fatal("Renderer: invalid batch handle %u in addToStaticBatch",
+                   batch.id);
+    if (!Ogre::MaterialManager::getSingleton().getByName(materialName))
+        log::fatal("Renderer: unknown material '%s'", materialName.c_str());
+    mImpl->staticBatches[batch.id - 1].recs.push_back(
+        {mesh, materialName, pos, yawDeg});
+}
+
+void Renderer::buildStaticBatch(StaticBatchHandle batch)
+{
+    if (!batch.valid() || batch.id > mImpl->staticBatches.size())
+        log::fatal("Renderer: invalid batch handle %u in buildStaticBatch",
+                   batch.id);
+    // Respect an already-active wireframe view (PSX_WIREFRAME startup).
+    mImpl->fillStaticBatch(mImpl->staticBatches[batch.id - 1],
+                           mImpl->env.wireframe ? "PSX/DebugWireframe" : "");
 }
 
 void Renderer::attachParticles(NodeHandle node, const std::string& templateName)
@@ -416,6 +487,12 @@ void Renderer::setWireframeDebug(bool enabled)
     }
     if (!enabled)
         mImpl->savedMaterials.clear();
+    // Static batches have no per-entity material swap: rebuild each built
+    // batch from its records with the wire material (on) or the recorded
+    // originals (off).
+    for (auto& b : mImpl->staticBatches)
+        if (b.built)
+            mImpl->fillStaticBatch(b, enabled ? "PSX/DebugWireframe" : "");
     // The post chain smears the 1px lines: the pixelation RT averages them
     // away, stylize inks their depth edges, dither speckles the flat colour.
     // Bypass every post effect while the view is up, restore after.

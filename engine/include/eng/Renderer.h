@@ -83,6 +83,16 @@ public:
     // closed-ish meshes to extrude cleanly.
     void attachMesh(NodeHandle node, MeshHandle mesh,
                     const std::string& materialName, bool castShadows = false);
+
+    // Static world geometry, baked into region-batched buffers (one draw
+    // per material per region, whole regions frustum-culled). add* records
+    // are retained so the batch can be rebuilt -- the wireframe debug view
+    // rebuilds every batch with the wire material and back.
+    StaticBatchHandle createStaticBatch(glm::vec3 regionSize);
+    void addToStaticBatch(StaticBatchHandle batch, MeshHandle mesh,
+                          const std::string& materialName, glm::vec3 pos,
+                          float yawDeg = 0.0f);
+    void buildStaticBatch(StaticBatchHandle batch); // bake the records
     void attachParticles(NodeHandle node, const std::string& templateName);
     void attachCamera(NodeHandle node); // moves the single camera to this node
     LightHandle attachLight(NodeHandle node, const LightDesc& desc);
