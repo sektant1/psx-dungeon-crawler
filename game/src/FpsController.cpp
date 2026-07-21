@@ -1,6 +1,7 @@
 #include "FpsController.h"
 
 #include <eng/Input.h>
+#include <eng/Physics.h>
 #include <eng/Renderer.h>
 
 #include <algorithm>
@@ -55,10 +56,22 @@ glm::vec3 FpsController::forward() const
     return {-std::sin(mYaw) * cp, std::sin(mPitch), -std::cos(mYaw) * cp};
 }
 
-void FpsController::init(eng::Renderer& r, glm::vec3 startPos, float speed,
-                         float sensitivity, glm::vec3 roomMin, glm::vec3 roomMax)
+void FpsController::init(eng::Renderer& r, eng::Physics& physics,
+                         glm::vec3 startPos, float speed, float sensitivity,
+                         glm::vec3 roomMin, glm::vec3 roomMax)
 {
+    mPhysics = &physics;
     reset(startPos, speed, sensitivity, roomMin, roomMax, r.envState().fovDeg);
+    // Remove any previous character (level transitions call init repeatedly).
+    if (mCharacter.valid())
+        physics.removeCharacter(mCharacter);
+    eng::CharacterDesc cd;
+    cd.position = startPos;
+    cd.radius = mCollisionRadius;
+    cd.height = 1.7f;
+    mCharacter = physics.createCharacter(cd);
+    mCharGrounded = false;
+    mLastCrouch = false;
     mBody = r.createNode(eng::kRootNode, mPos);
     mHead = r.createNode(mBody, {0.0f, kEyeHeight, 0.0f});
     r.attachCamera(mHead);
@@ -180,22 +193,6 @@ void FpsController::simulate(const Command& command, float dt)
         mCoyoteTime = 0.0f;
         mJumpBufferTime = 0.0f;
     }
-    if (!grounded() || mVerticalVelocity > 0.0f) {
-        mVerticalVelocity -= kGravity * dt;
-        mPos.y += mVerticalVelocity * dt;
-        // Every dungeon tile renders its roof at y=3. Keep the camera below
-        // it rather than allowing a jump to pass through visible geometry.
-        const float maxFeetY = kDungeonCeilingY - mEyeHeight - kCeilingClearance;
-        if (mPos.y > maxFeetY) {
-            mPos.y = maxFeetY;
-            mVerticalVelocity = 0.0f;
-        }
-        if (mPos.y <= 0.0f) {
-            mPos.y = 0.0f;
-            mVerticalVelocity = 0.0f;
-        }
-    }
-
     float speedFactor = 1.0f;
     if (mSliding) speedFactor = kSlideMultiplier;
     else if (mCrouched) speedFactor = kCrouchMultiplier;
@@ -212,17 +209,76 @@ void FpsController::simulate(const Command& command, float dt)
                                                           : kDeceleration));
     mVelocity.x = approach(mVelocity.x, target.x, rate * dt);
     mVelocity.y = approach(mVelocity.y, target.y, rate * dt);
-    const glm::vec3 beforeMove = mPos;
-    const glm::vec3 desired =
-        mPos + glm::vec3(mVelocity.x, 0.0f, mVelocity.y) * dt;
-    mPos = mResolve ? mResolve(mPos, desired)
-                    : glm::clamp(desired, mMin, mMax);
-    // Collision owns the final movement. Feeding its actual displacement back
-    // into locomotion eliminates phantom speed/bob while pushing a wall and
-    // makes changing direction after a collision responsive.
+
     const float safeDt = std::max(dt, 1e-4f);
-    mVelocity = glm::vec2((mPos.x - beforeMove.x) / safeDt,
-                           (mPos.z - beforeMove.z) / safeDt);
+    if (mPhysics && mCharacter.valid()) {
+        // Crouch shape change: only on transition, not every frame.
+        if (mCrouched != mLastCrouch) {
+            mPhysics->characterSetShape(mCharacter, mCollisionRadius,
+                                        mCrouched ? 1.2f : 1.7f);
+            mLastCrouch = mCrouched;
+        }
+
+        // Gravity integration: apply gravity each step; if grounded and
+        // falling, clamp to 0 so the character sticks to the floor.
+        // Jolt's ExtendedUpdate integrates the velocity we set — we must
+        // NOT also manually integrate mPos.y to avoid double-gravity.
+        if (mCharGrounded && mVerticalVelocity < 0.0f)
+            mVerticalVelocity = 0.0f;
+        mVerticalVelocity -= kGravity * dt;
+        constexpr float kTerminalVelocity = -50.0f;
+        if (mVerticalVelocity < kTerminalVelocity)
+            mVerticalVelocity = kTerminalVelocity;
+
+        const glm::vec3 vel(mVelocity.x, mVerticalVelocity, mVelocity.y);
+        mPhysics->characterSetVelocity(mCharacter, vel);
+        mPhysics->characterUpdate(mCharacter, dt);
+        const eng::CharacterState st = mPhysics->characterState(mCharacter);
+
+        const glm::vec3 beforeMove = mPos;
+        mPos = st.position; // feet position
+        mCharGrounded = st.grounded();
+        if (mCharGrounded && mVerticalVelocity < 0.0f)
+            mVerticalVelocity = 0.0f;
+
+        // Ceiling clamp: keep camera from poking through the roof mesh.
+        const float maxFeetY = kDungeonCeilingY - mEyeHeight - kCeilingClearance;
+        if (mPos.y > maxFeetY) {
+            mPos.y = maxFeetY;
+            mVerticalVelocity = 0.0f;
+        }
+
+        // Feed actual displacement back for bob/FOV.
+        mVelocity = glm::vec2((mPos.x - beforeMove.x) / safeDt,
+                               (mPos.z - beforeMove.z) / safeDt);
+    } else {
+        // No physics (test fallback): manual gravity + AABB clamp.
+        if (!grounded() || mVerticalVelocity > 0.0f) {
+            mVerticalVelocity -= kGravity * dt;
+            mPos.y += mVerticalVelocity * dt;
+            // Every dungeon tile renders its roof at y=3. Keep the camera below
+            // it rather than allowing a jump to pass through visible geometry.
+            const float maxFeetY = kDungeonCeilingY - mEyeHeight - kCeilingClearance;
+            if (mPos.y > maxFeetY) {
+                mPos.y = maxFeetY;
+                mVerticalVelocity = 0.0f;
+            }
+            if (mPos.y <= 0.0f) {
+                mPos.y = 0.0f;
+                mVerticalVelocity = 0.0f;
+            }
+        }
+
+        const glm::vec3 beforeMove = mPos;
+        const glm::vec3 desired =
+            mPos + glm::vec3(mVelocity.x, 0.0f, mVelocity.y) * dt;
+        mPos = glm::clamp(desired, mMin, mMax);
+        // Collision owns the final movement. Feeding its actual displacement back
+        // into locomotion eliminates phantom speed/bob while pushing a wall and
+        // makes changing direction after a collision responsive.
+        mVelocity = glm::vec2((mPos.x - beforeMove.x) / safeDt,
+                               (mPos.z - beforeMove.z) / safeDt);
+    }
 
     // The authored templates pair locomotion state with camera feedback.
     // Keep it subtle for the PSX presentation: no nausea-inducing roll, just

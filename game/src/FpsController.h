@@ -3,10 +3,9 @@
 
 #include <glm/glm.hpp>
 
-#include <functional>
-
 namespace eng {
 class Input;
+class Physics;
 class Renderer;
 } // namespace eng
 
@@ -28,15 +27,11 @@ public:
         bool slidePressed = false;
     };
 
-    // Resolves a desired move against level geometry; returns the allowed
-    // position (e.g. DungeonMap::resolveMove). Replaces the AABB clamp.
-    using MoveResolver = std::function<glm::vec3(glm::vec3 from, glm::vec3 to)>;
-
-    void init(eng::Renderer& r, glm::vec3 startPos, float speed,
-              float sensitivity, glm::vec3 roomMin, glm::vec3 roomMax);
+    void init(eng::Renderer& r, eng::Physics& physics, glm::vec3 startPos,
+              float speed, float sensitivity, glm::vec3 roomMin,
+              glm::vec3 roomMax);
     void reset(glm::vec3 startPos, float speed, float sensitivity,
                glm::vec3 roomMin, glm::vec3 roomMax, float baseFov = 70.0f);
-    void setResolver(MoveResolver resolver) { mResolve = std::move(resolver); }
     void simulate(const Command& command, float dt);
     void present(eng::Renderer& r);
     void update(eng::Input& in, eng::Renderer& r, float dt);
@@ -47,7 +42,7 @@ public:
     bool crouched() const { return mCrouched; }
     bool sprinting() const { return mSprinting; }
     bool sliding() const { return mSliding; }
-    bool grounded() const { return mPos.y <= 0.001f; }
+    bool grounded() const { return mPhysics ? mCharGrounded : (mPos.y <= 0.001f); }
     glm::vec3 position() const { return mPos; }
     // Horizontal capsule footprint used by the dungeon's rendered-wall sweep.
     // Kept below the 0.8 m half-width arch opening for comfortable traversal.
@@ -89,8 +84,11 @@ private:
     float mCoyoteTime = 0.0f;
     float mJumpBufferTime = 0.0f;
     bool mCrouched = false;
+    bool mLastCrouch = false;
     bool mSprinting = false;
     bool mSprintExhausted = false;
     bool mSliding = false;
-    MoveResolver mResolve;
+    bool mCharGrounded = false;
+    eng::Physics* mPhysics = nullptr;
+    eng::CharacterHandle mCharacter{};
 };

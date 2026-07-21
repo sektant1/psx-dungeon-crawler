@@ -139,6 +139,24 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     };
     mSpawn = worldCell(spawnCell);
     mExit = worldCell(exitCell);
+    // X marks the walkable cell inside a portal wall. Snap the visual root to
+    // the nearest solid boundary and face it into the room; this makes the
+    // portal replace a wall section instead of floating at the cell centre.
+    struct WallSide { int dc, dr; glm::vec3 offset; float yaw; };
+    const WallSide sides[] = {
+        {0, -1, {0.0f, 0.0f, -0.5f},   0.0f},
+        {1,  0, {0.5f, 0.0f,  0.0f}, -90.0f},
+        {0,  1, {0.0f, 0.0f,  0.5f}, 180.0f},
+        {-1, 0, {-0.5f,0.0f,  0.0f},  90.0f},
+    };
+    for (const WallSide& side : sides) {
+        if (mLayout.walkable(exitCell.col + side.dc,
+                             exitCell.row + side.dr))
+            continue;
+        mExit += side.offset * mCell;
+        mExitYawDegrees = side.yaw;
+        break;
+    }
 
     mRooms.resize(size_t(mLayout.roomCount()));
     mArches.resize(size_t(mLayout.archCount()));
@@ -674,97 +692,4 @@ void DungeonMap::toggleTorch(eng::Renderer& r, int index)
     // colour too (flicker skips unlit torches and won't fight this).
     if (!torch.lit)
         r.setLightColour(torch.light, glm::vec3(0.0f));
-}
-
-bool DungeonMap::circleFits(float x, float z, float radius) const
-{
-    // Circle/AABB is the exact 2D test for the square grid walls. It is less
-    // restrictive than the previous four-corner square approximation and,
-    // unlike point tests, matches the arch mesh's 1.2..2.8 m opening.
-    const auto hitsRect = [&](float minX, float minZ, float maxX, float maxZ) {
-        const float nearX = glm::clamp(x, minX, maxX);
-        const float nearZ = glm::clamp(z, minZ, maxZ);
-        const float dx = x - nearX;
-        const float dz = z - nearZ;
-        return dx * dx + dz * dz < radius * radius;
-    };
-
-    for (const PropBlocker& prop : mPropBlockers)
-        if (hitsRect(prop.minX, prop.minZ, prop.maxX, prop.maxZ))
-            return false;
-
-    const int colMin = int(std::floor((x - radius - mOrigin.x) / mCell));
-    const int colMax = int(std::floor((x + radius - mOrigin.x) / mCell));
-    const int rowMin = int(std::floor((z - radius - mOrigin.z) / mCell));
-    const int rowMax = int(std::floor((z + radius - mOrigin.z) / mCell));
-    for (int row = rowMin; row <= rowMax; ++row) {
-        for (int col = colMin; col <= colMax; ++col) {
-            const float x0 = mOrigin.x + col * mCell;
-            const float z0 = mOrigin.z + row * mCell;
-            const float x1 = x0 + mCell;
-            const float z1 = z0 + mCell;
-            const char c = cellAt(col, row);
-            if (!mLayout.walkable(col, row)) {
-                if (hitsRect(x0, z0, x1, z1))
-                    return false;
-                continue;
-            }
-            if (c != 'A')
-                continue;
-
-            const int archIndex = mLayout.archAt(col, row);
-            const bool ns = archIndex >= 0 && mLayout.arch(archIndex).northSouth;
-            const float mid = ns ? x0 + mCell * 0.5f : z0 + mCell * 0.5f;
-            const float lo = mid - kArchHalfWidth;
-            const float hi = mid + kArchHalfWidth;
-            const bool hitsSide = ns
-                ? hitsRect(x0, z0, lo, z1) || hitsRect(hi, z0, x1, z1)
-                : hitsRect(x0, z0, x1, lo) || hitsRect(x0, hi, x1, z1);
-            if (hitsSide)
-                return false;
-        }
-    }
-    return true;
-}
-
-glm::vec3 DungeonMap::resolveMove(glm::vec3 from, glm::vec3 to,
-                                  float radius) const
-{
-    // Sub-step the capsule sweep so sprint/slide speeds and low frame rates
-    // cannot skip a grid feature. Axis resolution deliberately preserves the
-    // unblocked tangent, giving immediate FPS-style wall glancing instead of
-    // sticky diagonal collisions. A binary search brings the capsule to the
-    // visible wall with no arbitrary "stop short" gap.
-    const float distance = glm::length(glm::vec2(to.x - from.x, to.z - from.z));
-    const int steps = std::max(1, int(std::ceil(distance / std::max(radius * 0.5f, 0.05f))));
-    const auto moveAxis = [&](glm::vec3 at, float target, bool xAxis) {
-        const auto fits = [&](float value) {
-            return xAxis ? circleFits(value, at.z, radius)
-                         : circleFits(at.x, value, radius);
-        };
-        if (fits(target)) {
-            if (xAxis) at.x = target;
-            else at.z = target;
-            return at;
-        }
-        const float start = xAxis ? at.x : at.z;
-        float lo = 0.0f, hi = 1.0f;
-        for (int i = 0; i < 8; ++i) {
-            const float t = (lo + hi) * 0.5f;
-            if (fits(glm::mix(start, target, t))) lo = t;
-            else hi = t;
-        }
-        if (xAxis) at.x = glm::mix(start, target, lo);
-        else at.z = glm::mix(start, target, lo);
-        return at;
-    };
-
-    glm::vec3 out = from;
-    for (int step = 1; step <= steps; ++step) {
-        const float t = float(step) / float(steps);
-        out = moveAxis(out, glm::mix(from.x, to.x, t), true);
-        out = moveAxis(out, glm::mix(from.z, to.z, t), false);
-    }
-    out.y = to.y;
-    return out;
 }

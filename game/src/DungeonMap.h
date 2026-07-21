@@ -34,8 +34,8 @@ class Physics;
 //
 // Rendering: floor + ceiling tile per walkable cell, wall segments facing
 // inward on walkable/solid boundaries, pillars on wall corners, arches on
-// 'A' cells. Collision: resolveMove sweeps a circular player body along the
-// rendered shell, including the arch tile's measured side blocks/opening.
+// 'A' cells. Collision: static box bodies emitted into Jolt physics by
+// buildFromLayout; the FPS controller drives a CharacterVirtual against them.
 class DungeonMap
 {
 public:
@@ -56,6 +56,7 @@ public:
 
     glm::vec3 spawn() const { return mSpawn; }
     glm::vec3 exitPos() const { return mExit; }
+    float exitYawDegrees() const { return mExitYawDegrees; }
 
     // Read-only grid data for the generated-dungeon inspector. Kept separate
     // from gameplay traversal so debug UI cannot mutate level state.
@@ -83,8 +84,8 @@ public:
     // Toggle flame + light together (the tip node carries both).
     void toggleTorch(eng::Renderer& r, int index);
 
-    // Slide 'from'->'to' against the walls; returns the allowed position.
-    // 'radius' is the player's body radius on the ground plane.
+    // Deterministic sweep retained for editor/tools and regression tests;
+    // runtime locomotion uses the Jolt character controller.
     glm::vec3 resolveMove(glm::vec3 from, glm::vec3 to, float radius) const;
 
 private:
@@ -99,8 +100,6 @@ private:
 
     char cellAt(int col, int row) const;
     bool walkableCell(int col, int row) const;
-    // True when a circular player body does not intersect any rendered wall
-    // or arch side block. Coordinates are on the ground plane.
     bool circleFits(float x, float z, float radius) const;
 
     struct Torch {
@@ -148,6 +147,7 @@ private:
     glm::vec3 mOrigin{0.0f}; // world position of cell (0,0)'s NW corner
     glm::vec3 mSpawn{0.0f};
     glm::vec3 mExit{0.0f}; // world pos of the 'X' down-portal cell
+    float mExitYawDegrees = 0.0f;
 
     // Physics: raw pointer to the long-lived Physics instance (owned by main).
     // Null until the first build that passes a Physics reference.

@@ -97,7 +97,6 @@ public:
     void update(eng::Renderer& r, float animationTime);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
     void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
-    glm::vec3 resolveMove(glm::vec3 from, glm::vec3 to, float radius) const;
     std::string showcasePrompt(glm::vec3 eye, glm::vec3 forward) const;
     glm::vec3 spawnPosition() const { return spawn; }
     glm::vec3 exitPosition() const { return exit; }
@@ -452,6 +451,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         PortalStyle down;
         down.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
         down.lightColour = {0.06f, 0.42f, 0.025f};
+        down.yawDegrees = lv.map.exitYawDegrees();
         lv.downPortal = createPortal(r, lv.exit, down);
         portalBlockers(lv.exit, "Dungeon Portal — animated fel gate");
         if (depth > 0) {
@@ -507,27 +507,6 @@ void LiveLevel::update(eng::Renderer& r, float animationTime)
     }
 }
 
-glm::vec3 LiveLevel::resolveMove(glm::vec3 from, glm::vec3 to, float radius) const
-{
-    glm::vec3 out = map.resolveMove(from, to, radius);
-    const auto fits = [&](float x, float z) {
-        for (const ShowcaseExhibit& e : exhibits) {
-            if (!e.blocksMovement) continue;
-            const float nearestX = std::clamp(x, e.position.x - e.halfExtents.x,
-                                               e.position.x + e.halfExtents.x);
-            const float nearestZ = std::clamp(z, e.position.z - e.halfExtents.z,
-                                               e.position.z + e.halfExtents.z);
-            const glm::vec2 delta{x - nearestX, z - nearestZ};
-            if (glm::dot(delta, delta) < radius * radius) return false;
-        }
-        return true;
-    };
-    glm::vec3 slid = from;
-    if (fits(out.x, slid.z)) slid.x = out.x;
-    if (fits(slid.x, out.z)) slid.z = out.z;
-    slid.y = out.y;
-    return slid;
-}
 
 std::string LiveLevel::showcasePrompt(glm::vec3 eye, glm::vec3 forward) const
 {
@@ -631,12 +610,7 @@ int main(int, char**)
         const glm::vec3 p = portalPreview
             ? level.exitPosition() + glm::vec3(0.0f, 0.0f, 6.0f)
             : (atExit ? level.exitPosition() : level.spawnPosition());
-        player.init(r, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
-        player.setResolver([&level, &player](glm::vec3 from, glm::vec3 to) {
-            // This lambda is rebound after init, so the controller's FPS
-            // capsule footprint always matches dungeon collision.
-            return level.resolveMove(from, to, player.collisionRadius());
-        });
+        player.init(r, physics, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
         // Carried light rides the fresh head node (the old one was destroyed).
         eng::LightDesc carry;
         carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
@@ -672,11 +646,8 @@ int main(int, char**)
         const gen::Layout layout = editor.takeLayout();
         if (!level.rebuildLayout(r, physics, assets, layout, depth))
             return;
-        player.init(r, level.spawnPosition(), speed, sens,
+        player.init(r, physics, level.spawnPosition(), speed, sens,
                     glm::vec3(-1000.0f), glm::vec3(1000.0f));
-        player.setResolver([&level, &player](glm::vec3 from, glm::vec3 to) {
-            return level.resolveMove(from, to, player.collisionRadius());
-        });
         eng::LightDesc carry;
         carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
                                  std::pow(0.58f, 2.2f)) * 0.95f;
@@ -720,8 +691,6 @@ int main(int, char**)
         level.update(r, animTime);
         level.updateVisibility(r, player.eyePosition());
 
-        // Player movement uses the existing resolveMove path for now;
-        // rewiring to the Jolt character controller is a later task.
         player.update(in, r, dt);
 
         targets.clear();
