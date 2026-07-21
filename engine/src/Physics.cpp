@@ -8,10 +8,16 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyType.h>
+#include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <algorithm>
 #include <thread>
 #include <unordered_map>
@@ -226,8 +232,99 @@ void Physics::removeBody(BodyHandle h) {
     mImpl->freeList.push_back(h.id);
 }
 
+// ---- mesh body ----
+BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
+                                   const std::vector<uint32_t>& indices,
+                                   glm::vec3 pos, glm::quat rot, BodyLayer layer) {
+    if (!mImpl->inited) return {};
+
+    VertexList jverts;
+    jverts.reserve(verts.size());
+    for (const auto& v : verts)
+        jverts.push_back(Float3(v.x, v.y, v.z));
+
+    IndexedTriangleList tris;
+    tris.reserve(indices.size() / 3);
+    for (size_t i = 0; i + 2 < indices.size(); i += 3)
+        tris.push_back(IndexedTriangle(indices[i], indices[i+1], indices[i+2], 0));
+
+    MeshShapeSettings settings(jverts, tris);
+    ShapeSettings::ShapeResult res = settings.Create();
+    if (res.HasError()) {
+        std::fprintf(stderr, "[Physics] createMeshBody: %s\n", res.GetError().c_str());
+        return {};
+    }
+    ShapeRefC shape = res.Get();
+
+    RVec3 jpos(pos.x, pos.y, pos.z);
+    Quat  jrot(rot.x, rot.y, rot.z, rot.w);
+    BodyCreationSettings bcs(shape, jpos, jrot, EMotionType::Static, mapLayer(layer));
+
+    BodyID bid = mImpl->system.GetBodyInterface().CreateAndAddBody(bcs, EActivation::DontActivate);
+    if (bid.IsInvalid()) return {};
+
+    uint32_t slot;
+    if (!mImpl->freeList.empty()) {
+        slot = mImpl->freeList.back();
+        mImpl->freeList.pop_back();
+    } else {
+        slot = uint32_t(mImpl->bodies.size());
+        mImpl->bodies.push_back(BodyRec{});
+    }
+
+    BodyRec& rec = mImpl->bodies[slot];
+    rec.id       = bid;
+    rec.dynamic  = false;
+    rec.isStatic = true;
+    rec.curPos   = jpos;
+    rec.curRot   = jrot;
+    rec.prevPos  = jpos;
+    rec.prevRot  = jrot;
+    rec.alive    = true;
+
+    mImpl->idToSlot[bid.GetIndexAndSequenceNumber()] = slot;
+    return BodyHandle{ slot };
+}
+
+// ---- ray cast ----
+bool Physics::rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit& outHit, BodyLayer mask) const {
+    if (!mImpl->inited) return false;
+
+    glm::vec3 normDir = glm::normalize(dir);
+    RRayCast ray{ RVec3(from.x, from.y, from.z),
+                  Vec3(normDir.x * dist, normDir.y * dist, normDir.z * dist) };
+    RayCastResult result;
+
+    // Layer filter: only collide with the requested layer
+    struct LayerFilter final : public ObjectLayerFilter {
+        ObjectLayer want;
+        bool ShouldCollide(ObjectLayer l) const override { return l == want; }
+    } layerFilter;
+    layerFilter.want = mapLayer(mask);
+
+    bool hit = mImpl->system.GetNarrowPhaseQuery().CastRay(ray, result, {}, layerFilter);
+    if (!hit) return false;
+
+    outHit.fraction = result.mFraction;
+    glm::vec3 hitPoint = from + normDir * dist * result.mFraction;
+    outHit.point = hitPoint;
+
+    // Map BodyID -> BodyHandle via slot table
+    auto it = mImpl->idToSlot.find(result.mBodyID.GetIndexAndSequenceNumber());
+    outHit.body = (it != mImpl->idToSlot.end()) ? BodyHandle{ it->second } : BodyHandle{};
+
+    // Get surface normal via body lock
+    BodyLockRead lock(mImpl->system.GetBodyLockInterface(), result.mBodyID);
+    if (lock.Succeeded()) {
+        Vec3 n = lock.GetBody().GetWorldSpaceSurfaceNormal(
+            result.mSubShapeID2, RVec3(hitPoint.x, hitPoint.y, hitPoint.z));
+        outHit.normal = glm::vec3(n.GetX(), n.GetY(), n.GetZ());
+    }
+
+    return true;
+}
+
 // ---- stubs for later tasks (must exist so the header links) ----
-BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>&, const std::vector<uint32_t>&, glm::vec3, glm::quat, BodyLayer) { return {}; }
 void Physics::setBodyTransform(BodyHandle, glm::vec3, glm::quat) {}
 void Physics::applyImpulse(BodyHandle, glm::vec3, glm::vec3) {}
 void Physics::setBodyKinematic(BodyHandle, bool) {}
@@ -237,7 +334,6 @@ void Physics::characterSetVelocity(CharacterHandle, glm::vec3) {}
 void Physics::characterUpdate(CharacterHandle, float) {}
 CharacterState Physics::characterState(CharacterHandle) const { return {}; }
 void Physics::characterSetShape(CharacterHandle, float, float) {}
-bool Physics::rayCast(glm::vec3, glm::vec3, float, RayHit&, BodyLayer) const { return false; }
 int  Physics::shapeCast(const BodyDesc&, glm::vec3, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
 int  Physics::overlap(const BodyDesc&, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
 void Physics::setContactCallback(HitCallback) {}
