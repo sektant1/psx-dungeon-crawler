@@ -52,6 +52,7 @@ add_executable(game
     game/src/main.cpp
     game/src/FpsController.cpp
     game/src/DungeonMap.cpp
+    game/src/DungeonGen.cpp
 )
 target_include_directories(game PRIVATE third_party)
 target_link_libraries(game PRIVATE demo_scene)

@@ -4,6 +4,7 @@
 // demo_scene.toml sitting in the great hall. Game-specific lighting
 // overrides are applied after the scene loads.
 
+#include "DungeonGen.h"
 #include "DungeonMap.h"
 #include "FpsController.h"
 
@@ -16,10 +17,21 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 
 int main(int, char**)
 {
+    // Dev self-test: PSX_GEN_DUMP=<seed> prints a generated grid and exits,
+    // no window/Ogre. Eyeball connectivity + room shapes across seeds.
+    if (const char* dump = std::getenv("PSX_GEN_DUMP")) {
+        const auto grid = gen::generate(uint32_t(std::strtoul(dump, nullptr, 10)));
+        for (const std::string& row : grid)
+            std::printf("%s\n", row.c_str());
+        return 0;
+    }
+
     eng::Engine engine;
     const std::string assets = APP_ASSET_DIR;
     if (!engine.init(assets + "/game.toml", assets))
