@@ -206,6 +206,17 @@ static void test_shapecast_hits_prop_once() {
     std::puts("test_shapecast_hits_prop_once OK");
 }
 
+static void test_teardown_frees_all_bodies() {
+    eng::Physics phys; phys.init();
+    std::vector<eng::BodyHandle> hs;
+    for (int i=0;i<50;++i){ eng::BodyDesc b; b.position={float(i),2,0}; hs.push_back(phys.createBody(b)); }
+    CHECK(phys.bodyCount()==50, "50 bodies live after creation");
+    for (auto h: hs) phys.removeBody(h);
+    CHECK(phys.bodyCount()==0, "all bodies freed after removeBody");
+    phys.shutdown();
+    std::puts("test_teardown_frees_all_bodies OK");
+}
+
 int main() {
     test_box_falls_and_rests_on_floor();
     test_raycast_hits_static_box();
@@ -216,5 +227,6 @@ int main() {
     test_arch_cell_has_floor();
     test_fast_projectile_does_not_tunnel_thin_wall();
     test_shapecast_hits_prop_once();
+    test_teardown_frees_all_bodies();
     return 0;
 }

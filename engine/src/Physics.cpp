@@ -1,4 +1,5 @@
 #include "eng/Physics.h"
+#include "eng/Log.h"
 #include "PhysicsImpl.h"
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
@@ -73,6 +74,7 @@ struct Physics::Impl {
     PhysicsSystem system;
     float alpha  = 0.0f;
     bool  inited = false;
+    int   liveBodies = 0; // total bodies created and not yet removed
 
     // slot 0 is reserved as the null/invalid handle sentinel
     std::vector<BodyRec>               bodies;
@@ -204,7 +206,15 @@ void Physics::update(float dt, int steps) {
         rec.prevRot = rec.curRot;
     }
 
-    mImpl->system.Update(dt, steps, mImpl->temp.get(), mImpl->jobs.get());
+    JPH::EPhysicsUpdateError updateErr =
+        mImpl->system.Update(dt, steps, mImpl->temp.get(), mImpl->jobs.get());
+    if (updateErr != JPH::EPhysicsUpdateError::None) {
+        unsigned bits = (unsigned)updateErr;
+        const char* manifold = (bits & (unsigned)JPH::EPhysicsUpdateError::ManifoldCacheFull)   ? " ManifoldCacheFull"   : "";
+        const char* bodypair = (bits & (unsigned)JPH::EPhysicsUpdateError::BodyPairCacheFull)    ? " BodyPairCacheFull"   : "";
+        const char* contacts = (bits & (unsigned)JPH::EPhysicsUpdateError::ContactConstraintsFull) ? " ContactConstraintsFull" : "";
+        eng::log::error("Physics update error bits: %u%s%s%s", bits, manifold, bodypair, contacts);
+    }
 
     // read back updated transforms
     BodyInterface& bi = mImpl->system.GetBodyInterface();
@@ -304,6 +314,7 @@ BodyHandle Physics::createBody(const BodyDesc& desc) {
     rec.alive     = true;
 
     mImpl->idToSlot[bid.GetIndexAndSequenceNumber()] = slot;
+    ++mImpl->liveBodies;
     return BodyHandle{ slot };
 }
 
@@ -334,6 +345,10 @@ int Physics::activeBodyCount() const {
     return int(mImpl->system.GetNumActiveBodies(EBodyType::RigidBody));
 }
 
+int Physics::bodyCount() const {
+    return mImpl->liveBodies;
+}
+
 void Physics::setGravity(float y) { mImpl->system.SetGravity(JPH::Vec3(0, y, 0)); }
 float Physics::gravityY() const { return mImpl->system.GetGravity().GetY(); }
 
@@ -348,6 +363,7 @@ void Physics::removeBody(BodyHandle h) {
     rec.alive = false;
     rec.id    = BodyID();
     mImpl->freeList.push_back(h.id);
+    --mImpl->liveBodies;
 }
 
 // ---- mesh body ----
@@ -401,6 +417,7 @@ BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
     rec.alive    = true;
 
     mImpl->idToSlot[bid.GetIndexAndSequenceNumber()] = slot;
+    ++mImpl->liveBodies;
     return BodyHandle{ slot };
 }
 

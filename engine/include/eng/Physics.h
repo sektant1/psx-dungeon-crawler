@@ -49,6 +49,8 @@ struct RayHit  { BodyHandle body; glm::vec3 point{0}; glm::vec3 normal{0}; float
 struct ShapeHit { BodyHandle body; glm::vec3 point{0}; glm::vec3 normal{0}; float penetration = 0.0f; };
 struct HitEvent { BodyHandle self; BodyHandle other; glm::vec3 point{0}; glm::vec3 normal{0}; float impulse = 0.0f; };
 
+class EngContactListener;
+
 class Physics {
 public:
     Physics();
@@ -69,6 +71,7 @@ public:
     void applyImpulse(BodyHandle, glm::vec3 impulse, glm::vec3 atPoint);
     void setBodyKinematic(BodyHandle, bool);
     int  activeBodyCount() const;
+    int  bodyCount() const;       // total live bodies (dynamic + static) not yet removed
     void  setGravity(float y);      // sets world gravity to (0, y, 0)
     float gravityY() const;         // current gravity y component
 
@@ -89,6 +92,7 @@ public:
     void setContactCallback(HitCallback);
 
 private:
+    friend class EngContactListener;
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };
