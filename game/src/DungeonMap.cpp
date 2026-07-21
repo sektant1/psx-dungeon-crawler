@@ -339,6 +339,16 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                                {mCell * 0.5f, wallH * 0.5f, hz1});
                     }
                 }
+
+                // Arch cells are walkable passages: they still need the floor
+                // and ceiling collision slabs (the arch asset's base has holes
+                // in the opening), otherwise the player falls through the
+                // archway/portal floor.
+                {
+                    const float hc = mCell * 0.5f;
+                    addBox({x0 + hc, -0.05f,        z0 + hc}, {hc, 0.05f, hc});
+                    addBox({x0 + hc, wallH + 0.05f, z0 + hc}, {hc, 0.05f, hc});
+                }
                 continue;
             }
 
@@ -357,10 +367,19 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
 
             // Wall segments on solid/void boundaries, normals facing the
             // cell. Sprinkle the plaster-and-stone-base variant for variety.
-            const bool wallN = !walkableCell(col, row - 1);
-            const bool wallS = !walkableCell(col, row + 1);
-            const bool wallW = !walkableCell(col - 1, row);
-            const bool wallE = !walkableCell(col + 1, row);
+            bool wallN = !walkableCell(col, row - 1);
+            bool wallS = !walkableCell(col, row + 1);
+            bool wallW = !walkableCell(col - 1, row);
+            bool wallE = !walkableCell(col + 1, row);
+            // The portal factory supplies its own masonry surround. Cut the
+            // matching tile wall and collider out of the X cell so the energy
+            // membrane opens into darkness instead of overlaying brickwork.
+            if (c == 'X') {
+                if (mExitYawDegrees == 0.0f) wallN = false;
+                else if (mExitYawDegrees == 180.0f) wallS = false;
+                else if (mExitYawDegrees == 90.0f) wallW = false;
+                else if (mExitYawDegrees == -90.0f) wallE = false;
+            }
             const auto pick = [&](int salt) {
                 return (col * 7 + row * 13 + salt) % 4 == 0 ? wallPlaster
                                                             : wall;
