@@ -15,10 +15,12 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <algorithm>
+#include <cmath>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -37,6 +39,14 @@ struct BodyRec {
     bool alive = false;
 };
 
+// ---- character record ----
+struct CharacterRec {
+    JPH::Ref<JPH::CharacterVirtual> ch;
+    JPH::Vec3 desiredVelocity = JPH::Vec3::sZero();
+    float radius = 0.3f, height = 1.7f, maxSlope = 0.8f, stepHeight = 0.4f;
+    bool alive = false;
+};
+
 struct Physics::Impl {
     std::unique_ptr<TempAllocatorImpl>   temp;
     std::unique_ptr<JobSystemThreadPool> jobs;
@@ -52,9 +62,20 @@ struct Physics::Impl {
     std::vector<uint32_t>              freeList;
     // keyed on BodyID::GetIndexAndSequenceNumber()
     std::unordered_map<uint32_t, uint32_t> idToSlot;
+
+    // character table; slot 0 = null sentinel
+    std::vector<CharacterRec> characters;
+    std::vector<uint32_t>     charFreeList;
 };
 
 // ---- helpers ----
+static JPH::RefConst<JPH::Shape> makeCharShape(float radius, float height) {
+    float cyl = std::max(0.0f, height - 2.0f * radius);
+    JPH::RefConst<JPH::Shape> capsule = new JPH::CapsuleShape(cyl * 0.5f, radius);
+    return JPH::RotatedTranslatedShapeSettings(
+        JPH::Vec3(0, height * 0.5f, 0), JPH::Quat::sIdentity(), capsule).Create().Get();
+}
+
 static JPH::ObjectLayer mapLayer(BodyLayer l) {
     switch (l) {
         case BodyLayer::Static:     return phys::Layers::STATIC;
@@ -84,6 +105,7 @@ static JPH::ShapeRefC makeShape(const BodyDesc& d) {
 Physics::Physics() : mImpl(std::make_unique<Impl>()) {
     // slot 0 is the null sentinel — reserve it now
     mImpl->bodies.push_back(BodyRec{}); // slot 0: dead, invalid
+    mImpl->characters.push_back(CharacterRec{}); // slot 0: dead, invalid
 }
 Physics::~Physics() { shutdown(); }
 
@@ -124,6 +146,13 @@ void  Physics::setInterpolationAlpha(float a) { mImpl->alpha = a; }
 
 void Physics::shutdown() {
     if (!mImpl || !mImpl->inited) return;
+    // release all characters first (they may hold inner body IDs)
+    for (auto& rec : mImpl->characters) {
+        if (!rec.alive) continue;
+        rec.ch = nullptr;
+        rec.alive = false;
+    }
+    mImpl->charFreeList.clear();
     // destroy all remaining bodies
     BodyInterface& bi = mImpl->system.GetBodyInterface();
     for (auto& rec : mImpl->bodies) {
@@ -324,16 +353,130 @@ bool Physics::rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit& outHit,
     return true;
 }
 
+// ---- character management ----
+CharacterHandle Physics::createCharacter(const CharacterDesc& desc) {
+    if (!mImpl->inited) return {};
+
+    JPH::CharacterVirtualSettings settings;
+    settings.mShape = makeCharShape(desc.radius, desc.height);
+    settings.mMaxSlopeAngle = glm::radians(desc.maxSlopeDeg);
+    settings.mMass = desc.mass;
+    settings.mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -desc.radius);
+    settings.mInnerBodyLayer = phys::Layers::PLAYER;
+    settings.mInnerBodyShape = settings.mShape;
+
+    JPH::Ref<JPH::CharacterVirtual> cv = new JPH::CharacterVirtual(
+        &settings,
+        JPH::RVec3(desc.position.x, desc.position.y, desc.position.z),
+        JPH::Quat::sIdentity(),
+        0,
+        &mImpl->system);
+
+    uint32_t slot;
+    if (!mImpl->charFreeList.empty()) {
+        slot = mImpl->charFreeList.back();
+        mImpl->charFreeList.pop_back();
+    } else {
+        slot = uint32_t(mImpl->characters.size());
+        mImpl->characters.push_back(CharacterRec{});
+    }
+
+    CharacterRec& rec = mImpl->characters[slot];
+    rec.ch = cv;
+    rec.desiredVelocity = JPH::Vec3::sZero();
+    rec.radius = desc.radius;
+    rec.height = desc.height;
+    rec.maxSlope = glm::radians(desc.maxSlopeDeg);
+    rec.stepHeight = desc.stepHeight;
+    rec.alive = true;
+
+    return CharacterHandle{ slot };
+}
+
+void Physics::removeCharacter(CharacterHandle h) {
+    if (!h.valid() || h.id >= uint32_t(mImpl->characters.size())) return;
+    CharacterRec& rec = mImpl->characters[h.id];
+    if (!rec.alive) return;
+    rec.ch = nullptr;
+    rec.alive = false;
+    mImpl->charFreeList.push_back(h.id);
+}
+
+void Physics::characterSetVelocity(CharacterHandle h, glm::vec3 velocity) {
+    if (!h.valid() || h.id >= uint32_t(mImpl->characters.size())) return;
+    CharacterRec& rec = mImpl->characters[h.id];
+    if (!rec.alive) return;
+    rec.desiredVelocity = JPH::Vec3(velocity.x, velocity.y, velocity.z);
+}
+
+void Physics::characterUpdate(CharacterHandle h, float dt) {
+    if (!h.valid() || h.id >= uint32_t(mImpl->characters.size())) return;
+    CharacterRec& rec = mImpl->characters[h.id];
+    if (!rec.alive) return;
+
+    rec.ch->SetLinearVelocity(rec.desiredVelocity);
+
+    JPH::CharacterVirtual::ExtendedUpdateSettings us;
+    us.mWalkStairsStepUp = JPH::Vec3(0, rec.stepHeight, 0);
+
+    rec.ch->ExtendedUpdate(
+        dt,
+        mImpl->system.GetGravity(),
+        us,
+        mImpl->system.GetDefaultBroadPhaseLayerFilter(phys::Layers::PLAYER),
+        mImpl->system.GetDefaultLayerFilter(phys::Layers::PLAYER),
+        {},
+        {},
+        *mImpl->temp);
+}
+
+CharacterState Physics::characterState(CharacterHandle h) const {
+    if (!h.valid() || h.id >= uint32_t(mImpl->characters.size())) return {};
+    const CharacterRec& rec = mImpl->characters[h.id];
+    if (!rec.alive) return {};
+
+    CharacterState st;
+    JPH::RVec3 p = rec.ch->GetPosition();
+    st.position = { float(p.GetX()), float(p.GetY()), float(p.GetZ()) };
+    JPH::Vec3 v = rec.ch->GetLinearVelocity();
+    st.velocity = { v.GetX(), v.GetY(), v.GetZ() };
+    JPH::Vec3 n = rec.ch->GetGroundNormal();
+    st.groundNormal = { n.GetX(), n.GetY(), n.GetZ() };
+    switch (rec.ch->GetGroundState()) {
+        case JPH::CharacterBase::EGroundState::OnGround:
+            st.ground = GroundState::OnGround; break;
+        case JPH::CharacterBase::EGroundState::OnSteepGround:
+            st.ground = GroundState::OnSteepSlope; break;
+        default:
+            st.ground = GroundState::InAir; break;
+    }
+    return st;
+}
+
+void Physics::characterSetShape(CharacterHandle h, float radius, float height) {
+    if (!h.valid() || h.id >= uint32_t(mImpl->characters.size())) return;
+    CharacterRec& rec = mImpl->characters[h.id];
+    if (!rec.alive) return;
+
+    JPH::RefConst<JPH::Shape> newShape = makeCharShape(radius, height);
+    bool ok = rec.ch->SetShape(
+        newShape,
+        FLT_MAX,
+        mImpl->system.GetDefaultBroadPhaseLayerFilter(phys::Layers::PLAYER),
+        mImpl->system.GetDefaultLayerFilter(phys::Layers::PLAYER),
+        {},
+        {},
+        *mImpl->temp);
+    if (ok) {
+        rec.radius = radius;
+        rec.height = height;
+    }
+}
+
 // ---- stubs for later tasks (must exist so the header links) ----
 void Physics::setBodyTransform(BodyHandle, glm::vec3, glm::quat) {}
 void Physics::applyImpulse(BodyHandle, glm::vec3, glm::vec3) {}
 void Physics::setBodyKinematic(BodyHandle, bool) {}
-CharacterHandle Physics::createCharacter(const CharacterDesc&) { return {}; }
-void Physics::removeCharacter(CharacterHandle) {}
-void Physics::characterSetVelocity(CharacterHandle, glm::vec3) {}
-void Physics::characterUpdate(CharacterHandle, float) {}
-CharacterState Physics::characterState(CharacterHandle) const { return {}; }
-void Physics::characterSetShape(CharacterHandle, float, float) {}
 int  Physics::shapeCast(const BodyDesc&, glm::vec3, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
 int  Physics::overlap(const BodyDesc&, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
 void Physics::setContactCallback(HitCallback) {}

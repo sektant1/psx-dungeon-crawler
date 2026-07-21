@@ -52,9 +52,40 @@ static void test_mesh_body_is_solid() {
     std::puts("test_mesh_body_is_solid OK");
 }
 
+static void test_character_settles_and_is_blocked_by_wall() {
+    eng::Physics phys; phys.init();
+    eng::BodyDesc floor; floor.halfExtents={20,0.5f,20}; floor.position={0,-0.5f,0};
+    floor.layer=eng::BodyLayer::Static; floor.dynamic=false; phys.createBody(floor);
+    eng::BodyDesc wall; wall.halfExtents={0.5f,2,10}; wall.position={2,2,0};
+    wall.layer=eng::BodyLayer::Static; wall.dynamic=false; phys.createBody(wall);
+    eng::CharacterDesc cd; cd.position={0,1.0f,0};
+    eng::CharacterHandle ch = phys.createCharacter(cd);
+    for (int i=0;i<120;++i){ phys.characterSetVelocity(ch,{5,0,0}); phys.characterUpdate(ch,1.0f/60.0f); phys.update(1.0f/60.0f); }
+    eng::CharacterState s = phys.characterState(ch);
+    assert(s.grounded() && "character should be grounded on floor");
+    assert(s.position.x < 1.5f && "character must not pass through the wall at x=1.5");
+    phys.shutdown();
+    std::puts("test_character_settles_and_is_blocked_by_wall OK");
+}
+static void test_character_steps_small_ledge() {
+    eng::Physics phys; phys.init();
+    eng::BodyDesc floor; floor.halfExtents={20,0.5f,20}; floor.position={0,-0.5f,0};
+    floor.layer=eng::BodyLayer::Static; floor.dynamic=false; phys.createBody(floor);
+    eng::BodyDesc step; step.halfExtents={5,0.15f,5}; step.position={5,0.15f,0}; // 0.30 m tall
+    step.layer=eng::BodyLayer::Static; step.dynamic=false; phys.createBody(step);
+    eng::CharacterDesc cd; cd.position={0,1.0f,0}; cd.stepHeight=0.4f;
+    eng::CharacterHandle ch = phys.createCharacter(cd);
+    for (int i=0;i<240;++i){ phys.characterSetVelocity(ch,{4,0,0}); phys.characterUpdate(ch,1.0f/60.0f); phys.update(1.0f/60.0f); }
+    assert(phys.characterState(ch).position.y > 0.25f && "character should have stepped up onto the ledge");
+    phys.shutdown();
+    std::puts("test_character_steps_small_ledge OK");
+}
+
 int main() {
     test_box_falls_and_rests_on_floor();
     test_raycast_hits_static_box();
     test_mesh_body_is_solid();
+    test_character_settles_and_is_blocked_by_wall();
+    test_character_steps_small_ledge();
     return 0;
 }

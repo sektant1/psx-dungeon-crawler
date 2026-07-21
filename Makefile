@@ -11,7 +11,7 @@ BUILD_DIR   ?= build
 BUILD_TYPE  ?= Release
 JOBS        ?= $(shell nproc)
 
-.PHONY: all build deps demo game docs debug clean
+.PHONY: all build deps demo game editor docs debug clean
 
 all: build
 
@@ -29,6 +29,9 @@ demo: build
 
 game: build
 	cd $(BUILD_DIR) && SDL_VIDEODRIVER=x11 ./game
+
+editor: build
+	cd $(BUILD_DIR) && SDL_VIDEODRIVER=x11 ./level_editor
 
 docs:
 	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)

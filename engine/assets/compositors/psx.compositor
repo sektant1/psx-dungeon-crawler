@@ -16,6 +16,7 @@ compositor PSX/Stylized
         texture rt_bright target_width_scaled 0.166667 target_height_scaled 0.166667 PF_BYTE_RGBA
         texture rt_blur target_width_scaled 0.166667 target_height_scaled 0.166667 PF_BYTE_RGBA
         texture rt_final target_width_scaled 0.333334 target_height_scaled 0.333334 PF_BYTE_RGBA
+        texture rt_resolve target_width_scaled 0.333334 target_height_scaled 0.333334 PF_BYTE_RGBA
 
         target mrt
         {
@@ -73,13 +74,23 @@ compositor PSX/Stylized
             }
         }
 
+        target rt_resolve
+        {
+            input none
+            pass render_quad
+            {
+                material PSX/HardwareResolve
+                input 0 rt_final
+            }
+        }
+
         target_output
         {
             input none
             pass render_quad
             {
                 material PSX/DitherPost
-                input 0 rt_final
+                input 0 rt_resolve
             }
         }
     }

@@ -26,6 +26,10 @@ public:
     bool visible() const;
     void setVisible(bool v);
 
+    // Independent tool windows can use the ImGui/OGRE integration without
+    // also showing the engine's generic diagnostics window.
+    void setMainWindowVisible(bool visible);
+
     // Centered HUD prompt ("Press [E] to ..."), drawn every frame while
     // non-empty -- independent of the debug panel's visibility.
     void setHudPrompt(const std::string& text);

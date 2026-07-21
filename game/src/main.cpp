@@ -7,6 +7,7 @@
 #include "DungeonGen.h"
 #include "DungeonMap.h"
 #include "FpsController.h"
+#include "LevelEditor.h"
 #include "Targeting.h"
 
 #include <DemoScene.h>
@@ -90,6 +91,8 @@ class LiveLevel {
 public:
     bool rebuild(eng::Renderer& r, eng::Physics& physics,
                  const std::string& assets, uint32_t seed, int depth);
+    bool rebuildLayout(eng::Renderer& r, eng::Physics& physics,
+                       const std::string& assets, gen::Layout layout, int depth);
     void update(eng::Renderer& r, float animationTime);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
     void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
@@ -103,7 +106,8 @@ public:
     void clearPhysics() { map.clearPhysics(); }
 
 private:
-    friend LiveLevel buildLevel(eng::Renderer&, eng::Physics&, const std::string&, uint32_t, int);
+    friend LiveLevel buildLevel(eng::Renderer&, eng::Physics&, const std::string&,
+                                uint32_t, int, const gen::Layout*);
     DungeonMap map;
     DemoScene scene;
     eng::NodeHandle chestBase{}, chestSpin{};
@@ -220,14 +224,16 @@ static void drawDungeonMap(const DungeonMap& map, glm::vec3 playerPos)
 // Build a complete level (dungeon + demo scene + props + chest + portals)
 // into the (already-clear) scene. depth>0 adds an up-portal at the entry.
 LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
-                     const std::string& assets, uint32_t seed, int depth)
+                     const std::string& assets, uint32_t seed, int depth,
+                     const gen::Layout* authored = nullptr)
 {
     LiveLevel lv;
 
     // --------------------------------------------------------- dungeon ---
     // Procedurally generated level; the anchor 'C' room lands at the world
     // origin so the shared DemoScene sits centred inside it.
-    if (!lv.map.loadFromRows(r, physics, gen::generate(seed),
+    gen::Layout layout = authored ? *authored : gen::generate(seed);
+    if (!lv.map.loadFromRows(r, physics, std::move(layout),
                              assets + "/meshes/tiles/",
                              assets + "/meshes/props/")) {
         eng::log::error("buildLevel: map load failed");
@@ -360,8 +366,12 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                        {xs[i], 0.0f, 0.0f}, i == 0 ? 25.0f : -40.0f);
                 eng::NodeHandle flame =
                     r.createNode(eng::kRootNode, {xs[i], 1.35f, 0.0f});
+                r.attachParticles(flame, "Game/TorchGlow");
                 r.attachParticles(flame, "Game/TorchFire");
                 r.attachParticles(flame, "Game/TorchAsh");
+                eng::NodeHandle smoke =
+                    r.createNode(flame, {0.0f, 0.12f, 0.0f});
+                r.attachParticles(smoke, "Game/FireSmoke");
                 r.setPosition(omnis[i], {xs[i], 1.6f, 0.0f});
             }
         }
@@ -433,6 +443,18 @@ bool LiveLevel::rebuild(eng::Renderer& r, eng::Physics& physics,
     map.clearPhysics();
     r.clearScene();
     *this = buildLevel(r, physics, assets, seed, depth);
+    return map.debugRows() > 0;
+}
+
+bool LiveLevel::rebuildLayout(eng::Renderer& r, eng::Physics& physics,
+                              const std::string& assets, gen::Layout layout,
+                              int depth)
+{
+    if (!layout.valid())
+        return false;
+    map.clearPhysics();
+    r.clearScene();
+    *this = buildLevel(r, physics, assets, 0, depth, &layout);
     return map.debugRows() > 0;
 }
 
@@ -544,8 +566,26 @@ int main(int, char**)
                                                        : (player.grounded() ? "grounded"
                                                                             : "airborne"));
     });
-    engine.debugUi().addWindow([&level, &player] {
-        drawDungeonMap(level.dungeon(), player.eyePosition());
+    LevelEditor editor(level.dungeon().debugLayoutRows(),
+                       assets + "/editor_level.toml");
+    engine.debugUi().addWindow([&level, &player, &editor, &r, &physics,
+                                &assets, &depth, speed, sens, &engine] {
+        if (!editor.draw(level.dungeon(), player.eyePosition()))
+            return;
+        const gen::Layout layout = editor.takeLayout();
+        if (!level.rebuildLayout(r, physics, assets, layout, depth))
+            return;
+        player.init(r, level.spawnPosition(), speed, sens,
+                    glm::vec3(-1000.0f), glm::vec3(1000.0f));
+        player.setResolver([&level, &player](glm::vec3 from, glm::vec3 to) {
+            return level.resolveMove(from, to, player.collisionRadius());
+        });
+        eng::LightDesc carry;
+        carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
+                                 std::pow(0.58f, 2.2f)) * 0.95f;
+        carry.range = 7.0f;
+        r.attachLight(player.headNode(), carry);
+        engine.input().setMouseGrab(false);
     });
 
     // ---------------------------------------------------------------- loop ---

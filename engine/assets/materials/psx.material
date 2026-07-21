@@ -176,6 +176,24 @@ material PSX/DitherPost
     } }
 }
 
+// Optional hardware-era reconstruction. Disabled by default (mode 0), so the
+// existing renderer remains pixel-identical until a profile selects a mode.
+material PSX/HardwareResolve
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref HardwareResolve_FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
 material PSX/PixelStylize
 {
     technique { pass {

@@ -329,10 +329,10 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                     yaw = 180.0f;
                 } else if (wallW) {
                     mount.x = x0 + in;
-                    yaw = -90.0f;
+                    yaw = 90.0f;
                 } else if (wallE) {
                     mount.x = x0 + mCell - in;
-                    yaw = 90.0f;
+                    yaw = -90.0f;
                 } else {
                     eng::log::error("DungeonMap: 'L' at col %d row %d has no "
                                     "wall; torch skipped", col, row);
@@ -347,8 +347,12 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                 // particles hang off a child there so the tilt carries
                 // them along.
                 eng::NodeHandle tip = r.createNode(n, {0.0f, 0.55f, 0.0f});
+                r.attachParticles(tip, "Game/TorchGlow");
                 r.attachParticles(tip, "Game/TorchFire");
                 r.attachParticles(tip, "Game/TorchAsh");
+                eng::NodeHandle smoke =
+                    r.createNode(tip, {0.0f, 0.12f, 0.0f});
+                r.attachParticles(smoke, "Game/FireSmoke");
                 // Grid position seeds the phase so torches flicker
                 // out of step with each other.
                 mTorches.push_back({r.attachLight(tip, warm), tip,
@@ -389,9 +393,10 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     for (const auto& ar : mArches)
         r.buildStaticBatch(ar.batch);
 
-    eng::log::info("DungeonMap: %zu rows, %zu rooms, %zu arches, %zu pillar posts, cell %.1f m",
+    eng::log::info("DungeonMap: %zu rows, %zu rooms, %zu arches, %zu torches, "
+                   "%zu pillar posts, cell %.1f m",
                    mLayout.rows().size(), mRooms.size(), mArches.size(),
-                   pillarSpots.size(), mCell);
+                   mTorches.size(), pillarSpots.size(), mCell);
     return true;
 }
 

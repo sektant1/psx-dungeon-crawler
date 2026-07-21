@@ -2,6 +2,8 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <vector>
 
 namespace eng::phys {
 

@@ -1,0 +1,8 @@
+[window]
+title = "Dungeon Level Editor"
+width = 1100
+height = 760
+vsync = true
+
+[bindings]
+quit = "Escape"

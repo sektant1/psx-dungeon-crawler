@@ -77,11 +77,26 @@ add_executable(game
     game/src/FpsController.cpp
     game/src/DungeonMap.cpp
     game/src/DungeonGen.cpp
+    game/src/LevelDocument.cpp
+    game/src/LevelEditor.cpp
     game/src/Targeting.cpp
 )
 target_include_directories(game PRIVATE third_party)
 target_link_libraries(game PRIVATE demo_scene)
 target_compile_definitions(game PRIVATE
+    APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
+)
+
+add_executable(level_editor
+    game/src/editor_main.cpp
+    game/src/DungeonMap.cpp
+    game/src/DungeonGen.cpp
+    game/src/LevelDocument.cpp
+    game/src/LevelEditor.cpp
+)
+target_include_directories(level_editor PRIVATE third_party)
+target_link_libraries(level_editor PRIVATE eng)
+target_compile_definitions(level_editor PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
 )
 
@@ -92,6 +107,14 @@ if(BUILD_TESTING)
     )
     target_include_directories(dungeon_layout_tests PRIVATE game/src)
     add_test(NAME dungeon_layout COMMAND dungeon_layout_tests)
+
+    add_executable(level_document_tests
+        game/tests/LevelDocumentTests.cpp
+        game/src/LevelDocument.cpp
+        game/src/DungeonGen.cpp
+    )
+    target_include_directories(level_document_tests PRIVATE game/src third_party)
+    add_test(NAME level_document COMMAND level_document_tests)
 
     add_executable(targeting_tests
         game/tests/TargetingTests.cpp

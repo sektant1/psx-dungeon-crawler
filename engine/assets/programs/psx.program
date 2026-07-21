@@ -362,6 +362,69 @@ fragment_program Dither_FS glsl
     }
 }
 
+fragment_program HardwareResolve_FS glsl
+{
+    source hardware_resolve.frag
+    default_params
+    {
+        param_named sceneTex int 0
+        param_named resolveMode float 0.0
+        param_named resolveStrength float 1.0
+    }
+}
+
+vertex_program Particle_VS glsl
+{
+    source particle.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program FireParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_FLAME=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named alphaScissor float 0.04
+    }
+}
+
+fragment_program AshParticle_FS glsl
+{
+    source particle.frag
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named alphaScissor float 0.08
+    }
+}
+
+fragment_program SmokeParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_SMOKE=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named alphaScissor float 0.025
+    }
+}
+
+fragment_program BlockParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_BLOCK=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named alphaScissor float 0.025
+    }
+}
+
 vertex_program Stylize_VS glsl
 {
     source quad.vert
@@ -374,6 +437,7 @@ fragment_program Stylize_FS glsl
     {
         param_named sceneTex int 0
         param_named normalDepthTex int 1
+        param_named_auto nearClip near_clip_distance
         param_named_auto farClip far_clip_distance
         param_named stylizeEnabled float 1.0
         param_named shadowsEnabled float 1.0

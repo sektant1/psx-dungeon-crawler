@@ -301,10 +301,10 @@ material Game/FireParticle
 {
     technique { pass {
         cull_hardware none
-        scene_blend alpha_blend
-        depth_write on
-        vertex_program_ref PSX_VS_Unlit { }
-        fragment_program_ref PSX_FS_UnlitAlphaScissor
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref FireParticle_FS
         {
             param_named alphaScissor float 0.1
         }
@@ -323,15 +323,37 @@ material Game/AshParticle
     technique { pass {
         cull_hardware none
         scene_blend alpha_blend
-        depth_write on
-        vertex_program_ref PSX_VS_Unlit { }
-        fragment_program_ref PSX_FS_UnlitAlphaScissor
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref BlockParticle_FS
         {
             param_named alphaScissor float 0.1
         }
         texture_unit
         {
             texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Reusable smoke card: ordinary alpha blend (never additive/blooming), with
+// depth testing but no depth writes so overlapping puffs remain translucent.
+material Game/SmokeParticle
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref SmokeParticle_FS
+        {
+            param_named alphaScissor float 0.025
+        }
+        texture_unit
+        {
+            texture white.png
             filtering none
             tex_address_mode clamp
         }

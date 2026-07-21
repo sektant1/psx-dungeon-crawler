@@ -20,6 +20,7 @@ struct DebugUi::Impl {
     RenderCore* core = nullptr;
     Renderer* renderer = nullptr;
     bool visible = false;
+    bool mainWindowVisible = true;
 
     std::vector<std::pair<std::string, std::function<void()>>> panels;
     std::vector<std::function<void()>> windows;
@@ -48,13 +49,33 @@ struct DebugUi::Impl {
     bool highlightsEnabled = true;
     bool outlinesEnabled = true;
     float inkStrength = 0.16f;
+    float inkThreshold = 0.25f;
+    glm::vec3 inkColor{0.035f, 0.025f, 0.09f};
     float highlightStrength = 0.10f;
+    float highlightThreshold = 0.50f;
+    float highlightDarkFade = 0.15f;
+    glm::vec3 highlightColor{1.0f, 0.72f, 0.42f};
     float outlineOpacity = 0.26f;
     float outlineThickness = 1.0f;
+    float outlineDepthSensitivity = 8.0f;
+    float outlineNormalSensitivity = 0.20f;
+    float outlineSharpness = 0.85f;
+    float outlineDistanceFade = 0.08f;
+    float outlineDarkFade = 0.12f;
+    glm::vec3 outlineColor{0.025f, 0.018f, 0.065f};
     bool vignetteEnabled = true;
     float vignetteStrength = 0.08f;
+    glm::vec3 vignetteColor{0.24f, 0.20f, 0.38f};
+    int renderPreset = 6;
+    bool applyRenderPreset = false;
+    float gradeSaturation = 1.0f;
+    float gradeTintStrength = 0.035f;
+    float gradeBlackLift = 0.060f;
+    bool hardwareResolveEnabled = false;
+    float hardwareResolveMode = 0.0f;
+    float hardwareResolveStrength = 0.65f;
 
-    void init(RenderCore* c, Renderer* r) { core = c; renderer = r; }
+    void init(RenderCore* c, Renderer* r);
 
     // Feeds one SDL event to ImGui. Returns true when ImGui consumed it
     // (event must then not reach eng::Input). Always returns false while

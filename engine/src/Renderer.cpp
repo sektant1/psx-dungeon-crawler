@@ -317,6 +317,8 @@ void Renderer::setCameraFov(float degrees)
 
 void Renderer::setCameraClip(float nearDist, float farDist)
 {
+    nearDist = std::clamp(nearDist, 0.01f, 10.0f);
+    farDist = std::max(farDist, nearDist + 1.0f);
     mImpl->env.nearClip = nearDist;
     mImpl->env.farClip = farDist;
     mImpl->core.camera()->setNearClipDistance(nearDist);

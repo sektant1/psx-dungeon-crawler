@@ -60,6 +60,7 @@ public:
     // from gameplay traversal so debug UI cannot mutate level state.
     int debugRows() const { return mLayout.rowCount(); }
     int debugColumns() const { return mLayout.columnCount(); }
+    const std::vector<std::string>& debugLayoutRows() const { return mLayout.rows(); }
     char debugCellAt(int col, int row) const { return cellAt(col, row); }
     int debugRoomAt(int col, int row) const { return roomOfCell(col, row); }
     bool debugArchNorthSouth(int col, int row) const;

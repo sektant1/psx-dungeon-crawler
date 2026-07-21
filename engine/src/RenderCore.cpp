@@ -155,7 +155,7 @@ void RenderCore::setPixelSize(int pixelSize)
     const float f = 1.0f / float(mPixelSize) + 1e-6f;
     const float fHalf = 0.5f / float(mPixelSize) + 1e-6f;
     const std::pair<const char*, float> texFactors[] = {
-        {"mrt", f}, {"rt_post", f}, {"rt_final", f},
+        {"mrt", f}, {"rt_post", f}, {"rt_final", f}, {"rt_resolve", f},
         {"rt_bright", fHalf}, {"rt_blur", fHalf},
     };
     Ogre::CompositionTechnique* tech = comp->getTechnique(0);
