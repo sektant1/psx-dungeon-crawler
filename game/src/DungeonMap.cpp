@@ -211,6 +211,13 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
         }
     }
 
+    // A malformed grid can leave an arch with no adjacent rooms (both -1); it
+    // would be permanently invisible with no other symptom, so warn.
+    for (size_t i = 0; i < mArches.size(); ++i)
+        if (mArches[i].roomA < 0 && mArches[i].roomB < 0)
+            eng::log::warn("DungeonMap: arch %zu has no adjacent rooms "
+                           "(dangling)", i);
+
     // One big-region batch per room and per arch (a room is a few cells, so
     // one region = one draw per room material; PVS handles inter-room culling).
     for (auto& rm : mRooms)
@@ -381,6 +388,9 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
         if (curBatch.valid())
             put(pillar, {mOrigin.x + pc * mCell, 0.0f, mOrigin.z + pr * mCell},
                 0.0f);
+        else
+            eng::log::warn("DungeonMap: pillar at col %d row %d has no room/arch"
+                           " neighbour; skipped", pc, pr);
     }
 
     for (const auto& rm : mRooms)
@@ -428,7 +438,7 @@ void DungeonMap::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos,
             r.setStaticBatchVisible(rm.batch, true);
         for (const auto& ar : mArches)
             r.setStaticBatchVisible(ar.batch, true);
-        mVisibleRooms.clear(); // force a recompute when culling resumes
+        mLastCurrentRooms.clear(); // force a recompute when culling resumes
         return;
     }
 
@@ -456,15 +466,15 @@ void DungeonMap::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos,
             r.setStaticBatchVisible(room.batch, true);
         for (const auto& ar : mArches)
             r.setStaticBatchVisible(ar.batch, true);
-        mVisibleRooms.clear();
+        mLastCurrentRooms.clear();
         return;
     }
 
     // Recompute only when the current-room set changes.
     std::sort(current.begin(), current.end());
-    if (current == mVisibleRooms)
+    if (current == mLastCurrentRooms)
         return;
-    mVisibleRooms = current;
+    mLastCurrentRooms = current;
 
     // BFS the portal graph: a room is visible if current, or reachable and its
     // AABB is within farDist of the camera. Arch visible if either room is.

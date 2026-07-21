@@ -104,7 +104,11 @@ private:
     int mStride = 0;              // columns per row for mCellRoom/mCellArch
     std::vector<Room> mRooms;
     std::vector<Arch> mArches;
-    std::vector<int> mVisibleRooms; // cache of last-visible room set (sorted)
+    // Cache of the last current-room set (sort key for the visibility early-
+    // out). Keyed on current rooms only: safe because every reachable room in
+    // this dungeon is well within farDist, so the visible set can't change
+    // without the current-room set changing.
+    std::vector<int> mLastCurrentRooms;
 
     // World (col,row) of a ground-plane point; may be outside the grid.
     void cellOf(float x, float z, int& col, int& row) const;
