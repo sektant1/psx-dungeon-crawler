@@ -14,33 +14,23 @@
 
 namespace {
 
-constexpr const char* kTileMaterial = "Game/PropBauerhaus";
+constexpr const char* kTileMaterial = "Game/DungeonTile";
 // Half-width of the stone_archway's walkable opening (measured: the gap
 // spans 1.2..2.8 across the 4 m piece).
 constexpr float kArchHalfWidth = 0.8f;
 
 float lin(float srgb) { return std::pow(srgb, 2.2f); }
 
-bool isWalkableChar(char c)
-{
-    return c == '.' || c == 'A' || c == 'L' || c == 'S' || c == 'C' || c == 'X';
-}
-
 } // namespace
 
 char DungeonMap::cellAt(int col, int row) const
 {
-    if (row < 0 || row >= int(mRows.size()))
-        return ' ';
-    const std::string& r = mRows[row];
-    if (col < 0 || col >= int(r.size()))
-        return ' ';
-    return r[col];
+    return mLayout.cellAt(col, row);
 }
 
 bool DungeonMap::walkableCell(int col, int row) const
 {
-    return isWalkableChar(cellAt(col, row));
+    return mLayout.walkable(col, row);
 }
 
 void DungeonMap::cellOf(float x, float z, int& col, int& row) const
@@ -51,12 +41,13 @@ void DungeonMap::cellOf(float x, float z, int& col, int& row) const
 
 int DungeonMap::roomOfCell(int col, int row) const
 {
-    if (row < 0 || col < 0 || row >= int(mRows.size()) || mStride == 0)
-        return -1;
-    const int idx = row * mStride + col;
-    if (col >= mStride || idx >= int(mCellRoom.size()))
-        return -1;
-    return mCellRoom[size_t(idx)];
+    return mLayout.roomAt(col, row);
+}
+
+bool DungeonMap::debugArchNorthSouth(int col, int row) const
+{
+    const int index = mLayout.archAt(col, row);
+    return index >= 0 && mLayout.arch(index).northSouth;
 }
 
 bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
@@ -101,16 +92,17 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
         lampY = float((*light)["y"].value_or(2.55));
     }
 
-    return buildFromRows(r, std::move(rows), mCell, wallH, lightColour,
-                         lightEnergy, lightRange, lampY, tileMeshDir,
-                         propMeshDir);
+    return buildFromLayout(r, gen::Layout::fromRows(std::move(rows)), mCell,
+                           wallH, lightColour, lightEnergy, lightRange, lampY,
+                           tileMeshDir, propMeshDir);
 }
 
-bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
-                               float cell, float wallH, glm::vec3 lightColour,
-                               float lightEnergy, float lightRange, float lampY,
-                               const std::string& tileMeshDir,
-                               const std::string& propMeshDir)
+bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
+                                 float cell, float wallH,
+                                 glm::vec3 lightColour, float lightEnergy,
+                                 float lightRange, float lampY,
+                                 const std::string& tileMeshDir,
+                                 const std::string& propMeshDir)
 {
     // A DungeonMap can be rebuilt in place (editor/reload and future level
     // previews). None of its previous segmentation, portals or torch state
@@ -118,144 +110,35 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
     mRooms.clear();
     mArches.clear();
     mTorches.clear();
-    mCellRoom.clear();
-    mCellArch.clear();
-    mArchNS.clear();
     mLastCurrentRooms.clear();
+    mCurrentScratch.clear();
+    mQueueScratch.clear();
+    mVisibleScratch.clear();
 
     mCell = cell;
-    mRows = std::move(rows);
-    if (mRows.empty()) {
-        eng::log::error("DungeonMap: empty grid");
+    mLayout = std::move(layout);
+    if (!mLayout.valid()) {
+        eng::log::error("DungeonMap: invalid layout: %s", mLayout.error().c_str());
         return false;
     }
-    int cCol = -1, cRow = -1, sCol = -1, sRow = -1, xCol = -1, xRow = -1;
-    for (int row = 0; row < int(mRows.size()); ++row)
-        for (int col = 0; col < int(mRows[row].size()); ++col) {
-            if (mRows[row][col] == 'C') { cCol = col; cRow = row; }
-            if (mRows[row][col] == 'S') { sCol = col; sRow = row; }
-            if (mRows[row][col] == 'X') { xCol = col; xRow = row; }
-        }
-    if (cCol < 0 || sCol < 0) {
-        eng::log::error("DungeonMap: grid needs both a 'C' and an 'S' marker");
-        return false;
-    }
-    mOrigin = {-(cCol + 0.5f) * mCell, 0.0f, -(cRow + 0.5f) * mCell};
-    mSpawn = {mOrigin.x + (sCol + 0.5f) * mCell, 0.0f,
-              mOrigin.z + (sRow + 0.5f) * mCell};
-    mExit = (xCol >= 0)
-                ? glm::vec3{mOrigin.x + (xCol + 0.5f) * mCell, 0.0f,
-                           mOrigin.z + (xRow + 0.5f) * mCell}
-                : mSpawn; // no 'X' -> fall back to spawn (never absent)
+    const gen::Cell anchorCell = mLayout.anchor();
+    const gen::Cell spawnCell = mLayout.spawn();
+    const gen::Cell exitCell = mLayout.exit();
+    mOrigin = {-(anchorCell.col + 0.5f) * mCell, 0.0f,
+               -(anchorCell.row + 0.5f) * mCell};
+    const auto worldCell = [&](gen::Cell at) {
+        return glm::vec3{mOrigin.x + (at.col + 0.5f) * mCell, 0.0f,
+                         mOrigin.z + (at.row + 0.5f) * mCell};
+    };
+    mSpawn = worldCell(spawnCell);
+    mExit = worldCell(exitCell);
 
-    // --- room segmentation (occlusion-culling units) ---
-    // Flood-fill walkable cells into rooms; 'A' arch cells are boundaries
-    // (each arch is its own batch joining <=2 rooms). Runs before geometry so
-    // the grid loop can route each tile into its room/arch batch.
-    mStride = 0;
-    for (const std::string& s : mRows)
-        mStride = std::max(mStride, int(s.size()));
-    const int rowsN = int(mRows.size());
-    mCellRoom.assign(size_t(rowsN * mStride), -1);
-    mCellArch.assign(size_t(rowsN * mStride), -1);
-    mArchNS.assign(size_t(rowsN * mStride), false);
-
-    const auto idxOf = [&](int col, int row) { return row * mStride + col; };
-
-    // stone_archway is a complete tunnel: its two open faces are opposite
-    // and its other two sides are solid. Using it on a dead end, a turn or a
-    // T/cross intersection leaves either a visual hole or an invisible
-    // collision edge. Degrade those markers to ordinary floor before room
-    // segmentation, allowing the regular edge-wall pass below to seal them.
-    for (int row = 0; row < rowsN; ++row) {
-        for (int col = 0; col < int(mRows[row].size()); ++col) {
-            if (cellAt(col, row) != 'A')
-                continue;
-            const bool n = walkableCell(col, row - 1);
-            const bool s = walkableCell(col, row + 1);
-            const bool w = walkableCell(col - 1, row);
-            const bool e = walkableCell(col + 1, row);
-            const bool ns = n && s && !w && !e;
-            const bool ew = w && e && !n && !s;
-            if (!ns && !ew) {
-                eng::log::warn("DungeonMap: arch at col %d row %d is not a "
-                               "straight doorway; using floor + edge walls",
-                               col, row);
-                mRows[row][col] = '.';
-                continue;
-            }
-            mArchNS[size_t(idxOf(col, row))] = ns;
-        }
-    }
-
-    // Assign arch indices first (each 'A' cell = one arch).
-    for (int row = 0; row < rowsN; ++row)
-        for (int col = 0; col < int(mRows[row].size()); ++col)
-            if (cellAt(col, row) == 'A') {
-                mCellArch[size_t(idxOf(col, row))] = int(mArches.size());
-                mArches.push_back({});
-            }
-
-    // Flood-fill non-arch walkable cells into rooms.
-    for (int row = 0; row < rowsN; ++row) {
-        for (int col = 0; col < int(mRows[row].size()); ++col) {
-            const char c = cellAt(col, row);
-            if (!isWalkableChar(c) || c == 'A')
-                continue;
-            if (mCellRoom[size_t(idxOf(col, row))] != -1)
-                continue;
-            const int room = int(mRooms.size());
-            mRooms.push_back({});
-            std::vector<std::pair<int, int>> stack{{col, row}};
-            mCellRoom[size_t(idxOf(col, row))] = room;
-            while (!stack.empty()) {
-                auto [cc, cr] = stack.back();
-                stack.pop_back();
-                const std::pair<int, int> nb[4] = {
-                    {cc + 1, cr}, {cc - 1, cr}, {cc, cr + 1}, {cc, cr - 1}};
-                for (auto [nc, nr] : nb) {
-                    if (nc < 0 || nr < 0 || nr >= rowsN || nc >= mStride)
-                        continue;
-                    const char nch = cellAt(nc, nr);
-                    if (!isWalkableChar(nch) || nch == 'A')
-                        continue;
-                    int& slot = mCellRoom[size_t(idxOf(nc, nr))];
-                    if (slot != -1)
-                        continue;
-                    slot = room;
-                    stack.push_back({nc, nr});
-                }
-            }
-        }
-    }
-
-    // Tag each arch with the rooms of its walkable non-arch neighbours.
-    for (int row = 0; row < rowsN; ++row) {
-        for (int col = 0; col < int(mRows[row].size()); ++col) {
-            const int ai = mCellArch[size_t(idxOf(col, row))];
-            if (ai < 0)
-                continue;
-            const std::pair<int, int> nb[4] = {
-                {col + 1, row}, {col - 1, row}, {col, row + 1}, {col, row - 1}};
-            for (auto [nc, nr] : nb) {
-                const int rm = roomOfCell(nc, nr);
-                if (rm < 0)
-                    continue;
-                if (mArches[size_t(ai)].roomA < 0)
-                    mArches[size_t(ai)].roomA = rm;
-                else if (mArches[size_t(ai)].roomA != rm &&
-                         mArches[size_t(ai)].roomB < 0)
-                    mArches[size_t(ai)].roomB = rm;
-            }
-        }
-    }
-
-    // A malformed grid can leave an arch with no adjacent rooms (both -1); it
-    // would be permanently invisible with no other symptom, so warn.
-    for (size_t i = 0; i < mArches.size(); ++i)
-        if (mArches[i].roomA < 0 && mArches[i].roomB < 0)
-            eng::log::warn("DungeonMap: arch %zu has no adjacent rooms "
-                           "(dangling)", i);
+    mRooms.resize(size_t(mLayout.roomCount()));
+    mArches.resize(size_t(mLayout.archCount()));
+    mCurrentScratch.reserve(mRooms.size());
+    mQueueScratch.reserve(mRooms.size());
+    mLastCurrentRooms.reserve(mRooms.size());
+    mVisibleScratch.resize(mRooms.size());
 
     // One big-region batch per room and per arch (a room is a few cells, so
     // one region = one draw per room material; PVS handles inter-room culling).
@@ -296,18 +179,18 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
 
     std::set<std::pair<int, int>> pillarSpots; // corner keys, de-duplicated
 
-    for (int row = 0; row < int(mRows.size()); ++row) {
-        for (int col = 0; col < int(mRows[row].size()); ++col) {
-            const char c = mRows[row][col];
-            if (!isWalkableChar(c))
+    for (int row = 0; row < mLayout.rowCount(); ++row) {
+        for (int col = 0; col < mLayout.columnCount(); ++col) {
+            const char c = mLayout.cellAt(col, row);
+            if (!mLayout.walkable(col, row))
                 continue;
             // Cell rect: x in [x0, x0+cell], z in [z0, z0+cell].
             const float x0 = mOrigin.x + col * mCell;
             const float z0 = mOrigin.z + row * mCell;
 
             // Route this cell's tiles into its room (or arch) batch.
-            const int aIdx = mCellArch[size_t(row * mStride + col)];
-            const int rIdx = mCellRoom[size_t(row * mStride + col)];
+            const int aIdx = mLayout.archAt(col, row);
+            const int rIdx = mLayout.roomAt(col, row);
             if (aIdx >= 0) {
                 curBatch = mArches[size_t(aIdx)].batch;
             } else if (rIdx >= 0) {
@@ -317,11 +200,12 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
             }
 
             if (c == 'A') {
-                // stone_archway is a complete cell (including floor and
-                // roof), so do not overlay the generic floor/ceiling here:
-                // coplanar faces fight each other and show as black/flicker
-                // artifacts under the PSX post process.
-                if (mArchNS[size_t(row * mStride + col)])
+                // The arch asset provides the side blocks and roof but its
+                // base has holes in the walkable opening. Supply the same
+                // floor slab as ordinary cells, raised a hair above any
+                // coincident asset faces to prevent z-fighting.
+                put(floor, {x0, 0.002f, z0 + mCell}, 0.0f);
+                if (mLayout.arch(aIdx).northSouth)
                     put(arch, {x0, 0.0f, z0 + mCell}, 0.0f);
                 else
                     put(arch, {x0 + mCell, 0.0f, z0 + mCell}, 90.0f);
@@ -417,9 +301,10 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
         }
         if (!curBatch.valid())
             for (auto [cc, cr] : corners) {
-                if (cr < 0 || cc < 0 || cr >= int(mRows.size()) || cc >= mStride)
+                if (cr < 0 || cc < 0 || cr >= mLayout.rowCount() ||
+                    cc >= mLayout.columnCount())
                     continue;
-                const int ai = mCellArch[size_t(cr * mStride + cc)];
+                const int ai = mLayout.archAt(cc, cr);
                 if (ai >= 0) { curBatch = mArches[size_t(ai)].batch; break; }
             }
         if (curBatch.valid())
@@ -436,17 +321,18 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
         r.buildStaticBatch(ar.batch);
 
     eng::log::info("DungeonMap: %zu rows, %zu rooms, %zu arches, %zu pillar posts, cell %.1f m",
-                   mRows.size(), mRooms.size(), mArches.size(), pillarSpots.size(), mCell);
+                   mLayout.rows().size(), mRooms.size(), mArches.size(),
+                   pillarSpots.size(), mCell);
     return true;
 }
 
-bool DungeonMap::loadFromRows(eng::Renderer& r, std::vector<std::string> rows,
+bool DungeonMap::loadFromRows(eng::Renderer& r, gen::Layout layout,
                               const std::string& tileMeshDir,
                               const std::string& propMeshDir)
 {
     // Generator grids use the same tile scale and warm-torch defaults as the
     // TOML fallback (game/assets/dungeon.toml [dungeon.light]).
-    return buildFromRows(r, std::move(rows), 4.0f, 3.0f,
+    return buildFromLayout(r, std::move(layout), 4.0f, 3.0f,
                          {lin(1.0f), lin(0.58f), lin(0.28f)}, 4.0f, 6.0f, 1.9f,
                          tileMeshDir, propMeshDir);
 }
@@ -483,18 +369,20 @@ void DungeonMap::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos,
     // arch's joined rooms.
     int col, row;
     cellOf(cameraPos.x, cameraPos.z, col, row);
-    std::vector<int> current;
+    mCurrentScratch.clear();
+    std::vector<int>& current = mCurrentScratch;
     const int rm = roomOfCell(col, row);
     if (rm >= 0) {
         current.push_back(rm);
-    } else if (row >= 0 && col >= 0 && row < int(mRows.size()) &&
-               col < mStride) {
-        const int ai = mCellArch[size_t(row * mStride + col)];
+    } else if (row >= 0 && col >= 0 && row < mLayout.rowCount() &&
+               col < mLayout.columnCount()) {
+        const int ai = mLayout.archAt(col, row);
         if (ai >= 0) {
-            if (mArches[size_t(ai)].roomA >= 0)
-                current.push_back(mArches[size_t(ai)].roomA);
-            if (mArches[size_t(ai)].roomB >= 0)
-                current.push_back(mArches[size_t(ai)].roomB);
+            const gen::Arch& arch = mLayout.arch(ai);
+            if (arch.roomA >= 0)
+                current.push_back(arch.roomA);
+            if (arch.roomB >= 0)
+                current.push_back(arch.roomB);
         }
     }
     if (current.empty()) {
@@ -515,8 +403,10 @@ void DungeonMap::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos,
 
     // BFS the portal graph: a room is visible if current, or reachable and its
     // AABB is within farDist of the camera. Arch visible if either room is.
-    std::vector<char> vis(mRooms.size(), 0);
-    std::vector<int> queue = current;
+    std::fill(mVisibleScratch.begin(), mVisibleScratch.end(), 0);
+    std::vector<char>& vis = mVisibleScratch;
+    mQueueScratch.assign(current.begin(), current.end());
+    std::vector<int>& queue = mQueueScratch;
     for (int c : current)
         vis[size_t(c)] = 1;
     const auto aabbDist = [&](const Room& room) {
@@ -526,7 +416,8 @@ void DungeonMap::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos,
     while (!queue.empty()) {
         const int room = queue.back();
         queue.pop_back();
-        for (const auto& ar : mArches) {
+        for (size_t ai = 0; ai < mArches.size(); ++ai) {
+            const gen::Arch& ar = mLayout.arch(int(ai));
             int other = -1;
             if (ar.roomA == room) other = ar.roomB;
             else if (ar.roomB == room) other = ar.roomA;
@@ -541,30 +432,19 @@ void DungeonMap::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos,
 
     for (size_t i = 0; i < mRooms.size(); ++i)
         r.setStaticBatchVisible(mRooms[i].batch, vis[i] != 0);
-    for (const auto& ar : mArches) {
+    for (size_t ai = 0; ai < mArches.size(); ++ai) {
+        const gen::Arch& ar = mLayout.arch(int(ai));
         const bool show = (ar.roomA >= 0 && vis[size_t(ar.roomA)]) ||
                           (ar.roomB >= 0 && vis[size_t(ar.roomB)]);
-        r.setStaticBatchVisible(ar.batch, show);
+        r.setStaticBatchVisible(mArches[ai].batch, show);
     }
 }
 
-int DungeonMap::findTorch(glm::vec3 eye, glm::vec3 forward,
-                          float maxDist) const
+void DungeonMap::appendTorchTargets(std::vector<GameplayTarget>& targets) const
 {
-    int best = -1;
-    float bestDist = maxDist;
-    for (size_t i = 0; i < mTorches.size(); ++i) {
-        const glm::vec3 to = mTorches[i].tipPos - eye;
-        const float dist = glm::length(to);
-        if (dist > bestDist || dist < 1e-3f)
-            continue;
-        // Within ~25 degrees of the view axis counts as "looking at it".
-        if (glm::dot(to / dist, forward) < 0.9f)
-            continue;
-        best = int(i);
-        bestDist = dist;
-    }
-    return best;
+    targets.reserve(targets.size() + mTorches.size());
+    for (size_t i = 0; i < mTorches.size(); ++i)
+        targets.push_back({TargetKind::Torch, int(i), mTorches[i].tipPos, 2.5f});
 }
 
 void DungeonMap::toggleTorch(eng::Renderer& r, int index)
@@ -603,7 +483,7 @@ bool DungeonMap::circleFits(float x, float z, float radius) const
             const float x1 = x0 + mCell;
             const float z1 = z0 + mCell;
             const char c = cellAt(col, row);
-            if (!isWalkableChar(c)) {
+            if (!mLayout.walkable(col, row)) {
                 if (hitsRect(x0, z0, x1, z1))
                     return false;
                 continue;
@@ -611,7 +491,8 @@ bool DungeonMap::circleFits(float x, float z, float radius) const
             if (c != 'A')
                 continue;
 
-            const bool ns = mArchNS[size_t(row * mStride + col)];
+            const int archIndex = mLayout.archAt(col, row);
+            const bool ns = archIndex >= 0 && mLayout.arch(archIndex).northSouth;
             const float mid = ns ? x0 + mCell * 0.5f : z0 + mCell * 0.5f;
             const float lo = mid - kArchHalfWidth;
             const float hi = mid + kArchHalfWidth;
@@ -628,10 +509,11 @@ bool DungeonMap::circleFits(float x, float z, float radius) const
 glm::vec3 DungeonMap::resolveMove(glm::vec3 from, glm::vec3 to,
                                   float radius) const
 {
-    // Sub-step the sweep so a low frame rate or a speed boost cannot skip a
-    // thin grid feature. Resolve X then Z each micro-step for stable wall
-    // sliding, and binary-search any blocked axis right up to the visible
-    // wall rather than leaving a noticeable gap.
+    // Sub-step the capsule sweep so sprint/slide speeds and low frame rates
+    // cannot skip a grid feature. Axis resolution deliberately preserves the
+    // unblocked tangent, giving immediate FPS-style wall glancing instead of
+    // sticky diagonal collisions. A binary search brings the capsule to the
+    // visible wall with no arbitrary "stop short" gap.
     const float distance = glm::length(glm::vec2(to.x - from.x, to.z - from.z));
     const int steps = std::max(1, int(std::ceil(distance / std::max(radius * 0.5f, 0.05f))));
     const auto moveAxis = [&](glm::vec3 at, float target, bool xAxis) {

@@ -82,6 +82,32 @@ fragment_program PSX_FS_Lit glsl
     }
 }
 
+// Dungeon geometry keeps the same lighting shader but writes a sentinel into
+// the edge metadata target. This is compile-time rather than a material
+// uniform so static geometry batching cannot lose the exclusion.
+fragment_program PSX_FS_Dungeon glsl
+{
+    source psx.frag
+    preprocessor_defines LIT=1,DUNGEON_NO_STYLIZE=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named modulateColor float4 1.0 1.0 1.0 1.0
+        param_named_auto fogColour fog_colour
+        param_named_auto fogParams fog_params
+        param_named_auto ambientLight ambient_light_colour
+        param_named_auto lightPos light_position_view_space_array 16
+        param_named_auto lightDiffuse light_diffuse_colour_array 16
+        param_named_auto lightAtten light_attenuation_array 16
+        param_named_auto lightCount light_count
+        param_named omniAttenuation float 1.0
+        param_named lightSteps float 0.0
+        param_named lightStepSoftness float 0.35
+        param_named perPixelLighting float 1.0
+        param_named fogDesatBoost float 0.0
+    }
+}
+
 fragment_program PSX_FS_Unlit glsl
 {
     source psx.frag
@@ -334,12 +360,8 @@ fragment_program Dither_FS glsl
 vertex_program Stylize_VS glsl
 {
     source quad.vert
-    default_params
-    {
-        param_named_auto worldViewProj worldviewproj_matrix
-    }
+    default_params { param_named_auto worldViewProj worldviewproj_matrix }
 }
-
 fragment_program Stylize_FS glsl
 {
     source pixel_stylize.frag

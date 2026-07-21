@@ -1,5 +1,5 @@
 #version 330 core
-// Adds the blurred bright-pass onto the stylized scene, BEFORE the dither
+// Adds the blurred bright-pass onto the pixelated scene, before the dither
 // pass so the glow is quantized/dithered like everything else.
 in vec2 uv;
 uniform sampler2D sceneTex;

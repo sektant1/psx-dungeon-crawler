@@ -12,11 +12,22 @@ constexpr float kCrouchEyeHeight = 1.18f;
 const float kMaxPitch = glm::radians(89.0f);
 constexpr float kAcceleration = 24.0f;
 constexpr float kDeceleration = 30.0f;
+constexpr float kAirAcceleration = 8.5f;
 constexpr float kSprintMultiplier = 1.7f;
 constexpr float kWalkMultiplier = 0.55f;
 constexpr float kCrouchMultiplier = 0.45f;
 constexpr float kStaminaDrain = 0.28f; // full sprint lasts ~3.6 seconds
 constexpr float kStaminaRecover = 0.18f;
+constexpr float kSprintStartThreshold = 0.08f;
+constexpr float kJumpVelocity = 5.0f;
+constexpr float kGravity = 18.0f;
+constexpr float kCoyoteDuration = 0.10f;
+constexpr float kJumpBufferDuration = 0.12f;
+constexpr float kDungeonCeilingY = 3.0f;
+constexpr float kCeilingClearance = 0.10f;
+constexpr float kSlideDuration = 0.55f;
+constexpr float kSlideMultiplier = 2.0f;
+constexpr float kSlideDeceleration = 18.0f;
 
 float approach(float value, float target, float maxDelta)
 {
@@ -47,23 +58,38 @@ glm::vec3 FpsController::forward() const
 void FpsController::init(eng::Renderer& r, glm::vec3 startPos, float speed,
                          float sensitivity, glm::vec3 roomMin, glm::vec3 roomMax)
 {
+    reset(startPos, speed, sensitivity, roomMin, roomMax, r.envState().fovDeg);
+    mBody = r.createNode(eng::kRootNode, mPos);
+    mHead = r.createNode(mBody, {0.0f, kEyeHeight, 0.0f});
+    r.attachCamera(mHead);
+}
+
+void FpsController::reset(glm::vec3 startPos, float speed, float sensitivity,
+                          glm::vec3 roomMin, glm::vec3 roomMax, float baseFov)
+{
     mPos = startPos;
     mSpeed = speed;
     mSens = sensitivity;
     mMin = roomMin;
     mMax = roomMax;
     mVelocity = glm::vec2(0.0f);
+    mSlideDirection = glm::vec2(0.0f);
+    mVerticalVelocity = 0.0f;
     mSprintStamina = 1.0f;
+    mSlideTime = 0.0f;
     mBobPhase = 0.0f;
     mEyeHeight = kEyeHeight;
+    mCollisionRadius = 0.30f;
     mHeadOffset = {0.0f, kEyeHeight, 0.0f};
-    mBaseFov = r.envState().fovDeg;
+    mBaseFov = baseFov;
     mLastAppliedFov = mBaseFov;
+    mFovKick = 0.0f;
     mCrouched = false;
     mSprinting = false;
-    mBody = r.createNode(eng::kRootNode, mPos);
-    mHead = r.createNode(mBody, {0.0f, kEyeHeight, 0.0f});
-    r.attachCamera(mHead);
+    mSprintExhausted = false;
+    mSliding = false;
+    mCoyoteTime = kCoyoteDuration;
+    mJumpBufferTime = 0.0f;
 }
 
 void FpsController::setBaseFov(float degrees)
@@ -74,43 +100,115 @@ void FpsController::setBaseFov(float degrees)
 
 void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
 {
-    if (in.mouseGrabbed()) {
-        const glm::vec2 d = in.mouseDelta();
-        mYaw -= d.x * mSens;
-        mPitch = glm::clamp(mPitch - d.y * mSens, -kMaxPitch, kMaxPitch);
+    Command command;
+    command.mouseLook = in.mouseGrabbed();
+    command.lookDelta = in.mouseDelta();
+    command.move.x = float(in.isDown("move_right")) - float(in.isDown("move_left"));
+    command.move.y = float(in.isDown("move_forward")) - float(in.isDown("move_back"));
+    command.sprint = in.isDown("sprint");
+    command.walk = in.isDown("walk");
+    command.crouch = in.isDown("crouch");
+    command.jumpPressed = in.wasPressed("jump");
+    command.slidePressed = in.wasPressed("slide");
+    simulate(command, dt);
+    present(r);
+}
+
+void FpsController::simulate(const Command& command, float dt)
+{
+    if (command.mouseLook) {
+        mYaw -= command.lookDelta.x * mSens;
+        mPitch = glm::clamp(mPitch - command.lookDelta.y * mSens,
+                            -kMaxPitch, kMaxPitch);
     }
 
     // Camera looks down -Z at yaw 0; forward/right on the ground plane.
     const glm::vec3 fwd(-std::sin(mYaw), 0.0f, -std::cos(mYaw));
     const glm::vec3 right(std::cos(mYaw), 0.0f, -std::sin(mYaw));
     glm::vec3 move(0.0f);
-    if (in.isDown("move_forward"))
-        move += fwd;
-    if (in.isDown("move_back"))
-        move -= fwd;
-    if (in.isDown("move_right"))
-        move += right;
-    if (in.isDown("move_left"))
-        move -= right;
+    move += fwd * command.move.y;
+    move += right * command.move.x;
     const bool hasMove = glm::length(move) > 0.0f;
-    mCrouched = in.isDown("crouch");
-    const bool wantsSprint = in.isDown("sprint") && hasMove && !mCrouched;
-    mSprinting = wantsSprint && mSprintStamina > 0.0f;
-    if (mSprinting)
+    const glm::vec2 moveDirection = hasMove
+        ? glm::vec2(glm::normalize(move).x, glm::normalize(move).z)
+        : glm::vec2(0.0f);
+    const bool sprintHeld = command.sprint;
+    if (!sprintHeld)
+        mSprintExhausted = false;
+
+    mCrouched = command.crouch || mSliding;
+    const bool wantsSprint = sprintHeld && hasMove && !mCrouched &&
+                             !mSprintExhausted;
+    mSprinting = wantsSprint && mSprintStamina >= kSprintStartThreshold;
+    if (mSprinting) {
         mSprintStamina = std::max(0.0f, mSprintStamina - kStaminaDrain * dt);
-    else
+        // Do not re-enable sprint one frame after depletion just because the
+        // recovery branch added a tiny amount of stamina. Releasing Shift is
+        // the intentional reset for the exhausted state.
+        if (mSprintStamina <= 0.0f) {
+            mSprintExhausted = true;
+            mSprinting = false;
+        }
+    } else {
         mSprintStamina = std::min(1.0f, mSprintStamina + kStaminaRecover * dt);
+    }
+
+    if (!mSliding && command.slidePressed && mSprinting && grounded()) {
+        mSliding = true;
+        mSlideTime = kSlideDuration;
+        mSlideDirection = moveDirection;
+        mSprinting = false;
+    }
+    if (mSliding) {
+        mSlideTime = std::max(0.0f, mSlideTime - dt);
+        if (mSlideTime <= 0.0f)
+            mSliding = false;
+    }
+    mCrouched = command.crouch || mSliding;
+
+    if (command.jumpPressed)
+        mJumpBufferTime = kJumpBufferDuration;
+    else
+        mJumpBufferTime = std::max(0.0f, mJumpBufferTime - dt);
+    if (grounded())
+        mCoyoteTime = kCoyoteDuration;
+    else
+        mCoyoteTime = std::max(0.0f, mCoyoteTime - dt);
+    if (mJumpBufferTime > 0.0f && mCoyoteTime > 0.0f && !mCrouched) {
+        mVerticalVelocity = kJumpVelocity;
+        mCoyoteTime = 0.0f;
+        mJumpBufferTime = 0.0f;
+    }
+    if (!grounded() || mVerticalVelocity > 0.0f) {
+        mVerticalVelocity -= kGravity * dt;
+        mPos.y += mVerticalVelocity * dt;
+        // Every dungeon tile renders its roof at y=3. Keep the camera below
+        // it rather than allowing a jump to pass through visible geometry.
+        const float maxFeetY = kDungeonCeilingY - mEyeHeight - kCeilingClearance;
+        if (mPos.y > maxFeetY) {
+            mPos.y = maxFeetY;
+            mVerticalVelocity = 0.0f;
+        }
+        if (mPos.y <= 0.0f) {
+            mPos.y = 0.0f;
+            mVerticalVelocity = 0.0f;
+        }
+    }
 
     float speedFactor = 1.0f;
-    if (mCrouched) speedFactor = kCrouchMultiplier;
+    if (mSliding) speedFactor = kSlideMultiplier;
+    else if (mCrouched) speedFactor = kCrouchMultiplier;
     else if (mSprinting) speedFactor = kSprintMultiplier;
-    else if (in.isDown("walk")) speedFactor = kWalkMultiplier;
+    else if (command.walk) speedFactor = kWalkMultiplier;
 
-    const glm::vec2 target = hasMove
-        ? glm::vec2(glm::normalize(move).x, glm::normalize(move).z) *
-              (mSpeed * speedFactor)
-        : glm::vec2(0.0f);
-    const float rate = hasMove ? kAcceleration : kDeceleration;
+    const float slideProgress = mSlideTime / kSlideDuration;
+    const glm::vec2 target = mSliding
+        ? mSlideDirection * (mSpeed * speedFactor * (0.35f + 0.65f * slideProgress))
+        : (hasMove ? moveDirection * (mSpeed * speedFactor) : glm::vec2(0.0f));
+    const float rate = mSliding ? kSlideDeceleration
+                                : (!grounded() ? kAirAcceleration
+                                               : (hasMove ? kAcceleration
+                                                          : kDeceleration));
     mVelocity.x = approach(mVelocity.x, target.x, rate * dt);
     mVelocity.y = approach(mVelocity.y, target.y, rate * dt);
     const glm::vec3 beforeMove = mPos;
@@ -140,18 +238,21 @@ void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
         std::sin(mBobPhase * 0.5f) * bobAmount * 0.55f,
         mEyeHeight + std::abs(std::sin(mBobPhase)) * bobAmount,
         0.0f};
-    r.setPosition(mHead, mHeadOffset);
+    mFovKick = mSprinting ? 4.0f * speedRatio : 0.0f;
+}
 
-    // The renderer's environment cache is also edited by the debug camera
-    // panel. If somebody changed FOV since our last write, adopt that as the
-    // new base instead of continually forcing 70 degrees.
+void FpsController::present(eng::Renderer& r)
+{
+    // The debug camera panel can revise the locomotion base FOV.
     const float rendererFov = r.envState().fovDeg;
     if (std::abs(rendererFov - mLastAppliedFov) > 0.001f)
         mBaseFov = rendererFov;
-    const float fovKick = mSprinting ? 4.0f * speedRatio : 0.0f;
-    mLastAppliedFov = mBaseFov + fovKick;
-    r.setCameraFov(mLastAppliedFov);
+    const float desiredFov = mBaseFov + mFovKick;
+    if (std::abs(rendererFov - desiredFov) > 0.001f)
+        r.setCameraFov(desiredFov);
+    mLastAppliedFov = desiredFov;
 
+    r.setPosition(mHead, mHeadOffset);
     r.setPosition(mBody, mPos);
     r.setOrientation(mBody, glm::angleAxis(mYaw, glm::vec3(0, 1, 0)));
     r.setOrientation(mHead, glm::angleAxis(mPitch, glm::vec3(1, 0, 0)));

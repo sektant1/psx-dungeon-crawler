@@ -1,6 +1,4 @@
-// PSX post stack: scene -> low-res MRT (colour + normal/depth) -> pixel
-// stylizer (outlines/highlights, pixelart_stylizer.gdshader port) -> dither/
-// colour-depth pass (pp_band-dither.gdshader port) -> window, nearest-upscaled.
+// PSX post stack: scene -> low-res MRT -> stylizer -> dither -> window.
 //
 // Texture sizes are target_width_scaled/target_height_scaled with factor
 // 1/pixelSize; RenderCore::setPixelSize patches the factors on the definition
@@ -9,8 +7,6 @@
 // float truncation in Ogre's size derivation yields 320x240 for 960x720, not
 // 319x239.
 //
-// mrt is FLOAT16 on both surfaces: surface 1 stores view depth / farClip in
-// alpha and 8-bit alpha would quantize edge detection to mush.
 compositor PSX/Stylized
 {
     technique
@@ -23,9 +19,8 @@ compositor PSX/Stylized
 
         target mrt
         {
-            input previous      // scene renders into the low-res MRT
+            input previous
         }
-
         target rt_post
         {
             input none

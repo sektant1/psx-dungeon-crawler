@@ -19,6 +19,10 @@ public:
     // open and the header is expanded.
     void addPanel(const std::string& name, std::function<void()> draw);
 
+    // Adds an independent ImGui window. `draw` owns its Begin/End calls and
+    // runs every frame while the debug UI is visible.
+    void addWindow(std::function<void()> draw);
+
     bool visible() const;
     void setVisible(bool v);
 

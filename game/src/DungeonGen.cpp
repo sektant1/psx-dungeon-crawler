@@ -1,6 +1,7 @@
 #include "DungeonGen.h"
 
 #include <algorithm>
+#include <array>
 #include <random>
 
 namespace gen {
@@ -230,7 +231,7 @@ struct Builder {
 
 } // namespace
 
-std::vector<std::string> generate(uint32_t seed)
+Layout generate(uint32_t seed)
 {
     for (uint32_t attempt = 0; attempt < 32; ++attempt) {
         Builder b(seed + attempt);
@@ -288,17 +289,189 @@ std::vector<std::string> generate(uint32_t seed)
             for (int x = 0; x < kW; ++x)
                 if (g[size_t(y)][size_t(x)] != '#') ++walkable;
         if (reachedC && reached == walkable)
-            return g;
+            return Layout::fromRows(std::move(g), true);
         // else retry next seed
     }
 
     // Fallback: minimal valid grid (one S, one C, one A, connected) so the
     // game always boots even if 32 seeds somehow all fail.
-    return {
+    return Layout::fromRows({
         "#########",
         "#S.A.X.C#",
         "#########",
-    };
+    }, true);
+}
+
+char Layout::cellAt(int col, int row) const
+{
+    if (row < 0 || row >= int(mRows.size()) || col < 0 || col >= mStride ||
+        col >= int(mRows[size_t(row)].size()))
+        return ' ';
+    return mRows[size_t(row)][size_t(col)];
+}
+
+bool Layout::walkable(int col, int row) const
+{
+    const char c = cellAt(col, row);
+    return c == '.' || c == 'A' || c == 'L' || c == 'S' || c == 'C' || c == 'X';
+}
+
+int Layout::roomAt(int col, int row) const
+{
+    if (row < 0 || row >= rowCount() || col < 0 || col >= mStride)
+        return -1;
+    return mCellRoom[size_t(row * mStride + col)];
+}
+
+int Layout::archAt(int col, int row) const
+{
+    if (row < 0 || row >= rowCount() || col < 0 || col >= mStride)
+        return -1;
+    return mCellArch[size_t(row * mStride + col)];
+}
+
+Layout Layout::fromRows(std::vector<std::string> rows, bool requireExit)
+{
+    Layout out;
+    out.mRows = std::move(rows);
+    if (out.mRows.empty()) {
+        out.mError = "empty grid";
+        return out;
+    }
+    for (const auto& row : out.mRows)
+        out.mStride = std::max(out.mStride, int(row.size()));
+    if (out.mStride == 0) {
+        out.mError = "empty grid";
+        return out;
+    }
+
+    int spawnCount = 0, anchorCount = 0, exitCount = 0;
+    const std::string allowed = "#.ALSCX ";
+    for (int row = 0; row < out.rowCount(); ++row) {
+        for (int col = 0; col < int(out.mRows[size_t(row)].size()); ++col) {
+            const char c = out.mRows[size_t(row)][size_t(col)];
+            if (allowed.find(c) == std::string::npos) {
+                out.mError = "unknown cell marker at " + std::to_string(col) +
+                             "," + std::to_string(row);
+                return out;
+            }
+            if (c == 'S') { out.mSpawn = {col, row}; ++spawnCount; }
+            if (c == 'C') { out.mAnchor = {col, row}; ++anchorCount; }
+            if (c == 'X') { out.mExit = {col, row}; ++exitCount; }
+        }
+    }
+    if (spawnCount != 1 || anchorCount != 1 || exitCount > 1 ||
+        (requireExit && exitCount != 1)) {
+        out.mError = "grid needs exactly one S and C";
+        if (requireExit) out.mError += ", and exactly one X";
+        return out;
+    }
+    if (!out.mExit.valid())
+        out.mExit = out.mSpawn;
+
+    const int cellCount = out.rowCount() * out.mStride;
+    out.mCellRoom.assign(size_t(cellCount), -1);
+    out.mCellArch.assign(size_t(cellCount), -1);
+    const auto idx = [&out](int col, int row) { return row * out.mStride + col; };
+
+    // Malformed arches become floor before topology is derived. This keeps
+    // the ASCII adapter forgiving while every downstream caller sees the
+    // same validated interpretation.
+    for (int row = 0; row < out.rowCount(); ++row) {
+        for (int col = 0; col < int(out.mRows[size_t(row)].size()); ++col) {
+            if (out.cellAt(col, row) != 'A') continue;
+            const bool n = out.walkable(col, row - 1);
+            const bool s = out.walkable(col, row + 1);
+            const bool w = out.walkable(col - 1, row);
+            const bool e = out.walkable(col + 1, row);
+            if (!((n && s && !w && !e) || (w && e && !n && !s)))
+                out.mRows[size_t(row)][size_t(col)] = '.';
+        }
+    }
+
+    for (int row = 0; row < out.rowCount(); ++row)
+        for (int col = 0; col < out.mStride; ++col)
+            if (out.cellAt(col, row) == 'A') {
+                const int ai = int(out.mArches.size());
+                out.mCellArch[size_t(idx(col, row))] = ai;
+                Arch arch;
+                arch.northSouth = out.walkable(col, row - 1) &&
+                                  out.walkable(col, row + 1);
+                out.mArches.push_back(arch);
+            }
+
+    for (int row = 0; row < out.rowCount(); ++row) {
+        for (int col = 0; col < out.mStride; ++col) {
+            if (!out.walkable(col, row) || out.cellAt(col, row) == 'A' ||
+                out.roomAt(col, row) >= 0)
+                continue;
+            const int room = out.mRoomCount++;
+            out.mCellRoom[size_t(idx(col, row))] = room;
+            std::vector<Cell> stack{{col, row}};
+            while (!stack.empty()) {
+                const Cell at = stack.back();
+                stack.pop_back();
+                const std::array<Cell, 4> neighbours{{
+                    {at.col + 1, at.row}, {at.col - 1, at.row},
+                    {at.col, at.row + 1}, {at.col, at.row - 1}}};
+                for (Cell next : neighbours) {
+                    if (!out.walkable(next.col, next.row) ||
+                        out.cellAt(next.col, next.row) == 'A' ||
+                        out.roomAt(next.col, next.row) >= 0)
+                        continue;
+                    out.mCellRoom[size_t(idx(next.col, next.row))] = room;
+                    stack.push_back(next);
+                }
+            }
+        }
+    }
+
+    for (int row = 0; row < out.rowCount(); ++row) {
+        for (int col = 0; col < out.mStride; ++col) {
+            const int ai = out.archAt(col, row);
+            if (ai < 0) continue;
+            Arch& arch = out.mArches[size_t(ai)];
+            const std::array<Cell, 4> neighbours{{
+                {col + 1, row}, {col - 1, row}, {col, row + 1}, {col, row - 1}}};
+            for (Cell next : neighbours) {
+                const int room = out.roomAt(next.col, next.row);
+                if (room < 0) continue;
+                if (arch.roomA < 0) arch.roomA = room;
+                else if (arch.roomA != room && arch.roomB < 0) arch.roomB = room;
+            }
+            if (arch.roomA < 0) {
+                out.mError = "arch has no adjacent room at " +
+                             std::to_string(col) + "," + std::to_string(row);
+                return out;
+            }
+        }
+    }
+
+    std::vector<char> reached(size_t(cellCount), 0);
+    std::vector<Cell> flood{out.mSpawn};
+    reached[size_t(idx(out.mSpawn.col, out.mSpawn.row))] = 1;
+    while (!flood.empty()) {
+        const Cell at = flood.back();
+        flood.pop_back();
+        const std::array<Cell, 4> neighbours{{
+            {at.col + 1, at.row}, {at.col - 1, at.row},
+            {at.col, at.row + 1}, {at.col, at.row - 1}}};
+        for (Cell next : neighbours) {
+            if (!out.walkable(next.col, next.row)) continue;
+            const size_t nextIndex = size_t(idx(next.col, next.row));
+            if (reached[nextIndex]) continue;
+            reached[nextIndex] = 1;
+            flood.push_back(next);
+        }
+    }
+    for (int row = 0; row < out.rowCount(); ++row)
+        for (int col = 0; col < out.mStride; ++col)
+            if (out.walkable(col, row) && !reached[size_t(idx(col, row))]) {
+                out.mError = "walkable cell is disconnected at " +
+                             std::to_string(col) + "," + std::to_string(row);
+                return out;
+            }
+    return out;
 }
 
 } // namespace gen

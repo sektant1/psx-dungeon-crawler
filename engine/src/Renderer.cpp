@@ -45,7 +45,7 @@ struct Renderer::Impl {
     // on toggle-off (the view bypasses them so lines stay crisp).
     struct {
         int pixelSize = 3;
-        bool stylize = true, dither = false, bloom = true, grade = false;
+        bool dither = false, bloom = true, grade = false;
     } preWireframe;
 
     // Static geometry batches: records kept after build() so the wireframe
@@ -404,7 +404,7 @@ void Renderer::setBackground(glm::vec3 colour)
 void Renderer::setDitherEnabled(bool enabled)
 {
     mImpl->env.dither = enabled;
-    // The post chain hosts pixelation/outlines/bloom too, so it stays on;
+    // The post chain hosts pixelation/bloom too, so it stays on;
     // "dither off" only bypasses the quantization inside the dither pass.
     mImpl->core.enablePostChain();
     setMaterialParam("PSX/DitherPost", "ditherEnabled", enabled ? 1.0f : 0.0f);
@@ -414,12 +414,6 @@ void Renderer::setPixelSize(int pixelSize)
 {
     mImpl->env.pixelSize = std::clamp(pixelSize, 1, 16);
     mImpl->core.setPixelSize(mImpl->env.pixelSize);
-}
-
-void Renderer::setStylizeEnabled(bool enabled)
-{
-    mImpl->env.stylize = enabled;
-    setMaterialParam("PSX/PixelStylize", "stylizeEnabled", enabled ? 1.0f : 0.0f);
 }
 
 void Renderer::setPerPixelLightingEnabled(bool enabled)
@@ -537,21 +531,23 @@ void Renderer::setWireframeDebug(bool enabled)
     for (auto& b : mImpl->staticBatches)
         if (b.built)
             mImpl->fillStaticBatch(b, enabled ? "PSX/DebugWireframe" : "");
-    // The post chain smears the 1px lines: the pixelation RT averages them
-    // away, stylize inks their depth edges, dither speckles the flat colour.
+    // The post chain smears the 1px lines, so bypass every post effect while
+    // the view is up and restore it afterwards.
     // Bypass every post effect while the view is up, restore after.
     if (enabled) {
-        mImpl->preWireframe = {mImpl->env.pixelSize, mImpl->env.stylize,
-                               mImpl->env.dither, mImpl->env.bloom,
+        mImpl->preWireframe = {mImpl->env.pixelSize, mImpl->env.dither,
+                               mImpl->env.bloom,
                                mImpl->env.grade};
         setPixelSize(1);
-        setStylizeEnabled(false);
+        // Wireframe is a diagnostic view: no ink/highlight pass should alter
+        // its lines or introduce false contour noise.
+        setMaterialParam("PSX/PixelStylize", "stylizeEnabled", 0.0f);
         setDitherEnabled(false);
         setBloomEnabled(false);
         setGradeEnabled(false);
     } else {
         setPixelSize(mImpl->preWireframe.pixelSize);
-        setStylizeEnabled(mImpl->preWireframe.stylize);
+        setMaterialParam("PSX/PixelStylize", "stylizeEnabled", 1.0f);
         setDitherEnabled(mImpl->preWireframe.dither);
         setBloomEnabled(mImpl->preWireframe.bloom);
         setGradeEnabled(mImpl->preWireframe.grade);

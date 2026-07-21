@@ -6,6 +6,9 @@
 #include <string>
 #include <vector>
 
+#include "DungeonGen.h"
+#include "Targeting.h"
+
 namespace eng {
 class Renderer;
 } // namespace eng
@@ -39,12 +42,24 @@ public:
 
     // Build the dungeon from an in-memory grid (e.g. from gen::generate)
     // instead of a TOML file. Shares all geometry/segmentation/torch code.
-    bool loadFromRows(eng::Renderer& r, std::vector<std::string> rows,
+    bool loadFromRows(eng::Renderer& r, gen::Layout layout,
                       const std::string& tileMeshDir,
                       const std::string& propMeshDir);
 
     glm::vec3 spawn() const { return mSpawn; }
     glm::vec3 exitPos() const { return mExit; }
+
+    // Read-only grid data for the generated-dungeon inspector. Kept separate
+    // from gameplay traversal so debug UI cannot mutate level state.
+    int debugRows() const { return mLayout.rowCount(); }
+    int debugColumns() const { return mLayout.columnCount(); }
+    char debugCellAt(int col, int row) const { return cellAt(col, row); }
+    int debugRoomAt(int col, int row) const { return roomOfCell(col, row); }
+    bool debugArchNorthSouth(int col, int row) const;
+    void debugCellOf(glm::vec3 worldPos, int& col, int& row) const
+    {
+        cellOf(worldPos.x, worldPos.z, col, row);
+    }
 
     // Torch light flicker: call once per frame with the animation clock.
     void update(eng::Renderer& r, float t) const;
@@ -53,9 +68,8 @@ public:
     // farDist of the camera. Call once per frame before rendering.
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos, float farDist);
 
-    // Interaction: index of the torch the player is looking at (within
-    // maxDist of eye, roughly on the view axis), or -1.
-    int findTorch(glm::vec3 eye, glm::vec3 forward, float maxDist) const;
+    // Torch adapter for the shared gameplay-target seam.
+    void appendTorchTargets(std::vector<GameplayTarget>& targets) const;
     bool torchLit(int index) const { return mTorches[size_t(index)].lit; }
     // Toggle flame + light together (the tip node carries both).
     void toggleTorch(eng::Renderer& r, int index);
@@ -67,7 +81,7 @@ public:
 private:
     // Shared build core: assumes rows + cell/wall/light params are chosen.
     // Both load() (TOML) and loadFromRows() (generator) funnel through here.
-    bool buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
+    bool buildFromLayout(eng::Renderer& r, gen::Layout layout,
                        float cell, float wallH, glm::vec3 lightColour,
                        float lightEnergy, float lightRange, float lampY,
                        const std::string& tileMeshDir,
@@ -98,12 +112,7 @@ private:
     };
     struct Arch {
         eng::StaticBatchHandle batch;
-        int roomA = -1;
-        int roomB = -1;
     };
-    std::vector<int> mCellRoom;   // room index per (row*mStride+col); -1 = none
-    std::vector<int> mCellArch;   // arch index per cell; -1 = not an arch
-    int mStride = 0;              // columns per row for mCellRoom/mCellArch
     std::vector<Room> mRooms;
     std::vector<Arch> mArches;
     // Cache of the last current-room set (sort key for the visibility early-
@@ -111,16 +120,18 @@ private:
     // this dungeon is well within farDist, so the visible set can't change
     // without the current-room set changing.
     std::vector<int> mLastCurrentRooms;
+    // Reused by the portal-visibility walk. Room crossings used to allocate
+    // three vectors in one frame, producing a visible frametime tooth.
+    std::vector<int> mCurrentScratch;
+    std::vector<int> mQueueScratch;
+    std::vector<char> mVisibleScratch;
 
     // World (col,row) of a ground-plane point; may be outside the grid.
     void cellOf(float x, float z, int& col, int& row) const;
     int roomOfCell(int col, int row) const; // -1 if none
 
-    std::vector<std::string> mRows;
+    gen::Layout mLayout;
     std::vector<Torch> mTorches;
-    // Per-cell: a validated arch tunnel runs north-south. Indexed with
-    // row*mStride+col, never a fixed maximum map width.
-    std::vector<bool> mArchNS;
     float mCell = 4.0f;
     glm::vec3 mOrigin{0.0f}; // world position of cell (0,0)'s NW corner
     glm::vec3 mSpawn{0.0f};

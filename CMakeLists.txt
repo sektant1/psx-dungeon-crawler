@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(dungeon_crawler CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -53,9 +55,35 @@ add_executable(game
     game/src/FpsController.cpp
     game/src/DungeonMap.cpp
     game/src/DungeonGen.cpp
+    game/src/Targeting.cpp
 )
 target_include_directories(game PRIVATE third_party)
 target_link_libraries(game PRIVATE demo_scene)
 target_compile_definitions(game PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
 )
+
+if(BUILD_TESTING)
+    add_executable(dungeon_layout_tests
+        game/tests/DungeonLayoutTests.cpp
+        game/src/DungeonGen.cpp
+    )
+    target_include_directories(dungeon_layout_tests PRIVATE game/src)
+    add_test(NAME dungeon_layout COMMAND dungeon_layout_tests)
+
+    add_executable(targeting_tests
+        game/tests/TargetingTests.cpp
+        game/src/Targeting.cpp
+    )
+    target_include_directories(targeting_tests PRIVATE game/src)
+    target_link_libraries(targeting_tests PRIVATE glm::glm)
+    add_test(NAME targeting COMMAND targeting_tests)
+
+    add_executable(fps_controller_tests
+        game/tests/FpsControllerTests.cpp
+        game/src/FpsController.cpp
+    )
+    target_include_directories(fps_controller_tests PRIVATE game/src)
+    target_link_libraries(fps_controller_tests PRIVATE eng)
+    add_test(NAME fps_controller COMMAND fps_controller_tests)
+endif()

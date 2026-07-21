@@ -23,8 +23,8 @@ public:
     bool init(uintptr_t nativeWindowHandle, int width, int height,
               const std::string& title, const std::string& appAssetDir,
               bool vsync);
-    // Brings up the PSX/Stylized post chain (scene downscale + stylize +
-    // dither) if not already active. Idempotent; the chain stays on once up.
+    // Brings up the PSX post chain (scene downscale + bloom + dither) if not
+    // already active. Idempotent; the chain stays on once up.
     void enablePostChain();
     // Rebuilds the chain with RT sizes = window / pixelSize. Clamped 1..16.
     void setPixelSize(int pixelSize);

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <vector>
 
 // detail::coreOf / detail::registerRoot come from eng/Renderer.h (via
 // Engine.h); their definitions live in Renderer.cpp next to Renderer::Impl.
@@ -21,6 +22,8 @@ struct Engine::Impl {
     bool hasPrev = false;
     std::string screenshotPath;
     int frameCount = 0;
+    int benchmarkFrames = 0;
+    std::vector<float> frameSamples;
     bool grabBeforeDebugUi = false;
 };
 
@@ -59,6 +62,10 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     const char* shot = std::getenv("PSX_SCREENSHOT");
     if (shot)
         mImpl->screenshotPath = shot;
+    if (const char* frames = std::getenv("PSX_BENCH_FRAMES")) {
+        mImpl->benchmarkFrames = std::max(1, std::atoi(frames));
+        mImpl->frameSamples.reserve(size_t(mImpl->benchmarkFrames));
+    }
     mImpl->hasPrev = false;
     return true;
 }
@@ -111,7 +118,25 @@ void Engine::renderFrame(float dt)
 {
     mDebugUi.mImpl->buildFrame(dt);
     detail::coreOf(mRenderer).renderFrame(dt);
-    if (!mImpl->screenshotPath.empty() && ++mImpl->frameCount == 90) {
+    // Headless-friendly performance regression hook. Skip the first 60 frames
+    // so shader/texture warm-up cannot masquerade as steady-state spikes.
+    if (mImpl->benchmarkFrames > 0 && mImpl->frameCount >= 60 && dt > 0.0f) {
+        mImpl->frameSamples.push_back(dt * 1000.0f);
+        if (int(mImpl->frameSamples.size()) == mImpl->benchmarkFrames) {
+            std::vector<float> sorted = mImpl->frameSamples;
+            std::sort(sorted.begin(), sorted.end());
+            const auto percentile = [&](float p) {
+                const size_t i = size_t(p * float(sorted.size() - 1));
+                return sorted[i];
+            };
+            log::info("FrameStats: n=%zu p50=%.3fms p95=%.3fms p99=%.3fms max=%.3fms",
+                      sorted.size(), percentile(0.50f), percentile(0.95f),
+                      percentile(0.99f), sorted.back());
+            mClose = true;
+        }
+    }
+    ++mImpl->frameCount;
+    if (!mImpl->screenshotPath.empty() && mImpl->frameCount == 90) {
         detail::coreOf(mRenderer).writeScreenshot(mImpl->screenshotPath);
         mClose = true;
     }

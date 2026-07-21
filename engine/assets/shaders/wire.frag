@@ -2,7 +2,7 @@
 // Debug wireframe view: flat-colour mesh lines, drawn by PSX/DebugWireframe
 // with polygon_mode wireframe. Reuses PSX_VS_Unlit so the lines keep the
 // vertex snap/jitter of the real geometry. Still writes the MRT normal/depth
-// surface so the stylize pass sees sane edge data instead of garbage.
+// surface metadata remains valid for post-processing targets.
 
 noperspective in vec3 vNormalVS;
 noperspective in float vViewDepth;

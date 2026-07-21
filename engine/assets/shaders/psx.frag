@@ -145,13 +145,21 @@ void main()
     // Edge-detection buffer wants geometric truth: the perspective-correct
     // normal where the lit path provides one. The noperspective vNormalVS
     // swims across big low-poly triangles (crystal shards), which punches
-    // holes in the stylizer's normal-edge outlines mid-face.
+    // metadata stays continuous across each rendered surface.
 #ifdef LIT
+#ifdef DUNGEON_NO_STYLIZE
+    fragNormalDepth = vec4(0.0);
+#else
     fragNormalDepth = vec4(normalize(vNormalSmooth) * 0.5 + 0.5,
                            vViewDepth / farClip);
+#endif
+#else
+#ifdef DUNGEON_NO_STYLIZE
+    fragNormalDepth = vec4(0.0);
 #else
     fragNormalDepth = vec4(normalize(vNormalVS) * 0.5 + 0.5,
                            vViewDepth / farClip);
+#endif
 #endif
 #endif
 }

@@ -39,7 +39,6 @@ struct EnvState {
     float farClip = 4000.0f;
     bool dither = false;
     int pixelSize = 3;       // PSX/Stylized RT = window / pixelSize
-    bool stylize = true;     // outline/highlight pass active
     bool perPixelLighting = true; // fragment vs vertex light evaluation
     float omniAttenuation = 1.0f; // Godot omni falloff exponent (1 = linear)
     float lightSteps = 0.0f; // diffuse posterization bands, 0 = smooth
@@ -134,7 +133,6 @@ public:
     // --- post + verification ---------------------------------------------
     void setDitherEnabled(bool enabled);
     void setPixelSize(int pixelSize);      // 1..16, rebuilds the post chain
-    void setStylizeEnabled(bool enabled);  // off = pass-through (PSX look only)
     void setPerPixelLightingEnabled(bool enabled); // off = authentic vertex-lit
     void setOmniAttenuation(float exponent); // omni falloff curve, 1 = linear
     void setLightSteps(float steps); // posterized diffuse bands, 0 = smooth

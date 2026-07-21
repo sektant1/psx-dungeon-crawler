@@ -7,6 +7,7 @@
 #include "DungeonGen.h"
 #include "DungeonMap.h"
 #include "FpsController.h"
+#include "Targeting.h"
 
 #include <DemoScene.h>
 
@@ -17,6 +18,7 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -51,13 +53,9 @@ static void applyPalette(eng::Renderer& r, const DemoScene& scene)
     r.setLightSteps(4.0f);
     r.setFogDesatBoost(0.4f);
     r.setGradeEnabled(true);
-    // Stylize outlines tinted to the palette: green-black shadows, warm
-    // parchment highlights (raw sRGB, mixed post-encode by the pass).
-    r.setMaterialParam("PSX/PixelStylize", "shadowColor",
-                       glm::vec3(0.03f, 0.07f, 0.035f));
+    r.setMaterialParam("PSX/PixelStylize", "shadowColor", glm::vec3(0.03f, 0.07f, 0.035f));
     r.setMaterialParam("PSX/PixelStylize", "shadowStrength", 0.45f);
-    r.setMaterialParam("PSX/PixelStylize", "highlightColor",
-                       glm::vec3(0.94f, 0.88f, 0.72f));
+    r.setMaterialParam("PSX/PixelStylize", "highlightColor", glm::vec3(0.94f, 0.88f, 0.72f));
     r.setMaterialParam("PSX/PixelStylize", "highlightStrength", 0.12f);
     // Torch-only bloom: only flames/embers/singularity cross the threshold.
     r.setBloomParams(0.85f, 0.6f);
@@ -65,7 +63,23 @@ static void applyPalette(eng::Renderer& r, const DemoScene& scene)
 
 // Everything a built level owns that the main loop animates or references.
 // Swapped atomically on a transition (clearScene + buildLevel).
-struct Level {
+class LiveLevel {
+public:
+    bool rebuild(eng::Renderer& r, const std::string& assets,
+                 uint32_t seed, int depth);
+    void update(eng::Renderer& r, float animationTime);
+    void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
+    void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
+    glm::vec3 resolveMove(glm::vec3 from, glm::vec3 to, float radius) const
+    { return map.resolveMove(from, to, radius); }
+    glm::vec3 spawnPosition() const { return spawn; }
+    glm::vec3 exitPosition() const { return exit; }
+    bool torchIsLit(int index) const { return map.torchLit(index); }
+    void toggleTorch(eng::Renderer& r, int index) { map.toggleTorch(r, index); }
+    const DungeonMap& dungeon() const { return map; }
+
+private:
+    friend LiveLevel buildLevel(eng::Renderer&, const std::string&, uint32_t, int);
     DungeonMap map;
     DemoScene scene;
     eng::NodeHandle chestBase{}, chestSpin{};
@@ -76,12 +90,115 @@ struct Level {
     eng::NodeHandle upPortal{}; // invalid at depth 0
 };
 
+// Read-only generated-grid inspector. The dungeon owns the data; this only
+// projects it into an ImGui draw list for debugging layout/room segmentation.
+static void drawDungeonMap(const DungeonMap& map, glm::vec3 playerPos)
+{
+    ImGui::SetNextWindowSize(ImVec2(540.0f, 600.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(400.0f, 10.0f), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Generated Dungeon Map")) {
+        ImGui::End();
+        return;
+    }
+
+    const int rows = map.debugRows();
+    const int cols = map.debugColumns();
+    if (rows == 0 || cols == 0) {
+        ImGui::TextUnformatted("No generated level is loaded.");
+        ImGui::End();
+        return;
+    }
+
+    int playerCol, playerRow;
+    map.debugCellOf(playerPos, playerCol, playerRow);
+    ImGui::Text("%d x %d cells  |  player: (%d, %d)", cols, rows,
+                playerCol, playerRow);
+    static bool roomLabels = false;
+    ImGui::SameLine();
+    ImGui::Checkbox("room IDs", &roomLabels);
+
+    const ImVec2 available = ImGui::GetContentRegionAvail();
+    const float cell = std::clamp((available.x - 4.0f) / float(cols), 7.0f, 18.0f);
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const ImVec2 extent(cell * float(cols), cell * float(rows));
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddRectFilled(origin, ImVec2(origin.x + extent.x, origin.y + extent.y),
+                        IM_COL32(8, 12, 11, 255));
+
+    static constexpr ImU32 kRooms[] = {
+        IM_COL32(46, 92, 104, 255), IM_COL32(89, 69, 118, 255),
+        IM_COL32(73, 104, 68, 255), IM_COL32(120, 78, 57, 255),
+        IM_COL32(50, 109, 97, 255), IM_COL32(105, 91, 53, 255),
+        IM_COL32(72, 76, 125, 255), IM_COL32(117, 61, 99, 255),
+    };
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            const char tile = map.debugCellAt(col, row);
+            const int room = map.debugRoomAt(col, row);
+            ImU32 colour = IM_COL32(16, 20, 21, 255); // solid/void
+            if (room >= 0)
+                colour = kRooms[size_t(room) % (sizeof(kRooms) / sizeof(kRooms[0]))];
+            if (tile == 'A') colour = IM_COL32(202, 153, 61, 255);
+            if (tile == 'L') colour = IM_COL32(210, 106, 43, 255);
+            if (tile == 'S') colour = IM_COL32(89, 190, 236, 255);
+            if (tile == 'C') colour = IM_COL32(188, 102, 220, 255);
+            if (tile == 'X') colour = IM_COL32(95, 210, 143, 255);
+
+            const ImVec2 p0(origin.x + cell * float(col),
+                             origin.y + cell * float(row));
+            const ImVec2 p1(p0.x + cell, p0.y + cell);
+            draw->AddRectFilled(p0, p1, colour);
+            draw->AddRect(p0, p1, IM_COL32(4, 7, 7, 210));
+            if (tile == 'A') {
+                const bool ns = map.debugArchNorthSouth(col, row);
+                if (ns) {
+                    draw->AddLine({p0.x + cell * 0.25f, p0.y},
+                                  {p0.x + cell * 0.25f, p1.y}, IM_COL32(38, 28, 13, 255));
+                    draw->AddLine({p0.x + cell * 0.75f, p0.y},
+                                  {p0.x + cell * 0.75f, p1.y}, IM_COL32(38, 28, 13, 255));
+                } else {
+                    draw->AddLine({p0.x, p0.y + cell * 0.25f},
+                                  {p1.x, p0.y + cell * 0.25f}, IM_COL32(38, 28, 13, 255));
+                    draw->AddLine({p0.x, p0.y + cell * 0.75f},
+                                  {p1.x, p0.y + cell * 0.75f}, IM_COL32(38, 28, 13, 255));
+                }
+            }
+            if (roomLabels && room >= 0 && cell >= 13.0f) {
+                const std::string label = std::to_string(room);
+                draw->AddText({p0.x + 2.0f, p0.y + 1.0f}, IM_COL32(230, 245, 238, 235),
+                              label.c_str());
+            }
+        }
+    }
+    draw->AddRect(origin, ImVec2(origin.x + extent.x, origin.y + extent.y),
+                  IM_COL32(205, 225, 210, 220), 0.0f, 0, 1.5f);
+    if (playerCol >= 0 && playerRow >= 0 && playerCol < cols && playerRow < rows) {
+        const ImVec2 centre(origin.x + (float(playerCol) + 0.5f) * cell,
+                            origin.y + (float(playerRow) + 0.5f) * cell);
+        draw->AddCircleFilled(centre, std::max(2.5f, cell * 0.24f),
+                              IM_COL32(245, 249, 236, 255));
+        draw->AddCircle(centre, std::max(3.5f, cell * 0.30f),
+                        IM_COL32(7, 10, 8, 255), 12, 1.5f);
+    }
+    ImGui::Dummy(extent); // reserve the draw-list rectangle in window layout
+    ImGui::TextColored(ImVec4(0.35f, 0.75f, 0.92f, 1.0f), "S player spawn");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.79f, 0.60f, 0.24f, 1.0f), "A arch");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.83f, 0.42f, 0.17f, 1.0f), "L torch");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.74f, 0.40f, 0.86f, 1.0f), "C anchor");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.37f, 0.82f, 0.56f, 1.0f), "X exit");
+    ImGui::End();
+}
+
 // Build a complete level (dungeon + demo scene + props + chest + portals)
 // into the (already-clear) scene. depth>0 adds an up-portal at the entry.
-static Level buildLevel(eng::Renderer& r, const std::string& assets,
-                        uint32_t seed, int depth)
+LiveLevel buildLevel(eng::Renderer& r, const std::string& assets,
+                     uint32_t seed, int depth)
 {
-    Level lv;
+    LiveLevel lv;
 
     // --------------------------------------------------------- dungeon ---
     // Procedurally generated level; the anchor 'C' room lands at the world
@@ -284,21 +401,41 @@ static Level buildLevel(eng::Renderer& r, const std::string& assets,
     return lv;
 }
 
-// Returns +1 if the player is aiming at the down portal, -1 at the up portal,
-// 0 at neither (mirrors DungeonMap::findTorch: within maxDist, ~25 deg of view).
-static int aimedPortal(const Level& lv, glm::vec3 eye, glm::vec3 forward,
-                       float maxDist, bool hasUp)
+bool LiveLevel::rebuild(eng::Renderer& r, const std::string& assets,
+                        uint32_t seed, int depth)
 {
-    const auto looking = [&](glm::vec3 target) {
-        const glm::vec3 to = target - eye;
-        const float d = glm::length(to);
-        return d > 1e-3f && d <= maxDist && glm::dot(to / d, forward) >= 0.9f;
-    };
-    if (looking(lv.exit + glm::vec3(0.0f, 0.4f, 0.0f)))
-        return 1;
-    if (hasUp && looking(lv.spawn + glm::vec3(0.0f, 0.4f, 0.0f)))
-        return -1;
-    return 0;
+    r.clearScene();
+    *this = buildLevel(r, assets, seed, depth);
+    return map.debugRows() > 0;
+}
+
+void LiveLevel::update(eng::Renderer& r, float animationTime)
+{
+    scene.update(r, animationTime);
+    map.update(r, animationTime);
+    r.setPosition(chestBase,
+                  {0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f), 0.0f});
+    r.setOrientation(chestSpin,
+                     glm::angleAxis(animationTime * 0.8f, glm::vec3(0, 1, 0)));
+    const float pulse = 0.9f + 0.1f * std::sin(animationTime * 1.7f) +
+                        0.05f * std::sin(animationTime * 4.3f);
+    r.setLightColour(chestGlow, chestGlowColour * pulse);
+}
+
+void LiveLevel::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos)
+{
+    map.updateVisibility(r, cameraPos, 30.0f);
+}
+
+void LiveLevel::appendTargets(std::vector<GameplayTarget>& targets,
+                              int depth) const
+{
+    map.appendTorchTargets(targets);
+    targets.push_back({TargetKind::PortalDown, 0,
+                       exit + glm::vec3(0.0f, 0.4f, 0.0f), 3.0f});
+    if (depth > 0)
+        targets.push_back({TargetKind::PortalUp, 0,
+                           spawn + glm::vec3(0.0f, 0.4f, 0.0f), 3.0f});
 }
 
 int main(int, char**)
@@ -307,7 +444,7 @@ int main(int, char**)
     // no window/Ogre. Eyeball connectivity + room shapes across seeds.
     if (const char* dump = std::getenv("PSX_GEN_DUMP")) {
         const auto grid = gen::generate(uint32_t(std::strtoul(dump, nullptr, 10)));
-        for (const std::string& row : grid)
+        for (const std::string& row : grid.rows())
             std::printf("%s\n", row.c_str());
         return 0;
     }
@@ -337,18 +474,19 @@ int main(int, char**)
     const float sens =
         float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
 
-    Level level;
+    LiveLevel level;
     FpsController player;
 
     // Wipe the scene, build the level at `depth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     const auto enterLevel = [&](bool atExit) {
-        r.clearScene();
-        level = buildLevel(r, assets, seeds[size_t(depth)], depth);
-        const glm::vec3 p = atExit ? level.exit : level.spawn;
+        level.rebuild(r, assets, seeds[size_t(depth)], depth);
+        const glm::vec3 p = atExit ? level.exitPosition() : level.spawnPosition();
         player.init(r, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
-        player.setResolver([&level](glm::vec3 from, glm::vec3 to) {
-            return level.map.resolveMove(from, to, 0.35f);
+        player.setResolver([&level, &player](glm::vec3 from, glm::vec3 to) {
+            // This lambda is rebound after init, so the controller's FPS
+            // capsule footprint always matches dungeon collision.
+            return level.resolveMove(from, to, player.collisionRadius());
         });
         // Carried light rides the fresh head node (the old one was destroyed).
         eng::LightDesc carry;
@@ -372,10 +510,18 @@ int main(int, char**)
         ImGui::Text("sprint: %s  stamina: %3.0f%%",
                     player.sprinting() ? "active" : "ready",
                     player.sprintStamina() * 100.0f);
+        ImGui::Text("movement: %s", player.sliding() ? "sliding"
+                                                       : (player.grounded() ? "grounded"
+                                                                            : "airborne"));
+    });
+    engine.debugUi().addWindow([&level, &player] {
+        drawDungeonMap(level.dungeon(), player.eyePosition());
     });
 
     // ---------------------------------------------------------------- loop ---
     float animTime = 0.0f;
+    std::vector<GameplayTarget> targets;
+    targets.reserve(64);
     while (!engine.shouldClose()) {
         const float dt = engine.tick();
         eng::Input& in = engine.input();
@@ -393,53 +539,37 @@ int main(int, char**)
         }
 
         animTime += dt;
-        level.scene.update(r, animTime);
-        level.map.update(r, animTime); // torch flicker
-        level.map.updateVisibility(r, player.eyePosition(), 30.0f);
-
-        // Levitating loot: slow bob + steady yaw turn; glow pulses like
-        // banked coals (two-sine breathing, never below ~0.8x).
-        r.setPosition(level.chestBase,
-                      {0.0f, 1.35f + 0.25f * std::sin(animTime * 0.9f), 0.0f});
-        r.setOrientation(level.chestSpin,
-                         glm::angleAxis(animTime * 0.8f, glm::vec3(0, 1, 0)));
-        const float pulse = 0.9f + 0.1f * std::sin(animTime * 1.7f) +
-                            0.05f * std::sin(animTime * 4.3f);
-        r.setLightColour(level.chestGlow, level.chestGlowColour * pulse);
+        level.update(r, animTime);
+        level.updateVisibility(r, player.eyePosition());
 
         player.update(in, r, dt);
 
-        // Torch interaction: aim at a torch within reach -> HUD prompt;
-        // E toggles the flame + light.
-        const int aimed =
-            level.map.findTorch(player.eyePosition(), player.forward(), 2.5f);
-        if (aimed >= 0) {
-            engine.debugUi().setHudPrompt(level.map.torchLit(aimed)
+        targets.clear();
+        level.appendTargets(targets, depth);
+        const GameplayTarget* target = aimedTarget(
+            targets, player.eyePosition(), player.forward());
+        if (!target) {
+            engine.debugUi().setHudPrompt("");
+        } else if (target->kind == TargetKind::Torch) {
+            engine.debugUi().setHudPrompt(level.torchIsLit(target->id)
                                               ? "Press [E] to snuff the torch"
                                               : "Press [E] to light the torch");
             if (in.wasPressed("interact"))
-                level.map.toggleTorch(r, aimed);
+                level.toggleTorch(r, target->id);
+        } else if (target->kind == TargetKind::PortalDown) {
+            engine.debugUi().setHudPrompt("Press [E] to descend");
+            if (in.wasPressed("interact")) {
+                if (depth + 1 == int(seeds.size()))
+                    seeds.push_back(baseSeed +
+                                    uint32_t(depth + 1) * 0x9E3779B9u);
+                ++depth;
+                enterLevel(false);
+            }
         } else {
-            // Portal interaction (when not already prompting a torch).
-            const int portal = aimedPortal(level, player.eyePosition(),
-                                           player.forward(), 3.0f, depth > 0);
-            if (portal > 0) {
-                engine.debugUi().setHudPrompt("Press [E] to descend");
-                if (in.wasPressed("interact")) {
-                    if (depth + 1 == int(seeds.size()))
-                        seeds.push_back(baseSeed +
-                                        uint32_t(depth + 1) * 0x9E3779B9u);
-                    ++depth;
-                    enterLevel(false); // arrive at the new level's entry
-                }
-            } else if (portal < 0) {
-                engine.debugUi().setHudPrompt("Press [E] to ascend");
-                if (in.wasPressed("interact")) {
-                    --depth;
-                    enterLevel(true); // arrive at the down-portal you left
-                }
-            } else {
-                engine.debugUi().setHudPrompt("");
+            engine.debugUi().setHudPrompt("Press [E] to ascend");
+            if (in.wasPressed("interact")) {
+                --depth;
+                enterLevel(true);
             }
         }
 

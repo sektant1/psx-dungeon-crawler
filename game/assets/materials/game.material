@@ -50,6 +50,21 @@ material Game/PropBauerhaus
     } }
 }
 
+// Dungeon geometry deliberately opts out of post-process edge ink/highlights.
+material Game/DungeonTile
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture bauerhaus.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
 material Game/PropWood
 {
     technique { pass {

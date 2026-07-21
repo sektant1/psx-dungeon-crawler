@@ -20,7 +20,7 @@ void main()
 {
     vec4 base_color = texture(sceneTex, uv);
     // Grade runs before the dither bypass so "dither off" still keeps the
-    // palette-unifying grade (independent toggles, like stylizeEnabled).
+    // palette-unifying grade with an independent toggle.
     if (gradeEnabled > 0.5) {
         // Unify mismatched pack textures: desaturate a touch, split-tone
         // (shadows toward the tint colour, mids/highs toward warm), then a
