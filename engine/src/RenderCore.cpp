@@ -73,6 +73,13 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     // AFTER resource groups initialise: setting the technique loads Ogre's
     // extrusion programs (Ogre/ShadowExtrude*, Media/Main).
     mSceneMgr->setShadowTechnique(Ogre::SHADOWTYPE_STENCIL_MODULATIVE);
+    // Infinite-far-plane shadow volumes (the Ogre default) force the camera
+    // far clip to 0/infinity, which zeroes the far_clip_distance auto param.
+    // psx.frag divides view depth by it for the MRT depth channel, so an
+    // infinite far plane turns the whole normal-depth surface into INF/NaN
+    // and the stylize/outline pass inks the frame black. Finite volumes are
+    // fine here: shadowFarDistance caps them at 15 m anyway.
+    mSceneMgr->setShadowUseInfiniteFarPlane(false);
     mSceneMgr->setShadowColour(Ogre::ColourValue(0.55f, 0.55f, 0.62f));
     mSceneMgr->setShadowFarDistance(15.0f);
 
