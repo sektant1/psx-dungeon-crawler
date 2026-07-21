@@ -236,8 +236,7 @@ material Game/Singularity
 {
     technique { pass {
         cull_hardware none
-        scene_blend add
-        depth_write off
+        depth_write on
         vertex_program_ref PSX_VS_Unlit { }
         fragment_program_ref PSX_FS_Unlit
         {
@@ -296,8 +295,7 @@ material Game/PortalUp
 {
     technique { pass {
         cull_hardware none
-        scene_blend alpha_blend
-        depth_write off
+        depth_write on
         vertex_program_ref PSX_VS_Unlit
         {
             param_named uvScale float2 1.35 1.35

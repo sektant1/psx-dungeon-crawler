@@ -630,23 +630,6 @@ int main(int, char**)
             eng::log::error("Level %d failed to load", depth);
             return;
         }
-        if (std::getenv("PSX_ARCH_RAYTEST")) {
-            const auto centers = level.dungeon().debugArchCenters();
-            int miss = 0;
-            for (const glm::vec3& c : centers) {
-                eng::RayHit hit;
-                const bool ok = physics.rayCast(c + glm::vec3(0, 3, 0),
-                                                {0, -1, 0}, 5.0f, hit,
-                                                eng::BodyLayer::Static);
-                std::fprintf(stderr, "ARCH cell (%.1f,%.1f): %s floorY=%.3f\n",
-                             c.x, c.z, ok ? "FLOOR" : "NO-FLOOR!!",
-                             ok ? hit.point.y : -99.0f);
-                if (!ok) ++miss;
-            }
-            std::fprintf(stderr, "ARCH_RAYTEST: %zu arches, %d without floor\n",
-                         centers.size(), miss);
-            std::exit(miss == 0 ? 0 : 1);
-        }
         const bool portalPreview = depth == 0 && portalPreviewMode;
         const glm::vec3 p = portalPreview
             ? level.exitPosition() + glm::vec3(0.0f, 0.0f, 6.0f)

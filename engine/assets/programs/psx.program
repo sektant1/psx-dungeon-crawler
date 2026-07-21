@@ -185,7 +185,7 @@ fragment_program PSX_FS_Unlit glsl
 fragment_program PSX_FS_UnlitFlow glsl
 {
     source psx.frag
-    preprocessor_defines ALPHA_BLEND=1,FLOW_PORTAL=1
+    preprocessor_defines FLOW_PORTAL=1
     default_params
     {
         param_named albedoTex int 0

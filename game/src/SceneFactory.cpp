@@ -34,8 +34,11 @@ PortalVisual createPortal(eng::Renderer& r, glm::vec3 floorPosition,
         r.attachMesh(frame, r.loadObj(style.frameMesh), style.frameMaterial,
                      false);
     }
+    // The compressed frame spans local z [1.04, 2.0]. Put the opaque
+    // membrane just behind it so it never intersects the masonry and cannot
+    // z-fight or reorder as the view angle changes.
     const eng::NodeHandle arch = r.createNode(
-        out.root, {0.0f, style.height, style.frameMesh.empty() ? 0.0f : 1.82f});
+        out.root, {0.0f, style.height, style.frameMesh.empty() ? 0.0f : 1.0f});
     out.field = r.createNode(arch);
     if (authoredFrame) {
         r.setScale(out.field, {style.fieldScale.x, 1.0f, style.fieldScale.y});
