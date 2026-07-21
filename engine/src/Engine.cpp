@@ -34,11 +34,12 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     const std::string title = mConfig.getString("window.title", "eng");
     const int width = static_cast<int>(mConfig.getNumber("window.width", 960));
     const int height = static_cast<int>(mConfig.getNumber("window.height", 720));
+    const bool vsync = mConfig.getBool("window.vsync", false);
 
     if (!mImpl->platform.init(title, width, height))
         return false;
     if (!detail::coreOf(mRenderer).init(mImpl->platform.nativeHandle(), width,
-                                        height, title, appAssetDir)) {
+                                        height, title, appAssetDir, vsync)) {
         shutdown();
         return false;
     }

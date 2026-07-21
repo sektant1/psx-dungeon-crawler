@@ -18,7 +18,8 @@ namespace eng {
 RenderCore::~RenderCore() { shutdown(); }
 
 bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
-                      const std::string& title, const std::string& appAssetDir)
+                      const std::string& title, const std::string& appAssetDir,
+                      bool vsync)
 {
     // Fully programmatic setup: no plugins.cfg / ogre.cfg, no RTSS -- all
     // materials are hand-written GLSL.
@@ -31,7 +32,7 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
 
     Ogre::NameValuePairList params;
     params["externalWindowHandle"] = std::to_string(nativeWindowHandle);
-    params["vsync"] = "true";
+    params["vsync"] = vsync ? "true" : "false";
     mWindow = mRoot->createRenderWindow(title, width, height, false, &params);
     mSceneMgr = mRoot->createSceneManager();
 

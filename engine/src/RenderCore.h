@@ -21,7 +21,8 @@ class RenderCore
 public:
     ~RenderCore(); // calls shutdown(); safe if already shut down
     bool init(uintptr_t nativeWindowHandle, int width, int height,
-              const std::string& title, const std::string& appAssetDir);
+              const std::string& title, const std::string& appAssetDir,
+              bool vsync);
     // Brings up the PSX/Stylized post chain (scene downscale + stylize +
     // dither) if not already active. Idempotent; the chain stays on once up.
     void enablePostChain();
