@@ -1,8 +1,8 @@
-// dungeon-crawler scaffold: FPS walk through a modular PSX dungeon
-// (DungeonMap + dungeon.toml), with the demo scene (crystals, boxes,
-// sparkles, light shaft) shared via samples/common/DemoScene +
-// demo_scene.toml sitting in the great hall. Game-specific lighting
-// overrides are applied after the scene loads.
+// dungeon-crawler: FPS walk through a procedurally generated PSX dungeon
+// (DungeonGen -> DungeonMap), with the shared demo scene (crystals, chest,
+// sparkles, light shaft) sitting in the generated level's anchor room.
+// A whole level is built by buildLevel() into a Level bundle; level
+// transitions (portals) clear the scene and rebuild.
 
 #include "DungeonGen.h"
 #include "DungeonMap.h"
@@ -13,6 +13,7 @@
 #include <imgui.h>
 
 #include <eng/Engine.h>
+#include <eng/Log.h>
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -20,60 +21,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
-int main(int, char**)
+// Per-scene palette + shader grade (verdigris). Must re-run after every
+// scene rebuild, so it lives in its own function called from buildLevel.
+static void applyPalette(eng::Renderer& r, const DemoScene& scene)
 {
-    // Dev self-test: PSX_GEN_DUMP=<seed> prints a generated grid and exits,
-    // no window/Ogre. Eyeball connectivity + room shapes across seeds.
-    if (const char* dump = std::getenv("PSX_GEN_DUMP")) {
-        const auto grid = gen::generate(uint32_t(std::strtoul(dump, nullptr, 10)));
-        for (const std::string& row : grid)
-            std::printf("%s\n", row.c_str());
-        return 0;
-    }
-
-    eng::Engine engine;
-    const std::string assets = APP_ASSET_DIR;
-    if (!engine.init(assets + "/game.toml", assets))
-        return 1;
-    eng::Renderer& r = engine.renderer();
-
-    r.setCameraFov(70.0f);
-    // Far clip rides the fog: at 30 m the exponential murk (density 0.12)
-    // passes ~2.7 % and the background matches the fog colour, so the far
-    // plane is invisible; regions beyond it frustum-cull entirely. Also
-    // tightens the MRT depth encode for the stylize/ink pass.
-    r.setCameraClip(0.05f, 30.0f);
-
-    // --------------------------------------------------------- dungeon ---
-    // Modular dungeon from the PSX_Modular_Medieval tile set, laid out in
-    // dungeon.toml. The 'C' cell (great hall centre) sits at the world
-    // origin so the shared DemoScene lands inside the hall.
-    // Procedurally generated level (PSX_GEN_SEED overrides the default seed).
-    // The generator's anchor 'C' room lands at the world origin so the shared
-    // DemoScene still sits centred inside it.
-    uint32_t seed = 1;
-    if (const char* s = std::getenv("PSX_GEN_SEED"))
-        seed = uint32_t(std::strtoul(s, nullptr, 10));
-    DungeonMap dungeon;
-    if (!dungeon.loadFromRows(r, gen::generate(seed), assets + "/meshes/tiles/",
-                              assets + "/meshes/props/"))
-        return 1;
-
-    // ------------------------------------------------------ shared scene ---
-    // Sun parented to the root: static here, orbiting in the demo.
-    DemoScene scene;
-    DemoScene::Options sceneOpts;
-    sceneOpts.crystals = true;     // glassy spires ring the treasure shrine
-    sceneOpts.boxes = false;       // movers replaced by the treasure chest
-    if (!scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", eng::kRootNode,
-                    sceneOpts))
-        return 1;
-
-    // ------------------------------------------- game lighting overrides ---
-    // Dark-fantasy grade: the dungeon is torch-lit. The demo's daylight
-    // palette (bright sun, blue fog, high ambient) is replaced wholesale --
-    // cold near-black ambience, warm light only where torches burn.
     const auto lin = [](float srgb) { return std::pow(srgb, 2.2f); };
     // Faint verdigris ambient: green-tinted so unlit stone reads mossy and
     // torch pools read warm by contrast.
@@ -108,19 +61,54 @@ int main(int, char**)
     r.setMaterialParam("PSX/PixelStylize", "highlightStrength", 0.12f);
     // Torch-only bloom: only flames/embers/singularity cross the threshold.
     r.setBloomParams(0.85f, 0.6f);
+}
+
+// Everything a built level owns that the main loop animates or references.
+// Swapped atomically on a transition (clearScene + buildLevel).
+struct Level {
+    DungeonMap map;
+    DemoScene scene;
+    eng::NodeHandle chestBase{}, chestSpin{};
+    eng::LightHandle chestGlow{};
+    glm::vec3 chestGlowColour{0.0f};
+    glm::vec3 spawn{0.0f}, exit{0.0f};
+    eng::NodeHandle downPortal{};
+    eng::NodeHandle upPortal{}; // invalid at depth 0
+};
+
+// Build a complete level (dungeon + demo scene + props + chest + portals)
+// into the (already-clear) scene. depth>0 adds an up-portal at the entry.
+static Level buildLevel(eng::Renderer& r, const std::string& assets,
+                        uint32_t seed, int depth)
+{
+    Level lv;
+
+    // --------------------------------------------------------- dungeon ---
+    // Procedurally generated level; the anchor 'C' room lands at the world
+    // origin so the shared DemoScene sits centred inside it.
+    if (!lv.map.loadFromRows(r, gen::generate(seed), assets + "/meshes/tiles/",
+                             assets + "/meshes/props/")) {
+        eng::log::error("buildLevel: map load failed");
+        return lv;
+    }
+    lv.spawn = lv.map.spawn();
+    lv.exit = lv.map.exitPos();
+
+    // ------------------------------------------------------ shared scene ---
+    DemoScene::Options sceneOpts;
+    sceneOpts.crystals = true;     // glassy spires ring the treasure shrine
+    sceneOpts.boxes = false;       // movers replaced by the treasure chest
+    lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", eng::kRootNode,
+                  sceneOpts);
+
+    applyPalette(r, lv.scene);
 
     // ------------------------------------------------- set dressing ---
-    // Medieval props (PSX_Modular_Medieval + medievalweaponspack
-    // conversions in meshes/props) placed per room of dungeon.toml.
-    // Cell centres: x = (col-3)*4, z = (row-7)*4 ('C' is col 3, row 7).
+    // Medieval props placed around the anchor room (positions authored for
+    // the shared centrepiece layout at the world origin).
     {
         const std::string props = assets + "/meshes/props/";
         const auto mesh = [&](const char* f) { return r.loadObj(props + f); };
-        // Props cast stencil shadows (kit meshes are closed enough to
-        // extrude); the dungeon tiles themselves only receive.
-        // 'cast' opts a prop into stencil shadows. Only closed-ish meshes
-        // qualify -- open sheet meshes (crate, haybale, table top) extrude
-        // broken shadow volumes that smear dark patches over the walls.
         const auto place = [&](eng::MeshHandle m, const char* mat,
                                glm::vec3 pos, float yawDeg,
                                glm::vec3 scale = glm::vec3(1.0f),
@@ -134,7 +122,6 @@ int main(int, char**)
             r.attachMesh(n, m, mat, cast);
             return n;
         };
-        // Two-primitive props share one node (per-primitive OBJ split).
         const auto place2 = [&](eng::MeshHandle m0, const char* mat0,
                                 eng::MeshHandle m1, const char* mat1,
                                 glm::vec3 pos, float yawDeg,
@@ -156,7 +143,6 @@ int main(int, char**)
         eng::MeshHandle vase1 = mesh("prop_vase_p1.obj");
 
         // --- entry hall (z ~ -24): a market table greets the player.
-        // Table origin sits at the leg tops (legs span y in [-0.88, 0]).
         eng::NodeHandle table = place2(
             mesh("prop_table_p0.obj"), "Game/PropWood",
             mesh("prop_table_p1.obj"), "Game/PropMarket",
@@ -184,21 +170,17 @@ int main(int, char**)
         }
         place(hay, "Game/PropHay", {8.7f, 0.0f, 4.4f}, 20.0f, noScale, false);
         place(hay, "Game/PropHay", {7.6f, 0.0f, 5.0f}, -60.0f, noScale, false);
-        // Pumpkins bulge 0.08 below their origin; lift onto the floor.
         place(pumpkin, "Game/PropMarketMisc", {9.2f, 0.08f, 3.4f}, 0.0f);
         place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
                {8.8f, 0.0f, -4.5f}, 0.0f);
         place(sack, "Game/PropJute", {9.1f, 0.0f, -3.4f}, -15.0f);
 
-        // --- vault (z ~ 18..26): the loot room. Sword stabbed into the
-        // floor, shield leaning on a barrel. The weapons-pack meshes are
-        // authored huge; scale to roughly life size.
+        // --- vault (z ~ 18..26): sword stabbed into the floor, shield on a
+        // barrel. The weapons-pack meshes are authored huge; scale down.
         {
             eng::NodeHandle sword =
                 r.createNode(eng::kRootNode, {0.0f, 1.15f, 24.0f});
             r.setScale(sword, glm::vec3(0.06f));
-            // Blade is modelled pointing +y; roll past 180 so it points
-            // down with a slight stuck-in-the-dirt lean.
             r.setOrientation(sword,
                              glm::angleAxis(glm::radians(168.0f),
                                             glm::vec3(0, 0, 1)) *
@@ -223,14 +205,12 @@ int main(int, char**)
                mesh("prop_barrel_open_p1.obj"), "Game/PropBauerhausTwoSided",
                {4.2f, 0.0f, 24.0f}, -30.0f);
 
-        // --- great hall braziers: the demo's two omni lamps floated in
-        // mid-air; ground each in an open barrel with a fire on the rim
-        // and lift the light just above the flames. (The animated cubes
-        // stay as they are.)
+        // --- braziers: ground the demo's two omni lamps in open barrels with
+        // a fire on the rim and lift the light just above the flames.
         {
             eng::MeshHandle brz0 = mesh("prop_barrel_open_p0.obj");
             eng::MeshHandle brz1 = mesh("prop_barrel_open_p1.obj");
-            const auto& omnis = scene.omniNodes();
+            const auto& omnis = lv.scene.omniNodes();
             const float xs[2] = {-4.0f, 4.0f};
             for (size_t i = 0; i < omnis.size() && i < 2; ++i) {
                 place2(brz0, "Game/PropPlanksTwoSided", brz1,
@@ -252,24 +232,12 @@ int main(int, char**)
     }
 
     // ------------------------------------------- hall centrepiece ---
-    // Replaces the demo's crystal field and animated boxes (formerly two
-    // spinning "tesseracts"). The great hall is the rest/reward beat
-    // between the entry hall and the vault, so the centrepiece is a
-    // treasure shrine: a single low-poly chest levitating over the origin
-    // like enchanted loot, slowly turning so every facet catches the
-    // braziers. The demo's crystal spires (radius ~2, glassy rim sheen)
-    // ring it as the arcane apparatus holding it aloft; offering clutter
-    // sits one step further out. A warm gold spill under the lid makes it
-    // the hall's landmark from every doorway and pulses like banked coals.
-    eng::NodeHandle chestBase;
-    eng::NodeHandle chestSpin;
-    eng::LightHandle chestGlow;
-    const glm::vec3 chestGlowColour = glm::vec3(1.0f, 0.62f, 0.22f) * 1.6f;
+    // Treasure shrine: a low-poly chest levitating over the origin (anchor
+    // room centre), ringed by the demo's crystal spires + offering clutter,
+    // with a warm gold spill that pulses like banked coals.
+    lv.chestGlowColour = glm::vec3(1.0f, 0.62f, 0.22f) * 1.6f;
     {
         const std::string props = assets + "/meshes/props/";
-        // Offering ring at radius 3.2 -- outside the crystal spires (which
-        // reclaimed their original ~2.1 spots): vases and sacks
-        // alternating, tribute piled around the hoard.
         eng::MeshHandle vase0 = r.loadObj(props + "prop_vase_p0.obj");
         eng::MeshHandle vase1 = r.loadObj(props + "prop_vase_p1.obj");
         eng::MeshHandle sack = r.loadObj(props + "prop_jutesack.obj");
@@ -286,34 +254,60 @@ int main(int, char**)
             }
         }
 
-        // The chest (low-poly-chest pack, converted via gltf_to_obj.py) is
-        // authored ~0.2 units wide; scale to a ~1.2 m footprint. Base node
-        // bobs (and carries the unscaled sparkles + glow light); the child
-        // spin node holds the 6x scale and the slow yaw turn.
-        chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
-        chestSpin = r.createNode(chestBase);
-        r.setScale(chestSpin, glm::vec3(6.0f));
-        r.attachMesh(chestSpin, r.loadObj(props + "prop_chest.obj"),
+        lv.chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
+        lv.chestSpin = r.createNode(lv.chestBase);
+        r.setScale(lv.chestSpin, glm::vec3(6.0f));
+        r.attachMesh(lv.chestSpin, r.loadObj(props + "prop_chest.obj"),
                      "Game/PropChest", true);
-
-        // Treasure shimmer rides the bob: sparkles around the lid; one warm
-        // omni (replacing the two violet tesseract lights -- net one slot
-        // freed of the shader's 16) spills gold over spires and braziers.
-        r.attachParticles(chestBase, "PSX/Sparkles");
+        r.attachParticles(lv.chestBase, "PSX/Sparkles");
         eng::LightDesc glow;
-        glow.colour = chestGlowColour;
+        glow.colour = lv.chestGlowColour;
         glow.range = 6.0f;
-        chestGlow = r.attachLight(chestBase, glow);
+        lv.chestGlow = r.attachLight(lv.chestBase, glow);
     }
+
+    // Portals are attached in Task 4 (depth used there for the up-portal).
+    (void)depth;
+    return lv;
+}
+
+int main(int, char**)
+{
+    // Dev self-test: PSX_GEN_DUMP=<seed> prints a generated grid and exits,
+    // no window/Ogre. Eyeball connectivity + room shapes across seeds.
+    if (const char* dump = std::getenv("PSX_GEN_DUMP")) {
+        const auto grid = gen::generate(uint32_t(std::strtoul(dump, nullptr, 10)));
+        for (const std::string& row : grid)
+            std::printf("%s\n", row.c_str());
+        return 0;
+    }
+
+    eng::Engine engine;
+    const std::string assets = APP_ASSET_DIR;
+    if (!engine.init(assets + "/game.toml", assets))
+        return 1;
+    eng::Renderer& r = engine.renderer();
+
+    r.setCameraFov(70.0f);
+    // Far clip rides the fog: at 30 m the exponential murk (density 0.12)
+    // passes ~2.7 % and the background matches the fog colour, so the far
+    // plane is invisible; regions beyond it frustum-cull entirely.
+    r.setCameraClip(0.05f, 30.0f);
+
+    uint32_t baseSeed = 1;
+    if (const char* s = std::getenv("PSX_GEN_SEED"))
+        baseSeed = uint32_t(std::strtoul(s, nullptr, 10));
+    Level level = buildLevel(r, assets, baseSeed, 0);
 
     // ------------------------------------------------------- FPS player ---
     FpsController player;
-    player.init(r, dungeon.spawn(),
-                float(engine.config().getNumber("player.speed", 3.0)),
-                float(engine.config().getNumber("player.mouse_sensitivity", 0.002)),
-                glm::vec3(-1000.0f), glm::vec3(1000.0f));
-    player.setResolver([&dungeon](glm::vec3 from, glm::vec3 to) {
-        return dungeon.resolveMove(from, to, 0.35f);
+    const float speed = float(engine.config().getNumber("player.speed", 3.0));
+    const float sens =
+        float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
+    player.init(r, level.spawn, speed, sens, glm::vec3(-1000.0f),
+                glm::vec3(1000.0f));
+    player.setResolver([&level](glm::vec3 from, glm::vec3 to) {
+        return level.map.resolveMove(from, to, 0.35f);
     });
     // Distance-based readability: a weak cool light carried at the player's
     // head keeps the near field legible; the fog swallows everything else.
@@ -351,33 +345,32 @@ int main(int, char**)
         }
 
         animTime += dt;
-        scene.update(r, animTime);
-        dungeon.update(r, animTime); // torch flicker
-        dungeon.updateVisibility(r, player.eyePosition(), 30.0f);
+        level.scene.update(r, animTime);
+        level.map.update(r, animTime); // torch flicker
+        level.map.updateVisibility(r, player.eyePosition(), 30.0f);
 
-        // Levitating loot: slow bob + steady yaw turn so every facet
-        // catches the braziers; glow pulses like banked coals (two-sine
-        // breathing, never below ~0.8x).
-        r.setPosition(chestBase, {0.0f, 1.35f + 0.25f * std::sin(animTime * 0.9f),
-                                  0.0f});
-        r.setOrientation(chestSpin,
+        // Levitating loot: slow bob + steady yaw turn; glow pulses like
+        // banked coals (two-sine breathing, never below ~0.8x).
+        r.setPosition(level.chestBase,
+                      {0.0f, 1.35f + 0.25f * std::sin(animTime * 0.9f), 0.0f});
+        r.setOrientation(level.chestSpin,
                          glm::angleAxis(animTime * 0.8f, glm::vec3(0, 1, 0)));
         const float pulse = 0.9f + 0.1f * std::sin(animTime * 1.7f) +
                             0.05f * std::sin(animTime * 4.3f);
-        r.setLightColour(chestGlow, chestGlowColour * pulse);
+        r.setLightColour(level.chestGlow, level.chestGlowColour * pulse);
 
         player.update(in, r, dt);
 
         // Torch interaction: aim at a torch within reach -> HUD prompt;
         // E toggles the flame + light.
         const int aimed =
-            dungeon.findTorch(player.eyePosition(), player.forward(), 2.5f);
+            level.map.findTorch(player.eyePosition(), player.forward(), 2.5f);
         if (aimed >= 0) {
-            engine.debugUi().setHudPrompt(dungeon.torchLit(aimed)
+            engine.debugUi().setHudPrompt(level.map.torchLit(aimed)
                                               ? "Press [E] to snuff the torch"
                                               : "Press [E] to light the torch");
             if (in.wasPressed("interact"))
-                dungeon.toggleTorch(r, aimed);
+                level.map.toggleTorch(r, aimed);
         } else {
             engine.debugUi().setHudPrompt("");
         }
