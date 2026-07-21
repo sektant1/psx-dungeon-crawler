@@ -189,6 +189,33 @@ void RenderCore::markPostChainDirty()
 
 void RenderCore::renderFrame(float dt) { mRoot->renderOneFrame(dt); }
 
+void RenderCore::frameStats(size_t& batches, size_t& triangles) const
+{
+    batches = 0;
+    triangles = 0;
+    const auto add = [&](Ogre::RenderTarget* rt) {
+        if (!rt)
+            return;
+        const auto& s = rt->getStatistics();
+        batches += size_t(s.batchCount);
+        triangles += size_t(s.triangleCount);
+    };
+    add(mWindow);
+    if (!mViewport || !mChainAdded)
+        return;
+    Ogre::CompositorChain* chain =
+        Ogre::CompositorManager::getSingleton().getCompositorChain(mViewport);
+    if (!chain)
+        return;
+    // Texture names as declared in psx.compositor (same list setPixelSize
+    // patches); the "mrt" entry is the scene pass.
+    for (Ogre::CompositorInstance* ci : chain->getCompositorInstances())
+        if (ci->getEnabled())
+            for (const char* tex :
+                 {"mrt", "rt_post", "rt_final", "rt_bright", "rt_blur"})
+                add(ci->getRenderTarget(tex));
+}
+
 void RenderCore::onResize(int width, int height)
 {
     if (!mWindow)

@@ -186,12 +186,21 @@ void DebugUi::Impl::buildFrame(float dt)
 
 void DebugUi::Impl::drawStats()
 {
-    const auto& st = core->window()->getStatistics();
-    ImGui::Text("FPS %.1f (avg %.1f)", st.lastFPS, st.avgFPS);
+    // FPS from the engine-side frame-time ring: window lastFPS needs a
+    // second of frames before it primes (reads 0.0 in short captures).
+    float accMs = 0.0f;
+    for (float ms : frameMs)
+        accMs += ms;
+    const float avgMs = accMs / float(frameMs.size());
+    ImGui::Text("FPS %.1f (avg %.2f ms)", avgMs > 0.0f ? 1000.0f / avgMs : 0.0f,
+                avgMs);
     ImGui::PlotLines("##frametimes", frameMs.data(), int(frameMs.size()),
                      frameMsIdx, "frame ms", 0.0f, 33.0f, ImVec2(-1, 40));
-    ImGui::Text("batches %zu  triangles %zu", size_t(st.batchCount),
-                size_t(st.triangleCount));
+    // Whole-frame counts incl. the compositor MRT scene pass (the window's
+    // own statistics only cover the final quads).
+    size_t batches = 0, tris = 0;
+    core->frameStats(batches, tris);
+    ImGui::Text("batches %zu  triangles %zu", batches, tris);
     const Ogre::Vector3 p = core->camera()->getDerivedPosition();
     ImGui::Text("window %ux%u  cam %.2f %.2f %.2f", core->window()->getWidth(),
                 core->window()->getHeight(), p.x, p.y, p.z);

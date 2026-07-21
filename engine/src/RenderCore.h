@@ -36,6 +36,11 @@ public:
     void writeScreenshot(const std::string& path);
     void shutdown();
 
+    // Whole-frame batch/triangle counts: window + every live post-chain
+    // target (the scene renders into the compositor MRT, which the window's
+    // own statistics never see).
+    void frameStats(size_t& batches, size_t& triangles) const;
+
     Ogre::SceneManager* sceneMgr() const { return mSceneMgr; }
     Ogre::Camera* camera() const { return mCamera; }
     Ogre::Viewport* viewport() const { return mViewport; }
