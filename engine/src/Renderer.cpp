@@ -225,6 +225,28 @@ void Renderer::setStaticBatchVisible(StaticBatchHandle batch, bool visible)
     mImpl->staticBatches[batch.id - 1].sg->setVisible(visible);
 }
 
+void Renderer::clearScene()
+{
+    Ogre::SceneManager* sm = mImpl->core.sceneMgr();
+    // Detach + destroy every SceneNode under the root, then free the objects
+    // those nodes referenced (Ogre owns them; removing nodes alone leaks).
+    sm->getRootSceneNode()->removeAndDestroyAllChildren();
+    sm->destroyAllStaticGeometry();
+    sm->destroyAllParticleSystems();
+    sm->destroyAllEntities();
+    sm->destroyAllManualObjects();
+    sm->destroyAllLights();
+    // Reset handle bookkeeping; re-register the root as kRootNode (id 1), the
+    // same way detail::registerRoot does at startup.
+    mImpl->nodes.clear();
+    mImpl->lights.clear();
+    mImpl->staticBatches.clear();
+    mImpl->savedMaterials.clear();
+    mImpl->meshNames.clear(); // buildLevel re-loadObj's every mesh it needs
+    mImpl->nameCounter = 0;
+    mImpl->nodes.push_back(sm->getRootSceneNode());
+}
+
 void Renderer::attachParticles(NodeHandle node, const std::string& templateName)
 {
     try {

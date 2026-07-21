@@ -96,6 +96,10 @@ public:
     void buildStaticBatch(StaticBatchHandle batch); // bake the records
     // Show/hide a whole static batch (room-level occlusion culling).
     void setStaticBatchVisible(StaticBatchHandle batch, bool visible);
+    // Destroy all scene content (nodes, meshes, lights, particles, static
+    // batches, entities) except the camera, resetting handle allocation so
+    // fresh handles start over. Used for level transitions.
+    void clearScene();
     void attachParticles(NodeHandle node, const std::string& templateName);
     void attachCamera(NodeHandle node); // moves the single camera to this node
     LightHandle attachLight(NodeHandle node, const LightDesc& desc);
