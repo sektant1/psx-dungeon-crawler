@@ -103,6 +103,99 @@ struct Builder {
         else          { carveV(ax, ay, by); carveH(by, ax, bx); }
     }
 
+    // Corridor cells orthogonally touching a room become arch doorways: this
+    // splits room and corridor into separate occlusion regions joined by the
+    // arch. Collected from the label grid (pre-arch), applied by the caller.
+    std::vector<std::pair<int, int>> archCells() const {
+        std::vector<std::pair<int, int>> out;
+        for (int y = 1; y < kH - 1; ++y)
+            for (int x = 1; x < kW - 1; ++x) {
+                if (lab[size_t(y)][size_t(x)] != 'c') continue;
+                const bool touchesRoom =
+                    lab[size_t(y - 1)][size_t(x)] == 'r' ||
+                    lab[size_t(y + 1)][size_t(x)] == 'r' ||
+                    lab[size_t(y)][size_t(x - 1)] == 'r' ||
+                    lab[size_t(y)][size_t(x + 1)] == 'r';
+                if (touchesRoom) out.push_back({x, y});
+            }
+        return out;
+    }
+
+    // Entry = leaf room centre nearest (0,0); anchor = farthest leaf from entry.
+    void pickSetpieceLeaves(int& entry, int& anchor) const {
+        entry = -1; anchor = -1;
+        double bestNear = 1e18, bestFar = -1.0;
+        int ecx = 0, ecy = 0;
+        for (int i = 0; i < int(nodes.size()); ++i) {
+            if (!nodes[size_t(i)].leaf) continue;
+            const double cx = nodes[size_t(i)].rx + nodes[size_t(i)].rw / 2.0;
+            const double cy = nodes[size_t(i)].ry + nodes[size_t(i)].rh / 2.0;
+            const double d = cx * cx + cy * cy;
+            if (d < bestNear) { bestNear = d; entry = i; ecx = int(cx); ecy = int(cy); }
+        }
+        for (int i = 0; i < int(nodes.size()); ++i) {
+            if (!nodes[size_t(i)].leaf || i == entry) continue;
+            const double cx = nodes[size_t(i)].rx + nodes[size_t(i)].rw / 2.0;
+            const double cy = nodes[size_t(i)].ry + nodes[size_t(i)].rh / 2.0;
+            const double d = (cx - ecx) * (cx - ecx) + (cy - ecy) * (cy - ecy);
+            if (d > bestFar) { bestFar = d; anchor = i; }
+        }
+    }
+
+    // Grow a leaf's room to >= 5x5 (clamped to leaf bounds), re-carving floor.
+    void growRoom(int leaf) {
+        Node& n = nodes[size_t(leaf)];
+        const int rw = std::min(n.w - 2, std::max(5, n.rw));
+        const int rh = std::min(n.h - 2, std::max(5, n.rh));
+        n.rx = n.x + (n.w - rw) / 2;
+        n.ry = n.y + (n.h - rh) / 2;
+        n.rw = rw; n.rh = rh;
+        for (int yy = n.ry; yy < n.ry + rh; ++yy)
+            for (int xx = n.rx; xx < n.rx + rw; ++xx)
+                lab[size_t(yy)][size_t(xx)] = 'r';
+    }
+
+    // One torch per room: a room-edge floor cell (still '.') adjacent to wall.
+    void placeTorch(const Node& n, std::vector<std::string>& g) {
+        for (int tries = 0; tries < 8; ++tries) {
+            const int x = rnd(n.rx, n.rx + n.rw - 1);
+            const int y = rnd(n.ry, n.ry + n.rh - 1);
+            const bool edge = (x == n.rx || x == n.rx + n.rw - 1 ||
+                               y == n.ry || y == n.ry + n.rh - 1);
+            if (edge && g[size_t(y)][size_t(x)] == '.') {
+                g[size_t(y)][size_t(x)] = 'L';
+                return;
+            }
+        }
+    }
+
+    // Flood over walkable cells in g from (sx,sy); returns reached count and
+    // whether (tx,ty) was reached.
+    int flood(const std::vector<std::string>& g, int sx, int sy,
+              int tx, int ty, bool& reachedTarget) const {
+        std::vector<std::string> seen(size_t(kH), std::string(size_t(kW), '0'));
+        std::vector<std::pair<int, int>> st{{sx, sy}};
+        seen[size_t(sy)][size_t(sx)] = '1';
+        int count = 0;
+        reachedTarget = false;
+        while (!st.empty()) {
+            auto [x, y] = st.back(); st.pop_back();
+            ++count;
+            if (x == tx && y == ty) reachedTarget = true;
+            const std::pair<int, int> nb[4] = {
+                {x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}};
+            for (auto [nx, ny] : nb) {
+                if (nx < 0 || ny < 0 || nx >= kW || ny >= kH) continue;
+                if (seen[size_t(ny)][size_t(nx)] == '1') continue;
+                const char cc = g[size_t(ny)][size_t(nx)];
+                if (cc == '#' || cc == ' ') continue;
+                seen[size_t(ny)][size_t(nx)] = '1';
+                st.push_back({nx, ny});
+            }
+        }
+        return count;
+    }
+
     std::vector<std::string> emitPlain() const {
         std::vector<std::string> g(size_t(kH), std::string(size_t(kW), '#'));
         for (int y = 0; y < kH; ++y)
@@ -123,12 +216,57 @@ struct Builder {
 
 std::vector<std::string> generate(uint32_t seed)
 {
-    Builder b(seed);
-    b.nodes.push_back({1, 1, kW - 2, kH - 2}); // interior root (1-cell border)
-    b.split(0, 0);
-    b.carveRooms();
-    b.connect(0);
-    return b.emitPlain(); // Task 3 replaces this with arches + set-pieces
+    for (uint32_t attempt = 0; attempt < 32; ++attempt) {
+        Builder b(seed + attempt);
+        b.nodes.push_back({1, 1, kW - 2, kH - 2});
+        b.split(0, 0);
+        const int leaves = b.leafCount();
+        if (leaves < 6 || leaves > 10) continue; // want 6-10 rooms
+        b.carveRooms();
+        b.connect(0);
+
+        int entry, anchor;
+        b.pickSetpieceLeaves(entry, anchor);
+        if (entry < 0 || anchor < 0) continue;
+        b.growRoom(anchor); // ensure the demo scene fits (>= 5x5)
+
+        // Floor/wall grid, then arches, torches, set-pieces.
+        std::vector<std::string> g(size_t(kH), std::string(size_t(kW), '#'));
+        for (int y = 0; y < kH; ++y)
+            for (int x = 0; x < kW; ++x)
+                if (b.lab[size_t(y)][size_t(x)] != '#')
+                    g[size_t(y)][size_t(x)] = '.';
+        for (auto [x, y] : b.archCells())
+            g[size_t(y)][size_t(x)] = 'A';
+        for (const auto& n : b.nodes)
+            if (n.leaf) b.placeTorch(n, g);
+
+        const int scx = b.nodes[size_t(entry)].rx + b.nodes[size_t(entry)].rw / 2;
+        const int scy = b.nodes[size_t(entry)].ry + b.nodes[size_t(entry)].rh / 2;
+        const int ccx = b.nodes[size_t(anchor)].rx + b.nodes[size_t(anchor)].rw / 2;
+        const int ccy = b.nodes[size_t(anchor)].ry + b.nodes[size_t(anchor)].rh / 2;
+        g[size_t(scy)][size_t(scx)] = 'S';
+        g[size_t(ccy)][size_t(ccx)] = 'C';
+
+        // Connectivity: from S reach C and every walkable cell.
+        bool reachedC = false;
+        const int reached = b.flood(g, scx, scy, ccx, ccy, reachedC);
+        int walkable = 0;
+        for (int y = 0; y < kH; ++y)
+            for (int x = 0; x < kW; ++x)
+                if (g[size_t(y)][size_t(x)] != '#') ++walkable;
+        if (reachedC && reached == walkable)
+            return g;
+        // else retry next seed
+    }
+
+    // Fallback: minimal valid grid (one S, one C, one A, connected) so the
+    // game always boots even if 32 seeds somehow all fail.
+    return {
+        "#######",
+        "#S.A.C#",
+        "#######",
+    };
 }
 
 } // namespace gen
