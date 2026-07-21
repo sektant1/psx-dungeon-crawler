@@ -256,6 +256,22 @@ std::vector<std::string> generate(uint32_t seed)
         g[size_t(scy)][size_t(scx)] = 'S';
         g[size_t(ccy)][size_t(ccx)] = 'C';
 
+        // Down-portal 'X': a floor cell in the anchor room offset from 'C'
+        // (the demo-scene centre). Prefer two cells up; else any other floor
+        // cell in the room.
+        {
+            const Node& ar = b.nodes[size_t(anchor)];
+            int px = ccx, py = ccy;
+            if (ccy - 2 >= ar.ry && g[size_t(ccy - 2)][size_t(ccx)] == '.')
+                py = ccy - 2;
+            else {
+                for (int yy = ar.ry; yy < ar.ry + ar.rh; ++yy)
+                    for (int xxx = ar.rx; xxx < ar.rx + ar.rw; ++xxx)
+                        if (g[size_t(yy)][size_t(xxx)] == '.') { px = xxx; py = yy; }
+            }
+            g[size_t(py)][size_t(px)] = 'X';
+        }
+
         // Connectivity: from S reach C and every walkable cell.
         bool reachedC = false;
         const int reached = b.flood(g, scx, scy, ccx, ccy, reachedC);
@@ -271,9 +287,9 @@ std::vector<std::string> generate(uint32_t seed)
     // Fallback: minimal valid grid (one S, one C, one A, connected) so the
     // game always boots even if 32 seeds somehow all fail.
     return {
-        "#######",
-        "#S.A.C#",
-        "#######",
+        "#########",
+        "#S.A.X.C#",
+        "#########",
     };
 }
 

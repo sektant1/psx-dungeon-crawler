@@ -43,6 +43,7 @@ public:
                       const std::string& propMeshDir);
 
     glm::vec3 spawn() const { return mSpawn; }
+    glm::vec3 exitPos() const { return mExit; }
 
     // Torch light flicker: call once per frame with the animation clock.
     void update(eng::Renderer& r, float t) const;
@@ -115,4 +116,5 @@ private:
     float mCell = 4.0f;
     glm::vec3 mOrigin{0.0f}; // world position of cell (0,0)'s NW corner
     glm::vec3 mSpawn{0.0f};
+    glm::vec3 mExit{0.0f}; // world pos of the 'X' down-portal cell
 };

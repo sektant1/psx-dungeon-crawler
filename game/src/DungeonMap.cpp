@@ -23,7 +23,7 @@ float lin(float srgb) { return std::pow(srgb, 2.2f); }
 
 bool isWalkableChar(char c)
 {
-    return c == '.' || c == 'A' || c == 'L' || c == 'S' || c == 'C';
+    return c == '.' || c == 'A' || c == 'L' || c == 'S' || c == 'C' || c == 'X';
 }
 
 } // namespace
@@ -118,11 +118,12 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
         eng::log::error("DungeonMap: empty grid");
         return false;
     }
-    int cCol = -1, cRow = -1, sCol = -1, sRow = -1;
+    int cCol = -1, cRow = -1, sCol = -1, sRow = -1, xCol = -1, xRow = -1;
     for (int row = 0; row < int(mRows.size()); ++row)
         for (int col = 0; col < int(mRows[row].size()); ++col) {
             if (mRows[row][col] == 'C') { cCol = col; cRow = row; }
             if (mRows[row][col] == 'S') { sCol = col; sRow = row; }
+            if (mRows[row][col] == 'X') { xCol = col; xRow = row; }
         }
     if (cCol < 0 || sCol < 0) {
         eng::log::error("DungeonMap: grid needs both a 'C' and an 'S' marker");
@@ -131,6 +132,10 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
     mOrigin = {-(cCol + 0.5f) * mCell, 0.0f, -(cRow + 0.5f) * mCell};
     mSpawn = {mOrigin.x + (sCol + 0.5f) * mCell, 0.0f,
               mOrigin.z + (sRow + 0.5f) * mCell};
+    mExit = (xCol >= 0)
+                ? glm::vec3{mOrigin.x + (xCol + 0.5f) * mCell, 0.0f,
+                           mOrigin.z + (xRow + 0.5f) * mCell}
+                : mSpawn; // no 'X' -> fall back to spawn (never absent)
 
     // --- room segmentation (occlusion-culling units) ---
     // Flood-fill walkable cells into rooms; 'A' arch cells are boundaries
