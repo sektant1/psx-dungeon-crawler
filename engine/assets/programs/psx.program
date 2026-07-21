@@ -357,6 +357,7 @@ fragment_program Stylize_FS glsl
         param_named outlineNormalSens float 0.6
         param_named outlineSharpness float 0.85
         param_named outlineDistFade float 0.08
+        param_named outlineDarkFade float 0.12
     }
 }
 
@@ -366,7 +367,7 @@ fragment_program BloomBright_FS glsl
     default_params
     {
         param_named sceneTex int 0
-        param_named bloomThreshold float 0.7
+        param_named bloomThreshold float 0.85
     }
 }
 
@@ -387,7 +388,7 @@ fragment_program BloomComposite_FS glsl
     {
         param_named sceneTex int 0
         param_named bloomTex int 1
-        param_named bloomIntensity float 0.8
+        param_named bloomIntensity float 0.6
         param_named bloomEnabled float 1.0
     }
 }

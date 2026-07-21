@@ -45,8 +45,9 @@ struct EnvState {
     float lightSteps = 0.0f; // diffuse posterization bands, 0 = smooth
     float fogDesatBoost = 0.0f; // distance desat/darken before fog mix
     bool bloom = true;
-    float bloomThreshold = 0.7f;
-    float bloomIntensity = 0.8f;
+    float bloomThreshold = 0.85f; // torch-only: flames/embers glow, walls don't
+    float bloomIntensity = 0.6f;
+    bool wireframe = false;  // debug view: models as light-blue mesh lines
     bool grade = false;             // colour grade in the dither pass
     float gradeDesaturate = 0.15f;
     float gradeContrast = 1.05f;
@@ -123,6 +124,9 @@ public:
     void setFogDesatBoost(float boost); // 0 = plain fog lerp
     void setBloomEnabled(bool enabled);    // off = pass-through composite
     void setBloomParams(float threshold, float intensity);
+    // Debug view: swaps every entity's materials for light-blue wireframe
+    // lines (PSX/DebugWireframe); off restores the original materials.
+    void setWireframeDebug(bool enabled);
     void setGradeEnabled(bool enabled); // colour grade before quantization
     void setGradeParams(float desaturate, float contrast,
                         glm::vec3 shadowTint, glm::vec3 midTint);
