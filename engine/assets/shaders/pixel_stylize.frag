@@ -23,6 +23,18 @@ uniform float outlineThickness;   // edge sample offset in low-res pixels (1..4)
 uniform float shadowThreshold;    // depth-edge smoothstep centre, default 0.25
 uniform float highlightThreshold; // normal-edge smoothstep centre, default 0.5
 uniform float highlightDarkFade;  // luma where highlights reach full, default 0.25
+
+// Ink outline (Boltgun-style): a hard contour drawn over the frame, separate
+// from the soft shadow/highlight tinting above. Depth silhouettes ink the
+// *near* object only (one-sided, so lines stay 1 tap wide); normal creases
+// add interior feature lines.
+uniform float outlineEnabled;     // 1.0/0.0
+uniform vec3 outlineColor;        // default black
+uniform float outlineOpacity;     // 0..1 ink coverage, default 0.85
+uniform float outlineDepthSens;   // relative depth-step gain, default 15
+uniform float outlineNormalSens;  // crease line gain (0 = silhouette only), 0.6
+uniform float outlineSharpness;   // 1 = hard pixel edge, 0 = soft, default 0.85
+uniform float outlineDistFade;    // exp(-depth*fade): ink dies into the fog, 0.08
 out vec4 fragColour;
 
 float getDepth(vec2 suv)
@@ -118,10 +130,48 @@ void main()
         normalDiff *= smoothstep(0.04, max(highlightDarkFade, 0.05), lum);
     }
 
+    // Ink outline: relative depth steps (dn - d) / d so a 10 cm ledge inks
+    // the same at 2 m and 10 m; normal disagreement adds interior creases.
+    float ink = 0.0;
+    if (outlineEnabled > 0.5) {
+        float d  = getDepth(uv);
+        float du = getDepth(uv + vec2( 0.0, -1.0) * e);
+        float dr = getDepth(uv + vec2( 1.0,  0.0) * e);
+        float dd = getDepth(uv + vec2( 0.0,  1.0) * e);
+        float dl = getDepth(uv + vec2(-1.0,  0.0) * e);
+        // Second difference (depth curvature), not first difference: a flat
+        // surface at ANY viewing angle has du+dd-2d ~ 0 (its per-pixel depth
+        // step is constant), so grazing corridor floors/walls never self-ink.
+        // A silhouette jumps on exactly one side, leaving a large positive
+        // curvature. Normalise by d so a ledge inks the same at 2 m and 10 m.
+        float rel = max(max(du + dd - 2.0 * d, dl + dr - 2.0 * d), 0.0) /
+                    max(d, 1e-3);
+        float edge = clamp(rel * outlineDepthSens, 0.0, 1.0);
+
+        vec3 n  = getNormal(uv);
+
+        vec3 nu = getNormal(uv + vec2( 0.0, -1.0) * e);
+        vec3 nr = getNormal(uv + vec2( 1.0,  0.0) * e);
+        vec3 nd = getNormal(uv + vec2( 0.0,  1.0) * e);
+        vec3 nl = getNormal(uv + vec2(-1.0,  0.0) * e);
+        float nEdge = max(max(1.0 - dot(n, nu), 1.0 - dot(n, nd)),
+                          max(1.0 - dot(n, nr), 1.0 - dot(n, nl)));
+        edge = max(edge, clamp(nEdge * outlineNormalSens, 0.0, 1.0));
+
+        // Sharpness narrows the smoothstep band around 0.5: at 1.0 the line
+        // is a hard step (crisp pixel ink), at 0 it fades in over the full
+        // range. Distance fade sinks far ink into the fog instead of
+        // leaving black wires floating in the murk.
+        float band = max((1.0 - outlineSharpness) * 0.5, 0.01);
+        edge = smoothstep(0.5 - band, 0.5 + band, edge);
+        ink = edge * outlineOpacity * exp(-d * outlineDistFade);
+    }
+
     vec3 final = original;
     final = mix(final, mix(original, highlightColor, highlightStrength),
                 normalDiff * highlightsEnabled);
     final = mix(final, mix(original, shadowColor, shadowStrength),
                 depthDiff * shadowsEnabled);
+    final = mix(final, outlineColor, ink * 0.0); // TEMP: ink neutered
     fragColour = vec4(final, 1.0);
 }

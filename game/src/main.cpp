@@ -336,6 +336,9 @@ int main(int, char**)
         }
 
         engine.renderFrame(dt);
+        static int dbgFrames = 0; // TEMP debug: dump one frame to disk
+        if (++dbgFrames == 90)
+            r.writeScreenshot("/tmp/frame_game.png");
     }
     engine.shutdown();
     return 0;

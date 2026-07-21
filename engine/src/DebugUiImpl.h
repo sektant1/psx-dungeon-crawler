@@ -47,6 +47,14 @@ struct DebugUi::Impl {
     float shadowThreshold = 0.25f;   // depth-edge detector centre
     float highlightThreshold = 0.5f; // normal-edge detector centre
     float highlightDarkFade = 0.25f; // luma where highlights reach full
+    // Ink outline (Boltgun-style hard contour).
+    bool outlineEnabled = true;
+    glm::vec3 outlineColor{0.0f};
+    float outlineOpacity = 0.85f;
+    float outlineDepthSens = 15.0f;
+    float outlineNormalSens = 0.6f;
+    float outlineSharpness = 0.85f;
+    float outlineDistFade = 0.08f;
 
     void init(RenderCore* c, Renderer* r) { core = c; renderer = r; }
 

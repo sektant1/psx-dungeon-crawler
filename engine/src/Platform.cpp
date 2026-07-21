@@ -8,6 +8,12 @@ namespace eng {
 
 bool Platform::init(const std::string& title, int width, int height)
 {
+    // Ogre's GL3Plus render window is created against an X11 handle, so SDL
+    // must run on X11 (XWayland). Under a native-Wayland session the x11
+    // union member of SDL_SysWMinfo aliases the wl_surface pointer, which
+    // Ogre rejects ("Invalid parentWindowHandle") before the first frame.
+    // Respect an explicit user override; otherwise pin the driver.
+    SDL_setenv("SDL_VIDEODRIVER", "x11", 0 /* no overwrite */);
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         log::error("Platform: SDL_Init failed: %s", SDL_GetError());
         return false;
@@ -21,7 +27,18 @@ bool Platform::init(const std::string& title, int width, int height)
     }
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);
-    SDL_GetWindowWMInfo(mWindow, &wmInfo);
+    if (!SDL_GetWindowWMInfo(mWindow, &wmInfo)) {
+        log::error("Platform: SDL_GetWindowWMInfo failed: %s", SDL_GetError());
+        return false;
+    }
+    // The union is only meaningful for the subsystem SDL actually picked;
+    // reading .x11 under Wayland yields a garbage pointer, not a window ID.
+    if (wmInfo.subsystem != SDL_SYSWM_X11) {
+        log::error("Platform: SDL video driver is '%s', need X11 "
+                   "(run with SDL_VIDEODRIVER=x11)",
+                   SDL_GetCurrentVideoDriver());
+        return false;
+    }
 #if defined(SDL_VIDEO_DRIVER_X11)
     mNativeHandle = static_cast<uintptr_t>(wmInfo.info.x11.window);
 #endif
