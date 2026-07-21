@@ -1,5 +1,5 @@
-// Torch flame + ash, PSX-flavoured: few chunky point-billboard quads,
-// colour-faded by affectors. Attach both at the torch's flame seat.
+// Torch flame + embers/motes, PSX-flavoured: few chunky point-billboard
+// quads, colour-faded by affectors. Attach both systems at the flame seat.
 
 particle_system Game/TorchFire
 {
@@ -18,23 +18,33 @@ particle_system Game/TorchFire
         time_to_live_max 0.6
         velocity_min    0.25
         velocity_max    0.5
-        colour          1.0 0.85 0.3 1.0
+        colour          1.0 0.8 0.35 1.0
     }
 
-    // hot yellow core -> orange -> red-out
+    // amber core -> long orange body -> red-out (deeper than a white-yellow
+    // ramp; reads as sooty torchfire and feeds the bloom bright-pass)
     affector ColourInterpolator
     {
         time0   0.0
-        colour0 1.0 0.9 0.45 1.0
-        time1   0.55
-        colour1 1.0 0.45 0.1 0.9
+        colour0 1.0 0.82 0.38 1.0
+        time1   0.65
+        colour1 1.0 0.42 0.10 0.9
         time2   1.0
-        colour2 0.6 0.08 0.02 0.0
+        colour2 0.55 0.07 0.02 0.0
     }
 
     affector Scaler
     {
         rate    -0.12
+    }
+
+    // Slow spin breaks the identical-quad look of the shared sparkle sprite.
+    affector Rotator
+    {
+        rotation_speed_range_start  -90
+        rotation_speed_range_end     90
+        rotation_range_start         0
+        rotation_range_end           360
     }
 }
 
@@ -43,19 +53,33 @@ particle_system Game/TorchAsh
     material        Game/AshParticle
     particle_width  0.06
     particle_height 0.06
-    quota           12
+    quota           16
     billboard_type  point
 
+    // Warm embers: few, small, bright enough for the bloom threshold.
     emitter Point
     {
-        angle           25
+        angle           18
+        direction       0 1 0
+        emission_rate   2
+        time_to_live_min 0.9
+        time_to_live_max 1.6
+        velocity_min    0.45
+        velocity_max    0.7
+        colour          1.0 0.45 0.15 1.0
+    }
+
+    // Grey-green motes: slow, long-lived, drift into the murk.
+    emitter Point
+    {
+        angle           30
         direction       0 1 0
         emission_rate   3
-        time_to_live_min 1.2
-        time_to_live_max 2.0
-        velocity_min    0.35
-        velocity_max    0.6
-        colour          0.35 0.32 0.3 0.8
+        time_to_live_min 1.4
+        time_to_live_max 2.5
+        velocity_min    0.25
+        velocity_max    0.45
+        colour          0.30 0.34 0.28 0.8
     }
 
     // drift sideways a little as they rise, then fade out
