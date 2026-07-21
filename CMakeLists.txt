@@ -108,6 +108,12 @@ if(BUILD_TESTING)
     target_include_directories(fps_controller_tests PRIVATE game/src)
     target_link_libraries(fps_controller_tests PRIVATE eng)
     add_test(NAME fps_controller COMMAND fps_controller_tests)
+
+    add_executable(physics_tests
+        game/tests/PhysicsTests.cpp
+    )
+    target_link_libraries(physics_tests PRIVATE eng)
+    add_test(NAME physics_tests COMMAND physics_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
