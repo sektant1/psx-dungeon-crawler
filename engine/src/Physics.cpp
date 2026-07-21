@@ -475,8 +475,27 @@ void Physics::characterSetShape(CharacterHandle h, float radius, float height) {
 
 // ---- stubs for later tasks (must exist so the header links) ----
 void Physics::setBodyTransform(BodyHandle, glm::vec3, glm::quat) {}
-void Physics::applyImpulse(BodyHandle, glm::vec3, glm::vec3) {}
-void Physics::setBodyKinematic(BodyHandle, bool) {}
+
+void Physics::applyImpulse(BodyHandle h, glm::vec3 impulse, glm::vec3 atPoint) {
+    if (!h.valid() || h.id >= uint32_t(mImpl->bodies.size())) return;
+    BodyRec& rec = mImpl->bodies[h.id];
+    if (!rec.alive) return;
+    BodyInterface& bi = mImpl->system.GetBodyInterface();
+    bi.AddImpulse(rec.id,
+                  JPH::Vec3(impulse.x, impulse.y, impulse.z),
+                  JPH::RVec3(atPoint.x, atPoint.y, atPoint.z));
+    bi.ActivateBody(rec.id);
+}
+
+void Physics::setBodyKinematic(BodyHandle h, bool kinematic) {
+    if (!h.valid() || h.id >= uint32_t(mImpl->bodies.size())) return;
+    BodyRec& rec = mImpl->bodies[h.id];
+    if (!rec.alive) return;
+    BodyInterface& bi = mImpl->system.GetBodyInterface();
+    bi.SetMotionType(rec.id,
+                     kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic,
+                     JPH::EActivation::Activate);
+}
 int  Physics::shapeCast(const BodyDesc&, glm::vec3, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
 int  Physics::overlap(const BodyDesc&, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
 void Physics::setContactCallback(HitCallback) {}

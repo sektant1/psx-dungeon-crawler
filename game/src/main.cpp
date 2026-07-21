@@ -542,6 +542,15 @@ void LiveLevel::appendTargets(std::vector<GameplayTarget>& targets,
                            spawn + glm::vec3(0.0f, 0.4f, 0.0f), 3.0f});
 }
 
+// Dynamic physics prop: a render node driven by a Jolt rigid body each frame.
+// renderOffset is subtracted from the body centre to place the mesh origin
+// (which sits at the model's base) at the correct world position.
+struct DynamicProp {
+    eng::NodeHandle node;
+    eng::BodyHandle body;
+    glm::vec3 renderOffset{0.0f}; // body centre - mesh base (vertical half-height)
+};
+
 int main(int, char**)
 {
     // Dev self-test: PSX_GEN_DUMP=<seed> prints a generated grid and exits,
@@ -581,12 +590,26 @@ int main(int, char**)
     eng::Physics physics;
     physics.init();
 
+    // Dynamic prop table: bodies spawned once for the depth-0 lobby and
+    // synced to render nodes every frame while propsAlive is true.
+    // Known limitation: props are not re-spawned on level transition; their
+    // bodies are removed and propsAlive set false before any rebuild.
+    std::vector<DynamicProp> dynamicProps;
+    bool propsAlive = false;
+
     LiveLevel level;
     FpsController player;
 
     // Wipe the scene, build the level at `depth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     const auto enterLevel = [&](bool atExit) {
+        // Destroy dynamic prop bodies before clearScene wipes their nodes.
+        if (propsAlive) {
+            for (auto& dp : dynamicProps)
+                physics.removeBody(dp.body);
+            dynamicProps.clear();
+            propsAlive = false;
+        }
         bool loaded = false;
         if (depth == 0) {
             LevelDocument lobby;
@@ -620,6 +643,83 @@ int main(int, char**)
         engine.input().setMouseGrab(!portalPreview);
     };
     enterLevel(false); // depth 0, spawn at entry
+
+    // Spawn dynamic crates and barrels in the lobby entry hall.
+    // Props sit a few metres in front of the spawn (toward the anchor room).
+    // Mesh origins are at the base; body centres are offset up by halfHeight.
+    // Crate: 0.8 m cube -> halfExtents {0.4, 0.4, 0.4}, body centre y = 0.4.
+    // Barrel: r=0.28, h=0.9 -> halfHeight 0.45, body centre y = 0.45.
+    {
+        const std::string props = assets + "/meshes/props/";
+        eng::MeshHandle mCrate   = r.loadObj(props + "prop_crate.obj");
+        eng::MeshHandle mBarrel0 = r.loadObj(props + "prop_barrel_p0.obj");
+        eng::MeshHandle mBarrel1 = r.loadObj(props + "prop_barrel_p1.obj");
+
+        const auto spawnCrate = [&](glm::vec3 bodyPos, float yawDeg) {
+            constexpr float hh = 0.4f;
+            eng::BodyDesc bd;
+            bd.kind = eng::ShapeKind::Box;
+            bd.halfExtents = {0.4f, hh, 0.4f};
+            bd.position = bodyPos;
+            bd.layer = eng::BodyLayer::Prop;
+            bd.dynamic = true;
+            bd.mass = 5.0f;
+            bd.friction = 0.6f;
+            eng::BodyHandle bh = physics.createBody(bd);
+            // Node origin at mesh base = body centre lowered by halfHeight
+            glm::vec3 nodePos = bodyPos - glm::vec3(0.0f, hh, 0.0f);
+            eng::NodeHandle nh = r.createNode(eng::kRootNode, nodePos);
+            if (yawDeg != 0.0f)
+                r.setOrientation(nh, glm::angleAxis(glm::radians(yawDeg),
+                                                    glm::vec3(0.0f, 1.0f, 0.0f)));
+            r.attachMesh(nh, mCrate, "Game/PropMarket");
+            DynamicProp dp;
+            dp.node = nh;
+            dp.body = bh;
+            dp.renderOffset = glm::vec3(0.0f, hh, 0.0f);
+            dynamicProps.push_back(dp);
+        };
+
+        const auto spawnBarrel = [&](glm::vec3 bodyPos, float yawDeg) {
+            constexpr float halfH = 0.45f;
+            constexpr float radius = 0.28f;
+            eng::BodyDesc bd;
+            bd.kind = eng::ShapeKind::Cylinder;
+            bd.halfHeight = halfH;
+            bd.radius = radius;
+            bd.position = bodyPos;
+            bd.layer = eng::BodyLayer::Prop;
+            bd.dynamic = true;
+            bd.mass = 8.0f;
+            bd.friction = 0.6f;
+            eng::BodyHandle bh = physics.createBody(bd);
+            glm::vec3 nodePos = bodyPos - glm::vec3(0.0f, halfH, 0.0f);
+            eng::NodeHandle nh = r.createNode(eng::kRootNode, nodePos);
+            if (yawDeg != 0.0f)
+                r.setOrientation(nh, glm::angleAxis(glm::radians(yawDeg),
+                                                    glm::vec3(0.0f, 1.0f, 0.0f)));
+            r.attachMesh(nh, mBarrel0, "Game/PropPlanks");
+            r.attachMesh(nh, mBarrel1, "Game/PropBauerhaus");
+            DynamicProp dp;
+            dp.node = nh;
+            dp.body = bh;
+            dp.renderOffset = glm::vec3(0.0f, halfH, 0.0f);
+            dynamicProps.push_back(dp);
+        };
+
+        // Two crates stacked near the entry hall (spawn side of the anchor room)
+        spawnCrate({3.0f, 0.4f, 18.0f},   10.0f);   // ground crate
+        spawnCrate({3.0f, 1.2f, 18.0f},  -15.0f);   // stacked on top
+        // A third crate to the side
+        spawnCrate({1.5f, 0.4f, 17.0f},   30.0f);
+        // Two barrels next to them
+        spawnBarrel({4.5f, 0.45f, 17.5f},   0.0f);
+        spawnBarrel({5.2f, 0.45f, 18.5f},  20.0f);
+        // One more loose crate for variety
+        spawnCrate({2.2f, 0.4f, 19.5f},  -20.0f);
+
+        propsAlive = true;
+    }
 
     engine.debugUi().addPanel("Player", [&player, &r] {
         ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);
@@ -687,6 +787,16 @@ int main(int, char**)
         }
         physics.setInterpolationAlpha(accumulator / kFixedDt);
 
+        // Sync dynamic prop render nodes from the interpolated physics transform.
+        if (propsAlive) {
+            for (auto& dp : dynamicProps) {
+                glm::vec3 p; glm::quat q;
+                physics.getRenderTransform(dp.body, p, q);
+                r.setPosition(dp.node, p - dp.renderOffset);
+                r.setOrientation(dp.node, q);
+            }
+        }
+
         animTime += dt;
         level.update(r, animTime);
         level.updateVisibility(r, player.eyePosition());
@@ -724,6 +834,13 @@ int main(int, char**)
         }
 
         engine.renderFrame(dt);
+    }
+    // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
+    if (propsAlive) {
+        for (auto& dp : dynamicProps)
+            physics.removeBody(dp.body);
+        dynamicProps.clear();
+        propsAlive = false;
     }
     level.clearPhysics();
     physics.shutdown();

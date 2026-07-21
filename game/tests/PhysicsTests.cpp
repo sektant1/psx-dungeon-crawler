@@ -81,11 +81,26 @@ static void test_character_steps_small_ledge() {
     std::puts("test_character_steps_small_ledge OK");
 }
 
+static void test_impulse_moves_prop() {
+    eng::Physics phys; phys.init();
+    eng::BodyDesc floor; floor.halfExtents={20,0.5f,20}; floor.position={0,-0.5f,0};
+    floor.layer=eng::BodyLayer::Static; floor.dynamic=false; phys.createBody(floor);
+    eng::BodyDesc crate; crate.halfExtents={0.4f,0.4f,0.4f}; crate.position={0,0.4f,0};
+    crate.layer=eng::BodyLayer::Prop; crate.mass=5.0f; eng::BodyHandle h=phys.createBody(crate);
+    phys.applyImpulse(h, {20,0,0}, {0,0.4f,0});
+    for(int i=0;i<60;++i) phys.update(1.0f/60.0f);
+    glm::vec3 p; glm::quat q; phys.getRenderTransform(h,p,q);
+    assert(p.x > 0.3f && "impulse should shove the crate in +x");
+    phys.shutdown();
+    std::puts("test_impulse_moves_prop OK");
+}
+
 int main() {
     test_box_falls_and_rests_on_floor();
     test_raycast_hits_static_box();
     test_mesh_body_is_solid();
     test_character_settles_and_is_blocked_by_wall();
     test_character_steps_small_ledge();
+    test_impulse_moves_prop();
     return 0;
 }
