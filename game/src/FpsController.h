@@ -33,6 +33,9 @@ public:
     glm::vec3 eyePosition() const;
     glm::vec3 forward() const;
 
+    // Head node (camera parent), e.g. for attaching a player-carried light.
+    eng::NodeHandle headNode() const { return mHead; }
+
 private:
     eng::NodeHandle mBody{};
     eng::NodeHandle mHead{};

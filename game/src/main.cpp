@@ -53,24 +53,39 @@ int main(int, char**)
     // palette (bright sun, blue fog, high ambient) is replaced wholesale --
     // cold near-black ambience, warm light only where torches burn.
     const auto lin = [](float srgb) { return std::pow(srgb, 2.2f); };
-    // Faint cold ambient: barely lifts unlit faces out of pure black so
-    // geometry stays readable, tinted blue so torch pools read warm.
-    r.setAmbient({lin(0.55f) * 0.07f, lin(0.62f) * 0.07f, lin(0.80f) * 0.07f});
-    // Sun becomes weak blue moonlight spilling through cracks: steep
-    // top-down so it varies wall shading, dim enough to never fight the
-    // torches.
+    // Faint verdigris ambient: green-tinted so unlit stone reads mossy and
+    // torch pools read warm by contrast.
+    r.setAmbient({lin(0.35f) * 0.06f, lin(0.50f) * 0.06f, lin(0.38f) * 0.06f});
+    // Sun becomes a weak sickly-green spill through cracks: steep top-down
+    // so it varies wall shading, dim enough to never fight the torches.
     r.setOrientation(scene.sunNode(),
                      glm::angleAxis(glm::radians(30.0f), glm::vec3(0, 1, 0)) *
                          glm::angleAxis(glm::radians(-75.0f), glm::vec3(1, 0, 0)));
     r.setLightColour(scene.sunLight(),
-                     {lin(0.45f) * 0.25f, lin(0.55f) * 0.25f, lin(0.85f) * 0.25f});
-    // Fog and backdrop: deep blue-black murk instead of daylight haze, a
-    // touch denser so corridors fade to darkness, not to sky.
-    r.setFog({lin(0.045f), lin(0.05f), lin(0.09f)}, 0.09f);
-    r.setBackground({0.013f, 0.015f, 0.03f});
+                     {lin(0.40f) * 0.22f, lin(0.55f) * 0.22f, lin(0.42f) * 0.22f});
+    // Fog and backdrop: swamp green-black murk, denser so corridors drown
+    // roughly two cells out. Background matches the fog chromaticity so
+    // silhouettes have no seam against the void.
+    r.setFog({lin(0.04f), lin(0.07f), lin(0.05f)}, 0.12f);
+    r.setBackground({0.012f, 0.021f, 0.015f});
     // Additive shaft: faint ghost-light in the murk.
     r.setMaterialParam("PSX/LightShaft", "modulateColor",
-                       glm::vec4(1.0f, 1.0f, 1.0f, 0.18f));
+                       glm::vec4(0.85f, 1.0f, 0.9f, 0.16f));
+    // Verdigris shader defaults: banded torch pools, distance desaturation,
+    // palette-unifying grade (all live-tunable in the debug panel).
+    r.setLightSteps(4.0f);
+    r.setFogDesatBoost(0.4f);
+    r.setGradeEnabled(true);
+    // Stylize outlines tinted to the palette: green-black shadows, warm
+    // parchment highlights (raw sRGB, mixed post-encode by the pass).
+    r.setMaterialParam("PSX/PixelStylize", "shadowColor",
+                       glm::vec3(0.03f, 0.07f, 0.035f));
+    r.setMaterialParam("PSX/PixelStylize", "shadowStrength", 0.45f);
+    r.setMaterialParam("PSX/PixelStylize", "highlightColor",
+                       glm::vec3(0.94f, 0.88f, 0.72f));
+    r.setMaterialParam("PSX/PixelStylize", "highlightStrength", 0.12f);
+    // Torch-only bloom: only flames/embers/singularity cross the threshold.
+    r.setBloomParams(0.85f, 0.6f);
 
     // ------------------------------------------------- set dressing ---
     // Medieval props (PSX_Modular_Medieval + medievalweaponspack
@@ -278,6 +293,15 @@ int main(int, char**)
     player.setResolver([&dungeon](glm::vec3 from, glm::vec3 to) {
         return dungeon.resolveMove(from, to, 0.35f);
     });
+    // Distance-based readability: a weak cool light carried at the player's
+    // head keeps the near field legible; the fog swallows everything else.
+    {
+        eng::LightDesc carry;
+        carry.colour = glm::vec3(std::pow(0.55f, 2.2f), std::pow(0.65f, 2.2f),
+                                 std::pow(0.55f, 2.2f)) * 0.8f;
+        carry.range = 5.0f;
+        r.attachLight(player.headNode(), carry);
+    }
     engine.input().setMouseGrab(true);
 
     engine.debugUi().addPanel("Player", [&player] {
@@ -336,9 +360,6 @@ int main(int, char**)
         }
 
         engine.renderFrame(dt);
-        static int dbgFrames = 0; // TEMP debug: dump one frame to disk
-        if (++dbgFrames == 90)
-            r.writeScreenshot("/tmp/frame_game.png");
     }
     engine.shutdown();
     return 0;
