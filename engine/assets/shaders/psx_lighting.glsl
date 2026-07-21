@@ -11,6 +11,7 @@ uniform float lightCount;
 uniform float omniAttenuation; // Godot OmniLight3D.omni_attenuation exponent
 uniform float lightSteps;      // > 0.5: posterize diffuse into N hard bands
                                // (ambient stays continuous); 0 = smooth
+uniform float lightStepSoftness; // half-width of soft band seam, 0 = hard
 
 // (Godot pre-multiplies light energy by PI to cancel the 1/PI in its lambert
 //  BRDF, so plain NdotL * colour*energy matches 1:1.)
@@ -42,7 +43,16 @@ vec3 psxComputeLight(vec3 vsPos, vec3 vsNormal)
     // never bands the whole scene toward black. Deliberately unclamped:
     // floor() keeps banding values above 1, preserving the overbright torch
     // cores the bloom bright-pass thresholds on.
+    // Soft-edged quantize: plateaus stay flat, but each band boundary is
+    // rounded with smoothstep so the ring edges fade instead of snapping.
+    // (No fwidth here — this include also runs in the vertex-lit path.)
     if (lightSteps > 0.5)
-        diffuse = floor(diffuse * lightSteps) / lightSteps;
+    {
+        float edge = clamp(lightStepSoftness, 0.0, 0.5); // seam half-width
+        vec3 x = diffuse * lightSteps;
+        vec3 fr = fract(x);
+        vec3 soft = smoothstep(0.5 - edge, 0.5 + edge, fr);
+        diffuse = (floor(x) + soft) / lightSteps;
+    }
     return ambientLight.rgb + diffuse;
 }

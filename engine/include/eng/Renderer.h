@@ -43,6 +43,7 @@ struct EnvState {
     bool perPixelLighting = true; // fragment vs vertex light evaluation
     float omniAttenuation = 1.0f; // Godot omni falloff exponent (1 = linear)
     float lightSteps = 0.0f; // diffuse posterization bands, 0 = smooth
+    float lightStepSoftness = 0.35f; // band seam half-width, 0 = hard edges
     float fogDesatBoost = 0.0f; // distance desat/darken before fog mix
     bool bloom = true;
     float bloomThreshold = 0.85f; // torch-only: flames/embers glow, walls don't
@@ -133,6 +134,7 @@ public:
     void setPerPixelLightingEnabled(bool enabled); // off = authentic vertex-lit
     void setOmniAttenuation(float exponent); // omni falloff curve, 1 = linear
     void setLightSteps(float steps); // posterized diffuse bands, 0 = smooth
+    void setLightStepSoftness(float softness); // band seam half-width, 0 = hard
     void setFogDesatBoost(float boost); // 0 = plain fog lerp
     void setBloomEnabled(bool enabled);    // off = pass-through composite
     void setBloomParams(float threshold, float intensity);

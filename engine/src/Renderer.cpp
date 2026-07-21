@@ -454,6 +454,12 @@ void Renderer::setLightSteps(float steps)
     setGlobalMaterialParam("lightSteps", steps);
 }
 
+void Renderer::setLightStepSoftness(float softness)
+{
+    mImpl->env.lightStepSoftness = softness;
+    setGlobalMaterialParam("lightStepSoftness", softness);
+}
+
 void Renderer::setFogDesatBoost(float boost)
 {
     mImpl->env.fogDesatBoost = boost;

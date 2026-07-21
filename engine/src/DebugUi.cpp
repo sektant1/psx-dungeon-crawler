@@ -243,6 +243,10 @@ void DebugUi::Impl::drawShaders()
     float lightSteps = env.lightSteps;
     if (ImGui::SliderFloat("light steps", &lightSteps, 0.0f, 12.0f, "%.0f"))
         renderer->setLightSteps(lightSteps);
+    float lightStepSoftness = env.lightStepSoftness;
+    if (ImGui::SliderFloat("light step softness", &lightStepSoftness, 0.0f,
+                           0.5f, "%.2f"))
+        renderer->setLightStepSoftness(lightStepSoftness);
     float fogDesat = env.fogDesatBoost;
     if (ImGui::SliderFloat("fog desat boost", &fogDesat, 0.0f, 1.0f))
         renderer->setFogDesatBoost(fogDesat);
