@@ -276,6 +276,31 @@ void DebugUi::Impl::drawPixelArt()
     if (ImGui::ColorEdit3("highlight colour", &highlightColor.x))
         renderer->setMaterialParam("PSX/PixelStylize", "highlightColor",
                                    highlightColor);
+    if (ImGui::SliderFloat("outline thickness", &outlineThickness, 1.0f, 4.0f,
+                           "%.1f px"))
+        renderer->setMaterialParam("PSX/PixelStylize", "outlineThickness",
+                                   outlineThickness);
+    ImGui::SetItemTooltip("Edge sample offset in low-res pixels; 1 = the\n"
+                          "reference single-pixel outline, higher fattens\n"
+                          "both shadow and highlight edges.");
+    if (ImGui::SliderFloat("shadow edge threshold", &shadowThreshold, 0.05f,
+                           0.6f, "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "shadowThreshold",
+                                   shadowThreshold);
+    ImGui::SetItemTooltip("Depth-step sensitivity: lower outlines every small\n"
+                          "ledge, higher keeps only strong silhouettes.");
+    if (ImGui::SliderFloat("highlight edge threshold", &highlightThreshold,
+                           0.3f, 0.9f, "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "highlightThreshold",
+                                   highlightThreshold);
+    ImGui::SetItemTooltip("Crease sensitivity: lower highlights shallow\n"
+                          "bevels, higher only sharp convex corners.");
+    if (ImGui::SliderFloat("highlight dark fade", &highlightDarkFade, 0.05f,
+                           0.6f, "%.2f"))
+        renderer->setMaterialParam("PSX/PixelStylize", "highlightDarkFade",
+                                   highlightDarkFade);
+    ImGui::SetItemTooltip("Scene luma below which edge highlights fade out,\n"
+                          "so dark geometry doesn't grow glowing wires.");
 }
 
 void DebugUi::Impl::drawCamera()
@@ -301,7 +326,7 @@ void DebugUi::Impl::copyToml()
                   "precision_multiplier = %.4f\n"
                   "dither = %s\n"
                   "col_depth = %.1f\n"
-                  "dither_banding = %s\n"
+                  "dither_banding = %.2f\n"
                   "dither_dark_fade = %.3f\n"
                   "pixel_size = %d\n"
                   "per_pixel_lighting = %s\n"
@@ -316,6 +341,10 @@ void DebugUi::Impl::copyToml()
                   "highlight_strength = %.2f\n"
                   "shadow_color_srgb = [%.4f, %.4f, %.4f]\n"
                   "highlight_color_srgb = [%.4f, %.4f, %.4f]\n"
+                  "outline_thickness = %.1f\n"
+                  "shadow_threshold = %.2f\n"
+                  "highlight_threshold = %.2f\n"
+                  "highlight_dark_fade = %.2f\n"
                   "ambient_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_colour_linear = [%.4f, %.4f, %.4f]\n"
                   "fog_density = %.4f\n"
@@ -324,7 +353,7 @@ void DebugUi::Impl::copyToml()
                   "near_clip = %.3f\n"
                   "far_clip = %.1f\n",
                   precisionMultiplier, env.dither ? "true" : "false", colDepth,
-                  ditherBanding ? "true" : "false", ditherDarkFade,
+                  ditherBanding, ditherDarkFade,
                   env.pixelSize, env.perPixelLighting ? "true" : "false",
                   env.omniAttenuation,
                   env.bloom ? "true" : "false", env.bloomThreshold,
@@ -334,6 +363,8 @@ void DebugUi::Impl::copyToml()
                   stylizeHighlights ? "true" : "false", shadowStrength,
                   highlightStrength, shadowColor.x, shadowColor.y, shadowColor.z,
                   highlightColor.x, highlightColor.y, highlightColor.z,
+                  outlineThickness, shadowThreshold, highlightThreshold,
+                  highlightDarkFade,
                   env.ambient.x, env.ambient.y,
                   env.ambient.z, env.fogColour.x, env.fogColour.y,
                   env.fogColour.z, env.fogDensity, env.background.x,

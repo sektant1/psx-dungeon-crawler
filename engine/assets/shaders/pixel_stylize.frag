@@ -19,6 +19,10 @@ uniform float shadowStrength;     // 0..1, default 0.4
 uniform float highlightStrength;  // 0..1, default 0.1
 uniform vec3 shadowColor;         // default black
 uniform vec3 highlightColor;      // default white
+uniform float outlineThickness;   // edge sample offset in low-res pixels (1..4)
+uniform float shadowThreshold;    // depth-edge smoothstep centre, default 0.25
+uniform float highlightThreshold; // normal-edge smoothstep centre, default 0.5
+uniform float highlightDarkFade;  // luma where highlights reach full, default 0.25
 out vec4 fragColour;
 
 float getDepth(vec2 suv)
@@ -54,7 +58,10 @@ void main()
         return;
     }
 
-    vec2 e = 1.0 / vec2(textureSize(sceneTex, 0));
+    // Thickness scales the cross-sample offsets: 1 = the reference's
+    // single-pixel outline, higher pushes the taps out so edges fatten
+    // (in low-res pixels, so the result stays chunky after upscale).
+    vec2 e = outlineThickness / vec2(textureSize(sceneTex, 0));
 
     // Shadow outlines: centre nearer than a neighbour = exterior edge.
     // negDepthDiff starts at 0 (not the Godot original's 0.5 seed) so a
@@ -79,7 +86,10 @@ void main()
         // when edge0 == edge1; every driver degenerates it to step(). Written
         // explicitly here, identical result.
         negDepthDiff = step(0.5, negDepthDiff);
-        depthDiff = smoothstep(0.2, 0.3, depthDiff);
+        // Centre exposed as shadowThreshold (reference: 0.25); lower = more
+        // depth steps count as edges, higher = only strong silhouettes.
+        depthDiff = smoothstep(shadowThreshold - 0.05, shadowThreshold + 0.05,
+                               depthDiff);
     }
 
     // Highlight edges: convex creases via normal divergence, depth-gated so
@@ -96,13 +106,16 @@ void main()
         normalDiff += normalIndicator(bias, n, nr, depthDiff);
         normalDiff += normalIndicator(bias, n, nd, depthDiff);
         normalDiff += normalIndicator(bias, n, nl, depthDiff);
-        normalDiff = smoothstep(0.2, 0.8, normalDiff);
+        // Centre exposed as highlightThreshold (reference: 0.5); lower =
+        // shallower creases highlight, higher = only sharp convex corners.
+        normalDiff = smoothstep(highlightThreshold - 0.3,
+                                highlightThreshold + 0.3, normalDiff);
         normalDiff = clamp(normalDiff - negDepthDiff, 0.0, 1.0);
         // Highlights are painted light; on a surface sitting in darkness
         // they read as a glowing wire. Fade them with scene luminance so
         // only lit geometry gets edge highlights.
         float lum = dot(original, vec3(0.2126, 0.7152, 0.0722));
-        normalDiff *= smoothstep(0.04, 0.25, lum);
+        normalDiff *= smoothstep(0.04, max(highlightDarkFade, 0.05), lum);
     }
 
     vec3 final = original;

@@ -43,6 +43,10 @@ struct DebugUi::Impl {
     float highlightStrength = 0.1f;
     glm::vec3 shadowColor{0.0f};
     glm::vec3 highlightColor{1.0f};
+    float outlineThickness = 1.0f;   // edge tap offset in low-res pixels
+    float shadowThreshold = 0.25f;   // depth-edge detector centre
+    float highlightThreshold = 0.5f; // normal-edge detector centre
+    float highlightDarkFade = 0.25f; // luma where highlights reach full
 
     void init(RenderCore* c, Renderer* r) { core = c; renderer = r; }
 
