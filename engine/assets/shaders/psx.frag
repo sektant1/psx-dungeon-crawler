@@ -142,7 +142,16 @@ void main()
     // Additive light volumes must not disturb edge data: adding zero is a no-op.
     fragNormalDepth = vec4(0.0);
 #else
+    // Edge-detection buffer wants geometric truth: the perspective-correct
+    // normal where the lit path provides one. The noperspective vNormalVS
+    // swims across big low-poly triangles (crystal shards), which punches
+    // holes in the stylizer's normal-edge outlines mid-face.
+#ifdef LIT
+    fragNormalDepth = vec4(normalize(vNormalSmooth) * 0.5 + 0.5,
+                           vViewDepth / farClip);
+#else
     fragNormalDepth = vec4(normalize(vNormalVS) * 0.5 + 0.5,
                            vViewDepth / farClip);
+#endif
 #endif
 }
