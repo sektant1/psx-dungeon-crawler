@@ -67,6 +67,30 @@ private:
         bool lit = true;
     };
 
+    // Static-geometry batches for room-level occlusion culling. Each room is
+    // a connected group of walkable non-arch cells; each 'A' arch is its own
+    // batch tagged with the (<=2) rooms it joins.
+    struct Room {
+        eng::StaticBatchHandle batch;
+        glm::vec3 aabbMin{0.0f};
+        glm::vec3 aabbMax{0.0f};
+    };
+    struct Arch {
+        eng::StaticBatchHandle batch;
+        int roomA = -1;
+        int roomB = -1;
+    };
+    std::vector<int> mCellRoom;   // room index per (row*mStride+col); -1 = none
+    std::vector<int> mCellArch;   // arch index per cell; -1 = not an arch
+    int mStride = 0;              // columns per row for mCellRoom/mCellArch
+    std::vector<Room> mRooms;
+    std::vector<Arch> mArches;
+    std::vector<int> mVisibleRooms; // cache of last-visible room set (sorted)
+
+    // World (col,row) of a ground-plane point; may be outside the grid.
+    void cellOf(float x, float z, int& col, int& row) const;
+    int roomOfCell(int col, int row) const; // -1 if none
+
     std::vector<std::string> mRows;
     std::vector<Torch> mTorches;
     std::vector<bool> mArchNS; // per-cell: arch tunnel runs north-south
