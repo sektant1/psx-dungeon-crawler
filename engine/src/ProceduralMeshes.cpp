@@ -201,7 +201,7 @@ void createPortalDisc(const std::string& meshName, float radius, int segments)
 {
     segments = std::max(8, segments);
     auto* mo = new Ogre::ManualObject(meshName + "_mo");
-    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_FAN);
+    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
     mo->position(0, 0, 0); mo->normal(0, 0, 1); mo->textureCoord(0.5f, 0.5f);
     mo->colour(Ogre::ColourValue::White);
     for (int i = 0; i <= segments; ++i) {
@@ -212,6 +212,8 @@ void createPortalDisc(const std::string& meshName, float radius, int segments)
                          0.5f + std::sin(a) * 0.5f);
         mo->colour(Ogre::ColourValue::White);
     }
+    for (int i = 0; i < segments; ++i)
+        mo->triangle(0, Ogre::uint32(i + 1), Ogre::uint32(i + 2));
     mo->end();
     mo->convertToMesh(meshName);
     delete mo;

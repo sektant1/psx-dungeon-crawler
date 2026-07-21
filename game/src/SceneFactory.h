@@ -17,10 +17,13 @@ struct PortalStyle {
     std::string frameMesh;
     std::string particles = "PSX/Sparkles";
     glm::vec3 lightColour{1.05f, 0.20f, 1.45f};
+    float yawDegrees = 0.0f;
     float lightRange = 5.5f;
     float outerRadius = 0.92f;
-    float innerRadius = 0.78f;
-    float height = 1.45f;
+    float innerRadius = 1.0f;
+    // Authored arch opening is broad and low (about 3.3 x 1.9 m).
+    glm::vec2 fieldScale{1.62f, 1.30f};
+    float height = 1.30f;
     int segments = 18;
 };
 

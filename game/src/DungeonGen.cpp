@@ -296,19 +296,23 @@ Layout generate(uint32_t seed)
         g[size_t(scy)][size_t(scx)] = 'S';
         g[size_t(ccy)][size_t(ccx)] = 'C';
 
-        // Down-portal 'X': a floor cell in the anchor room offset from 'C'
-        // (the demo-scene centre). Prefer two cells up; else any other floor
-        // cell in the room.
+        // Down-portal 'X': a floor cell directly against the anchor room's
+        // outer shell. Runtime snaps the portal onto that solid boundary, so
+        // it reads as a wall replacement rather than a freestanding prop.
         {
             const Node& ar = b.nodes[size_t(anchor)];
-            int px = ccx, py = ccy;
-            if (ccy - 2 >= ar.ry && g[size_t(ccy - 2)][size_t(ccx)] == '.')
-                py = ccy - 2;
-            else {
-                for (int yy = ar.ry; yy < ar.ry + ar.rh; ++yy)
-                    for (int xxx = ar.rx; xxx < ar.rx + ar.rw; ++xxx)
-                        if (g[size_t(yy)][size_t(xxx)] == '.') { px = xxx; py = yy; }
-            }
+            int px = -1, py = -1;
+            for (int yy = ar.ry; yy < ar.ry + ar.rh && px < 0; ++yy)
+                for (int xxx = ar.rx; xxx < ar.rx + ar.rw; ++xxx) {
+                    if (g[size_t(yy)][size_t(xxx)] != '.') continue;
+                    const bool boundary =
+                        g[size_t(yy - 1)][size_t(xxx)] == '#' ||
+                        g[size_t(yy + 1)][size_t(xxx)] == '#' ||
+                        g[size_t(yy)][size_t(xxx - 1)] == '#' ||
+                        g[size_t(yy)][size_t(xxx + 1)] == '#';
+                    if (boundary) { px = xxx; py = yy; break; }
+                }
+            if (px < 0) { px = ccx; py = ccy; }
             g[size_t(py)][size_t(px)] = 'X';
         }
 

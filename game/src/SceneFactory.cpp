@@ -14,21 +14,38 @@ PortalVisual createPortal(eng::Renderer& r, glm::vec3 floorPosition,
                           const PortalStyle& style)
 {
     PortalVisual out;
-    const eng::MeshHandle disc = r.createPortalDisc(
-        style.innerRadius, style.segments);
+    const bool authoredFrame = !style.frameMesh.empty();
+    const eng::MeshHandle membrane = authoredFrame
+        ? r.createPlane(style.innerRadius * 2.0f)
+        : r.createPortalDisc(style.innerRadius, style.segments);
     out.root = r.createNode(eng::kRootNode, floorPosition);
+    r.setOrientation(out.root,
+                     glm::angleAxis(glm::radians(style.yawDegrees),
+                                    glm::vec3(0, 1, 0)));
     if (!style.frameMesh.empty()) {
         // The authored arch occupies x[0,4], y[0,3], z[-4,0]. Offset it so
         // its opening is centered on the 4 m portal cell and its front face
         // points toward the approaching player (+Z).
         eng::NodeHandle frame = r.createNode(out.root, {-2.0f, 0.0f, 2.0f});
+        // The source kit piece is a four-metre-deep passage module. Compress
+        // only its depth so it reads as a monumental portal surround rather
+        // than a short tunnel, without distorting the authored front arch.
+        r.setScale(frame, {1.0f, 1.0f, 0.24f});
         r.attachMesh(frame, r.loadObj(style.frameMesh), style.frameMaterial,
                      false);
     }
     const eng::NodeHandle arch = r.createNode(
-        out.root, {0.0f, style.height, style.frameMesh.empty() ? 0.0f : 2.03f});
+        out.root, {0.0f, style.height, style.frameMesh.empty() ? 0.0f : 1.82f});
     out.field = r.createNode(arch);
-    r.attachMesh(out.field, disc, style.material);
+    if (authoredFrame) {
+        r.setScale(out.field, {style.fieldScale.x, 1.0f, style.fieldScale.y});
+        r.setOrientation(out.field,
+                         glm::angleAxis(glm::radians(90.0f),
+                                        glm::vec3(1, 0, 0)));
+    } else {
+        r.setScale(out.field, {style.fieldScale.x, style.fieldScale.y, 1.0f});
+    }
+    r.attachMesh(out.field, membrane, style.material);
     if (!style.particles.empty())
         r.attachParticles(out.root, style.particles);
     eng::LightDesc glow;

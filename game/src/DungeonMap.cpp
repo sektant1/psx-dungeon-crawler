@@ -591,6 +591,17 @@ void DungeonMap::clearPhysics()
     mColliders.clear();
 }
 
+std::vector<glm::vec3> DungeonMap::debugArchCenters() const
+{
+    std::vector<glm::vec3> out;
+    for (int row = 0; row < mLayout.rowCount(); ++row)
+        for (int col = 0; col < mLayout.columnCount(); ++col)
+            if (mLayout.cellAt(col, row) == 'A')
+                out.push_back({mOrigin.x + (col + 0.5f) * mCell, 0.0f,
+                               mOrigin.z + (row + 0.5f) * mCell});
+    return out;
+}
+
 void DungeonMap::update(eng::Renderer& r, float t) const
 {
     // Torch flicker: two incommensurate sines + a fast spike term give an

@@ -61,18 +61,18 @@ material Fantasy/FelEnergy
 {
     technique { pass {
         cull_hardware none
-        scene_blend add
+        scene_blend alpha_blend
         depth_write off
         vertex_program_ref PSX_VS_Unlit {
             param_named uvScale float2 1.35 1.35
-            param_named uvPanVelocity float2 0.075 -0.115
+            param_named uvPanVelocity float2 0.28 -0.20
         }
-        fragment_program_ref PSX_FS_Unlit
-        { param_named modulateColor float4 0.30 1.0 0.16 0.85 }
+        fragment_program_ref PSX_FS_UnlitFlow
+        { param_named modulateColor float4 0.34 0.58 0.16 0.92 }
         texture_unit {
-            texture portal_fel_flow.png
+            texture slime_stylized.png
             filtering none
-            tex_address_mode clamp
+            tex_address_mode wrap
         }
     } }
 }

@@ -276,15 +276,15 @@ material Game/PortalDown
         vertex_program_ref PSX_VS_Unlit
         {
             param_named uvScale float2 1.35 1.35
-            param_named uvPanVelocity float2 0.075 -0.115
+            param_named uvPanVelocity float2 0.28 -0.20
         }
-        fragment_program_ref PSX_FS_Unlit
+        fragment_program_ref PSX_FS_UnlitFlow
         {
-            param_named modulateColor float4 0.10 0.42 0.055 0.62
+            param_named modulateColor float4 0.34 0.58 0.16 0.92
         }
         texture_unit
         {
-            texture portal_fel_flow.png
+            texture slime_stylized.png
             filtering none
             tex_address_mode wrap
         }
@@ -296,20 +296,20 @@ material Game/PortalUp
 {
     technique { pass {
         cull_hardware none
-        scene_blend add
+        scene_blend alpha_blend
         depth_write off
         vertex_program_ref PSX_VS_Unlit
         {
             param_named uvScale float2 1.35 1.35
-            param_named uvPanVelocity float2 -0.055 0.095
+            param_named uvPanVelocity float2 -0.22 0.17
         }
-        fragment_program_ref PSX_FS_Unlit
+        fragment_program_ref PSX_FS_UnlitFlow
         {
-            param_named modulateColor float4 0.12 0.36 0.62 0.68
+            param_named modulateColor float4 0.18 0.46 0.68 0.92
         }
         texture_unit
         {
-            texture portal_fel_flow.png
+            texture water_stylized.png
             filtering none
             tex_address_mode wrap
         }

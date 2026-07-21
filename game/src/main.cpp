@@ -599,6 +599,8 @@ int main(int, char**)
 
     LiveLevel level;
     FpsController player;
+    const bool portalPreviewMode =
+        std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
     // Wipe the scene, build the level at `depth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
@@ -628,8 +630,24 @@ int main(int, char**)
             eng::log::error("Level %d failed to load", depth);
             return;
         }
-        const bool portalPreview = depth == 0 &&
-                                   std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
+        if (std::getenv("PSX_ARCH_RAYTEST")) {
+            const auto centers = level.dungeon().debugArchCenters();
+            int miss = 0;
+            for (const glm::vec3& c : centers) {
+                eng::RayHit hit;
+                const bool ok = physics.rayCast(c + glm::vec3(0, 3, 0),
+                                                {0, -1, 0}, 5.0f, hit,
+                                                eng::BodyLayer::Static);
+                std::fprintf(stderr, "ARCH cell (%.1f,%.1f): %s floorY=%.3f\n",
+                             c.x, c.z, ok ? "FLOOR" : "NO-FLOOR!!",
+                             ok ? hit.point.y : -99.0f);
+                if (!ok) ++miss;
+            }
+            std::fprintf(stderr, "ARCH_RAYTEST: %zu arches, %d without floor\n",
+                         centers.size(), miss);
+            std::exit(miss == 0 ? 0 : 1);
+        }
+        const bool portalPreview = depth == 0 && portalPreviewMode;
         const glm::vec3 p = portalPreview
             ? level.exitPosition() + glm::vec3(0.0f, 0.0f, 6.0f)
             : (atExit ? level.exitPosition() : level.spawnPosition());
@@ -801,7 +819,8 @@ int main(int, char**)
         level.update(r, animTime);
         level.updateVisibility(r, player.eyePosition());
 
-        player.update(in, r, dt);
+        if (!portalPreviewMode)
+            player.update(in, r, dt);
 
         targets.clear();
         level.appendTargets(targets, depth);
