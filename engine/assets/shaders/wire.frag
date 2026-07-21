@@ -8,6 +8,7 @@ noperspective in vec3 vNormalVS;
 noperspective in float vViewDepth;
 
 uniform vec4 wireColor;
+uniform float wireDepthFade; // exp(-depth*fade) sinks far lines; 0 = flat
 uniform float farClip;
 
 layout(location = 0) out vec4 fragColour;
@@ -15,7 +16,10 @@ layout(location = 1) out vec4 fragNormalDepth;
 
 void main()
 {
-    fragColour = wireColor;
+    // Depth cue: nearby lines keep full brightness, far ones dim toward
+    // black so dense distant geometry stops reading as solid noise.
+    fragColour = vec4(wireColor.rgb * exp(-vViewDepth * wireDepthFade),
+                      wireColor.a);
     fragNormalDepth = vec4(normalize(vNormalVS) * 0.5 + 0.5,
                            vViewDepth / farClip);
 }

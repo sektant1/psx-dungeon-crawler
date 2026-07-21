@@ -206,6 +206,18 @@ void DebugUi::Impl::drawShaders()
     ImGui::SetItemTooltip("Debug view: every model as light-blue mesh lines\n"
                           "(PSX/DebugWireframe); original materials restore\n"
                           "on untick.");
+    if (wireframe) {
+        if (ImGui::ColorEdit3("wire colour", &wireColor.x))
+            renderer->setMaterialParam("PSX/DebugWireframe", "wireColor",
+                                       glm::vec4(wireColor, 1.0f));
+        if (ImGui::SliderFloat("wire depth fade", &wireDepthFade, 0.0f, 0.5f,
+                               "%.3f"))
+            renderer->setMaterialParam("PSX/DebugWireframe", "wireDepthFade",
+                                       wireDepthFade);
+        ImGui::SetItemTooltip("exp(-depth*fade): dims distant lines so dense\n"
+                              "far geometry stops reading as solid noise;\n"
+                              "0 = flat colour everywhere.");
+    }
     if (ImGui::SliderFloat("vertex snap", &precisionMultiplier, 0.0f, 1.0f))
         renderer->setGlobalMaterialParam("precisionMultiplier",
                                          precisionMultiplier);

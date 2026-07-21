@@ -31,6 +31,9 @@ struct DebugUi::Impl {
     // PSX shader tunables (UI-side cache; initial values match the
     // defaults in engine/assets/programs/psx.program + psx.material).
     float precisionMultiplier = 1.0f;
+    // Wireframe debug view (Wire_FS defaults).
+    glm::vec3 wireColor{0.55f, 0.8f, 1.0f};
+    float wireDepthFade = 0.0f;
     float colDepth = 15.0f;
     float ditherBanding = 0.5f; // pattern amplitude 0..1, not just on/off
     float ditherDarkFade = 0.12f;

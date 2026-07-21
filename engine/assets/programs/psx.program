@@ -288,6 +288,7 @@ fragment_program Wire_FS glsl
     default_params
     {
         param_named wireColor float4 0.55 0.8 1.0 1.0
+        param_named wireDepthFade float 0.0
         param_named_auto farClip far_clip_distance
     }
 }
