@@ -11,6 +11,7 @@
 #include "Projectiles.h"
 #include "SceneFactory.h"
 #include "Melee.h"
+#include "Dummy.h"
 #include "Targeting.h"
 
 #include <DemoScene.h>
@@ -28,6 +29,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 // Per-scene moonlit dark-fantasy palette. Must re-run after every
@@ -465,6 +467,22 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             portalBlockers(lv.spawn, "Return Portal — animated arcane gate");
         }
     }
+    if (depth == 0 && !std::getenv("PSX_NO_SHOWCASE_LABELS")) {
+        std::unordered_set<std::string> labelled;
+        for (const ShowcaseExhibit& exhibit : lv.exhibits) {
+            if (exhibit.label.empty() || !labelled.insert(exhibit.id).second)
+                continue;
+            const bool portal = exhibit.id.find("Portal") != std::string::npos;
+            const glm::vec3 anchor = portal
+                ? exhibit.position + glm::vec3(1.25f, 1.65f, 0.0f)
+                : exhibit.position + glm::vec3(
+                    0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f);
+            const eng::NodeHandle labelNode = r.createNode(eng::kRootNode, anchor);
+            eng::TextSpriteStyle style;
+            style.worldHeight = portal ? 0.42f : 0.32f;
+            r.attachTextSprite(labelNode, exhibit.label, style);
+        }
+    }
     return lv;
 }
 
@@ -594,7 +612,6 @@ int main(int, char**)
 
     ProjectileSystem projectiles;
     MeleeSystem melee;
-    melee.setHitCallback([](eng::BodyHandle,glm::vec3,glm::vec3){});
 
     // Dynamic prop table: bodies spawned once for the depth-0 lobby and
     // synced to render nodes every frame while propsAlive is true.
@@ -602,6 +619,15 @@ int main(int, char**)
     // bodies are removed and propsAlive set false before any rebuild.
     std::vector<DynamicProp> dynamicProps;
     bool propsAlive = false;
+    Dummy dummy;
+    bool dummyAlive = false;
+    melee.setHitCallback([&dummy, &dummyAlive, &physics](
+                             eng::BodyHandle body, glm::vec3 point,
+                             glm::vec3 normal) {
+        if (dummyAlive && dummy.alive() && body == dummy.body())
+            dummy.kill(physics, -normal * 8.0f + glm::vec3(0.0f, 3.0f, 0.0f),
+                       point);
+    });
 
     LiveLevel level;
     FpsController player;
@@ -617,6 +643,10 @@ int main(int, char**)
                 physics.removeBody(dp.body);
             dynamicProps.clear();
             propsAlive = false;
+        }
+        if (dummyAlive) {
+            dummy.clear(physics, r);
+            dummyAlive = false;
         }
         bool loaded = false;
         if (depth == 0) {
@@ -661,8 +691,13 @@ int main(int, char**)
     // Initialise the projectile system (builds procedural meshes) and register
     // the contact seam so arrows stick and bolts despawn on impact.
     projectiles.init(r);
-    physics.setContactCallback([&projectiles, &physics](const eng::HitEvent& e) {
+    physics.setContactCallback([&projectiles, &physics, &dummy, &dummyAlive](const eng::HitEvent& e) {
         projectiles.onHit(physics, e);
+        if (dummyAlive && dummy.alive() &&
+            (e.self == dummy.body() || e.other == dummy.body())) {
+            // Arrow hit the dummy: knock it forward and upward
+            dummy.kill(physics, glm::vec3(0.0f, 3.0f, 6.0f), e.point);
+        }
     });
 
     // Spawn dynamic crates and barrels in the lobby entry hall.
@@ -741,6 +776,11 @@ int main(int, char**)
 
         propsAlive = true;
     }
+
+    // Spawn a topple dummy alongside the lobby props (entry hall area).
+    // Placed 3 m further toward the anchor room from the crate cluster.
+    dummy.init(physics, r, glm::vec3(3.0f, 0.0f, 15.0f));
+    dummyAlive = true;
 
     engine.debugUi().addPanel("Player", [&player, &r] {
         ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);
@@ -833,6 +873,8 @@ int main(int, char**)
             }
         }
         projectiles.syncRender(physics, r);
+        if (dummyAlive)
+            dummy.syncRender(physics, r);
 
         animTime += dt;
         level.update(r, animTime);
@@ -889,6 +931,10 @@ int main(int, char**)
             physics.removeBody(dp.body);
         dynamicProps.clear();
         propsAlive = false;
+    }
+    if (dummyAlive) {
+        dummy.clear(physics, r);
+        dummyAlive = false;
     }
     level.clearPhysics();
     projectiles.clear(physics, r);
