@@ -353,6 +353,12 @@ void Renderer::setOmniAttenuation(float exponent)
     setGlobalMaterialParam("omniAttenuation", exponent);
 }
 
+void Renderer::setLightSteps(float steps)
+{
+    mImpl->env.lightSteps = steps;
+    setGlobalMaterialParam("lightSteps", steps);
+}
+
 void Renderer::setBloomEnabled(bool enabled)
 {
     mImpl->env.bloom = enabled;
