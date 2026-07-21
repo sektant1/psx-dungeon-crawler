@@ -8,6 +8,7 @@
 #include "DungeonMap.h"
 #include "FpsController.h"
 #include "LevelEditor.h"
+#include "Projectiles.h"
 #include "SceneFactory.h"
 #include "Targeting.h"
 
@@ -590,6 +591,8 @@ int main(int, char**)
     eng::Physics physics;
     physics.init();
 
+    ProjectileSystem projectiles;
+
     // Dynamic prop table: bodies spawned once for the depth-0 lobby and
     // synced to render nodes every frame while propsAlive is true.
     // Known limitation: props are not re-spawned on level transition; their
@@ -644,6 +647,13 @@ int main(int, char**)
         engine.input().setMouseGrab(!portalPreview);
     };
     enterLevel(false); // depth 0, spawn at entry
+
+    // Initialise the projectile system (builds procedural meshes) and register
+    // the contact seam so arrows stick and bolts despawn on impact.
+    projectiles.init(r);
+    physics.setContactCallback([&projectiles, &physics](const eng::HitEvent& e) {
+        projectiles.onHit(physics, e);
+    });
 
     // Spawn dynamic crates and barrels in the lobby entry hall.
     // Props sit a few metres in front of the spawn (toward the anchor room).
@@ -797,6 +807,7 @@ int main(int, char**)
         int guard = 0;
         while (accumulator >= kFixedDt && guard++ < 5) {
             physics.update(kFixedDt);
+            projectiles.fixedUpdate(physics, r, kFixedDt);
             accumulator -= kFixedDt;
         }
         physics.setInterpolationAlpha(accumulator / kFixedDt);
@@ -810,6 +821,7 @@ int main(int, char**)
                 r.setOrientation(dp.node, q);
             }
         }
+        projectiles.syncRender(physics, r);
 
         animTime += dt;
         level.update(r, animTime);
@@ -848,6 +860,14 @@ int main(int, char**)
             }
         }
 
+        // Projectile firing — only when mouse is grabbed (not in debug UI).
+        if (in.mouseGrabbed()) {
+            if (in.wasPressed("fire_arrow"))
+                projectiles.fireArrow(physics, r, player.eyePosition(), player.forward());
+            if (in.wasPressed("cast_spell"))
+                projectiles.fireBolt(physics, r, player.eyePosition(), player.forward());
+        }
+
         engine.renderFrame(dt);
     }
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
@@ -858,6 +878,7 @@ int main(int, char**)
         propsAlive = false;
     }
     level.clearPhysics();
+    projectiles.clear(physics, r);
     physics.shutdown();
     engine.shutdown();
     return 0;

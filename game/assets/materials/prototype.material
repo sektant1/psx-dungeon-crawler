@@ -1,0 +1,30 @@
+// Prototype materials for physics projectiles.
+// Arrow: dark earth tones; Bolt: bright arcane white.
+
+material Game/ProtoArrow
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture proto_dark_05.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/ProtoBolt
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture proto_light_03.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

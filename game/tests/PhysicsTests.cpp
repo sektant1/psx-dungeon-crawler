@@ -134,6 +134,24 @@ static void test_impulse_moves_prop() {
 // collider layout (mirroring DungeonMap::buildFromLayout's arch branch) and
 // confirm a character standing in the doorway rests on the floor instead of
 // dropping through the gap between the side blocks.
+static void test_fast_projectile_does_not_tunnel_thin_wall() {
+    eng::Physics phys; phys.init();
+    int contacts = 0;
+    phys.setContactCallback([&](const eng::HitEvent&){ contacts++; });
+    eng::BodyDesc wall; wall.halfExtents={0.02f,2,2}; wall.position={5,0,0}; // 4cm thin
+    wall.layer=eng::BodyLayer::Static; wall.dynamic=false; phys.createBody(wall);
+    eng::BodyDesc arrow; arrow.kind=eng::ShapeKind::Capsule; arrow.radius=0.03f; arrow.halfHeight=0.2f;
+    arrow.position={0,0,0}; arrow.layer=eng::BodyLayer::Projectile; arrow.continuousCast=true; arrow.mass=0.1f;
+    eng::BodyHandle a=phys.createBody(arrow);
+    phys.applyImpulse(a,{15,0,0},{0,0,0}); // ~150 m/s
+    for(int i=0;i<30;++i) phys.update(1.0f/60.0f);
+    glm::vec3 p; glm::quat q; phys.getRenderTransform(a,p,q);
+    CHECK(contacts>0, "CCD arrow should register a contact with the thin wall");
+    CHECK(p.x < 5.5f, "arrow should not have tunneled far past the wall");
+    phys.shutdown();
+    std::puts("test_fast_projectile_does_not_tunnel_thin_wall OK");
+}
+
 static void test_arch_cell_has_floor() {
     eng::Physics phys; phys.init();
     const float cell = 4.0f, wallH = 3.0f, archHalf = 0.8f;
@@ -176,5 +194,6 @@ int main() {
     test_character_steps_small_ledge();
     test_impulse_moves_prop();
     test_arch_cell_has_floor();
+    test_fast_projectile_does_not_tunnel_thin_wall();
     return 0;
 }

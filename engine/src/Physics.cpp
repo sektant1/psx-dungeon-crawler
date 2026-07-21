@@ -21,6 +21,7 @@
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -28,6 +29,19 @@
 using namespace JPH;
 
 namespace eng {
+
+// Shared data that the contact listener writes to during Jolt's Update.
+// Plain struct — no private visibility issues — passed by pointer to the listener.
+struct ContactSharedData {
+    Physics::HitCallback*                     contactCb = nullptr;
+    std::mutex*                               contactMtx = nullptr;
+    std::vector<HitEvent>*                    pendingContacts = nullptr;
+    std::unordered_map<uint32_t, uint32_t>*   idToSlot = nullptr;
+};
+
+// Forward-declared so Physics::Impl can hold a unique_ptr to it;
+// full definition follows after Impl.
+class EngContactListener;
 
 // ---- body record ----
 struct BodyRec {
@@ -66,6 +80,54 @@ struct Physics::Impl {
     // character table; slot 0 = null sentinel
     std::vector<CharacterRec> characters;
     std::vector<uint32_t>     charFreeList;
+
+    // contact seam
+    Physics::HitCallback contactCb;
+    std::mutex  contactMtx;
+    std::vector<HitEvent> pendingContacts;
+    ContactSharedData contactShared;
+    std::unique_ptr<EngContactListener> listener;
+};
+
+// ContactListener: collects HitEvents into pendingContacts during Update;
+// they are flushed (and the callback called) after Update returns.
+class EngContactListener final : public JPH::ContactListener {
+public:
+    explicit EngContactListener(ContactSharedData* shared) : mShared(shared) {}
+
+    void OnContactAdded(const JPH::Body& b1, const JPH::Body& b2,
+                        const JPH::ContactManifold& manifold,
+                        JPH::ContactSettings&) override
+    {
+        if (!mShared->contactCb || !*mShared->contactCb) return;
+
+        // Map body IDs to BodyHandles via the id->slot table
+        BodyHandle h1{}, h2{};
+        {
+            auto it = mShared->idToSlot->find(b1.GetID().GetIndexAndSequenceNumber());
+            if (it != mShared->idToSlot->end()) h1 = BodyHandle{ it->second };
+        }
+        {
+            auto it = mShared->idToSlot->find(b2.GetID().GetIndexAndSequenceNumber());
+            if (it != mShared->idToSlot->end()) h2 = BodyHandle{ it->second };
+        }
+
+        JPH::RVec3 cp = manifold.GetWorldSpaceContactPointOn1(0);
+        JPH::Vec3  n  = manifold.mWorldSpaceNormal;
+
+        HitEvent ev;
+        ev.self   = h1;
+        ev.other  = h2;
+        ev.point  = glm::vec3(float(cp.GetX()), float(cp.GetY()), float(cp.GetZ()));
+        ev.normal = glm::vec3(-n.GetX(), -n.GetY(), -n.GetZ());
+        ev.impulse = 0.0f;
+
+        std::lock_guard<std::mutex> lock(*mShared->contactMtx);
+        mShared->pendingContacts->push_back(ev);
+    }
+
+private:
+    ContactSharedData* mShared;
 };
 
 // ---- helpers ----
@@ -118,6 +180,14 @@ void Physics::init() {
     mImpl->jobs = std::make_unique<JobSystemThreadPool>(cMaxPhysicsJobs, cMaxPhysicsBarriers, int(threads));
     mImpl->system.Init(4096, 0, 4096, 4096, mImpl->bp, mImpl->ovb, mImpl->opp);
     mImpl->system.SetGravity(Vec3(0, -18.0f, 0));
+    // Register the contact listener so we can forward HitEvents to game code.
+    // The listener is owned by the Impl; it must outlive the PhysicsSystem.
+    mImpl->contactShared.contactCb      = &mImpl->contactCb;
+    mImpl->contactShared.contactMtx     = &mImpl->contactMtx;
+    mImpl->contactShared.pendingContacts = &mImpl->pendingContacts;
+    mImpl->contactShared.idToSlot       = &mImpl->idToSlot;
+    mImpl->listener = std::make_unique<EngContactListener>(&mImpl->contactShared);
+    mImpl->system.SetContactListener(mImpl->listener.get());
     mImpl->inited = true;
 }
 
@@ -138,6 +208,19 @@ void Physics::update(float dt, int steps) {
     for (auto& rec : mImpl->bodies) {
         if (!rec.alive || rec.isStatic) continue;
         bi.GetPositionAndRotation(rec.id, rec.curPos, rec.curRot);
+    }
+
+    // Flush deferred contact events collected during Update (called from job threads).
+    // We hold the lock just long enough to swap out the vector, then call the
+    // callback from the main thread with no lock held.
+    if (mImpl->contactCb) {
+        std::vector<HitEvent> batch;
+        {
+            std::lock_guard<std::mutex> lock(mImpl->contactMtx);
+            batch.swap(mImpl->pendingContacts);
+        }
+        for (const HitEvent& ev : batch)
+            mImpl->contactCb(ev);
     }
 }
 
@@ -501,6 +584,8 @@ void Physics::setBodyKinematic(BodyHandle h, bool kinematic) {
 }
 int  Physics::shapeCast(const BodyDesc&, glm::vec3, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
 int  Physics::overlap(const BodyDesc&, glm::vec3, std::vector<ShapeHit>&, BodyLayer) const { return 0; }
-void Physics::setContactCallback(HitCallback) {}
+void Physics::setContactCallback(HitCallback cb) {
+    mImpl->contactCb = std::move(cb);
+}
 
 } // namespace eng

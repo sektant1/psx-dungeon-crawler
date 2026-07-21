@@ -3,6 +3,9 @@
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Body/Body.h>
+#include <mutex>
 #include <vector>
 
 namespace eng::phys {
