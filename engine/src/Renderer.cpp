@@ -36,6 +36,7 @@ struct Renderer::Impl {
     std::vector<Ogre::SceneNode*> nodes; // nodes[id-1]; id 1 == scene root
     std::vector<std::string> meshNames;  // meshNames[id-1]
     std::vector<Ogre::Light*> lights;    // lights[id-1]
+    std::vector<Ogre::BillboardSet*> sprites; // sprites[id-1]
     int nameCounter = 0;
     EnvState env;
     // Original sub-entity materials, saved while the wireframe debug view
@@ -213,6 +214,63 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     mImpl->node(node, "attachMesh")->attachObject(e);
 }
 
+std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
+{
+    const char* base = clip.blend == SpriteBlend::Alpha ? "Sprite/Alpha"
+                     : clip.blend == SpriteBlend::Additive ? "Sprite/Additive"
+                                                          : "Sprite/Opaque";
+    Ogre::MaterialPtr source = Ogre::MaterialManager::getSingleton().getByName(base);
+    if (!source)
+        log::fatal("Renderer: sprite template '%s' is missing", base);
+    const std::string name = mImpl->nextName("sprite_material");
+    Ogre::MaterialPtr material = source->clone(name);
+    Ogre::Pass* pass = material->getTechnique(0)->getPass(0);
+    std::string texture = clip.texture;
+    if (!Ogre::ResourceGroupManager::getSingleton().resourceExistsInAnyGroup(texture)) {
+        log::error("Sprite: texture '%s' is missing; using PINKY.png",
+                   texture.c_str());
+        texture = "PINKY.png";
+    }
+    pass->getTextureUnitState(0)->setTextureName(texture);
+    auto vp = pass->getVertexProgramParameters();
+    vp->setNamedConstant("spriteGrid",
+                         Ogre::Vector2(float(std::max(1, clip.grid.x)),
+                                       float(std::max(1, clip.grid.y))));
+    vp->setNamedConstant("spriteFrameCount", float(std::max(1, clip.frameCount)));
+    vp->setNamedConstant("spriteFps", std::max(0.0f, clip.framesPerSecond));
+    vp->setNamedConstant("spriteScroll", Ogre::Vector2(clip.scrollVelocity.x,
+                                                        clip.scrollVelocity.y));
+    vp->setNamedConstant("spriteUvScale", Ogre::Vector2(clip.uvScale.x,
+                                                         clip.uvScale.y));
+    vp->setNamedConstant("spritePhase", clip.phaseSeconds);
+    auto fp = pass->getFragmentProgramParameters();
+    fp->setNamedConstant("spriteTint", Ogre::Vector4(clip.tint.r, clip.tint.g,
+                                                      clip.tint.b, clip.tint.a));
+    fp->setNamedConstant("spriteAlphaCutoff", clip.alphaCutoff);
+    material->load();
+    return name;
+}
+
+SpriteHandle Renderer::attachSprite(NodeHandle node, const SpriteClip& clip)
+{
+    Ogre::SceneManager* sm = mImpl->core.sceneMgr();
+    Ogre::BillboardSet* set = sm->createBillboardSet(mImpl->nextName("sprite"), 1);
+    set->setMaterialName(createSpriteMaterial(clip));
+    set->setDefaultDimensions(std::max(0.001f, clip.worldSize.x),
+                              std::max(0.001f, clip.worldSize.y));
+    set->createBillboard(Ogre::Vector3::ZERO, Ogre::ColourValue::White);
+    mImpl->node(node, "attachSprite")->attachObject(set);
+    mImpl->sprites.push_back(set);
+    return {static_cast<uint32_t>(mImpl->sprites.size())};
+}
+
+void Renderer::setSpriteVisible(SpriteHandle sprite, bool visible)
+{
+    if (!sprite.valid() || sprite.id > mImpl->sprites.size())
+        log::fatal("Renderer: invalid sprite handle %u", sprite.id);
+    mImpl->sprites[sprite.id - 1]->setVisible(visible);
+}
+
 StaticBatchHandle Renderer::createStaticBatch(glm::vec3 regionSize)
 {
     Impl::StaticBatch b;
@@ -263,6 +321,7 @@ void Renderer::clearScene()
     sm->getRootSceneNode()->removeAndDestroyAllChildren();
     sm->destroyAllStaticGeometry();
     sm->destroyAllParticleSystems();
+    sm->destroyAllBillboardSets();
     sm->destroyAllEntities();
     sm->destroyAllManualObjects();
     sm->destroyAllLights();
@@ -279,6 +338,7 @@ void Renderer::clearScene()
     // a name that a lingering resource still holds.
     mImpl->nodes.clear();
     mImpl->lights.clear();
+    mImpl->sprites.clear();
     mImpl->staticBatches.clear();
     mImpl->savedMaterials.clear();
     mImpl->meshNames.clear();

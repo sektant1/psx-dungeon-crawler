@@ -1,0 +1,24 @@
+vertex_program Sprite/VS glsl
+{
+    source sprite.vert
+    default_params {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto time time 1.0
+        param_named spriteGrid float2 1.0 1.0
+        param_named spriteFrameCount float 1.0
+        param_named spriteFps float 0.0
+        param_named spriteScroll float2 0.0 0.0
+        param_named spriteUvScale float2 1.0 1.0
+        param_named spritePhase float 0.0
+    }
+}
+
+fragment_program Sprite/FS glsl
+{
+    source sprite.frag
+    default_params {
+        param_named spriteTexture int 0
+        param_named spriteTint float4 1.0 1.0 1.0 1.0
+        param_named spriteAlphaCutoff float 0.0
+    }
+}

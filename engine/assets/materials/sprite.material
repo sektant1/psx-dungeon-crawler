@@ -1,0 +1,46 @@
+material Sprite/Opaque
+{
+    technique { pass {
+        cull_hardware none
+        depth_write on
+        vertex_program_ref Sprite/VS { }
+        fragment_program_ref Sprite/FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Sprite/Alpha
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Sprite/VS { }
+        fragment_program_ref Sprite/FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Sprite/Additive
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend add
+        depth_write off
+        vertex_program_ref Sprite/VS { }
+        fragment_program_ref Sprite/FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

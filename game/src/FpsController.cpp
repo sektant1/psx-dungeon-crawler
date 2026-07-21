@@ -56,6 +56,12 @@ glm::vec3 FpsController::forward() const
     return {-std::sin(mYaw) * cp, std::sin(mPitch), -std::cos(mYaw) * cp};
 }
 
+void FpsController::setViewAngles(float yawRadians, float pitchRadians)
+{
+    mYaw = yawRadians;
+    mPitch = glm::clamp(pitchRadians, -kMaxPitch, kMaxPitch);
+}
+
 void FpsController::init(eng::Renderer& r, eng::Physics& physics,
                          glm::vec3 startPos, float speed, float sensitivity,
                          glm::vec3 roomMin, glm::vec3 roomMax)

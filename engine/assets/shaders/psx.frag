@@ -87,15 +87,6 @@ void main()
 #endif
 #else
     vec4 texture_color = texture(albedoTex, texture_uv);
-#ifdef FLOW_PORTAL
-    // Low-frequency bands survive the PSX compositor where fine texture
-    // detail does not. Because texture_uv already includes time-driven pan,
-    // these features translate continuously rather than pulsing in place.
-    float flowA = sin((texture_uv.x * 0.65 + texture_uv.y) * 18.0);
-    float flowB = sin((texture_uv.x - texture_uv.y * 0.45) * 11.0 + 1.7);
-    float flow = smoothstep(-0.65, 0.85, flowA * 0.72 + flowB * 0.28);
-    texture_color.rgb *= mix(0.42, 1.28, flow);
-#endif
     texture_color.rgb = toLinear(texture_color.rgb); // source_color sampler
     vec3 albedo = (color_base * texture_color).rgb;
 #if defined(ALPHA_BLEND) || defined(ALPHA_SCISSOR)

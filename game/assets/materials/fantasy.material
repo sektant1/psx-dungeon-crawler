@@ -62,12 +62,12 @@ material Fantasy/FelEnergy
     technique { pass {
         cull_hardware none
         depth_write on
-        vertex_program_ref PSX_VS_Unlit {
-            param_named uvScale float2 1.35 1.35
-            param_named uvPanVelocity float2 0.28 -0.20
+        vertex_program_ref Sprite/VS {
+            param_named spriteUvScale float2 1.35 1.35
+            param_named spriteScroll float2 0.28 -0.20
         }
-        fragment_program_ref PSX_FS_UnlitFlow
-        { param_named modulateColor float4 0.34 0.58 0.16 0.92 }
+        fragment_program_ref Sprite/FS
+        { param_named spriteTint float4 0.34 0.58 0.16 1.0 }
         texture_unit {
             texture slime_stylized.png
             filtering none
@@ -82,12 +82,12 @@ material Fantasy/Lava
         cull_hardware none
         scene_blend add
         depth_write off
-        vertex_program_ref PSX_VS_Unlit {
-            param_named uvScale float2 2.0 2.0
-            param_named uvPanVelocity float2 0.045 -0.025
+        vertex_program_ref Sprite/VS {
+            param_named spriteUvScale float2 2.0 2.0
+            param_named spriteScroll float2 0.045 -0.025
         }
-        fragment_program_ref PSX_FS_Unlit
-        { param_named modulateColor float4 1.0 0.24 0.025 0.92 }
+        fragment_program_ref Sprite/FS
+        { param_named spriteTint float4 1.0 0.24 0.025 0.92 }
         texture_unit {
             texture lava_atlas.png
             filtering none
@@ -102,12 +102,12 @@ material Fantasy/Water
         cull_hardware none
         scene_blend alpha_blend
         depth_write off
-        vertex_program_ref PSX_VS_Unlit {
-            param_named uvScale float2 4.0 4.0
-            param_named uvPanVelocity float2 0.07 0.035
+        vertex_program_ref Sprite/VS {
+            param_named spriteUvScale float2 4.0 4.0
+            param_named spriteScroll float2 0.07 0.035
         }
-        fragment_program_ref PSX_FS_UnlitTransparent
-        { param_named modulateColor float4 0.30 0.68 1.0 0.72 }
+        fragment_program_ref Sprite/FS
+        { param_named spriteTint float4 0.30 0.68 1.0 0.72 }
         texture_unit {
             texture water_stylized.png
             filtering none
@@ -122,12 +122,12 @@ material Fantasy/ToxicSlime
         cull_hardware none
         scene_blend alpha_blend
         depth_write off
-        vertex_program_ref PSX_VS_Unlit {
-            param_named uvScale float2 3.0 3.0
-            param_named uvPanVelocity float2 -0.035 0.055
+        vertex_program_ref Sprite/VS {
+            param_named spriteUvScale float2 3.0 3.0
+            param_named spriteScroll float2 -0.035 0.055
         }
-        fragment_program_ref PSX_FS_UnlitTransparent
-        { param_named modulateColor float4 0.43 1.0 0.12 0.78 }
+        fragment_program_ref Sprite/FS
+        { param_named spriteTint float4 0.43 1.0 0.12 0.78 }
         texture_unit {
             texture slime_stylized.png
             filtering none
@@ -142,9 +142,9 @@ material Fantasy/ArcaneGlow
         cull_hardware none
         scene_blend add
         depth_write off
-        vertex_program_ref PSX_VS_Unlit { param_named uvPanVelocity float2 0.03 -0.04 }
-        fragment_program_ref PSX_FS_Unlit
-        { param_named modulateColor float4 0.35 0.42 1.0 0.80 }
+        vertex_program_ref Sprite/VS { param_named spriteScroll float2 0.03 -0.04 }
+        fragment_program_ref Sprite/FS
+        { param_named spriteTint float4 0.35 0.42 1.0 0.80 }
         texture_unit {
             texture glow_radial.png
             filtering none

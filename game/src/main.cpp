@@ -434,7 +434,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
 
     }
 
-    // Portals: generated low-poly arch + animated additive membrane. The
+    // Portals: generated low-poly arch + opaque scrolling sprite membrane. The
     // threshold remains on the cell centre so interaction/navigation stays
     // deterministic while the tall silhouette reads across a whole room.
     {
@@ -634,10 +634,17 @@ int main(int, char**)
             return;
         }
         const bool portalPreview = depth == 0 && portalPreviewMode;
+        const float portalYaw = glm::radians(level.dungeon().exitYawDegrees());
+        const glm::vec3 portalFront(std::sin(portalYaw), 0.0f,
+                                    std::cos(portalYaw));
         const glm::vec3 p = portalPreview
-            ? level.exitPosition() + glm::vec3(0.0f, 0.0f, 6.0f)
+            ? level.exitPosition() + portalFront * 6.0f
             : (atExit ? level.exitPosition() : level.spawnPosition());
         player.init(r, physics, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
+        if (portalPreview) {
+            player.setViewAngles(portalYaw);
+            player.present(r);
+        }
         // Carried light rides the fresh head node (the old one was destroyed).
         eng::LightDesc carry;
         carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),

@@ -14,18 +14,11 @@ in vec4 colour;
 uniform mat4 worldViewProj;
 uniform mat4 worldView;
 uniform mat4 invTransWorldView;
-uniform float time;
 
 // Godot: global uniform float precision_multiplier = 1.0
 uniform float precisionMultiplier;
 uniform vec2 uvScale;
 uniform vec2 uvOffset;
-uniform vec2 uvPanVelocity;
-// Sprite-sheet animation shared by world materials. [1,1], count 1 or rate
-// 0 keeps ordinary textures unchanged; frames advance left-to-right, top-down.
-uniform vec2 uvFrameGrid;
-uniform float uvFrameCount;
-uniform float uvFrameRate;
 
 #ifdef LIT
 // Godot render_mode vertex_lighting + diffuse_lambert + specular_disabled.
@@ -63,12 +56,7 @@ vec4 get_snapped_pos(vec4 base_pos)
 
 void main()
 {
-    vec2 baseUV = uv0 * uvScale + uvOffset + uvPanVelocity * time;
-    vec2 grid = max(floor(uvFrameGrid + 0.5), vec2(1.0));
-    float count = clamp(floor(uvFrameCount + 0.5), 1.0, grid.x * grid.y);
-    float frame = uvFrameRate > 0.0 ? mod(floor(time * uvFrameRate), count) : 0.0;
-    vec2 cell = vec2(mod(frame, grid.x), floor(frame / grid.x));
-    vUV = (baseUV + cell) / grid;
+    vUV = uv0 * uvScale + uvOffset;
     vColour = colour;
 
     vec3 vsPos = (worldView * vertex).xyz;

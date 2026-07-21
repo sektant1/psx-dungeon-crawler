@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/Handles.h>
+#include <eng/Sprite.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -92,6 +93,12 @@ public:
     // closed-ish meshes to extrude cleanly.
     void attachMesh(NodeHandle node, MeshHandle mesh,
                     const std::string& materialName, bool castShadows = false);
+
+    // Sprite seam: createSpriteMaterial applies a clip to arbitrary mesh UVs;
+    // attachSprite uses the same clip as a camera-facing world billboard.
+    std::string createSpriteMaterial(const SpriteClip& clip);
+    SpriteHandle attachSprite(NodeHandle node, const SpriteClip& clip);
+    void setSpriteVisible(SpriteHandle sprite, bool visible);
 
     // Static world geometry, baked into region-batched buffers (one draw
     // per material per region, whole regions frustum-culled). add* records

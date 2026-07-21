@@ -264,22 +264,21 @@ material Game/PortalStone
     } }
 }
 
-// Descent portal: steady emissive bloom over a continuously scrolling,
-// seamless energy surface. Scroll speed is authored per material in UV/sec.
+// Descent portal: opaque emissive sprite material with a continuously
+// scrolling texture. Values above 1 intentionally feed the bloom pass.
 material Game/PortalDown
 {
     technique { pass {
         cull_hardware none
-        scene_blend add
-        depth_write off
-        vertex_program_ref PSX_VS_Unlit
+        depth_write on
+        vertex_program_ref Sprite/VS
         {
-            param_named uvScale float2 1.35 1.35
-            param_named uvPanVelocity float2 0.28 -0.20
+            param_named spriteUvScale float2 1.35 1.35
+            param_named spriteScroll float2 0.28 -0.20
         }
-        fragment_program_ref PSX_FS_UnlitFlow
+        fragment_program_ref Sprite/FS
         {
-            param_named modulateColor float4 0.34 0.58 0.16 0.92
+            param_named spriteTint float4 0.55 1.45 0.25 1.0
         }
         texture_unit
         {
@@ -296,14 +295,14 @@ material Game/PortalUp
     technique { pass {
         cull_hardware none
         depth_write on
-        vertex_program_ref PSX_VS_Unlit
+        vertex_program_ref Sprite/VS
         {
-            param_named uvScale float2 1.35 1.35
-            param_named uvPanVelocity float2 -0.22 0.17
+            param_named spriteUvScale float2 1.35 1.35
+            param_named spriteScroll float2 -0.22 0.17
         }
-        fragment_program_ref PSX_FS_UnlitFlow
+        fragment_program_ref Sprite/FS
         {
-            param_named modulateColor float4 0.18 0.46 0.68 0.92
+            param_named spriteTint float4 0.35 0.85 1.60 1.0
         }
         texture_unit
         {

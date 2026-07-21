@@ -52,6 +52,7 @@ public:
     // Keeps locomotion feedback separate from a designer/debug-camera FOV.
     float baseFov() const { return mBaseFov; }
     void setBaseFov(float degrees);
+    void setViewAngles(float yawRadians, float pitchRadians = 0.0f);
 
     // Eye position (feet + eye height) and view direction, for interaction
     // ray checks.

@@ -23,6 +23,11 @@ struct StaticBatchHandle {
     bool valid() const { return id != 0; }
 };
 
+struct SpriteHandle {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
 // The scene root, valid after Engine::init.
 inline constexpr NodeHandle kRootNode{1};
 
