@@ -181,9 +181,9 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
     // One big-region batch per room and per arch (a room is a few cells, so
     // one region = one draw per room material; PVS handles inter-room culling).
     for (auto& rm : mRooms)
-        rm.batch = r.createStaticBatch({64.0f, 64.0f, 64.0f});
+        rm.batch = r.createStaticBatch({8.0f, 8.0f, 8.0f});
     for (auto& ar : mArches)
-        ar.batch = r.createStaticBatch({64.0f, 64.0f, 64.0f});
+        ar.batch = r.createStaticBatch({8.0f, 8.0f, 8.0f});
 
     // Lamp light parameters ([dungeon.light], warm torch defaults).
     glm::vec3 lightColour{lin(1.0f), lin(0.62f), lin(0.32f)};
