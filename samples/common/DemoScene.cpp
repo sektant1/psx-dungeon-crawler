@@ -85,7 +85,8 @@ glm::mat4 rowsBake(const std::vector<float>& r)
 } // namespace
 
 bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
-                     const std::string& meshDir, eng::NodeHandle sunParent)
+                     const std::string& meshDir, eng::NodeHandle sunParent,
+                     const Options& opts)
 {
     toml::parse_result result = toml::parse_file(sceneToml);
     if (!result) {
@@ -113,7 +114,7 @@ bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
         eng::LightDesc light;
         light.type = eng::LightDesc::Type::Directional;
         light.colour = vec3At(sun, "colour");
-        r.attachLight(mSun, light);
+        mSunLight = r.attachLight(mSun, light);
     }
 
     // ----------------------------------------------------------- omnis ---
@@ -126,10 +127,12 @@ bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
         const toml::array* xs = omni["x_positions"].as_array();
         if (!xs)
             eng::log::fatal("DemoScene: missing array 'omni.x_positions'");
-        for (const auto& x : *xs)
-            r.attachLight(r.createNode(eng::kRootNode,
-                                       {float(x.value_or(0.0)), y, 0.0f}),
-                          light);
+        for (const auto& x : *xs) {
+            eng::NodeHandle n = r.createNode(
+                eng::kRootNode, {float(x.value_or(0.0)), y, 0.0f});
+            r.attachLight(n, light);
+            mOmnis.push_back(n);
+        }
     }
 
     // ------------------------------------------------------ light shaft ---
@@ -141,7 +144,7 @@ bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
     }
 
     // --------------------------------------- animated boxes + sparkles ---
-    {
+    if (opts.boxes) {
         const toml::table& boxes = tableAt(root, "boxes");
         const float y = numAt(boxes, "y");
         const glm::vec3 scale{numAt(boxes, "scale")};
@@ -167,7 +170,7 @@ bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
     }
 
     // ---------------------------------------------------- blob shadows ---
-    {
+    if (opts.blobShadows) {
         const toml::table& shadows = tableAt(root, "shadows");
         eng::MeshHandle plane = r.createPlane(numAt(shadows, "plane_size"));
         const float y = numAt(shadows, "y");
@@ -181,7 +184,7 @@ bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
     }
 
     // -------------------------------------------------------- crystals ---
-    {
+    if (opts.crystals) {
         const toml::table& crystals = tableAt(root, "crystals");
         eng::MeshHandle ground =
             r.loadObj(meshDir + strAt(crystals, "ground_mesh"));

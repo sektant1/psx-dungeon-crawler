@@ -15,3 +15,281 @@ material Game/Room
         }
     } }
 }
+
+// ------------------------------------------------------------------------
+// Prop materials: one per texture from the PSX_Modular_Medieval /
+// medievalweaponspack conversions (game/assets/textures/props). All share
+// the PSX lit pair, point filtering, default 1x1 uvScale.
+// ------------------------------------------------------------------------
+
+material Game/PropPlanks
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture wood_planks.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropBauerhaus
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture bauerhaus.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropWood
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture generic_wood.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropMarket
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture market.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropJute
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture jute.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropTerracotta
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture terracotta.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropLamp
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture lamp_texture.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropWeapon
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture MedievalWeaponsSword.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropHay
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture hay.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Open-topped props (open barrels, braziers): the kit shells are
+// single-sided, so from above the near side backface-culls away and the
+// prop looks transparent. Two-sided variants fix that; inner faces get
+// mirrored normals (PSX-acceptable).
+material Game/PropBauerhausTwoSided
+{
+    technique { pass {
+        cull_hardware none
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture bauerhaus.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropPlanksTwoSided
+{
+    technique { pass {
+        cull_hardware none
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture wood_planks.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Treasure chest (low-poly-chest pack): baked albedo atlas.
+material Game/PropChest
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture chest_albedo.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Hall centrepiece "singularity": additive violet glow cube, unlit, both
+// faces so the interior shows through the spin.
+material Game/Singularity
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend add
+        depth_write off
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_Unlit
+        {
+            param_named modulateColor float4 0.55 0.25 1.0 1.0
+        }
+        texture_unit
+        {
+            texture white.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Wall torch (low-poly-torches pack): flat material colours baked into
+// vertex colours, so the texture is a plain white 8x8.
+material Game/Torch
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture white.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Torch flame billboard. Same recipe as the proven PSX/Sparkle material:
+// alpha-scissor cuts the quad to the sparkle shape (plain PSX_FS_Unlit
+// ignores texture alpha and shows the texture's black background as an
+// opaque square).
+material Game/FireParticle
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write on
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitAlphaScissor
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Ash motes: same scissor recipe, tinted grey by the particle colour.
+material Game/AshParticle
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write on
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitAlphaScissor
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Game/PropMarketMisc
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture market_misc.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

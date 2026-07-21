@@ -3,9 +3,10 @@
 // loop exists exactly once. Uniform bindings live in psx.program on BOTH the
 // vertex and the LIT fragment programs.
 uniform vec4 ambientLight; // ambient_light_colour (env ambient * energy)
-uniform vec4 lightPos[3];  // view space; w == 0 -> directional (dir TO light)
-uniform vec4 lightDiffuse[3]; // light colour * energy
-uniform vec4 lightAtten[3];   // x = range
+uniform vec4 lightPos[16];  // view space; w == 0 -> directional (dir TO light)
+uniform vec4 lightDiffuse[16]; // light colour * energy
+uniform vec4 lightAtten[16];   // y = range (x is a huge dummy so Ogre's
+                              // frustum light-culling never drops the light)
 uniform float lightCount;
 uniform float omniAttenuation; // Godot OmniLight3D.omni_attenuation exponent
 
@@ -14,7 +15,7 @@ uniform float omniAttenuation; // Godot OmniLight3D.omni_attenuation exponent
 vec3 psxComputeLight(vec3 vsPos, vec3 vsNormal)
 {
     vec3 light = ambientLight.rgb;
-    int count = int(min(lightCount, 3.0) + 0.5);
+    int count = int(min(lightCount, 16.0) + 0.5);
     for (int i = 0; i < count; ++i)
     {
         vec3 L;
@@ -30,7 +31,7 @@ vec3 psxComputeLight(vec3 vsPos, vec3 vsNormal)
             float dist = length(toLight);
             L = toLight / max(dist, 1e-5);
             // Godot omni attenuation curve: pow(1 - d/range, attenuation)
-            att = pow(clamp(1.0 - dist / lightAtten[i].x, 0.0, 1.0),
+            att = pow(clamp(1.0 - dist / lightAtten[i].y, 0.0, 1.0),
                       omniAttenuation);
         }
         light += lightDiffuse[i].rgb * max(dot(vsNormal, L), 0.0) * att;

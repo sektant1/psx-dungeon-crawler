@@ -38,16 +38,43 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     // Resource locations AFTER the render window exists (material parsing
     // needs a live render system). Engine-owned PSX stack + app assets.
     auto& rgm = Ogre::ResourceGroupManager::getSingleton();
+    // Ogre's own media: stencil shadow volume extrusion programs
+    // (Ogre/ShadowExtrude*) live in Media/Main and are required the moment
+    // a shadow technique is set.
+    rgm.addResourceLocation(std::string(OGRE_MEDIA_DIR) + "/Main",
+                            "FileSystem", "General");
     const std::string engBase = ENG_ASSET_DIR;
     for (const char* sub : {"/shaders", "/programs", "/materials",
                             "/compositors", "/textures"})
         rgm.addResourceLocation(engBase + sub, "FileSystem", "General");
-    for (const char* sub : {"/materials", "/textures", "/particles"}) {
+    for (const char* sub : {"/materials", "/textures", "/textures/props",
+                            "/particles"}) {
         const std::string dir = appAssetDir + sub;
         if (std::filesystem::is_directory(dir))
             rgm.addResourceLocation(dir, "FileSystem", "General");
     }
     rgm.initialiseAllResourceGroups();
+
+    // The PSX shaders bind 16 light slots (psx_lighting.glsl); Ogre's
+    // per-pass default of 8 would truncate the per-renderable light list
+    // before the auto params fill those arrays.
+    for (const auto& it :
+         Ogre::MaterialManager::getSingleton().getResourceIterator()) {
+        auto mat = Ogre::static_pointer_cast<Ogre::Material>(it.second);
+        for (Ogre::Technique* tech : mat->getTechniques())
+            for (Ogre::Pass* pass : tech->getPasses())
+                pass->setMaxSimultaneousLights(16);
+    }
+
+    // Hard-edged stencil shadows: period-correct (no soft filtering), work
+    // with any material, and need no extra shader plumbing. Modulative =
+    // one darkening pass over shadowed areas; casters and lights both opt
+    // in (Entity/Light setCastShadows via the Renderer API). Must run
+    // AFTER resource groups initialise: setting the technique loads Ogre's
+    // extrusion programs (Ogre/ShadowExtrude*, Media/Main).
+    mSceneMgr->setShadowTechnique(Ogre::SHADOWTYPE_STENCIL_MODULATIVE);
+    mSceneMgr->setShadowColour(Ogre::ColourValue(0.55f, 0.55f, 0.62f));
+    mSceneMgr->setShadowFarDistance(15.0f);
 
     mCamera = mSceneMgr->createCamera("MainCamera");
     mCamera->setFOVy(Ogre::Degree(70.0f)); // defaults; app overrides via API

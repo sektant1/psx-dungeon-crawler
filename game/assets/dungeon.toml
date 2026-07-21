@@ -1,0 +1,33 @@
+# Dungeon layout for the game scaffold. Each character is one 4 m cell:
+#   '#' solid   '.' floor   'A' archway   'L' floor + lamp
+#   'S' spawn   'C' scene anchor (shifted to the world origin)   ' ' void
+#
+# Critical path: entry hall (S) -> corridor -> great hall (C, the shared
+# crystal scene) -> corridor -> vault. Lamps mark the route and rest spots.
+
+[dungeon]
+cell_size = 4.0
+wall_height = 3.0
+rows = [
+    "#######",
+    "#SL.L.#",
+    "###A###",
+    "  #L#  ",
+    "  #L#  ",
+    "###A###",
+    "#L...L#",
+    "#..C..#",
+    "#L...L#",
+    "###A###",
+    "  #L#  ",
+    " ##A## ",
+    " #L.L# ",
+    " #.L.# ",
+    " ##### ",
+]
+
+[dungeon.light]
+colour_srgb = [1.0, 0.62, 0.32]
+energy = 4.0
+range = 6.5
+y = 1.9 # torch mount height on the wall

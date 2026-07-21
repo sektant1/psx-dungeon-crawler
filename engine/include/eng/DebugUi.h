@@ -22,6 +22,10 @@ public:
     bool visible() const;
     void setVisible(bool v);
 
+    // Centered HUD prompt ("Press [E] to ..."), drawn every frame while
+    // non-empty -- independent of the debug panel's visibility.
+    void setHudPrompt(const std::string& text);
+
 private:
     friend class Engine; // constructs, feeds events, builds frames
     DebugUi();

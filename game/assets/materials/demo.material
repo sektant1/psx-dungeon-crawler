@@ -58,21 +58,31 @@ material PSX/BoxLit
     } }
 }
 
-// world/crystal/crystal_spire_mat.tres (psx_lit, no texture -> vertex colours)
+// world/crystal/crystal_spire_mat.tres (psx_lit, no texture -> vertex
+// colours) + glassy fresnel edge: icy sheen hugging the spire silhouettes.
 material PSX/CrystalSpire
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
-        fragment_program_ref PSX_FS_LitNoTex { }
+        fragment_program_ref PSX_FS_LitNoTexRim
+        {
+            param_named rimColour float4 0.75 0.9 1.0 0.85
+            param_named rimPower float 2.5
+        }
     } }
 }
 
-// world/crystal/crystal_ground_mat.tres (identical settings, separate mat as in Godot)
+// world/crystal/crystal_ground_mat.tres (same base, separate mat as in
+// Godot). Subtler rim than the spires so the base chunks stay grounded.
 material PSX/CrystalGround
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
-        fragment_program_ref PSX_FS_LitNoTex { }
+        fragment_program_ref PSX_FS_LitNoTexRim
+        {
+            param_named rimColour float4 0.75 0.9 1.0 0.4
+            param_named rimPower float 3.0
+        }
     } }
 }
 

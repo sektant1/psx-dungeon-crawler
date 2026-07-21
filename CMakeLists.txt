@@ -31,6 +31,7 @@ target_link_libraries(eng PUBLIC glm::glm OgreOverlay PRIVATE OgreMain SDL2::SDL
 target_compile_definitions(eng PRIVATE
     ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
     OGRE_PLUGIN_DIR="${OGRE_PLUGIN_DIR}"
+    OGRE_MEDIA_DIR="${OGRE_MEDIA_DIR}"
 )
 
 # Shared PSX demo scene, data-driven from samples/common/assets.
@@ -50,7 +51,9 @@ target_compile_definitions(psx_demo PRIVATE
 add_executable(game
     game/src/main.cpp
     game/src/FpsController.cpp
+    game/src/DungeonMap.cpp
 )
+target_include_directories(game PRIVATE third_party)
 target_link_libraries(game PRIVATE demo_scene)
 target_compile_definitions(game PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"

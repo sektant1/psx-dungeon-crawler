@@ -10,6 +10,17 @@ constexpr float kEyeHeight = 1.7f;
 const float kMaxPitch = glm::radians(89.0f);
 } // namespace
 
+glm::vec3 FpsController::eyePosition() const
+{
+    return mPos + glm::vec3(0.0f, kEyeHeight, 0.0f);
+}
+
+glm::vec3 FpsController::forward() const
+{
+    const float cp = std::cos(mPitch);
+    return {-std::sin(mYaw) * cp, std::sin(mPitch), -std::cos(mYaw) * cp};
+}
+
 void FpsController::init(eng::Renderer& r, glm::vec3 startPos, float speed,
                          float sensitivity, glm::vec3 roomMin, glm::vec3 roomMax)
 {
@@ -43,9 +54,12 @@ void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
         move += right;
     if (in.isDown("move_left"))
         move -= right;
-    if (glm::length(move) > 0.0f)
-        mPos += glm::normalize(move) * mSpeed * dt;
-    mPos = glm::clamp(mPos, mMin, mMax);
+    if (glm::length(move) > 0.0f) {
+        const glm::vec3 desired =
+            mPos + glm::normalize(move) * mSpeed * dt;
+        mPos = mResolve ? mResolve(mPos, desired)
+                        : glm::clamp(desired, mMin, mMax);
+    }
 
     r.setPosition(mBody, mPos);
     r.setOrientation(mBody, glm::angleAxis(mYaw, glm::vec3(0, 1, 0)));

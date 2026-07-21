@@ -92,6 +92,8 @@ void DebugUi::addPanel(const std::string& name, std::function<void()> draw)
 bool DebugUi::visible() const { return mImpl->visible; }
 void DebugUi::setVisible(bool v) { mImpl->visible = v; }
 
+void DebugUi::setHudPrompt(const std::string& text) { mImpl->hudPrompt = text; }
+
 bool DebugUi::Impl::onEvent(const SDL_Event& e)
 {
     if (!visible)
@@ -144,6 +146,22 @@ void DebugUi::Impl::buildFrame(float dt)
     frameMs[size_t(frameMsIdx)] = dt * 1000.0f;
     frameMsIdx = (frameMsIdx + 1) % int(frameMs.size());
 
+    // HUD prompt: bottom-centre, borderless, always on top of the scene.
+    if (!hudPrompt.empty()) {
+        const ImVec2 ds = io.DisplaySize;
+        const ImVec2 ts = ImGui::CalcTextSize(hudPrompt.c_str());
+        ImGui::SetNextWindowPos(
+            ImVec2((ds.x - ts.x) * 0.5f, ds.y * 0.78f));
+        ImGui::SetNextWindowBgAlpha(0.45f);
+        ImGui::Begin("##hudprompt", nullptr,
+                     ImGuiWindowFlags_NoDecoration |
+                         ImGuiWindowFlags_NoInputs |
+                         ImGuiWindowFlags_AlwaysAutoResize |
+                         ImGuiWindowFlags_NoSavedSettings);
+        ImGui::TextUnformatted(hudPrompt.c_str());
+        ImGui::End();
+    }
+
     if (!visible)
         return;
 
@@ -191,9 +209,10 @@ void DebugUi::Impl::drawShaders()
         renderer->setDitherEnabled(dither);
     if (ImGui::SliderFloat("colour depth", &colDepth, 1.0f, 64.0f, "%.0f"))
         renderer->setMaterialParam("PSX/DitherPost", "colDepth", colDepth);
-    if (ImGui::Checkbox("dither banding", &ditherBanding))
+    if (ImGui::SliderFloat("dither strength", &ditherBanding, 0.0f, 1.0f,
+                           "%.2f"))
         renderer->setMaterialParam("PSX/DitherPost", "ditherBanding",
-                                   ditherBanding ? 1.0f : 0.0f);
+                                   ditherBanding);
     if (ImGui::SliderFloat("dither dark fade", &ditherDarkFade, 0.0f, 0.3f,
                            "%.3f"))
         renderer->setMaterialParam("PSX/DitherPost", "ditherDarkFade",

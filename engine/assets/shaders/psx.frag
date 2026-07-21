@@ -1,7 +1,8 @@
 #version 330 core
 // Port of shaders/psx_base.gdshaderinc fragment() for Ogre GL3Plus.
 // Variants via preprocessor_defines:
-//   LIT, METAL, NO_TEXTURE, ALPHA_BLEND, ALPHA_SCISSOR, LIGHT_VOLUME, BLEND_ADD
+//   LIT, METAL, NO_TEXTURE, ALPHA_BLEND, ALPHA_SCISSOR, LIGHT_VOLUME, BLEND_ADD,
+//   RIM (requires LIT: fresnel edge sheen for glassy materials)
 
 noperspective in vec2 vUV;
 noperspective in vec4 vColour;
@@ -21,6 +22,10 @@ uniform sampler2D albedoTex;
 #endif
 #ifdef ALPHA_SCISSOR
 uniform float alphaScissor;
+#endif
+#ifdef RIM
+uniform vec4 rimColour;  // rgb = sRGB sheen tint, a = strength
+uniform float rimPower;
 #endif
 
 // world_env.tres: fog_enabled, exponential density fog
@@ -100,6 +105,20 @@ void main()
         lightAmt = psxComputeLight(vVsPos, normalize(vNormalSmooth));
     }
     vec3 rgb = albedo * lightAmt;
+#ifdef RIM
+    // Glassy fresnel edge: brightest where the surface grazes the view.
+    // Perspective-correct normal/position so the sheen hugs the silhouette
+    // instead of swimming with the affine interpolation. Added after
+    // lighting so it reads as a specular sheen, before fog so distance
+    // still swallows it.
+    vec3 rimN = normalize(vNormalSmooth);
+    vec3 rimV = normalize(-vVsPos);
+    float rimF = pow(1.0 - clamp(dot(rimN, rimV), 0.0, 1.0), rimPower);
+    // Gate by the local light level: the sheen is reflected light, so it
+    // must die on shadowed/unlit faces instead of glowing through them.
+    float rimLit = clamp(dot(lightAmt, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+    rgb += toLinear(rimColour.rgb) * (rimF * rimColour.a * rimLit);
+#endif
 #else
     vec3 rgb = albedo;            // unshaded
 #endif

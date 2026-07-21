@@ -23,6 +23,7 @@ struct LightDesc {
     Type type = Type::Point;
     glm::vec3 colour{1.0f}; // linear, energy pre-multiplied by the caller
     float range = 3.0f;     // point lights only
+    bool castShadows = false; // stencil shadows from opted-in casters
 };
 
 // Last-set environment/camera values, cached so the debug UI can display
@@ -64,12 +65,22 @@ public:
     void setPosition(NodeHandle node, glm::vec3 position);
     void setOrientation(NodeHandle node, glm::quat orientation);
     void setScale(NodeHandle node, glm::vec3 scale);
+    // Show/hide a node and everything attached beneath it (meshes,
+    // particles, lights).
+    void setNodeVisible(NodeHandle node, bool show);
 
     // --- attachments ------------------------------------------------------
-    void attachMesh(NodeHandle node, MeshHandle mesh, const std::string& materialName);
+    // castShadows opts the entity into stencil shadow casting; keep it off
+    // for open/sliced geometry (walls, floors) -- shadow volumes need
+    // closed-ish meshes to extrude cleanly.
+    void attachMesh(NodeHandle node, MeshHandle mesh,
+                    const std::string& materialName, bool castShadows = false);
     void attachParticles(NodeHandle node, const std::string& templateName);
     void attachCamera(NodeHandle node); // moves the single camera to this node
-    void attachLight(NodeHandle node, const LightDesc& desc);
+    LightHandle attachLight(NodeHandle node, const LightDesc& desc);
+    // Retint an existing light (linear, energy pre-multiplied) -- cheap,
+    // intended for per-frame effects like torch flicker.
+    void setLightColour(LightHandle light, glm::vec3 colour);
 
     // --- camera -----------------------------------------------------------
     void setCameraFov(float degrees); // vertical FOV

@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <string>
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -21,6 +22,7 @@ struct DebugUi::Impl {
     bool visible = false;
 
     std::vector<std::pair<std::string, std::function<void()>>> panels;
+    std::string hudPrompt; // drawn every frame while non-empty
 
     // Stats panel: frametime ring buffer (ms).
     std::array<float, 120> frameMs{};
@@ -30,8 +32,8 @@ struct DebugUi::Impl {
     // defaults in engine/assets/programs/psx.program + psx.material).
     float precisionMultiplier = 1.0f;
     float colDepth = 15.0f;
-    bool ditherBanding = true;
-    float ditherDarkFade = 0.06f;
+    float ditherBanding = 0.5f; // pattern amplitude 0..1, not just on/off
+    float ditherDarkFade = 0.12f;
 
     // Pixel-art stylizer tunables (defaults match Stylize_FS in psx.program;
     // colours are raw sRGB, mixed post-encode like the Godot reference).

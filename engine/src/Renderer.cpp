@@ -34,6 +34,7 @@ struct Renderer::Impl {
     RenderCore core;
     std::vector<Ogre::SceneNode*> nodes; // nodes[id-1]; id 1 == scene root
     std::vector<std::string> meshNames;  // meshNames[id-1]
+    std::vector<Ogre::Light*> lights;    // lights[id-1]
     int nameCounter = 0;
     EnvState env;
 
@@ -112,14 +113,20 @@ void Renderer::setScale(NodeHandle node, glm::vec3 scale)
     mImpl->node(node, "setScale")->setScale(toOgre(scale));
 }
 
+void Renderer::setNodeVisible(NodeHandle node, bool show)
+{
+    mImpl->node(node, "setNodeVisible")->setVisible(show);
+}
+
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
-                          const std::string& materialName)
+                          const std::string& materialName, bool castShadows)
 {
     if (!Ogre::MaterialManager::getSingleton().getByName(materialName))
         log::fatal("Renderer: unknown material '%s'", materialName.c_str());
     Ogre::Entity* e =
         mImpl->core.sceneMgr()->createEntity(mImpl->mesh(mesh, "attachMesh"));
     e->setMaterialName(materialName);
+    e->setCastShadows(castShadows);
     mImpl->node(node, "attachMesh")->attachObject(e);
 }
 
@@ -143,7 +150,7 @@ void Renderer::attachCamera(NodeHandle node)
     mImpl->node(node, "attachCamera")->attachObject(cam);
 }
 
-void Renderer::attachLight(NodeHandle node, const LightDesc& desc)
+LightHandle Renderer::attachLight(NodeHandle node, const LightDesc& desc)
 {
     Ogre::Light* l = mImpl->core.sceneMgr()->createLight();
     l->setType(desc.type == LightDesc::Type::Directional
@@ -151,9 +158,30 @@ void Renderer::attachLight(NodeHandle node, const LightDesc& desc)
                    : Ogre::Light::LT_POINT);
     l->setDiffuseColour(toColour(desc.colour));
     l->setSpecularColour(Ogre::ColourValue::Black); // PSX: specular_disabled
+    // Ogre culls lights against the camera frustum using the attenuation
+    // range (findLightsAffectingFrustum); a tight range makes wall lights
+    // pop off the moment the source leaves the view. Keep Ogre's range
+    // huge so lights stay registered, and pass the real falloff range
+    // through the constant-attenuation slot -- the PSX shader reads
+    // lightAtten.y (see psx_lighting.glsl) and ignores the rest.
     if (desc.type == LightDesc::Type::Point)
-        l->setAttenuation(desc.range, 1.0f, 0.0f, 0.0f); // shader reads range only
+        l->setAttenuation(1000.0f, desc.range, 0.0f, 0.0f);
+    l->setCastShadows(desc.castShadows);
+    // The huge Ogre-side attenuation range would also become the stencil
+    // volume extrusion distance; cap it to something scene-sized.
+    if (desc.castShadows)
+        l->setShadowFarDistance(desc.range * 2.0f);
     mImpl->node(node, "attachLight")->attachObject(l);
+    mImpl->lights.push_back(l);
+    return {static_cast<uint32_t>(mImpl->lights.size())};
+}
+
+void Renderer::setLightColour(LightHandle light, glm::vec3 colour)
+{
+    if (!light.valid() || light.id > mImpl->lights.size())
+        log::fatal("Renderer: invalid light handle %u in setLightColour",
+                   light.id);
+    mImpl->lights[light.id - 1]->setDiffuseColour(toColour(colour));
 }
 
 void Renderer::setCameraFov(float degrees)

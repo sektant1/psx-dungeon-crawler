@@ -13,6 +13,11 @@ struct NodeHandle {
     bool valid() const { return id != 0; }
 };
 
+struct LightHandle {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
 // The scene root, valid after Engine::init.
 inline constexpr NodeHandle kRootNode{1};
 

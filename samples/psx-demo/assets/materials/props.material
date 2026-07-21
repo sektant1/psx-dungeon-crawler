@@ -1,0 +1,160 @@
+// ------------------------------------------------------------------------
+// Prop materials: one per texture from the PSX_Modular_Medieval /
+// medievalweaponspack conversions (textures/props; same set as the game's
+// game.material). All share the PSX lit pair, point filtering, 1x1 uvScale.
+// ------------------------------------------------------------------------
+
+material Game/PropPlanks
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture wood_planks.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropBauerhaus
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture bauerhaus.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropWood
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture generic_wood.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropMarket
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture market.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropJute
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture jute.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropTerracotta
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture terracotta.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropLamp
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture lamp_texture.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropWeapon
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture MedievalWeaponsSword.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropHay
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture hay.jpg
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/PropMarketMisc
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture market_misc.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Treasure chest (low-poly-chest pack): baked albedo atlas.
+material Game/PropChest
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture chest_albedo.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

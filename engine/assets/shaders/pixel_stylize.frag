@@ -98,6 +98,11 @@ void main()
         normalDiff += normalIndicator(bias, n, nl, depthDiff);
         normalDiff = smoothstep(0.2, 0.8, normalDiff);
         normalDiff = clamp(normalDiff - negDepthDiff, 0.0, 1.0);
+        // Highlights are painted light; on a surface sitting in darkness
+        // they read as a glowing wire. Fade them with scene luminance so
+        // only lit geometry gets edge highlights.
+        float lum = dot(original, vec3(0.2126, 0.7152, 0.0722));
+        normalDiff *= smoothstep(0.04, 0.25, lum);
     }
 
     vec3 final = original;
