@@ -34,6 +34,9 @@ struct DebugUi::Impl {
     // Wireframe debug view (Wire_FS defaults).
     glm::vec3 wireColor{0.55f, 0.8f, 1.0f};
     float wireDepthFade = 0.0f;
+    // Line thickness in screen pixels, faked via the pixelation RT (GL core
+    // profile forbids glLineWidth > 1): render at 1/n res, nearest upscale.
+    int wireThickness = 1;
     float colDepth = 15.0f;
     float ditherBanding = 0.5f; // pattern amplitude 0..1, not just on/off
     float ditherDarkFade = 0.12f;

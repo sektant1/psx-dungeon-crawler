@@ -201,8 +201,12 @@ void DebugUi::Impl::drawShaders()
 {
     const EnvState& env = renderer->envState();
     bool wireframe = env.wireframe;
-    if (ImGui::Checkbox("wireframe view", &wireframe))
+    if (ImGui::Checkbox("wireframe view", &wireframe)) {
         renderer->setWireframeDebug(wireframe);
+        // Enabling forces pixelSize 1; reapply the chosen line thickness.
+        if (wireframe && wireThickness > 1)
+            renderer->setPixelSize(wireThickness);
+    }
     ImGui::SetItemTooltip("Debug view: every model as light-blue mesh lines\n"
                           "(PSX/DebugWireframe); original materials restore\n"
                           "on untick.");
@@ -217,6 +221,12 @@ void DebugUi::Impl::drawShaders()
         ImGui::SetItemTooltip("exp(-depth*fade): dims distant lines so dense\n"
                               "far geometry stops reading as solid noise;\n"
                               "0 = flat colour everywhere.");
+        if (ImGui::SliderInt("wire thickness (px)", &wireThickness, 1, 8))
+            renderer->setPixelSize(wireThickness);
+        ImGui::SetItemTooltip("GL core profile forbids wide lines, so lines\n"
+                              "thicken via the pixelation RT: rendered at 1/n\n"
+                              "resolution, nearest-upscaled to n-px chunks.\n"
+                              "Restores your pixel size on untick.");
     }
     if (ImGui::SliderFloat("vertex snap", &precisionMultiplier, 0.0f, 1.0f))
         renderer->setGlobalMaterialParam("precisionMultiplier",
