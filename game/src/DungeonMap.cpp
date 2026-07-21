@@ -1,6 +1,7 @@
 #include "DungeonMap.h"
 
 #include <eng/Log.h>
+#include <eng/Physics.h>
 #include <eng/Renderer.h>
 
 #include <glm/gtc/quaternion.hpp>
@@ -50,7 +51,8 @@ bool DungeonMap::debugArchNorthSouth(int col, int row) const
     return index >= 0 && mLayout.arch(index).northSouth;
 }
 
-bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
+bool DungeonMap::load(eng::Renderer& r, eng::Physics& physics,
+                      const std::string& tomlPath,
                       const std::string& tileMeshDir,
                       const std::string& propMeshDir)
 {
@@ -92,12 +94,13 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
         lampY = float((*light)["y"].value_or(2.55));
     }
 
-    return buildFromLayout(r, gen::Layout::fromRows(std::move(rows)), mCell,
-                           wallH, lightColour, lightEnergy, lightRange, lampY,
-                           tileMeshDir, propMeshDir);
+    return buildFromLayout(r, physics, gen::Layout::fromRows(std::move(rows)),
+                           mCell, wallH, lightColour, lightEnergy, lightRange,
+                           lampY, tileMeshDir, propMeshDir);
 }
 
-bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
+bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
+                                 gen::Layout layout,
                                  float cell, float wallH,
                                  glm::vec3 lightColour, float lightEnergy,
                                  float lightRange, float lampY,
@@ -107,6 +110,8 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
     // A DungeonMap can be rebuilt in place (editor/reload and future level
     // previews). None of its previous segmentation, portals or torch state
     // may leak into the new tile grid.
+    clearPhysics(); // free any colliders from a previous build
+    mPhysics = &physics;
     mRooms.clear();
     mArches.clear();
     mTorches.clear();
@@ -161,6 +166,16 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
     const auto put = [&](eng::MeshHandle m, glm::vec3 pos, float yawDeg) {
         r.addToStaticBatch(curBatch, m, kTileMaterial, pos, yawDeg);
     };
+    // Emit a static box collider and record its handle for clearPhysics().
+    const auto addBox = [&](glm::vec3 centre, glm::vec3 halfExtents) {
+        eng::BodyDesc d;
+        d.kind = eng::ShapeKind::Box;
+        d.halfExtents = halfExtents;
+        d.position = centre;
+        d.layer = eng::BodyLayer::Static;
+        d.dynamic = false;
+        mColliders.push_back(mPhysics->createBody(d));
+    };
     const auto growRoomAabb = [&](int room, glm::vec3 cellMin, glm::vec3 cellMax) {
         Room& rm = mRooms[size_t(room)];
         if (rm.aabbMin == rm.aabbMax && rm.aabbMin == glm::vec3(0.0f)) {
@@ -209,6 +224,36 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
                     put(arch, {x0, 0.0f, z0 + mCell}, 0.0f);
                 else
                     put(arch, {x0 + mCell, 0.0f, z0 + mCell}, 90.0f);
+
+                // Arch colliders: two solid side-blocks flanking the opening,
+                // mirroring the circleFits() arch logic. No full-wall boxes.
+                // TODO: replace with createMeshBody for mesh-accurate arches
+                //       (e.g. stairs/ramps) once that seam is wired up.
+                {
+                    const bool ns = mLayout.arch(aIdx).northSouth;
+                    const float x1 = x0 + mCell;
+                    const float z1 = z0 + mCell;
+                    const float mid  = ns ? x0 + mCell * 0.5f : z0 + mCell * 0.5f;
+                    const float lo   = mid - kArchHalfWidth;
+                    const float hi   = mid + kArchHalfWidth;
+                    if (ns) {
+                        // Arch runs N–S: side blocks span [x0,lo] and [hi,x1].
+                        const float hw0 = (lo - x0) * 0.5f;
+                        const float hw1 = (x1 - hi) * 0.5f;
+                        addBox({x0 + hw0, wallH * 0.5f, z0 + mCell * 0.5f},
+                               {hw0, wallH * 0.5f, mCell * 0.5f});
+                        addBox({hi + hw1, wallH * 0.5f, z0 + mCell * 0.5f},
+                               {hw1, wallH * 0.5f, mCell * 0.5f});
+                    } else {
+                        // Arch runs E–W: side blocks span [z0,lo] and [hi,z1].
+                        const float hz0 = (lo - z0) * 0.5f;
+                        const float hz1 = (z1 - hi) * 0.5f;
+                        addBox({x0 + mCell * 0.5f, wallH * 0.5f, z0 + hz0},
+                               {mCell * 0.5f, wallH * 0.5f, hz0});
+                        addBox({x0 + mCell * 0.5f, wallH * 0.5f, hi + hz1},
+                               {mCell * 0.5f, wallH * 0.5f, hz1});
+                    }
+                }
                 continue;
             }
 
@@ -216,6 +261,14 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
             // same footprint mirrored downward, raised to wall height.
             put(floor, {x0, 0.0f, z0 + mCell}, 0.0f);
             put(ceiling, {x0, wallH, z0 + mCell}, 0.0f);
+
+            // Floor and ceiling collision slabs (thin boxes centred just
+            // outside the walkable volume so the physics surface aligns).
+            {
+                const float hc = mCell * 0.5f;
+                addBox({x0 + hc, -0.05f,      z0 + hc}, {hc, 0.05f, hc});
+                addBox({x0 + hc, wallH + 0.05f, z0 + hc}, {hc, 0.05f, hc});
+            }
 
             // Wall segments on solid/void boundaries, normals facing the
             // cell. Sprinkle the plaster-and-stone-base variant for variety.
@@ -235,6 +288,22 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
                 put(pick(2), {x0, 0.0f, z0 + mCell}, 90.0f);
             if (wallE)
                 put(pick(3), {x0 + mCell, 0.0f, z0}, -90.0f);
+
+            // Wall collision boxes (thin slabs at each solid boundary face).
+            // wallN: -z face of cell (z = z0); wallS: +z face (z = z0+mCell).
+            // wallW: -x face (x = x0);          wallE: +x face (x = x0+mCell).
+            {
+                const float hc  = mCell * 0.5f;
+                const float hwH = wallH * 0.5f;
+                if (wallN)
+                    addBox({x0 + hc,    hwH, z0},         {hc,   hwH, 0.05f});
+                if (wallS)
+                    addBox({x0 + hc,    hwH, z0 + mCell}, {hc,   hwH, 0.05f});
+                if (wallW)
+                    addBox({x0,         hwH, z0 + hc},    {0.05f, hwH, hc});
+                if (wallE)
+                    addBox({x0 + mCell, hwH, z0 + hc},    {0.05f, hwH, hc});
+            }
 
             // Wooden posts on inner wall corners.
             if (wallN && wallW) pillarSpots.insert({col, row});
@@ -326,15 +395,25 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, gen::Layout layout,
     return true;
 }
 
-bool DungeonMap::loadFromRows(eng::Renderer& r, gen::Layout layout,
+bool DungeonMap::loadFromRows(eng::Renderer& r, eng::Physics& physics,
+                              gen::Layout layout,
                               const std::string& tileMeshDir,
                               const std::string& propMeshDir)
 {
     // Generator grids use the same tile scale and warm-torch defaults as the
     // TOML fallback (game/assets/dungeon.toml [dungeon.light]).
-    return buildFromLayout(r, std::move(layout), 4.0f, 3.0f,
+    return buildFromLayout(r, physics, std::move(layout), 4.0f, 3.0f,
                          {lin(1.0f), lin(0.68f), lin(0.34f)}, 4.4f, 6.5f, 1.9f,
                          tileMeshDir, propMeshDir);
+}
+
+void DungeonMap::clearPhysics()
+{
+    if (!mPhysics)
+        return;
+    for (eng::BodyHandle h : mColliders)
+        mPhysics->removeBody(h);
+    mColliders.clear();
 }
 
 void DungeonMap::update(eng::Renderer& r, float t) const

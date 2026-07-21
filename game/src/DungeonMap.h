@@ -11,6 +11,7 @@
 
 namespace eng {
 class Renderer;
+class Physics;
 } // namespace eng
 
 // Data-driven modular dungeon built from the PSX_Modular_Medieval tile set
@@ -37,14 +38,20 @@ class Renderer;
 class DungeonMap
 {
 public:
-    bool load(eng::Renderer& r, const std::string& tomlPath,
+    bool load(eng::Renderer& r, eng::Physics& physics,
+              const std::string& tomlPath,
               const std::string& tileMeshDir, const std::string& propMeshDir);
 
     // Build the dungeon from an in-memory grid (e.g. from gen::generate)
     // instead of a TOML file. Shares all geometry/segmentation/torch code.
-    bool loadFromRows(eng::Renderer& r, gen::Layout layout,
+    bool loadFromRows(eng::Renderer& r, eng::Physics& physics,
+                      gen::Layout layout,
                       const std::string& tileMeshDir,
                       const std::string& propMeshDir);
+
+    // Remove all static collider bodies registered by the last build.
+    // Call before rebuilding or destroying the map to avoid body leaks.
+    void clearPhysics();
 
     glm::vec3 spawn() const { return mSpawn; }
     glm::vec3 exitPos() const { return mExit; }
@@ -81,7 +88,8 @@ public:
 private:
     // Shared build core: assumes rows + cell/wall/light params are chosen.
     // Both load() (TOML) and loadFromRows() (generator) funnel through here.
-    bool buildFromLayout(eng::Renderer& r, gen::Layout layout,
+    bool buildFromLayout(eng::Renderer& r, eng::Physics& physics,
+                       gen::Layout layout,
                        float cell, float wallH, glm::vec3 lightColour,
                        float lightEnergy, float lightRange, float lampY,
                        const std::string& tileMeshDir,
@@ -136,4 +144,11 @@ private:
     glm::vec3 mOrigin{0.0f}; // world position of cell (0,0)'s NW corner
     glm::vec3 mSpawn{0.0f};
     glm::vec3 mExit{0.0f}; // world pos of the 'X' down-portal cell
+
+    // Physics: raw pointer to the long-lived Physics instance (owned by main).
+    // Null until the first build that passes a Physics reference.
+    eng::Physics* mPhysics = nullptr;
+    // Static box colliders emitted for the dungeon shell (floor, ceiling, walls,
+    // arch side-blocks). Freed by clearPhysics() before every rebuild.
+    std::vector<eng::BodyHandle> mColliders;
 };
