@@ -22,7 +22,7 @@ uniform vec3 highlightColor;      // default white
 uniform float outlineThickness;   // edge sample offset in low-res pixels (1..4)
 uniform float shadowThreshold;    // depth-edge smoothstep centre, default 0.25
 uniform float highlightThreshold; // normal-edge smoothstep centre, default 0.5
-uniform float highlightDarkFade;  // luma where highlights reach full, default 0.25
+uniform float highlightDarkFade;  // luma where highlights reach full, default 0.15
 
 // Ink outline (Boltgun-style): a hard contour drawn over the frame, separate
 // from the soft shadow/highlight tinting above. Depth silhouettes ink the
@@ -152,7 +152,6 @@ void main()
         // curvature. Normalise by d so a ledge inks the same at 2 m and 10 m.
         float rel = max(max(du + dd - 2.0 * d, dl + dr - 2.0 * d), 0.0) /
                     max(d, 1e-3);
-        float edge = clamp(rel * outlineDepthSens, 0.0, 1.0);
 
         vec3 n  = getNormal(uv);
 
@@ -162,7 +161,14 @@ void main()
         vec3 nl = getNormal(uv + vec2(-1.0,  0.0) * e);
         float nEdge = max(max(1.0 - dot(n, nu), 1.0 - dot(n, nd)),
                           max(1.0 - dot(n, nr), 1.0 - dot(n, nl)));
-        edge = max(edge, clamp(nEdge * outlineNormalSens, 0.0, 1.0));
+        // Sum, don't max: contact edges (e.g. a crystal shard meeting its
+        // base or the floor) often sit just under BOTH single-cue
+        // thresholds -- a small depth kink plus a moderate crease must add
+        // up to a line, or the outline goes patchy exactly where objects
+        // touch.
+        float edge = clamp(rel * outlineDepthSens +
+                               nEdge * outlineNormalSens,
+                           0.0, 1.0);
 
         // Sharpness narrows the smoothstep band around 0.5: at 1.0 the line
         // is a hard step (crisp pixel ink), at 0 it fades in over the full
