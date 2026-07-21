@@ -236,14 +236,22 @@ void Renderer::clearScene()
     sm->destroyAllEntities();
     sm->destroyAllManualObjects();
     sm->destroyAllLights();
+    // Entities are gone; now free their Ogre::Mesh resources (otherwise the
+    // next level's loadObj collides on the same resource name). Only the
+    // meshes this Renderer created are in meshNames.
+    auto& mm = Ogre::MeshManager::getSingleton();
+    for (const std::string& name : mImpl->meshNames)
+        if (mm.getByName(name))
+            mm.remove(name);
     // Reset handle bookkeeping; re-register the root as kRootNode (id 1), the
-    // same way detail::registerRoot does at startup.
+    // same way detail::registerRoot does at startup. nameCounter stays
+    // MONOTONIC across levels so freshly created Ogre objects can never reuse
+    // a name that a lingering resource still holds.
     mImpl->nodes.clear();
     mImpl->lights.clear();
     mImpl->staticBatches.clear();
     mImpl->savedMaterials.clear();
-    mImpl->meshNames.clear(); // buildLevel re-loadObj's every mesh it needs
-    mImpl->nameCounter = 0;
+    mImpl->meshNames.clear();
     mImpl->nodes.push_back(sm->getRootSceneNode());
 }
 

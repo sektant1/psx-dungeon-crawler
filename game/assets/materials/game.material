@@ -219,6 +219,48 @@ material Game/Singularity
     } }
 }
 
+// Descent portal: additive violet glow cube at the level's down-exit.
+material Game/PortalDown
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend add
+        depth_write off
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_Unlit
+        {
+            param_named modulateColor float4 0.6 0.2 1.0 1.0
+        }
+        texture_unit
+        {
+            texture white.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Ascent portal: additive pale-green glow cube at the level's entry.
+material Game/PortalUp
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend add
+        depth_write off
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_Unlit
+        {
+            param_named modulateColor float4 0.4 1.0 0.6 1.0
+        }
+        texture_unit
+        {
+            texture white.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
 // Wall torch (low-poly-torches pack): flat material colours baked into
 // vertex colours, so the texture is a plain white 8x8.
 material Game/Torch

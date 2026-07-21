@@ -266,9 +266,39 @@ static Level buildLevel(eng::Renderer& r, const std::string& assets,
         lv.chestGlow = r.attachLight(lv.chestBase, glow);
     }
 
-    // Portals are attached in Task 4 (depth used there for the up-portal).
-    (void)depth;
+    // Portals: emissive additive cubes as waist-high floor markers. The
+    // player spawns ON the portal cell (up on descend, down on ascend), so a
+    // small low cube reads as a glow at their feet rather than engulfing the
+    // camera; from across a room it's a visible landmark to aim at.
+    {
+        eng::MeshHandle cube = r.createInteriorBox(0.8f, 0);
+        lv.downPortal = r.createNode(eng::kRootNode,
+                                     lv.exit + glm::vec3(0.0f, 0.4f, 0.0f));
+        r.attachMesh(lv.downPortal, cube, "Game/PortalDown");
+        if (depth > 0) {
+            lv.upPortal = r.createNode(eng::kRootNode,
+                                       lv.spawn + glm::vec3(0.0f, 0.4f, 0.0f));
+            r.attachMesh(lv.upPortal, cube, "Game/PortalUp");
+        }
+    }
     return lv;
+}
+
+// Returns +1 if the player is aiming at the down portal, -1 at the up portal,
+// 0 at neither (mirrors DungeonMap::findTorch: within maxDist, ~25 deg of view).
+static int aimedPortal(const Level& lv, glm::vec3 eye, glm::vec3 forward,
+                       float maxDist, bool hasUp)
+{
+    const auto looking = [&](glm::vec3 target) {
+        const glm::vec3 to = target - eye;
+        const float d = glm::length(to);
+        return d > 1e-3f && d <= maxDist && glm::dot(to / d, forward) >= 0.9f;
+    };
+    if (looking(lv.exit + glm::vec3(0.0f, 0.4f, 0.0f)))
+        return 1;
+    if (hasUp && looking(lv.spawn + glm::vec3(0.0f, 0.4f, 0.0f)))
+        return -1;
+    return 0;
 }
 
 int main(int, char**)
@@ -297,28 +327,38 @@ int main(int, char**)
     uint32_t baseSeed = 1;
     if (const char* s = std::getenv("PSX_GEN_SEED"))
         baseSeed = uint32_t(std::strtoul(s, nullptr, 10));
-    Level level = buildLevel(r, assets, baseSeed, 0);
 
-    // ------------------------------------------------------- FPS player ---
-    FpsController player;
+    // Persistent level stack: seeds[d] is depth d's seed (stored so revisits
+    // reuse it -> identical layout). Live scenes are never cached; one level
+    // is live at a time and rebuilt on every transition.
+    std::vector<uint32_t> seeds{baseSeed};
+    int depth = 0;
     const float speed = float(engine.config().getNumber("player.speed", 3.0));
     const float sens =
         float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
-    player.init(r, level.spawn, speed, sens, glm::vec3(-1000.0f),
-                glm::vec3(1000.0f));
-    player.setResolver([&level](glm::vec3 from, glm::vec3 to) {
-        return level.map.resolveMove(from, to, 0.35f);
-    });
-    // Distance-based readability: a weak cool light carried at the player's
-    // head keeps the near field legible; the fog swallows everything else.
-    {
+
+    Level level;
+    FpsController player;
+
+    // Wipe the scene, build the level at `depth`, and (re)spawn the player.
+    // atExit spawns at the down-portal (arrived by ascending); else at entry.
+    const auto enterLevel = [&](bool atExit) {
+        r.clearScene();
+        level = buildLevel(r, assets, seeds[size_t(depth)], depth);
+        const glm::vec3 p = atExit ? level.exit : level.spawn;
+        player.init(r, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
+        player.setResolver([&level](glm::vec3 from, glm::vec3 to) {
+            return level.map.resolveMove(from, to, 0.35f);
+        });
+        // Carried light rides the fresh head node (the old one was destroyed).
         eng::LightDesc carry;
         carry.colour = glm::vec3(std::pow(0.55f, 2.2f), std::pow(0.65f, 2.2f),
                                  std::pow(0.55f, 2.2f)) * 0.8f;
         carry.range = 5.0f;
         r.attachLight(player.headNode(), carry);
-    }
-    engine.input().setMouseGrab(true);
+        engine.input().setMouseGrab(true);
+    };
+    enterLevel(false); // depth 0, spawn at entry
 
     engine.debugUi().addPanel("Player", [&player] {
         ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);
@@ -372,7 +412,27 @@ int main(int, char**)
             if (in.wasPressed("interact"))
                 level.map.toggleTorch(r, aimed);
         } else {
-            engine.debugUi().setHudPrompt("");
+            // Portal interaction (when not already prompting a torch).
+            const int portal = aimedPortal(level, player.eyePosition(),
+                                           player.forward(), 3.0f, depth > 0);
+            if (portal > 0) {
+                engine.debugUi().setHudPrompt("Press [E] to descend");
+                if (in.wasPressed("interact")) {
+                    if (depth + 1 == int(seeds.size()))
+                        seeds.push_back(baseSeed +
+                                        uint32_t(depth + 1) * 0x9E3779B9u);
+                    ++depth;
+                    enterLevel(false); // arrive at the new level's entry
+                }
+            } else if (portal < 0) {
+                engine.debugUi().setHudPrompt("Press [E] to ascend");
+                if (in.wasPressed("interact")) {
+                    --depth;
+                    enterLevel(true); // arrive at the down-portal you left
+                }
+            } else {
+                engine.debugUi().setHudPrompt("");
+            }
         }
 
         engine.renderFrame(dt);
