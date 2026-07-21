@@ -121,6 +121,12 @@ private:
     PortalVisual downPortal{};
     PortalVisual upPortal{}; // invalid at depth 0
     std::vector<ShowcaseExhibit> exhibits;
+    struct WorldLabel {
+        eng::NodeHandle node{};
+        eng::SpriteHandle sprite{};
+        glm::vec3 position{0.0f};
+    };
+    std::vector<WorldLabel> worldLabels;
 };
 
 // Read-only generated-grid inspector. The dungeon owns the data; this only
@@ -325,7 +331,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                {-8.8f, 0.0f, 4.5f}, 15.0f);
         place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
                {-9.0f, 0.0f, 3.4f}, 80.0f);
-        {
+        if (depth == 0) {
             const glm::vec3 c{-9.0f, 0.0f, -4.5f};
             place(crate, "Game/PropMarket", c, 10.0f, noScale, false);
             place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f,
@@ -457,12 +463,18 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         down.lightColour = {0.06f, 0.42f, 0.025f};
         down.yawDegrees = lv.map.exitYawDegrees();
         lv.downPortal = createPortal(r, lv.exit, down);
-        {
+        if (depth == 0) {
+            const glm::vec3 local{0.0f, 2.68f, 2.32f};
             const eng::NodeHandle label = r.createNode(
-                lv.downPortal.root, {0.0f, 2.68f, 2.32f});
+                lv.downPortal.root, local);
             eng::TextSpriteStyle style;
-            style.worldHeight = 0.38f;
-            r.attachTextSprite(label, "DUNGEON PORTAL", style);
+            style.worldHeight = 0.44f;
+            const eng::SpriteHandle sprite =
+                r.attachTextSprite(label, "DUNGEON PORTAL", style);
+            r.setSpriteVisible(sprite, false);
+            const float yaw = glm::radians(down.yawDegrees);
+            lv.worldLabels.push_back({label, sprite, lv.exit + glm::vec3(
+                std::sin(yaw) * local.z, local.y, std::cos(yaw) * local.z)});
         }
         portalBlockers(lv.exit, "Dungeon Portal — animated fel gate");
         if (depth > 0) {
@@ -471,13 +483,6 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             up.material = "Game/PortalUp";
             up.lightColour = {0.18f, 0.90f, 1.35f};
             lv.upPortal = createPortal(r, lv.spawn, up);
-            {
-                const eng::NodeHandle label = r.createNode(
-                    lv.upPortal.root, {0.0f, 2.68f, 2.32f});
-                eng::TextSpriteStyle style;
-                style.worldHeight = 0.38f;
-                r.attachTextSprite(label, "RETURN PORTAL", style);
-            }
             portalBlockers(lv.spawn, "Return Portal — animated arcane gate");
         }
     }
@@ -493,8 +498,11 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                 0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f);
             const eng::NodeHandle labelNode = r.createNode(eng::kRootNode, anchor);
             eng::TextSpriteStyle style;
-            style.worldHeight = 0.32f;
-            r.attachTextSprite(labelNode, exhibit.label, style);
+            style.worldHeight = 0.36f;
+            const eng::SpriteHandle sprite =
+                r.attachTextSprite(labelNode, exhibit.label, style);
+            r.setSpriteVisible(sprite, false);
+            lv.worldLabels.push_back({labelNode, sprite, anchor});
         }
     }
     return lv;
@@ -563,6 +571,20 @@ std::string LiveLevel::showcasePrompt(glm::vec3 eye, glm::vec3 forward) const
 void LiveLevel::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos)
 {
     map.updateVisibility(r, cameraPos, 30.0f);
+    // Labels ease in over the final metre instead of popping at a hard range.
+    // Scaling a billboard preserves its camera-facing orientation and the
+    // fully hidden state avoids distant gallery clutter and draw cost.
+    constexpr float revealStart = 5.5f;
+    constexpr float fullSizeAt = 4.4f;
+    for (const WorldLabel& label : worldLabels) {
+        const float distance = glm::length(label.position - cameraPos);
+        float t = glm::clamp((revealStart - distance) /
+                                 (revealStart - fullSizeAt),
+                             0.0f, 1.0f);
+        t = t * t * (3.0f - 2.0f * t);
+        r.setSpriteVisible(label.sprite, t > 0.015f);
+        r.setScale(label.node, glm::vec3(t));
+    }
 }
 
 void LiveLevel::appendTargets(std::vector<GameplayTarget>& targets,
@@ -620,6 +642,8 @@ int main(int, char**)
     const float speed = float(engine.config().getNumber("player.speed", 3.0));
     const float sens =
         float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
+
+    bool showColliders = false;
 
     eng::Physics physics;
     physics.init();
@@ -812,11 +836,12 @@ int main(int, char**)
                                                        : (player.grounded() ? "grounded"
                                                                             : "airborne"));
     });
-    engine.debugUi().addPanel("Physics", [&physics, &player] {
+    engine.debugUi().addPanel("Physics", [&physics, &player, &showColliders] {
         ImGui::Text("active bodies: %d", physics.activeBodyCount());
         float g = physics.gravityY();
         if (ImGui::SliderFloat("gravity Y", &g, -40.0f, 0.0f, "%.1f"))
             physics.setGravity(g);
+        ImGui::Checkbox("show colliders", &showColliders);
         ImGui::Separator();
         ImGui::Text("grounded: %s", player.grounded() ? "yes" : "no");
         const glm::vec3 n = player.groundNormal();
@@ -935,6 +960,20 @@ int main(int, char**)
                 projectiles.fireBolt(physics, r, player.eyePosition(), player.forward());
             if (in.wasMouseClicked())
                 melee.startSwing();
+        }
+
+        // Physics collider wireframe overlay
+        if (showColliders) {
+            static std::vector<eng::Physics::DebugLine> pl;
+            pl.clear();
+            physics.debugDraw(pl);
+            static std::vector<eng::Renderer::DebugLine> dl;
+            dl.clear();
+            for (const auto& l : pl)
+                dl.push_back({l.a, l.b, l.colour});
+            r.setDebugLines(dl);
+        } else {
+            r.setDebugLines({});
         }
 
         engine.renderFrame(dt);

@@ -55,6 +55,7 @@ struct BodyRec {
     JPH::RVec3 prevPos = JPH::RVec3::sZero(), curPos  = JPH::RVec3::sZero();
     JPH::Quat  prevRot = JPH::Quat::sIdentity(), curRot = JPH::Quat::sIdentity();
     bool alive = false;
+    BodyLayer layer = BodyLayer::Prop;
 };
 
 // ---- character record ----
@@ -312,6 +313,7 @@ BodyHandle Physics::createBody(const BodyDesc& desc) {
     rec.prevPos   = pos;
     rec.prevRot   = rot;
     rec.alive     = true;
+    rec.layer     = desc.layer;
 
     mImpl->idToSlot[bid.GetIndexAndSequenceNumber()] = slot;
     ++mImpl->liveBodies;
@@ -415,6 +417,7 @@ BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
     rec.prevPos  = jpos;
     rec.prevRot  = jrot;
     rec.alive    = true;
+    rec.layer    = layer;
 
     mImpl->idToSlot[bid.GetIndexAndSequenceNumber()] = slot;
     ++mImpl->liveBodies;
@@ -695,6 +698,72 @@ int Physics::overlap(const BodyDesc& shape, glm::vec3 at,
 }
 void Physics::setContactCallback(HitCallback cb) {
     mImpl->contactCb = std::move(cb);
+}
+
+// ---- debug draw ----
+static void pushBoxEdges(std::vector<Physics::DebugLine>& out,
+                         const glm::vec3& mn, const glm::vec3& mx,
+                         const glm::vec3& col)
+{
+    // 8 corners of the AABB
+    glm::vec3 c[8] = {
+        {mn.x, mn.y, mn.z}, {mx.x, mn.y, mn.z},
+        {mx.x, mn.y, mx.z}, {mn.x, mn.y, mx.z},
+        {mn.x, mx.y, mn.z}, {mx.x, mx.y, mn.z},
+        {mx.x, mx.y, mx.z}, {mn.x, mx.y, mx.z},
+    };
+    // 12 edges: 4 bottom, 4 top, 4 vertical
+    static const int edges[12][2] = {
+        {0,1},{1,2},{2,3},{3,0}, // bottom
+        {4,5},{5,6},{6,7},{7,4}, // top
+        {0,4},{1,5},{2,6},{3,7}, // verticals
+    };
+    for (auto& e : edges)
+        out.push_back({c[e[0]], c[e[1]], col});
+}
+
+void Physics::debugDraw(std::vector<DebugLine>& out) const
+{
+    if (!mImpl->inited) return;
+
+    BodyInterface& bi = mImpl->system.GetBodyInterface();
+
+    for (const auto& rec : mImpl->bodies) {
+        if (!rec.alive) continue;
+
+        // Colour by layer
+        glm::vec3 col{1.0f, 1.0f, 1.0f};
+        switch (rec.layer) {
+            case BodyLayer::Static:     col = {0.5f, 0.5f, 0.5f}; break;
+            case BodyLayer::Prop:       col = {0.2f, 1.0f, 0.2f}; break;
+            case BodyLayer::Projectile: col = {1.0f, 1.0f, 0.2f}; break;
+            case BodyLayer::Player:     col = {0.2f, 0.8f, 1.0f}; break;
+            case BodyLayer::Trigger:    col = {1.0f, 0.4f, 1.0f}; break;
+        }
+
+        // Read the body's world-space AABB under a lock to avoid races.
+        JPH::BodyLockRead lock(mImpl->system.GetBodyLockInterface(), rec.id);
+        if (!lock.Succeeded()) continue;
+        const JPH::AABox& box = lock.GetBody().GetWorldSpaceBounds();
+        const JPH::Vec3& mn = box.mMin;
+        const JPH::Vec3& mx = box.mMax;
+        pushBoxEdges(out,
+                     {mn.GetX(), mn.GetY(), mn.GetZ()},
+                     {mx.GetX(), mx.GetY(), mx.GetZ()},
+                     col);
+    }
+
+    // Characters: draw a box from their radius/height
+    const glm::vec3 charCol{0.2f, 0.8f, 1.0f};
+    for (const auto& rec : mImpl->characters) {
+        if (!rec.alive || !rec.ch) continue;
+        JPH::RVec3 p = rec.ch->GetPosition();
+        const float r = rec.radius;
+        const float h = rec.height;
+        glm::vec3 centre(float(p.GetX()), float(p.GetY()) + h * 0.5f, float(p.GetZ()));
+        glm::vec3 half{r, h * 0.5f, r};
+        pushBoxEdges(out, centre - half, centre + half, charCol);
+    }
 }
 
 } // namespace eng

@@ -91,6 +91,13 @@ public:
     using HitCallback = std::function<void(const HitEvent&)>;
     void setContactCallback(HitCallback);
 
+    // Debug visualisation: fills `out` with wireframe edges for every live
+    // body (AABB from Jolt) and every live character (capsule extents).
+    // Colour-coded by layer: Static=grey, Prop=green, Projectile=yellow,
+    // Player/character=cyan. Call once per frame when the overlay is on.
+    struct DebugLine { glm::vec3 a{0}; glm::vec3 b{0}; glm::vec3 colour{1,1,1}; };
+    void debugDraw(std::vector<DebugLine>& out) const;
+
 private:
     friend class EngContactListener;
     struct Impl;

@@ -372,6 +372,13 @@ fragment_program Wire_FS glsl
     }
 }
 
+// Debug line overlay fragment shader: uses per-vertex colour passed through
+// by PSX_VS_Unlit (vColour attribute -> vColour varying).
+fragment_program DebugLines_FS glsl
+{
+    source debug_lines.frag
+}
+
 // --------------------------------------------------------- post process ---
 
 vertex_program Dither_VS glsl

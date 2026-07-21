@@ -46,6 +46,10 @@ struct Renderer::Impl {
     // Original sub-entity materials, saved while the wireframe debug view
     // holds every entity on PSX/DebugWireframe.
     std::unordered_map<Ogre::SubEntity*, std::string> savedMaterials;
+
+    // Immediate-mode debug line overlay (physics collider wireframes etc.)
+    // Created lazily on first use; recreated if clearScene destroyed it.
+    Ogre::ManualObject* debugLines = nullptr;
     // Post-chain settings stashed by setWireframeDebug(true) and restored
     // on toggle-off (the view bypasses them so lines stay crisp).
     struct {
@@ -430,6 +434,7 @@ void Renderer::clearScene()
     mImpl->staticBatches.clear();
     mImpl->savedMaterials.clear();
     mImpl->meshNames.clear();
+    mImpl->debugLines = nullptr; // destroyAllManualObjects freed it
     mImpl->nodes.push_back(sm->getRootSceneNode());
 }
 
@@ -758,6 +763,32 @@ const EnvState& Renderer::envState() const { return mImpl->env; }
 void Renderer::writeScreenshot(const std::string& path)
 {
     mImpl->core.writeScreenshot(path);
+}
+
+void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
+{
+    Ogre::SceneManager* sm = mImpl->core.sceneMgr();
+    // Lazy creation (or re-creation after clearScene).
+    if (!mImpl->debugLines) {
+        mImpl->debugLines = sm->createManualObject("__eng_debug_lines");
+        mImpl->debugLines->setDynamic(true);
+        sm->getRootSceneNode()->createChildSceneNode()->attachObject(
+            mImpl->debugLines);
+    }
+    mImpl->debugLines->clear();
+    if (lines.empty())
+        return;
+    // PSX/DebugLines: unlit, per-vertex colour, depth_write off (declared in
+    // engine/assets/materials/psx.material + debug_lines.frag).
+    const std::string matName = "PSX/DebugLines";
+    mImpl->debugLines->begin(matName, Ogre::RenderOperation::OT_LINE_LIST);
+    for (const auto& l : lines) {
+        mImpl->debugLines->position(l.a.x, l.a.y, l.a.z);
+        mImpl->debugLines->colour(Ogre::ColourValue(l.colour.r, l.colour.g, l.colour.b, 1.0f));
+        mImpl->debugLines->position(l.b.x, l.b.y, l.b.z);
+        mImpl->debugLines->colour(Ogre::ColourValue(l.colour.r, l.colour.g, l.colour.b, 1.0f));
+    }
+    mImpl->debugLines->end();
 }
 
 namespace detail {

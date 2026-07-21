@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace eng {
 
@@ -165,6 +166,12 @@ public:
     void setGradeParams(float desaturate, float contrast,
                         glm::vec3 shadowTint, glm::vec3 midTint);
     void writeScreenshot(const std::string& path);
+
+    // --- debug line overlay -----------------------------------------------
+    struct DebugLine { glm::vec3 a{0}; glm::vec3 b{0}; glm::vec3 colour{1,1,1}; };
+    // Replace the debug line set for this frame. Pass empty to clear. Rebuilt
+    // into a single unlit line-list; call once per frame when the overlay is on.
+    void setDebugLines(const std::vector<DebugLine>& lines);
 
 private:
     friend class Engine; // Engine constructs, initialises, and drives it
