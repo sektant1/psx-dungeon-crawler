@@ -127,7 +127,9 @@ void main()
         // they read as a glowing wire. Fade them with scene luminance so
         // only lit geometry gets edge highlights.
         float lum = dot(original, vec3(0.2126, 0.7152, 0.0722));
-        normalDiff *= smoothstep(0.04, max(highlightDarkFade, 0.05), lum);
+        // Floor lowered from the reference's 0.04: the verdigris palette is
+        // much darker, and highlights near torch pools sit below the old gate.
+        normalDiff *= smoothstep(0.02, max(highlightDarkFade, 0.05), lum);
     }
 
     // Ink outline: relative depth steps (dn - d) / d so a 10 cm ledge inks
@@ -172,6 +174,6 @@ void main()
                 normalDiff * highlightsEnabled);
     final = mix(final, mix(original, shadowColor, shadowStrength),
                 depthDiff * shadowsEnabled);
-    final = mix(final, outlineColor, ink * 0.0); // TEMP: ink neutered
+    final = mix(final, outlineColor, ink); // ink draws over shading
     fragColour = vec4(final, 1.0);
 }

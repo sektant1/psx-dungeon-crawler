@@ -281,6 +281,17 @@ fragment_program PSX_FS_LightVolume glsl
     }
 }
 
+// Debug wireframe view (PSX/DebugWireframe): flat colour, default light blue.
+fragment_program Wire_FS glsl
+{
+    source wire.frag
+    default_params
+    {
+        param_named wireColor float4 0.55 0.8 1.0 1.0
+        param_named_auto farClip far_clip_distance
+    }
+}
+
 // --------------------------------------------------------- post process ---
 
 vertex_program Dither_VS glsl
@@ -338,12 +349,12 @@ fragment_program Stylize_FS glsl
         param_named outlineThickness float 1.0
         param_named shadowThreshold float 0.25
         param_named highlightThreshold float 0.5
-        param_named highlightDarkFade float 0.25
+        param_named highlightDarkFade float 0.15
         param_named outlineEnabled float 1.0
         param_named outlineColor float3 0.0 0.0 0.0
         param_named outlineOpacity float 0.85
-        param_named outlineDepthSens float 0.0
-        param_named outlineNormalSens float 0.0
+        param_named outlineDepthSens float 15.0
+        param_named outlineNormalSens float 0.6
         param_named outlineSharpness float 0.85
         param_named outlineDistFade float 0.08
     }
