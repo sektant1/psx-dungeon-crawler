@@ -132,7 +132,7 @@ void main()
 #else
     // Verdigris murk: desaturate + darken with distance so geometry sinks
     // into the fog instead of flat-lerping toward its colour.
-    float sink = fog_amount * fogDesatBoost;
+    float sink = clamp(fog_amount * fogDesatBoost, 0.0, 1.0);
     rgb = mix(rgb, vec3(dot(rgb, vec3(0.2126, 0.7152, 0.0722))) * 0.6, sink);
     rgb = mix(rgb, fogColour.rgb, fog_amount);   // fogColour already linear
 #endif

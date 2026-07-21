@@ -39,7 +39,9 @@ vec3 psxComputeLight(vec3 vsPos, vec3 vsNormal)
         diffuse += lightDiffuse[i].rgb * max(dot(vsNormal, L), 0.0) * att;
     }
     // Stepped torch-pool rings: quantize the diffuse term only, so ambient
-    // never bands the whole scene toward black.
+    // never bands the whole scene toward black. Deliberately unclamped:
+    // floor() keeps banding values above 1, preserving the overbright torch
+    // cores the bloom bright-pass thresholds on.
     if (lightSteps > 0.5)
         diffuse = floor(diffuse * lightSteps) / lightSteps;
     return ambientLight.rgb + diffuse;

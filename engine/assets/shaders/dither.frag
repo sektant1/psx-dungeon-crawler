@@ -19,10 +19,8 @@ out vec4 fragColour;
 void main()
 {
     vec4 base_color = texture(sceneTex, uv);
-    if (ditherEnabled < 0.5) {
-        fragColour = vec4(base_color.rgb, 1.0);
-        return;
-    }
+    // Grade runs before the dither bypass so "dither off" still keeps the
+    // palette-unifying grade (independent toggles, like stylizeEnabled).
     if (gradeEnabled > 0.5) {
         // Unify mismatched pack textures: desaturate a touch, split-tone
         // (shadows toward the tint colour, mids/highs toward warm), then a
@@ -34,6 +32,10 @@ void main()
         base_color.rgb *= tint;
         base_color.rgb = clamp((base_color.rgb - 0.5) * gradeContrast + 0.5,
                                0.0, 1.0);
+    }
+    if (ditherEnabled < 0.5) {
+        fragColour = vec4(base_color.rgb, 1.0);
+        return;
     }
     vec2 dith_size = vec2(textureSize(ditherTex, 0));
     vec2 buf_size = vec2(textureSize(sceneTex, 0));
