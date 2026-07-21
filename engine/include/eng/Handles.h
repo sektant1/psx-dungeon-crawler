@@ -26,4 +26,16 @@ struct StaticBatchHandle {
 // The scene root, valid after Engine::init.
 inline constexpr NodeHandle kRootNode{1};
 
+struct BodyHandle {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+    bool operator==(const BodyHandle& o) const { return id == o.id; }
+    bool operator!=(const BodyHandle& o) const { return id != o.id; }
+};
+
+struct CharacterHandle {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
 } // namespace eng
