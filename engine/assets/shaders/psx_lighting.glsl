@@ -9,12 +9,14 @@ uniform vec4 lightAtten[16];   // y = range (x is a huge dummy so Ogre's
                               // frustum light-culling never drops the light)
 uniform float lightCount;
 uniform float omniAttenuation; // Godot OmniLight3D.omni_attenuation exponent
+uniform float lightSteps;      // > 0.5: posterize diffuse into N hard bands
+                               // (ambient stays continuous); 0 = smooth
 
 // (Godot pre-multiplies light energy by PI to cancel the 1/PI in its lambert
 //  BRDF, so plain NdotL * colour*energy matches 1:1.)
 vec3 psxComputeLight(vec3 vsPos, vec3 vsNormal)
 {
-    vec3 light = ambientLight.rgb;
+    vec3 diffuse = vec3(0.0);
     int count = int(min(lightCount, 16.0) + 0.5);
     for (int i = 0; i < count; ++i)
     {
@@ -34,7 +36,11 @@ vec3 psxComputeLight(vec3 vsPos, vec3 vsNormal)
             att = pow(clamp(1.0 - dist / lightAtten[i].y, 0.0, 1.0),
                       omniAttenuation);
         }
-        light += lightDiffuse[i].rgb * max(dot(vsNormal, L), 0.0) * att;
+        diffuse += lightDiffuse[i].rgb * max(dot(vsNormal, L), 0.0) * att;
     }
-    return light;
+    // Stepped torch-pool rings: quantize the diffuse term only, so ambient
+    // never bands the whole scene toward black.
+    if (lightSteps > 0.5)
+        diffuse = floor(diffuse * lightSteps) / lightSteps;
+    return ambientLight.rgb + diffuse;
 }
