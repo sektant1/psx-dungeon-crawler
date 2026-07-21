@@ -371,9 +371,16 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             bool wallS = !walkableCell(col, row + 1);
             bool wallW = !walkableCell(col - 1, row);
             bool wallE = !walkableCell(col + 1, row);
+            // Preserve physical boundaries before suppressing the visual wall
+            // behind a portal. The opaque membrane is a solid threshold: the
+            // player must interact with it rather than walking through it.
+            const bool collideN = wallN;
+            const bool collideS = wallS;
+            const bool collideW = wallW;
+            const bool collideE = wallE;
             // The portal factory supplies its own masonry surround. Cut the
-            // matching tile wall and collider out of the X cell so the energy
-            // membrane opens into darkness instead of overlaying brickwork.
+            // matching tile wall out of the X cell so the energy membrane
+            // replaces the brickwork while retaining the boundary collider.
             if (c == 'X') {
                 if (mExitYawDegrees == 0.0f) wallN = false;
                 else if (mExitYawDegrees == 180.0f) wallS = false;
@@ -399,13 +406,13 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             {
                 const float hc  = mCell * 0.5f;
                 const float hwH = wallH * 0.5f;
-                if (wallN)
+                if (collideN)
                     addBox({x0 + hc,    hwH, z0},         {hc,   hwH, 0.05f});
-                if (wallS)
+                if (collideS)
                     addBox({x0 + hc,    hwH, z0 + mCell}, {hc,   hwH, 0.05f});
-                if (wallW)
+                if (collideW)
                     addBox({x0,         hwH, z0 + hc},    {0.05f, hwH, hc});
-                if (wallE)
+                if (collideE)
                     addBox({x0 + mCell, hwH, z0 + hc},    {0.05f, hwH, hc});
             }
 
