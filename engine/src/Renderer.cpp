@@ -359,6 +359,12 @@ void Renderer::setLightSteps(float steps)
     setGlobalMaterialParam("lightSteps", steps);
 }
 
+void Renderer::setFogDesatBoost(float boost)
+{
+    mImpl->env.fogDesatBoost = boost;
+    setGlobalMaterialParam("fogDesatBoost", boost);
+}
+
 void Renderer::setBloomEnabled(bool enabled)
 {
     mImpl->env.bloom = enabled;

@@ -32,6 +32,8 @@ uniform float rimPower;
 uniform vec4 fogColour;   // scene fog colour
 uniform vec4 fogParams;   // x = density (Ogre FOG_EXP)
 uniform float farClip;
+uniform float fogDesatBoost; // 0 = off: sink distant colour toward grey
+                             // before the fog mix so props drown, not lerp
 
 #ifdef LIT
 #include <psx_lighting.glsl>
@@ -128,6 +130,10 @@ void main()
 #ifdef BLEND_ADD
     rgb *= (1.0 - fog_amount);    // additive blend: fade to black, never brighten
 #else
+    // Verdigris murk: desaturate + darken with distance so geometry sinks
+    // into the fog instead of flat-lerping toward its colour.
+    float sink = fog_amount * fogDesatBoost;
+    rgb = mix(rgb, vec3(dot(rgb, vec3(0.2126, 0.7152, 0.0722))) * 0.6, sink);
     rgb = mix(rgb, fogColour.rgb, fog_amount);   // fogColour already linear
 #endif
 
