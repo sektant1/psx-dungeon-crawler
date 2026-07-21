@@ -13,6 +13,27 @@ find_package(OGRE 14 REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(glm REQUIRED)
 
+include(FetchContent)
+# Jolt Physics. Pin to a stable release tag; bump deliberately.
+FetchContent_Declare(
+    JoltPhysics
+    GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG        v5.6.0
+    SOURCE_SUBDIR  Build
+)
+# Match our determinism/perf posture; disable debug renderer (needs dxc).
+set(DOUBLE_PRECISION OFF CACHE BOOL "" FORCE)
+set(GENERATE_DEBUG_SYMBOLS ON CACHE BOOL "" FORCE)
+set(CROSS_PLATFORM_DETERMINISTIC OFF CACHE BOOL "" FORCE)
+set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+set(DEBUG_RENDERER_IN_DISTRIBUTION OFF CACHE BOOL "" FORCE)
+# The game uses Jolt's CPU physics only. Vulkan compute pulls in DXC shader
+# compilation even with Jolt's debug renderer disabled.
+set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(JoltPhysics)
+
 add_library(eng STATIC
     engine/src/RenderCore.cpp
     engine/src/ObjLoader.cpp
@@ -24,12 +45,13 @@ add_library(eng STATIC
     engine/src/Platform.cpp
     engine/src/Engine.cpp
     engine/src/DebugUi.cpp
+    engine/src/Physics.cpp
 )
 target_include_directories(eng
     PUBLIC engine/include
     PRIVATE third_party
 )
-target_link_libraries(eng PUBLIC glm::glm OgreOverlay PRIVATE OgreMain SDL2::SDL2)
+target_link_libraries(eng PUBLIC glm::glm OgreOverlay PRIVATE OgreMain SDL2::SDL2 Jolt)
 target_compile_definitions(eng PRIVATE
     ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
     OGRE_PLUGIN_DIR="${OGRE_PLUGIN_DIR}"
@@ -86,4 +108,23 @@ if(BUILD_TESTING)
     target_include_directories(fps_controller_tests PRIVATE game/src)
     target_link_libraries(fps_controller_tests PRIVATE eng)
     add_test(NAME fps_controller COMMAND fps_controller_tests)
+endif()
+
+# API documentation is optional so normal builds do not require Doxygen.
+find_package(Doxygen QUIET)
+if(Doxygen_FOUND)
+    set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/docs")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
+        @ONLY
+    )
+    add_custom_target(docs
+        COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+else()
+    message(STATUS "Doxygen not found; the docs target will not be available")
 endif()
