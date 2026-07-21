@@ -360,10 +360,18 @@ int main(int, char**)
     };
     enterLevel(false); // depth 0, spawn at entry
 
-    engine.debugUi().addPanel("Player", [&player] {
+    engine.debugUi().addPanel("Player", [&player, &r] {
         ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);
         ImGui::SliderFloat("mouse sensitivity", &player.sensitivity(), 0.0005f,
                            0.01f, "%.4f");
+        float baseFov = player.baseFov();
+        if (ImGui::SliderFloat("locomotion base FOV", &baseFov, 30.0f, 120.0f,
+                               "%.0f"))
+            player.setBaseFov(baseFov);
+        ImGui::Text("stance: %s", player.crouched() ? "crouched" : "standing");
+        ImGui::Text("sprint: %s  stamina: %3.0f%%",
+                    player.sprinting() ? "active" : "ready",
+                    player.sprintStamina() * 100.0f);
     });
 
     // ---------------------------------------------------------------- loop ---

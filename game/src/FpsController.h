@@ -10,9 +10,9 @@ class Input;
 class Renderer;
 } // namespace eng
 
-// First-person controller: yaw on a body node, pitch on a head node
-// (camera attached at eye height). Movement on the ground plane, clamped
-// to a room AABB, or resolved by a caller-provided collider (setResolver).
+// Grounded first-person controller inspired by the Godot FPS templates:
+// acceleration/deceleration, sprint stamina, hold-to-crouch and restrained
+// camera bob/FOV feedback. Yaw lives on the body, pitch on the head.
 class FpsController
 {
 public:
@@ -27,6 +27,12 @@ public:
 
     float& speed() { return mSpeed; }
     float& sensitivity() { return mSens; }
+    float sprintStamina() const { return mSprintStamina; } // normalized 0..1
+    bool crouched() const { return mCrouched; }
+    bool sprinting() const { return mSprinting; }
+    // Keeps locomotion feedback separate from a designer/debug-camera FOV.
+    float baseFov() const { return mBaseFov; }
+    void setBaseFov(float degrees);
 
     // Eye position (feet + eye height) and view direction, for interaction
     // ray checks.
@@ -46,5 +52,14 @@ private:
     float mPitch = 0.0f;
     float mSpeed = 3.0f;
     float mSens = 0.002f;
+    glm::vec2 mVelocity{0.0f};
+    float mSprintStamina = 1.0f;
+    float mBobPhase = 0.0f;
+    float mEyeHeight = 1.7f;
+    glm::vec3 mHeadOffset{0.0f, 1.7f, 0.0f};
+    float mBaseFov = 70.0f;
+    float mLastAppliedFov = 70.0f;
+    bool mCrouched = false;
+    bool mSprinting = false;
     MoveResolver mResolve;
 };

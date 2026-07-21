@@ -112,6 +112,17 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
                                const std::string& tileMeshDir,
                                const std::string& propMeshDir)
 {
+    // A DungeonMap can be rebuilt in place (editor/reload and future level
+    // previews). None of its previous segmentation, portals or torch state
+    // may leak into the new tile grid.
+    mRooms.clear();
+    mArches.clear();
+    mTorches.clear();
+    mCellRoom.clear();
+    mCellArch.clear();
+    mArchNS.clear();
+    mLastCurrentRooms.clear();
+
     mCell = cell;
     mRows = std::move(rows);
     if (mRows.empty()) {
@@ -147,8 +158,36 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
     const int rowsN = int(mRows.size());
     mCellRoom.assign(size_t(rowsN * mStride), -1);
     mCellArch.assign(size_t(rowsN * mStride), -1);
+    mArchNS.assign(size_t(rowsN * mStride), false);
 
     const auto idxOf = [&](int col, int row) { return row * mStride + col; };
+
+    // stone_archway is a complete tunnel: its two open faces are opposite
+    // and its other two sides are solid. Using it on a dead end, a turn or a
+    // T/cross intersection leaves either a visual hole or an invisible
+    // collision edge. Degrade those markers to ordinary floor before room
+    // segmentation, allowing the regular edge-wall pass below to seal them.
+    for (int row = 0; row < rowsN; ++row) {
+        for (int col = 0; col < int(mRows[row].size()); ++col) {
+            if (cellAt(col, row) != 'A')
+                continue;
+            const bool n = walkableCell(col, row - 1);
+            const bool s = walkableCell(col, row + 1);
+            const bool w = walkableCell(col - 1, row);
+            const bool e = walkableCell(col + 1, row);
+            const bool ns = n && s && !w && !e;
+            const bool ew = w && e && !n && !s;
+            if (!ns && !ew) {
+                eng::log::warn("DungeonMap: arch at col %d row %d is not a "
+                               "straight doorway; using floor + edge walls",
+                               col, row);
+                mRows[row][col] = '.';
+                continue;
+            }
+            mArchNS[size_t(idxOf(col, row))] = ns;
+        }
+    }
+
     // Assign arch indices first (each 'A' cell = one arch).
     for (int row = 0; row < rowsN; ++row)
         for (int col = 0; col < int(mRows[row].size()); ++col)
@@ -255,7 +294,6 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
     warm.range = lightRange;
     warm.castShadows = true; // torches throw hard prop shadows
 
-    mArchNS.assign(mRows.size() * 64, false); // 64 >= any sane row length
     std::set<std::pair<int, int>> pillarSpots; // corner keys, de-duplicated
 
     for (int row = 0; row < int(mRows.size()); ++row) {
@@ -278,23 +316,22 @@ bool DungeonMap::buildFromRows(eng::Renderer& r, std::vector<std::string> rows,
                              {x0 + mCell, wallH, z0 + mCell});
             }
 
-            // Floor spans x[0,cell] z[-cell,0] from its node; ceiling is the
-            // same footprint mirrored downward, raised to wall height.
-            put(floor, {x0, 0.0f, z0 + mCell}, 0.0f);
-            put(ceiling, {x0, wallH, z0 + mCell}, 0.0f);
-
             if (c == 'A') {
-                // Arch tunnel runs toward its walkable neighbours; the
-                // piece's own side walls replace this cell's wall segments.
-                const bool ns = walkableCell(col, row - 1) ||
-                                walkableCell(col, row + 1);
-                mArchNS[row * 64 + col] = ns;
-                if (ns)
+                // stone_archway is a complete cell (including floor and
+                // roof), so do not overlay the generic floor/ceiling here:
+                // coplanar faces fight each other and show as black/flicker
+                // artifacts under the PSX post process.
+                if (mArchNS[size_t(row * mStride + col)])
                     put(arch, {x0, 0.0f, z0 + mCell}, 0.0f);
                 else
                     put(arch, {x0 + mCell, 0.0f, z0 + mCell}, 90.0f);
                 continue;
             }
+
+            // Floor spans x[0,cell] z[-cell,0] from its node; ceiling is the
+            // same footprint mirrored downward, raised to wall height.
+            put(floor, {x0, 0.0f, z0 + mCell}, 0.0f);
+            put(ceiling, {x0, wallH, z0 + mCell}, 0.0f);
 
             // Wall segments on solid/void boundaries, normals facing the
             // cell. Sprinkle the plaster-and-stone-base variant for variety.
@@ -542,19 +579,48 @@ void DungeonMap::toggleTorch(eng::Renderer& r, int index)
         r.setLightColour(torch.light, glm::vec3(0.0f));
 }
 
-bool DungeonMap::walkableAt(float x, float z) const
+bool DungeonMap::circleFits(float x, float z, float radius) const
 {
-    const int col = int(std::floor((x - mOrigin.x) / mCell));
-    const int row = int(std::floor((z - mOrigin.z) / mCell));
-    const char c = cellAt(col, row);
-    if (!isWalkableChar(c))
-        return false;
-    if (c == 'A') {
-        // Only the arch's opening is passable, a band across the cell.
-        const float cx = mOrigin.x + (col + 0.5f) * mCell;
-        const float cz = mOrigin.z + (row + 0.5f) * mCell;
-        return mArchNS[row * 64 + col] ? std::abs(x - cx) < kArchHalfWidth
-                                       : std::abs(z - cz) < kArchHalfWidth;
+    // Circle/AABB is the exact 2D test for the square grid walls. It is less
+    // restrictive than the previous four-corner square approximation and,
+    // unlike point tests, matches the arch mesh's 1.2..2.8 m opening.
+    const auto hitsRect = [&](float minX, float minZ, float maxX, float maxZ) {
+        const float nearX = glm::clamp(x, minX, maxX);
+        const float nearZ = glm::clamp(z, minZ, maxZ);
+        const float dx = x - nearX;
+        const float dz = z - nearZ;
+        return dx * dx + dz * dz < radius * radius;
+    };
+
+    const int colMin = int(std::floor((x - radius - mOrigin.x) / mCell));
+    const int colMax = int(std::floor((x + radius - mOrigin.x) / mCell));
+    const int rowMin = int(std::floor((z - radius - mOrigin.z) / mCell));
+    const int rowMax = int(std::floor((z + radius - mOrigin.z) / mCell));
+    for (int row = rowMin; row <= rowMax; ++row) {
+        for (int col = colMin; col <= colMax; ++col) {
+            const float x0 = mOrigin.x + col * mCell;
+            const float z0 = mOrigin.z + row * mCell;
+            const float x1 = x0 + mCell;
+            const float z1 = z0 + mCell;
+            const char c = cellAt(col, row);
+            if (!isWalkableChar(c)) {
+                if (hitsRect(x0, z0, x1, z1))
+                    return false;
+                continue;
+            }
+            if (c != 'A')
+                continue;
+
+            const bool ns = mArchNS[size_t(row * mStride + col)];
+            const float mid = ns ? x0 + mCell * 0.5f : z0 + mCell * 0.5f;
+            const float lo = mid - kArchHalfWidth;
+            const float hi = mid + kArchHalfWidth;
+            const bool hitsSide = ns
+                ? hitsRect(x0, z0, lo, z1) || hitsRect(hi, z0, x1, z1)
+                : hitsRect(x0, z0, x1, lo) || hitsRect(x0, hi, x1, z1);
+            if (hitsSide)
+                return false;
+        }
     }
     return true;
 }
@@ -562,19 +628,40 @@ bool DungeonMap::walkableAt(float x, float z) const
 glm::vec3 DungeonMap::resolveMove(glm::vec3 from, glm::vec3 to,
                                   float radius) const
 {
-    // Axis-separated slide: accept each axis only if the body's four
-    // corner samples stay walkable.
-    const auto fits = [&](float x, float z) {
-        return walkableAt(x - radius, z - radius) &&
-               walkableAt(x + radius, z - radius) &&
-               walkableAt(x - radius, z + radius) &&
-               walkableAt(x + radius, z + radius);
+    // Sub-step the sweep so a low frame rate or a speed boost cannot skip a
+    // thin grid feature. Resolve X then Z each micro-step for stable wall
+    // sliding, and binary-search any blocked axis right up to the visible
+    // wall rather than leaving a noticeable gap.
+    const float distance = glm::length(glm::vec2(to.x - from.x, to.z - from.z));
+    const int steps = std::max(1, int(std::ceil(distance / std::max(radius * 0.5f, 0.05f))));
+    const auto moveAxis = [&](glm::vec3 at, float target, bool xAxis) {
+        const auto fits = [&](float value) {
+            return xAxis ? circleFits(value, at.z, radius)
+                         : circleFits(at.x, value, radius);
+        };
+        if (fits(target)) {
+            if (xAxis) at.x = target;
+            else at.z = target;
+            return at;
+        }
+        const float start = xAxis ? at.x : at.z;
+        float lo = 0.0f, hi = 1.0f;
+        for (int i = 0; i < 8; ++i) {
+            const float t = (lo + hi) * 0.5f;
+            if (fits(glm::mix(start, target, t))) lo = t;
+            else hi = t;
+        }
+        if (xAxis) at.x = glm::mix(start, target, lo);
+        else at.z = glm::mix(start, target, lo);
+        return at;
     };
+
     glm::vec3 out = from;
-    if (fits(to.x, out.z))
-        out.x = to.x;
-    if (fits(out.x, to.z))
-        out.z = to.z;
+    for (int step = 1; step <= steps; ++step) {
+        const float t = float(step) / float(steps);
+        out = moveAxis(out, glm::mix(from.x, to.x, t), true);
+        out = moveAxis(out, glm::mix(from.z, to.z, t), false);
+    }
     out.y = to.y;
     return out;
 }

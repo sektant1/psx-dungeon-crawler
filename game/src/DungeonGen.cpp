@@ -103,20 +103,28 @@ struct Builder {
         else          { carveV(ax, ay, by); carveH(by, ax, bx); }
     }
 
-    // Corridor cells orthogonally touching a room become arch doorways: this
-    // splits room and corridor into separate occlusion regions joined by the
-    // arch. Collected from the label grid (pre-arch), applied by the caller.
+    // Straight corridor cells orthogonally touching a room become arch
+    // doorways. The tile asset is a complete straight tunnel, so never place
+    // it at a bend or junction: its built-in side walls would otherwise seal
+    // a live route or leave an unsupported edge. Collected from the label
+    // grid (pre-arch), applied by the caller.
     std::vector<std::pair<int, int>> archCells() const {
         std::vector<std::pair<int, int>> out;
         for (int y = 1; y < kH - 1; ++y)
             for (int x = 1; x < kW - 1; ++x) {
                 if (lab[size_t(y)][size_t(x)] != 'c') continue;
+                const bool n = lab[size_t(y - 1)][size_t(x)] != '#';
+                const bool s = lab[size_t(y + 1)][size_t(x)] != '#';
+                const bool w = lab[size_t(y)][size_t(x - 1)] != '#';
+                const bool e = lab[size_t(y)][size_t(x + 1)] != '#';
+                const bool straight = (n && s && !w && !e) ||
+                                      (w && e && !n && !s);
                 const bool touchesRoom =
                     lab[size_t(y - 1)][size_t(x)] == 'r' ||
                     lab[size_t(y + 1)][size_t(x)] == 'r' ||
                     lab[size_t(y)][size_t(x - 1)] == 'r' ||
                     lab[size_t(y)][size_t(x + 1)] == 'r';
-                if (touchesRoom) out.push_back({x, y});
+                if (straight && touchesRoom) out.push_back({x, y});
             }
         return out;
     }
