@@ -111,12 +111,14 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
     const eng::MeshHandle pillar = r.loadObj(tileMeshDir + "tile_pillar.obj");
     const eng::MeshHandle torch = r.loadObj(propMeshDir + "prop_torch.obj");
 
+    // Static shell (floors/ceilings/walls/arches/pillars) bakes into
+    // region-batched static geometry: one draw per region instead of one
+    // per tile, whole regions frustum-culled. 12 m regions = 3x3 cells.
+    const eng::StaticBatchHandle shell =
+        r.createStaticBatch({12.0f, 8.0f, 12.0f});
+
     const auto put = [&](eng::MeshHandle m, glm::vec3 pos, float yawDeg) {
-        eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
-        if (yawDeg != 0.0f)
-            r.setOrientation(n, glm::angleAxis(glm::radians(yawDeg),
-                                               glm::vec3(0, 1, 0)));
-        r.attachMesh(n, m, kTileMaterial);
+        r.addToStaticBatch(shell, m, kTileMaterial, pos, yawDeg);
     };
 
     eng::LightDesc warm;
@@ -229,6 +231,8 @@ bool DungeonMap::load(eng::Renderer& r, const std::string& tomlPath,
     for (const auto& [pc, pr] : pillarSpots)
         put(pillar, {mOrigin.x + pc * mCell, 0.0f, mOrigin.z + pr * mCell},
             0.0f);
+
+    r.buildStaticBatch(shell);
 
     eng::log::info("DungeonMap: %zu rows, %zu pillar posts, cell %.1f m",
                    mRows.size(), pillarSpots.size(), mCell);

@@ -27,7 +27,11 @@ int main(int, char**)
     eng::Renderer& r = engine.renderer();
 
     r.setCameraFov(70.0f);
-    r.setCameraClip(0.05f, 100.0f);
+    // Far clip rides the fog: at 30 m the exponential murk (density 0.12)
+    // passes ~2.7 % and the background matches the fog colour, so the far
+    // plane is invisible; regions beyond it frustum-cull entirely. Also
+    // tightens the MRT depth encode for the stylize/ink pass.
+    r.setCameraClip(0.05f, 30.0f);
 
     // --------------------------------------------------------- dungeon ---
     // Modular dungeon from the PSX_Modular_Medieval tile set, laid out in
