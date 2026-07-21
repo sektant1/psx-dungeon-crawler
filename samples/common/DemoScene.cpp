@@ -169,20 +169,6 @@ bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
         }
     }
 
-    // ---------------------------------------------------- blob shadows ---
-    if (opts.blobShadows) {
-        const toml::table& shadows = tableAt(root, "shadows");
-        eng::MeshHandle plane = r.createPlane(numAt(shadows, "plane_size"));
-        const float y = numAt(shadows, "y");
-        const std::string material = strAt(shadows, "material");
-        for (bool reverse : {false, true}) {
-            eng::NodeHandle base = r.createNode(
-                eng::kRootNode, {reverse ? 1.0f : -1.0f, 0.0f, 0.0f});
-            r.attachMesh(r.createNode(base, {0.0f, y, 0.0f}), plane, material);
-            mShadowScales.push_back({base, reverse});
-        }
-    }
-
     // -------------------------------------------------------- crystals ---
     if (opts.crystals) {
         const toml::table& crystals = tableAt(root, "crystals");
@@ -240,11 +226,5 @@ void DemoScene::update(eng::Renderer& r, float t) const
         r.setOrientation(p.node, glm::angleAxis(t, glm::vec3(0, 1, 0)) *
                                      glm::angleAxis(t, glm::vec3(1, 0, 0)) *
                                      glm::angleAxis(t, glm::vec3(0, 0, 1)));
-    }
-    // world/shadow/shadow.gd: scale = 0.775 + sin(t) * 0.125 * dir
-    for (const Anim& s : mShadowScales) {
-        const float dir = s.reverse ? 1.0f : -1.0f;
-        const float scale = 0.775f + std::sin(t) * 0.125f * dir;
-        r.setScale(s.node, {scale, scale, scale});
     }
 }

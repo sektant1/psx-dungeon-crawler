@@ -92,8 +92,10 @@ int main(int, char**)
         chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
         chestSpin = r.createNode(chestBase);
         r.setScale(chestSpin, glm::vec3(6.0f));
+        // Real stencil shadow (engine-wide SHADOWTYPE_STENCIL_MODULATIVE)
+        // instead of the old hand-scaled blob planes.
         r.attachMesh(chestSpin, r.loadObj(assets + "/meshes/props/prop_chest.obj"),
-                     "Game/PropChest");
+                     "Game/PropChest", true);
         r.attachParticles(chestBase, "PSX/Sparkles");
         eng::LightDesc glow;
         glow.colour = chestGlowColour;

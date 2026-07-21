@@ -38,11 +38,6 @@ metal_material = "PSX/BoxMetal"
 lit_material = "PSX/BoxLit"
 sparkles = "PSX/Sparkles"
 
-[shadows]
-plane_size = 2.0
-y = 0.05
-material = "PSX/Shadow"
-
 [crystals]
 ground_mesh = "crystal_ground.obj"
 ground_material = "PSX/CrystalGround"

@@ -44,7 +44,6 @@ int main(int, char**)
     DemoScene::Options sceneOpts;
     sceneOpts.crystals = true;     // glassy spires ring the treasure shrine
     sceneOpts.boxes = false;       // movers replaced by the treasure chest
-    sceneOpts.blobShadows = false; // real stencil shadows exist now
     if (!scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", eng::kRootNode,
                     sceneOpts))
         return 1;

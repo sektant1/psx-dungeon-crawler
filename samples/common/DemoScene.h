@@ -9,7 +9,7 @@ class Renderer;
 }
 
 // Shared PSX demo scene (environment palette, sun, omni lamps, light shaft,
-// animated boxes + sparkles, blob shadows, crystals), described by a TOML
+// animated boxes + sparkles, crystals), described by a TOML
 // file (see samples/common/assets/demo_scene.toml). The sun light is created
 // under `sunParent` so apps can orbit it (demo) or keep it static (game).
 class DemoScene
@@ -21,7 +21,6 @@ public:
     struct Options {
         bool crystals = true;
         bool boxes = true; // animated boxes + sparkles
-        bool blobShadows = true;
     };
 
     // False on parse/load failure (details logged). meshDir must contain the
@@ -35,7 +34,7 @@ public:
         return load(r, sceneToml, meshDir, sunParent, Options());
     }
 
-    void update(eng::Renderer& r, float t) const; // animated boxes + shadows
+    void update(eng::Renderer& r, float t) const; // animated boxes
 
     // Sun light node (child of sunParent) -- apps may re-orient it.
     eng::NodeHandle sunNode() const { return mSun; }
@@ -55,5 +54,4 @@ private:
         bool reverse = false;
     };
     std::vector<Anim> mSinPans;
-    std::vector<Anim> mShadowScales;
 };
