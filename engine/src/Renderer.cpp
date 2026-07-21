@@ -380,6 +380,25 @@ void Renderer::setBloomParams(float threshold, float intensity)
     setMaterialParam("PSX/BloomComposite", "bloomIntensity", intensity);
 }
 
+void Renderer::setGradeEnabled(bool enabled)
+{
+    mImpl->env.grade = enabled;
+    setMaterialParam("PSX/DitherPost", "gradeEnabled", enabled ? 1.0f : 0.0f);
+}
+
+void Renderer::setGradeParams(float desaturate, float contrast,
+                              glm::vec3 shadowTint, glm::vec3 midTint)
+{
+    mImpl->env.gradeDesaturate = desaturate;
+    mImpl->env.gradeContrast = contrast;
+    mImpl->env.gradeShadowTint = shadowTint;
+    mImpl->env.gradeMidTint = midTint;
+    setMaterialParam("PSX/DitherPost", "gradeDesaturate", desaturate);
+    setMaterialParam("PSX/DitherPost", "gradeContrast", contrast);
+    setMaterialParam("PSX/DitherPost", "gradeShadowTint", shadowTint);
+    setMaterialParam("PSX/DitherPost", "gradeMidTint", midTint);
+}
+
 const EnvState& Renderer::envState() const { return mImpl->env; }
 
 void Renderer::writeScreenshot(const std::string& path)

@@ -303,6 +303,11 @@ fragment_program Dither_FS glsl
         param_named ditherBanding float 0.5
         param_named ditherDarkFade float 0.12
         param_named ditherEnabled float 1.0
+        param_named gradeEnabled float 0.0
+        param_named gradeDesaturate float 0.15
+        param_named gradeContrast float 1.05
+        param_named gradeShadowTint float3 0.82 1.0 0.86
+        param_named gradeMidTint float3 1.0 0.96 0.88
     }
 }
 
@@ -334,6 +339,13 @@ fragment_program Stylize_FS glsl
         param_named shadowThreshold float 0.25
         param_named highlightThreshold float 0.5
         param_named highlightDarkFade float 0.25
+        param_named outlineEnabled float 1.0
+        param_named outlineColor float3 0.0 0.0 0.0
+        param_named outlineOpacity float 0.85
+        param_named outlineDepthSens float 15.0
+        param_named outlineNormalSens float 0.6
+        param_named outlineSharpness float 0.85
+        param_named outlineDistFade float 0.08
     }
 }
 

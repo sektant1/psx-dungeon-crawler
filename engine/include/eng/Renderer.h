@@ -47,6 +47,11 @@ struct EnvState {
     bool bloom = true;
     float bloomThreshold = 0.7f;
     float bloomIntensity = 0.8f;
+    bool grade = false;             // colour grade in the dither pass
+    float gradeDesaturate = 0.15f;
+    float gradeContrast = 1.05f;
+    glm::vec3 gradeShadowTint{0.82f, 1.0f, 0.86f};
+    glm::vec3 gradeMidTint{1.0f, 0.96f, 0.88f};
 };
 
 // Public renderer facade. All Ogre types stay inside engine/src.
@@ -118,6 +123,9 @@ public:
     void setFogDesatBoost(float boost); // 0 = plain fog lerp
     void setBloomEnabled(bool enabled);    // off = pass-through composite
     void setBloomParams(float threshold, float intensity);
+    void setGradeEnabled(bool enabled); // colour grade before quantization
+    void setGradeParams(float desaturate, float contrast,
+                        glm::vec3 shadowTint, glm::vec3 midTint);
     void writeScreenshot(const std::string& path);
 
 private:
