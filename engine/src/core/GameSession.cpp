@@ -7,7 +7,7 @@ GameSession::~GameSession() = default;
 Space* GameSession::createSpace(std::string name) {
     auto space = std::make_unique<Space>(name);
     Space* raw = space.get();
-    mSpaces[std::move(name)] = std::move(space);
+    mSpaces.emplace(name, std::move(space));
     return raw;
 }
 

@@ -11,7 +11,8 @@ GameObject* Space::createObject(std::string name) {
 }
 
 void Space::destroyObject(GameObject* obj) {
-    if (obj) mToDestroy.push_back(obj);
+    if (obj && std::find(mToDestroy.begin(), mToDestroy.end(), obj) == mToDestroy.end())
+        mToDestroy.push_back(obj);
 }
 
 void Space::flushDestroyed() {

@@ -43,6 +43,7 @@ int main(){
     require(world->objects().size()==2, "two objects in space");
     require(g1->name()=="goblin", "object name");
     world->destroyObject(g1);       // deferred: still present until flush
+    world->destroyObject(g1);       // duplicate — must not double-destroy
     require(world->objects().size()==2, "destroy is deferred");
     world->flushDestroyed();
     require(world->objects().size()==1, "flush removes marked object");

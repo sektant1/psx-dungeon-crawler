@@ -23,6 +23,8 @@ public:
         long long startNs;
         Scope(Profiler& p, std::string n);
         ~Scope();
+        Scope(const Scope&) = delete;
+        Scope& operator=(const Scope&) = delete;
     };
 
 private:

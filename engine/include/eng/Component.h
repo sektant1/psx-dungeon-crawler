@@ -1,7 +1,6 @@
 #pragma once
 #include <eng/Object.h>
 #include <memory>
-#include <vector>
 
 namespace eng {
 

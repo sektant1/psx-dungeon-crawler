@@ -21,6 +21,8 @@ public:
         Trace& trace;
         Scope(Trace& t, const std::string& name) : trace(t) { trace.begin(name); }
         ~Scope() { trace.end(); }
+        Scope(const Scope&) = delete;
+        Scope& operator=(const Scope&) = delete;
     };
 
 private:
