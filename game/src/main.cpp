@@ -869,6 +869,32 @@ int main(int, char**)
     engine.debugUi().addPanel("Attacks", [&combat, &engine] {
         combat.drawDebugUi(engine.input());
     });
+    engine.debugUi().addPanel("Particles", [&particles, &r] {
+        static float particleQuality = 1.0f;
+        if (ImGui::SliderFloat("global quality", &particleQuality, 0.25f, 1.0f))
+            r.setParticleQuality(particleQuality);
+        ImGui::TextDisabled("lower = fewer particles in heavy scenes");
+        ImGui::Separator();
+        auto& descs = particles.descs();
+        for (size_t i = 0; i < descs.size(); ++i) {
+            eng::ParticleEffectDesc& d = descs[i];
+            if (!ImGui::TreeNode(d.name.c_str())) continue;
+            ImGui::SliderInt("quota", &d.quota, 1, 128);
+            if (!d.emitters.empty())
+                ImGui::SliderFloat("emission", &d.emitters[0].emissionRate, 0.0f, 200.0f);
+            ImGui::SliderFloat("base w", &d.baseWidth, 0.02f, 0.6f);
+            ImGui::SliderFloat("base h", &d.baseHeight, 0.02f, 0.6f);
+            for (size_t s = 0; s < d.colourRamp.size(); ++s) {
+                ImGui::PushID(int(s));
+                ImGui::ColorEdit4("ramp stop", &d.colourRamp[s].rgba.x);
+                ImGui::PopID();
+            }
+            ImGui::SliderFloat("scale jitter", &d.scaleJitter, 0.0f, 0.5f);
+            if (ImGui::Button("apply"))
+                particles.reregister(r, i);
+            ImGui::TreePop();
+        }
+    });
     engine.debugUi().addPanel("Physics", [&physics, &player, &showColliders] {
         ImGui::Text("active bodies: %d", physics.activeBodyCount());
         float g = physics.gravityY();
