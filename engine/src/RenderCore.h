@@ -53,6 +53,7 @@ public:
     void frameStats(size_t& batches, size_t& triangles) const;
 
     Ogre::SceneManager* sceneMgr() const { return mSceneMgr; }
+    Ogre::Root* root() const { return mRoot; }
     Ogre::Camera* camera() const { return mCamera; }
     Ogre::Viewport* viewport() const { return mViewport; }
     Ogre::RenderWindow* window() const { return mWindow; }

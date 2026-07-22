@@ -23,6 +23,7 @@
 #include <imgui.h>
 
 #include <eng/Engine.h>
+#include <eng/LoadingScreen.h>
 #include <eng/Log.h>
 #include <eng/Physics.h>
 
@@ -251,6 +252,13 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                      const gen::Layout* authored = nullptr)
 {
     LiveLevel lv;
+    const eng::NodeHandle levelRoot =
+        r.createNode(eng::kRootNode, glm::vec3(0.0f),
+                     "Level Scene depth " + std::to_string(depth));
+    const eng::NodeHandle dungeonRoot =
+        r.createNode(levelRoot, glm::vec3(0.0f), "Procedural Dungeon");
+    const eng::NodeHandle showcaseRoot =
+        r.createNode(levelRoot, glm::vec3(0.0f), "Shared Showcase");
 
     // --------------------------------------------------------- dungeon ---
     // Procedurally generated level; the anchor 'C' room lands at the world
@@ -258,7 +266,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     gen::Layout layout = authored ? *authored : gen::generate(seed);
     if (!lv.map.loadFromRows(r, physics, std::move(layout),
                              assets + "/meshes/tiles/",
-                             assets + "/meshes/props/")) {
+                             assets + "/meshes/props/", dungeonRoot)) {
         eng::log::error("buildLevel: map load failed");
         return lv;
     }
@@ -269,7 +277,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     DemoScene::Options sceneOpts;
     sceneOpts.crystals = depth == 0; // lobby-only crystal feature gallery
     sceneOpts.boxes = false;       // movers replaced by the treasure chest
-    lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", eng::kRootNode,
+    lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", showcaseRoot,
                   sceneOpts);
 
     applyPalette(r, lv.scene);
@@ -603,6 +611,10 @@ int main(int, char**)
     if (!engine.init(assets + "/game.toml", assets))
         return 1;
     eng::Renderer& r = engine.renderer();
+    eng::LoadingScreen loading(engine);
+    loading.begin("Loading dungeon");
+    loading.step("Preparing renderer", 0.08f);
+    loading.present();
 
     r.setCameraFov(70.0f);
     // With the current 0.05 exponential fog, a 90 m far plane retains only
@@ -627,6 +639,8 @@ int main(int, char**)
 
     eng::Physics physics;
     physics.init();
+    loading.step("Preparing physics", 0.16f);
+    loading.present();
 
     ProjectileSystem projectiles;
     SpellSystem spells;
@@ -640,6 +654,8 @@ int main(int, char**)
 
     ParticleLibrary particles;
     particles.load(r, assets + "/particles.toml");
+    loading.step("Loading combat data", 0.26f);
+    loading.present();
     projectiles.setConfig(&combat);
     spells.setConfig(&combat);
     melee.setConfig(&combat);
@@ -738,12 +754,16 @@ int main(int, char**)
         applyWeaponVis(r);
         engine.input().setMouseGrab(!portalPreview);
     };
+    loading.step("Building level", 0.42f);
+    loading.present();
     enterLevel(false); // depth 0, spawn at entry
 
     // Initialise the projectile system (builds procedural meshes) and register
     // the contact seam so arrows stick and bolts despawn on impact.
     projectiles.init(r);
     spells.init(r);
+    loading.step("Spawning systems", 0.72f);
+    loading.present();
     physics.setContactCallback([&projectiles, &spells, &physics, &r, &dummy, &dummyAlive](const eng::HitEvent& e) {
         projectiles.onHit(physics, e);
         spells.onHit(physics, r, e);
@@ -849,6 +869,9 @@ int main(int, char**)
     // Placed 3 m further toward the anchor room from the crate cluster.
     dummy.init(physics, r, glm::vec3(3.0f, 0.0f, 15.0f));
     dummyAlive = true;
+    loading.step("Ready", 1.0f);
+    loading.present();
+    loading.finish();
 
     engine.debugUi().addPanel("Player", [&player, &r] {
         ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);

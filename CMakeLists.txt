@@ -76,6 +76,8 @@ add_library(eng STATIC
     engine/src/ObjLoader.cpp
     engine/src/ProceduralMeshes.cpp
     engine/src/Renderer.cpp
+    engine/src/MaterialPreview.cpp
+    engine/src/LoadingScreen.cpp
     engine/src/Particles.cpp
     engine/src/Log.cpp
     engine/src/Config.cpp
@@ -159,6 +161,7 @@ add_executable(level_editor
     game/src/LevelDocument.cpp
     game/src/LevelEditor.cpp
     game/src/ParticleLibrary.cpp
+    game/src/JsonSceneLoader.cpp
 )
 target_include_directories(level_editor PRIVATE third_party)
 target_link_libraries(level_editor PRIVATE eng)

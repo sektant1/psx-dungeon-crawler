@@ -41,14 +41,16 @@ class DungeonMap
 public:
     bool load(eng::Renderer& r, eng::Physics& physics,
               const std::string& tomlPath,
-              const std::string& tileMeshDir, const std::string& propMeshDir);
+              const std::string& tileMeshDir, const std::string& propMeshDir,
+              eng::NodeHandle sceneRoot = eng::kRootNode);
 
     // Build the dungeon from an in-memory grid (e.g. from gen::generate)
     // instead of a TOML file. Shares all geometry/segmentation/torch code.
     bool loadFromRows(eng::Renderer& r, eng::Physics& physics,
                       gen::Layout layout,
                       const std::string& tileMeshDir,
-                      const std::string& propMeshDir);
+                      const std::string& propMeshDir,
+                      eng::NodeHandle sceneRoot = eng::kRootNode);
 
     // Remove all static collider bodies registered by the last build.
     // Call before rebuilding or destroying the map to avoid body leaks.
@@ -96,7 +98,8 @@ private:
                        float cell, float wallH, glm::vec3 lightColour,
                        float lightEnergy, float lightRange, float lampY,
                        const std::string& tileMeshDir,
-                       const std::string& propMeshDir);
+                       const std::string& propMeshDir,
+                       eng::NodeHandle sceneRoot);
 
     char cellAt(int col, int row) const;
     bool walkableCell(int col, int row) const;
@@ -116,11 +119,13 @@ private:
     // batch tagged with the (<=2) rooms it joins.
     struct Room {
         eng::StaticBatchHandle batch;
+        eng::NodeHandle node;
         glm::vec3 aabbMin{0.0f};
         glm::vec3 aabbMax{0.0f};
     };
     struct Arch {
         eng::StaticBatchHandle batch;
+        eng::NodeHandle node;
     };
     std::vector<Room> mRooms;
     std::vector<Arch> mArches;

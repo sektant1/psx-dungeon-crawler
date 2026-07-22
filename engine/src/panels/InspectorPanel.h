@@ -1,5 +1,7 @@
 #pragma once
 #include "ScenePanel.h"
+#include <eng/MaterialPreview.h>
+#include <memory>
 namespace eng { class Renderer; class SceneView; }
 namespace eng::ui {
 struct Selection;
@@ -10,5 +12,6 @@ public:
     void draw(Renderer& r, const SceneView& scene, Selection& sel);
 private:
     ScenePanel mTree;
+    std::unique_ptr<MaterialPreview> mPreview;
 };
 }

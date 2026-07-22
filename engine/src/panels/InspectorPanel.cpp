@@ -1,6 +1,7 @@
 #include "InspectorPanel.h"
 #include "ScenePanel.h"
 #include "Selection.h"
+#include <eng/MaterialPreview.h>
 #include <eng/Renderer.h>
 #include <eng/SceneView.h>
 #include <imgui.h>
@@ -43,8 +44,19 @@ void InspectorPanel::draw(Renderer& r, const SceneView& scene, Selection& sel) {
         for (const AttachmentInfo& a : info.attachments) {
             ImGui::PushID(int(a.handle) ^ int(a.kind));
             if (a.kind == NodeAttachKind::Mesh) {
-                if (ImGui::CollapsingHeader("Mesh Component", ImGuiTreeNodeFlags_DefaultOpen))
+                if (ImGui::CollapsingHeader("Mesh Component", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (!mPreview)
+                        mPreview = std::make_unique<MaterialPreview>(r, 96);
+                    mPreview->render(a.label);
+                    const uint64_t tex = mPreview->textureId();
+                    if (tex != 0) {
+                        const float side = float(mPreview->size());
+                        ImGui::Image((ImTextureID)tex, ImVec2(side, side),
+                                     ImVec2(0, 1), ImVec2(1, 0));
+                        ImGui::SameLine();
+                    }
                     ImGui::Text("Material: %s", a.label.c_str());
+                }
             } else if (a.kind == NodeAttachKind::Light) {
                 if (ImGui::CollapsingHeader("Light Component", ImGuiTreeNodeFlags_DefaultOpen)) {
                     LightDesc ld;

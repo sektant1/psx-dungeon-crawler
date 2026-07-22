@@ -27,6 +27,9 @@ public:
     bool shouldClose() const { return mClose; }
     void requestClose() { mClose = true; }
     void renderFrame(float dt); // may set shouldClose() (screenshot hook)
+    void presentLoadingFrame(const std::string& title,
+                             const std::string& label,
+                             float progress01);
     void shutdown();
 
     Renderer& renderer() { return mRenderer; }

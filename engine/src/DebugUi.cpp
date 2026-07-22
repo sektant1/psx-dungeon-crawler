@@ -8,6 +8,7 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <string>
 
 namespace eng {
@@ -84,6 +85,39 @@ void DebugUi::Impl::buildFrame(float dt)
     }
     for (auto& draw : windows)
         draw();
+}
+
+void DebugUi::Impl::buildLoadingFrame(const std::string& title,
+                                      const std::string& label,
+                                      float progress01)
+{
+    ctx.beginFrame(0.0f);
+    if (!title.empty()) {
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize(io.DisplaySize);
+        ImGui::SetNextWindowBgAlpha(1.0f);
+        ImGui::Begin("##loading_screen", nullptr,
+                     ImGuiWindowFlags_NoDecoration |
+                         ImGuiWindowFlags_NoInputs |
+                         ImGuiWindowFlags_NoSavedSettings |
+                         ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoBringToFrontOnFocus);
+        const float width = std::min(520.0f, io.DisplaySize.x * 0.62f);
+        const ImVec2 titleSize = ImGui::CalcTextSize(title.c_str());
+        ImGui::SetCursorPos(ImVec2((io.DisplaySize.x - width) * 0.5f,
+                                   io.DisplaySize.y * 0.46f));
+        ImGui::BeginGroup();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                             (width - titleSize.x) * 0.5f);
+        ImGui::TextUnformatted(title.c_str());
+        ImGui::Spacing();
+        ImGui::ProgressBar(std::clamp(progress01, 0.0f, 1.0f),
+                           ImVec2(width, 0.0f),
+                           label.empty() ? nullptr : label.c_str());
+        ImGui::EndGroup();
+        ImGui::End();
+    }
 }
 
 } // namespace eng

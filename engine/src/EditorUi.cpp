@@ -38,13 +38,10 @@ void EditorUi::draw(uint64_t texId)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    // NoBackground so the OS window (the live Ogre 3D render) shows through the
-    // transparent central dock node -- the editor's "viewport" is the engine's
-    // own window render, framed by the opaque side/bottom panels.
     ImGuiWindowFlags host = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoBackground;
+        ImGuiWindowFlags_MenuBar;
     ImGui::Begin("##EditorHost", nullptr, host);
     ImGui::PopStyleVar(3);
     ImGuiID dockId = ImGui::GetID("EditorDockSpace");
@@ -92,16 +89,16 @@ void EditorUi::draw(uint64_t texId)
     s.inspector.draw(s.r, s.r.scene(), s.sel);
     ImGui::End();
 
-    // The Scene dock lives in the passthrough central node. NoBackground keeps it
-    // transparent so the engine's window 3D shows through; it exists to capture
-    // the viewport region (for camera control) and hold the "Scene" tab. An
-    // optional RTT texture, when provided, is drawn as the image instead.
-    ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoBackground);
+    // Explicit RTT viewport. If the GL texture id cannot be resolved, show a
+    // visible placeholder so editor/rendering failures are diagnosable.
+    ImGui::Begin("Scene");
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     s.vpSize.w = int(avail.x);
     s.vpSize.h = int(avail.y);
     if (texId != 0 && avail.x > 0 && avail.y > 0)
         ImGui::Image((ImTextureID)texId, avail, ImVec2(0, 1), ImVec2(1, 0)); // GL V-flip
+    else
+        ImGui::TextDisabled("Scene render target unavailable");
     s.vpHovered = ImGui::IsWindowHovered();
     ImGui::End();
 }

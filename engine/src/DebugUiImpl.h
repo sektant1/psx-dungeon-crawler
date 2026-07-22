@@ -37,6 +37,9 @@ struct DebugUi::Impl {
 
     // Per frame, before renderOneFrame: ImGuiOverlay::NewFrame() + widgets.
     void buildFrame(float dt);
+    void buildLoadingFrame(const std::string& title,
+                           const std::string& label,
+                           float progress01);
 };
 
 } // namespace eng

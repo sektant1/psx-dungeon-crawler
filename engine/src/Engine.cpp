@@ -155,6 +155,14 @@ void Engine::renderFrame(float dt)
     }
 }
 
+void Engine::presentLoadingFrame(const std::string& title,
+                                 const std::string& label,
+                                 float progress01)
+{
+    mDebugUi.mImpl->buildLoadingFrame(title, label, progress01);
+    detail::coreOf(mRenderer).renderFrame(0.0f);
+}
+
 void Engine::shutdown()
 {
     detail::coreOf(mRenderer).shutdown(); // Ogre first

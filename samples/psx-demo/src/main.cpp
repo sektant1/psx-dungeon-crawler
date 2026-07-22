@@ -5,6 +5,7 @@
 #include "DemoScene.h"
 
 #include <eng/Engine.h>
+#include <eng/LoadingScreen.h>
 #include <eng/Math.h>
 
 #include <glm/gtc/quaternion.hpp>
@@ -33,6 +34,10 @@ int main(int, char**)
     if (!engine.init(assets + "/demo.toml", assets))
         return 1;
     eng::Renderer& r = engine.renderer();
+    eng::LoadingScreen loading(engine);
+    loading.begin("Loading demo");
+    loading.step("Preparing camera", 0.15f);
+    loading.present();
 
     // Camera3D: fov 68.1243 vertical, Godot default clips.
     r.setCameraFov(68.1243f);
@@ -58,6 +63,8 @@ int main(int, char**)
     DemoScene scene;
     DemoScene::Options sceneOpts;
     sceneOpts.boxes = false; // replaced by the game's treasure-chest centre
+    loading.step("Loading shared scene", 0.45f);
+    loading.present();
     if (!scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", orbit.node,
                     sceneOpts))
         return 1;
@@ -111,6 +118,8 @@ int main(int, char**)
     // lamps, the sword stabbed into the ground, the shield leaning on a
     // barrel.
     {
+        loading.step("Placing showcase props", 0.72f);
+        loading.present();
         const std::string props = assets + "/meshes/props/";
         const auto mesh = [&](const char* f) { return r.loadObj(props + f); };
         // Ring placement: polar(angleDeg, radius) -> floor position.
@@ -260,6 +269,9 @@ int main(int, char**)
             r.attachLight(n, warmLight);
         }
     }
+    loading.step("Ready", 1.0f);
+    loading.present();
+    loading.finish();
 
     // ---------------------------------------------------------------- loop ---
     bool paused = false;

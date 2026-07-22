@@ -1,4 +1,25 @@
-// Prototype materials for physics projectiles.
+// Prototype materials for editor floors, blank scenes and physics projectiles.
+
+material Game/PrototypeFloor
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 16.0 16.0
+        }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.72 0.78 0.76 1.0
+        }
+        texture_unit
+        {
+            texture proto_light_06.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
 // Arrow: dark earth tones; Bolt: bright arcane white.
 
 material Game/ProtoArrow

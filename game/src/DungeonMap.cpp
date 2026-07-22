@@ -59,7 +59,8 @@ bool DungeonMap::debugArchNorthSouth(int col, int row) const
 bool DungeonMap::load(eng::Renderer& r, eng::Physics& physics,
                       const std::string& tomlPath,
                       const std::string& tileMeshDir,
-                      const std::string& propMeshDir)
+                      const std::string& propMeshDir,
+                      eng::NodeHandle sceneRoot)
 {
     toml::parse_result result = toml::parse_file(tomlPath);
     if (!result) {
@@ -101,7 +102,7 @@ bool DungeonMap::load(eng::Renderer& r, eng::Physics& physics,
 
     return buildFromLayout(r, physics, gen::Layout::fromRows(std::move(rows)),
                            mCell, wallH, lightColour, lightEnergy, lightRange,
-                           lampY, tileMeshDir, propMeshDir);
+                           lampY, tileMeshDir, propMeshDir, sceneRoot);
 }
 
 bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
@@ -110,7 +111,8 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                                  glm::vec3 lightColour, float lightEnergy,
                                  float lightRange, float lampY,
                                  const std::string& tileMeshDir,
-                                 const std::string& propMeshDir)
+                                 const std::string& propMeshDir,
+                                 eng::NodeHandle sceneRoot)
 {
     // A DungeonMap can be rebuilt in place (editor/reload and future level
     // previews). None of its previous segmentation, portals or torch state
@@ -169,12 +171,29 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     mLastCurrentRooms.reserve(mRooms.size());
     mVisibleScratch.resize(mRooms.size());
 
+    const eng::NodeHandle roomsRoot =
+        r.createNode(sceneRoot, glm::vec3(0.0f), "Rooms");
+    const eng::NodeHandle archesRoot =
+        r.createNode(sceneRoot, glm::vec3(0.0f), "Arches");
+    const eng::NodeHandle fixturesRoot =
+        r.createNode(sceneRoot, glm::vec3(0.0f), "Fixtures");
+    const eng::NodeHandle torchesRoot =
+        r.createNode(fixturesRoot, glm::vec3(0.0f), "Torches");
+
     // One big-region batch per room and per arch (a room is a few cells, so
     // one region = one draw per room material; PVS handles inter-room culling).
-    for (auto& rm : mRooms)
+    for (size_t i = 0; i < mRooms.size(); ++i) {
+        Room& rm = mRooms[i];
+        rm.node = r.createNode(roomsRoot, glm::vec3(0.0f),
+                               "Room " + std::to_string(i));
         rm.batch = r.createStaticBatch({8.0f, 8.0f, 8.0f});
-    for (auto& ar : mArches)
+    }
+    for (size_t i = 0; i < mArches.size(); ++i) {
+        Arch& ar = mArches[i];
+        ar.node = r.createNode(archesRoot, glm::vec3(0.0f),
+                               "Arch " + std::to_string(i));
         ar.batch = r.createStaticBatch({8.0f, 8.0f, 8.0f});
+    }
 
     // ------------------------------------------------------------ meshes ---
     const eng::MeshHandle floor = r.loadObj(tileMeshDir + "tile_floor.obj");
@@ -522,7 +541,10 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                                     "wall; torch skipped", col, row);
                     continue;
                 }
-                eng::NodeHandle n = r.createNode(eng::kRootNode, mount);
+                eng::NodeHandle n = r.createNode(
+                    torchesRoot, mount,
+                    "Torch (" + std::to_string(col) + "," +
+                        std::to_string(row) + ")");
                 r.setOrientation(
                     n, glm::angleAxis(glm::radians(yaw + 180.0f),
                                       glm::vec3(0, 1, 0)));
@@ -582,13 +604,14 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
 bool DungeonMap::loadFromRows(eng::Renderer& r, eng::Physics& physics,
                               gen::Layout layout,
                               const std::string& tileMeshDir,
-                              const std::string& propMeshDir)
+                              const std::string& propMeshDir,
+                              eng::NodeHandle sceneRoot)
 {
     // Generator grids use the same tile scale and warm-torch defaults as the
     // TOML fallback (game/assets/dungeon.toml [dungeon.light]).
     return buildFromLayout(r, physics, std::move(layout), 4.0f, 3.0f,
                          {lin(1.0f), lin(0.68f), lin(0.34f)}, 4.4f, 6.5f, 1.9f,
-                         tileMeshDir, propMeshDir);
+                         tileMeshDir, propMeshDir, sceneRoot);
 }
 
 void DungeonMap::clearPhysics()
