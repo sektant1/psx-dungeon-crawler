@@ -1,0 +1,46 @@
+# Scene look palettes. Colours are authored in sRGB (0..1) exactly as they
+# appear here; applyRenderPalette() linearises the ones the renderer expects in
+# linear space. Each [palette.<name>] table starts from the RenderPalette struct
+# defaults (the dungeon look) and overrides only the keys it lists.
+
+[palette.dungeon]
+ambient_srgb        = [0.46, 0.47, 0.53]
+ambient_scale       = 0.25
+sun_yaw_deg         = 30.0
+sun_pitch_deg       = -75.0
+sun_colour_srgb     = [0.62, 0.54, 0.76]
+sun_scale           = 0.42
+fog_srgb            = [0.12, 0.115, 0.15]
+fog_density         = 0.050
+background_srgb     = [0.038, 0.035, 0.050]
+light_steps         = 4.0
+light_step_softness = 0.30
+fog_desat_boost     = 0.08
+light_shaft_colour  = [0.68, 0.76, 1.0, 0.19]
+grade_desaturate    = 0.015
+grade_contrast      = 0.98
+grade_shadow_tint   = [0.12, 0.12, 0.18]
+grade_mid_tint      = [0.72, 0.65, 0.60]
+grade_saturation    = 1.0
+grade_tint_strength = 0.035
+grade_black_lift    = 0.060
+col_depth           = 31.0
+dither_banding      = 0.018
+dither_dark_fade    = 0.20
+shadow_colour       = [0.035, 0.025, 0.09]
+shadow_strength     = 0.16
+highlight_colour    = [1.0, 0.72, 0.42]
+highlight_strength  = 0.10
+outline_colour      = [0.025, 0.018, 0.065]
+outline_opacity     = 0.26
+outline_depth_sens  = 8.0
+outline_normal_sens = 0.20
+vignette_strength   = 0.08
+vignette_colour     = [0.24, 0.20, 0.38]
+bloom_threshold     = 0.72
+bloom_intensity     = 0.72
+
+# The lobby is a teaching/showcase vista: same look as the dungeon but with a
+# longer fog reach so the far portal landmark stays readable on arrival.
+[palette.lobby]
+fog_density = 0.026

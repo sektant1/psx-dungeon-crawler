@@ -14,6 +14,7 @@
 #include "SceneFactory.h"
 #include "Melee.h"
 #include "ParticleLibrary.h"
+#include "RenderPalette.h"
 #include "Dummy.h"
 #include "Targeting.h"
 #include "ViewModel.h"
@@ -36,64 +37,6 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
-
-// Per-scene moonlit dark-fantasy palette. Must re-run after every
-// scene rebuild, so it lives in its own function called from buildLevel.
-static void applyPalette(eng::Renderer& r, const DemoScene& scene)
-{
-    const auto lin = [](float srgb) { return std::pow(srgb, 2.2f); };
-    // Slate-blue ambient keeps unlit planes legible without painting the
-    // whole level purple. Local warm lights provide the fantasy colour.
-    r.setAmbient({lin(0.46f) * 0.25f, lin(0.47f) * 0.25f,
-                  lin(0.53f) * 0.25f});
-    // A dim moon-blue spill separates silhouettes and sells illustrated
-    // planes while the steep angle keeps the dungeon oppressive.
-    r.setOrientation(scene.sunNode(),
-                     glm::angleAxis(glm::radians(30.0f), glm::vec3(0, 1, 0)) *
-                         glm::angleAxis(glm::radians(-75.0f), glm::vec3(1, 0, 0)));
-    r.setLightColour(scene.sunLight(),
-                     {lin(0.62f) * 0.42f, lin(0.54f) * 0.42f,
-                      lin(0.76f) * 0.42f});
-    // Navy-violet fog keeps distant geometry dreamlike instead of erasing it.
-    r.setFog({lin(0.12f), lin(0.115f), lin(0.15f)}, 0.050f);
-    r.setBackground({0.038f, 0.035f, 0.050f});
-    // The shaft becomes pale moon-magic rather than green ghost-light.
-    r.setMaterialParam("PSX/LightShaft", "modulateColor",
-                       glm::vec4(0.68f, 0.76f, 1.0f, 0.19f));
-    // Broad but softly joined bands retain the illustrated read without
-    // turning every light pool into a high-contrast target.
-    r.setLightSteps(4.0f);
-    r.setLightStepSoftness(0.30f);
-    r.setFogDesatBoost(0.08f);
-    r.setGradeEnabled(true);
-    r.setGradeParams(0.015f, 0.98f, {0.12f, 0.12f, 0.18f},
-                     {0.72f, 0.65f, 0.60f});
-    r.setMaterialParam("PSX/DitherPost", "gradeSaturation", 1.0f);
-    r.setMaterialParam("PSX/DitherPost", "gradeTintStrength", 0.035f);
-    r.setMaterialParam("PSX/DitherPost", "gradeBlackLift", 0.060f);
-    r.setMaterialParam("PSX/DitherPost", "vignetteStrength", 0.08f);
-    r.setMaterialParam("PSX/DitherPost", "vignetteColor",
-                       glm::vec3(0.24f, 0.20f, 0.38f));
-    // Retain PSX colour precision and ordered dithering, but keep the pattern
-    // subordinate to texture detail and lighting rather than coating the view.
-    r.setMaterialParam("PSX/DitherPost", "ditherEnabled", 1.0f);
-    r.setMaterialParam("PSX/DitherPost", "colDepth", 31.0f);
-    r.setMaterialParam("PSX/DitherPost", "ditherBanding", 0.018f);
-    r.setMaterialParam("PSX/DitherPost", "ditherDarkFade", 0.20f);
-    r.setMaterialParam("PSX/PixelStylize", "shadowColor",
-                       glm::vec3(0.035f, 0.025f, 0.09f));
-    r.setMaterialParam("PSX/PixelStylize", "shadowStrength", 0.16f);
-    r.setMaterialParam("PSX/PixelStylize", "highlightColor",
-                       glm::vec3(1.0f, 0.72f, 0.42f));
-    r.setMaterialParam("PSX/PixelStylize", "highlightStrength", 0.10f);
-    r.setMaterialParam("PSX/PixelStylize", "outlineColor",
-                       glm::vec3(0.025f, 0.018f, 0.065f));
-    r.setMaterialParam("PSX/PixelStylize", "outlineOpacity", 0.26f);
-    r.setMaterialParam("PSX/PixelStylize", "outlineDepthSens", 8.0f);
-    r.setMaterialParam("PSX/PixelStylize", "outlineNormalSens", 0.20f);
-    // Warm magic blooms softly, without washing the inked silhouettes.
-    r.setBloomParams(0.72f, 0.72f);
-}
 
 static eng::TextSpriteStyle showcaseLabelStyle(float worldHeight,
                                                 glm::vec4 accent)
@@ -280,13 +223,10 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", showcaseRoot,
                   sceneOpts);
 
-    applyPalette(r, lv.scene);
-    if (depth == 0) {
-        // The lobby is a teaching/showcase vista: preserve atmosphere while
-        // keeping the far portal landmark readable from the arrival frame.
-        const auto lin = [](float c) { return std::pow(c, 2.2f); };
-        r.setFog({lin(0.12f), lin(0.115f), lin(0.15f)}, 0.026f);
-    }
+    RenderPalette palette;
+    loadRenderPalette(assets + "/palettes.toml", depth == 0 ? "lobby" : "dungeon",
+                      palette);
+    applyRenderPalette(r, palette, lv.scene.sunNode(), lv.scene.sunLight());
 
     // ------------------------------------------------- lobby showcase ---
     // Depth zero is a deliberately authored, non-combat exhibition hall.

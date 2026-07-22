@@ -130,6 +130,7 @@ add_executable(
   game/src/CombatConfig.cpp
   game/src/ParticleLibrary.cpp
   game/src/SceneFactory.cpp
+  game/src/RenderPalette.cpp
   game/src/Targeting.cpp
   game/src/Dummy.cpp
   game/src/ViewModel.cpp
@@ -197,6 +198,12 @@ if(BUILD_TESTING)
   target_include_directories(editor_camera_tests PRIVATE game/src)
   target_link_libraries(editor_camera_tests PRIVATE glm::glm)
   add_test(NAME editor_camera_tests COMMAND editor_camera_tests)
+
+  add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
+                                      game/src/RenderPalette.cpp)
+  target_include_directories(render_palette_tests PRIVATE game/src third_party engine/include)
+  target_link_libraries(render_palette_tests PRIVATE eng_toml glm::glm eng)
+  add_test(NAME render_palette COMMAND render_palette_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
