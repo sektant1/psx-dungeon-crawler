@@ -71,7 +71,11 @@ void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
     phys.applyImpulse(body, fwd * (0.3f * 18.0f), spawn); // ~18 m/s
 
     eng::NodeHandle node = r.createNode(eng::kRootNode, spawn);
-    r.attachMesh(node, mFireballMesh, "Game/FireballTrail", false);
+    // createBeveledBox is a 1 m unit cube; scale the mesh on a child node so the
+    // core reads ~0.3 m while the trail particles stay at author scale.
+    eng::NodeHandle core = r.createNode(node, glm::vec3(0.0f));
+    r.attachMesh(core, mFireballMesh, "Game/FireballTrail", false);
+    r.setScale(core, glm::vec3(0.30f));
     r.attachParticles(node, "Game/FireballTrail");
 
     spawnBurst(r, spawn, "Game/SpellMuzzle", 0.25f); // muzzle flash
@@ -104,7 +108,8 @@ void SpellSystem::castBeam(eng::Physics& phys, eng::Renderer& r,
     glm::vec3 mid = (eye + endPt) * 0.5f;
     eng::NodeHandle beam = r.createNode(eng::kRootNode, mid);
     r.setOrientation(beam, rotateFromTo(glm::vec3(0, 1, 0), fwd)); // box +Y -> fwd
-    r.setScale(beam, glm::vec3(0.06f, len * 0.5f, 0.06f));
+    // mBeamMesh is a 1 m unit cube: y-scale = len spans the full eye->hit length.
+    r.setScale(beam, glm::vec3(0.06f, len, 0.06f));
     r.attachMesh(beam, mBeamMesh, "Game/BeamCore", false);
     mTransients.push_back({ beam, 0.10f });
 
