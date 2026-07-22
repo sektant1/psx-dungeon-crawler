@@ -172,7 +172,9 @@ void SpellSystem::onHit(eng::Physics& phys, eng::Renderer& r,
 void SpellSystem::despawnFireball(eng::Physics& phys, eng::Renderer& r, Fireball& f) {
     r.stopParticles(f.trailFx); // stop emitting; pool reclaims once the tail fades
     phys.removeBody(f.body);
-    r.setNodeVisible(f.node, false);
+    // Destroy the node (mesh + light) so rapid casting can't leak Ogre objects;
+    // destroyNode detaches the pooled trail system, which recycles itself.
+    r.destroyNode(f.node);
 }
 
 void SpellSystem::fixedUpdate(eng::Physics& phys, eng::Renderer& r, float dt) {
@@ -186,7 +188,7 @@ void SpellSystem::fixedUpdate(eng::Physics& phys, eng::Renderer& r, float dt) {
     for (auto& t : mTransients) t.ttl -= dt;
     for (int i = int(mTransients.size()) - 1; i >= 0; --i)
         if (mTransients[i].ttl <= 0.0f) {
-            r.setNodeVisible(mTransients[i].node, false);
+            r.destroyNode(mTransients[i].node); // free burst node + its light
             mTransients.erase(mTransients.begin() + i);
         }
 }
@@ -203,6 +205,6 @@ void SpellSystem::syncRender(eng::Physics& phys, eng::Renderer& r) {
 void SpellSystem::clear(eng::Physics& phys, eng::Renderer& r) {
     for (auto& f : mFireballs) despawnFireball(phys, r, f);
     mFireballs.clear();
-    for (auto& t : mTransients) r.setNodeVisible(t.node, false);
+    for (auto& t : mTransients) r.destroyNode(t.node);
     mTransients.clear();
 }

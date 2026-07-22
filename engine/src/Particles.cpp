@@ -30,6 +30,9 @@ Ogre::ParticleSystem* Particles::build(const ParticleEffectDesc& d){
     Ogre::ParticleSystem* ps = mSm->createParticleSystem(name, std::max(1, d.quota));
     ps->setMaterialName(d.material);
     ps->setDefaultDimensions(d.baseWidth, d.baseHeight);
+    // World space so a moving emitter (fireball) leaves particles behind as a
+    // trail instead of dragging them along with it.
+    ps->setKeepParticlesInLocalSpace(false);
     // setRenderer exists (verified in OgreParticleSystem.h line 86). Uses the
     // string "billboard" which is the built-in Ogre billboard renderer type.
     ps->setRenderer("billboard");
@@ -112,9 +115,13 @@ ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent, g
     Ogre::ParticleSystem* ps = nullptr;
     if (!e.free.empty()){ ps = e.free.back(); e.free.pop_back(); }
     else { ps = build(e.desc); }
+    // Defensive: a pooled system must be detached before re-attaching (Ogre
+    // forbids attaching a MovableObject to two nodes). The particle inherits the
+    // parent's world transform; per-spawn offsets are handled by the caller
+    // creating a child node — we must NOT move the parent here.
+    if (ps->getParentSceneNode()) ps->getParentSceneNode()->detachObject(ps);
     parent->attachObject(ps);
-    // getParentSceneNode() returns the node we just attached to.
-    if (ps->getParentSceneNode()) ps->getParentSceneNode()->setPosition(localPos.x, localPos.y, localPos.z);
+    (void)localPos;
     ps->clear();
     for (unsigned short i=0;i<ps->getNumEmitters();++i) ps->getEmitter(i)->setEnabled(true);
 

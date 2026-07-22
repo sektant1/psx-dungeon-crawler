@@ -90,6 +90,10 @@ public:
     // Show/hide a node and everything attached beneath it (meshes,
     // particles, lights).
     void setNodeVisible(NodeHandle node, bool show);
+    // Permanently destroy a node and the lights/entities attached to it, so
+    // transient spawns (projectiles, one-shot VFX) don't leak Ogre objects.
+    // Pool-owned particle systems are only detached (they recycle themselves).
+    void destroyNode(NodeHandle node);
 
     // --- attachments ------------------------------------------------------
     // castShadows opts the entity into stencil shadow casting; keep it off

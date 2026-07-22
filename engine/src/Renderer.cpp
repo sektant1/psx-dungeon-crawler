@@ -214,6 +214,32 @@ void Renderer::setNodeVisible(NodeHandle node, bool show)
     mImpl->node(node, "setNodeVisible")->setVisible(show);
 }
 
+void Renderer::destroyNode(NodeHandle node)
+{
+    if (!node.valid() || node.id > mImpl->nodes.size()) return;
+    Ogre::SceneNode* n = mImpl->nodes[node.id - 1];
+    if (!n) return;
+    Ogre::SceneManager* sm = mImpl->core.sceneMgr();
+
+    // Snapshot attached objects (can't mutate the node's map while iterating).
+    std::vector<Ogre::MovableObject*> objs;
+    objs.reserve(n->numAttachedObjects());
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i)
+        objs.push_back(n->getAttachedObject(i));
+    for (Ogre::MovableObject* o : objs) {
+        n->detachObject(o);
+        // Pool-owned particle systems recycle themselves; only detach them.
+        if (o->getMovableType() == "ParticleSystem") continue;
+        if (o->getMovableType() == "Light")
+            for (auto& lp : mImpl->lights) if (lp == o) lp = nullptr;
+        sm->destroyMovableObject(o); // handles Light/Entity/etc.
+    }
+    n->removeAndDestroyAllChildren();
+    if (n->getParentSceneNode()) n->getParentSceneNode()->removeChild(n);
+    sm->destroySceneNode(n);
+    mImpl->nodes[node.id - 1] = nullptr; // stale slot; handle never reused
+}
+
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
                           const std::string& materialName, bool castShadows,
                           bool renderOnTop)
@@ -586,7 +612,12 @@ ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, NodeHandle parent,
                                          glm::vec3 localPos)
 {
     Ogre::SceneNode* n = mImpl->node(parent, "spawnParticles");
-    return mImpl->particles.spawn(fx, n, localPos);
+    // A non-zero local offset gets its own child node so the particle inherits
+    // an offset transform without disturbing the parent (the particle system
+    // itself has no per-attachment offset in Ogre).
+    if (glm::dot(localPos, localPos) > 1e-8f)
+        n = n->createChildSceneNode(toOgre(localPos));
+    return mImpl->particles.spawn(fx, n, glm::vec3(0.0f));
 }
 
 ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, glm::vec3 worldPos)

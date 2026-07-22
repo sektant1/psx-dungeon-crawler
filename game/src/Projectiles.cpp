@@ -105,7 +105,7 @@ void ProjectileSystem::onHit(eng::Physics& phys, const eng::HitEvent& e) {
 void ProjectileSystem::despawn(eng::Physics& phys, eng::Renderer& r,
                                 Projectile& p) {
     phys.removeBody(p.body);
-    r.setNodeVisible(p.node, false);
+    r.destroyNode(p.node); // free node + entity so spam can't leak Ogre objects
 }
 
 void ProjectileSystem::fixedUpdate(eng::Physics& phys, eng::Renderer& r,
