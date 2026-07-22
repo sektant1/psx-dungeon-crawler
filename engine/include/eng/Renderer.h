@@ -74,6 +74,8 @@ public:
     MeshHandle createBeveledBox(float bevel = 0.12f);
     MeshHandle createCone(float radius = 0.5f, float height = 1.0f,
                           int segments = 8);
+    MeshHandle createSphere(float radius = 0.5f, int rings = 12,
+                            int segments = 16);
     // Low-poly vertical fantasy portal components (facing +/-Z).
     MeshHandle createPortalRing(float outerRadius, float innerRadius,
                                 float depth, int segments = 20);

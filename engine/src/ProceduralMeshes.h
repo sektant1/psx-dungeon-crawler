@@ -17,6 +17,10 @@ void createBeveledBox(const std::string& meshName, float bevel);
 void createCone(const std::string& meshName, float radius, float height,
                 int segments);
 
+// UV sphere centred at origin, +Y pole. Smooth normals, longitude/latitude UVs.
+void createSphere(const std::string& meshName, float radius, int rings,
+                  int segments);
+
 // Thick annulus and matching vertical membrane, centred on XY and facing Z.
 void createPortalRing(const std::string& meshName, float outerRadius,
                       float innerRadius, float depth, int segments);

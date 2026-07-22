@@ -173,6 +173,41 @@ void createCone(const std::string& meshName, float radius, float height,
     mo->end(); mo->convertToMesh(meshName); delete mo;
 }
 
+void createSphere(const std::string& meshName, float radius, int rings,
+                  int segments)
+{
+    rings    = std::max(3, rings);
+    segments = std::max(3, segments);
+    auto* mo = new Ogre::ManualObject(meshName + "_mo");
+    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
+    // Vertex grid: (rings+1) latitudes x (segments+1) longitudes.
+    for (int y = 0; y <= rings; ++y) {
+        const float v   = float(y) / float(rings);
+        const float phi = v * Ogre::Math::PI;            // 0 (top) .. PI (bottom)
+        for (int x = 0; x <= segments; ++x) {
+            const float u     = float(x) / float(segments);
+            const float theta = u * Ogre::Math::TWO_PI;
+            const Ogre::Vector3 n(std::sin(phi) * std::cos(theta),
+                                  std::cos(phi),
+                                  std::sin(phi) * std::sin(theta));
+            mo->position(n * radius);
+            mo->normal(n);
+            mo->textureCoord(u, v);
+            mo->colour(Ogre::ColourValue::White);
+        }
+    }
+    const int stride = segments + 1;
+    for (int y = 0; y < rings; ++y) {
+        for (int x = 0; x < segments; ++x) {
+            const Ogre::uint32 a = Ogre::uint32(y * stride + x);
+            const Ogre::uint32 b = Ogre::uint32(a + stride);
+            mo->triangle(a, b, a + 1);
+            mo->triangle(a + 1, b, b + 1);
+        }
+    }
+    mo->end(); mo->convertToMesh(meshName); delete mo;
+}
+
 void createPortalRing(const std::string& meshName, float outerRadius,
                       float innerRadius, float depth, int segments)
 {

@@ -53,6 +53,9 @@ public:
     //   parryHeld     : true while the guard key is down.
     void update(eng::Renderer& r, float dt, bool triggerAttack, bool parryHeld);
 
+    // Show/hide the whole viewmodel (used to swap the active weapon).
+    void setVisible(eng::Renderer& r, bool show);
+
 private:
     eng::NodeHandle mNode{};
 

@@ -656,6 +656,10 @@ int main(int, char**)
     FpsController player;
     ViewModel viewModel;
     ViewModel staffModel;
+    // Active weapon: false = sword (melee), true = staff (spells). Toggled by
+    // the swap_weapon bind; drives which viewmodel is shown and which action
+    // input is accepted.
+    bool staffEquipped = false;
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
@@ -713,6 +717,8 @@ int main(int, char**)
         viewModel.init(r, player.headNode(), assets + "/meshes/props");
         staffModel.initStaff(r, player.headNode(),
                              assets + "/meshes/crystal_spire1.obj");
+        viewModel.setVisible(r, !staffEquipped);
+        staffModel.setVisible(r, staffEquipped);
         engine.input().setMouseGrab(!portalPreview);
     };
     enterLevel(false); // depth 0, spawn at entry
@@ -859,7 +865,8 @@ int main(int, char**)
     });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
-    engine.debugUi().addWindow([&level, &player, &viewModel, &staffModel, &editor, &r, &physics,
+    engine.debugUi().addWindow([&level, &player, &viewModel, &staffModel, &staffEquipped,
+                                &editor, &r, &physics,
                                 &assets, &depth, speed, sens, &engine] {
         if (!editor.draw(level.dungeon(), player.eyePosition()))
             return;
@@ -876,6 +883,8 @@ int main(int, char**)
         viewModel.init(r, player.headNode(), assets + "/meshes/props");
         staffModel.initStaff(r, player.headNode(),
                              assets + "/meshes/crystal_spire1.obj");
+        viewModel.setVisible(r, !staffEquipped);
+        staffModel.setVisible(r, staffEquipped);
         engine.input().setMouseGrab(false);
     });
 
@@ -967,17 +976,24 @@ int main(int, char**)
         bool swordAttack = false;
         bool didCast = false;
         if (in.mouseGrabbed()) {
+            if (in.wasPressed("swap_weapon")) {
+                staffEquipped = !staffEquipped;
+                viewModel.setVisible(r, !staffEquipped);
+                staffModel.setVisible(r, staffEquipped);
+            }
             if (in.wasPressed("fire_arrow"))
                 projectiles.fireArrow(physics, r, player.eyePosition(), player.forward());
-            if (in.wasPressed("cast_spell")) {
+            // Staff casts only when the staff is equipped.
+            if (staffEquipped && in.wasPressed("cast_spell")) {
                 spells.castFireball(physics, r, player.eyePosition(), player.forward());
                 didCast = true;
             }
-            if (in.wasPressed("cast_beam")) {
+            if (staffEquipped && in.wasPressed("cast_beam")) {
                 spells.castBeam(physics, r, player.eyePosition(), player.forward());
                 didCast = true;
             }
-            if (in.wasMouseClicked()) {
+            // Sword melee only when the sword is equipped.
+            if (!staffEquipped && in.wasMouseClicked()) {
                 melee.startSwing();
                 swordAttack = true;
             }

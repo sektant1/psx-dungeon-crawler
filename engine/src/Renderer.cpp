@@ -161,6 +161,13 @@ MeshHandle Renderer::createCone(float radius, float height, int segments)
     return mImpl->registerMesh(name);
 }
 
+MeshHandle Renderer::createSphere(float radius, int rings, int segments)
+{
+    const std::string name = mImpl->nextName("sphere");
+    ProceduralMeshes::createSphere(name, radius, rings, segments);
+    return mImpl->registerMesh(name);
+}
+
 MeshHandle Renderer::createPortalRing(float outerRadius, float innerRadius,
                                       float depth, int segments)
 {

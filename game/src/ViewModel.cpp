@@ -134,6 +134,12 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
     mSwayPhase  = 0.0f;
 }
 
+void ViewModel::setVisible(eng::Renderer& r, bool show)
+{
+    if (mNode.valid())
+        r.setNodeVisible(mNode, show);
+}
+
 // ---------------------------------------------------------------------------
 // update
 // ---------------------------------------------------------------------------

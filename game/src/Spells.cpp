@@ -29,8 +29,8 @@ static glm::quat rotateFromTo(glm::vec3 from, glm::vec3 to) {
 // ---- init ----
 
 void SpellSystem::init(eng::Renderer& r) {
-    mFireballMesh = r.createBeveledBox(0.06f); // small glowing core
-    mBeamMesh     = r.createBeveledBox(0.02f); // thin segment, scaled per cast
+    mFireballMesh = r.createSphere(0.14f, 10, 14); // glowing spherical core
+    mBeamMesh     = r.createBeveledBox(0.02f);     // thin segment, scaled per cast
 }
 
 // ---- transient bursts ----
@@ -71,11 +71,7 @@ void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
     phys.applyImpulse(body, fwd * (0.3f * 18.0f), spawn); // ~18 m/s
 
     eng::NodeHandle node = r.createNode(eng::kRootNode, spawn);
-    // createBeveledBox is a 1 m unit cube; scale the mesh on a child node so the
-    // core reads ~0.3 m while the trail particles stay at author scale.
-    eng::NodeHandle core = r.createNode(node, glm::vec3(0.0f));
-    r.attachMesh(core, mFireballMesh, "Game/FireballTrail", false);
-    r.setScale(core, glm::vec3(0.30f));
+    r.attachMesh(node, mFireballMesh, "Game/FireballTrail", false);
     r.attachParticles(node, "Game/FireballTrail");
 
     spawnBurst(r, spawn, "Game/SpellMuzzle", 0.25f); // muzzle flash
