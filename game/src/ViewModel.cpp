@@ -123,8 +123,11 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
     // for this spire — NOT a particle material (Game/BeamCore uses a billboard
     // vertex program + depth_write off, which mangles a solid mesh and reads as
     // faces wrongly culling).
+    // Shaft top is at local y = +6. The crystal mesh's base sits at y=0.234 in
+    // its own space, so at scale 2.0 the node must drop by 0.234*2 (=0.468) to
+    // seat the base on the rod; a touch more embeds it for a seamless join.
     const eng::MeshHandle tip = r.loadObj(crystalMeshPath);
-    eng::NodeHandle tipNode = r.createNode(mNode, glm::vec3(0.0f, 6.0f, 0.0f));
+    eng::NodeHandle tipNode = r.createNode(mNode, glm::vec3(0.0f, 6.0f - 0.55f, 0.0f));
     r.attachMesh(tipNode, tip, "PSX/CrystalSpire", false, true);
     r.setScale(tipNode, glm::vec3(2.0f));
 
