@@ -257,15 +257,6 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             r.attachMesh(n, m, mat, cast);
             return n;
         };
-        const auto place2 = [&](eng::MeshHandle m0, const char* mat0,
-                                eng::MeshHandle m1, const char* mat1,
-                                glm::vec3 pos, float yawDeg,
-                                bool cast = true) {
-            eng::NodeHandle n = place(m0, mat0, pos, yawDeg,
-                                      glm::vec3(1.0f), cast);
-            r.attachMesh(n, m1, mat1, cast);
-            return n;
-        };
         const glm::vec3 noScale{1.0f};
 
         eng::MeshHandle crate = mesh("prop_crate.obj");
