@@ -32,6 +32,17 @@ struct Engine::Impl {
 Engine::Engine() : mImpl(new Impl) {}
 Engine::~Engine() { shutdown(); } // defensive; shutdown() is idempotent
 
+System* Engine::registerSystem(System::StrongPtr sys) {
+    sys->initialize();
+    System* raw = sys.get();
+    mSystems.push_back(std::move(sys));
+    return raw;
+}
+
+void Engine::updateSystems(float dt) {
+    for (auto& s : mSystems) s->update(dt);
+}
+
 bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
 {
     if (!mConfig.load(configPath))
@@ -165,6 +176,9 @@ void Engine::presentLoadingFrame(const std::string& title,
 
 void Engine::shutdown()
 {
+    for (auto it = mSystems.rbegin(); it != mSystems.rend(); ++it)
+        (*it)->terminate();
+    mSystems.clear();
     detail::coreOf(mRenderer).shutdown(); // Ogre first
     mImpl->platform.shutdown();           // native window after
 }

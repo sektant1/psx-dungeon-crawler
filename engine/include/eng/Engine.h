@@ -3,9 +3,11 @@
 #include <eng/DebugUi.h>
 #include <eng/Input.h>
 #include <eng/Renderer.h>
+#include <eng/System.h>
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace eng {
 
@@ -37,6 +39,18 @@ public:
     Config& config() { return mConfig; }
     DebugUi& debugUi() { return mDebugUi; }
 
+    // System registry (SPEngine-style). Additive: the existing tick()/
+    // renderFrame() loop is unchanged; a game opts in by registering systems
+    // and calling updateSystems(dt) from its loop.
+    System* registerSystem(System::StrongPtr sys);
+    void updateSystems(float dt);
+
+    template <typename T> T* getSystem() {
+        for (auto& s : mSystems)
+            if (auto* p = dynamic_cast<T*>(s.get())) return p;
+        return nullptr;
+    }
+
 private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;
@@ -45,6 +59,7 @@ private:
     Renderer mRenderer;
     DebugUi mDebugUi;
     bool mClose = false;
+    std::vector<System::StrongPtr> mSystems;
 };
 
 } // namespace eng
