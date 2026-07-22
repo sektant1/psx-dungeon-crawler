@@ -977,6 +977,13 @@ uint64_t Renderer::editorViewportTextureId() const
     return mImpl->core.viewportTextureId();
 }
 
+void Renderer::setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient,
+                                   float fovDeg)
+{
+    mImpl->core.setEditorCameraPose(pos.x, pos.y, pos.z, orient.w, orient.x,
+                                    orient.y, orient.z, fovDeg);
+}
+
 void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
 {
     Ogre::SceneManager* sm = mImpl->core.sceneMgr();

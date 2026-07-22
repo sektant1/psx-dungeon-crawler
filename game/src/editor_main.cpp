@@ -33,35 +33,61 @@ int main(int, char**)
 
     const eng::NodeHandle sceneRoot =
         r.createNode(eng::kRootNode, glm::vec3(0.0f), "Editor Scene");
-    const eng::NodeHandle floorRoot =
-        r.createNode(sceneRoot, glm::vec3(0.0f), "Default Floor");
-    if (std::filesystem::is_regular_file(assets + "/scene.json")) {
-        eng::NodeHandle floor = r.createNode(floorRoot, glm::vec3(0.0f),
-                                             "Prototype Grid Plane");
-        r.setScale(floor, glm::vec3(48.0f, 1.0f, 48.0f));
-        r.attachMesh(floor, r.createPlane(1.0f), "Game/PrototypeFloor");
-    }
-    const eng::NodeHandle dungeonRoot =
-        r.createNode(sceneRoot, glm::vec3(0.0f), "Procedural Dungeon");
 
     DungeonMap map;
-    const std::string sceneJson = assets + "/scene.json";
-    if (std::filesystem::is_regular_file(sceneJson)) {
-        loading.step("Loading scene.json", 0.35f);
-        loading.present();
-        std::string error;
-        if (!loadJsonScene(sceneJson, r, &physics, sceneRoot, assets, error)) {
-            eng::log::error("Editor: scene.json failed: %s", error.c_str());
-            return 1;
+    const std::string tilesDir = assets + "/meshes/tiles/";
+    const std::string propsDir = assets + "/meshes/props/";
+
+    // All openable content lives under a swappable root so the Scene picker can
+    // reload it without disturbing the persistent lighting/camera rig below.
+    eng::NodeHandle contentRoot;
+    auto loadScene = [&](const eng::EditorUi::SceneFile& f) {
+        if (contentRoot.valid()) {
+            r.destroyNode(contentRoot);
+            contentRoot = eng::NodeHandle{};
         }
-    } else {
-        gen::Layout initial = gen::generate(1);
-        loading.step("Building procedural dungeon", 0.35f);
-        loading.present();
-        if (!map.loadFromRows(r, physics, initial, assets + "/meshes/tiles/",
-                              assets + "/meshes/props/", dungeonRoot))
-            return 1;
-    }
+        // Reset physics so repeated reloads don't accumulate stale bodies.
+        map.clearPhysics();
+        physics.shutdown();
+        physics.init();
+        contentRoot = r.createNode(sceneRoot, glm::vec3(0.0f),
+                                   f.label.empty() ? "Content" : f.label);
+        if (f.path.empty()) {
+            gen::Layout initial = gen::generate(1);
+            if (!map.loadFromRows(r, physics, initial, tilesDir, propsDir, contentRoot))
+                eng::log::error("Editor: procedural build failed");
+        } else {
+            std::string error;
+            if (!loadJsonScene(f.path, r, &physics, contentRoot, assets, error))
+                eng::log::error("Editor: load %s failed: %s", f.path.c_str(),
+                                error.c_str());
+        }
+    };
+
+    // Discover selectable scenes: the built-in procedural dungeon, plus every
+    // *.json in the asset root and assets/scenes/.
+    std::vector<eng::EditorUi::SceneFile> sceneFiles;
+    sceneFiles.push_back({"Procedural Dungeon", ""});
+    const auto scanJson = [&](const std::string& dir) {
+        std::error_code ec;
+        if (!std::filesystem::is_directory(dir, ec)) return;
+        for (const auto& e : std::filesystem::directory_iterator(dir, ec))
+            if (e.path().extension() == ".json")
+                sceneFiles.push_back(
+                    {e.path().filename().string(), e.path().string()});
+    };
+    scanJson(assets);
+    scanJson(assets + "/scenes");
+
+    // Default to scene.json if present, else the procedural dungeon.
+    int activeScene = 0;
+    for (int i = 0; i < int(sceneFiles.size()); ++i)
+        if (sceneFiles[i].label == "scene.json") { activeScene = i; break; }
+
+    loading.step("Building scene", 0.35f);
+    loading.present();
+    loadScene(sceneFiles[activeScene]);
+
     r.setAmbient(glm::vec3(0.55f));
     r.setBackground({0.05f, 0.06f, 0.08f});
     r.setCameraFov(60.0f);
@@ -87,22 +113,23 @@ int main(int, char**)
     // Positive pitch lifts the eye ABOVE the dungeon (sin(pitch) drives eye.y);
     // the default pitch is negative, so orbit up past horizontal to look down.
     cam.orbit(0.7f, 1.0f);
-    const eng::NodeHandle cameraRoot =
-        r.createNode(sceneRoot, glm::vec3(0.0f), "Cameras");
-    eng::NodeHandle camNode = r.createNode(cameraRoot, cam.eye(), "EditorCamera");
-    r.setOrientation(camNode, cam.orientation());
-    r.attachCamera(camNode);
 
     int vpW = 960, vpH = 640;
     loading.step("Creating scene viewport", 0.75f);
     loading.present();
     r.enableEditorViewport(vpW, vpH);
+    // The editor viewport has its OWN dedicated camera (a free-fly editor eye),
+    // rendered into the docked Scene panel's RTT -- independent of the game's
+    // MainCamera. Seed its pose from the framing EditorCamera above.
+    r.setEditorCameraPose(cam.eye(), cam.orientation(), 60.0f);
 
     engine.debugUi().setMainWindowVisible(false);
     engine.debugUi().setVisible(true);
     engine.input().setMouseGrab(false);
 
     eng::EditorUi ui(r);
+    ui.setSceneFiles(sceneFiles, activeScene);
+    ui.setLoadSceneCallback([&](const eng::EditorUi::SceneFile& f) { loadScene(f); });
     engine.debugUi().addWindow([&] {
         ui.draw(r.editorViewportTextureId());
         const auto sz = ui.viewportSize();
@@ -128,8 +155,7 @@ int main(int, char**)
             if (io.MouseWheel != 0.0f)
                 cam.dolly(io.MouseWheel);
         }
-        r.setPosition(camNode, cam.eye());
-        r.setOrientation(camNode, cam.orientation());
+        r.setEditorCameraPose(cam.eye(), cam.orientation(), 60.0f);
 
         // Selection AABB overlay: a ~1 m wire box at the selected node.
         std::vector<eng::Renderer::DebugLine> lines;

@@ -10,6 +10,9 @@
 #include "panels/InspectorPanel.h"
 #include "panels/Selection.h"
 
+#include <algorithm>
+#include <utility>
+
 namespace eng {
 
 struct EditorUi::Impl {
@@ -22,6 +25,9 @@ struct EditorUi::Impl {
     Size vpSize;
     bool vpHovered = false;
     bool builtLayout = false;
+    std::vector<SceneFile> sceneFiles;
+    int activeScene = 0;
+    LoadSceneFn loadScene;
 };
 
 EditorUi::EditorUi(Renderer& r) : mImpl(std::make_unique<Impl>(r)) {}
@@ -89,9 +95,36 @@ void EditorUi::draw(uint64_t texId)
     s.inspector.draw(s.r, s.r.scene(), s.sel);
     ImGui::End();
 
-    // Explicit RTT viewport. If the GL texture id cannot be resolved, show a
-    // visible placeholder so editor/rendering failures are diagnosable.
+    // Live scene viewport: the editor's dedicated free-fly camera rendered into
+    // an RTT. A Godot-style scene picker sits in the toolbar above the image.
     ImGui::Begin("Scene");
+    if (!s.sceneFiles.empty()) {
+        ImGui::SetNextItemWidth(260.0f);
+        const char* preview = s.sceneFiles[s.activeScene].label.c_str();
+        if (ImGui::BeginCombo("##ScenePicker", preview)) {
+            for (int i = 0; i < int(s.sceneFiles.size()); ++i) {
+                const bool selected = (i == s.activeScene);
+                if (ImGui::Selectable(s.sceneFiles[i].label.c_str(), selected)) {
+                    if (i != s.activeScene) {
+                        s.activeScene = i;
+                        s.sel.node = NodeHandle{}; // stale after a reload
+                        if (s.loadScene)
+                            s.loadScene(s.sceneFiles[i]);
+                    }
+                }
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reload")) {
+            s.sel.node = NodeHandle{};
+            if (s.loadScene)
+                s.loadScene(s.sceneFiles[s.activeScene]);
+        }
+        ImGui::Separator();
+    }
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     s.vpSize.w = int(avail.x);
     s.vpSize.h = int(avail.y);
@@ -106,5 +139,20 @@ void EditorUi::draw(uint64_t texId)
 NodeHandle EditorUi::selected() const { return mImpl->sel.node; }
 bool EditorUi::viewportHovered() const { return mImpl->vpHovered; }
 EditorUi::Size EditorUi::viewportSize() const { return mImpl->vpSize; }
+
+void EditorUi::setSceneFiles(std::vector<SceneFile> files, int active)
+{
+    mImpl->sceneFiles = std::move(files);
+    if (mImpl->sceneFiles.empty())
+        mImpl->activeScene = 0;
+    else
+        mImpl->activeScene =
+            std::max(0, std::min(active, int(mImpl->sceneFiles.size()) - 1));
+}
+
+void EditorUi::setLoadSceneCallback(LoadSceneFn cb)
+{
+    mImpl->loadScene = std::move(cb);
+}
 
 } // namespace eng

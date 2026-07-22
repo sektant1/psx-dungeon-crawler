@@ -199,6 +199,10 @@ public:
     void enableEditorViewport(int w, int h);
     void resizeEditorViewport(int w, int h);
     uint64_t editorViewportTextureId() const;
+    // Drive the editor viewport's dedicated free-fly camera (decoupled from the
+    // game MainCamera). Call every frame from the editor's EditorCamera.
+    void setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient,
+                             float fovDeg);
 
     // --- debug line overlay -----------------------------------------------
     struct DebugLine { glm::vec3 a{0}; glm::vec3 b{0}; glm::vec3 colour{1,1,1}; };

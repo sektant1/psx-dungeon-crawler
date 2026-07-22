@@ -196,23 +196,10 @@ void RenderCore::setPixelSize(int pixelSize)
         def->widthFactor = factor;
         def->heightFactor = factor;
     }
-    // Rebuild whichever chain instances exist so they pick up the new sizes.
-    // The window and the editor RTT can each host an independent instance.
+    // Rebuild the window's chain instance so it picks up the new sizes. The
+    // editor RTT deliberately runs NO post chain (a clean, Godot-like scene
+    // preview), so only the window instance needs rebuilding here.
     auto& cm = Ogre::CompositorManager::getSingleton();
-    if (mOffscreenChain && mOffscreenVp) {
-        cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
-        cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
-        mOffscreenChain = false;
-        try {
-            cm.addCompositor(mOffscreenVp, "PSX/Stylized");
-            cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", true);
-            mOffscreenChain = true;
-        } catch (const Ogre::Exception& e) {
-            Ogre::LogManager::getSingleton().logError(
-                "Editor offscreen post chain re-add failed: " +
-                e.getDescription());
-        }
-    }
     if (mChainAdded) {
         cm.removeCompositor(mViewport, "PSX/Stylized");
         mChainAdded = false;
@@ -231,43 +218,49 @@ void RenderCore::enableOffscreenViewport(int w, int h)
     }
     mOffW = w;
     mOffH = h;
+
+    // Dedicated free-fly editor eye, independent of the game/window MainCamera.
+    // The app drives it every frame via setEditorCameraPose(). This is what
+    // makes the Scene panel a live, navigable viewport (Godot-style) rather than
+    // a mirror of some other camera.
+    if (!mEditorCam) {
+        mEditorCam = mSceneMgr->createCamera("EditorViewportCamera");
+        mEditorCam->setNearClipDistance(0.05f);
+        mEditorCam->setFarClipDistance(4000.0f);
+        mEditorCam->setAutoAspectRatio(false);
+        // Ogre 14 cameras carry no transform of their own; a SceneNode does.
+        mEditorCamNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
+        mEditorCamNode->attachObject(mEditorCam);
+    }
+    mEditorCam->setAspectRatio(float(w) / float(h));
+
     mOffscreenTex = Ogre::TextureManager::getSingleton().createManual(
         "EditorViewportRTT", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
         Ogre::TEX_TYPE_2D, uint32_t(w), uint32_t(h), 0, Ogre::PF_R8G8B8A8,
         Ogre::TU_RENDERTARGET);
     Ogre::RenderTexture* rt = mOffscreenTex->getBuffer()->getRenderTarget();
-    rt->setAutoUpdated(true);
-    mOffscreenVp = rt->addViewport(mCamera);
+    rt->setAutoUpdated(true); // updated automatically before the window each frame
+    mOffscreenVp = rt->addViewport(mEditorCam);
     mOffscreenVp->setOverlaysEnabled(false); // keep imgui OUT of the RTT
     mOffscreenVp->setClearEveryFrame(true);
-    mOffscreenVp->setBackgroundColour(Ogre::ColourValue(0.02f, 0.02f, 0.03f, 1.0f));
+    mOffscreenVp->setBackgroundColour(Ogre::ColourValue(0.10f, 0.11f, 0.13f, 1.0f));
 
-    // Single-compositor arrangement. The PSX chain uses fixed-name MRT textures,
-    // so two live "PSX/Stylized" instances collide and blacken both targets.
-    // Solution: the chain lives ONLY on the RTT (the editor's real 3D view), and
-    // the OS window renders NO scene geometry -- its visibility mask is zeroed so
-    // no PSX material is invoked there (an uncomposited PSX pass renders black).
-    // The window then only clears dark and draws the imgui overlay; the docked
-    // Scene panel shows the fully post-processed RTT.
-    auto& cm = Ogre::CompositorManager::getSingleton();
-    if (mChainAdded) {
-        cm.setCompositorEnabled(mViewport, "PSX/Stylized", false);
-        cm.removeCompositor(mViewport, "PSX/Stylized");
-        mChainAdded = false;
-    }
-    mViewport->setVisibilityMask(0);        // window draws no scene geometry
-    mViewport->setOverlaysEnabled(true);    // ...but keeps the imgui overlay
-    mViewport->setBackgroundColour(Ogre::ColourValue(0.06f, 0.06f, 0.07f, 1.0f));
-    try {
-        cm.addCompositor(mOffscreenVp, "PSX/Stylized");
-        cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", true);
-        mOffscreenChain = true;
-    } catch (const Ogre::Exception& e) {
-        Ogre::LogManager::getSingleton().logError(
-            "Editor offscreen post chain unavailable: " + e.getDescription());
-    }
-    // Re-apply the current pixel size so the RTT's PSX targets match.
-    setPixelSize(mPixelSize);
+    // NOTE: the editor RTT runs NO PSX compositor. The chain uses fixed-name MRT
+    // textures, so a second live "PSX/Stylized" instance would collide with the
+    // window's and blacken both. A plain forward render also matches how DCC/
+    // engine editors show an unstylized working preview. The window keeps its own
+    // PSX chain untouched (it's hidden behind the imgui dockspace, harmless).
+}
+
+void RenderCore::setEditorCameraPose(float px, float py, float pz,
+                                     float qw, float qx, float qy, float qz,
+                                     float fovDeg)
+{
+    if (!mEditorCam || !mEditorCamNode)
+        return;
+    mEditorCamNode->setPosition(px, py, pz);
+    mEditorCamNode->setOrientation(Ogre::Quaternion(qw, qx, qy, qz));
+    mEditorCam->setFOVy(Ogre::Degree(fovDeg));
 }
 
 void RenderCore::resizeOffscreenViewport(int w, int h)
@@ -276,13 +269,8 @@ void RenderCore::resizeOffscreenViewport(int w, int h)
     h = std::max(1, h);
     if (!mOffscreenTex || (w == mOffW && h == mOffH))
         return;
-    // Tear down the old RTT (removes its viewport + compositor) and rebuild.
-    auto& cm = Ogre::CompositorManager::getSingleton();
-    if (mOffscreenChain && mOffscreenVp) {
-        cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
-        cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
-        mOffscreenChain = false;
-    }
+    // Tear down the old RTT (removes its viewport) and rebuild at the new size.
+    // The dedicated editor camera survives across resizes.
     mOffscreenTex->getBuffer()->getRenderTarget()->removeAllViewports();
     Ogre::TextureManager::getSingleton().remove(mOffscreenTex);
     mOffscreenTex.reset();
@@ -294,13 +282,10 @@ uint64_t RenderCore::viewportTextureId() const
 {
     if (!mOffscreenTex)
         return 0;
-    unsigned int id = 0;
-    try {
-        mOffscreenTex->getCustomAttribute("GLID", &id);
-    } catch (const Ogre::Exception&) {
-        return 0;
-    }
-    return uint64_t(id);
+    // OGRE's ImGuiOverlay treats ImTextureID as an Ogre ResourceHandle
+    // (TextureManager::getByHandle), NOT a raw GL id -- so hand back the
+    // texture's resource handle, not its GLID.
+    return uint64_t(mOffscreenTex->getHandle());
 }
 
 void RenderCore::markPostChainDirty()
@@ -362,12 +347,6 @@ void RenderCore::shutdown()
         return;
     // Tear down the editor offscreen RTT before the scene manager / root go.
     if (mOffscreenTex) {
-        auto& cm = Ogre::CompositorManager::getSingleton();
-        if (mOffscreenChain && mOffscreenVp) {
-            cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
-            cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
-            mOffscreenChain = false;
-        }
         mOffscreenTex->getBuffer()->getRenderTarget()->removeAllViewports();
         Ogre::TextureManager::getSingleton().remove(mOffscreenTex);
         mOffscreenTex.reset();

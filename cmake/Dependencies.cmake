@@ -43,6 +43,10 @@ CPMAddPackage(
         "SDL_TEST OFF"
         "SDL_SHARED ON"
         "SDL_STATIC OFF"
+        # SDL 2.30.11's pipewire backend does not compile against newer system
+        # PipeWire headers (pw_node_enum_params signature drift). We only need
+        # SDL for windowing/input; audio still negotiates ALSA/PulseAudio.
+        "SDL_PIPEWIRE OFF"
 )
 
 # --- Jolt Physics ------------------------------------------------------------

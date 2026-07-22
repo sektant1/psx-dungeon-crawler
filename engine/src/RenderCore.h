@@ -41,6 +41,11 @@ public:
     void resizeOffscreenViewport(int w, int h);
     uint64_t viewportTextureId() const;   // GL id for ImGui::Image, 0 if none
     bool offscreenActive() const { return mOffscreenTex.get() != nullptr; }
+    // Drive the editor RTT's dedicated camera (a free-fly editor eye, decoupled
+    // from the game/window MainCamera). Quaternion is (w,x,y,z).
+    void setEditorCameraPose(float px, float py, float pz,
+                             float qw, float qx, float qy, float qz,
+                             float fovDeg);
 
     void renderFrame(float dt);
     void onResize(int width, int height);
@@ -75,7 +80,8 @@ private:
     // Editor offscreen RTT (scene + post baked into a texture for ImGui::Image).
     Ogre::TexturePtr mOffscreenTex;
     Ogre::Viewport* mOffscreenVp = nullptr;
-    bool mOffscreenChain = false; // PSX chain lives on the RTT viewport
+    Ogre::Camera* mEditorCam = nullptr;    // dedicated free-fly eye for the RTT
+    Ogre::SceneNode* mEditorCamNode = nullptr; // carries mEditorCam's transform
     int mOffW = 0, mOffH = 0;
 };
 
