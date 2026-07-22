@@ -30,38 +30,50 @@ float remap01(float x, float a, float b)
     return smoothstep((x - a) / (b - a));
 }
 
+glm::quat poseOrientation(const WeaponViewmodelPose& pose)
+{
+    const glm::quat pitch = glm::angleAxis(
+        glm::radians(pose.rotationDegrees.x), glm::vec3(1, 0, 0));
+    const glm::quat yaw = glm::angleAxis(
+        glm::radians(pose.rotationDegrees.y), glm::vec3(0, 1, 0));
+    const glm::quat roll = glm::angleAxis(
+        glm::radians(pose.rotationDegrees.z), glm::vec3(0, 0, 1));
+    return yaw * roll * pitch;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
 // init
 // ---------------------------------------------------------------------------
 void ViewModel::init(eng::Renderer& r, eng::NodeHandle headNode,
-                     const std::string& propsDir)
+                     const std::string& propsDir,
+                     const WeaponViewmodelPose& pose)
 {
-    mNode = r.createNode(headNode, mBasePos);
-    const eng::MeshHandle sword = r.loadObj(propsDir + "/prop_sword.obj");
-    r.attachMesh(mNode, sword, "Game/ViewModelWeapon", false, true);
+    initWeapon(r, headNode, propsDir + "/prop_sword.obj",
+               "Game/ViewModelWeapon", pose);
+}
+
+void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
+                           const std::string& meshPath,
+                           const std::string& materialName,
+                           const WeaponViewmodelPose& pose)
+{
+    mPose = pose;
+    mNode = r.createNode(headNode, mPose.position);
+    const eng::MeshHandle weapon = r.loadObj(meshPath);
+    r.attachMesh(mNode, weapon, materialName, false, true);
 
     // The prop_sword.obj is authored at world scale (used in scene dressing at
     // 0.06x).  As a viewmodel it needs to be much smaller, but readable.
-    // 0.042 gives a blade that fills the lower-right quadrant without clipping.
-    r.setScale(mNode, glm::vec3(0.042f));
+    // The shared scale is tuned for the current metre-ish prop convention.
+    r.setScale(mNode, glm::vec3(mPose.scale));
 
     // Base orientation: the mesh's long axis runs along +Y (hilt at origin,
     // tip at +Y).  We want it to look like a sword held in the right hand:
-    //   • blade points mostly forward (-Z in camera/head space) and slightly up
-    //   • the flat of the blade faces left
-    //
-    // Build that with two rotations applied right-to-left:
-    //   1. Pitch the +Y axis toward -Z (the "forward-ish" direction):
-    //      rotate ~115° around X  (Y -> slightly-forward, slightly-down-ish)
-    //      but we want blade pointing FORWARD-UP, so ~70° around X instead.
-    //   2. Roll slightly (~-15°) around Z to tilt the grip toward the right hip.
-    const glm::quat basePitch =
-        glm::angleAxis(glm::radians(75.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    const glm::quat baseRoll =
-        glm::angleAxis(glm::radians(-18.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    r.setOrientation(mNode, baseRoll * basePitch);
+    // Negative pitch maps the authored +Y blade axis into camera-forward -Z;
+    // positive roll leans its tip toward screen centre from the right hand.
+    r.setOrientation(mNode, poseOrientation(mPose));
 
     // Reset animation state on every re-init (level transition).
     mAttackTime = -1.0f;
@@ -181,13 +193,6 @@ void ViewModel::update(eng::Renderer& r, float dt,
         rotDelta   = glm::slerp(rotDelta, guardRot * rotDelta, mParry);
     }
 
-    // Apply rest-pose base orientation baked in init(), then delta on top.
-    const glm::quat basePitch =
-        glm::angleAxis(glm::radians(75.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    const glm::quat baseRoll =
-        glm::angleAxis(glm::radians(-18.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    const glm::quat baseOrientation = baseRoll * basePitch;
-
-    r.setPosition(mNode, mBasePos + posOffset);
-    r.setOrientation(mNode, rotDelta * baseOrientation);
+    r.setPosition(mNode, mPose.position + posOffset);
+    r.setOrientation(mNode, rotDelta * poseOrientation(mPose));
 }
