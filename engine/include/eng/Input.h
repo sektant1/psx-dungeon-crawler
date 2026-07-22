@@ -20,6 +20,10 @@ public:
 
     bool loadBindings(const Config& cfg); // false on unknown key name
 
+    // Live single-key rebind of one action (debug UI). Replaces any existing
+    // keys for the action. Returns false on an unknown SDL key name.
+    bool rebind(const std::string& action, const std::string& keyName);
+
     bool isDown(const std::string& action) const;
     bool wasPressed(const std::string& action) const; // edge, cleared each tick
     bool wasMouseClicked() const;                     // left-button edge

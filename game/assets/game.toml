@@ -24,3 +24,41 @@ fire_arrow = "F"
 cast_spell = "Q"
 cast_beam = "R"
 swap_weapon = "X"
+
+# Attack tunables. Every value is also live-editable in the "Attacks" debug
+# panel; edits there apply immediately but are not written back here.
+[combat.fireball]
+speed = 18.0
+radius = 0.14
+mass = 0.30
+ttl = 6.0
+impact_impulse = 3.0
+light_colour = [1.0, 0.55, 0.15]
+light_range = 4.0
+trail_particle = "Game/FireballTrail"
+muzzle_particle = "Game/SpellMuzzle"
+impact_particle = "Game/FireballImpact"
+
+[combat.beam]
+range = 40.0
+width = 0.06
+impulse = 4.0
+segment_ttl = 0.10
+light_colour = [0.40, 0.70, 1.0]
+light_range = 3.0
+core_particle = "Game/BeamCore"
+impact_particle = "Game/BeamImpact"
+
+[combat.arrow]
+speed = 60.0
+radius = 0.03
+half_height = 0.22
+mass = 0.10
+ttl = 10.0
+
+[combat.melee]
+reach = 1.80
+radius = 0.50
+impulse = 6.0
+windup = 0.12
+active = 0.13

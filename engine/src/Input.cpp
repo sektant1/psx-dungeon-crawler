@@ -31,6 +31,18 @@ bool Input::loadBindings(const Config& cfg)
     return true;
 }
 
+bool Input::rebind(const std::string& action, const std::string& keyName)
+{
+    SDL_Keycode kc = SDL_GetKeyFromName(keyName.c_str());
+    if (kc == SDLK_UNKNOWN) {
+        log::error("Input: unknown key name '%s' for rebind of '%s'",
+                   keyName.c_str(), action.c_str());
+        return false;
+    }
+    mImpl->bindings[action] = { kc };
+    return true;
+}
+
 bool Input::isDown(const std::string& action) const
 {
     for (SDL_Keycode kc : mImpl->find(action))

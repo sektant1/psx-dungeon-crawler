@@ -10,6 +10,7 @@
 #include "LevelEditor.h"
 #include "Projectiles.h"
 #include "Spells.h"
+#include "CombatConfig.h"
 #include "SceneFactory.h"
 #include "Melee.h"
 #include "Dummy.h"
@@ -635,6 +636,15 @@ int main(int, char**)
     SpellSystem spells;
     MeleeSystem melee;
 
+    // Data-oriented attack tunables (speed/range/impulse/colours/particles/
+    // hotkeys), loaded from [combat.*] in game.toml and live-editable in the
+    // "Attacks" debug window. Systems read this each cast/swing.
+    CombatConfig combat;
+    combat.load(assets + "/game.toml");
+    projectiles.setConfig(&combat);
+    spells.setConfig(&combat);
+    melee.setConfig(&combat);
+
     // Dynamic prop table: bodies spawned once for the depth-0 lobby and
     // synced to render nodes every frame while propsAlive is true.
     // Known limitation: props are not re-spawned on level transition; their
@@ -848,6 +858,9 @@ int main(int, char**)
         ImGui::Text("movement: %s", player.sliding() ? "sliding"
                                                        : (player.grounded() ? "grounded"
                                                                             : "airborne"));
+    });
+    engine.debugUi().addPanel("Attacks", [&combat, &engine] {
+        combat.drawDebugUi(engine.input());
     });
     engine.debugUi().addPanel("Physics", [&physics, &player, &showColliders] {
         ImGui::Text("active bodies: %d", physics.activeBodyCount());

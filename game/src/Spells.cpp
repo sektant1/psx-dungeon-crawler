@@ -1,10 +1,18 @@
 #include "Spells.h"
 
+#include "CombatConfig.h"
+
 #include <eng/Renderer.h>
 
 #include <glm/gtc/quaternion.hpp>
 
 #include <cmath>
+
+// Convert an sRGB-picked colour into the linear, energy-premultiplied form the
+// renderer expects for LightDesc.colour.
+static glm::vec3 lightEnergy(glm::vec3 srgb, float gain = 2.0f) {
+    return glm::pow(glm::max(srgb, glm::vec3(0.0f)), glm::vec3(2.2f)) * gain;
+}
 
 // ---- helpers ----
 
@@ -36,9 +44,16 @@ void SpellSystem::init(eng::Renderer& r) {
 // ---- transient bursts ----
 
 eng::NodeHandle SpellSystem::spawnBurst(eng::Renderer& r, glm::vec3 pos,
-                                        const char* particleName, float ttl) {
+                                        const std::string& particleName, float ttl,
+                                        glm::vec3 lightColour, float lightRange) {
     eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
     r.attachParticles(n, particleName);
+    if (lightRange > 0.0f) {
+        eng::LightDesc l;
+        l.colour = lightEnergy(lightColour);
+        l.range  = lightRange;
+        r.attachLight(n, l);
+    }
     mTransients.push_back({ n, ttl });
     return n;
 }
@@ -47,6 +62,9 @@ eng::NodeHandle SpellSystem::spawnBurst(eng::Renderer& r, glm::vec3 pos,
 
 void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
                                glm::vec3 eye, glm::vec3 fwd) {
+    if (!mCfg) return;
+    const CombatConfig::Fireball& fb = mCfg->fireball;
+
     if (int(mFireballs.size()) >= mMaxFireballs) {
         despawnFireball(phys, r, mFireballs.front());
         mFireballs.erase(mFireballs.begin());
@@ -57,34 +75,43 @@ void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
 
     eng::BodyDesc d;
     d.kind          = eng::ShapeKind::Sphere;
-    d.radius        = 0.10f;
+    d.radius        = fb.radius;
     d.position      = spawn;
     d.layer         = eng::BodyLayer::Projectile;
     d.dynamic       = true;
     d.continuousCast = true;
-    d.mass          = 0.3f;
+    d.mass          = fb.mass;
     d.restitution   = 0.0f;
 
     eng::BodyHandle body = phys.createBody(d);
     if (!body.valid()) return;
 
-    phys.applyImpulse(body, fwd * (0.3f * 18.0f), spawn); // ~18 m/s
+    phys.applyImpulse(body, fwd * (fb.mass * fb.speed), spawn);
 
     eng::NodeHandle node = r.createNode(eng::kRootNode, spawn);
-    r.attachMesh(node, mFireballMesh, "Game/FireballTrail", false);
-    r.attachParticles(node, "Game/FireballTrail");
+    r.attachMesh(node, mFireballMesh, fb.trailParticle.c_str(), false);
+    r.attachParticles(node, fb.trailParticle);
+    if (fb.lightRange > 0.0f) {
+        eng::LightDesc l;
+        l.colour = lightEnergy(fb.lightColour);
+        l.range  = fb.lightRange;
+        r.attachLight(node, l);
+    }
 
-    spawnBurst(r, spawn, "Game/SpellMuzzle", 0.25f); // muzzle flash
+    spawnBurst(r, spawn, fb.muzzleParticle, 0.25f, fb.lightColour, fb.lightRange);
 
-    mFireballs.push_back({ body, node, 6.0f, false });
+    mFireballs.push_back({ body, node, fb.ttl, false });
 }
 
 // ---- beam (hitscan) ----
 
 void SpellSystem::castBeam(eng::Physics& phys, eng::Renderer& r,
                            glm::vec3 eye, glm::vec3 fwd) {
+    if (!mCfg) return;
+    const CombatConfig::Beam& bm = mCfg->beam;
+
     fwd = glm::normalize(fwd);
-    const float range = 40.0f;
+    const float range = bm.range;
 
     // rayCast takes a single BodyLayer mask; query Prop and Static, keep nearer.
     eng::RayHit hitProp, hitStatic;
@@ -105,14 +132,14 @@ void SpellSystem::castBeam(eng::Physics& phys, eng::Renderer& r,
     eng::NodeHandle beam = r.createNode(eng::kRootNode, mid);
     r.setOrientation(beam, rotateFromTo(glm::vec3(0, 1, 0), fwd)); // box +Y -> fwd
     // mBeamMesh is a 1 m unit cube: y-scale = len spans the full eye->hit length.
-    r.setScale(beam, glm::vec3(0.06f, len, 0.06f));
-    r.attachMesh(beam, mBeamMesh, "Game/BeamCore", false);
-    mTransients.push_back({ beam, 0.10f });
+    r.setScale(beam, glm::vec3(bm.width, len, bm.width));
+    r.attachMesh(beam, mBeamMesh, bm.coreParticle.c_str(), false);
+    mTransients.push_back({ beam, bm.segmentTtl });
 
     if (struck) {
-        spawnBurst(r, endPt, "Game/BeamImpact", 0.25f);
+        spawnBurst(r, endPt, bm.impactParticle, 0.25f, bm.lightColour, bm.lightRange);
         if (chosen.body.valid())
-            phys.applyImpulse(chosen.body, fwd * 4.0f, endPt);
+            phys.applyImpulse(chosen.body, fwd * bm.impulse, endPt);
     }
 }
 
@@ -120,14 +147,16 @@ void SpellSystem::castBeam(eng::Physics& phys, eng::Renderer& r,
 
 void SpellSystem::onHit(eng::Physics& phys, eng::Renderer& r,
                         const eng::HitEvent& e) {
+    if (!mCfg) return;
     for (auto& f : mFireballs) {
         if (!f.dead && (f.body == e.self || f.body == e.other)) {
             f.dead = true;
             f.ttl  = 0.0f;
-            spawnBurst(r, e.point, "Game/FireballImpact", 0.35f);
+            const CombatConfig::Fireball& fb = mCfg->fireball;
+            spawnBurst(r, e.point, fb.impactParticle, 0.35f, fb.lightColour, fb.lightRange);
             eng::BodyHandle target = (f.body == e.self) ? e.other : e.self;
             if (target.valid())
-                phys.applyImpulse(target, -e.normal * 3.0f, e.point); // radial push
+                phys.applyImpulse(target, -e.normal * fb.impactImpulse, e.point);
             return;
         }
     }

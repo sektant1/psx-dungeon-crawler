@@ -1,5 +1,7 @@
 #include "Projectiles.h"
 
+#include "CombatConfig.h"
+
 #include <eng/Physics.h>
 #include <eng/Renderer.h>
 
@@ -51,30 +53,36 @@ void ProjectileSystem::fireArrow(eng::Physics& phys, eng::Renderer& r,
     // Jolt capsule long axis is +Y; rotate +Y to fwd
     glm::quat orient = rotateFromTo(glm::vec3(0, 1, 0), fwd);
 
+    // Config tunables (fall back to legacy constants when unset).
+    const float radius     = mCfg ? mCfg->arrow.radius     : 0.03f;
+    const float halfHeight = mCfg ? mCfg->arrow.halfHeight : 0.22f;
+    const float mass       = mCfg ? mCfg->arrow.mass       : 0.10f;
+    const float speed      = mCfg ? mCfg->arrow.speed      : 60.0f;
+    const float ttl        = mCfg ? mCfg->arrow.ttl        : 10.0f;
+
     eng::BodyDesc d;
     d.kind          = eng::ShapeKind::Capsule;
-    d.radius        = 0.03f;
-    d.halfHeight    = 0.22f;
+    d.radius        = radius;
+    d.halfHeight    = halfHeight;
     d.position      = spawnPos;
     d.orientation   = orient;
     d.layer         = eng::BodyLayer::Projectile;
     d.dynamic       = true;
     d.continuousCast = true;
-    d.mass          = 0.1f;
+    d.mass          = mass;
     d.friction      = 0.8f;
     d.restitution   = 0.0f;
 
     eng::BodyHandle body = phys.createBody(d);
     if (!body.valid()) return;
 
-    // impulse = mass * targetSpeed (60 m/s)
-    phys.applyImpulse(body, fwd * (0.1f * 60.0f), spawnPos);
+    phys.applyImpulse(body, fwd * (mass * speed), spawnPos);
 
     eng::NodeHandle node = r.createNode(eng::kRootNode, spawnPos);
     r.setOrientation(node, orient);
     r.attachMesh(node, mArrowMesh, "Game/ProtoArrow", false);
 
-    mLive.push_back({ body, node, Kind::Arrow, 10.0f, false });
+    mLive.push_back({ body, node, Kind::Arrow, ttl, false });
 }
 
 // ---- contact seam ----

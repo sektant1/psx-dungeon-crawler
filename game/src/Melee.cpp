@@ -1,12 +1,13 @@
 #include "Melee.h"
+#include "CombatConfig.h"
 #include <algorithm>
 #include <vector>
 
 void MeleeSystem::startSwing() {
     if (swinging()) return;
-    // Match ViewModel: 120 ms anticipation, then the 130 ms edge-leading cut.
-    mWindupRemaining = 0.12f;
-    mActiveRemaining = 0.13f;
+    // Match ViewModel: anticipation then the edge-leading cut (config-tunable).
+    mWindupRemaining = mCfg ? mCfg->melee.windup : 0.12f;
+    mActiveRemaining = mCfg ? mCfg->melee.active : 0.13f;
     mHitThisSwing.clear();
 }
 
@@ -19,12 +20,16 @@ void MeleeSystem::fixedUpdate(eng::Physics& phys, glm::vec3 eye,
     if (mActiveRemaining <= 0.0f) return;
     mActiveRemaining = std::max(0.0f, mActiveRemaining - dt);
 
+    const float reach   = mCfg ? mCfg->melee.reach   : mReach;
+    const float radius  = mCfg ? mCfg->melee.radius  : mRadius;
+    const float impulse = mCfg ? mCfg->melee.impulse : mImpulse;
+
     eng::BodyDesc sweep;
     sweep.kind   = eng::ShapeKind::Sphere;
-    sweep.radius = mRadius;
+    sweep.radius = radius;
 
     glm::vec3 sweepFrom = eye + forward * 0.3f;
-    glm::vec3 sweepTo   = eye + forward * mReach;
+    glm::vec3 sweepTo   = eye + forward * reach;
 
     std::vector<eng::ShapeHit> hits;
     phys.shapeCast(sweep, sweepFrom, sweepTo, hits, eng::BodyLayer::Prop);
@@ -38,7 +43,7 @@ void MeleeSystem::fixedUpdate(eng::Physics& phys, glm::vec3 eye,
         if (alreadyHit) continue;
 
         mHitThisSwing.push_back(id);
-        phys.applyImpulse(hit.body, forward * mImpulse, hit.point);
+        phys.applyImpulse(hit.body, forward * impulse, hit.point);
         if (mOnHit) mOnHit(hit.body, hit.point, hit.normal);
     }
 }
