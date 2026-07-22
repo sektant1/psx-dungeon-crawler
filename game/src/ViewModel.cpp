@@ -95,6 +95,46 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
 }
 
 // ---------------------------------------------------------------------------
+// initStaff — procedural caster staff (shaft + crystal tip)
+// ---------------------------------------------------------------------------
+void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
+                          const std::string& crystalMeshPath,
+                          const WeaponViewmodelPose& pose)
+{
+    // Staff-specific framing: held upright in the right hand, shaft already
+    // authored along +Y so no grip-axis twist is needed.
+    WeaponViewmodelPose staffPose = pose;
+    staffPose.position          = {0.28f, -0.34f, -0.70f};
+    staffPose.rotationDegrees   = {-6.0f, 10.0f, 2.0f};
+    staffPose.scale             = 0.035f;
+    staffPose.gripAxisTwistDegrees = 0.0f;
+    mPose = staffPose;
+
+    mNode = r.createNode(headNode, mPose.position);
+
+    // Shaft: a unit beveled box stretched long+thin via a child node, so the
+    // uniform viewmodel scale stays on mNode (mirrors the barrel multi-mesh).
+    const eng::MeshHandle shaft = r.createBeveledBox(0.06f);
+    eng::NodeHandle shaftNode = r.createNode(mNode, glm::vec3(0.0f));
+    r.attachMesh(shaftNode, shaft, "Game/PropPlanks", false, true);
+    r.setScale(shaftNode, glm::vec3(1.0f, 12.0f, 1.0f));
+
+    // Crystal tip at the top of the shaft, emissive so it reads as a focus.
+    const eng::MeshHandle tip = r.loadObj(crystalMeshPath);
+    eng::NodeHandle tipNode = r.createNode(mNode, glm::vec3(0.0f, 6.0f, 0.0f));
+    r.attachMesh(tipNode, tip, "Game/BeamCore", false, true);
+    r.setScale(tipNode, glm::vec3(2.0f));
+
+    r.setScale(mNode, glm::vec3(mPose.scale));
+    r.setOrientation(mNode, poseOrientation(mPose));
+
+    // Reset animation state on every re-init (level transition).
+    mAttackTime = -1.0f;
+    mParry      = 0.0f;
+    mSwayPhase  = 0.0f;
+}
+
+// ---------------------------------------------------------------------------
 // update
 // ---------------------------------------------------------------------------
 void ViewModel::update(eng::Renderer& r, float dt,

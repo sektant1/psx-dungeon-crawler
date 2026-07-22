@@ -42,6 +42,12 @@ public:
                     const std::string& materialName,
                     const WeaponViewmodelPose& pose = {});
 
+    // Procedural caster staff: a long thin shaft plus a crystal tip, attached to
+    // the viewmodel node. Reuses the shared attack animation for a cast thrust.
+    void initStaff(eng::Renderer& r, eng::NodeHandle headNode,
+                   const std::string& crystalMeshPath,
+                   const WeaponViewmodelPose& pose = {});
+
     // Call once per frame (variable dt is fine — this is cosmetic only).
     //   triggerAttack : rising edge that starts the slash animation.
     //   parryHeld     : true while the guard key is down.
