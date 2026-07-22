@@ -768,7 +768,7 @@ int main(int, char**)
     loading.present();
     loading.finish();
 
-    engine.debugUi().addPanel("Player", [&player, &r] {
+    engine.debugUi().addPanel("Player", [&player] {
         ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);
         ImGui::SliderFloat("mouse sensitivity", &player.sensitivity(), 0.0005f,
                            0.01f, "%.4f");
