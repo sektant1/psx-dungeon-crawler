@@ -11,7 +11,7 @@ label_highlight_pattern = "Water|UV-panned"
 label_highlight_colour = [0.38, 0.76, 1.0]
 shape = "plane"
 material = "Fantasy/Water"
-position = [-12.0, 0.24, 24.0]
+position = [-12.0, 0.27, 24.0]
 scale = [3.2, 1.0, 3.2]
 
 [[exhibit]]
@@ -33,7 +33,7 @@ label_highlight_pattern = "Lava|magma"
 label_highlight_colour = [1.0, 0.42, 0.12]
 shape = "plane"
 material = "Fantasy/Lava"
-position = [12.0, 0.24, 24.0]
+position = [12.0, 0.27, 24.0]
 scale = [3.2, 1.0, 3.2]
 light_colour = [1.25, 0.20, 0.025]
 light_range = 4.5
@@ -57,7 +57,7 @@ label_highlight_pattern = "Toxic|Slime"
 label_highlight_colour = [0.38, 1.0, 0.20]
 shape = "plane"
 material = "Fantasy/ToxicSlime"
-position = [-12.0, 0.20, 20.0]
+position = [-12.0, 0.23, 20.0]
 scale = [2.6, 1.0, 2.6]
 light_colour = [0.18, 0.72, 0.04]
 light_range = 3.5
