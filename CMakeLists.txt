@@ -84,6 +84,7 @@ add_library(eng STATIC
     engine/src/Engine.cpp
     engine/src/DebugUi.cpp
     engine/src/UiContext.cpp
+    engine/src/panels/RenderTuningPanel.cpp
     engine/src/Physics.cpp
     engine/src/RenderPresets.cpp
     engine/src/SceneRegistry.cpp
