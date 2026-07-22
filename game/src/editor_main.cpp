@@ -58,7 +58,8 @@ int main(int, char**)
                 eng::log::error("Editor: procedural build failed");
         } else {
             std::string error;
-            if (!loadJsonScene(f.path, r, &physics, contentRoot, assets, error))
+            if (!loadJsonScene(f.path, r, &physics, contentRoot, assets, error,
+                               &map))
                 eng::log::error("Editor: load %s failed: %s", f.path.c_str(),
                                 error.c_str());
         }

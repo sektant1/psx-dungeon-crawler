@@ -1,5 +1,8 @@
 #include "JsonSceneLoader.h"
 
+#include "DungeonGen.h"
+#include "DungeonMap.h"
+
 #include <eng/Physics.h>
 #include <eng/Renderer.h>
 
@@ -77,8 +80,9 @@ void loadNode(const nlohmann::json& j, eng::Renderer& r, eng::NodeHandle parent,
 } // namespace
 
 bool loadJsonScene(const std::string& path, eng::Renderer& r,
-                   eng::Physics*, eng::NodeHandle parent,
-                   const std::string& assetDir, std::string& error)
+                   eng::Physics* physics, eng::NodeHandle parent,
+                   const std::string& assetDir, std::string& error,
+                   DungeonMap* dungeon)
 {
     std::ifstream in(path);
     if (!in) {
@@ -95,7 +99,38 @@ bool loadJsonScene(const std::string& path, eng::Renderer& r,
 
     const std::string sceneName = root.value("name", std::string("JSON Scene"));
     eng::NodeHandle scene = r.createNode(parent, glm::vec3(0.0f), sceneName);
-    if (root.value("default_floor", true))
+
+    // Generator directive: rebuild a procedural scene 1:1 from the same code
+    // the game runs. Deterministic in the seed, so the editor view matches the
+    // game's dungeon for that seed exactly.
+    const auto gen = root.find("generator");
+    const bool hasGenerator =
+        gen != root.end() && gen->is_object();
+    if (hasGenerator) {
+        const std::string type = gen->value("type", std::string());
+        if (type == "dungeon") {
+            if (!dungeon || !physics) {
+                error = "generator 'dungeon' needs a DungeonMap + Physics";
+                return false;
+            }
+            const uint32_t seed = gen->value("seed", 1u);
+            ::gen::Layout layout = ::gen::generate(seed);
+            if (!dungeon->loadFromRows(r, *physics, std::move(layout),
+                                       assetDir + "/meshes/tiles/",
+                                       assetDir + "/meshes/props/", scene)) {
+                error = "dungeon generator (seed " + std::to_string(seed) +
+                        ") failed to build";
+                return false;
+            }
+        } else {
+            error = "unknown generator type: '" + type + "'";
+            return false;
+        }
+    }
+
+    // A generated dungeon brings its own floor, so only default a prototype
+    // grid when there's no generator (unless the scene explicitly asks).
+    if (root.value("default_floor", !hasGenerator))
         addDefaultFloor(r, scene);
     const auto nodes = root.find("nodes");
     if (nodes != root.end() && nodes->is_array())
