@@ -102,7 +102,7 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     // would make that value invalid, so use finite volumes instead.
     mSceneMgr->setShadowUseInfiniteFarPlane(false);
     mSceneMgr->setShadowColour(Ogre::ColourValue(0.55f, 0.55f, 0.62f));
-    mSceneMgr->setShadowFarDistance(15.0f);
+    mSceneMgr->setShadowFarDistance(10.0f);
 
     mCamera = mSceneMgr->createCamera("MainCamera");
     mCamera->setFOVy(Ogre::Degree(70.0f)); // defaults; app overrides via API

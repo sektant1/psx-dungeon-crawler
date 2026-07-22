@@ -298,7 +298,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     eng::LightDesc warm;
     warm.colour = lightColour * lightEnergy;
     warm.range = lightRange;
-    warm.castShadows = true; // torches throw hard prop shadows
+    warm.castShadows = false; // torches no longer drive per-light stencil volumes
 
     std::set<std::pair<int, int>> pillarSpots; // corner keys, de-duplicated
     size_t ambientProps = 0;
