@@ -117,6 +117,31 @@ ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent, g
     if (ps->getParentSceneNode()) ps->getParentSceneNode()->setPosition(localPos.x, localPos.y, localPos.z);
     ps->clear();
     for (unsigned short i=0;i<ps->getNumEmitters();++i) ps->getEmitter(i)->setEnabled(true);
+
+    // Per-spawn variety: seed a cheap deterministic RNG from the handle counter so
+    // repeated casts differ but a given spawn is reproducible.
+    const ParticleEffectDesc& d = e.desc;
+    if (d.scaleJitter > 0.0f || d.hueJitter > 0.0f){
+        uint32_t s = mNextHandle * 2654435761u + 1u;
+        auto rnd = [&s]{ s ^= s<<13; s ^= s>>17; s ^= s<<5;
+                         return (s & 0xffffff) / float(0xffffff); }; // 0..1
+        if (d.scaleJitter > 0.0f){
+            const float j = 1.0f + (rnd()*2.0f - 1.0f) * d.scaleJitter;
+            ps->setDefaultDimensions(d.baseWidth * j, d.baseHeight * j);
+        }
+        if (d.hueJitter > 0.0f){
+            const float j = (rnd()*2.0f - 1.0f) * d.hueJitter;
+            glm::vec4 c = d.colourRamp.empty()
+                ? (d.emitters.empty() ? glm::vec4(1.0f) : d.emitters[0].startColour)
+                : d.colourRamp.front().rgba;
+            c.r = std::clamp(c.r + j, 0.0f, 1.0f);
+            c.b = std::clamp(c.b - j, 0.0f, 1.0f);
+            for (unsigned short i=0;i<ps->getNumEmitters();++i)
+                ps->getEmitter(i)->setParameter("colour",
+                    c4s(c));
+        }
+    }
+
     ps->setEmitting(true);
     float maxTtl = 0.0f;
     for (const auto& em : e.desc.emitters) maxTtl = std::max(maxTtl, em.ttlMax);
