@@ -28,6 +28,17 @@ struct SpriteHandle {
     bool valid() const { return id != 0; }
 };
 
+struct ParticlesHandle {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
+// Index of a registered effect template (0 = invalid).
+struct ParticleEffectId {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
 // The scene root, valid after Engine::init.
 inline constexpr NodeHandle kRootNode{1};
 
