@@ -2,6 +2,8 @@
 #include "ScenePanel.h"
 #include <eng/MaterialPreview.h>
 #include <memory>
+#include <string>
+#include <vector>
 namespace eng { class Renderer; class SceneView; }
 namespace eng::ui {
 struct Selection;
@@ -13,5 +15,6 @@ public:
 private:
     ScenePanel mTree;
     std::unique_ptr<MaterialPreview> mPreview;
+    std::vector<std::string> mMaterials; // discovered once from Renderer
 };
 }

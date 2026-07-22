@@ -19,11 +19,6 @@ public:
     struct Size { int w = 0, h = 0; };
     Size viewportSize() const; // last Scene-dock content size (for RTT resize)
 
-    // Preview toggle: when true, the viewport looks THROUGH the scene's runtime
-    // camera (fps/orbit); when false, a free-fly editor eye inspects the scene
-    // and the runtime camera is drawn as a gizmo. Toggled from the Scene toolbar.
-    bool previewCamera() const;
-
     // Scene picker: a Godot-style dropdown in the Scene toolbar to open one of
     // the discovered scene files. `label` is what shows in the combo; the
     // callback receives the chosen entry (empty path = the built-in procedural

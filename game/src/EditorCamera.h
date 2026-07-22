@@ -8,6 +8,7 @@ public:
     void orbit(float dYawRad, float dPitchRad); // mouse drag
     void dolly(float delta);                    // scroll toward/away target
     void pan(glm::vec3 worldDelta);
+    void frame(glm::vec3 target, float distance); // recenter + set orbit radius
     glm::vec3 eye() const;          // derived from target/distance/yaw/pitch
     glm::quat orientation() const;  // look-at target
     glm::vec3 target() const { return mTarget; }

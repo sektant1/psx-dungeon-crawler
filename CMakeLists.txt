@@ -149,13 +149,7 @@ eng_target_hardening(game)
 add_executable(
   level_editor
   game/src/editor_main.cpp
-  game/src/EditorCamera.cpp
-  game/src/DungeonMap.cpp
-  game/src/DungeonGen.cpp
-  game/src/LevelDocument.cpp
-  game/src/LevelEditor.cpp
-  game/src/ParticleLibrary.cpp
-  game/src/JsonSceneLoader.cpp)
+  game/src/EditorCamera.cpp)
 target_include_directories(level_editor PRIVATE third_party)
 target_link_libraries(level_editor PRIVATE eng)
 target_compile_definitions(

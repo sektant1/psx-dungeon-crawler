@@ -89,6 +89,15 @@ public:
     void setPosition(NodeHandle node, glm::vec3 position);
     void setOrientation(NodeHandle node, glm::quat orientation);
     void setScale(NodeHandle node, glm::vec3 scale);
+    // Live-swap the material on every mesh attached to a node (editor tweaks).
+    void setNodeMaterial(NodeHandle node, const std::string& materialName);
+    // All user-facing material names currently loaded (Ogre parsed every
+    // .material at init), sorted, with engine/Ogre internals filtered out. For
+    // editor material pickers -- discovered, never hard-coded.
+    std::vector<std::string> materialNames() const;
+    // World-space bounds of everything attached under a node (recursive), for
+    // editor auto-framing. Returns false if the node has no renderable bounds.
+    bool nodeWorldBounds(NodeHandle node, glm::vec3& center, float& radius) const;
     // Show/hide a node and everything attached beneath it (meshes,
     // particles, lights).
     void setNodeVisible(NodeHandle node, bool show);

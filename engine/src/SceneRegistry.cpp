@@ -24,6 +24,18 @@ void SceneRegistry::addAttachment(NodeHandle node, AttachRecord rec)
         it->second.attachments.push_back(std::move(rec));
 }
 
+void SceneRegistry::setMeshMaterial(NodeHandle node, const std::string& material)
+{
+    auto it = mNodes.find(node.id);
+    if (it == mNodes.end())
+        return;
+    for (AttachRecord& a : it->second.attachments)
+        if (a.kind == NodeAttachKind::Mesh) {
+            a.label = material;
+            return;
+        }
+}
+
 void SceneRegistry::removeNode(NodeHandle node)
 {
     auto it = mNodes.find(node.id);

@@ -221,6 +221,76 @@ void Renderer::setNodeVisible(NodeHandle node, bool show)
     mImpl->node(node, "setNodeVisible")->setVisible(show);
 }
 
+void Renderer::setNodeMaterial(NodeHandle node, const std::string& materialName)
+{
+    if (!Ogre::MaterialManager::getSingleton().getByName(materialName)) {
+        log::warn("Renderer: setNodeMaterial unknown material '%s'",
+                  materialName.c_str());
+        return;
+    }
+    Ogre::SceneNode* n = mImpl->node(node, "setNodeMaterial");
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i)
+        if (auto* e = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i))) {
+            e->setMaterialName(materialName);
+            // Keep the wireframe restore map coherent if the debug view is on.
+            for (Ogre::SubEntity* se : e->getSubEntities())
+                if (mImpl->savedMaterials.count(se))
+                    mImpl->savedMaterials[se] = materialName;
+        }
+    // Reflect the change in the editor's scene mirror (first mesh attachment).
+    mImpl->mScene.setMeshMaterial(node, materialName);
+}
+
+std::vector<std::string> Renderer::materialNames() const
+{
+    std::vector<std::string> out;
+    auto& mm = Ogre::MaterialManager::getSingleton();
+    auto it = mm.getResourceIterator();
+    while (it.hasMoreElements()) {
+        const std::string& n = it.getNext()->getName();
+        if (n.empty()) continue;
+        // Filter engine/Ogre internals + generated helper materials.
+        if (n.rfind("Ogre/", 0) == 0) continue;
+        if (n.rfind("__", 0) == 0) continue;                 // preview/internal
+        if (n.rfind("BaseWhite", 0) == 0) continue;
+        if (n.rfind("Sprite/", 0) == 0) continue;            // per-clip generated
+        if (n.find("DebugWireframe") != std::string::npos) continue;
+        out.push_back(n);
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+bool Renderer::nodeWorldBounds(NodeHandle node, glm::vec3& center,
+                               float& radius) const
+{
+    if (!node.valid() || node.id > mImpl->nodes.size())
+        return false;
+    Ogre::SceneNode* n = mImpl->nodes[node.id - 1];
+    if (!n)
+        return false;
+    n->_updateBounds();
+    Ogre::AxisAlignedBox box;
+    box.setNull();
+    std::function<void(Ogre::SceneNode*)> merge = [&](Ogre::SceneNode* sn) {
+        for (size_t i = 0; i < sn->numAttachedObjects(); ++i)
+            if (auto* e = dynamic_cast<Ogre::Entity*>(sn->getAttachedObject(i)))
+                box.merge(e->getWorldBoundingBox(true));
+        for (auto* child : sn->getChildren())
+            if (auto* cs = dynamic_cast<Ogre::SceneNode*>(child))
+                merge(cs);
+    };
+    merge(n);
+    if (box.isNull())
+        return false;
+    const Ogre::Vector3 c = box.getCenter();
+    const Ogre::Vector3 h = box.getHalfSize();
+    center = glm::vec3(c.x, c.y, c.z);
+    radius = std::max(0.05f, h.length());
+    return true;
+}
+
 void Renderer::destroyNode(NodeHandle node)
 {
     mImpl->mScene.removeNode(node);

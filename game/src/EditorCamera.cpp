@@ -11,6 +11,10 @@ void EditorCamera::dolly(float delta) {
     mDistance = std::clamp(mDistance - delta * 0.5f, 0.5f, 200.0f);
 }
 void EditorCamera::pan(glm::vec3 worldDelta) { mTarget += worldDelta; }
+void EditorCamera::frame(glm::vec3 target, float distance) {
+    mTarget = target;
+    mDistance = std::clamp(distance, 0.5f, 200.0f);
+}
 
 glm::vec3 EditorCamera::eye() const {
     const float cp = std::cos(mPitch), sp = std::sin(mPitch);

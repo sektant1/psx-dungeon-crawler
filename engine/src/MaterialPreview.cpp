@@ -128,13 +128,9 @@ uint64_t MaterialPreview::textureId() const
     const Impl& s = *mImpl;
     if (!s.texture)
         return 0;
-    unsigned int id = 0;
-    try {
-        s.texture->getCustomAttribute("GLID", &id);
-    } catch (const Ogre::Exception&) {
-        return 0;
-    }
-    return uint64_t(id);
+    // OGRE's ImGuiOverlay resolves ImTextureID via getByHandle -- it's an Ogre
+    // ResourceHandle, not a GL id.
+    return uint64_t(s.texture->getHandle());
 }
 
 int MaterialPreview::size() const { return mImpl->texSize; }

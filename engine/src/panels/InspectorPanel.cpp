@@ -55,7 +55,19 @@ void InspectorPanel::draw(Renderer& r, const SceneView& scene, Selection& sel) {
                                      ImVec2(0, 1), ImVec2(1, 0));
                         ImGui::SameLine();
                     }
-                    ImGui::Text("Material: %s", a.label.c_str());
+                    // Live material swap from the repo-discovered material list
+                    // (populated once from Renderer::materialNames, never hard-coded).
+                    if (mMaterials.empty())
+                        mMaterials = r.materialNames();
+                    if (ImGui::BeginCombo("Material", a.label.c_str())) {
+                        for (const std::string& m : mMaterials) {
+                            const bool isSel = a.label == m;
+                            if (ImGui::Selectable(m.c_str(), isSel))
+                                r.setNodeMaterial(sel.node, m);
+                            if (isSel) ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
                 }
             } else if (a.kind == NodeAttachKind::Light) {
                 if (ImGui::CollapsingHeader("Light Component", ImGuiTreeNodeFlags_DefaultOpen)) {
