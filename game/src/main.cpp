@@ -127,8 +127,8 @@ private:
     eng::LightHandle chestGlow{};
     glm::vec3 chestGlowColour{0.0f};
     glm::vec3 spawn{0.0f}, exit{0.0f};
-    PortalVisual downPortal{};
-    PortalVisual upPortal{}; // invalid at depth 0
+    PortalProp downPortal{};
+    PortalProp upPortal{}; // invalid at depth 0
     std::vector<ShowcaseExhibit> exhibits;
     struct WorldLabel {
         eng::NodeHandle node{};
@@ -456,26 +456,12 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     // threshold remains on the cell centre so interaction/navigation stays
     // deterministic while the tall silhouette reads across a whole room.
     {
-        const auto portalBlockers = [&](glm::vec3 at, const char* label) {
-            for (float side : {-1.0f, 1.0f}) {
-                ShowcaseExhibit pillar;
-                pillar.id = label;
-                pillar.label = label;
-                pillar.position = at + glm::vec3(side * 1.25f, 1.2f, 0.0f);
-                pillar.halfExtents = {0.46f, 1.2f, 0.42f};
-                pillar.blocksMovement = true;
-                lv.exhibits.push_back(std::move(pillar));
-            }
-        };
-        PortalStyle down;
+        PortalPropStyle down;
         down.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
         down.lightColour = {0.06f, 0.42f, 0.025f};
         down.yawDegrees = lv.map.exitYawDegrees();
-        lv.downPortal = createPortal(r, lv.exit, down);
+        lv.downPortal = createPortalProp(r, lv.exit, down);
         if (depth == 0) {
-            const glm::vec3 local{0.0f, 2.82f, 0.10f};
-            const eng::NodeHandle label = r.createNode(
-                lv.downPortal.root, local);
             eng::TextSpriteStyle style = showcaseLabelStyle(
                 0.48f, {0.22f, 0.82f, 0.18f, 1.0f});
             // Deliberately force a two-line plaque: it remains readable at
@@ -485,20 +471,18 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             style.colourRules.push_back(
                 {"PORTAL", {0.48f, 0.92f, 0.30f, 1.0f}});
             const eng::SpriteHandle sprite =
-                r.attachTextSprite(label, "DUNGEON PORTAL", style);
+                r.attachTextSprite(lv.downPortal.labelAnchor,
+                                   "DUNGEON PORTAL", style);
             r.setSpriteVisible(sprite, false);
-            const float yaw = glm::radians(down.yawDegrees);
-            lv.worldLabels.push_back({label, sprite, lv.exit + glm::vec3(
-                std::sin(yaw) * local.z, local.y, std::cos(yaw) * local.z)});
+            lv.worldLabels.push_back({lv.downPortal.labelAnchor, sprite,
+                                      lv.downPortal.labelWorldPosition});
         }
-        portalBlockers(lv.exit, "Dungeon Portal — animated fel gate");
         if (depth > 0) {
-            PortalStyle up;
+            PortalPropStyle up;
             up.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
             up.material = "Game/PortalUp";
             up.lightColour = {0.18f, 0.90f, 1.35f};
-            lv.upPortal = createPortal(r, lv.spawn, up);
-            portalBlockers(lv.spawn, "Return Portal — animated arcane gate");
+            lv.upPortal = createPortalProp(r, lv.spawn, up);
         }
     }
     if (depth == 0 && !std::getenv("PSX_NO_SHOWCASE_LABELS")) {
@@ -552,8 +536,6 @@ void LiveLevel::update(eng::Renderer& r, float animationTime)
 {
     scene.update(r, animationTime);
     map.update(r, animationTime);
-    animatePortal(r, downPortal, animationTime);
-    animatePortal(r, upPortal, animationTime, -1.0f);
     if (chestBase.valid()) {
         r.setPosition(chestBase,
                       {0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f),

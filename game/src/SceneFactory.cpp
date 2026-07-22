@@ -8,12 +8,13 @@
 #define TOML_EXCEPTIONS 0
 #include <tomlplusplus/toml.hpp>
 
+#include <cmath>
 #include <unordered_map>
 
-PortalVisual createPortal(eng::Renderer& r, glm::vec3 floorPosition,
-                          const PortalStyle& style)
+PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
+                            const PortalPropStyle& style)
 {
-    PortalVisual out;
+    PortalProp out;
     const bool authoredFrame = !style.frameMesh.empty();
     const eng::MeshHandle membrane = authoredFrame
         ? r.createPlane(style.innerRadius * 2.0f)
@@ -26,20 +27,20 @@ PortalVisual createPortal(eng::Renderer& r, glm::vec3 floorPosition,
         // The authored arch occupies x[0,4], y[0,3], z[-4,0]. Centre its
         // facade directly on the wall plane instead of offsetting the whole
         // four-metre source tunnel into the room.
-        eng::NodeHandle frame = r.createNode(out.root, {-2.0f, 0.0f, 0.0f});
+        eng::NodeHandle frame = r.createNode(out.root, style.frameOffset);
         // The source kit piece is a four-metre-deep passage module. Compress
         // only its depth so it reads as a monumental portal surround rather
         // than a short tunnel, without distorting the authored front arch.
-        r.setScale(frame, {1.0f, 1.0f, 0.12f});
+        r.setScale(frame, style.frameScale);
         r.attachMesh(frame, r.loadObj(style.frameMesh), style.frameMaterial,
                      false);
     }
-    // The compressed frame spans local z [-0.48, 0]. Put the opaque membrane
-    // just behind its rear face: both pieces now replace the boundary wall
-    // instead of projecting into the playable room.
+    // Overscan the opaque field behind the opening and keep it only a few
+    // centimetres behind the facade. The frame masks its edges from every
+    // playable angle without exposing an unlit recess.
     const eng::NodeHandle arch = r.createNode(
         out.root, {0.0f, style.height,
-                   style.frameMesh.empty() ? 0.0f : -0.50f});
+                   style.frameMesh.empty() ? 0.0f : style.membraneInset});
     out.field = r.createNode(arch);
     if (authoredFrame) {
         r.setScale(out.field, {style.fieldScale.x, 1.0f, style.fieldScale.y});
@@ -56,19 +57,14 @@ PortalVisual createPortal(eng::Renderer& r, glm::vec3 floorPosition,
     glow.colour = style.lightColour;
     glow.range = style.lightRange;
     out.light = r.attachLight(arch, glow);
+    out.labelAnchor = r.createNode(out.root, style.labelOffset);
+    const float yaw = glm::radians(style.yawDegrees);
+    const float c = std::cos(yaw), s = std::sin(yaw);
+    const glm::vec3 local = style.labelOffset;
+    out.labelWorldPosition = floorPosition + glm::vec3(
+        c * local.x + s * local.z, local.y,
+        -s * local.x + c * local.z);
     return out;
-}
-
-void animatePortal(eng::Renderer& r, const PortalVisual& portal, float time,
-                   float direction)
-{
-    // Portal motion is entirely UV-driven by the material. Keeping the mesh
-    // fixed avoids the cheap spinning-disc look and leaves bloom intensity
-    // stable; direction is retained for API compatibility with return gates.
-    (void)r;
-    (void)portal;
-    (void)time;
-    (void)direction;
 }
 
 bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
@@ -149,10 +145,13 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             *e, "label_highlight_colour", {1.0f, 0.78f, 0.22f});
         info.labelHighlight = {highlight, 1.0f};
         info.position = position;
+        // Visual bounds drive label placement even when an exhibit does not
+        // participate in collision. Plane height is intentionally zero.
+        info.halfExtents = glm::abs(scale) * 0.5f;
+        if (shape == "plane") info.halfExtents.y = 0.0f;
         info.blocksMovement = (*e)["collision"].value_or(
             shape == "box" || shape == "cone");
         if (info.blocksMovement) {
-            info.halfExtents = glm::abs(scale) * 0.5f;
             // Thin stands remain comfortably collidable; vertical size is
             // irrelevant to the ground-plane FPS resolver.
             info.halfExtents.x = std::max(info.halfExtents.x, 0.15f);

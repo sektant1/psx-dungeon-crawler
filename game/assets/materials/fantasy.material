@@ -133,9 +133,10 @@ material Fantasy/ToxicSlime
 material Fantasy/ArcaneGlow
 {
     technique { pass {
-        cull_hardware none
         scene_blend add
-        depth_write off
+        // Closed ring geometry must depth-test itself; otherwise its front,
+        // back, inner and outer shells add together into a blown-out slab.
+        depth_write on
         vertex_program_ref Sprite/VS { param_named spriteScroll float2 0.03 -0.04 }
         fragment_program_ref Sprite/FS
         { param_named spriteTint float4 0.35 0.42 1.0 0.80 }

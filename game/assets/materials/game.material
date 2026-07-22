@@ -50,8 +50,9 @@ material Game/PropBauerhaus
     } }
 }
 
-// Dungeon geometry contributes normal/depth metadata to the restrained
-// post-process edge ink and light bands.
+// The modular dungeon meshes were authored against Dungeon_Map's packed UV
+// regions. Keep the atlas intact: replacing it with a standalone tile would
+// magnify a small UV sub-rectangle and visibly stretch the masonry.
 material Game/DungeonTile
 {
     technique { pass {
@@ -59,15 +60,15 @@ material Game/DungeonTile
         fragment_program_ref PSX_FS_Dungeon { }
         texture_unit
         {
-            texture bauerhaus.png
+            texture Dungeon_Map.png
             filtering none
             tex_address_mode wrap
         }
     } }
 }
 
-// Imported modular arches contain visible inner/back faces. Render both sides
-// so the masonry stays complete from close first-person viewing angles.
+// Imported arches expose inner/back faces at close range. They share the same
+// authored atlas UVs as the room kit, but need two-sided rasterization.
 material Game/DungeonTileTwoSided
 {
     technique { pass {
@@ -76,7 +77,7 @@ material Game/DungeonTileTwoSided
         fragment_program_ref PSX_FS_Dungeon { }
         texture_unit
         {
-            texture bauerhaus.png
+            texture Dungeon_Map.png
             filtering none
             tex_address_mode wrap
         }

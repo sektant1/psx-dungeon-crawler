@@ -50,6 +50,7 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
                             "/compositors", "/textures"})
         rgm.addResourceLocation(engBase + sub, "FileSystem", "General");
     for (const char* sub : {"/materials", "/textures", "/textures/props",
+                            "/textures/dungeon",
                             "/textures/prototype", "/textures/vfx",
                             "/textures/surfaces", "/particles"}) {
         const std::string dir = appAssetDir + sub;

@@ -11,7 +11,7 @@ namespace eng { class Renderer; }
 
 // Reusable descriptors/results for composed scene objects. Primitive meshes
 // remain in Renderer; factories assemble them into game-facing prefabs.
-struct PortalStyle {
+struct PortalPropStyle {
     std::string material = "Game/PortalDown";
     std::string frameMaterial = "Game/DungeonTileTwoSided";
     std::string frameMesh;
@@ -21,16 +21,24 @@ struct PortalStyle {
     float lightRange = 5.5f;
     float outerRadius = 0.92f;
     float innerRadius = 1.0f;
-    // Authored arch opening is broad and low (about 3.3 x 1.9 m).
-    glm::vec2 fieldScale{1.62f, 1.30f};
-    float height = 1.30f;
+    // Overscan hides the membrane edges behind the authored arch at oblique
+    // camera angles. The small inset prevents z-fighting without exposing a
+    // dark tunnel around the field.
+    glm::vec2 fieldScale{1.90f, 1.55f};
+    float height = 1.42f;
+    float membraneInset = -0.035f;
+    glm::vec3 frameOffset{-2.0f, 0.0f, 0.0f};
+    glm::vec3 frameScale{1.0f, 1.0f, 0.12f};
+    glm::vec3 labelOffset{0.0f, 2.82f, 0.10f};
     int segments = 18;
 };
 
-struct PortalVisual {
+struct PortalProp {
     eng::NodeHandle root{};
     eng::NodeHandle field{};
+    eng::NodeHandle labelAnchor{};
     eng::LightHandle light{};
+    glm::vec3 labelWorldPosition{0.0f};
 };
 
 struct ShowcaseExhibit {
@@ -44,10 +52,10 @@ struct ShowcaseExhibit {
     bool blocksMovement = false;
 };
 
-PortalVisual createPortal(eng::Renderer& renderer, glm::vec3 floorPosition,
-                          const PortalStyle& style);
-void animatePortal(eng::Renderer& renderer, const PortalVisual& portal,
-                   float time, float direction = 1.0f);
+// Deep portal-prop seam: one descriptor assembles frame, opaque animated
+// membrane, light, particles and a correctly transformed tooltip anchor.
+PortalProp createPortalProp(eng::Renderer& renderer, glm::vec3 floorPosition,
+                            const PortalPropStyle& style = {});
 
 // Loads a TOML-authored primitive/material gallery. Returns false and logs a
 // useful error if the file is malformed; individual unknown shapes are skipped.
