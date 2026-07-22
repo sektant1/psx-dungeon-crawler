@@ -75,7 +75,14 @@ add_library(
   engine/src/panels/InspectorPanel.cpp
   engine/src/Physics.cpp
   engine/src/RenderPresets.cpp
-  engine/src/SceneRegistry.cpp)
+  engine/src/SceneRegistry.cpp
+  engine/src/core/Object.cpp
+  engine/src/core/Entity.cpp
+  engine/src/core/Space.cpp
+  engine/src/core/GameSession.cpp
+  engine/src/systems/Factory.cpp
+  engine/src/diagnostics/Trace.cpp
+  engine/src/diagnostics/Profiler.cpp)
 target_include_directories(
   eng
   PUBLIC engine/include
@@ -217,6 +224,30 @@ if(BUILD_TESTING)
   target_include_directories(obj_geometry_tests PRIVATE engine/src engine/include)
   target_link_libraries(obj_geometry_tests PRIVATE eng glm::glm)
   add_test(NAME obj_geometry COMMAND obj_geometry_tests)
+
+  add_executable(core_object_tests engine/tests/CoreObjectTests.cpp
+                                   engine/src/core/Object.cpp
+                                   engine/src/core/Entity.cpp
+                                   engine/src/core/Space.cpp
+                                   engine/src/core/GameSession.cpp)
+  target_include_directories(core_object_tests PRIVATE engine/include)
+  add_test(NAME core_object COMMAND core_object_tests)
+
+  add_executable(factory_tests engine/tests/FactoryTests.cpp
+                               engine/src/systems/Factory.cpp
+                               engine/src/core/Object.cpp)
+  target_include_directories(factory_tests PRIVATE engine/include)
+  add_test(NAME factory COMMAND factory_tests)
+
+  add_executable(trace_tests engine/tests/TraceTests.cpp
+                             engine/src/diagnostics/Trace.cpp)
+  target_include_directories(trace_tests PRIVATE engine/include)
+  add_test(NAME trace COMMAND trace_tests)
+
+  add_executable(profiler_tests engine/tests/ProfilerTests.cpp
+                                engine/src/diagnostics/Profiler.cpp)
+  target_include_directories(profiler_tests PRIVATE engine/include)
+  add_test(NAME profiler COMMAND profiler_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
