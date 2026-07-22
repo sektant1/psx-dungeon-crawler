@@ -80,6 +80,9 @@ material Fantasy/Lava
 {
     technique { pass {
         depth_write on
+        // Flat liquid sits just above its plinth; a small negative bias keeps
+        // it in front without z-fighting at grazing angles.
+        depth_bias -1 -1
         vertex_program_ref Sprite/VS {
             param_named spriteUvScale float2 2.0 2.0
             param_named spriteScroll float2 0.045 -0.025
@@ -88,7 +91,10 @@ material Fantasy/Lava
         { param_named spriteTint float4 1.0 0.72 0.46 1.0 }
         texture_unit {
             texture lava_stylized.png
-            filtering none
+            // point mag keeps PSX texel crunch; linear mip + anisotropy kill
+            // the grazing-angle minification shimmer on the scrolling texture.
+            filtering point point linear
+            max_anisotropy 4
             tex_address_mode wrap
         }
     } }
@@ -98,6 +104,7 @@ material Fantasy/Water
 {
     technique { pass {
         depth_write on
+        depth_bias -1 -1
         vertex_program_ref Sprite/VS {
             param_named spriteUvScale float2 4.0 4.0
             param_named spriteScroll float2 0.07 0.035
@@ -106,7 +113,8 @@ material Fantasy/Water
         { param_named spriteTint float4 0.30 0.68 1.0 1.0 }
         texture_unit {
             texture water_stylized.png
-            filtering none
+            filtering point point linear
+            max_anisotropy 4
             tex_address_mode wrap
         }
     } }
@@ -116,6 +124,7 @@ material Fantasy/ToxicSlime
 {
     technique { pass {
         depth_write on
+        depth_bias -1 -1
         vertex_program_ref Sprite/VS {
             param_named spriteUvScale float2 3.0 3.0
             param_named spriteScroll float2 -0.035 0.055
@@ -124,7 +133,8 @@ material Fantasy/ToxicSlime
         { param_named spriteTint float4 0.43 1.0 0.12 1.0 }
         texture_unit {
             texture slime_stylized.png
-            filtering none
+            filtering point point linear
+            max_anisotropy 4
             tex_address_mode wrap
         }
     } }
