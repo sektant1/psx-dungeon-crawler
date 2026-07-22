@@ -1,6 +1,15 @@
+# Build output
 build/
 build-debug/
+build-asan/
 compile_commands.json
 ogre.log
+
+# Vendored SDK
 vendor/ogre/
+
+# Caches / editor-local state
 .cache/
+imgui.ini
+__pycache__/
+*.pyc
