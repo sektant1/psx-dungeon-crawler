@@ -195,6 +195,11 @@ public:
                         glm::vec3 shadowTint, glm::vec3 midTint);
     void writeScreenshot(const std::string& path);
 
+    // --- editor offscreen viewport ---------------------------------------
+    void enableEditorViewport(int w, int h);
+    void resizeEditorViewport(int w, int h);
+    uint64_t editorViewportTextureId() const;
+
     // --- debug line overlay -----------------------------------------------
     struct DebugLine { glm::vec3 a{0}; glm::vec3 b{0}; glm::vec3 colour{1,1,1}; };
     // Replace the debug line set for this frame. Pass empty to clear. Rebuilt

@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <string>
 
+#include <OgreTexture.h> // Ogre::TexturePtr member
+
 namespace Ogre {
 class Root;
 class RenderWindow;
@@ -31,6 +33,15 @@ public:
     // Material edits on compositor render_quad passes need a chain recompile
     // before the cloned pass material sees the new GPU params.
     void markPostChainDirty();
+
+    // Editor offscreen viewport: render the scene + PSX post chain into a texture
+    // (overlays OFF so imgui isn't baked in) shown via ImGui::Image. The window
+    // viewport then presents only the imgui panels.
+    void enableOffscreenViewport(int w, int h);
+    void resizeOffscreenViewport(int w, int h);
+    uint64_t viewportTextureId() const;   // GL id for ImGui::Image, 0 if none
+    bool offscreenActive() const { return mOffscreenTex.get() != nullptr; }
+
     void renderFrame(float dt);
     void onResize(int width, int height);
     void writeScreenshot(const std::string& path);
@@ -59,6 +70,12 @@ private:
     int mPixelSize = 3;
     Ogre::OverlaySystem* mOverlaySystem = nullptr; // deleted before Root
     Ogre::ImGuiOverlay* mImGuiOverlay = nullptr;   // owned by OverlayManager
+
+    // Editor offscreen RTT (scene + post baked into a texture for ImGui::Image).
+    Ogre::TexturePtr mOffscreenTex;
+    Ogre::Viewport* mOffscreenVp = nullptr;
+    bool mOffscreenChain = false; // PSX chain lives on the RTT viewport
+    int mOffW = 0, mOffH = 0;
 };
 
 } // namespace eng

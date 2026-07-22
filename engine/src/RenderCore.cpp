@@ -196,13 +196,107 @@ void RenderCore::setPixelSize(int pixelSize)
         def->widthFactor = factor;
         def->heightFactor = factor;
     }
-    if (mChainAdded) {
-        Ogre::CompositorManager::getSingleton().removeCompositor(mViewport,
-                                                                 "PSX/Stylized");
+    // When the editor's offscreen viewport is active the PSX chain lives there,
+    // not on the window viewport; re-add on whichever viewport currently hosts it.
+    auto& cm = Ogre::CompositorManager::getSingleton();
+    if (mOffscreenVp) {
+        if (mOffscreenChain) {
+            cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
+            cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
+            mOffscreenChain = false;
+            try {
+                cm.addCompositor(mOffscreenVp, "PSX/Stylized");
+                cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", true);
+                mOffscreenChain = true;
+            } catch (const Ogre::Exception& e) {
+                Ogre::LogManager::getSingleton().logError(
+                    "Editor offscreen post chain re-add failed: " +
+                    e.getDescription());
+            }
+        }
+    } else if (mChainAdded) {
+        cm.removeCompositor(mViewport, "PSX/Stylized");
         mChainAdded = false;
         if (mChainEnabled)
             enablePostChain(); // re-add
     }
+}
+
+void RenderCore::enableOffscreenViewport(int w, int h)
+{
+    w = std::max(1, w);
+    h = std::max(1, h);
+    if (mOffscreenTex) {
+        resizeOffscreenViewport(w, h);
+        return;
+    }
+    mOffW = w;
+    mOffH = h;
+    mOffscreenTex = Ogre::TextureManager::getSingleton().createManual(
+        "EditorViewportRTT", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+        Ogre::TEX_TYPE_2D, uint32_t(w), uint32_t(h), 0, Ogre::PF_R8G8B8A8,
+        Ogre::TU_RENDERTARGET);
+    Ogre::RenderTexture* rt = mOffscreenTex->getBuffer()->getRenderTarget();
+    rt->setAutoUpdated(true);
+    mOffscreenVp = rt->addViewport(mCamera);
+    mOffscreenVp->setOverlaysEnabled(false); // keep imgui OUT of the RTT
+    mOffscreenVp->setClearEveryFrame(true);
+    mOffscreenVp->setBackgroundColour(Ogre::ColourValue(0.02f, 0.02f, 0.03f, 1.0f));
+
+    // Move the PSX post chain from the window viewport onto the RTT viewport so
+    // the editor image is post-processed and the window stays cheap.
+    auto& cm = Ogre::CompositorManager::getSingleton();
+    if (mChainAdded) {
+        cm.setCompositorEnabled(mViewport, "PSX/Stylized", false);
+        cm.removeCompositor(mViewport, "PSX/Stylized");
+        mChainAdded = false;
+    }
+    try {
+        cm.addCompositor(mOffscreenVp, "PSX/Stylized");
+        cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", true);
+        mOffscreenChain = true;
+    } catch (const Ogre::Exception& e) {
+        Ogre::LogManager::getSingleton().logError(
+            "Editor offscreen post chain unavailable: " + e.getDescription());
+    }
+    // Window viewport now shows the raw scene (covered by the opaque imgui
+    // dockspace) plus the imgui overlay. Keep its overlays enabled.
+    mViewport->setOverlaysEnabled(true);
+    // Re-apply the current pixel size so the RTT's PSX targets match.
+    setPixelSize(mPixelSize);
+}
+
+void RenderCore::resizeOffscreenViewport(int w, int h)
+{
+    w = std::max(1, w);
+    h = std::max(1, h);
+    if (!mOffscreenTex || (w == mOffW && h == mOffH))
+        return;
+    // Tear down the old RTT (removes its viewport + compositor) and rebuild.
+    auto& cm = Ogre::CompositorManager::getSingleton();
+    if (mOffscreenChain && mOffscreenVp) {
+        cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
+        cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
+        mOffscreenChain = false;
+    }
+    mOffscreenTex->getBuffer()->getRenderTarget()->removeAllViewports();
+    Ogre::TextureManager::getSingleton().remove(mOffscreenTex);
+    mOffscreenTex.reset();
+    mOffscreenVp = nullptr;
+    enableOffscreenViewport(w, h); // recreate at the new size
+}
+
+uint64_t RenderCore::viewportTextureId() const
+{
+    if (!mOffscreenTex)
+        return 0;
+    unsigned int id = 0;
+    try {
+        mOffscreenTex->getCustomAttribute("GLID", &id);
+    } catch (const Ogre::Exception&) {
+        return 0;
+    }
+    return uint64_t(id);
 }
 
 void RenderCore::markPostChainDirty()
@@ -262,6 +356,19 @@ void RenderCore::shutdown()
 {
     if (!mRoot)
         return;
+    // Tear down the editor offscreen RTT before the scene manager / root go.
+    if (mOffscreenTex) {
+        auto& cm = Ogre::CompositorManager::getSingleton();
+        if (mOffscreenChain && mOffscreenVp) {
+            cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
+            cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
+            mOffscreenChain = false;
+        }
+        mOffscreenTex->getBuffer()->getRenderTarget()->removeAllViewports();
+        Ogre::TextureManager::getSingleton().remove(mOffscreenTex);
+        mOffscreenTex.reset();
+        mOffscreenVp = nullptr;
+    }
     if (mViewport && mWindow)
         Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);
     if (mSceneMgr && mOverlaySystem)

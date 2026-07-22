@@ -962,6 +962,21 @@ void Renderer::writeScreenshot(const std::string& path)
     mImpl->core.writeScreenshot(path);
 }
 
+void Renderer::enableEditorViewport(int w, int h)
+{
+    mImpl->core.enableOffscreenViewport(w, h);
+}
+
+void Renderer::resizeEditorViewport(int w, int h)
+{
+    mImpl->core.resizeOffscreenViewport(w, h);
+}
+
+uint64_t Renderer::editorViewportTextureId() const
+{
+    return mImpl->core.viewportTextureId();
+}
+
 void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
 {
     Ogre::SceneManager* sm = mImpl->core.sceneMgr();
