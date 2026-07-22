@@ -1,5 +1,6 @@
 # Build output
 build/
+build-cpm/_deps/
 build-debug/
 build-asan/
 compile_commands.json
