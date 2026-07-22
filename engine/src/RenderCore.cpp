@@ -119,6 +119,14 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     mSceneMgr->addRenderQueueListener(mOverlaySystem);
     mImGuiOverlay = new Ogre::ImGuiOverlay();
     mImGuiOverlay->setZOrder(300);
+    // The ImGuiOverlay ctor created the ImGui context. Enable docking (single
+    // OS window: DockSpace only, no multi-viewport -- that would need a platform
+    // backend Ogre's overlay renderer doesn't provide). This lets the editor
+    // dock panels around the RTT viewport. Persist layout to imgui.ini.
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    }
     // show() runs the (private) Overlay::initialise() override, which builds
     // the ImGui font atlas and creates "ImGui/material". Without it the first
     // ImGuiOverlay::NewFrame() dereferences an unbuilt atlas and crashes.
