@@ -90,11 +90,15 @@ add_executable(game
     game/src/Targeting.cpp
     game/src/Dummy.cpp
     game/src/ViewModel.cpp
+    # Compiled directly (not linked via the demo_scene lib) so building `game`
+    # never triggers a separate demo target.
+    samples/common/DemoScene.cpp
 )
-target_include_directories(game PRIVATE third_party)
-target_link_libraries(game PRIVATE demo_scene)
+target_include_directories(game PRIVATE third_party samples/common)
+target_link_libraries(game PRIVATE eng)
 target_compile_definitions(game PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
+    DEMO_SCENE_TOML="${CMAKE_CURRENT_SOURCE_DIR}/samples/common/assets/demo_scene.toml"
 )
 
 add_executable(level_editor
