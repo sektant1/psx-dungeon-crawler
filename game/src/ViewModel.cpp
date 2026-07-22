@@ -119,10 +119,13 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
     r.attachMesh(shaftNode, shaft, "Game/PropPlanks", false, true);
     r.setScale(shaftNode, glm::vec3(1.0f, 12.0f, 1.0f));
 
-    // Crystal tip at the top of the shaft, emissive so it reads as a focus.
+    // Crystal tip at the top of the shaft. Use the rim-lit mesh material made
+    // for this spire — NOT a particle material (Game/BeamCore uses a billboard
+    // vertex program + depth_write off, which mangles a solid mesh and reads as
+    // faces wrongly culling).
     const eng::MeshHandle tip = r.loadObj(crystalMeshPath);
     eng::NodeHandle tipNode = r.createNode(mNode, glm::vec3(0.0f, 6.0f, 0.0f));
-    r.attachMesh(tipNode, tip, "Game/BeamCore", false, true);
+    r.attachMesh(tipNode, tip, "PSX/CrystalSpire", false, true);
     r.setScale(tipNode, glm::vec3(2.0f));
 
     r.setScale(mNode, glm::vec3(mPose.scale));
