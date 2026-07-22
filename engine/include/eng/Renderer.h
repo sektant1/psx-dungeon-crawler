@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/Handles.h>
+#include <eng/ParticleEffectDesc.h>
 #include <eng/Sprite.h>
 
 #include <glm/glm.hpp>
@@ -121,7 +122,15 @@ public:
     // batches, entities) except the camera, resetting handle allocation so
     // fresh handles start over. Used for level transitions.
     void clearScene();
-    void attachParticles(NodeHandle node, const std::string& templateName);
+    // --- particles (data-driven, pooled) ----------------------------------
+    ParticleEffectId registerParticleEffect(const ParticleEffectDesc& desc);
+    ParticlesHandle  spawnParticles(ParticleEffectId fx, NodeHandle parent,
+                                    glm::vec3 localPos = glm::vec3(0.0f));
+    ParticlesHandle  spawnParticles(ParticleEffectId fx, glm::vec3 worldPos);
+    void stopParticles(ParticlesHandle h);
+    void despawnParticles(ParticlesHandle h);
+    void setParticleQuality(float q);
+    void updateParticles(float dt);
     void attachCamera(NodeHandle node); // moves the single camera to this node
     LightHandle attachLight(NodeHandle node, const LightDesc& desc);
     // Retint an existing light (linear, energy pre-multiplied) -- cheap,
