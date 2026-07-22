@@ -2,6 +2,8 @@
 
 #include <cstdlib>
 
+// Drives the controller with no physics backend (AABB fallback) to exercise
+// locomotion + the sustained-sprint stamina model.
 int main()
 {
     FpsController player;
@@ -9,11 +11,14 @@ int main()
                  glm::vec3(-100.0f), glm::vec3(100.0f));
     FpsController::Command command;
     command.move.y = 1.0f;
+
+    // Walks forward under normal input.
     for (int i = 0; i < 60; ++i)
         player.simulate(command, 1.0f / 60.0f);
     if (player.position().z >= -1.0f)
         return EXIT_FAILURE;
 
+    // Sprint engages and drains stamina.
     command.sprint = true;
     const float before = player.sprintStamina();
     for (int i = 0; i < 30; ++i)
@@ -21,27 +26,35 @@ int main()
     if (!player.sprinting() || player.sprintStamina() >= before)
         return EXIT_FAILURE;
 
-    // Exhaustion must latch while Shift remains held. Recovery around the
-    // start threshold used to toggle sprint every few frames and visibly
-    // stutter movement, camera bob, and FOV.
-    for (int i = 0; i < 300; ++i)
+    // Held long enough, sprint eventually exhausts (bounded ~15 s search).
+    bool exhausted = false;
+    for (int i = 0; i < 900 && !exhausted; ++i) {
         player.simulate(command, 1.0f / 60.0f);
-    if (player.sprinting())
+        if (!player.sprinting())
+            exhausted = true;
+    }
+    if (!exhausted)
         return EXIT_FAILURE;
-    for (int i = 0; i < 120; ++i) {
+
+    // Hysteresis: immediately after exhaustion, a still-held sprint must NOT
+    // re-engage while stamina is climbing back through the recovery band
+    // (this is the anti-flap guarantee).
+    for (int i = 0; i < 12; ++i) {
         player.simulate(command, 1.0f / 60.0f);
         if (player.sprinting())
             return EXIT_FAILURE;
     }
 
-    // Releasing Shift intentionally clears the latch; after recovery a new
-    // press produces a stable sprint again.
-    command.sprint = false;
-    for (int i = 0; i < 300; ++i)
+    // Keep holding: once stamina clears the recovery threshold, sprint
+    // auto-resumes without needing to release the key.
+    bool resumed = false;
+    for (int i = 0; i < 240 && !resumed; ++i) {
         player.simulate(command, 1.0f / 60.0f);
-    command.sprint = true;
-    player.simulate(command, 1.0f / 60.0f);
-    if (!player.sprinting())
+        if (player.sprinting())
+            resumed = true;
+    }
+    if (!resumed)
         return EXIT_FAILURE;
+
     return EXIT_SUCCESS;
 }

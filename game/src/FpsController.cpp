@@ -11,15 +11,22 @@ namespace {
 constexpr float kEyeHeight = 1.7f;
 constexpr float kCrouchEyeHeight = 1.18f;
 const float kMaxPitch = glm::radians(89.0f);
-constexpr float kAcceleration = 24.0f;
-constexpr float kDeceleration = 30.0f;
-constexpr float kAirAcceleration = 8.5f;
-constexpr float kSprintMultiplier = 1.7f;
+// Snappy, high-agility locomotion: near-instant ground response and strong
+// air control so direction changes read as deliberate, weighty dashes rather
+// than sluggish drift.
+constexpr float kAcceleration = 42.0f;
+constexpr float kDeceleration = 34.0f;
+constexpr float kAirAcceleration = 16.0f;
+constexpr float kSprintMultiplier = 2.05f;
 constexpr float kWalkMultiplier = 0.55f;
 constexpr float kCrouchMultiplier = 0.45f;
-constexpr float kStaminaDrain = 0.28f; // full sprint lasts ~3.6 seconds
-constexpr float kStaminaRecover = 0.18f;
-constexpr float kSprintStartThreshold = 0.08f;
+// Generous, sustained sprint: ~10 s at full tilt, ~2 s to fully recover. The
+// hysteresis band (drop at empty, resume only past kSprintRecoverThreshold)
+// turns the old stamina flap into one long sprint / brief breather / sprint.
+constexpr float kStaminaDrain = 0.10f;
+constexpr float kStaminaRecover = 0.50f;
+constexpr float kSprintStartThreshold = 0.10f;
+constexpr float kSprintRecoverThreshold = 0.45f; // auto-resume past this
 constexpr float kJumpVelocity = 5.0f;
 constexpr float kGravity = 18.0f;
 constexpr float kCoyoteDuration = 0.10f;
@@ -152,7 +159,12 @@ void FpsController::simulate(const Command& command, float dt)
         ? glm::vec2(glm::normalize(move).x, glm::normalize(move).z)
         : glm::vec2(0.0f);
     const bool sprintHeld = command.sprint;
-    if (!sprintHeld)
+    // Exhaustion latch clears on release OR once stamina climbs back through
+    // the hysteresis band. A held sprint therefore auto-resumes after a short
+    // breather instead of flapping on/off near a single threshold (the old
+    // stop/start stutter). The wide band (empty -> 45%) makes re-triggering
+    // impossible until a meaningful chunk has recovered.
+    if (!sprintHeld || mSprintStamina >= kSprintRecoverThreshold)
         mSprintExhausted = false;
 
     mCrouched = command.crouch || mSliding;
@@ -161,11 +173,10 @@ void FpsController::simulate(const Command& command, float dt)
     mSprinting = wantsSprint && mSprintStamina >= kSprintStartThreshold;
     if (mSprinting) {
         mSprintStamina = std::max(0.0f, mSprintStamina - kStaminaDrain * dt);
-        // Latch exhaustion at the same threshold used to start sprinting.
-        // Previously the controller stopped at 8%, recovered just above 8%,
-        // sprinted one frame, then stopped again: a visible speed/FOV/bob
-        // stutter for as long as Shift remained held.
-        if (mSprintStamina < kSprintStartThreshold) {
+        // Latch exhaustion the moment stamina reaches the start threshold --
+        // not at zero. Sprint already cuts off below the threshold, so
+        // waiting for empty never fires and the toggle flaps at the boundary.
+        if (mSprintStamina <= kSprintStartThreshold) {
             mSprintExhausted = true;
             mSprinting = false;
         }
