@@ -1,15 +1,23 @@
 #include "Melee.h"
+#include <algorithm>
 #include <vector>
 
 void MeleeSystem::startSwing() {
-    if (mActiveSteps > 0) return;
-    mActiveSteps = 5;
+    if (swinging()) return;
+    // Match ViewModel: 120 ms anticipation, then the 130 ms edge-leading cut.
+    mWindupRemaining = 0.12f;
+    mActiveRemaining = 0.13f;
     mHitThisSwing.clear();
 }
 
-void MeleeSystem::fixedUpdate(eng::Physics& phys, glm::vec3 eye, glm::vec3 forward, float /*dt*/) {
-    if (mActiveSteps <= 0) return;
-    --mActiveSteps;
+void MeleeSystem::fixedUpdate(eng::Physics& phys, glm::vec3 eye,
+                              glm::vec3 forward, float dt) {
+    if (mWindupRemaining > 0.0f) {
+        mWindupRemaining = std::max(0.0f, mWindupRemaining - dt);
+        return;
+    }
+    if (mActiveRemaining <= 0.0f) return;
+    mActiveRemaining = std::max(0.0f, mActiveRemaining - dt);
 
     eng::BodyDesc sweep;
     sweep.kind   = eng::ShapeKind::Sphere;

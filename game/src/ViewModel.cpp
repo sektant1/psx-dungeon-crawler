@@ -141,67 +141,62 @@ void ViewModel::update(eng::Renderer& r, float dt,
 
     // --- Attack animation ---
     // Three phases over kAttackDur (0.35 s):
-    //   [0.00, 0.12) windup  : pull back right and up, cock blade
-    //   [0.12, 0.25) slash   : fast diagonal downward-left arc
+    //   [0.00, 0.12) windup  : draw the edge back without yawing it broadside
+    //   [0.12, 0.25) slash   : edge-leading diagonal forward cut
     //   [0.25, 0.35) recover : ease back to rest
     if (mAttackTime >= 0.0f) {
         const float t = mAttackTime;
 
         if (t < 0.12f) {
-            // --- Windup: pull sword back right (+X), up (+Y), rotate CCW yaw
+            // Pull the grip slightly out/up and cock the blade toward the
+            // player. Rotation stays on camera X/Z so the cutting edge keeps
+            // facing forward/back throughout the motion.
             const float p = remap01(t, 0.0f, 0.12f);
-            posOffset += glm::vec3(0.06f * p, 0.05f * p, 0.04f * p);
-            // Cock the blade: yaw left (negative yaw = CCW from above) and
-            // pitch back.
-            const glm::quat yawBack =
-                glm::angleAxis(glm::radians(-22.0f * p), glm::vec3(0, 1, 0));
-            const glm::quat pitchBack =
-                glm::angleAxis(glm::radians(-18.0f * p), glm::vec3(1, 0, 0));
-            rotDelta = yawBack * pitchBack;
+            posOffset += glm::vec3(0.04f * p, 0.03f * p, 0.05f * p);
+            rotDelta =
+                glm::angleAxis(glm::radians(-12.0f * p), glm::vec3(0, 0, 1)) *
+                glm::angleAxis(glm::radians(28.0f * p), glm::vec3(1, 0, 0));
 
         } else if (t < 0.25f) {
             // --- Slash: fast diagonal downward-left.
             // Normalise within [0.12, 0.25].
             const float p = remap01(t, 0.12f, 0.25f);
-            // Position sweeps from the windup offset to past-centre-left-down.
+            // Drive the grip inward/down/forward as the edge chops through.
             posOffset += glm::mix(
-                glm::vec3( 0.06f,  0.05f,  0.04f),
-                glm::vec3(-0.10f, -0.08f, -0.02f),
+                glm::vec3( 0.04f,  0.03f,  0.05f),
+                glm::vec3(-0.08f, -0.10f, -0.10f),
                 p);
-            // Big yaw right (slash direction) + downward pitch.
-            const float yawDeg   = glm::mix(-22.0f,  55.0f, p);
-            const float pitchDeg = glm::mix(-18.0f, -30.0f, p);
-            const float rollDeg  = glm::mix(  0.0f,  20.0f, p);
+            const float pitchDeg = glm::mix(28.0f, -78.0f, p);
+            const float rollDeg  = glm::mix(-12.0f, 18.0f, p);
             rotDelta =
-                glm::angleAxis(glm::radians(yawDeg),   glm::vec3(0, 1, 0)) *
-                glm::angleAxis(glm::radians(pitchDeg),  glm::vec3(1, 0, 0)) *
-                glm::angleAxis(glm::radians(rollDeg),   glm::vec3(0, 0, 1));
+                glm::angleAxis(glm::radians(rollDeg), glm::vec3(0, 0, 1)) *
+                glm::angleAxis(glm::radians(pitchDeg), glm::vec3(1, 0, 0));
 
         } else {
             // --- Recover: ease back to rest.
             const float p = remap01(t, 0.25f, kAttackDur);
             posOffset += glm::mix(
-                glm::vec3(-0.10f, -0.08f, -0.02f),
+                glm::vec3(-0.08f, -0.10f, -0.10f),
                 glm::vec3(0.0f),
                 p);
-            const float yawDeg   = glm::mix( 55.0f, 0.0f, p);
-            const float pitchDeg = glm::mix(-30.0f, 0.0f, p);
-            const float rollDeg  = glm::mix( 20.0f, 0.0f, p);
+            const float pitchDeg = glm::mix(-78.0f, 0.0f, p);
+            const float rollDeg  = glm::mix(18.0f, 0.0f, p);
             rotDelta =
-                glm::angleAxis(glm::radians(yawDeg),   glm::vec3(0, 1, 0)) *
-                glm::angleAxis(glm::radians(pitchDeg),  glm::vec3(1, 0, 0)) *
-                glm::angleAxis(glm::radians(rollDeg),   glm::vec3(0, 0, 1));
+                glm::angleAxis(glm::radians(rollDeg), glm::vec3(0, 0, 1)) *
+                glm::angleAxis(glm::radians(pitchDeg), glm::vec3(1, 0, 0));
         }
     }
 
     // --- Parry animation (blended in when not attacking) ---
     if (mParry > 0.001f) {
-        // Raise the sword to a horizontal guard in front of the face:
-        // shift left and up toward screen centre, rotate blade horizontal.
-        const glm::vec3 guardPos(-0.12f * mParry, 0.08f * mParry, 0.02f * mParry);
+        // Bring the edge inward and cant it across the upper body. X/Z-only
+        // rotation retains the forward-facing edge established by the asset
+        // twist instead of exposing the broad face during a block.
+        const glm::vec3 guardPos(-0.14f * mParry, 0.10f * mParry,
+                                 -0.04f * mParry);
         const glm::quat guardRot =
-            glm::angleAxis(glm::radians(55.0f * mParry), glm::vec3(0, 1, 0)) *
-            glm::angleAxis(glm::radians(35.0f * mParry), glm::vec3(1, 0, 0));
+            glm::angleAxis(glm::radians(48.0f * mParry), glm::vec3(0, 0, 1)) *
+            glm::angleAxis(glm::radians(-10.0f * mParry), glm::vec3(1, 0, 0));
         posOffset += guardPos;
         rotDelta   = glm::slerp(rotDelta, guardRot * rotDelta, mParry);
     }

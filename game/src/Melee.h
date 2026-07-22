@@ -12,11 +12,13 @@ public:
     void setHitCallback(HitFn fn) { mOnHit = std::move(fn); }
 
     void startSwing();                                  // begin an attack window
-    bool swinging() const { return mActiveSteps > 0; }
+    bool swinging() const { return mWindupRemaining > 0.0f ||
+                                   mActiveRemaining > 0.0f; }
     void fixedUpdate(eng::Physics&, glm::vec3 eye, glm::vec3 forward, float dt);
 
 private:
-    int mActiveSteps = 0;                 // fixed steps remaining in the swing
+    float mWindupRemaining = 0.0f;
+    float mActiveRemaining = 0.0f;
     float mReach = 1.8f, mRadius = 0.5f, mImpulse = 6.0f;
     std::vector<uint32_t> mHitThisSwing;  // body ids already hit this swing
     HitFn mOnHit;
