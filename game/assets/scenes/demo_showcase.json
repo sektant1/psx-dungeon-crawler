@@ -1,7 +1,8 @@
 {
   "name": "Demo Showcase",
   "default_floor": false,
-  "note": "Static transcription of the psx-demo prop ring + treasure shrine. Runtime-only bits (orbit camera, chest bob, sparkle particles, procedural interior-box backdrop, DemoScene crystal features, dusk grade) are omitted.",
+  "note": "Static transcription of the psx-demo prop ring + treasure shrine. Runtime-only bits (chest bob, sparkle particles, procedural interior-box backdrop, DemoScene crystal features, dusk grade) are omitted; the orbit camera is reproduced via the camera block.",
+  "camera": { "mode": "orbit", "target": [0, 1.3, 0], "distance": 5.2, "orbit_speed": 0.4, "orbit_pitch": 0.32, "fov": 68 },
   "nodes": [
     {
       "name": "Treasure Chest",

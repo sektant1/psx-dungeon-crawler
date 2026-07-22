@@ -12,8 +12,10 @@
 #include <eng/EditorUi.h>
 
 #include <imgui.h>
-#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/quaternion.hpp> // glm::quat_cast
 
+#include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -40,7 +42,12 @@ int main(int, char**)
 
     // All openable content lives under a swappable root so the Scene picker can
     // reload it without disturbing the persistent lighting/camera rig below.
+    // sceneCam holds how this scene wants the viewport driven (fps/orbit/free);
+    // the fps*/orbit* vars are the live per-frame runtime state, reseeded on load.
     eng::NodeHandle contentRoot;
+    SceneCamera sceneCam;
+    glm::vec3 fpsPos{0.0f};
+    float fpsYaw = 0.0f, fpsPitch = 0.0f, orbitTime = 0.0f;
     auto loadScene = [&](const eng::EditorUi::SceneFile& f) {
         if (contentRoot.valid()) {
             r.destroyNode(contentRoot);
@@ -52,17 +59,27 @@ int main(int, char**)
         physics.init();
         contentRoot = r.createNode(sceneRoot, glm::vec3(0.0f),
                                    f.label.empty() ? "Content" : f.label);
+        sceneCam = SceneCamera{}; // default: free-fly editor camera
         if (f.path.empty()) {
             gen::Layout initial = gen::generate(1);
             if (!map.loadFromRows(r, physics, initial, tilesDir, propsDir, contentRoot))
                 eng::log::error("Editor: procedural build failed");
+            // A dungeon runs first-person, dropped at the generated spawn.
+            sceneCam.mode = SceneCamera::Mode::Fps;
+            sceneCam.eye = map.spawn() + glm::vec3(0.0f, 1.6f, 0.0f);
+            sceneCam.fovDeg = 70.0f;
         } else {
             std::string error;
             if (!loadJsonScene(f.path, r, &physics, contentRoot, assets, error,
-                               &map))
+                               &map, &sceneCam))
                 eng::log::error("Editor: load %s failed: %s", f.path.c_str(),
                                 error.c_str());
         }
+        // Reseed live camera runtime state from the scene's request.
+        fpsPos = sceneCam.eye;
+        fpsYaw = sceneCam.yaw;
+        fpsPitch = 0.0f;
+        orbitTime = 0.0f;
     };
 
     // Discover selectable scenes: the built-in procedural dungeon, plus every
@@ -148,15 +165,78 @@ int main(int, char**)
         const float dt = engine.tick();
         if (engine.input().wasPressed("quit"))
             engine.requestClose();
-        // Camera control from ImGui IO while the Scene viewport is hovered.
-        if (ui.viewportHovered()) {
-            const ImGuiIO& io = ImGui::GetIO();
-            if (io.MouseDown[1])
-                cam.orbit(-io.MouseDelta.x * 0.008f, -io.MouseDelta.y * 0.008f);
-            if (io.MouseWheel != 0.0f)
-                cam.dolly(io.MouseWheel);
+        // Drive the viewport camera the way the loaded scene runs: free-fly
+        // editor eye, an auto-rotating turntable (demo), or a first-person
+        // walk-through (game/dungeon). Input is read from ImGui IO and only
+        // while the Scene viewport is hovered.
+        const ImGuiIO& io = ImGui::GetIO();
+        const bool hovered = ui.viewportHovered();
+        const glm::vec3 up(0.0f, 1.0f, 0.0f);
+        // Orientation looking from `eye` at `target` for an Ogre camera (which
+        // faces local -Z). Avoids the experimental glm::quatLookAt.
+        const auto lookAt = [](glm::vec3 eye, glm::vec3 target, glm::vec3 u) {
+            const glm::vec3 f = glm::normalize(target - eye);
+            const glm::vec3 rgt = glm::normalize(glm::cross(f, u));
+            const glm::vec3 tu = glm::cross(rgt, f);
+            return glm::quat_cast(glm::mat3(rgt, tu, -f));
+        };
+        glm::vec3 camEye = cam.eye();
+        glm::quat camOrient = cam.orientation();
+        float camFov = 60.0f;
+        switch (sceneCam.mode) {
+        case SceneCamera::Mode::Editor:
+            if (hovered) {
+                if (io.MouseDown[1])
+                    cam.orbit(-io.MouseDelta.x * 0.008f, -io.MouseDelta.y * 0.008f);
+                if (io.MouseWheel != 0.0f)
+                    cam.dolly(io.MouseWheel);
+            }
+            camEye = cam.eye();
+            camOrient = cam.orientation();
+            break;
+        case SceneCamera::Mode::Orbit: {
+            orbitTime += dt;
+            if (hovered && io.MouseWheel != 0.0f)
+                sceneCam.distance =
+                    std::clamp(sceneCam.distance - io.MouseWheel * 0.4f, 1.0f, 60.0f);
+            const float yaw = sceneCam.yaw + orbitTime * sceneCam.orbitSpeed;
+            const float cp = std::cos(sceneCam.orbitPitch);
+            const float sp = std::sin(sceneCam.orbitPitch);
+            camEye = sceneCam.target +
+                     sceneCam.distance * glm::vec3(cp * std::sin(yaw), sp, cp * std::cos(yaw));
+            camOrient = lookAt(camEye, sceneCam.target, up);
+            camFov = sceneCam.fovDeg;
+            break;
         }
-        r.setEditorCameraPose(cam.eye(), cam.orientation(), 60.0f);
+        case SceneCamera::Mode::Fps: {
+            if (hovered && io.MouseDown[1]) {
+                fpsYaw -= io.MouseDelta.x * 0.0032f;
+                fpsPitch = std::clamp(fpsPitch - io.MouseDelta.y * 0.0032f,
+                                      -1.5f, 1.5f);
+            }
+            camOrient = glm::angleAxis(fpsYaw, up) *
+                        glm::angleAxis(fpsPitch, glm::vec3(1, 0, 0));
+            const glm::vec3 fwd = camOrient * glm::vec3(0, 0, -1);
+            const glm::vec3 right = camOrient * glm::vec3(1, 0, 0);
+            if (hovered) {
+                glm::vec3 move(0.0f);
+                if (ImGui::IsKeyDown(ImGuiKey_W)) move += fwd;
+                if (ImGui::IsKeyDown(ImGuiKey_S)) move -= fwd;
+                if (ImGui::IsKeyDown(ImGuiKey_D)) move += right;
+                if (ImGui::IsKeyDown(ImGuiKey_A)) move -= right;
+                if (ImGui::IsKeyDown(ImGuiKey_E)) move += up;
+                if (ImGui::IsKeyDown(ImGuiKey_Q)) move -= up;
+                if (glm::dot(move, move) > 0.0f) {
+                    const float boost = ImGui::IsKeyDown(ImGuiKey_LeftShift) ? 3.0f : 1.0f;
+                    fpsPos += glm::normalize(move) * sceneCam.moveSpeed * boost * dt;
+                }
+            }
+            camEye = fpsPos;
+            camFov = sceneCam.fovDeg;
+            break;
+        }
+        }
+        r.setEditorCameraPose(camEye, camOrient, camFov);
 
         // Selection AABB overlay: a ~1 m wire box at the selected node.
         std::vector<eng::Renderer::DebugLine> lines;

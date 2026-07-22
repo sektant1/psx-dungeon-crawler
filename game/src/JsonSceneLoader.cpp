@@ -82,7 +82,7 @@ void loadNode(const nlohmann::json& j, eng::Renderer& r, eng::NodeHandle parent,
 bool loadJsonScene(const std::string& path, eng::Renderer& r,
                    eng::Physics* physics, eng::NodeHandle parent,
                    const std::string& assetDir, std::string& error,
-                   DungeonMap* dungeon)
+                   DungeonMap* dungeon, SceneCamera* camera)
 {
     std::ifstream in(path);
     if (!in) {
@@ -122,6 +122,13 @@ bool loadJsonScene(const std::string& path, eng::Renderer& r,
                         ") failed to build";
                 return false;
             }
+            // A dungeon runs first-person: start the preview walker at the
+            // generated spawn, matching how the game drops the player in.
+            if (camera) {
+                camera->mode = SceneCamera::Mode::Fps;
+                camera->eye = dungeon->spawn() + glm::vec3(0.0f, 1.6f, 0.0f);
+                camera->fovDeg = 70.0f;
+            }
         } else {
             error = "unknown generator type: '" + type + "'";
             return false;
@@ -137,6 +144,23 @@ bool loadJsonScene(const std::string& path, eng::Renderer& r,
         for (const nlohmann::json& node : *nodes)
             if (node.is_object())
                 loadNode(node, r, scene, assetDir);
+
+    // Explicit camera block overrides any generator default.
+    if (const auto cj = root.find("camera");
+        camera && cj != root.end() && cj->is_object()) {
+        const std::string mode = cj->value("mode", std::string("editor"));
+        if (mode == "orbit") camera->mode = SceneCamera::Mode::Orbit;
+        else if (mode == "fps") camera->mode = SceneCamera::Mode::Fps;
+        else camera->mode = SceneCamera::Mode::Editor;
+        camera->target = vec3(*cj, "target", camera->target);
+        camera->distance = cj->value("distance", camera->distance);
+        camera->orbitSpeed = cj->value("orbit_speed", camera->orbitSpeed);
+        camera->orbitPitch = cj->value("orbit_pitch", camera->orbitPitch);
+        camera->eye = vec3(*cj, "eye", camera->eye);
+        camera->yaw = cj->value("yaw", camera->yaw);
+        camera->moveSpeed = cj->value("move_speed", camera->moveSpeed);
+        camera->fovDeg = cj->value("fov", camera->fovDeg);
+    }
 
     error.clear();
     return true;
