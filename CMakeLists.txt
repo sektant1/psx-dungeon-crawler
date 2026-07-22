@@ -138,7 +138,7 @@ add_executable(
   # Compiled directly (not linked via the demo_scene lib) so building `game`
   # never triggers a separate demo target.
   samples/common/DemoScene.cpp)
-target_include_directories(game PRIVATE third_party samples/common)
+target_include_directories(game PRIVATE third_party samples/common engine/src)
 target_link_libraries(game PRIVATE eng)
 target_compile_definitions(
   game
@@ -211,6 +211,12 @@ if(BUILD_TESTING)
   target_include_directories(lobby_dressing_tests PRIVATE game/src third_party engine/include)
   target_link_libraries(lobby_dressing_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME lobby_dressing COMMAND lobby_dressing_tests)
+
+  add_executable(obj_geometry_tests engine/tests/ObjGeometryTests.cpp
+                                     engine/src/ObjLoader.cpp)
+  target_include_directories(obj_geometry_tests PRIVATE engine/src engine/include)
+  target_link_libraries(obj_geometry_tests PRIVATE eng glm::glm)
+  add_test(NAME obj_geometry COMMAND obj_geometry_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.

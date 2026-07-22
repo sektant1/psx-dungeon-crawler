@@ -1,4 +1,5 @@
 #include "DungeonMap.h"
+#include "ObjLoader.h"
 #include "ParticleLibrary.h"
 
 #include <eng/Log.h>
@@ -21,9 +22,6 @@ constexpr const char* kTileMaterial = "Game/DungeonTile";
 constexpr const char* kFloorMaterial = "Game/DungeonFloor";
 constexpr const char* kCeilingMaterial = "Game/DungeonCeiling";
 constexpr const char* kWallMaterial = "Game/DungeonWall";
-// Half-width of the stone_archway's walkable opening (measured: the gap
-// spans 1.2..2.8 across the 4 m piece).
-constexpr float kArchHalfWidth = 0.8f;
 
 float lin(float srgb) { return std::pow(srgb, 2.2f); }
 
@@ -202,6 +200,10 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     const eng::MeshHandle wallPlaster =
         r.loadObj(tileMeshDir + "tile_wall_plaster.obj");
     const eng::MeshHandle arch = r.loadObj(tileMeshDir + "tile_arch.obj");
+    // CPU-side arch geometry for mesh-accurate archway colliders (loaded once).
+    std::vector<glm::vec3> archVerts;
+    std::vector<uint32_t> archIndices;
+    ObjLoader::loadGeometry(tileMeshDir + "tile_arch.obj", archVerts, archIndices);
     const eng::MeshHandle pillar = r.loadObj(tileMeshDir + "tile_pillar.obj");
     const eng::MeshHandle torch = r.loadObj(propMeshDir + "prop_torch.obj");
     struct PropPart {
@@ -284,6 +286,15 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
         d.dynamic = false;
         mColliders.push_back(mPhysics->createBody(d));
     };
+    // Mesh-accurate archway collider: a static Jolt MeshShape traced from the
+    // arch render mesh, placed to match the render put(arch, ...) call.
+    const auto addArchMesh = [&](glm::vec3 pos, float yawDeg) {
+        if (archVerts.empty() || archIndices.empty())
+            return; // geometry load failed; floor/ceiling slabs still protect
+        const glm::quat q = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0, 1, 0));
+        mColliders.push_back(mPhysics->createMeshBody(
+            archVerts, archIndices, pos, q, eng::BodyLayer::Static));
+    };
     const auto growRoomAabb = [&](int room, glm::vec3 cellMin, glm::vec3 cellMax) {
         Room& rm = mRooms[size_t(room)];
         if (rm.aabbMin == rm.aabbMax && rm.aabbMin == glm::vec3(0.0f)) {
@@ -335,35 +346,14 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                 else
                     put(arch, {x0 + mCell, 0.0f, z0 + mCell}, 90.0f);
 
-                // Arch colliders: two solid side-blocks flanking the opening,
-                // mirroring the circleFits() arch logic. No full-wall boxes.
-                // TODO: replace with createMeshBody for mesh-accurate arches
-                //       (e.g. stairs/ramps) once that seam is wired up.
-                {
-                    const bool ns = mLayout.arch(aIdx).northSouth;
-                    const float x1 = x0 + mCell;
-                    const float z1 = z0 + mCell;
-                    const float mid  = ns ? x0 + mCell * 0.5f : z0 + mCell * 0.5f;
-                    const float lo   = mid - kArchHalfWidth;
-                    const float hi   = mid + kArchHalfWidth;
-                    if (ns) {
-                        // Arch runs N–S: side blocks span [x0,lo] and [hi,x1].
-                        const float hw0 = (lo - x0) * 0.5f;
-                        const float hw1 = (x1 - hi) * 0.5f;
-                        addBox({x0 + hw0, wallH * 0.5f, z0 + mCell * 0.5f},
-                               {hw0, wallH * 0.5f, mCell * 0.5f});
-                        addBox({hi + hw1, wallH * 0.5f, z0 + mCell * 0.5f},
-                               {hw1, wallH * 0.5f, mCell * 0.5f});
-                    } else {
-                        // Arch runs E–W: side blocks span [z0,lo] and [hi,z1].
-                        const float hz0 = (lo - z0) * 0.5f;
-                        const float hz1 = (z1 - hi) * 0.5f;
-                        addBox({x0 + mCell * 0.5f, wallH * 0.5f, z0 + hz0},
-                               {mCell * 0.5f, wallH * 0.5f, hz0});
-                        addBox({x0 + mCell * 0.5f, wallH * 0.5f, hi + hz1},
-                               {mCell * 0.5f, wallH * 0.5f, hz1});
-                    }
-                }
+                // Arch collider: a mesh-accurate static body traced from the
+                // arch render mesh, placed to match the render put(arch, ...)
+                // above so the neon collider overlay and the visual align. The
+                // player can no longer clip the curved jamb/lintel.
+                if (mLayout.arch(aIdx).northSouth)
+                    addArchMesh({x0, 0.0f, z0 + mCell}, 0.0f);
+                else
+                    addArchMesh({x0 + mCell, 0.0f, z0 + mCell}, 90.0f);
 
                 // Arch cells are walkable passages: they still need the floor
                 // and ceiling collision slabs (the arch asset's base has holes

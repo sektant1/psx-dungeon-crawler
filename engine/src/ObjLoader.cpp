@@ -1,6 +1,7 @@
 #include "ObjLoader.h"
 
 #include <Ogre.h>
+#include <glm/glm.hpp>
 
 #include <fstream>
 #include <sstream>
@@ -102,6 +103,45 @@ void load(const std::string& filePath, const std::string& meshName,
     mo->end();
     mo->convertToMesh(meshName);
     delete mo;
+}
+
+bool loadGeometry(const std::string& filePath,
+                  std::vector<glm::vec3>& outVerts,
+                  std::vector<uint32_t>& outIndices,
+                  const Ogre::Matrix4& bake)
+{
+    std::ifstream file(filePath);
+    if (!file) return false;
+    std::vector<Ogre::Vector3> positions;
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream ss(line);
+        std::string tag;
+        ss >> tag;
+        if (tag == "v") {
+            float x, y, z;
+            ss >> x >> y >> z;
+            Ogre::Vector3 p = bake * Ogre::Vector3(x, y, z);
+            positions.push_back(p);
+        } else if (tag == "f") {
+            std::vector<int> vs;
+            std::string tok;
+            while (ss >> tok) {
+                int vi, ti, ni;
+                parseFaceRef(tok, int(positions.size()), 0, 0, vi, ti, ni);
+                if (vi >= 0) vs.push_back(vi);
+            }
+            for (size_t i = 2; i < vs.size(); ++i) {
+                outIndices.push_back(uint32_t(vs[0]));
+                outIndices.push_back(uint32_t(vs[i - 1]));
+                outIndices.push_back(uint32_t(vs[i]));
+            }
+        }
+    }
+    outVerts.reserve(positions.size());
+    for (const Ogre::Vector3& p : positions)
+        outVerts.push_back(glm::vec3(p.x, p.y, p.z));
+    return true;
 }
 
 } // namespace ObjLoader

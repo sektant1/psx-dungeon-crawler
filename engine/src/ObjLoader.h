@@ -1,6 +1,9 @@
 #pragma once
 #include <OgreMatrix4.h>
+#include <glm/glm.hpp>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 // Minimal Wavefront OBJ loader -> Ogre::Mesh via ManualObject.
 //
@@ -17,4 +20,13 @@
 namespace ObjLoader {
 void load(const std::string& filePath, const std::string& meshName,
           const Ogre::Matrix4& bake = Ogre::Matrix4::IDENTITY);
+
+// CPU-side geometry read for physics/analysis (no Ogre mesh created). Fills
+// triangulated positions + indices in the OBJ's own space, with the same
+// `bake` transform applied as load(). Returns false if the file is unreadable.
+// UVs/normals/colours are ignored. Polygons are fan-triangulated.
+bool loadGeometry(const std::string& filePath,
+                  std::vector<glm::vec3>& outVerts,
+                  std::vector<uint32_t>& outIndices,
+                  const Ogre::Matrix4& bake = Ogre::Matrix4::IDENTITY);
 }
