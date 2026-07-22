@@ -6,6 +6,7 @@
 #include "InputImpl.h"
 #include "Platform.h"
 #include "RenderCore.h"
+#include "RenderPresets.h"
 
 #include <algorithm>
 #include <chrono>
@@ -51,6 +52,13 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     mDebugUi.mImpl->init(&detail::coreOf(mRenderer), &mRenderer);
     if (std::getenv("PSX_DEBUG_UI"))
         mDebugUi.setVisible(true);
+    if (const char* presetName = std::getenv("PSX_RENDER_PRESET")) {
+        int id = renderPresetFromName(presetName);
+        if (id > 0)
+            applyRenderPreset(mRenderer, renderPresetValues(id));
+        else
+            log::warn("Unknown PSX_RENDER_PRESET '%s'", presetName);
+    }
     // Safe before any attachMesh: entities created later join the debug
     // view through the attachMesh wireframe hook.
     if (std::getenv("PSX_WIREFRAME"))
