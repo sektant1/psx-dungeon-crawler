@@ -46,6 +46,7 @@ add_library(eng STATIC
     engine/src/Engine.cpp
     engine/src/DebugUi.cpp
     engine/src/Physics.cpp
+    engine/src/RenderPresets.cpp
 )
 target_include_directories(eng
     PUBLIC engine/include
