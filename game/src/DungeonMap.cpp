@@ -584,6 +584,13 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     for (const auto& ar : mArches)
         r.buildStaticBatch(ar.batch);
 
+    // Deliberately low-poly tiles: pin per-pixel lighting on the tile materials
+    // so torch pools stay smooth regardless of preset (vertex-lit presets would
+    // sample the sparse grid too coarsely). Higher-poly props keep preset look.
+    for (const char* mat :
+         {kTileMaterial, kFloorMaterial, kCeilingMaterial, kWallMaterial})
+        r.setMaterialParam(mat, "perPixelLighting", 1.0f);
+
     eng::log::info("DungeonMap: %zu rows, %zu rooms, %zu arches, %zu torches, "
                    "%zu ambient props, %zu pillar posts, cell %.1f m",
                    mLayout.rows().size(), mRooms.size(), mArches.size(),
