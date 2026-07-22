@@ -61,3 +61,18 @@ PortalProp createPortalProp(eng::Renderer& renderer, glm::vec3 floorPosition,
 // useful error if the file is malformed; individual unknown shapes are skipped.
 bool loadPrimitiveShowcase(eng::Renderer& renderer, const std::string& path,
                            std::vector<ShowcaseExhibit>& loaded);
+
+// Levitating treasure chest + offering ring + warm glow. The chest/glow are
+// animated by the caller, so their handles come back in the result.
+struct TreasureShrine {
+    eng::NodeHandle chestBase{};
+    eng::NodeHandle chestSpin{};
+    eng::LightHandle chestGlow{};
+    glm::vec3 chestGlowColour{0.0f};
+};
+TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& propMeshDir);
+
+// Grounds the DemoScene's two omni lamps in open barrels with a flame on the
+// rim, and lifts the light just above the flames. Moves the passed omni nodes.
+void buildBraziers(eng::Renderer& r, const std::string& propMeshDir,
+                   eng::NodeHandle omniA, eng::NodeHandle omniB);

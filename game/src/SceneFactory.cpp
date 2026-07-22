@@ -1,4 +1,5 @@
 #include "SceneFactory.h"
+#include "ParticleLibrary.h"
 
 #include <eng/Renderer.h>
 #include <eng/Log.h>
@@ -162,4 +163,55 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
     }
     eng::log::info("Showcase: loaded %zu primitive/material exhibits", loaded);
     return loaded > 0;
+}
+
+TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& props) {
+    TreasureShrine sh;
+    sh.chestGlowColour = glm::vec3(1.0f, 0.62f, 0.22f) * 1.6f;
+    eng::MeshHandle vase0 = r.loadObj(props + "prop_vase_p0.obj");
+    eng::MeshHandle vase1 = r.loadObj(props + "prop_vase_p1.obj");
+    eng::MeshHandle sack = r.loadObj(props + "prop_jutesack.obj");
+    for (int i = 0; i < 5; ++i) {
+        const float a = glm::radians(72.0f * float(i) + 56.0f);
+        const glm::vec3 pos{3.2f * std::sin(a), 0.0f, 3.2f * std::cos(a)};
+        eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
+        r.setOrientation(n, glm::angleAxis(a, glm::vec3(0, 1, 0)));
+        if (i % 2 == 0) {
+            r.attachMesh(n, vase0, "Game/PropTerracotta", true);
+            r.attachMesh(n, vase1, "Game/PropPlanks", true);
+        } else {
+            r.attachMesh(n, sack, "Game/PropJute", true);
+        }
+    }
+
+    sh.chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
+    sh.chestSpin = r.createNode(sh.chestBase);
+    r.setScale(sh.chestSpin, glm::vec3(6.0f));
+    r.attachMesh(sh.chestSpin, r.loadObj(props + "prop_chest.obj"),
+                 "Game/PropChest", true);
+    r.spawnParticles("sparkles", sh.chestBase);
+    eng::LightDesc glow;
+    glow.colour = sh.chestGlowColour;
+    glow.range = 6.0f;
+    sh.chestGlow = r.attachLight(sh.chestBase, glow);
+    return sh;
+}
+
+void buildBraziers(eng::Renderer& r, const std::string& props,
+                   eng::NodeHandle omniA, eng::NodeHandle omniB) {
+    eng::MeshHandle brz0 = r.loadObj(props + "prop_barrel_open_p0.obj");
+    eng::MeshHandle brz1 = r.loadObj(props + "prop_barrel_open_p1.obj");
+    const eng::NodeHandle omnis[2] = {omniA, omniB};
+    const float xs[2] = {-4.0f, 4.0f};
+    for (size_t i = 0; i < 2; ++i) {
+        eng::NodeHandle n = r.createNode(eng::kRootNode, {xs[i], 0.0f, 0.0f});
+        r.setOrientation(n, glm::angleAxis(glm::radians(i == 0 ? 25.0f : -40.0f),
+                                           glm::vec3(0, 1, 0)));
+        r.attachMesh(n, brz0, "Game/PropPlanksTwoSided", true);
+        r.attachMesh(n, brz1, "Game/PropBauerhausTwoSided", true);
+        eng::NodeHandle flame =
+            r.createNode(eng::kRootNode, {xs[i], 1.35f, 0.0f});
+        particlefx::spawnFlame(r, flame);
+        r.setPosition(omnis[i], {xs[i], 1.6f, 0.0f});
+    }
 }

@@ -320,21 +320,9 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
 
         // --- braziers: ground the demo's two omni lamps in open barrels with
         // a fire on the rim and lift the light just above the flames.
-        {
-            eng::MeshHandle brz0 = mesh("prop_barrel_open_p0.obj");
-            eng::MeshHandle brz1 = mesh("prop_barrel_open_p1.obj");
-            const auto& omnis = lv.scene.omniNodes();
-            const float xs[2] = {-4.0f, 4.0f};
-            for (size_t i = 0; i < omnis.size() && i < 2; ++i) {
-                place2(brz0, "Game/PropPlanksTwoSided", brz1,
-                       "Game/PropBauerhausTwoSided",
-                       {xs[i], 0.0f, 0.0f}, i == 0 ? 25.0f : -40.0f);
-                eng::NodeHandle flame =
-                    r.createNode(eng::kRootNode, {xs[i], 1.35f, 0.0f});
-                particlefx::spawnFlame(r, flame);
-                r.setPosition(omnis[i], {xs[i], 1.6f, 0.0f});
-            }
-        }
+        const auto& omnis = lv.scene.omniNodes();
+        if (omnis.size() >= 2)
+            buildBraziers(r, assets + "/meshes/props/", omnis[0], omnis[1]);
         {
             const glm::vec3 c{-4.5f, 0.0f, -20.0f};
             place(crate, "Game/PropMarket", c, -20.0f, noScale, false);
@@ -347,36 +335,11 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     // Treasure shrine: a low-poly chest levitating over the origin (anchor
     // room centre), ringed by the demo's crystal spires + offering clutter,
     // with a warm gold spill that pulses like banked coals.
-    lv.chestGlowColour = glm::vec3(1.0f, 0.62f, 0.22f) * 1.6f;
-    {
-        const std::string props = assets + "/meshes/props/";
-        eng::MeshHandle vase0 = r.loadObj(props + "prop_vase_p0.obj");
-        eng::MeshHandle vase1 = r.loadObj(props + "prop_vase_p1.obj");
-        eng::MeshHandle sack = r.loadObj(props + "prop_jutesack.obj");
-        for (int i = 0; i < 5; ++i) {
-            const float a = glm::radians(72.0f * float(i) + 56.0f);
-            const glm::vec3 pos{3.2f * std::sin(a), 0.0f, 3.2f * std::cos(a)};
-            eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
-            r.setOrientation(n, glm::angleAxis(a, glm::vec3(0, 1, 0)));
-            if (i % 2 == 0) {
-                r.attachMesh(n, vase0, "Game/PropTerracotta", true);
-                r.attachMesh(n, vase1, "Game/PropPlanks", true);
-            } else {
-                r.attachMesh(n, sack, "Game/PropJute", true);
-            }
-        }
-
-        lv.chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
-        lv.chestSpin = r.createNode(lv.chestBase);
-        r.setScale(lv.chestSpin, glm::vec3(6.0f));
-        r.attachMesh(lv.chestSpin, r.loadObj(props + "prop_chest.obj"),
-                     "Game/PropChest", true);
-        r.spawnParticles("sparkles", lv.chestBase);
-        eng::LightDesc glow;
-        glow.colour = lv.chestGlowColour;
-        glow.range = 6.0f;
-        lv.chestGlow = r.attachLight(lv.chestBase, glow);
-    }
+    TreasureShrine shrine = buildTreasureShrine(r, assets + "/meshes/props/");
+    lv.chestBase = shrine.chestBase;
+    lv.chestSpin = shrine.chestSpin;
+    lv.chestGlow = shrine.chestGlow;
+    lv.chestGlowColour = shrine.chestGlowColour;
 
     }
 
