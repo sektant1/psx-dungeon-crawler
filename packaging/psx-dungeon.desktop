@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PSX Dungeon Crawler
+Comment=PSX-style dungeon crawler
+Exec=psx-dungeon
+Icon=psx-dungeon
+Terminal=false
+Categories=Game;
