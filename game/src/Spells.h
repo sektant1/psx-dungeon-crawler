@@ -24,7 +24,7 @@ public:
     void clear(eng::Physics&, eng::Renderer&);
 
 private:
-    struct Fireball { eng::BodyHandle body; eng::NodeHandle node; float ttl; bool dead = false; };
+    struct Fireball { eng::BodyHandle body; eng::NodeHandle node; float ttl; bool dead = false; eng::ParticlesHandle trailFx{}; };
     struct Transient { eng::NodeHandle node; float ttl; };
 
     std::vector<Fireball> mFireballs;

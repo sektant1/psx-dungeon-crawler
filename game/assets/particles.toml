@@ -1,0 +1,221 @@
+# Spell VFX ---------------------------------------------------------------
+[[effect]]
+name = "spell_muzzle"
+material = "Game/SpellMuzzle"
+base_width = 0.18
+base_height = 0.18
+quota = 32
+loop = false
+burst_count = 20
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 60
+ttl_min = 0.10
+ttl_max = 0.18
+velocity_min = 0.6
+velocity_max = 1.2
+start_colour = [1.0, 0.97, 0.72, 1.0]
+
+[[effect]]
+name = "fireball_trail"
+material = "Game/FireballTrail"
+base_width = 0.14
+base_height = 0.14
+quota = 48
+loop = true
+scale_jitter = 0.1
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 25
+emission_rate = 60
+ttl_min = 0.30
+ttl_max = 0.50
+velocity_min = 0.30
+velocity_max = 0.70
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.45, 0.08, 0.80]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [1.0, 0.70, 0.22, 0.0]
+
+[[effect]]
+name = "fireball_impact"
+material = "Game/FireballImpact"
+base_width = 0.16
+base_height = 0.16
+quota = 64
+loop = false
+burst_count = 40
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.20
+ttl_max = 0.35
+velocity_min = 0.8
+velocity_max = 2.0
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.30, 0.04, 0.9]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [1.0, 0.60, 0.12, 0.0]
+
+[[effect]]
+name = "beam_core"
+material = "Game/BeamCore"
+base_width = 0.12
+base_height = 0.12
+quota = 24
+loop = false
+burst_count = 16
+[[effect.emitter]]
+direction = [0,0,-1]
+angle = 3
+ttl_min = 0.08
+ttl_max = 0.12
+velocity_min = 4.0
+velocity_max = 6.0
+start_colour = [0.85, 1.0, 1.0, 1.0]
+
+[[effect]]
+name = "beam_impact"
+material = "Game/BeamImpact"
+base_width = 0.10
+base_height = 0.10
+quota = 48
+loop = false
+burst_count = 32
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.15
+ttl_max = 0.25
+velocity_min = 0.6
+velocity_max = 1.6
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.20, 0.85, 1.0, 0.9]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.60, 1.0, 1.0, 0.0]
+
+# Torch / flame -----------------------------------------------------------
+[[effect]]
+name = "torch_fire"
+material = "Game/FireParticle"
+base_width = 0.14
+base_height = 0.16
+quota = 20
+loop = true
+rotation_jitter_deg = 90
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 16
+emission_rate = 12
+ttl_min = 0.24
+ttl_max = 0.46
+velocity_min = 0.20
+velocity_max = 0.42
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.82, 0.38, 0.88]
+[[effect.colour_ramp]]
+t = 0.65
+rgba = [1.0, 0.42, 0.10, 0.56]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.55, 0.07, 0.02, 0.0]
+
+[[effect]]
+name = "torch_glow"
+material = "Game/FireParticle"
+base_width = 0.20
+base_height = 0.22
+quota = 6
+loop = true
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 7
+emission_rate = 4
+ttl_min = 0.18
+ttl_max = 0.30
+velocity_min = 0.08
+velocity_max = 0.18
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.68, 0.22, 0.32]
+[[effect.colour_ramp]]
+t = 0.55
+rgba = [1.0, 0.30, 0.06, 0.20]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.45, 0.03, 0.01, 0.0]
+
+[[effect]]
+name = "torch_ash"
+material = "Game/AshParticle"
+base_width = 0.09
+base_height = 0.09
+quota = 24
+loop = true
+rotation_jitter_deg = 120
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 18
+emission_rate = 4
+ttl_min = 0.9
+ttl_max = 1.6
+velocity_min = 0.45
+velocity_max = 0.7
+start_colour = [1.0, 0.45, 0.15, 1.0]
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 30
+emission_rate = 3
+ttl_min = 1.4
+ttl_max = 2.5
+velocity_min = 0.25
+velocity_max = 0.45
+start_colour = [0.30, 0.34, 0.28, 0.8]
+
+[[effect]]
+name = "fire_smoke"
+material = "Game/SmokeParticle"
+base_width = 0.13
+base_height = 0.13
+quota = 12
+loop = true
+rotation_jitter_deg = 35
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 20
+emission_rate = 2.5
+ttl_min = 0.85
+ttl_max = 1.55
+velocity_min = 0.14
+velocity_max = 0.28
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.20, 0.19, 0.22, 0.22]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.34, 0.32, 0.36, 0.0]
+
+# Scene sparkles ----------------------------------------------------------
+[[effect]]
+name = "sparkles"
+material = "PSX/Sparkle"
+base_width = 0.3
+base_height = 0.3
+quota = 32
+loop = true
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+emission_rate = 8
+ttl_min = 1.0
+ttl_max = 1.0
+velocity_min = 2.0
+velocity_max = 2.0
+start_colour = [1.0, 1.0, 1.0, 1.0]

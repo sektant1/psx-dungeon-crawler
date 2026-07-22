@@ -13,6 +13,7 @@
 #include "CombatConfig.h"
 #include "SceneFactory.h"
 #include "Melee.h"
+#include "ParticleLibrary.h"
 #include "Dummy.h"
 #include "Targeting.h"
 #include "ViewModel.h"
@@ -400,12 +401,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                        {xs[i], 0.0f, 0.0f}, i == 0 ? 25.0f : -40.0f);
                 eng::NodeHandle flame =
                     r.createNode(eng::kRootNode, {xs[i], 1.35f, 0.0f});
-                r.attachParticles(flame, "Game/TorchGlow");
-                r.attachParticles(flame, "Game/TorchFire");
-                r.attachParticles(flame, "Game/TorchAsh");
-                eng::NodeHandle smoke =
-                    r.createNode(flame, {0.0f, 0.12f, 0.0f});
-                r.attachParticles(smoke, "Game/FireSmoke");
+                particlefx::spawnFlame(r, flame);
                 r.setPosition(omnis[i], {xs[i], 1.6f, 0.0f});
             }
         }
@@ -445,7 +441,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         r.setScale(lv.chestSpin, glm::vec3(6.0f));
         r.attachMesh(lv.chestSpin, r.loadObj(props + "prop_chest.obj"),
                      "Game/PropChest", true);
-        r.attachParticles(lv.chestBase, "PSX/Sparkles");
+        r.spawnParticles("sparkles", lv.chestBase);
         eng::LightDesc glow;
         glow.colour = lv.chestGlowColour;
         glow.range = 6.0f;
@@ -641,6 +637,9 @@ int main(int, char**)
     // "Attacks" debug window. Systems read this each cast/swing.
     CombatConfig combat;
     combat.load(assets + "/game.toml");
+
+    ParticleLibrary particles;
+    particles.load(r, assets + "/particles.toml");
     projectiles.setConfig(&combat);
     spells.setConfig(&combat);
     melee.setConfig(&combat);

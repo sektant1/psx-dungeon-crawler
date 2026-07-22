@@ -3,6 +3,7 @@
 // offsets layered on top of a fixed rest pose each frame.
 
 #include "ViewModel.h"
+#include "ParticleLibrary.h"
 
 #include <eng/Renderer.h>
 
@@ -165,11 +166,7 @@ void ViewModel::initTorch(eng::Renderer& r, eng::NodeHandle headNode,
     // point light hang here so the torch actually illuminates while equipped.
     // (No wall bracket/mount — this is the handheld variant.)
     eng::NodeHandle flame = r.createNode(mNode, glm::vec3(0.0f, 4.4f, 0.0f));
-    r.attachParticles(flame, "Game/TorchGlow");
-    r.attachParticles(flame, "Game/TorchFire");
-    r.attachParticles(flame, "Game/TorchAsh");
-    eng::NodeHandle smoke = r.createNode(flame, glm::vec3(0.0f, 0.12f, 0.0f));
-    r.attachParticles(smoke, "Game/FireSmoke");
+    particlefx::spawnFlame(r, flame);
 
     const auto lin = [](float s) { return std::pow(s, 2.2f); };
     eng::LightDesc warm;

@@ -164,7 +164,7 @@ bool DemoScene::load(eng::Renderer& r, const std::string& sceneToml,
             eng::NodeHandle anim = r.createNode(base);
             r.attachMesh(anim, mesh, strAt(boxes, d.matKey));
             if (d.sparkles)
-                r.attachParticles(anim, strAt(boxes, "sparkles"));
+                r.spawnParticles(strAt(boxes, "sparkles"), anim);
             mSinPans.push_back({anim, d.reverse});
         }
     }

@@ -52,7 +52,7 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
     }
     r.attachMesh(out.field, membrane, style.material);
     if (!style.particles.empty())
-        r.attachParticles(out.root, style.particles);
+        r.spawnParticles(style.particles, out.root);
     eng::LightDesc glow;
     glow.colour = style.lightColour;
     glow.range = style.lightRange;
@@ -126,7 +126,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         r.attachMesh(placed, mesh, material, false);
         if (const std::string particles =
                 (*e)["particles"].value_or(std::string()); !particles.empty())
-            r.attachParticles(placed, particles);
+            r.spawnParticles(particles, placed);
         if (const toml::array* colour = (*e)["light_colour"].as_array();
             colour && colour->size() == 3) {
             eng::LightDesc light;

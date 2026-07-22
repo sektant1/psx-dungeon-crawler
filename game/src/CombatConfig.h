@@ -21,9 +21,10 @@ struct CombatConfig {
         float impactImpulse = 3.0f;
         glm::vec3 lightColour{1.0f, 0.55f, 0.15f};
         float lightRange    = 4.0f;
-        std::string trailParticle  = "Game/FireballTrail";
-        std::string muzzleParticle = "Game/SpellMuzzle";
-        std::string impactParticle = "Game/FireballImpact";
+        // Particle EFFECT names (registered from particles.toml), not materials.
+        std::string trailParticle  = "fireball_trail";
+        std::string muzzleParticle = "spell_muzzle";
+        std::string impactParticle = "fireball_impact";
         std::string action = "cast_spell";
         std::string key    = "Q";
     } fireball;
@@ -35,8 +36,8 @@ struct CombatConfig {
         float segmentTtl = 0.10f;
         glm::vec3 lightColour{0.40f, 0.70f, 1.0f};
         float lightRange = 3.0f;
-        std::string coreParticle   = "Game/BeamCore";
-        std::string impactParticle = "Game/BeamImpact";
+        std::string coreParticle   = "Game/BeamCore";   // beam segment MESH material
+        std::string impactParticle = "beam_impact";      // particle EFFECT name
         std::string action = "cast_beam";
         std::string key    = "R";
     } beam;

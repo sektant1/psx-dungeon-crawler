@@ -85,6 +85,7 @@ add_executable(game
     game/src/Projectiles.cpp
     game/src/Spells.cpp
     game/src/CombatConfig.cpp
+    game/src/ParticleLibrary.cpp
     game/src/SceneFactory.cpp
     game/src/Targeting.cpp
     game/src/Dummy.cpp
@@ -102,6 +103,7 @@ add_executable(level_editor
     game/src/DungeonGen.cpp
     game/src/LevelDocument.cpp
     game/src/LevelEditor.cpp
+    game/src/ParticleLibrary.cpp
 )
 target_include_directories(level_editor PRIVATE third_party)
 target_link_libraries(level_editor PRIVATE eng)

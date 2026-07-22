@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <cstdint>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -18,6 +19,8 @@ public:
     void init(Ogre::SceneManager* sm);
 
     ParticleEffectId registerEffect(const ParticleEffectDesc& desc);
+    // Resolve a registered effect by its desc.name (invalid id if unknown).
+    ParticleEffectId find(const std::string& name) const;
 
     ParticlesHandle spawn(ParticleEffectId fx, Ogre::SceneNode* parent,
                           glm::vec3 localPos);
@@ -47,6 +50,7 @@ private:
 
     Ogre::SceneManager* mSm = nullptr;
     std::vector<Effect> mEffects;
+    std::unordered_map<std::string, uint32_t> mByName; // name -> ParticleEffectId
     std::unordered_map<uint32_t, Live> mLive;
     uint32_t mNextHandle = 1;
     uint32_t mNextName = 1;

@@ -35,9 +35,9 @@ ttl = 6.0
 impact_impulse = 3.0
 light_colour = [1.0, 0.55, 0.15]
 light_range = 4.0
-trail_particle = "Game/FireballTrail"
-muzzle_particle = "Game/SpellMuzzle"
-impact_particle = "Game/FireballImpact"
+trail_particle = "fireball_trail"
+muzzle_particle = "spell_muzzle"
+impact_particle = "fireball_impact"
 
 [combat.beam]
 range = 40.0
@@ -47,7 +47,7 @@ segment_ttl = 0.10
 light_colour = [0.40, 0.70, 1.0]
 light_range = 3.0
 core_particle = "Game/BeamCore"
-impact_particle = "Game/BeamImpact"
+impact_particle = "beam_impact"
 
 [combat.arrow]
 speed = 60.0

@@ -566,6 +566,22 @@ ParticleEffectId Renderer::registerParticleEffect(const ParticleEffectDesc& desc
     return mImpl->particles.registerEffect(desc);
 }
 
+ParticleEffectId Renderer::particleEffectId(const std::string& name)
+{
+    return mImpl->particles.find(name);
+}
+
+ParticlesHandle Renderer::spawnParticles(const std::string& name, NodeHandle parent,
+                                         glm::vec3 localPos)
+{
+    return spawnParticles(mImpl->particles.find(name), parent, localPos);
+}
+
+ParticlesHandle Renderer::spawnParticles(const std::string& name, glm::vec3 worldPos)
+{
+    return spawnParticles(mImpl->particles.find(name), worldPos);
+}
+
 ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, NodeHandle parent,
                                          glm::vec3 localPos)
 {

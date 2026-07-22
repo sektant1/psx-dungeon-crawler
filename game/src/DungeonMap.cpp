@@ -1,4 +1,5 @@
 #include "DungeonMap.h"
+#include "ParticleLibrary.h"
 
 #include <eng/Log.h>
 #include <eng/Physics.h>
@@ -530,12 +531,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                 // particles hang off a child there so the tilt carries
                 // them along.
                 eng::NodeHandle tip = r.createNode(n, {0.0f, 0.55f, 0.0f});
-                r.attachParticles(tip, "Game/TorchGlow");
-                r.attachParticles(tip, "Game/TorchFire");
-                r.attachParticles(tip, "Game/TorchAsh");
-                eng::NodeHandle smoke =
-                    r.createNode(tip, {0.0f, 0.12f, 0.0f});
-                r.attachParticles(smoke, "Game/FireSmoke");
+                particlefx::spawnFlame(r, tip);
                 // Grid position seeds the phase so torches flicker
                 // out of step with each other.
                 mTorches.push_back({r.attachLight(tip, warm), tip,

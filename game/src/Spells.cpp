@@ -47,7 +47,9 @@ eng::NodeHandle SpellSystem::spawnBurst(eng::Renderer& r, glm::vec3 pos,
                                         const std::string& particleName, float ttl,
                                         glm::vec3 lightColour, float lightRange) {
     eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
-    r.attachParticles(n, particleName);
+    // One-shot pooled burst by effect name; the system recycles itself once its
+    // emit window closes and its live particles fade (Renderer::updateParticles).
+    r.spawnParticles(particleName, n);
     if (lightRange > 0.0f) {
         eng::LightDesc l;
         l.colour = lightEnergy(lightColour);
@@ -89,8 +91,11 @@ void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
     phys.applyImpulse(body, fwd * (fb.mass * fb.speed), spawn);
 
     eng::NodeHandle node = r.createNode(eng::kRootNode, spawn);
-    r.attachMesh(node, mFireballMesh, fb.trailParticle.c_str(), false);
-    r.attachParticles(node, fb.trailParticle);
+    // Core mesh uses the emissive fireball material (fixed art); the trail is a
+    // looping pooled particle effect whose handle we keep so it can be stopped
+    // when the fireball despawns.
+    r.attachMesh(node, mFireballMesh, "Game/FireballTrail", false);
+    eng::ParticlesHandle trailFx = r.spawnParticles(fb.trailParticle, node);
     if (fb.lightRange > 0.0f) {
         eng::LightDesc l;
         l.colour = lightEnergy(fb.lightColour);
@@ -100,7 +105,7 @@ void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
 
     spawnBurst(r, spawn, fb.muzzleParticle, 0.25f, fb.lightColour, fb.lightRange);
 
-    mFireballs.push_back({ body, node, fb.ttl, false });
+    mFireballs.push_back({ body, node, fb.ttl, false, trailFx });
 }
 
 // ---- beam (hitscan) ----
@@ -165,6 +170,7 @@ void SpellSystem::onHit(eng::Physics& phys, eng::Renderer& r,
 // ---- lifetime ----
 
 void SpellSystem::despawnFireball(eng::Physics& phys, eng::Renderer& r, Fireball& f) {
+    r.stopParticles(f.trailFx); // stop emitting; pool reclaims once the tail fades
     phys.removeBody(f.body);
     r.setNodeVisible(f.node, false);
 }

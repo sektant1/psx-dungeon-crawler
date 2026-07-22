@@ -124,9 +124,14 @@ public:
     void clearScene();
     // --- particles (data-driven, pooled) ----------------------------------
     ParticleEffectId registerParticleEffect(const ParticleEffectDesc& desc);
+    ParticleEffectId particleEffectId(const std::string& name); // by desc.name
     ParticlesHandle  spawnParticles(ParticleEffectId fx, NodeHandle parent,
                                     glm::vec3 localPos = glm::vec3(0.0f));
     ParticlesHandle  spawnParticles(ParticleEffectId fx, glm::vec3 worldPos);
+    // Convenience: resolve the effect by name and spawn (invalid name = no-op).
+    ParticlesHandle  spawnParticles(const std::string& name, NodeHandle parent,
+                                    glm::vec3 localPos = glm::vec3(0.0f));
+    ParticlesHandle  spawnParticles(const std::string& name, glm::vec3 worldPos);
     void stopParticles(ParticlesHandle h);
     void despawnParticles(ParticlesHandle h);
     void setParticleQuality(float q);

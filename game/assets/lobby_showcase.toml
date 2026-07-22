@@ -120,6 +120,6 @@ shape = "ring"
 material = "Fantasy/ArcaneGlow"
 position = [12.0, 1.35, -14.0]
 scale = [2.4, 2.4, 2.4]
-particles = "PSX/Sparkles"
+particles = "sparkles"
 light_colour = [0.20, 0.25, 1.0]
 light_range = 4.0

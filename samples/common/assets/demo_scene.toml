@@ -36,7 +36,7 @@ metal_mesh = "bevel-box.obj"
 lit_mesh = "box.obj"
 metal_material = "PSX/BoxMetal"
 lit_material = "PSX/BoxLit"
-sparkles = "PSX/Sparkles"
+sparkles = "sparkles"
 
 [crystals]
 ground_mesh = "crystal_ground.obj"

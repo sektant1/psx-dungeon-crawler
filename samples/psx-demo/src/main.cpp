@@ -96,7 +96,7 @@ int main(int, char**)
         // instead of the old hand-scaled blob planes.
         r.attachMesh(chestSpin, r.loadObj(assets + "/meshes/props/prop_chest.obj"),
                      "Game/PropChest", true);
-        r.attachParticles(chestBase, "PSX/Sparkles");
+        r.spawnParticles("sparkles", chestBase);
         eng::LightDesc glow;
         glow.colour = chestGlowColour;
         glow.range = 6.0f;

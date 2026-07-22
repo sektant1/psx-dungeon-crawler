@@ -96,7 +96,14 @@ ParticleEffectId Particles::registerEffect(const ParticleEffectDesc& desc){
         }
     }
     mEffects.push_back({ desc, {} });
-    return ParticleEffectId{ uint32_t(mEffects.size()) };
+    const uint32_t id = uint32_t(mEffects.size());
+    mByName[desc.name] = id;
+    return ParticleEffectId{ id };
+}
+
+ParticleEffectId Particles::find(const std::string& name) const {
+    auto it = mByName.find(name);
+    return it == mByName.end() ? ParticleEffectId{} : ParticleEffectId{ it->second };
 }
 
 ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent, glm::vec3 localPos){
