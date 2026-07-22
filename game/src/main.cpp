@@ -8,6 +8,7 @@
 #include "DungeonMap.h"
 #include "FpsController.h"
 #include "LevelEditor.h"
+#include "LobbyDressing.h"
 #include "Projectiles.h"
 #include "Spells.h"
 #include "CombatConfig.h"
@@ -238,6 +239,9 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     // Medieval props placed around the anchor room (positions authored for
     // the shared centrepiece layout at the world origin).
     {
+        loadLobbyDressing(r, assets + "/lobby_dressing.toml",
+                          assets + "/meshes/props/");
+
         const std::string props = assets + "/meshes/props/";
         const auto mesh = [&](const char* f) { return r.loadObj(props + f); };
         const auto place = [&](eng::MeshHandle m, const char* mat,
@@ -264,33 +268,21 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         };
         const glm::vec3 noScale{1.0f};
 
-        eng::MeshHandle barrel0 = mesh("prop_barrel_p0.obj");
-        eng::MeshHandle barrel1 = mesh("prop_barrel_p1.obj");
         eng::MeshHandle crate = mesh("prop_crate.obj");
-        eng::MeshHandle sack = mesh("prop_jutesack.obj");
-        eng::MeshHandle hay = mesh("prop_haybale.obj");
         eng::MeshHandle pumpkin = mesh("prop_pumpkin.obj");
-        eng::MeshHandle vase0 = mesh("prop_vase_p0.obj");
-        eng::MeshHandle vase1 = mesh("prop_vase_p1.obj");
 
-        // --- entry hall (z ~ +24): a market table greets the player.
-        eng::NodeHandle table = place2(
-            mesh("prop_table_p0.obj"), "Game/PropWood",
-            mesh("prop_table_p1.obj"), "Game/PropMarket",
-            {7.0f, 0.88f, 24.5f}, -120.0f, false);
+        // --- entry hall (z ~ +24): child props on the market table. The table
+        // body itself is authored in lobby_dressing.toml; here we mirror its
+        // transform on a bare node so the bread/pumpkin ride along.
+        eng::NodeHandle table = r.createNode(eng::kRootNode, {7.0f, 0.88f, 24.5f});
+        r.setOrientation(table, glm::angleAxis(glm::radians(-120.0f),
+                                               glm::vec3(0, 1, 0)));
         r.attachMesh(r.createNode(table, {0.3f, 0.53f, -0.2f}),
                      mesh("prop_bread.obj"), "Game/PropMarketMisc");
         r.attachMesh(r.createNode(table, {-0.35f, 0.59f, 0.25f}), pumpkin,
                      "Game/PropMarketMisc");
-        place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
-               {-8.5f, 0.0f, 25.0f}, 30.0f);
-        place(sack, "Game/PropJute", {-5.0f, 0.0f, 22.8f}, 100.0f);
 
-        // --- great hall corners (x +-10, z +-6 interior)
-        place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
-               {-8.8f, 0.0f, 4.5f}, 15.0f);
-        place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
-               {-9.0f, 0.0f, 3.4f}, 80.0f);
+        // --- great hall corner crate stack (per-crate Y offsets, kept in code)
         if (depth == 0) {
             const glm::vec3 c{-9.0f, 0.0f, -4.5f};
             place(crate, "Game/PropMarket", c, 10.0f, noScale, false);
@@ -299,12 +291,6 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             place(crate, "Game/PropMarket", c + glm::vec3(0, 0.48f, 0), 40.0f,
                   noScale, false);
         }
-        place(hay, "Game/PropHay", {8.7f, 0.0f, 4.4f}, 20.0f, noScale, false);
-        place(hay, "Game/PropHay", {7.6f, 0.0f, 5.0f}, -60.0f, noScale, false);
-        place(pumpkin, "Game/PropMarketMisc", {9.2f, 0.08f, 3.4f}, 0.0f);
-        place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
-               {8.8f, 0.0f, -4.5f}, 0.0f);
-        place(sack, "Game/PropJute", {9.1f, 0.0f, -3.4f}, -15.0f);
 
         // --- vault (z ~ -18..-26): sword stabbed into the floor, shield on a
         // barrel. The weapons-pack meshes are authored huge; scale down.
@@ -319,9 +305,8 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                                                 glm::vec3(1, 0, 0)));
             r.attachMesh(sword, mesh("prop_sword.obj"), "Game/PropWeapon");
 
+            // The barrel the shield rests on is authored in lobby_dressing.toml.
             const glm::vec3 b{-4.0f, 0.0f, -24.2f};
-            place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
-                   b, 0.0f);
             eng::NodeHandle shield =
                 r.createNode(eng::kRootNode, b + glm::vec3(0.0f, 0.55f, -0.75f));
             r.setScale(shield, glm::vec3(0.08f));
@@ -332,9 +317,6 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                                                 glm::vec3(1, 0, 0)));
             r.attachMesh(shield, mesh("prop_shield.obj"), "Game/PropWeapon");
         }
-        place2(mesh("prop_barrel_open_p0.obj"), "Game/PropPlanksTwoSided",
-               mesh("prop_barrel_open_p1.obj"), "Game/PropBauerhausTwoSided",
-               {4.2f, 0.0f, -24.0f}, -30.0f);
 
         // --- braziers: ground the demo's two omni lamps in open barrels with
         // a fire on the rim and lift the light just above the flames.

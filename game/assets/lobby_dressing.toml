@@ -1,0 +1,85 @@
+# Static set-dressing for the lobby (depth 0). Each [[prop]] is one node with a
+# single yaw and uniform/simple scale; 1..N mesh/material parts share it.
+#
+# Migrated from game/src/main.cpp buildLevel(). NOT here (kept in code because
+# the flat schema can't express them): the table's bread/pumpkin children, the
+# vault sword+shield (compound rotations, tiny scale), the stacked crates
+# (per-crate Y offsets), and the braziers (particles + light repositioning).
+
+# --- entry hall (z ~ +24): a market table greets the player.
+[[prop]]
+meshes = ["prop_table_p0.obj", "prop_table_p1.obj"]
+materials = ["Game/PropWood", "Game/PropMarket"]
+position = [7.0, 0.88, 24.5]
+yaw = -120.0
+cast_shadows = false
+
+[[prop]]
+meshes = ["prop_vase_p0.obj", "prop_vase_p1.obj"]
+materials = ["Game/PropTerracotta", "Game/PropPlanks"]
+position = [-8.5, 0.0, 25.0]
+yaw = 30.0
+
+[[prop]]
+meshes = ["prop_jutesack.obj"]
+materials = ["Game/PropJute"]
+position = [-5.0, 0.0, 22.8]
+yaw = 100.0
+
+# --- great hall corners (x +-10, z +-6 interior)
+[[prop]]
+meshes = ["prop_barrel_p0.obj", "prop_barrel_p1.obj"]
+materials = ["Game/PropPlanks", "Game/PropBauerhaus"]
+position = [-8.8, 0.0, 4.5]
+yaw = 15.0
+
+[[prop]]
+meshes = ["prop_barrel_p0.obj", "prop_barrel_p1.obj"]
+materials = ["Game/PropPlanks", "Game/PropBauerhaus"]
+position = [-9.0, 0.0, 3.4]
+yaw = 80.0
+
+[[prop]]
+meshes = ["prop_haybale.obj"]
+materials = ["Game/PropHay"]
+position = [8.7, 0.0, 4.4]
+yaw = 20.0
+cast_shadows = false
+
+[[prop]]
+meshes = ["prop_haybale.obj"]
+materials = ["Game/PropHay"]
+position = [7.6, 0.0, 5.0]
+yaw = -60.0
+cast_shadows = false
+
+[[prop]]
+meshes = ["prop_pumpkin.obj"]
+materials = ["Game/PropMarketMisc"]
+position = [9.2, 0.08, 3.4]
+yaw = 0.0
+
+[[prop]]
+meshes = ["prop_vase_p0.obj", "prop_vase_p1.obj"]
+materials = ["Game/PropTerracotta", "Game/PropPlanks"]
+position = [8.8, 0.0, -4.5]
+yaw = 0.0
+
+[[prop]]
+meshes = ["prop_jutesack.obj"]
+materials = ["Game/PropJute"]
+position = [9.1, 0.0, -3.4]
+yaw = -15.0
+
+# --- vault (z ~ -24): barrel the shield rests on (shield stays in code).
+[[prop]]
+meshes = ["prop_barrel_p0.obj", "prop_barrel_p1.obj"]
+materials = ["Game/PropPlanks", "Game/PropBauerhaus"]
+position = [-4.0, 0.0, -24.2]
+yaw = 0.0
+
+[[prop]]
+meshes = ["prop_barrel_open_p0.obj", "prop_barrel_open_p1.obj"]
+materials = ["Game/PropPlanksTwoSided", "Game/PropBauerhausTwoSided"]
+position = [4.2, 0.0, -24.0]
+yaw = -30.0

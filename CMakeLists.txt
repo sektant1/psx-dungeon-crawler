@@ -128,6 +128,7 @@ add_executable(
   game/src/Projectiles.cpp
   game/src/Spells.cpp
   game/src/CombatConfig.cpp
+  game/src/LobbyDressing.cpp
   game/src/ParticleLibrary.cpp
   game/src/SceneFactory.cpp
   game/src/RenderPalette.cpp
@@ -204,6 +205,12 @@ if(BUILD_TESTING)
   target_include_directories(render_palette_tests PRIVATE game/src third_party engine/include)
   target_link_libraries(render_palette_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME render_palette COMMAND render_palette_tests)
+
+  add_executable(lobby_dressing_tests game/tests/LobbyDressingTests.cpp
+                                       game/src/LobbyDressing.cpp)
+  target_include_directories(lobby_dressing_tests PRIVATE game/src third_party engine/include)
+  target_link_libraries(lobby_dressing_tests PRIVATE eng_toml glm::glm eng)
+  add_test(NAME lobby_dressing COMMAND lobby_dressing_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
