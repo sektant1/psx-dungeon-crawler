@@ -64,8 +64,11 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
     mNode = r.createNode(headNode, mPose.position);
     // Normalize the imported model around its authored hand/grip socket.
     // Animation now rotates about the hand, not an arbitrary exporter origin.
-    const glm::mat4 pivotBake = glm::translate(
-        glm::mat4(1.0f), -mPose.gripPivot);
+    const glm::mat4 pivotBake =
+        glm::rotate(glm::mat4(1.0f),
+                    glm::radians(mPose.gripAxisTwistDegrees),
+                    glm::vec3(0, 1, 0)) *
+        glm::translate(glm::mat4(1.0f), -mPose.gripPivot);
     const eng::MeshHandle weapon = r.loadObj(meshPath, &pivotBake);
     r.attachMesh(mNode, weapon, materialName, false, true);
 

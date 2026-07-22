@@ -18,6 +18,11 @@ struct WeaponViewmodelPose {
     // roughly y[-2.3, 1.0], hence its centre at -0.65. Future weapon assets
     // set this to their own grip/socket point and inherit the same idle pose.
     glm::vec3 gripPivot{0.0f, -0.65f, 0.0f};
+
+    // Axial mesh correction around the authored grip/blade +Y axis. The
+    // imported sword otherwise presents its broad face forward, leaving its
+    // cutting edges pointing screen-left/right instead of forward/backward.
+    float gripAxisTwistDegrees = 90.0f;
 };
 
 // First-person sword viewmodel. Parented to the camera head node so it
