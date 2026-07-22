@@ -69,17 +69,24 @@ void createPlane(const std::string& meshName, float size)
     auto* mo = new Ogre::ManualObject(meshName + "_mo");
     mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
     const float xs[2] = {-half, half};
-    for (int j = 0; j < 2; ++j) {
-        for (int i = 0; i < 2; ++i) {
-            mo->position(xs[i], 0.0f, xs[j]);
-            mo->normal(0, 1, 0);
-            mo->textureCoord((float)i, (float)j);
-            mo->colour(Ogre::ColourValue::White);
+    // Emit independent top and bottom faces. Pool and portal surfaces remain
+    // visible from either side without disabling culling for their material.
+    for (int face = 0; face < 2; ++face) {
+        const float normalY = face == 0 ? 1.0f : -1.0f;
+        for (int j = 0; j < 2; ++j) {
+            for (int i = 0; i < 2; ++i) {
+                mo->position(xs[i], 0.0f, xs[j]);
+                mo->normal(0, normalY, 0);
+                mo->textureCoord((float)i, (float)j);
+                mo->colour(Ogre::ColourValue::White);
+            }
         }
     }
-    // CCW seen from +Y
+    // Winding agrees with each face normal.
     mo->triangle(0, 2, 1);
     mo->triangle(1, 2, 3);
+    mo->triangle(4, 5, 6);
+    mo->triangle(5, 7, 6);
     mo->end();
     mo->convertToMesh(meshName);
     delete mo;
@@ -116,8 +123,18 @@ void createBeveledBox(const std::string& meshName, float bevel)
         }
         for (int y = 0; y < 3; ++y) for (int x = 0; x < 3; ++x) {
             const Ogre::uint32 a = base + Ogre::uint32(y * 4 + x);
-            mo->triangle(a, a + 4, a + 1);
-            mo->triangle(a + 1, a + 4, a + 5);
+            Ogre::Vector3 u(Ogre::Vector3::ZERO), v(Ogre::Vector3::ZERO);
+            u[f.u] = 1.0f; v[f.v] = 1.0f;
+            Ogre::Vector3 expected(Ogre::Vector3::ZERO);
+            expected[f.fixed] = f.sign;
+            const bool currentIsOutward = v.crossProduct(u).dotProduct(expected) > 0;
+            if (currentIsOutward) {
+                mo->triangle(a, a + 4, a + 1);
+                mo->triangle(a + 1, a + 4, a + 5);
+            } else {
+                mo->triangle(a, a + 1, a + 4);
+                mo->triangle(a + 1, a + 5, a + 4);
+            }
         }
         base += 16;
     }
@@ -139,19 +156,19 @@ void createCone(const std::string& meshName, float radius, float height,
         const Ogre::Vector3 p1(std::cos(b) * radius, -half,
                               std::sin(b) * radius);
         const Ogre::Vector3 tip(0, half, 0);
-        Ogre::Vector3 n = (p1 - p0).crossProduct(tip - p0).normalisedCopy();
+        Ogre::Vector3 n = (tip - p0).crossProduct(p1 - p0).normalisedCopy();
         Ogre::uint32 k = Ogre::uint32(i * 6);
         for (const auto& v : {p0, p1, tip}) {
             mo->position(v); mo->normal(n); mo->textureCoord(v.y > 0 ? 0.5f : 0.0f,
                                                                v.y > 0 ? 0.0f : 1.0f);
             mo->colour(Ogre::ColourValue::White);
         }
-        mo->triangle(k, k + 1, k + 2);
+        mo->triangle(k, k + 2, k + 1);
         for (const auto& v : {Ogre::Vector3::ZERO + Ogre::Vector3(0,-half,0), p1, p0}) {
             mo->position(v); mo->normal(0,-1,0); mo->textureCoord(0.5f,0.5f);
             mo->colour(Ogre::ColourValue::White);
         }
-        mo->triangle(k + 3, k + 4, k + 5);
+        mo->triangle(k + 3, k + 5, k + 4);
     }
     mo->end(); mo->convertToMesh(meshName); delete mo;
 }
