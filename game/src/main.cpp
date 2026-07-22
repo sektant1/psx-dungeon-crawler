@@ -827,6 +827,11 @@ int main(int, char**)
         ImGui::Text("stance: %s", player.crouched() ? "crouched"
                     : (player.sliding() ? "sliding" : "standing"));
     });
+    // Self-windowing debug view: projects the generated grid into its own
+    // ImGui window, so it registers as a window (not an inline panel).
+    engine.debugUi().addWindow([&level, &player] {
+        drawDungeonMap(level.dungeon(), player.eyePosition());
+    });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
     engine.debugUi().addWindow([&level, &player, &editor, &r, &physics,
