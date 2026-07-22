@@ -6,6 +6,7 @@
 #include "Particles.h"
 #include "ProceduralMeshes.h"
 #include "RenderCore.h"
+#include "SceneRegistry.h"
 
 #include <Ogre.h>
 #include <imgui.h>
@@ -38,6 +39,7 @@ Ogre::Matrix4 toOgre(const glm::mat4& m) // glm column-major -> Ogre row-major
 struct Renderer::Impl {
     RenderCore core;
     Particles particles; // data-driven pooled particle effects
+    SceneRegistry mScene; // editor-facing mirror of the scene graph
     std::vector<Ogre::SceneNode*> nodes; // nodes[id-1]; id 1 == scene root
     std::vector<std::string> meshNames;  // meshNames[id-1]
     std::vector<Ogre::Light*> lights;    // lights[id-1]
@@ -186,12 +188,16 @@ MeshHandle Renderer::createPortalDisc(float radius, int segments)
     return mImpl->registerMesh(name);
 }
 
-NodeHandle Renderer::createNode(NodeHandle parent, glm::vec3 position)
+NodeHandle Renderer::createNode(NodeHandle parent, glm::vec3 position,
+                                const std::string& name)
 {
     Ogre::SceneNode* n =
         mImpl->node(parent, "createNode")->createChildSceneNode(toOgre(position));
     mImpl->nodes.push_back(n);
-    return {static_cast<uint32_t>(mImpl->nodes.size())};
+    NodeHandle h{static_cast<uint32_t>(mImpl->nodes.size())};
+    mImpl->mScene.addNode(h, parent,
+                          name.empty() ? mImpl->mScene.autoName(h) : name);
+    return h;
 }
 
 void Renderer::setPosition(NodeHandle node, glm::vec3 position)
@@ -216,6 +222,7 @@ void Renderer::setNodeVisible(NodeHandle node, bool show)
 
 void Renderer::destroyNode(NodeHandle node)
 {
+    mImpl->mScene.removeNode(node);
     if (!node.valid() || node.id > mImpl->nodes.size()) return;
     Ogre::SceneNode* n = mImpl->nodes[node.id - 1];
     if (!n) return;
@@ -259,6 +266,7 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
         }
     }
     mImpl->node(node, "attachMesh")->attachObject(e);
+    mImpl->mScene.addAttachment(node, {NodeAttachKind::Mesh, 0, materialName});
 }
 
 std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
@@ -312,7 +320,9 @@ SpriteHandle Renderer::attachSprite(NodeHandle node, const SpriteClip& clip)
     set->createBillboard(Ogre::Vector3::ZERO, Ogre::ColourValue::White);
     mImpl->node(node, "attachSprite")->attachObject(set);
     mImpl->sprites.push_back(set);
-    return {static_cast<uint32_t>(mImpl->sprites.size())};
+    SpriteHandle sh{static_cast<uint32_t>(mImpl->sprites.size())};
+    mImpl->mScene.addAttachment(node, {NodeAttachKind::Sprite, sh.id, ""});
+    return sh;
 }
 
 SpriteHandle Renderer::attachTextSprite(NodeHandle node, const std::string& text,
@@ -584,6 +594,7 @@ void Renderer::clearScene()
     mImpl->savedMaterials.clear();
     mImpl->meshNames.clear();
     mImpl->debugLines = nullptr; // destroyAllManualObjects freed it
+    mImpl->mScene.clear();
     mImpl->nodes.push_back(sm->getRootSceneNode());
 }
 
@@ -617,7 +628,9 @@ ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, NodeHandle parent,
     // itself has no per-attachment offset in Ogre).
     if (glm::dot(localPos, localPos) > 1e-8f)
         n = n->createChildSceneNode(toOgre(localPos));
-    return mImpl->particles.spawn(fx, n, glm::vec3(0.0f));
+    ParticlesHandle ph = mImpl->particles.spawn(fx, n, glm::vec3(0.0f));
+    mImpl->mScene.addAttachment(parent, {NodeAttachKind::Particles, ph.id, ""});
+    return ph;
 }
 
 ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, glm::vec3 worldPos)
@@ -662,7 +675,9 @@ LightHandle Renderer::attachLight(NodeHandle node, const LightDesc& desc)
         l->setShadowFarDistance(desc.range * 2.0f);
     mImpl->node(node, "attachLight")->attachObject(l);
     mImpl->lights.push_back(l);
-    return {static_cast<uint32_t>(mImpl->lights.size())};
+    LightHandle lh{static_cast<uint32_t>(mImpl->lights.size())};
+    mImpl->mScene.addAttachment(node, {NodeAttachKind::Light, lh.id, ""});
+    return lh;
 }
 
 void Renderer::setLightColour(LightHandle light, glm::vec3 colour)

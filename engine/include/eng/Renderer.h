@@ -83,7 +83,8 @@ public:
     MeshHandle createPortalDisc(float radius, int segments = 20);
 
     // --- scene graph ------------------------------------------------------
-    NodeHandle createNode(NodeHandle parent, glm::vec3 position = glm::vec3(0.0f));
+    NodeHandle createNode(NodeHandle parent, glm::vec3 position = glm::vec3(0.0f),
+                          const std::string& name = {});
     void setPosition(NodeHandle node, glm::vec3 position);
     void setOrientation(NodeHandle node, glm::quat orientation);
     void setScale(NodeHandle node, glm::vec3 scale);

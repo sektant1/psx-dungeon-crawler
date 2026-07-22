@@ -85,6 +85,7 @@ add_library(eng STATIC
     engine/src/DebugUi.cpp
     engine/src/Physics.cpp
     engine/src/RenderPresets.cpp
+    engine/src/SceneRegistry.cpp
 )
 target_include_directories(eng
     PUBLIC engine/include
@@ -197,6 +198,11 @@ if(BUILD_TESTING)
     )
     target_link_libraries(physics_tests PRIVATE eng)
     add_test(NAME physics_tests COMMAND physics_tests)
+
+    add_executable(scene_registry_tests engine/tests/SceneRegistryTests.cpp engine/src/SceneRegistry.cpp)
+    target_include_directories(scene_registry_tests PRIVATE engine/include engine/src third_party/imgui)
+    target_link_libraries(scene_registry_tests PRIVATE glm::glm)
+    add_test(NAME scene_registry_tests COMMAND scene_registry_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
