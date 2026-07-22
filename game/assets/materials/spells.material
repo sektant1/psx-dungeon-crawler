@@ -1,0 +1,110 @@
+// Spell VFX particle materials — all additive, depth-write off.
+// Tinting is driven by emitter colour_range_* in spells.particle;
+// these material definitions are identical clones of Game/FireParticle
+// and Game/AshParticle with the same shader pipeline (Particle_VS /
+// FireParticle_FS / BlockParticle_FS, sparkle.png, src_alpha one).
+
+// Bright white-gold muzzle puff.
+material Game/SpellMuzzle
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref FireParticle_FS
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Orange streaming sparks for a fireball trail.
+material Game/FireballTrail
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref FireParticle_FS
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Orange-red radial burst on fireball impact.
+material Game/FireballImpact
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref FireParticle_FS
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Cyan-white thin core for a beam spell.
+material Game/BeamCore
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref BlockParticle_FS
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Cyan spark burst at beam impact point.
+material Game/BeamImpact
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref BlockParticle_FS
+        {
+            param_named alphaScissor float 0.1
+        }
+        texture_unit
+        {
+            texture sparkle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
