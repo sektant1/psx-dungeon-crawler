@@ -67,6 +67,45 @@ material Game/DungeonTile
     } }
 }
 
+// Floor/ceiling meshes retain their source atlas coordinates. These vertex
+// transforms expand their respective 1/11-scale cells back to full 0..1 UVs,
+// allowing the standalone dungeon tiles to repeat without black atlas gaps.
+material Game/DungeonFloor
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 11.0 11.0
+            param_named uvOffset float2 -9.0 -3.0
+        }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture TEX_Ground_04.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Game/DungeonCeiling
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 11.0 11.0
+            param_named uvOffset float2 -10.0 -3.0
+        }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture TEX_Wall_03.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
 // Imported arches expose inner/back faces at close range. They share the same
 // authored atlas UVs as the room kit, but need two-sided rasterization.
 material Game/DungeonTileTwoSided

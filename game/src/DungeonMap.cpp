@@ -17,6 +17,8 @@
 namespace {
 
 constexpr const char* kTileMaterial = "Game/DungeonTile";
+constexpr const char* kFloorMaterial = "Game/DungeonFloor";
+constexpr const char* kCeilingMaterial = "Game/DungeonCeiling";
 // Half-width of the stone_archway's walkable opening (measured: the gap
 // spans 1.2..2.8 across the 4 m piece).
 constexpr float kArchHalfWidth = 0.8f;
@@ -247,8 +249,9 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     }
 
     eng::StaticBatchHandle curBatch{}; // set per cell in the grid loop
-    const auto put = [&](eng::MeshHandle m, glm::vec3 pos, float yawDeg) {
-        r.addToStaticBatch(curBatch, m, kTileMaterial, pos, yawDeg);
+    const auto put = [&](eng::MeshHandle m, glm::vec3 pos, float yawDeg,
+                         const char* material = kTileMaterial) {
+        r.addToStaticBatch(curBatch, m, material, pos, yawDeg);
     };
     // Emit a static box collider and record its handle for clearPhysics().
     const auto addBox = [&](glm::vec3 centre, glm::vec3 halfExtents) {
@@ -304,7 +307,8 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                 // base has holes in the walkable opening. Supply the same
                 // floor slab as ordinary cells, raised a hair above any
                 // coincident asset faces to prevent z-fighting.
-                put(floor, {x0, 0.002f, z0 + mCell}, 0.0f);
+                put(floor, {x0, 0.002f, z0 + mCell}, 0.0f,
+                    kFloorMaterial);
                 if (mLayout.arch(aIdx).northSouth)
                     put(arch, {x0, 0.0f, z0 + mCell}, 0.0f);
                 else
@@ -354,8 +358,9 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
 
             // Floor spans x[0,cell] z[-cell,0] from its node; ceiling is the
             // same footprint mirrored downward, raised to wall height.
-            put(floor, {x0, 0.0f, z0 + mCell}, 0.0f);
-            put(ceiling, {x0, wallH, z0 + mCell}, 0.0f);
+            put(floor, {x0, 0.0f, z0 + mCell}, 0.0f, kFloorMaterial);
+            put(ceiling, {x0, wallH, z0 + mCell}, 0.0f,
+                kCeilingMaterial);
 
             // Floor and ceiling collision slabs (thin boxes centred just
             // outside the walkable volume so the physics surface aligns).
