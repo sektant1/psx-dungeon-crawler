@@ -15,7 +15,7 @@ struct PortalPropStyle {
     std::string material = "Game/PortalDown";
     std::string frameMaterial = "Game/DungeonTileTwoSided";
     std::string frameMesh;
-    std::string particles = "PSX/Sparkles";
+    std::string particles = "sparkles"; // particle EFFECT name (particles.toml)
     glm::vec3 lightColour{1.05f, 0.20f, 1.45f};
     float yawDegrees = 0.0f;
     float lightRange = 5.5f;
