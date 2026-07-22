@@ -1,6 +1,8 @@
 #pragma once
 #include <eng/DebugUi.h>
 
+#include "UiContext.h"
+
 #include <SDL2/SDL.h>
 
 #include <glm/glm.hpp>
@@ -22,13 +24,10 @@ struct DebugUi::Impl {
     bool visible = false;
     bool mainWindowVisible = true;
 
+    eng::ui::Context ctx; // shared imgui + SDL plumbing
+
     std::vector<std::pair<std::string, std::function<void()>>> panels;
     std::vector<std::function<void()>> windows;
-    std::string hudPrompt; // drawn every frame while non-empty
-
-    // Stats panel: frametime ring buffer (ms).
-    std::array<float, 120> frameMs{};
-    int frameMsIdx = 0;
 
     // PSX shader tunables (UI-side cache; initial values match the
     // defaults in engine/assets/programs/psx.program + psx.material).
