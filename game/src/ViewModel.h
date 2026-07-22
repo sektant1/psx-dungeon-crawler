@@ -48,6 +48,12 @@ public:
                    const std::string& crystalMeshPath,
                    const WeaponViewmodelPose& pose = {});
 
+    // Procedural handheld torch (no wall bracket): a short wood handle with a
+    // live flame — fire/glow/ash particles plus a warm point light — at its top,
+    // so it lights the scene while equipped. Reuses the attack thrust animation.
+    void initTorch(eng::Renderer& r, eng::NodeHandle headNode,
+                   const WeaponViewmodelPose& pose = {});
+
     // Call once per frame (variable dt is fine — this is cosmetic only).
     //   triggerAttack : rising edge that starts the slash animation.
     //   parryHeld     : true while the guard key is down.

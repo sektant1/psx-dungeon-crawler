@@ -140,6 +140,51 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
     mSwayPhase  = 0.0f;
 }
 
+// ---------------------------------------------------------------------------
+// initTorch — handheld torch (wood handle + live flame + warm light)
+// ---------------------------------------------------------------------------
+void ViewModel::initTorch(eng::Renderer& r, eng::NodeHandle headNode,
+                          const WeaponViewmodelPose& pose)
+{
+    WeaponViewmodelPose torchPose = pose;
+    torchPose.position          = {0.30f, -0.32f, -0.68f};
+    torchPose.rotationDegrees   = {-4.0f, 8.0f, 3.0f};
+    torchPose.scale             = 0.045f;
+    torchPose.gripAxisTwistDegrees = 0.0f;
+    mPose = torchPose;
+
+    mNode = r.createNode(headNode, mPose.position);
+
+    // Handle: a short wood rod (unit box stretched on a child node).
+    const eng::MeshHandle handle = r.createBeveledBox(0.06f);
+    eng::NodeHandle handleNode = r.createNode(mNode, glm::vec3(0.0f));
+    r.attachMesh(handleNode, handle, "Game/PropPlanks", false, true);
+    r.setScale(handleNode, glm::vec3(1.0f, 8.0f, 1.0f));
+
+    // Flame seat at the top of the handle. Fire/glow/ash particles plus a warm
+    // point light hang here so the torch actually illuminates while equipped.
+    // (No wall bracket/mount — this is the handheld variant.)
+    eng::NodeHandle flame = r.createNode(mNode, glm::vec3(0.0f, 4.4f, 0.0f));
+    r.attachParticles(flame, "Game/TorchGlow");
+    r.attachParticles(flame, "Game/TorchFire");
+    r.attachParticles(flame, "Game/TorchAsh");
+    eng::NodeHandle smoke = r.createNode(flame, glm::vec3(0.0f, 0.12f, 0.0f));
+    r.attachParticles(smoke, "Game/FireSmoke");
+
+    const auto lin = [](float s) { return std::pow(s, 2.2f); };
+    eng::LightDesc warm;
+    warm.colour = glm::vec3(lin(1.0f), lin(0.60f), lin(0.30f)) * 3.5f;
+    warm.range  = 5.5f;
+    r.attachLight(flame, warm);
+
+    r.setScale(mNode, glm::vec3(mPose.scale));
+    r.setOrientation(mNode, poseOrientation(mPose));
+
+    mAttackTime = -1.0f;
+    mParry      = 0.0f;
+    mSwayPhase  = 0.0f;
+}
+
 void ViewModel::setVisible(eng::Renderer& r, bool show)
 {
     if (mNode.valid())

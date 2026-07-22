@@ -666,10 +666,18 @@ int main(int, char**)
     FpsController player;
     ViewModel viewModel;
     ViewModel staffModel;
-    // Active weapon: false = sword (melee), true = staff (spells). Toggled by
-    // the swap_weapon bind; drives which viewmodel is shown and which action
-    // input is accepted.
-    bool staffEquipped = false;
+    ViewModel torchModel;
+    // Active weapon, cycled by the swap_weapon bind. Drives which viewmodel is
+    // shown and which action input is accepted:
+    //   Sword -> melee (LMB), Staff -> spells (cast keys), Torch -> light + bash.
+    enum Weapon { WSword = 0, WStaff = 1, WTorch = 2, WeaponCount = 3 };
+    int weapon = WSword;
+    // Show only the active viewmodel.
+    const auto applyWeaponVis = [&](eng::Renderer& rr) {
+        viewModel.setVisible(rr, weapon == WSword);
+        staffModel.setVisible(rr, weapon == WStaff);
+        torchModel.setVisible(rr, weapon == WTorch);
+    };
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
@@ -727,8 +735,8 @@ int main(int, char**)
         viewModel.init(r, player.headNode(), assets + "/meshes/props");
         staffModel.initStaff(r, player.headNode(),
                              assets + "/meshes/crystal_spire1.obj");
-        viewModel.setVisible(r, !staffEquipped);
-        staffModel.setVisible(r, staffEquipped);
+        torchModel.initTorch(r, player.headNode());
+        applyWeaponVis(r);
         engine.input().setMouseGrab(!portalPreview);
     };
     enterLevel(false); // depth 0, spawn at entry
@@ -878,7 +886,7 @@ int main(int, char**)
     });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
-    engine.debugUi().addWindow([&level, &player, &viewModel, &staffModel, &staffEquipped,
+    engine.debugUi().addWindow([&level, &player, &viewModel, &staffModel, &torchModel, &weapon,
                                 &editor, &r, &physics,
                                 &assets, &depth, speed, sens, &engine] {
         if (!editor.draw(level.dungeon(), player.eyePosition()))
@@ -896,8 +904,10 @@ int main(int, char**)
         viewModel.init(r, player.headNode(), assets + "/meshes/props");
         staffModel.initStaff(r, player.headNode(),
                              assets + "/meshes/crystal_spire1.obj");
-        viewModel.setVisible(r, !staffEquipped);
-        staffModel.setVisible(r, staffEquipped);
+        torchModel.initTorch(r, player.headNode());
+        viewModel.setVisible(r, weapon == 0);
+        staffModel.setVisible(r, weapon == 1);
+        torchModel.setVisible(r, weapon == 2);
         engine.input().setMouseGrab(false);
     });
 
@@ -990,31 +1000,31 @@ int main(int, char**)
         bool didCast = false;
         if (in.mouseGrabbed()) {
             if (in.wasPressed("swap_weapon")) {
-                staffEquipped = !staffEquipped;
-                viewModel.setVisible(r, !staffEquipped);
-                staffModel.setVisible(r, staffEquipped);
+                weapon = (weapon + 1) % WeaponCount;
+                applyWeaponVis(r);
             }
             if (in.wasPressed("fire_arrow"))
                 projectiles.fireArrow(physics, r, player.eyePosition(), player.forward());
             // Staff casts only when the staff is equipped.
-            if (staffEquipped && in.wasPressed("cast_spell")) {
+            if (weapon == WStaff && in.wasPressed("cast_spell")) {
                 spells.castFireball(physics, r, player.eyePosition(), player.forward());
                 didCast = true;
             }
-            if (staffEquipped && in.wasPressed("cast_beam")) {
+            if (weapon == WStaff && in.wasPressed("cast_beam")) {
                 spells.castBeam(physics, r, player.eyePosition(), player.forward());
                 didCast = true;
             }
-            // Sword melee only when the sword is equipped.
-            if (!staffEquipped && in.wasMouseClicked()) {
+            // Melee swing for the sword and the torch (a light club).
+            if ((weapon == WSword || weapon == WTorch) && in.wasMouseClicked()) {
                 melee.startSwing();
                 swordAttack = true;
             }
         }
-        viewModel.update(r, dt, swordAttack,
+        viewModel.update(r, dt, weapon == WSword && swordAttack,
                          in.mouseGrabbed() &&
                              in.isMouseDown(eng::MouseButton::Right));
         staffModel.update(r, dt, didCast, false);
+        torchModel.update(r, dt, weapon == WTorch && swordAttack, false);
 
         // Physics collider wireframe overlay — neon-pink collision view.
         if (showColliders) {
