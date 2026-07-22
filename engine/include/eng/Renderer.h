@@ -14,6 +14,7 @@ namespace eng {
 
 class RenderCore; // internal; forward-declared only, no Ogre leak
 class Renderer;
+class SceneView; // read-only scene-graph facade, defined in Renderer.cpp
 
 namespace detail {
 // Engine-only backdoor to the internal core (defined in Renderer.cpp).
@@ -146,6 +147,11 @@ public:
     // Retint an existing light (linear, energy pre-multiplied) -- cheap,
     // intended for per-frame effects like torch flicker.
     void setLightColour(LightHandle light, glm::vec3 colour);
+    // Set a point light's falloff range (linear attenuation range).
+    void setLightRange(LightHandle light, float range);
+
+    // Read-only scene-graph introspection facade for editor tooling.
+    SceneView scene() const;
 
     // --- camera -----------------------------------------------------------
     void setCameraFov(float degrees); // vertical FOV
@@ -199,6 +205,7 @@ private:
     friend class Engine; // Engine constructs, initialises, and drives it
     friend RenderCore& detail::coreOf(Renderer&);
     friend void detail::registerRoot(Renderer&);
+    friend class SceneView; // reads mImpl to walk the scene graph read-only
     Renderer();
     ~Renderer();
     struct Impl;

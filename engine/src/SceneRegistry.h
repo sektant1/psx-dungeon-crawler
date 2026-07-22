@@ -1,12 +1,11 @@
 #pragma once
 #include <eng/Handles.h>
+#include <eng/SceneView.h> // public eng::NodeAttachKind, reused by AttachRecord
 #include <string>
 #include <vector>
 #include <unordered_map>
 
 namespace eng {
-
-enum class NodeAttachKind { Mesh, Light, Sprite, Particles };
 
 struct AttachRecord {
     NodeAttachKind kind;

@@ -1,6 +1,7 @@
 #include <eng/Renderer.h>
 
 #include <eng/Log.h>
+#include <eng/SceneView.h>
 
 #include "ObjLoader.h"
 #include "Particles.h"
@@ -985,6 +986,67 @@ void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
         mImpl->debugLines->colour(Ogre::ColourValue(l.colour.r, l.colour.g, l.colour.b, 1.0f));
     }
     mImpl->debugLines->end();
+}
+
+void Renderer::setLightRange(LightHandle light, float range)
+{
+    // Mirror attachLight: Ogre's attenuation range is pinned huge so the light
+    // stays registered against the frustum; the real falloff range rides in the
+    // constant-attenuation slot (arg 2), which the PSX shader reads as
+    // lightAtten.y (see psx_lighting.glsl).
+    if (light.valid() && light.id <= mImpl->lights.size())
+        mImpl->lights[light.id - 1]->setAttenuation(1000.0f, range, 0.0f, 0.0f);
+}
+
+SceneView Renderer::scene() const { return SceneView(*this); }
+
+std::vector<NodeHandle> SceneView::roots() const
+{
+    return mRenderer->mImpl->mScene.roots();
+}
+
+std::vector<NodeHandle> SceneView::childrenOf(NodeHandle n) const
+{
+    const NodeRecord* r = mRenderer->mImpl->mScene.find(n);
+    return r ? r->children : std::vector<NodeHandle>{};
+}
+
+bool SceneView::info(NodeHandle n, NodeInfo& out) const
+{
+    auto& impl = *mRenderer->mImpl;
+    const NodeRecord* rec = impl.mScene.find(n);
+    if (!rec) return false;
+    out.handle = rec->handle; out.parent = rec->parent; out.name = rec->name;
+    out.attachments.clear();
+    for (const AttachRecord& a : rec->attachments)
+        out.attachments.push_back({a.kind, a.handle, a.label});
+    if (n.valid() && n.id <= impl.nodes.size()) {
+        Ogre::SceneNode* sn = impl.nodes[n.id - 1];
+        const Ogre::Vector3 p = sn->getPosition();
+        const Ogre::Quaternion q = sn->getOrientation();
+        const Ogre::Vector3 s = sn->getScale();
+        out.position = glm::vec3(p.x, p.y, p.z);
+        out.orientation = glm::quat(q.w, q.x, q.y, q.z);
+        out.scale = glm::vec3(s.x, s.y, s.z);
+    }
+    out.visible = true; // MVP: visibility read-back not tracked
+    return true;
+}
+
+bool SceneView::lightInfo(LightHandle l, LightDesc& out) const
+{
+    auto& impl = *mRenderer->mImpl;
+    if (!l.valid() || l.id > impl.lights.size()) return false;
+    Ogre::Light* lt = impl.lights[l.id - 1];
+    const Ogre::ColourValue c = lt->getDiffuseColour();
+    out.colour = glm::vec3(c.r, c.g, c.b);
+    // Real falloff range lives in the constant-attenuation slot (see
+    // setLightRange / attachLight), not Ogre's attenuation range.
+    out.range = lt->getAttenuationConstant();
+    out.type = (lt->getType() == Ogre::Light::LT_DIRECTIONAL)
+                   ? LightDesc::Type::Directional : LightDesc::Type::Point;
+    out.castShadows = lt->getCastShadows();
+    return true;
 }
 
 namespace detail {
