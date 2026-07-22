@@ -38,14 +38,21 @@ void EditorUi::draw(uint64_t texId)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    // NoBackground so the OS window (the live Ogre 3D render) shows through the
+    // transparent central dock node -- the editor's "viewport" is the engine's
+    // own window render, framed by the opaque side/bottom panels.
     ImGuiWindowFlags host = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_MenuBar;
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+        ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoBackground;
     ImGui::Begin("##EditorHost", nullptr, host);
     ImGui::PopStyleVar(3);
     ImGuiID dockId = ImGui::GetID("EditorDockSpace");
-    ImGui::DockSpace(dockId, ImVec2(0, 0), ImGuiDockNodeFlags_None);
-    if (!s.builtLayout) {
+    ImGui::DockSpace(dockId, ImVec2(0, 0), ImGuiDockNodeFlags_PassthruCentralNode);
+    // Build the default split only once the host size is real. On the very first
+    // frame the SDL window size may not have propagated to io.DisplaySize yet, so
+    // vp->WorkSize can be tiny -- building then bakes in degenerate ~12px panels.
+    if (!s.builtLayout && vp->WorkSize.x > 200.0f && vp->WorkSize.y > 200.0f) {
         s.builtLayout = true;
         ImGui::DockBuilderRemoveNode(dockId);
         ImGui::DockBuilderAddNode(dockId, ImGuiDockNodeFlags_DockSpace);
@@ -85,14 +92,16 @@ void EditorUi::draw(uint64_t texId)
     s.inspector.draw(s.r, s.r.scene(), s.sel);
     ImGui::End();
 
-    ImGui::Begin("Scene");
+    // The Scene dock lives in the passthrough central node. NoBackground keeps it
+    // transparent so the engine's window 3D shows through; it exists to capture
+    // the viewport region (for camera control) and hold the "Scene" tab. An
+    // optional RTT texture, when provided, is drawn as the image instead.
+    ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoBackground);
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     s.vpSize.w = int(avail.x);
     s.vpSize.h = int(avail.y);
     if (texId != 0 && avail.x > 0 && avail.y > 0)
         ImGui::Image((ImTextureID)texId, avail, ImVec2(0, 1), ImVec2(1, 0)); // GL V-flip
-    else
-        ImGui::TextDisabled("viewport unavailable");
     s.vpHovered = ImGui::IsWindowHovered();
     ImGui::End();
 }

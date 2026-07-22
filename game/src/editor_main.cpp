@@ -28,35 +28,42 @@ int main(int, char**)
     if (!map.loadFromRows(r, physics, initial, assets + "/meshes/tiles/",
                           assets + "/meshes/props/"))
         return 1;
-    r.setAmbient(glm::vec3(0.18f));
-    r.setBackground({0.025f, 0.030f, 0.035f});
-    r.setCameraFov(55.0f);
-    r.setCameraClip(0.1f, 250.0f);
+    r.setAmbient(glm::vec3(0.55f));
+    r.setBackground({0.05f, 0.06f, 0.08f});
+    r.setCameraFov(60.0f);
+    r.setCameraClip(0.1f, 400.0f);
+    // A key directional light so editor geometry reads with form/shading rather
+    // than flat ambient. Steep angle keeps floors and wall tops both lit.
+    {
+        eng::NodeHandle sun = r.createNode(eng::kRootNode, {0.0f, 0.0f, 0.0f}, "Sun");
+        r.setOrientation(sun, glm::angleAxis(glm::radians(35.0f), glm::vec3(0, 1, 0)) *
+                                  glm::angleAxis(glm::radians(-55.0f), glm::vec3(1, 0, 0)));
+        eng::LightDesc d;
+        d.type = eng::LightDesc::Type::Directional;
+        d.colour = glm::vec3(0.9f, 0.88f, 0.82f);
+        r.attachLight(sun, d);
+    }
 
     EditorCamera cam;
-    // Frame the dungeon: target the anchor room at the origin, back the camera
-    // out and tilt down a little so the whole hall is visible on open.
-    for (int i = 0; i < 40; ++i) cam.dolly(-1.0f);   // increase distance to ~32
-    cam.orbit(0.0f, -0.35f);
+    // Frame the whole dungeon from a high three-quarter angle (target the anchor
+    // room at the origin), like an editor's default overview shot.
+    for (int i = 0; i < 34; ++i) cam.dolly(-1.0f);   // distance ~29
+    // Positive pitch lifts the eye ABOVE the dungeon (sin(pitch) drives eye.y);
+    // the default pitch is negative, so orbit up past horizontal to look down.
+    cam.orbit(0.7f, 1.0f);
     eng::NodeHandle camNode = r.createNode(eng::kRootNode, cam.eye(), "EditorCamera");
     r.setOrientation(camNode, cam.orientation());
     r.attachCamera(camNode);
-
-    int vpW = 1280, vpH = 720;
-    r.enableEditorViewport(vpW, vpH);
 
     engine.debugUi().setMainWindowVisible(false);
     engine.debugUi().setVisible(true);
     engine.input().setMouseGrab(false);
 
+    // The editor uses a passthrough central dock node: the engine renders the
+    // scene to the OS window as usual, and the docked panels frame a transparent
+    // hole through which that render shows. No render-to-texture needed.
     eng::EditorUi ui(r);
-    engine.debugUi().addWindow([&] {
-        const eng::EditorUi::Size sz = ui.viewportSize();
-        if (sz.w > 0 && sz.h > 0 && (sz.w != vpW || sz.h != vpH)) {
-            vpW = sz.w; vpH = sz.h; r.resizeEditorViewport(vpW, vpH);
-        }
-        ui.draw(r.editorViewportTextureId());
-    });
+    engine.debugUi().addWindow([&] { ui.draw(0); });
 
     while (!engine.shouldClose()) {
         const float dt = engine.tick();

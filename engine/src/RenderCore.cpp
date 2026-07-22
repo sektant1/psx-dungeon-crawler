@@ -196,25 +196,24 @@ void RenderCore::setPixelSize(int pixelSize)
         def->widthFactor = factor;
         def->heightFactor = factor;
     }
-    // When the editor's offscreen viewport is active the PSX chain lives there,
-    // not on the window viewport; re-add on whichever viewport currently hosts it.
+    // Rebuild whichever chain instances exist so they pick up the new sizes.
+    // The window and the editor RTT can each host an independent instance.
     auto& cm = Ogre::CompositorManager::getSingleton();
-    if (mOffscreenVp) {
-        if (mOffscreenChain) {
-            cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
-            cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
-            mOffscreenChain = false;
-            try {
-                cm.addCompositor(mOffscreenVp, "PSX/Stylized");
-                cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", true);
-                mOffscreenChain = true;
-            } catch (const Ogre::Exception& e) {
-                Ogre::LogManager::getSingleton().logError(
-                    "Editor offscreen post chain re-add failed: " +
-                    e.getDescription());
-            }
+    if (mOffscreenChain && mOffscreenVp) {
+        cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", false);
+        cm.removeCompositor(mOffscreenVp, "PSX/Stylized");
+        mOffscreenChain = false;
+        try {
+            cm.addCompositor(mOffscreenVp, "PSX/Stylized");
+            cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", true);
+            mOffscreenChain = true;
+        } catch (const Ogre::Exception& e) {
+            Ogre::LogManager::getSingleton().logError(
+                "Editor offscreen post chain re-add failed: " +
+                e.getDescription());
         }
-    } else if (mChainAdded) {
+    }
+    if (mChainAdded) {
         cm.removeCompositor(mViewport, "PSX/Stylized");
         mChainAdded = false;
         if (mChainEnabled)
@@ -243,14 +242,22 @@ void RenderCore::enableOffscreenViewport(int w, int h)
     mOffscreenVp->setClearEveryFrame(true);
     mOffscreenVp->setBackgroundColour(Ogre::ColourValue(0.02f, 0.02f, 0.03f, 1.0f));
 
-    // Move the PSX post chain from the window viewport onto the RTT viewport so
-    // the editor image is post-processed and the window stays cheap.
+    // Single-compositor arrangement. The PSX chain uses fixed-name MRT textures,
+    // so two live "PSX/Stylized" instances collide and blacken both targets.
+    // Solution: the chain lives ONLY on the RTT (the editor's real 3D view), and
+    // the OS window renders NO scene geometry -- its visibility mask is zeroed so
+    // no PSX material is invoked there (an uncomposited PSX pass renders black).
+    // The window then only clears dark and draws the imgui overlay; the docked
+    // Scene panel shows the fully post-processed RTT.
     auto& cm = Ogre::CompositorManager::getSingleton();
     if (mChainAdded) {
         cm.setCompositorEnabled(mViewport, "PSX/Stylized", false);
         cm.removeCompositor(mViewport, "PSX/Stylized");
         mChainAdded = false;
     }
+    mViewport->setVisibilityMask(0);        // window draws no scene geometry
+    mViewport->setOverlaysEnabled(true);    // ...but keeps the imgui overlay
+    mViewport->setBackgroundColour(Ogre::ColourValue(0.06f, 0.06f, 0.07f, 1.0f));
     try {
         cm.addCompositor(mOffscreenVp, "PSX/Stylized");
         cm.setCompositorEnabled(mOffscreenVp, "PSX/Stylized", true);
@@ -259,9 +266,6 @@ void RenderCore::enableOffscreenViewport(int w, int h)
         Ogre::LogManager::getSingleton().logError(
             "Editor offscreen post chain unavailable: " + e.getDescription());
     }
-    // Window viewport now shows the raw scene (covered by the opaque imgui
-    // dockspace) plus the imgui overlay. Keep its overlays enabled.
-    mViewport->setOverlaysEnabled(true);
     // Re-apply the current pixel size so the RTT's PSX targets match.
     setPixelSize(mPixelSize);
 }
