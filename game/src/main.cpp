@@ -639,6 +639,7 @@ int main(int, char**)
     // bodies are removed and propsAlive set false before any rebuild.
     std::vector<DynamicProp> dynamicProps;
     bool propsAlive = false;
+    eng::BodyHandle propGroundBody{};
     Dummy dummy;
     bool dummyAlive = false;
     melee.setHitCallback([&dummy, &dummyAlive, &physics](
@@ -664,6 +665,7 @@ int main(int, char**)
                 physics.removeBody(dp.body);
             dynamicProps.clear();
             propsAlive = false;
+            if (propGroundBody.valid()) { physics.removeBody(propGroundBody); propGroundBody = {}; }
         }
         if (dummyAlive) {
             dummy.clear(physics, r);
@@ -738,7 +740,7 @@ int main(int, char**)
             eng::BodyDesc bd;
             bd.kind = eng::ShapeKind::Box;
             bd.halfExtents = {0.4f, hh, 0.4f};
-            bd.position = bodyPos;
+            bd.position = bodyPos + glm::vec3(0.0f, 0.02f, 0.0f);
             bd.layer = eng::BodyLayer::Prop;
             bd.dynamic = true;
             bd.mass = 5.0f;
@@ -765,7 +767,7 @@ int main(int, char**)
             bd.kind = eng::ShapeKind::Cylinder;
             bd.halfHeight = halfH;
             bd.radius = radius;
-            bd.position = bodyPos;
+            bd.position = bodyPos + glm::vec3(0.0f, 0.02f, 0.0f);
             bd.layer = eng::BodyLayer::Prop;
             bd.dynamic = true;
             bd.mass = 8.0f;
@@ -784,6 +786,20 @@ int main(int, char**)
             dp.renderOffset = glm::vec3(0.0f, halfH, 0.0f);
             dynamicProps.push_back(dp);
         };
+
+        // Guaranteed solid ground beneath the lobby prop staging. Per-cell
+        // DungeonMap floor slabs do not reliably cover these hardcoded world
+        // positions, so props were sinking / a barrel tipped half-in-floor.
+        // Thin static box, top at y=0.
+        {
+            eng::BodyDesc gd;
+            gd.kind = eng::ShapeKind::Box;
+            gd.halfExtents = {4.0f, 0.10f, 3.0f};
+            gd.position = {3.3f, -0.10f, 18.0f}; // top = -0.10 + 0.10 = 0.0
+            gd.layer = eng::BodyLayer::Static;
+            gd.dynamic = false;
+            propGroundBody = physics.createBody(gd);
+        }
 
         // Two crates stacked near the entry hall (spawn side of the anchor room)
         spawnCrate({3.0f, 0.4f, 18.0f},   10.0f);   // ground crate
@@ -974,6 +990,7 @@ int main(int, char**)
             physics.removeBody(dp.body);
         dynamicProps.clear();
         propsAlive = false;
+        if (propGroundBody.valid()) { physics.removeBody(propGroundBody); propGroundBody = {}; }
     }
     if (dummyAlive) {
         dummy.clear(physics, r);
