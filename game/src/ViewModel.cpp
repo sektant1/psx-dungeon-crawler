@@ -7,6 +7,7 @@
 #include <eng/Renderer.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
@@ -61,7 +62,11 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
 {
     mPose = pose;
     mNode = r.createNode(headNode, mPose.position);
-    const eng::MeshHandle weapon = r.loadObj(meshPath);
+    // Normalize the imported model around its authored hand/grip socket.
+    // Animation now rotates about the hand, not an arbitrary exporter origin.
+    const glm::mat4 pivotBake = glm::translate(
+        glm::mat4(1.0f), -mPose.gripPivot);
+    const eng::MeshHandle weapon = r.loadObj(meshPath, &pivotBake);
     r.attachMesh(mNode, weapon, materialName, false, true);
 
     // The prop_sword.obj is authored at world scale (used in scene dressing at
