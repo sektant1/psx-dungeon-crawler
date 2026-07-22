@@ -39,6 +39,7 @@ add_library(eng STATIC
     engine/src/ObjLoader.cpp
     engine/src/ProceduralMeshes.cpp
     engine/src/Renderer.cpp
+    engine/src/Particles.cpp
     engine/src/Log.cpp
     engine/src/Config.cpp
     engine/src/Input.cpp

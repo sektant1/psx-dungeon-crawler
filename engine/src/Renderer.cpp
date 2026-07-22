@@ -3,6 +3,7 @@
 #include <eng/Log.h>
 
 #include "ObjLoader.h"
+#include "Particles.h"
 #include "ProceduralMeshes.h"
 #include "RenderCore.h"
 
@@ -36,6 +37,7 @@ Ogre::Matrix4 toOgre(const glm::mat4& m) // glm column-major -> Ogre row-major
 
 struct Renderer::Impl {
     RenderCore core;
+    Particles particles; // data-driven pooled particle effects
     std::vector<Ogre::SceneNode*> nodes; // nodes[id-1]; id 1 == scene root
     std::vector<std::string> meshNames;  // meshNames[id-1]
     std::vector<Ogre::Light*> lights;    // lights[id-1]
@@ -522,6 +524,7 @@ void Renderer::clearScene()
     Ogre::SceneManager* sm = mImpl->core.sceneMgr();
     // Detach + destroy every SceneNode under the root, then free the objects
     // those nodes referenced (Ogre owns them; removing nodes alone leaks).
+    mImpl->particles.clear(); // drop pooled-system bookkeeping before Ogre frees them
     sm->getRootSceneNode()->removeAndDestroyAllChildren();
     sm->destroyAllStaticGeometry();
     sm->destroyAllParticleSystems();
@@ -558,17 +561,28 @@ void Renderer::clearScene()
     mImpl->nodes.push_back(sm->getRootSceneNode());
 }
 
-void Renderer::attachParticles(NodeHandle node, const std::string& templateName)
+ParticleEffectId Renderer::registerParticleEffect(const ParticleEffectDesc& desc)
 {
-    try {
-        Ogre::ParticleSystem* ps = mImpl->core.sceneMgr()->createParticleSystem(
-            mImpl->nextName("particles"), templateName);
-        mImpl->node(node, "attachParticles")->attachObject(ps);
-    } catch (const std::exception& e) {
-        log::fatal("Renderer: attachParticles('%s') failed: %s",
-                   templateName.c_str(), e.what());
-    }
+    return mImpl->particles.registerEffect(desc);
 }
+
+ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, NodeHandle parent,
+                                         glm::vec3 localPos)
+{
+    Ogre::SceneNode* n = mImpl->node(parent, "spawnParticles");
+    return mImpl->particles.spawn(fx, n, localPos);
+}
+
+ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, glm::vec3 worldPos)
+{
+    NodeHandle n = createNode(kRootNode, worldPos);
+    return spawnParticles(fx, n, glm::vec3(0.0f));
+}
+
+void Renderer::stopParticles(ParticlesHandle h) { mImpl->particles.stop(h); }
+void Renderer::despawnParticles(ParticlesHandle h) { mImpl->particles.despawn(h); }
+void Renderer::setParticleQuality(float q) { mImpl->particles.setQuality(q); }
+void Renderer::updateParticles(float dt) { mImpl->particles.update(dt); }
 
 void Renderer::attachCamera(NodeHandle node)
 {
@@ -918,6 +932,7 @@ RenderCore& coreOf(Renderer& r) { return r.mImpl->core; }
 void registerRoot(Renderer& r)
 {
     r.mImpl->nodes.push_back(r.mImpl->core.sceneMgr()->getRootSceneNode());
+    r.mImpl->particles.init(r.mImpl->core.sceneMgr());
 }
 
 } // namespace detail

@@ -128,6 +128,7 @@ float Engine::tick()
 void Engine::renderFrame(float dt)
 {
     mDebugUi.mImpl->buildFrame(dt);
+    mRenderer.updateParticles(dt); // recycle finished one-shot particle systems
     detail::coreOf(mRenderer).renderFrame(dt);
     // Headless-friendly performance regression hook. Skip the first 60 frames
     // so shader/texture warm-up cannot masquerade as steady-state spikes.
