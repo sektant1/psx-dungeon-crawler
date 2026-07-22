@@ -207,6 +207,11 @@ if(BUILD_TESTING)
     target_include_directories(scene_registry_tests PRIVATE engine/include engine/src third_party/imgui)
     target_link_libraries(scene_registry_tests PRIVATE glm::glm)
     add_test(NAME scene_registry_tests COMMAND scene_registry_tests)
+
+    add_executable(editor_camera_tests game/tests/EditorCameraTests.cpp game/src/EditorCamera.cpp)
+    target_include_directories(editor_camera_tests PRIVATE game/src)
+    target_link_libraries(editor_camera_tests PRIVATE glm::glm)
+    add_test(NAME editor_camera_tests COMMAND editor_camera_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
