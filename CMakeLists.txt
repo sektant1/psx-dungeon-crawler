@@ -82,6 +82,7 @@ add_library(eng STATIC
     engine/src/Input.cpp
     engine/src/Platform.cpp
     engine/src/Engine.cpp
+    engine/src/EditorUi.cpp
     engine/src/DebugUi.cpp
     engine/src/UiContext.cpp
     engine/src/panels/RenderTuningPanel.cpp
@@ -152,6 +153,7 @@ eng_target_hardening(game)
 
 add_executable(level_editor
     game/src/editor_main.cpp
+    game/src/EditorCamera.cpp
     game/src/DungeonMap.cpp
     game/src/DungeonGen.cpp
     game/src/LevelDocument.cpp
