@@ -80,9 +80,6 @@ material Fantasy/Lava
 {
     technique { pass {
         depth_write on
-        // Flat liquid sits just above its plinth; a small negative bias keeps
-        // it in front without z-fighting at grazing angles.
-        depth_bias -1 -1
         vertex_program_ref Sprite/VS {
             param_named spriteUvScale float2 2.0 2.0
             param_named spriteScroll float2 0.045 -0.025
@@ -104,7 +101,6 @@ material Fantasy/Water
 {
     technique { pass {
         depth_write on
-        depth_bias -1 -1
         vertex_program_ref Sprite/VS {
             param_named spriteUvScale float2 4.0 4.0
             param_named spriteScroll float2 0.07 0.035
@@ -124,7 +120,6 @@ material Fantasy/ToxicSlime
 {
     technique { pass {
         depth_write on
-        depth_bias -1 -1
         vertex_program_ref Sprite/VS {
             param_named spriteUvScale float2 3.0 3.0
             param_named spriteScroll float2 -0.035 0.055
