@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -145,6 +146,22 @@ int main(int, char**)
     engine.debugUi().setVisible(true);
     engine.input().setMouseGrab(false);
 
+    // Launch the real game/demo in their own window (separate process), so the
+    // editor can sit alongside a live run. Executables live next to this one.
+    std::string exeDir = ".";
+    {
+        std::error_code ec;
+        const auto self = std::filesystem::canonical("/proc/self/exe", ec);
+        if (!ec) exeDir = self.parent_path().string();
+    }
+    const auto launch = [](const std::string& exe) {
+        const std::string cmd =
+            "SDL_VIDEODRIVER=x11 \"" + exe + "\" >/dev/null 2>&1 &";
+        std::system(cmd.c_str());
+    };
+    const std::string gameExe = exeDir + "/game";
+    const std::string demoExe = exeDir + "/psx_demo";
+
     eng::EditorUi ui(r);
     ui.setSceneFiles(sceneFiles, activeScene);
     ui.setLoadSceneCallback([&](const eng::EditorUi::SceneFile& f) { loadScene(f); });
@@ -156,6 +173,15 @@ int main(int, char**)
             vpH = sz.h;
             r.resizeEditorViewport(vpW, vpH);
         }
+        // Launch buttons: open the actual game/demo in a separate window.
+        ImGui::Begin("Run");
+        ImGui::TextUnformatted("Launch a live build in its own window:");
+        if (ImGui::Button("Run Game"))
+            launch(gameExe);
+        ImGui::SameLine();
+        if (ImGui::Button("Run Demo"))
+            launch(demoExe);
+        ImGui::End();
     });
     loading.step("Ready", 1.0f);
     loading.present();
@@ -180,45 +206,37 @@ int main(int, char**)
             const glm::vec3 tu = glm::cross(rgt, f);
             return glm::quat_cast(glm::mat3(rgt, tu, -f));
         };
-        glm::vec3 camEye = cam.eye();
-        glm::quat camOrient = cam.orientation();
-        float camFov = 60.0f;
-        switch (sceneCam.mode) {
-        case SceneCamera::Mode::Editor:
-            if (hovered) {
-                if (io.MouseDown[1])
-                    cam.orbit(-io.MouseDelta.x * 0.008f, -io.MouseDelta.y * 0.008f);
-                if (io.MouseWheel != 0.0f)
-                    cam.dolly(io.MouseWheel);
-            }
-            camEye = cam.eye();
-            camOrient = cam.orientation();
-            break;
-        case SceneCamera::Mode::Orbit: {
+        // "Preview" looks THROUGH the scene's runtime camera; otherwise a
+        // free-fly editor eye inspects the scene and the runtime camera is drawn
+        // as a gizmo. Editor-mode scenes have no distinct runtime camera.
+        const bool preview = ui.previewCamera();
+        const bool runInput = hovered && preview; // runtime cam takes input only in preview
+
+        // ---- runtime camera pose (fps walk / demo orbit) -------------------
+        glm::vec3 rtEye = fpsPos;
+        glm::quat rtOrient(1, 0, 0, 0);
+        float rtFov = sceneCam.fovDeg;
+        if (sceneCam.mode == SceneCamera::Mode::Orbit) {
             orbitTime += dt;
-            if (hovered && io.MouseWheel != 0.0f)
+            if (runInput && io.MouseWheel != 0.0f)
                 sceneCam.distance =
                     std::clamp(sceneCam.distance - io.MouseWheel * 0.4f, 1.0f, 60.0f);
             const float yaw = sceneCam.yaw + orbitTime * sceneCam.orbitSpeed;
             const float cp = std::cos(sceneCam.orbitPitch);
             const float sp = std::sin(sceneCam.orbitPitch);
-            camEye = sceneCam.target +
-                     sceneCam.distance * glm::vec3(cp * std::sin(yaw), sp, cp * std::cos(yaw));
-            camOrient = lookAt(camEye, sceneCam.target, up);
-            camFov = sceneCam.fovDeg;
-            break;
-        }
-        case SceneCamera::Mode::Fps: {
-            if (hovered && io.MouseDown[1]) {
+            rtEye = sceneCam.target +
+                    sceneCam.distance * glm::vec3(cp * std::sin(yaw), sp, cp * std::cos(yaw));
+            rtOrient = lookAt(rtEye, sceneCam.target, up);
+        } else if (sceneCam.mode == SceneCamera::Mode::Fps) {
+            if (runInput && io.MouseDown[1]) {
                 fpsYaw -= io.MouseDelta.x * 0.0032f;
-                fpsPitch = std::clamp(fpsPitch - io.MouseDelta.y * 0.0032f,
-                                      -1.5f, 1.5f);
+                fpsPitch = std::clamp(fpsPitch - io.MouseDelta.y * 0.0032f, -1.5f, 1.5f);
             }
-            camOrient = glm::angleAxis(fpsYaw, up) *
-                        glm::angleAxis(fpsPitch, glm::vec3(1, 0, 0));
-            const glm::vec3 fwd = camOrient * glm::vec3(0, 0, -1);
-            const glm::vec3 right = camOrient * glm::vec3(1, 0, 0);
-            if (hovered) {
+            rtOrient = glm::angleAxis(fpsYaw, up) *
+                       glm::angleAxis(fpsPitch, glm::vec3(1, 0, 0));
+            if (runInput) {
+                const glm::vec3 fwd = rtOrient * glm::vec3(0, 0, -1);
+                const glm::vec3 right = rtOrient * glm::vec3(1, 0, 0);
                 glm::vec3 move(0.0f);
                 if (ImGui::IsKeyDown(ImGuiKey_W)) move += fwd;
                 if (ImGui::IsKeyDown(ImGuiKey_S)) move -= fwd;
@@ -231,15 +249,70 @@ int main(int, char**)
                     fpsPos += glm::normalize(move) * sceneCam.moveSpeed * boost * dt;
                 }
             }
-            camEye = fpsPos;
-            camFov = sceneCam.fovDeg;
-            break;
+            rtEye = fpsPos;
         }
+
+        // ---- view camera ---------------------------------------------------
+        const bool freeFly = !preview || sceneCam.mode == SceneCamera::Mode::Editor;
+        glm::vec3 camEye;
+        glm::quat camOrient;
+        float camFov;
+        if (freeFly) {
+            // Free-fly editor eye (RMB orbit + wheel dolly). For Editor-mode
+            // scenes this IS the camera; for fps/orbit it inspects while the
+            // runtime camera shows as a gizmo.
+            if (hovered) {
+                if (io.MouseDown[1])
+                    cam.orbit(-io.MouseDelta.x * 0.008f, -io.MouseDelta.y * 0.008f);
+                if (io.MouseWheel != 0.0f)
+                    cam.dolly(io.MouseWheel);
+            }
+            camEye = cam.eye(); camOrient = cam.orientation(); camFov = 60.0f;
+        } else {
+            camEye = rtEye; camOrient = rtOrient; camFov = rtFov; // look through it
         }
         r.setEditorCameraPose(camEye, camOrient, camFov);
 
         // Selection AABB overlay: a ~1 m wire box at the selected node.
         std::vector<eng::Renderer::DebugLine> lines;
+        // Runtime-camera gizmo: a small sphere at the eye + FOV frustum lines,
+        // shown while inspecting (not while looking through the camera).
+        if (!preview && sceneCam.mode != SceneCamera::Mode::Editor) {
+            const glm::vec3 col(1.0f, 0.8f, 0.2f);
+            const glm::vec3 f = rtOrient * glm::vec3(0, 0, -1);
+            const glm::vec3 rgt = rtOrient * glm::vec3(1, 0, 0);
+            const glm::vec3 u2 = rtOrient * glm::vec3(0, 1, 0);
+            // Frustum: eye -> 4 far corners at 3 m, spanning the vertical FOV.
+            const float d = 3.0f;
+            const float aspect = vpH > 0 ? float(vpW) / float(vpH) : 1.7778f;
+            const float hh = std::tan(glm::radians(rtFov) * 0.5f) * d;
+            const float hw = hh * aspect;
+            const glm::vec3 c = rtEye + f * d;
+            const glm::vec3 tl = c + u2 * hh - rgt * hw;
+            const glm::vec3 tr = c + u2 * hh + rgt * hw;
+            const glm::vec3 bl = c - u2 * hh - rgt * hw;
+            const glm::vec3 br = c - u2 * hh + rgt * hw;
+            lines.push_back({rtEye, tl, col}); lines.push_back({rtEye, tr, col});
+            lines.push_back({rtEye, bl, col}); lines.push_back({rtEye, br, col});
+            lines.push_back({tl, tr, col}); lines.push_back({tr, br, col});
+            lines.push_back({br, bl, col}); lines.push_back({bl, tl, col});
+            // Sphere at the eye: three orthogonal wire circles, radius 0.28 m.
+            const float rad = 0.28f;
+            const int seg = 16;
+            for (int i = 0; i < seg; ++i) {
+                const float a0 = float(i) / seg * 6.2831853f;
+                const float a1 = float(i + 1) / seg * 6.2831853f;
+                const glm::vec3 xy0(std::cos(a0) * rad, std::sin(a0) * rad, 0);
+                const glm::vec3 xy1(std::cos(a1) * rad, std::sin(a1) * rad, 0);
+                const glm::vec3 xz0(std::cos(a0) * rad, 0, std::sin(a0) * rad);
+                const glm::vec3 xz1(std::cos(a1) * rad, 0, std::sin(a1) * rad);
+                const glm::vec3 yz0(0, std::cos(a0) * rad, std::sin(a0) * rad);
+                const glm::vec3 yz1(0, std::cos(a1) * rad, std::sin(a1) * rad);
+                lines.push_back({rtEye + xy0, rtEye + xy1, col});
+                lines.push_back({rtEye + xz0, rtEye + xz1, col});
+                lines.push_back({rtEye + yz0, rtEye + yz1, col});
+            }
+        }
         const eng::NodeHandle selNode = ui.selected();
         if (selNode.valid()) {
             eng::NodeInfo info;

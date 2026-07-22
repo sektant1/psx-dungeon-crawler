@@ -28,6 +28,7 @@ struct EditorUi::Impl {
     std::vector<SceneFile> sceneFiles;
     int activeScene = 0;
     LoadSceneFn loadScene;
+    bool preview = false;
 };
 
 EditorUi::EditorUi(Renderer& r) : mImpl(std::make_unique<Impl>(r)) {}
@@ -123,6 +124,9 @@ void EditorUi::draw(uint64_t texId)
             if (s.loadScene)
                 s.loadScene(s.sceneFiles[s.activeScene]);
         }
+        ImGui::SameLine();
+        if (ImGui::Button(s.preview ? "Stop (Editor Cam)" : "Preview Camera"))
+            s.preview = !s.preview;
         ImGui::Separator();
     }
     const ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -139,6 +143,7 @@ void EditorUi::draw(uint64_t texId)
 NodeHandle EditorUi::selected() const { return mImpl->sel.node; }
 bool EditorUi::viewportHovered() const { return mImpl->vpHovered; }
 EditorUi::Size EditorUi::viewportSize() const { return mImpl->vpSize; }
+bool EditorUi::previewCamera() const { return mImpl->preview; }
 
 void EditorUi::setSceneFiles(std::vector<SceneFile> files, int active)
 {
