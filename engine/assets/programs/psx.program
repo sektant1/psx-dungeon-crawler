@@ -100,6 +100,7 @@ fragment_program PSX_FS_Lit glsl
         param_named lightStepSoftness float 0.35
         param_named perPixelLighting float 1.0
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 
@@ -124,6 +125,7 @@ fragment_program PSX_FS_LitPerspective glsl
         param_named lightStepSoftness float 0.35
         param_named perPixelLighting float 1.0
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 
@@ -150,6 +152,7 @@ fragment_program PSX_FS_Dungeon glsl
         param_named lightStepSoftness float 0.35
         param_named perPixelLighting float 1.0
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 
@@ -164,6 +167,7 @@ fragment_program PSX_FS_Unlit glsl
         param_named_auto fogParams fog_params
         param_named_auto farClip far_clip_distance
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 
@@ -227,6 +231,7 @@ fragment_program PSX_FS_LitTransparent glsl
         param_named lightStepSoftness float 0.35
         param_named perPixelLighting float 1.0
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 
@@ -242,6 +247,7 @@ fragment_program PSX_FS_UnlitTransparent glsl
         param_named_auto fogParams fog_params
         param_named_auto farClip far_clip_distance
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 
@@ -267,6 +273,7 @@ fragment_program PSX_FS_LitAlphaScissor glsl
         param_named lightStepSoftness float 0.35
         param_named perPixelLighting float 1.0
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 
@@ -283,6 +290,7 @@ fragment_program PSX_FS_UnlitAlphaScissor glsl
         param_named_auto fogParams fog_params
         param_named_auto farClip far_clip_distance
         param_named fogDesatBoost float 0.0
+        param_named affineAmount float 0.0
     }
 }
 

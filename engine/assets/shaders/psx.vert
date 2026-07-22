@@ -30,6 +30,9 @@ noperspective out vec2 vUV;
 #else
 smooth out vec2 vUV;
 #endif
+// Runtime-blendable UV pair (psx.frag mixes them by affineAmount).
+smooth out vec2 vUVPersp;
+noperspective out vec2 vUVAffine;
 noperspective out vec4 vColour;
 noperspective out vec3 vLight;
 noperspective out vec3 vNormalVS;
@@ -57,6 +60,8 @@ vec4 get_snapped_pos(vec4 base_pos)
 void main()
 {
     vUV = uv0 * uvScale + uvOffset;
+    vUVPersp = vUV;
+    vUVAffine = vUV;
     vColour = colour;
 
     vec3 vsPos = (worldView * vertex).xyz;

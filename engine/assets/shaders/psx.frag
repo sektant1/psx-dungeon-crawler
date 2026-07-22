@@ -9,6 +9,9 @@ noperspective in vec2 vUV;
 #else
 smooth in vec2 vUV;
 #endif
+smooth in vec2 vUVPersp;
+noperspective in vec2 vUVAffine;
+uniform float affineAmount; // 0 = perspective, 1 = affine warp
 noperspective in vec4 vColour;
 noperspective in vec3 vLight;
 noperspective in vec3 vNormalVS;
@@ -72,7 +75,7 @@ void main()
 #endif
     vec2 texture_uv = vec2(n.x / 2.0 + 0.5, (-n.y) / 2.0 + 0.5);
 #else
-    vec2 texture_uv = vUV;
+    vec2 texture_uv = mix(vUVPersp, vUVAffine, affineAmount);
 #endif
 
     // vColour (glTF COLOR_0) is already linear, like in Godot;
