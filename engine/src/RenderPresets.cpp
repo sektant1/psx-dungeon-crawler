@@ -33,6 +33,7 @@ RenderPresetValues renderPresetValues(int preset)
         v.vignetteColor = {0.24f, 0.23f, 0.28f};
         v.ditherBanding = 0.040f;
         v.hardwareResolveStrength = 0.55f;
+        v.affineAmount = 0.85f; // signature PS1 texture swim on near geometry
         break;
     case 2: // PS2
         v.pixelSize = 1; v.perPixel = true;
@@ -62,7 +63,10 @@ RenderPresetValues renderPresetValues(int preset)
         v.gradeSaturation = 0.96f; v.gradeTintStrength = 0.02f;
         v.gradeBlackLift = 0.040f; v.vignetteStrength = 0.025f;
         v.colDepth = 31.0f; v.ditherBanding = 0.004f;
-        v.hardwareResolveStrength = 0.78f;
+        v.hardwareResolveStrength = 0.92f; // N64: soft bilinear/AA blur
+        v.affineAmount = 0.45f; // mild warp, softer than PS1
+        v.gradeShadow = {0.14f, 0.12f, 0.10f}; // warm murk vs PS1's cool
+        v.gradeMid = {0.70f, 0.64f, 0.56f};
         break;
     case 5: // pixel-3d
         v.pixelSize = 3; v.perPixel = true;
@@ -93,6 +97,7 @@ RenderPresetValues renderPresetValues(int preset)
         v.bloomThreshold = 0.80f; v.bloomIntensity = 0.40f;
         v.ditherBanding = 0.018f;
         v.hardwareResolveStrength = 0.45f;
+        v.affineAmount = 0.30f; // subtle warp: retro hint, not full swim
         break;
     default: break;
     }
