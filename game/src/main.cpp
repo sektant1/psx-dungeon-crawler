@@ -693,24 +693,53 @@ int main(int, char**)
         staffModel.setVisible(rr, weapon == WStaff);
         torchModel.setVisible(rr, weapon == WTorch);
     };
+    // Re-attach the carried light and the three viewmodels to the player's
+    // fresh head node after a respawn/rebuild (the old head node is destroyed
+    // by clearScene), then show only the active weapon. Called from every
+    // path that rebuilds the level under the player.
+    const auto attachPlayerLoadout = [&] {
+        eng::LightDesc carry;
+        carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
+                                 std::pow(0.58f, 2.2f)) * 0.95f;
+        carry.range = 7.0f;
+        r.attachLight(player.headNode(), carry);
+        viewModel.init(r, player.headNode(), assets + "/meshes/props");
+        staffModel.initStaff(r, player.headNode(),
+                             assets + "/meshes/crystal_spire1.obj");
+        torchModel.initTorch(r, player.headNode());
+        applyWeaponVis(r);
+    };
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
+
+    // Destroy the lobby's dynamic prop bodies (+ their ground slab) before a
+    // clearScene wipes the render nodes they drive. Called on every level
+    // transition and at shutdown.
+    const auto teardownDynamicProps = [&] {
+        if (!propsAlive)
+            return;
+        for (auto& dp : dynamicProps)
+            physics.removeBody(dp.body);
+        dynamicProps.clear();
+        propsAlive = false;
+        if (propGroundBody.valid()) {
+            physics.removeBody(propGroundBody);
+            propGroundBody = {};
+        }
+    };
+    const auto teardownDummy = [&] {
+        if (!dummyAlive)
+            return;
+        dummy.clear(physics, r);
+        dummyAlive = false;
+    };
 
     // Wipe the scene, build the level at `depth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     const auto enterLevel = [&](bool atExit) {
-        // Destroy dynamic prop bodies before clearScene wipes their nodes.
-        if (propsAlive) {
-            for (auto& dp : dynamicProps)
-                physics.removeBody(dp.body);
-            dynamicProps.clear();
-            propsAlive = false;
-            if (propGroundBody.valid()) { physics.removeBody(propGroundBody); propGroundBody = {}; }
-        }
-        if (dummyAlive) {
-            dummy.clear(physics, r);
-            dummyAlive = false;
-        }
+        // Destroy dynamic prop + dummy bodies before clearScene wipes their nodes.
+        teardownDynamicProps();
+        teardownDummy();
         bool loaded = false;
         if (depth == 0) {
             LevelDocument lobby;
@@ -741,17 +770,7 @@ int main(int, char**)
             player.setViewAngles(portalYaw);
             player.present(r);
         }
-        // Carried light rides the fresh head node (the old one was destroyed).
-        eng::LightDesc carry;
-        carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
-                                 std::pow(0.58f, 2.2f)) * 0.95f;
-        carry.range = 7.0f;
-        r.attachLight(player.headNode(), carry);
-        viewModel.init(r, player.headNode(), assets + "/meshes/props");
-        staffModel.initStaff(r, player.headNode(),
-                             assets + "/meshes/crystal_spire1.obj");
-        torchModel.initTorch(r, player.headNode());
-        applyWeaponVis(r);
+        attachPlayerLoadout();
         engine.input().setMouseGrab(!portalPreview);
     };
     loading.step("Building level", 0.42f);
@@ -934,9 +953,9 @@ int main(int, char**)
     });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
-    engine.debugUi().addWindow([&level, &player, &viewModel, &staffModel, &torchModel, &weapon,
-                                &editor, &r, &physics,
-                                &assets, &depth, speed, sens, &engine] {
+    engine.debugUi().addWindow([&level, &player, &editor, &r, &physics,
+                                &assets, &depth, speed, sens, &engine,
+                                &attachPlayerLoadout] {
         if (!editor.draw(level.dungeon(), player.eyePosition()))
             return;
         const gen::Layout layout = editor.takeLayout();
@@ -944,18 +963,7 @@ int main(int, char**)
             return;
         player.init(r, physics, level.spawnPosition(), speed, sens,
                     glm::vec3(-1000.0f), glm::vec3(1000.0f));
-        eng::LightDesc carry;
-        carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
-                                 std::pow(0.58f, 2.2f)) * 0.95f;
-        carry.range = 7.0f;
-        r.attachLight(player.headNode(), carry);
-        viewModel.init(r, player.headNode(), assets + "/meshes/props");
-        staffModel.initStaff(r, player.headNode(),
-                             assets + "/meshes/crystal_spire1.obj");
-        torchModel.initTorch(r, player.headNode());
-        viewModel.setVisible(r, weapon == 0);
-        staffModel.setVisible(r, weapon == 1);
-        torchModel.setVisible(r, weapon == 2);
+        attachPlayerLoadout();
         engine.input().setMouseGrab(false);
     });
 
@@ -1094,17 +1102,8 @@ int main(int, char**)
         engine.renderFrame(dt);
     }
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
-    if (propsAlive) {
-        for (auto& dp : dynamicProps)
-            physics.removeBody(dp.body);
-        dynamicProps.clear();
-        propsAlive = false;
-        if (propGroundBody.valid()) { physics.removeBody(propGroundBody); propGroundBody = {}; }
-    }
-    if (dummyAlive) {
-        dummy.clear(physics, r);
-        dummyAlive = false;
-    }
+    teardownDynamicProps();
+    teardownDummy();
     level.clearPhysics();
     projectiles.clear(physics, r);
     spells.clear(physics, r);

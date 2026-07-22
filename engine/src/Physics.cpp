@@ -156,6 +156,14 @@ static JPH::ObjectLayer mapLayer(BodyLayer l) {
     return phys::Layers::PROP;
 }
 
+// Narrow-phase query filter: collide only with one object layer. Shared by
+// rayCast/shapeCast/overlap (was re-declared inline in each).
+struct SingleLayerFilter final : public JPH::ObjectLayerFilter {
+    JPH::ObjectLayer want;
+    explicit SingleLayerFilter(JPH::ObjectLayer w) : want(w) {}
+    bool ShouldCollide(JPH::ObjectLayer l) const override { return l == want; }
+};
+
 static JPH::ShapeRefC makeShape(const BodyDesc& d) {
     switch (d.kind) {
         case ShapeKind::Box:
@@ -168,6 +176,20 @@ static JPH::ShapeRefC makeShape(const BodyDesc& d) {
             return new CylinderShape(d.halfHeight, d.radius);
     }
     return new BoxShape(Vec3(d.halfExtents.x, d.halfExtents.y, d.halfExtents.z));
+}
+
+// Allocate a body-table slot: reuse the free list or grow. Shared by
+// createBody/createMeshBody (identical push-back logic in both).
+static uint32_t allocBodySlot(std::vector<BodyRec>& bodies,
+                              std::vector<uint32_t>& freeList) {
+    if (!freeList.empty()) {
+        uint32_t slot = freeList.back();
+        freeList.pop_back();
+        return slot;
+    }
+    uint32_t slot = uint32_t(bodies.size());
+    bodies.push_back(BodyRec{});
+    return slot;
 }
 
 // ---- lifecycle ----
@@ -297,14 +319,7 @@ BodyHandle Physics::createBody(const BodyDesc& desc) {
     if (bid.IsInvalid()) return {};
 
     // allocate a slot (reuse free list or push_back)
-    uint32_t slot;
-    if (!mImpl->freeList.empty()) {
-        slot = mImpl->freeList.back();
-        mImpl->freeList.pop_back();
-    } else {
-        slot = uint32_t(mImpl->bodies.size());
-        mImpl->bodies.push_back(BodyRec{});
-    }
+    uint32_t slot = allocBodySlot(mImpl->bodies, mImpl->freeList);
 
     BodyRec& rec  = mImpl->bodies[slot];
     rec.id        = bid;
@@ -401,14 +416,7 @@ BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
     BodyID bid = mImpl->system.GetBodyInterface().CreateAndAddBody(bcs, EActivation::DontActivate);
     if (bid.IsInvalid()) return {};
 
-    uint32_t slot;
-    if (!mImpl->freeList.empty()) {
-        slot = mImpl->freeList.back();
-        mImpl->freeList.pop_back();
-    } else {
-        slot = uint32_t(mImpl->bodies.size());
-        mImpl->bodies.push_back(BodyRec{});
-    }
+    uint32_t slot = allocBodySlot(mImpl->bodies, mImpl->freeList);
 
     BodyRec& rec = mImpl->bodies[slot];
     rec.id       = bid;
@@ -435,13 +443,7 @@ bool Physics::rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit& outHit,
                   Vec3(normDir.x * dist, normDir.y * dist, normDir.z * dist) };
     RayCastResult result;
 
-    // Layer filter: only collide with the requested layer
-    struct LayerFilter final : public ObjectLayerFilter {
-        ObjectLayer want;
-        bool ShouldCollide(ObjectLayer l) const override { return l == want; }
-    } layerFilter;
-    layerFilter.want = mapLayer(mask);
-
+    SingleLayerFilter layerFilter(mapLayer(mask));
     bool hit = mImpl->system.GetNarrowPhaseQuery().CastRay(ray, result, {}, layerFilter);
     if (!hit) return false;
 
@@ -614,12 +616,7 @@ int Physics::shapeCast(const BodyDesc& shape, glm::vec3 from, glm::vec3 to,
 
     JPH::ShapeRefC shapeRef = makeShape(shape);
 
-    // Layer filter: only collide with the requested layer.
-    struct LayerFilter final : public JPH::ObjectLayerFilter {
-        JPH::ObjectLayer want;
-        bool ShouldCollide(JPH::ObjectLayer l) const override { return l == want; }
-    } layerFilter;
-    layerFilter.want = mapLayer(mask);
+    SingleLayerFilter layerFilter(mapLayer(mask));
 
     JPH::Vec3 dir(to.x - from.x, to.y - from.y, to.z - from.z);
     JPH::RShapeCast cast(
@@ -663,11 +660,7 @@ int Physics::overlap(const BodyDesc& shape, glm::vec3 at,
 
     JPH::ShapeRefC shapeRef = makeShape(shape);
 
-    struct LayerFilter final : public JPH::ObjectLayerFilter {
-        JPH::ObjectLayer want;
-        bool ShouldCollide(JPH::ObjectLayer l) const override { return l == want; }
-    } layerFilter;
-    layerFilter.want = mapLayer(mask);
+    SingleLayerFilter layerFilter(mapLayer(mask));
 
     JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
     mImpl->system.GetNarrowPhaseQuery().CollideShape(
@@ -728,8 +721,6 @@ static void pushBoxEdges(std::vector<Physics::DebugLine>& out,
 void Physics::debugDraw(std::vector<DebugLine>& out) const
 {
     if (!mImpl->inited) return;
-
-    BodyInterface& bi = mImpl->system.GetBodyInterface();
 
     for (const auto& rec : mImpl->bodies) {
         if (!rec.alive) continue;
