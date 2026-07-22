@@ -51,8 +51,13 @@ void ViewModel::init(eng::Renderer& r, eng::NodeHandle headNode,
                      const std::string& propsDir,
                      const WeaponViewmodelPose& pose)
 {
+    WeaponViewmodelPose swordPose = pose;
+    // Legacy sword exporter placed the origin above the grip centre. Keep
+    // that asset correction here; new weapons use a grip-at-origin contract.
+    if (glm::dot(swordPose.gripPivot, swordPose.gripPivot) < 0.000001f)
+        swordPose.gripPivot = {0.0f, -0.65f, 0.0f};
     initWeapon(r, headNode, propsDir + "/prop_sword.obj",
-               "Game/ViewModelWeapon", pose);
+               "Game/ViewModelWeapon", swordPose);
 }
 
 void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,

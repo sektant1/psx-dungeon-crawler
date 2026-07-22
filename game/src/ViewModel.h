@@ -14,14 +14,14 @@ struct WeaponViewmodelPose {
     glm::vec3 rotationDegrees{-8.0f, 12.0f, 4.0f}; // pitch, yaw, roll
     float scale = 0.035f;
 
-    // Authored mesh-space point held by the hand. The sword grip spans
-    // roughly y[-2.3, 1.0], hence its centre at -0.65. Future weapon assets
-    // set this to their own grip/socket point and inherit the same idle pose.
-    glm::vec3 gripPivot{0.0f, -0.65f, 0.0f};
+    // New weapon assets should be authored with their hand/grip at the origin.
+    // Legacy imports can override this mesh-space point without changing the
+    // universal camera socket or animation.
+    glm::vec3 gripPivot{0.0f};
 
     // Axial mesh correction around the authored grip/blade +Y axis. The
-    // imported sword otherwise presents its broad face forward, leaving its
-    // cutting edges pointing screen-left/right instead of forward/backward.
+    // This is the default convention for every future upright melee weapon:
+    // its narrow edge faces the camera and cutting edges point forward/back.
     float gripAxisTwistDegrees = 90.0f;
 };
 
