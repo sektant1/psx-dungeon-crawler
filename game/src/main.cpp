@@ -627,7 +627,7 @@ int main(int, char**)
     const float sens =
         float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
 
-    bool showColliders = false;
+    bool showColliders = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
 
     eng::Physics physics;
     physics.init();
@@ -1016,15 +1016,18 @@ int main(int, char**)
                              in.isMouseDown(eng::MouseButton::Right));
         staffModel.update(r, dt, didCast, false);
 
-        // Physics collider wireframe overlay
+        // Physics collider wireframe overlay — neon-pink collision view.
         if (showColliders) {
+            // Hot neon pink (~#FF14C8), pushed slightly >1 so it stays vivid
+            // through tonemapping/dither and reads as an emissive outline.
+            const glm::vec3 kNeonPink(1.30f, 0.08f, 0.78f);
             static std::vector<eng::Physics::DebugLine> pl;
             pl.clear();
             physics.debugDraw(pl);
             static std::vector<eng::Renderer::DebugLine> dl;
             dl.clear();
             for (const auto& l : pl)
-                dl.push_back({l.a, l.b, l.colour});
+                dl.push_back({l.a, l.b, kNeonPink});
             r.setDebugLines(dl);
         } else {
             r.setDebugLines({});
