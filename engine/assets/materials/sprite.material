@@ -44,3 +44,22 @@ material Sprite/Additive
         }
     } }
 }
+
+// World-space UI: billboarded like other sprites, but never hidden by nearby
+// mesh depth. Kept opaque because the PSX compositor has a second MRT whose
+// depth/normal reconstruction must not be alpha-blended.
+material Sprite/Overlay
+{
+    technique { pass {
+        cull_hardware none
+        depth_check off
+        depth_write off
+        vertex_program_ref Sprite/VS { }
+        fragment_program_ref Sprite/FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

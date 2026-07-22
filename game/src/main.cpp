@@ -13,6 +13,7 @@
 #include "Melee.h"
 #include "Dummy.h"
 #include "Targeting.h"
+#include "ViewModel.h"
 
 #include <DemoScene.h>
 
@@ -90,6 +91,15 @@ static void applyPalette(eng::Renderer& r, const DemoScene& scene)
     r.setBloomParams(0.72f, 0.72f);
 }
 
+static eng::TextSpriteStyle showcaseLabelStyle(float worldHeight,
+                                                glm::vec4 accent)
+{
+    eng::TextSpriteStyle style;
+    style.worldHeight = worldHeight;
+    style.accentColour = accent;
+    return style;
+}
+
 // Everything a built level owns that the main loop animates or references.
 // Swapped atomically on a transition (clearScene + buildLevel).
 class LiveLevel {
@@ -101,7 +111,6 @@ public:
     void update(eng::Renderer& r, float animationTime);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
     void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
-    std::string showcasePrompt(glm::vec3 eye, glm::vec3 forward) const;
     glm::vec3 spawnPosition() const { return spawn; }
     glm::vec3 exitPosition() const { return exit; }
     bool torchIsLit(int index) const { return map.torchLit(index); }
@@ -464,11 +473,17 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         down.yawDegrees = lv.map.exitYawDegrees();
         lv.downPortal = createPortal(r, lv.exit, down);
         if (depth == 0) {
-            const glm::vec3 local{0.0f, 2.68f, 2.32f};
+            const glm::vec3 local{0.0f, 2.82f, 0.10f};
             const eng::NodeHandle label = r.createNode(
                 lv.downPortal.root, local);
-            eng::TextSpriteStyle style;
-            style.worldHeight = 0.44f;
+            eng::TextSpriteStyle style = showcaseLabelStyle(
+                0.48f, {0.22f, 0.82f, 0.18f, 1.0f});
+            // Deliberately force a two-line plaque: it remains readable at
+            // the low-resolution presentation target without spanning the
+            // full arch width.
+            style.maxWidthPixels = 72;
+            style.colourRules.push_back(
+                {"PORTAL", {0.48f, 0.92f, 0.30f, 1.0f}});
             const eng::SpriteHandle sprite =
                 r.attachTextSprite(label, "DUNGEON PORTAL", style);
             r.setSpriteVisible(sprite, false);
@@ -497,8 +512,11 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             const glm::vec3 anchor = exhibit.position + glm::vec3(
                 0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f);
             const eng::NodeHandle labelNode = r.createNode(eng::kRootNode, anchor);
-            eng::TextSpriteStyle style;
-            style.worldHeight = 0.36f;
+            eng::TextSpriteStyle style = showcaseLabelStyle(
+                0.36f, exhibit.labelAccent);
+            if (!exhibit.labelHighlightPattern.empty())
+                style.colourRules.push_back(
+                    {exhibit.labelHighlightPattern, exhibit.labelHighlight});
             const eng::SpriteHandle sprite =
                 r.attachTextSprite(labelNode, exhibit.label, style);
             r.setSpriteVisible(sprite, false);
@@ -549,24 +567,6 @@ void LiveLevel::update(eng::Renderer& r, float animationTime)
     }
 }
 
-
-std::string LiveLevel::showcasePrompt(glm::vec3 eye, glm::vec3 forward) const
-{
-    const ShowcaseExhibit* best = nullptr;
-    float bestDistance = 5.0f;
-    for (const ShowcaseExhibit& e : exhibits) {
-        glm::vec3 target = e.position;
-        target.y = std::max(0.5f, e.position.y);
-        const glm::vec3 offset = target - eye;
-        const float distance = glm::length(offset);
-        if (distance >= bestDistance || distance < 0.01f ||
-            glm::dot(offset / distance, forward) < 0.88f)
-            continue;
-        best = &e;
-        bestDistance = distance;
-    }
-    return best ? best->label : std::string();
-}
 
 void LiveLevel::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos)
 {
@@ -669,6 +669,7 @@ int main(int, char**)
 
     LiveLevel level;
     FpsController player;
+    ViewModel viewModel;
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
@@ -709,7 +710,7 @@ int main(int, char**)
         const glm::vec3 portalFront(std::sin(portalYaw), 0.0f,
                                     std::cos(portalYaw));
         const glm::vec3 p = portalPreview
-            ? level.exitPosition() + portalFront * 6.0f
+            ? level.exitPosition() + portalFront * 4.0f
             : (atExit ? level.exitPosition() : level.spawnPosition());
         player.init(r, physics, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
         if (portalPreview) {
@@ -722,6 +723,7 @@ int main(int, char**)
                                  std::pow(0.58f, 2.2f)) * 0.95f;
         carry.range = 7.0f;
         r.attachLight(player.headNode(), carry);
+        viewModel.init(r, player.headNode(), assets + "/meshes/props");
         engine.input().setMouseGrab(!portalPreview);
     };
     enterLevel(false); // depth 0, spawn at entry
@@ -852,7 +854,7 @@ int main(int, char**)
     });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
-    engine.debugUi().addWindow([&level, &player, &editor, &r, &physics,
+    engine.debugUi().addWindow([&level, &player, &viewModel, &editor, &r, &physics,
                                 &assets, &depth, speed, sens, &engine] {
         if (!editor.draw(level.dungeon(), player.eyePosition()))
             return;
@@ -866,6 +868,7 @@ int main(int, char**)
                                  std::pow(0.58f, 2.2f)) * 0.95f;
         carry.range = 7.0f;
         r.attachLight(player.headNode(), carry);
+        viewModel.init(r, player.headNode(), assets + "/meshes/props");
         engine.input().setMouseGrab(false);
     });
 
@@ -927,8 +930,7 @@ int main(int, char**)
         const GameplayTarget* target = aimedTarget(
             targets, player.eyePosition(), player.forward());
         if (!target) {
-            engine.debugUi().setHudPrompt(level.showcasePrompt(
-                player.eyePosition(), player.forward()));
+            engine.debugUi().setHudPrompt({});
         } else if (target->kind == TargetKind::Torch) {
             engine.debugUi().setHudPrompt(level.torchIsLit(target->id)
                                               ? "Press [E] to snuff the torch"
@@ -953,14 +955,20 @@ int main(int, char**)
         }
 
         // Projectile firing — only when mouse is grabbed (not in debug UI).
+        bool swordAttack = false;
         if (in.mouseGrabbed()) {
             if (in.wasPressed("fire_arrow"))
                 projectiles.fireArrow(physics, r, player.eyePosition(), player.forward());
             if (in.wasPressed("cast_spell"))
                 projectiles.fireBolt(physics, r, player.eyePosition(), player.forward());
-            if (in.wasMouseClicked())
+            if (in.wasMouseClicked()) {
                 melee.startSwing();
+                swordAttack = true;
+            }
         }
+        viewModel.update(r, dt, swordAttack,
+                         in.mouseGrabbed() &&
+                             in.isMouseDown(eng::MouseButton::Right));
 
         // Physics collider wireframe overlay
         if (showColliders) {

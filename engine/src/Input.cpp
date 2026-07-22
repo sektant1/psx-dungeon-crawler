@@ -47,7 +47,32 @@ bool Input::wasPressed(const std::string& action) const
     return false;
 }
 
-bool Input::wasMouseClicked() const { return mImpl->mouseClicked; }
+namespace {
+Uint8 toSdlButton(MouseButton button)
+{
+    switch (button) {
+    case MouseButton::Left: return SDL_BUTTON_LEFT;
+    case MouseButton::Right: return SDL_BUTTON_RIGHT;
+    case MouseButton::Middle: return SDL_BUTTON_MIDDLE;
+    }
+    return SDL_BUTTON_LEFT;
+}
+} // namespace
+
+bool Input::wasMouseClicked() const
+{
+    return wasMousePressed(MouseButton::Left);
+}
+
+bool Input::isMouseDown(MouseButton button) const
+{
+    return mImpl->mouseDown.count(toSdlButton(button)) != 0;
+}
+
+bool Input::wasMousePressed(MouseButton button) const
+{
+    return mImpl->mousePressed.count(toSdlButton(button)) != 0;
+}
 glm::vec2 Input::mouseDelta() const { return mImpl->delta; }
 
 void Input::setMouseGrab(bool grab)

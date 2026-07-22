@@ -14,13 +14,14 @@ struct Input::Impl {
     std::map<std::string, std::vector<SDL_Keycode>> bindings;
     std::set<SDL_Keycode> down;
     std::set<SDL_Keycode> pressed;
-    bool mouseClicked = false;
+    std::set<Uint8> mouseDown;
+    std::set<Uint8> mousePressed;
     glm::vec2 delta{0.0f};
 
     void beginTick()
     {
         pressed.clear();
-        mouseClicked = false;
+        mousePressed.clear();
         delta = glm::vec2(0.0f);
     }
 
@@ -40,8 +41,11 @@ struct Input::Impl {
             delta += glm::vec2(float(e.motion.xrel), float(e.motion.yrel));
             break;
         case SDL_MOUSEBUTTONDOWN:
-            if (e.button.button == SDL_BUTTON_LEFT)
-                mouseClicked = true;
+            mouseDown.insert(e.button.button);
+            mousePressed.insert(e.button.button);
+            break;
+        case SDL_MOUSEBUTTONUP:
+            mouseDown.erase(e.button.button);
             break;
         }
     }

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <regex>
 #include <unordered_map>
 #include <vector>
 
@@ -205,7 +206,8 @@ void Renderer::setNodeVisible(NodeHandle node, bool show)
 }
 
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
-                          const std::string& materialName, bool castShadows)
+                          const std::string& materialName, bool castShadows,
+                          bool renderOnTop)
 {
     if (!Ogre::MaterialManager::getSingleton().getByName(materialName))
         log::fatal("Renderer: unknown material '%s'", materialName.c_str());
@@ -213,6 +215,8 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
         mImpl->core.sceneMgr()->createEntity(mImpl->mesh(mesh, "attachMesh"));
     e->setMaterialName(materialName);
     e->setCastShadows(castShadows);
+    if (renderOnTop)
+        e->setRenderQueueGroup(Ogre::RENDER_QUEUE_8);
     if (mImpl->env.wireframe) { // debug view active: join it immediately
         for (Ogre::SubEntity* se : e->getSubEntities()) {
             mImpl->savedMaterials[se] = materialName;
@@ -226,6 +230,7 @@ std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
 {
     const char* base = clip.blend == SpriteBlend::Alpha ? "Sprite/Alpha"
                      : clip.blend == SpriteBlend::Additive ? "Sprite/Additive"
+                     : clip.blend == SpriteBlend::Overlay ? "Sprite/Overlay"
                                                           : "Sprite/Opaque";
     Ogre::MaterialPtr source = Ogre::MaterialManager::getSingleton().getByName(base);
     if (!source)
@@ -287,12 +292,82 @@ SpriteHandle Renderer::attachTextSprite(NodeHandle node, const std::string& text
     int atlasWidth = 0, atlasHeight = 0;
     atlas->GetTexDataAsRGBA32(&atlasPixels, &atlasWidth, &atlasHeight);
     const int padding = std::max(2, style.paddingPixels);
-    float advance = 0.0f;
-    for (unsigned char c : text)
-        advance += font->FindGlyph(c < 128 ? c : '?')->AdvanceX;
-    const int width = std::max(8, int(std::ceil(advance)) + padding * 2);
-    const int height = std::max(8, int(std::ceil(font->FontSize)) + padding * 2);
+    const auto textWidth = [&](const std::string& value) {
+        float width = 0.0f;
+        for (unsigned char c : value)
+            width += font->FindGlyph(c)->AdvanceX;
+        return width;
+    };
+    // The current UI font is ASCII. Collapse UTF-8 punctuation to one dash
+    // instead of producing one '?' for every continuation byte.
+    std::string printable;
+    for (size_t i = 0; i < text.size();) {
+        const unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c < 128) {
+            printable.push_back(char(c));
+            ++i;
+        } else {
+            printable.push_back('-');
+            ++i;
+            while (i < text.size() &&
+                   (static_cast<unsigned char>(text[i]) & 0xc0) == 0x80)
+                ++i;
+        }
+    }
+    std::vector<std::string> lines(1);
+    std::string word;
+    const auto appendWord = [&]() {
+        if (word.empty()) return;
+        std::string candidate = lines.back().empty()
+            ? word : lines.back() + " " + word;
+        if (!lines.back().empty() &&
+            textWidth(candidate) > float(std::max(32, style.maxWidthPixels))) {
+            lines.push_back(word);
+        } else {
+            lines.back() = std::move(candidate);
+        }
+        word.clear();
+    };
+    for (char c : printable) {
+        if (c == '\n') {
+            appendWord();
+            if (!lines.back().empty()) lines.emplace_back();
+        } else if (c == ' ' || c == '\t') {
+            appendWord();
+        } else {
+            word.push_back(c);
+        }
+    }
+    appendWord();
+    if (lines.back().empty() && lines.size() > 1) lines.pop_back();
+    std::vector<float> lineWidths;
+    float widest = 0.0f;
+    for (const std::string& line : lines) {
+        const float lineWidth = textWidth(line);
+        lineWidths.push_back(lineWidth);
+        widest = std::max(widest, lineWidth);
+    }
+    const int lineHeight = int(std::ceil(font->FontSize));
+    const int lineSpacing = std::max(0, style.lineSpacingPixels);
+    const int accentWidth = std::max(0, style.accentWidthPixels);
+    const int accentGutter = accentWidth > 0 ? accentWidth + 2 : 0;
+    const int width = std::max(
+        8, int(std::ceil(widest)) + padding * 2 + accentGutter);
+    const int height = std::max(
+        8, lineHeight * int(lines.size()) +
+               lineSpacing * std::max(0, int(lines.size()) - 1) + padding * 2);
     std::vector<unsigned char> pixels(size_t(width * height * 4), 0);
+    std::vector<std::pair<std::regex, glm::vec4>> colourRules;
+    colourRules.reserve(style.colourRules.size());
+    for (const auto& rule : style.colourRules) {
+        try {
+            colourRules.emplace_back(
+                std::regex(rule.pattern, std::regex::icase), rule.colour);
+        } catch (const std::regex_error&) {
+            log::error("TextSprite: invalid colour regex '%s'",
+                       rule.pattern.c_str());
+        }
+    }
     const auto byte = [](float v) {
         return static_cast<unsigned char>(glm::clamp(v, 0.0f, 1.0f) * 255.0f);
     };
@@ -302,29 +377,61 @@ SpriteHandle Renderer::attachTextSprite(NodeHandle node, const std::string& text
         pixels[i + 0] = byte(colour.r); pixels[i + 1] = byte(colour.g);
         pixels[i + 2] = byte(colour.b); pixels[i + 3] = byte(colour.a);
     };
+    // Overlay plaques are intentionally opaque, so antialiased glyph alpha
+    // must be resolved into the plaque here rather than left for GPU blend.
+    const auto blendText = [&](int x, int y, glm::vec4 colour, float coverage) {
+        if (x < 0 || y < 0 || x >= width || y >= height) return;
+        const size_t i = size_t((y * width + x) * 4);
+        const float a = glm::clamp(coverage * colour.a, 0.0f, 1.0f);
+        pixels[i + 0] = byte(glm::mix(float(pixels[i + 0]) / 255.0f, colour.r, a));
+        pixels[i + 1] = byte(glm::mix(float(pixels[i + 1]) / 255.0f, colour.g, a));
+        pixels[i + 2] = byte(glm::mix(float(pixels[i + 2]) / 255.0f, colour.b, a));
+        pixels[i + 3] = 255;
+    };
     for (int y = 0; y < height; ++y)
         for (int x = 0; x < width; ++x) {
             const bool border = x < 2 || y < 2 || x >= width - 2 || y >= height - 2;
             put(x, y, border ? style.borderColour : style.backgroundColour);
         }
-    float pen = float(padding);
-    for (unsigned char c : text) {
-        const ImFontGlyph* glyph = font->FindGlyph(c < 128 ? c : '?');
+    for (int y = 2; y < height - 2; ++y)
+        for (int x = 2; x < 2 + accentWidth; ++x)
+            put(x, y, style.accentColour);
+    for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
+      float pen = float(accentGutter) +
+          (float(width - accentGutter) - lineWidths[lineIndex]) * 0.5f;
+      const float lineTop = float(padding + int(lineIndex) *
+                                  (lineHeight + lineSpacing));
+      const std::string& line = lines[lineIndex];
+      for (size_t charIndex = 0; charIndex < line.size(); ++charIndex) {
+        const unsigned char c = static_cast<unsigned char>(line[charIndex]);
+        const ImFontGlyph* glyph = font->FindGlyph(c);
+        glm::vec4 colour = style.textColour;
+        if (c != ' ') {
+            size_t begin = charIndex, end = charIndex + 1;
+            while (begin > 0 && line[begin - 1] != ' ') --begin;
+            while (end < line.size() && line[end] != ' ') ++end;
+            const std::string currentWord = line.substr(begin, end - begin);
+            for (const auto& rule : colourRules)
+                if (std::regex_search(currentWord, rule.first)) {
+                    colour = rule.second;
+                    break;
+                }
+        }
         const int sx0 = int(std::round(glyph->U0 * atlasWidth));
         const int sy0 = int(std::round(glyph->V0 * atlasHeight));
         const int sx1 = int(std::round(glyph->U1 * atlasWidth));
         const int sy1 = int(std::round(glyph->V1 * atlasHeight));
         const int dx0 = int(std::round(pen + glyph->X0));
-        const int dy0 = int(std::round(float(padding) + glyph->Y0));
+        const int dy0 = int(std::round(lineTop + glyph->Y0));
         for (int sy = sy0; sy < sy1; ++sy)
             for (int sx = sx0; sx < sx1; ++sx) {
                 const unsigned char alpha = atlasPixels[(sy * atlasWidth + sx) * 4 + 3];
                 if (!alpha) continue;
-                glm::vec4 colour = style.textColour;
-                colour.a *= float(alpha) / 255.0f;
-                put(dx0 + sx - sx0, dy0 + sy - sy0, colour);
+                blendText(dx0 + sx - sx0, dy0 + sy - sy0, colour,
+                          float(alpha) / 255.0f);
             }
         pen += glyph->AdvanceX;
+      }
     }
 
     const std::string textureName = mImpl->nextName("text_sprite_texture");
@@ -339,13 +446,19 @@ SpriteHandle Renderer::attachTextSprite(NodeHandle node, const std::string& text
 
     SpriteClip clip;
     clip.texture = textureName;
-    clip.worldSize = {style.worldHeight * float(width) / float(height),
-                      style.worldHeight};
+    const float pixelToWorld = style.worldHeight /
+        float(lineHeight + padding * 2);
+    clip.worldSize = {float(width) * pixelToWorld,
+                      float(height) * pixelToWorld};
     // Text plaques are deliberately opaque: the PSX compositor consumes a
     // second normal/depth target, and blending that target makes translucent
     // billboards invalidate the full-screen reconstruction pass.
-    clip.blend = SpriteBlend::Opaque;
-    return attachSprite(node, clip);
+    clip.blend = SpriteBlend::Overlay;
+    const SpriteHandle sprite = attachSprite(node, clip);
+    // Queue 80 is after ordinary scene geometry but remains inside the PSX
+    // compositor's scene pass (queue 99/overlay is intentionally excluded).
+    mImpl->sprites[sprite.id - 1]->setRenderQueueGroup(Ogre::RENDER_QUEUE_8);
+    return sprite;
 }
 
 void Renderer::setSpriteVisible(SpriteHandle sprite, bool visible)

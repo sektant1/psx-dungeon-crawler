@@ -84,6 +84,7 @@ add_executable(game
     game/src/SceneFactory.cpp
     game/src/Targeting.cpp
     game/src/Dummy.cpp
+    game/src/ViewModel.cpp
 )
 target_include_directories(game PRIVATE third_party)
 target_link_libraries(game PRIVATE demo_scene)

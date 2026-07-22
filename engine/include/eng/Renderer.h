@@ -93,7 +93,8 @@ public:
     // for open/sliced geometry (walls, floors) -- shadow volumes need
     // closed-ish meshes to extrude cleanly.
     void attachMesh(NodeHandle node, MeshHandle mesh,
-                    const std::string& materialName, bool castShadows = false);
+                    const std::string& materialName, bool castShadows = false,
+                    bool renderOnTop = false);
 
     // Sprite seam: createSpriteMaterial applies a clip to arbitrary mesh UVs;
     // attachSprite uses the same clip as a camera-facing world billboard.

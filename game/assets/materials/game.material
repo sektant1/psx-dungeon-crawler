@@ -167,6 +167,25 @@ material Game/PropWeapon
     } }
 }
 
+// Camera-space weapon. It is rendered after world geometry without writing
+// depth, preventing nearby walls from slicing through the first-person blade.
+material Game/ViewModelWeapon
+{
+    receive_shadows off
+    technique { pass {
+        depth_check off
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture MedievalWeaponsSword.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
 material Game/PropHay
 {
     technique { pass {

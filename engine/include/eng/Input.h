@@ -6,6 +6,8 @@
 
 namespace eng {
 
+enum class MouseButton { Left, Right, Middle };
+
 class Config;
 
 // Action-mapped input. Bindings come from the [bindings] TOML table:
@@ -21,6 +23,8 @@ public:
     bool isDown(const std::string& action) const;
     bool wasPressed(const std::string& action) const; // edge, cleared each tick
     bool wasMouseClicked() const;                     // left-button edge
+    bool isMouseDown(MouseButton button) const;
+    bool wasMousePressed(MouseButton button) const;
     glm::vec2 mouseDelta() const;                     // relative, this tick
 
     void setMouseGrab(bool grab); // relative mouse mode + cursor capture

@@ -3,10 +3,11 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <vector>
 
 namespace eng {
 
-enum class SpriteBlend { Opaque, Alpha, Additive };
+enum class SpriteBlend { Opaque, Alpha, Additive, Overlay };
 
 // One reusable 2D asset contract. The same clip can drive a billboard sprite
 // or be turned into a material for arbitrary mesh UVs.
@@ -25,11 +26,20 @@ struct SpriteClip {
 };
 
 struct TextSpriteStyle {
+    struct ColourRule {
+        std::string pattern;
+        glm::vec4 colour{1.0f};
+    };
     glm::vec4 textColour{1.0f, 0.90f, 0.62f, 1.0f};
     glm::vec4 backgroundColour{0.035f, 0.025f, 0.045f, 0.90f};
     glm::vec4 borderColour{0.42f, 0.30f, 0.12f, 1.0f};
+    glm::vec4 accentColour{0.88f, 0.58f, 0.12f, 1.0f};
     float worldHeight = 0.34f;
     int paddingPixels = 4;
+    int maxWidthPixels = 156;
+    int lineSpacingPixels = 2;
+    int accentWidthPixels = 3;
+    std::vector<ColourRule> colourRules;
 };
 
 } // namespace eng

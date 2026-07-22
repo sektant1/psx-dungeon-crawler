@@ -23,22 +23,23 @@ PortalVisual createPortal(eng::Renderer& r, glm::vec3 floorPosition,
                      glm::angleAxis(glm::radians(style.yawDegrees),
                                     glm::vec3(0, 1, 0)));
     if (!style.frameMesh.empty()) {
-        // The authored arch occupies x[0,4], y[0,3], z[-4,0]. Offset it so
-        // its opening is centered on the 4 m portal cell and its front face
-        // points toward the approaching player (+Z).
-        eng::NodeHandle frame = r.createNode(out.root, {-2.0f, 0.0f, 2.0f});
+        // The authored arch occupies x[0,4], y[0,3], z[-4,0]. Centre its
+        // facade directly on the wall plane instead of offsetting the whole
+        // four-metre source tunnel into the room.
+        eng::NodeHandle frame = r.createNode(out.root, {-2.0f, 0.0f, 0.0f});
         // The source kit piece is a four-metre-deep passage module. Compress
         // only its depth so it reads as a monumental portal surround rather
         // than a short tunnel, without distorting the authored front arch.
-        r.setScale(frame, {1.0f, 1.0f, 0.24f});
+        r.setScale(frame, {1.0f, 1.0f, 0.12f});
         r.attachMesh(frame, r.loadObj(style.frameMesh), style.frameMaterial,
                      false);
     }
-    // The compressed frame spans local z [1.04, 2.0]. Put the opaque
-    // membrane just behind it so it never intersects the masonry and cannot
-    // z-fight or reorder as the view angle changes.
+    // The compressed frame spans local z [-0.48, 0]. Put the opaque membrane
+    // just behind its rear face: both pieces now replace the boundary wall
+    // instead of projecting into the playable room.
     const eng::NodeHandle arch = r.createNode(
-        out.root, {0.0f, style.height, style.frameMesh.empty() ? 0.0f : 1.0f});
+        out.root, {0.0f, style.height,
+                   style.frameMesh.empty() ? 0.0f : -0.50f});
     out.field = r.createNode(arch);
     if (authoredFrame) {
         r.setScale(out.field, {style.fieldScale.x, 1.0f, style.fieldScale.y});
@@ -140,6 +141,13 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         ShowcaseExhibit info;
         info.id = id;
         info.label = (*e)["label"].value_or(id);
+        info.labelHighlightPattern =
+            (*e)["label_highlight_pattern"].value_or(std::string());
+        const glm::vec3 accent = vec3(*e, "label_accent", {0.88f, 0.58f, 0.12f});
+        info.labelAccent = {accent, 1.0f};
+        const glm::vec3 highlight = vec3(
+            *e, "label_highlight_colour", {1.0f, 0.78f, 0.22f});
+        info.labelHighlight = {highlight, 1.0f};
         info.position = position;
         info.blocksMovement = (*e)["collision"].value_or(
             shape == "box" || shape == "cone");

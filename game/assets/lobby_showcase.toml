@@ -6,6 +6,9 @@
 [[exhibit]]
 id = "water_pool"
 label = "Water — transparent, UV-panned surface"
+label_accent = [0.20, 0.62, 1.0]
+label_highlight_pattern = "Water|UV-panned"
+label_highlight_colour = [0.38, 0.76, 1.0]
 shape = "plane"
 material = "Fantasy/Water"
 position = [-12.0, 0.24, 24.0]
@@ -14,6 +17,9 @@ scale = [3.2, 1.0, 3.2]
 [[exhibit]]
 id = "water_plinth"
 label = "Carved Stone — beveled construction primitive"
+label_accent = [0.58, 0.64, 0.72]
+label_highlight_pattern = "Carved|Stone"
+label_highlight_colour = [0.72, 0.78, 0.86]
 shape = "box"
 material = "Fantasy/CarvedStone"
 position = [-12.0, 0.12, 24.0]
@@ -22,6 +28,9 @@ scale = [3.7, 0.22, 3.7]
 [[exhibit]]
 id = "lava_pool"
 label = "Lava — 4-frame animated atlas with local light"
+label_accent = [1.0, 0.30, 0.06]
+label_highlight_pattern = "Lava|atlas"
+label_highlight_colour = [1.0, 0.42, 0.12]
 shape = "plane"
 material = "Fantasy/Lava"
 position = [12.0, 0.24, 24.0]
@@ -32,6 +41,9 @@ light_range = 4.5
 [[exhibit]]
 id = "lava_plinth"
 label = "Warm Dungeon Stone — stylized masonry"
+label_accent = [0.86, 0.42, 0.14]
+label_highlight_pattern = "Warm|Stone"
+label_highlight_colour = [1.0, 0.56, 0.20]
 shape = "box"
 material = "Fantasy/WarmDungeonStone"
 position = [12.0, 0.12, 24.0]
@@ -40,6 +52,9 @@ scale = [3.7, 0.22, 3.7]
 [[exhibit]]
 id = "slime_pool"
 label = "Toxic Slime — transparent panning material"
+label_accent = [0.28, 1.0, 0.16]
+label_highlight_pattern = "Toxic|Slime"
+label_highlight_colour = [0.38, 1.0, 0.20]
 shape = "plane"
 material = "Fantasy/ToxicSlime"
 position = [-12.0, 0.20, 20.0]
@@ -50,6 +65,9 @@ light_range = 3.5
 [[exhibit]]
 id = "slime_plinth"
 label = "Dark Iron — metallic material"
+label_accent = [0.42, 0.48, 0.58]
+label_highlight_pattern = "Dark|Iron"
+label_highlight_colour = [0.62, 0.70, 0.84]
 shape = "box"
 material = "Fantasy/DarkIron"
 position = [-12.0, 0.10, 20.0]
@@ -58,6 +76,9 @@ scale = [3.0, 0.18, 3.0]
 [[exhibit]]
 id = "fel_sample"
 label = "Fel Energy — additive 4-frame atlas, particles and light"
+label_accent = [0.28, 1.0, 0.16]
+label_highlight_pattern = "Fel|Energy"
+label_highlight_colour = [0.38, 1.0, 0.20]
 shape = "plane"
 material = "Fantasy/FelEnergy"
 position = [12.0, 0.72, 20.0]
@@ -69,6 +90,9 @@ light_range = 2.0
 [[exhibit]]
 id = "fel_stand"
 label = "Dark Iron energy-table stand"
+label_accent = [0.42, 0.48, 0.58]
+label_highlight_pattern = "Dark|Iron"
+label_highlight_colour = [0.62, 0.70, 0.84]
 shape = "box"
 material = "Fantasy/DarkIron"
 position = [12.0, 0.35, 20.0]
@@ -78,6 +102,9 @@ scale = [1.3, 0.7, 1.0]
 [[exhibit]]
 id = "carved_column"
 label = "Carved Stone — beveled box, nonuniform scale"
+label_accent = [0.58, 0.64, 0.72]
+label_highlight_pattern = "Carved|Stone"
+label_highlight_colour = [0.72, 0.78, 0.86]
 shape = "box"
 material = "Fantasy/CarvedStone"
 position = [-12.0, 1.15, -1.0]
@@ -87,6 +114,9 @@ rotation = [0.0, 8.0, -2.0]
 [[exhibit]]
 id = "iron_obelisk"
 label = "Dark Iron — generated eight-sided cone"
+label_accent = [0.42, 0.48, 0.58]
+label_highlight_pattern = "Dark|Iron"
+label_highlight_colour = [0.62, 0.70, 0.84]
 shape = "cone"
 material = "Fantasy/DarkIron"
 position = [12.0, 1.15, -1.0]
@@ -96,6 +126,9 @@ rotation = [0.0, 22.0, 0.0]
 [[exhibit]]
 id = "wood_beam"
 label = "Aged Wood — rotated beveled beam"
+label_accent = [0.72, 0.38, 0.14]
+label_highlight_pattern = "Aged|Wood"
+label_highlight_colour = [0.92, 0.56, 0.24]
 shape = "box"
 material = "Fantasy/AgedWood"
 position = [-12.0, 1.0, -14.0]
@@ -105,6 +138,9 @@ rotation = [0.0, 18.0, -8.0]
 [[exhibit]]
 id = "arcane_ring"
 label = "Arcane Glow — generated ring, particles and light"
+label_accent = [0.42, 0.48, 1.0]
+label_highlight_pattern = "Arcane|Glow"
+label_highlight_colour = [0.48, 0.58, 1.0]
 shape = "ring"
 material = "Fantasy/ArcaneGlow"
 position = [12.0, 1.35, -14.0]

@@ -36,6 +36,9 @@ struct PortalVisual {
 struct ShowcaseExhibit {
     std::string id;
     std::string label;
+    std::string labelHighlightPattern;
+    glm::vec4 labelAccent{0.88f, 0.58f, 0.12f, 1.0f};
+    glm::vec4 labelHighlight{1.0f, 0.78f, 0.22f, 1.0f};
     glm::vec3 position{0.0f};
     glm::vec3 halfExtents{0.0f};
     bool blocksMovement = false;
