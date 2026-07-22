@@ -86,6 +86,7 @@ struct Physics::Impl {
     // character table; slot 0 = null sentinel
     std::vector<CharacterRec> characters;
     std::vector<uint32_t>     charFreeList;
+    phys::CharacterPushListener charPushListener;
 
     // contact seam
     Physics::HitCallback contactCb;
@@ -194,6 +195,7 @@ void Physics::init() {
     mImpl->contactShared.idToSlot       = &mImpl->idToSlot;
     mImpl->listener = std::make_unique<EngContactListener>(&mImpl->contactShared);
     mImpl->system.SetContactListener(mImpl->listener.get());
+    mImpl->charPushListener.system = &mImpl->system;
     mImpl->inited = true;
 }
 
@@ -480,6 +482,7 @@ CharacterHandle Physics::createCharacter(const CharacterDesc& desc) {
         JPH::Quat::sIdentity(),
         0,
         &mImpl->system);
+    cv->SetListener(&mImpl->charPushListener);
 
     uint32_t slot;
     if (!mImpl->charFreeList.empty()) {

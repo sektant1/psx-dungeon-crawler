@@ -5,6 +5,8 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 #include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/PhysicsSystem.h>
 #include <mutex>
 #include <vector>
 
@@ -54,6 +56,27 @@ public:
         if (pair(TRIGGER, PROP)) return false;
         if (pair(TRIGGER, PROJECTILE)) return false;
         return true;
+    }
+};
+
+class CharacterPushListener final : public JPH::CharacterContactListener {
+public:
+    JPH::PhysicsSystem* system = nullptr;
+
+    void OnContactAdded(const JPH::CharacterVirtual* inCharacter,
+                        const JPH::CharacterContact& inContact,
+                        JPH::CharacterContactSettings& ioSettings) override {
+        ioSettings.mCanPushCharacter  = true;
+        ioSettings.mCanReceiveImpulses = true;
+        if (!system) return;
+        if (inContact.mMotionTypeB != JPH::EMotionType::Dynamic) return;
+        JPH::BodyInterface& bi = system->GetBodyInterface();
+        JPH::Vec3 v = inCharacter->GetLinearVelocity();
+        v.SetY(0.0f);
+        float into = -inContact.mContactNormal.Dot(v);   // speed into the prop
+        if (into <= 0.0f) return;
+        JPH::Vec3 push = -inContact.mContactNormal * (into * 2.0f);
+        bi.AddImpulse(inContact.mBodyB, push);
     }
 };
 
