@@ -9,9 +9,11 @@ namespace eng { class Renderer; }
 // this framing automatically and only need to override fields when their
 // authored axis or dimensions differ substantially.
 struct WeaponViewmodelPose {
-    glm::vec3 position{0.30f, -0.30f, -0.42f};
-    glm::vec3 rotationDegrees{-72.0f, -4.0f, 18.0f}; // pitch, yaw, roll
-    float scale = 0.043f;
+    glm::vec3 position{0.22f, -0.24f, -0.42f};
+    // Negative pitch raises the blade from the hand while positive yaw turns
+    // it inward across the right-hand view.
+    glm::vec3 rotationDegrees{-62.0f, 18.0f, 18.0f}; // pitch, yaw, roll
+    float scale = 0.040f;
 };
 
 // First-person sword viewmodel. Parented to the camera head node so it
