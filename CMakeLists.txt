@@ -6,6 +6,39 @@ include(CTest)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# --- Build speed: compiler cache -------------------------------------------
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "ccache: ${CCACHE_PROGRAM}")
+endif()
+
+# --- Build speed: LTO/IPO for Release (our targets only; Jolt opts out) -----
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ENG_IPO_SUPPORTED OUTPUT _ipo_err)
+
+# --- Sanitizers: -DENABLE_ASAN=ON for an ASan+UBSan+LeakSan build -----------
+option(ENABLE_ASAN "Build our targets with Address/UB/Leak sanitizers" OFF)
+
+# Shared compile/link options applied to first-party targets ONLY (never Jolt
+# or OGRE): warnings, optional IPO, optional sanitizers. Call for each target.
+function(eng_target_hardening tgt)
+    target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    if(ENG_IPO_SUPPORTED)
+        set_property(TARGET ${tgt} PROPERTY
+                     INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    endif()
+    if(ENABLE_ASAN)
+        target_compile_options(${tgt} PRIVATE
+            -fsanitize=address,undefined -fno-omit-frame-pointer -g)
+        target_link_options(${tgt} PRIVATE -fsanitize=address,undefined)
+    endif()
+endfunction()
+
 # Prefer the vendored OGRE SDK (vendor/ogre/sdk) over any system install.
 list(PREPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/vendor/ogre/sdk")
 
@@ -59,6 +92,7 @@ target_compile_definitions(eng PRIVATE
     OGRE_PLUGIN_DIR="${OGRE_PLUGIN_DIR}"
     OGRE_MEDIA_DIR="${OGRE_MEDIA_DIR}"
 )
+eng_target_hardening(eng)
 
 # Shared PSX demo scene, data-driven from samples/common/assets.
 add_library(demo_scene STATIC samples/common/DemoScene.cpp)
@@ -67,12 +101,14 @@ target_link_libraries(demo_scene PUBLIC eng)
 target_compile_definitions(demo_scene PUBLIC
     DEMO_SCENE_TOML="${CMAKE_CURRENT_SOURCE_DIR}/samples/common/assets/demo_scene.toml"
 )
+eng_target_hardening(demo_scene)
 
 add_executable(psx_demo samples/psx-demo/src/main.cpp)
 target_link_libraries(psx_demo PRIVATE demo_scene)
 target_compile_definitions(psx_demo PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/psx-demo/assets"
 )
+eng_target_hardening(psx_demo)
 
 add_executable(game
     game/src/main.cpp
@@ -100,6 +136,7 @@ target_compile_definitions(game PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
     DEMO_SCENE_TOML="${CMAKE_CURRENT_SOURCE_DIR}/samples/common/assets/demo_scene.toml"
 )
+eng_target_hardening(game)
 
 add_executable(level_editor
     game/src/editor_main.cpp
@@ -114,6 +151,7 @@ target_link_libraries(level_editor PRIVATE eng)
 target_compile_definitions(level_editor PRIVATE
     APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
 )
+eng_target_hardening(level_editor)
 
 if(BUILD_TESTING)
     add_executable(dungeon_layout_tests
