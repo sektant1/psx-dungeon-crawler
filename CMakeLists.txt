@@ -82,6 +82,7 @@ add_executable(game
     game/src/LevelEditor.cpp
     game/src/Melee.cpp
     game/src/Projectiles.cpp
+    game/src/Spells.cpp
     game/src/SceneFactory.cpp
     game/src/Targeting.cpp
     game/src/Dummy.cpp
