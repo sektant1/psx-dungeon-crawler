@@ -68,6 +68,10 @@ set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(JoltPhysics)
 
 add_library(eng STATIC
+    third_party/imgui/imgui.cpp
+    third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp
+    third_party/imgui/imgui_widgets.cpp
     engine/src/RenderCore.cpp
     engine/src/ObjLoader.cpp
     engine/src/ProceduralMeshes.cpp
@@ -86,6 +90,9 @@ target_include_directories(eng
     PUBLIC engine/include
     PRIVATE third_party
 )
+# Vendored imgui docking branch must win over OgreOverlay's bundled imgui so
+# <imgui.h> resolves to the docking copy everywhere in the engine + game.
+target_include_directories(eng BEFORE PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui)
 target_link_libraries(eng PUBLIC glm::glm OgreOverlay PRIVATE OgreMain SDL2::SDL2 Jolt)
 target_compile_definitions(eng PRIVATE
     ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
