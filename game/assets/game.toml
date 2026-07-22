@@ -2,7 +2,7 @@
 title = "Debug"
 width = 960
 height = 720
-vsync = false
+vsync = true
 
 [player]
 speed = 3.0
