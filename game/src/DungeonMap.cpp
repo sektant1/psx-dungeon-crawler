@@ -19,6 +19,7 @@ namespace {
 constexpr const char* kTileMaterial = "Game/DungeonTile";
 constexpr const char* kFloorMaterial = "Game/DungeonFloor";
 constexpr const char* kCeilingMaterial = "Game/DungeonCeiling";
+constexpr const char* kWallMaterial = "Game/DungeonWall";
 // Half-width of the stone_archway's walkable opening (measured: the gap
 // spans 1.2..2.8 across the 4 m piece).
 constexpr float kArchHalfWidth = 0.8f;
@@ -397,13 +398,13 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                                                             : wall;
             };
             if (wallN)
-                put(pick(0), {x0, 0.0f, z0}, 0.0f);
+                put(pick(0), {x0, 0.0f, z0}, 0.0f, kWallMaterial);
             if (wallS)
-                put(pick(1), {x0 + mCell, 0.0f, z0 + mCell}, 180.0f);
+                put(pick(1), {x0 + mCell, 0.0f, z0 + mCell}, 180.0f, kWallMaterial);
             if (wallW)
-                put(pick(2), {x0, 0.0f, z0 + mCell}, 90.0f);
+                put(pick(2), {x0, 0.0f, z0 + mCell}, 90.0f, kWallMaterial);
             if (wallE)
-                put(pick(3), {x0 + mCell, 0.0f, z0}, -90.0f);
+                put(pick(3), {x0 + mCell, 0.0f, z0}, -90.0f, kWallMaterial);
 
             // Wall collision boxes (thin slabs at each solid boundary face).
             // wallN: -z face of cell (z = z0); wallS: +z face (z = z0+mCell).

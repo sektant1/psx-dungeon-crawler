@@ -106,6 +106,29 @@ material Game/DungeonCeiling
     } }
 }
 
+// Walls: the packed Dungeon_Map atlas UVs on tile_wall_plaster reach down into
+// the atlas's black/chain filler cells, smearing garbage onto the mesh. Point
+// walls at the standalone stone tile with wrap addressing so the mesh UVs
+// simply repeat one clean texture instead of indexing atlas cells. uvScale
+// tunes the repeat density; wrap makes any UV range render seamless stone.
+material Game/DungeonWall
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 3.0 3.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture TEX_Wall_03.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
 // Imported arches expose inner/back faces at close range. They share the same
 // authored atlas UVs as the room kit, but need two-sided rasterization.
 material Game/DungeonTileTwoSided
