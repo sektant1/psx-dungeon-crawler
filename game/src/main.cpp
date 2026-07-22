@@ -9,6 +9,7 @@
 #include "FpsController.h"
 #include "LevelEditor.h"
 #include "Projectiles.h"
+#include "Spells.h"
 #include "SceneFactory.h"
 #include "Melee.h"
 #include "Dummy.h"
@@ -631,6 +632,7 @@ int main(int, char**)
     physics.init();
 
     ProjectileSystem projectiles;
+    SpellSystem spells;
     MeleeSystem melee;
 
     // Dynamic prop table: bodies spawned once for the depth-0 lobby and
@@ -653,6 +655,7 @@ int main(int, char**)
     LiveLevel level;
     FpsController player;
     ViewModel viewModel;
+    ViewModel staffModel;
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
@@ -708,6 +711,8 @@ int main(int, char**)
         carry.range = 7.0f;
         r.attachLight(player.headNode(), carry);
         viewModel.init(r, player.headNode(), assets + "/meshes/props");
+        staffModel.initStaff(r, player.headNode(),
+                             assets + "/meshes/crystal_spire1.obj");
         engine.input().setMouseGrab(!portalPreview);
     };
     enterLevel(false); // depth 0, spawn at entry
@@ -715,8 +720,10 @@ int main(int, char**)
     // Initialise the projectile system (builds procedural meshes) and register
     // the contact seam so arrows stick and bolts despawn on impact.
     projectiles.init(r);
-    physics.setContactCallback([&projectiles, &physics, &dummy, &dummyAlive](const eng::HitEvent& e) {
+    spells.init(r);
+    physics.setContactCallback([&projectiles, &spells, &physics, &r, &dummy, &dummyAlive](const eng::HitEvent& e) {
         projectiles.onHit(physics, e);
+        spells.onHit(physics, r, e);
         if (dummyAlive && dummy.alive() &&
             (e.self == dummy.body() || e.other == dummy.body())) {
             // Arrow hit the dummy: knock it forward and upward
@@ -852,7 +859,7 @@ int main(int, char**)
     });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
-    engine.debugUi().addWindow([&level, &player, &viewModel, &editor, &r, &physics,
+    engine.debugUi().addWindow([&level, &player, &viewModel, &staffModel, &editor, &r, &physics,
                                 &assets, &depth, speed, sens, &engine] {
         if (!editor.draw(level.dungeon(), player.eyePosition()))
             return;
@@ -867,6 +874,8 @@ int main(int, char**)
         carry.range = 7.0f;
         r.attachLight(player.headNode(), carry);
         viewModel.init(r, player.headNode(), assets + "/meshes/props");
+        staffModel.initStaff(r, player.headNode(),
+                             assets + "/meshes/crystal_spire1.obj");
         engine.input().setMouseGrab(false);
     });
 
@@ -898,6 +907,7 @@ int main(int, char**)
         while (accumulator >= kFixedDt && guard++ < 5) {
             physics.update(kFixedDt);
             projectiles.fixedUpdate(physics, r, kFixedDt);
+            spells.fixedUpdate(physics, r, kFixedDt);
             melee.fixedUpdate(physics, player.eyePosition(), player.forward(), kFixedDt);
             accumulator -= kFixedDt;
         }
@@ -913,6 +923,7 @@ int main(int, char**)
             }
         }
         projectiles.syncRender(physics, r);
+        spells.syncRender(physics, r);
         if (dummyAlive)
             dummy.syncRender(physics, r);
 
@@ -954,11 +965,18 @@ int main(int, char**)
 
         // Projectile firing — only when mouse is grabbed (not in debug UI).
         bool swordAttack = false;
+        bool didCast = false;
         if (in.mouseGrabbed()) {
             if (in.wasPressed("fire_arrow"))
                 projectiles.fireArrow(physics, r, player.eyePosition(), player.forward());
-            if (in.wasPressed("cast_spell"))
-                projectiles.fireBolt(physics, r, player.eyePosition(), player.forward());
+            if (in.wasPressed("cast_spell")) {
+                spells.castFireball(physics, r, player.eyePosition(), player.forward());
+                didCast = true;
+            }
+            if (in.wasPressed("cast_beam")) {
+                spells.castBeam(physics, r, player.eyePosition(), player.forward());
+                didCast = true;
+            }
             if (in.wasMouseClicked()) {
                 melee.startSwing();
                 swordAttack = true;
@@ -967,6 +985,7 @@ int main(int, char**)
         viewModel.update(r, dt, swordAttack,
                          in.mouseGrabbed() &&
                              in.isMouseDown(eng::MouseButton::Right));
+        staffModel.update(r, dt, didCast, false);
 
         // Physics collider wireframe overlay
         if (showColliders) {
@@ -998,6 +1017,7 @@ int main(int, char**)
     }
     level.clearPhysics();
     projectiles.clear(physics, r);
+    spells.clear(physics, r);
     physics.shutdown();
     engine.shutdown();
     return 0;

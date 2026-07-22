@@ -33,8 +33,6 @@ static glm::quat rotateFromTo(glm::vec3 from, glm::vec3 to) {
 void ProjectileSystem::init(eng::Renderer& r) {
     // Arrow: thin cone (radius 0.03, height 0.5) to represent the shaft tip
     mArrowMesh = r.createCone(0.03f, 0.5f, 6);
-    // Bolt: small beveled box for a magical projectile look
-    mBoltMesh  = r.createBeveledBox(0.05f);
 }
 
 // ---- fire ----
@@ -79,39 +77,6 @@ void ProjectileSystem::fireArrow(eng::Physics& phys, eng::Renderer& r,
     mLive.push_back({ body, node, Kind::Arrow, 10.0f, false });
 }
 
-void ProjectileSystem::fireBolt(eng::Physics& phys, eng::Renderer& r,
-                                 glm::vec3 eye, glm::vec3 fwd) {
-    if (int(mLive.size()) >= mMaxLive) {
-        despawn(phys, r, mLive.front());
-        mLive.erase(mLive.begin());
-    }
-
-    fwd = glm::normalize(fwd);
-    glm::vec3 spawnPos = eye + fwd * 0.5f;
-
-    eng::BodyDesc d;
-    d.kind          = eng::ShapeKind::Sphere;
-    d.radius        = 0.08f;
-    d.position      = spawnPos;
-    d.layer         = eng::BodyLayer::Projectile;
-    d.dynamic       = true;
-    d.continuousCast = true;
-    d.mass          = 0.2f;
-    d.friction      = 0.2f;
-    d.restitution   = 0.1f;
-
-    eng::BodyHandle body = phys.createBody(d);
-    if (!body.valid()) return;
-
-    // 25 m/s
-    phys.applyImpulse(body, fwd * (0.2f * 25.0f), spawnPos);
-
-    eng::NodeHandle node = r.createNode(eng::kRootNode, spawnPos);
-    r.attachMesh(node, mBoltMesh, "Game/ProtoBolt", false);
-
-    mLive.push_back({ body, node, Kind::Bolt, 8.0f, false });
-}
-
 // ---- contact seam ----
 
 void ProjectileSystem::onHit(eng::Physics& phys, const eng::HitEvent& e) {
@@ -121,9 +86,6 @@ void ProjectileSystem::onHit(eng::Physics& phys, const eng::HitEvent& e) {
                 p.stuck = true;
                 p.ttl   = 20.0f; // stuck arrows linger longer
                 phys.setBodyKinematic(p.body, true);
-            } else if (p.kind == Kind::Bolt && !p.stuck) {
-                p.stuck = true;
-                p.ttl   = 0.0f; // despawn next fixedUpdate
             }
             return;
         }
@@ -140,14 +102,9 @@ void ProjectileSystem::despawn(eng::Physics& phys, eng::Renderer& r,
 
 void ProjectileSystem::fixedUpdate(eng::Physics& phys, eng::Renderer& r,
                                     float dt) {
-    for (auto& p : mLive) {
-        if (!p.stuck)
-            p.ttl -= dt;
-        else if (p.kind == Kind::Arrow)
-            p.ttl -= dt; // stuck arrows still count down to eventual cleanup
-        else
-            p.ttl -= dt; // bolts arrive here with ttl=0 already
-    }
+    // Both live and stuck arrows count down toward eventual cleanup.
+    for (auto& p : mLive)
+        p.ttl -= dt;
 
     // Remove expired projectiles (sweep from back to preserve indices)
     for (int i = int(mLive.size()) - 1; i >= 0; --i) {
