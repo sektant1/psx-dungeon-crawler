@@ -84,6 +84,22 @@ add_library(eng_toml INTERFACE)
 target_link_libraries(eng_toml INTERFACE tomlplusplus::tomlplusplus)
 target_include_directories(eng_toml INTERFACE "${_toml_compat}")
 
+# --- miniaudio (audio playback, single-header) -------------------------------
+# Header-only C library; DOWNLOAD_ONLY (it ships no CMake target we want). One
+# TU (engine/src/audio/Audio.cpp) defines MINIAUDIO_IMPLEMENTATION.
+CPMAddPackage(
+    NAME miniaudio
+    GITHUB_REPOSITORY mackron/miniaudio
+    GIT_TAG 0.11.21
+    DOWNLOAD_ONLY YES
+)
+add_library(miniaudio INTERFACE)
+target_include_directories(miniaudio INTERFACE "${miniaudio_SOURCE_DIR}")
+# miniaudio's Linux backends need libm/libdl/pthread at link time.
+if(UNIX AND NOT APPLE)
+    target_link_libraries(miniaudio INTERFACE m dl pthread)
+endif()
+
 # --- OGRE 14 (renderer, built from source) -----------------------------------
 # The single heavy dependency. First configure fetches + builds OGRE and its
 # bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. We build
