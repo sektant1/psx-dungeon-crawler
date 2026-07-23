@@ -1,6 +1,6 @@
 #pragma once
 #include <eng/Handles.h>
-#include <eng/Renderer.h> // eng::LightDesc
+#include <eng/LightDesc.h> // eng::LightDesc
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>

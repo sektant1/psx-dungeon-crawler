@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/Handles.h>
+#include <eng/LightDesc.h>
 #include <eng/ParticleEffectDesc.h>
 #include <eng/Sprite.h>
 
@@ -21,14 +22,6 @@ namespace detail {
 RenderCore& coreOf(Renderer& r);
 void registerRoot(Renderer& r);
 } // namespace detail
-
-struct LightDesc {
-    enum class Type { Directional, Point };
-    Type type = Type::Point;
-    glm::vec3 colour{1.0f}; // linear, energy pre-multiplied by the caller
-    float range = 3.0f;     // point lights only
-    bool castShadows = false; // stencil shadows from opted-in casters
-};
 
 // Last-set environment/camera values, cached so the debug UI can display
 // and edit them. Ambient/fog colours are linear; background is raw sRGB

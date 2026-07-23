@@ -75,6 +75,33 @@ int main() {
     sync2.sync();
     require(b2.meshes == 1 && b2.lights == 1, "attachment not repeated");
 
+    // --- reparent updates pushed world position on next sync ---
+    Scene s3;
+    RecordingBackend b3;
+    SceneSync sync3(s3, b3);
+    const entt::entity par = s3.create("par");
+    Transform prt; prt.position = {5.0f, 0.0f, 0.0f};
+    s3.setLocalTransform(par, prt);
+    const entt::entity kid = s3.create("kid");
+    Transform kdt; kdt.position = {2.0f, 0.0f, 0.0f};
+    s3.setLocalTransform(kid, kdt);
+    sync3.sync(); // kid world = 2 (no parent yet)
+    s3.setParent(kid, par);
+    sync3.sync(); // kid world = 7 now
+    require(b3.positions.back() == glm::vec3(7.0f, 0.0f, 0.0f),
+            "reparented child pushes composed world position");
+
+    // --- double destroy is safe (destroyNode fires once) ---
+    Scene s4;
+    RecordingBackend b4;
+    SceneSync sync4(s4, b4);
+    const entt::entity d = s4.create("d");
+    sync4.sync();
+    s4.destroy(d);
+    sync4.sync();
+    sync4.sync(); // second sync after destroy must not re-destroy
+    require(b4.destroys == 1, "destroyNode fires exactly once");
+
     std::cout << "SceneSyncTests OK\n";
     return 0;
 }

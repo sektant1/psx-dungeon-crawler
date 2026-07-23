@@ -102,6 +102,36 @@ int main() {
     require(su.registry().get<Children>(up).value.empty(),
             "child removed from old parent on unparent");
 
+    // --- 3-level dirty propagation chain ---
+    Scene sc;
+    const entt::entity gp = sc.create("gp");
+    const entt::entity pa = sc.create("pa");
+    const entt::entity ch2 = sc.create("ch");
+    Transform gpt; gpt.position = {1.0f, 0.0f, 0.0f}; sc.setLocalTransform(gp, gpt);
+    Transform pat; pat.position = {2.0f, 0.0f, 0.0f}; sc.setLocalTransform(pa, pat);
+    Transform cht; cht.position = {4.0f, 0.0f, 0.0f}; sc.setLocalTransform(ch2, cht);
+    sc.setParent(pa, gp);
+    sc.setParent(ch2, pa);
+    sc.updateWorldTransforms();
+    require(sc.registry().get<WorldTransform>(ch2).matrix[3][0] == 7.0f,
+            "3-level world X composes (1+2+4)");
+    // Moving only the grandparent re-dirties the grandchild.
+    Transform gpt2; gpt2.position = {10.0f, 0.0f, 0.0f}; sc.setLocalTransform(gp, gpt2);
+    require(sc.registry().all_of<Dirty>(ch2), "grandparent move dirties grandchild");
+    sc.updateWorldTransforms();
+    require(sc.registry().get<WorldTransform>(ch2).matrix[3][0] == 16.0f,
+            "grandchild follows grandparent (10+2+4)");
+
+    // --- cycle guard: setParent that would form a cycle is rejected ---
+    Scene scy;
+    const entt::entity x = scy.create("x");
+    const entt::entity y = scy.create("y");
+    scy.setParent(y, x);          // y under x
+    scy.setParent(x, y);          // would make x under y -> cycle: must be rejected
+    auto* xp = scy.registry().try_get<Parent>(x);
+    require(!xp || xp->value == entt::null,
+            "cycle-forming setParent rejected");
+
     std::cout << "SceneTests OK\n";
     return 0;
 }
