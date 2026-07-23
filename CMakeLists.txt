@@ -88,11 +88,14 @@ add_library(
   engine/src/systems/Events.cpp
   engine/src/io/FileSystem.cpp
   engine/src/io/DirectoryWatcher.cpp
-  engine/src/content/TextResource.cpp)
+  engine/src/content/TextResource.cpp
+  engine/src/audio/SoundResource.cpp
+  engine/src/audio/SoundInstance.cpp
+  engine/src/audio/Audio.cpp)
 target_include_directories(
   eng
   PUBLIC engine/include
-  PRIVATE third_party)
+  PRIVATE third_party engine/src/audio)
 # Vendored imgui docking branch must win over OgreOverlay's bundled imgui so
 # <imgui.h> resolves to the docking copy everywhere in the engine + game.
 target_include_directories(eng BEFORE
@@ -100,7 +103,7 @@ target_include_directories(eng BEFORE
 target_link_libraries(
   eng
   PUBLIC glm::glm OgreOverlay
-  PRIVATE OgreMain SDL2::SDL2 Jolt)
+  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio)
 target_compile_definitions(
   eng
   PRIVATE ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
@@ -285,6 +288,16 @@ if(BUILD_TESTING)
                                engine/src/core/Object.cpp)
   target_include_directories(content_tests PRIVATE engine/include)
   add_test(NAME content COMMAND content_tests)
+
+  add_executable(audio_tests engine/tests/AudioTests.cpp
+                             engine/src/audio/Audio.cpp
+                             engine/src/audio/SoundInstance.cpp
+                             engine/src/audio/SoundResource.cpp
+                             engine/src/io/FileSystem.cpp
+                             engine/src/core/Object.cpp)
+  target_include_directories(audio_tests PRIVATE engine/include engine/src/audio)
+  target_link_libraries(audio_tests PRIVATE miniaudio)
+  add_test(NAME audio COMMAND audio_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
