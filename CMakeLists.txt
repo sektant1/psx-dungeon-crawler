@@ -82,7 +82,12 @@ add_library(
   engine/src/core/GameSession.cpp
   engine/src/systems/Factory.cpp
   engine/src/diagnostics/Trace.cpp
-  engine/src/diagnostics/Profiler.cpp)
+  engine/src/diagnostics/Profiler.cpp
+  engine/src/systems/Ease.cpp
+  engine/src/systems/Actions.cpp
+  engine/src/systems/Events.cpp
+  engine/src/io/FileSystem.cpp
+  engine/src/io/DirectoryWatcher.cpp)
 target_include_directories(
   eng
   PUBLIC engine/include
@@ -248,6 +253,30 @@ if(BUILD_TESTING)
                                 engine/src/diagnostics/Profiler.cpp)
   target_include_directories(profiler_tests PRIVATE engine/include)
   add_test(NAME profiler COMMAND profiler_tests)
+
+  add_executable(actions_tests engine/tests/ActionsTests.cpp
+                               engine/src/systems/Ease.cpp
+                               engine/src/systems/Actions.cpp
+                               engine/src/core/Object.cpp)
+  target_include_directories(actions_tests PRIVATE engine/include)
+  target_link_libraries(actions_tests PRIVATE glm::glm)
+  add_test(NAME actions COMMAND actions_tests)
+
+  add_executable(events_tests engine/tests/EventsTests.cpp
+                              engine/src/systems/Events.cpp)
+  target_include_directories(events_tests PRIVATE engine/include)
+  add_test(NAME events COMMAND events_tests)
+
+  add_executable(filesystem_tests engine/tests/FileSystemTests.cpp
+                                  engine/src/io/FileSystem.cpp)
+  target_include_directories(filesystem_tests PRIVATE engine/include)
+  add_test(NAME filesystem COMMAND filesystem_tests)
+
+  add_executable(directory_watcher_tests engine/tests/DirectoryWatcherTests.cpp
+                                         engine/src/io/DirectoryWatcher.cpp
+                                         engine/src/io/FileSystem.cpp)
+  target_include_directories(directory_watcher_tests PRIVATE engine/include)
+  add_test(NAME directory_watcher COMMAND directory_watcher_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
