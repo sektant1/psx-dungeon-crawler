@@ -139,6 +139,7 @@ add_executable(
   game/src/DungeonMap.cpp
   game/src/DungeonGen.cpp
   game/src/LevelDocument.cpp
+  game/src/LevelResource.cpp
   game/src/LevelEditor.cpp
   game/src/Melee.cpp
   game/src/Projectiles.cpp
