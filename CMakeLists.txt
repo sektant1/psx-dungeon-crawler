@@ -76,6 +76,9 @@ add_library(
   engine/src/Physics.cpp
   engine/src/RenderPresets.cpp
   engine/src/SceneRegistry.cpp
+  engine/src/ecs/Scene.cpp
+  engine/src/ecs/SceneSync.cpp
+  engine/src/ecs/RendererSceneBackend.cpp
   engine/src/core/Object.cpp
   engine/src/core/Entity.cpp
   engine/src/core/Space.cpp
