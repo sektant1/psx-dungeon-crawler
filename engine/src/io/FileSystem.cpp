@@ -16,6 +16,10 @@ std::time_t FileSystem::lastModified(const Path& path) {
     std::error_code ec;
     auto ft = fs::last_write_time(path, ec);
     if (ec) return 0;
+    // C++17 has no portable file_clock->system_clock cast, so approximate by
+    // rebasing onto system_clock via the current instant of both clocks. Precise
+    // enough for display/coarse comparison; DirectoryWatcher diffs raw file-clock
+    // ticks directly and does not use this.
     auto sys = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
         ft - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
     return std::chrono::system_clock::to_time_t(sys);
@@ -39,7 +43,7 @@ bool FileSystem::fileWrite(const Path& path, const std::string& data, bool appen
     std::ofstream o(path, std::ios::binary | (append ? std::ios::app : std::ios::trunc));
     if (!o) return false;
     o << data;
-    return true;
+    return o.good();
 }
 
 FileSystem::Path FileSystem::extension(const Path& path) { return fs::path(path).extension().string(); }

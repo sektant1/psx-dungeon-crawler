@@ -20,6 +20,9 @@ private:
 // Type-indexed publish/subscribe bus. Member functions of the form
 // void(EventType&) connect against an owning instance; dispatch routes by the
 // concrete event type. disconnect() drops every handler owned by an instance.
+// The bus stores raw observer pointers, so an observer MUST call
+// disconnect(this) in its destructor before it is freed, or a later dispatch
+// will call through a dangling pointer.
 class EventBus {
 public:
     template <typename E, typename Obj>
@@ -33,7 +36,10 @@ public:
     void dispatch(E& event) {
         auto it = mHandlers.find(std::type_index(typeid(E)));
         if (it == mHandlers.end()) return;
-        for (auto& h : it->second) h.call(event);
+        // Snapshot so a handler may connect()/disconnect() during dispatch
+        // without invalidating the range we are iterating.
+        std::vector<Handler> handlers = it->second;
+        for (auto& h : handlers) h.call(event);
     }
 
     void disconnect(void* inst);

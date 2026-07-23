@@ -54,7 +54,9 @@ inline glm::vec3 lerpProp(const glm::vec3& a, const glm::vec3& b, float t) { ret
 inline glm::vec4 lerpProp(const glm::vec4& a, const glm::vec4& b, float t) { return glm::mix(a, b, t); }
 
 // Tweens a referenced property from its live value (captured on first update)
-// to `target` over `duration` seconds using `ease`.
+// to `target` over `duration` seconds using `ease`. The referenced variable
+// MUST outlive the owning action set; free the tween via Actions::clear() (or
+// let it finish) before destroying the target.
 template <typename T>
 class ActionProperty : public Action {
 public:
