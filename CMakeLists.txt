@@ -211,6 +211,13 @@ if(BUILD_TESTING)
   target_link_libraries(scene_registry_tests PRIVATE glm::glm)
   add_test(NAME scene_registry_tests COMMAND scene_registry_tests)
 
+  add_executable(scene_tests engine/tests/SceneTests.cpp
+                             engine/src/ecs/Scene.cpp)
+  target_include_directories(
+    scene_tests PRIVATE engine/include engine/src third_party/imgui)
+  target_link_libraries(scene_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME scene_tests COMMAND scene_tests)
+
   add_executable(editor_camera_tests game/tests/EditorCameraTests.cpp
                                      game/src/EditorCamera.cpp)
   target_include_directories(editor_camera_tests PRIVATE game/src)
