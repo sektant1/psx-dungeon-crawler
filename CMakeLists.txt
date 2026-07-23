@@ -102,7 +102,7 @@ target_include_directories(eng BEFORE
                            PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui)
 target_link_libraries(
   eng
-  PUBLIC glm::glm OgreOverlay
+  PUBLIC glm::glm OgreOverlay EnTT::EnTT
   PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio)
 target_compile_definitions(
   eng

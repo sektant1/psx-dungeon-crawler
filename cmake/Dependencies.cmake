@@ -31,6 +31,14 @@ CPMAddPackage(
     GIT_TAG 1.0.1
 )
 
+# --- EnTT (header-only ECS) --------------------------------------------------
+# Scene-data source of truth. Header-only: just an include target, no build.
+CPMAddPackage(
+    NAME EnTT
+    GITHUB_REPOSITORY skypjack/entt
+    GIT_TAG v3.13.2
+)
+
 # --- SDL2 --------------------------------------------------------------------
 # Shared by default so we don't statically pull SDL's system backends into our
 # binaries; the build tree ships the .so next to the executables.
