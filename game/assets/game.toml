@@ -2,7 +2,14 @@
 title = "Debug"
 width = 960
 height = 720
-vsync = true
+# vsync=true triggers an ImGui overlay flicker under Mesa/GL3Plus/XWayland
+# (the overlay's dynamic buffer is scanned out while the next frame rewrites
+# it). Run unsynced and pace with the frame limiter below instead.
+vsync = false
+# Frame limiter: caps the loop so vsync=false doesn't run the GPU flat out.
+# Set limit_fps=false for uncapped, or change max_fps to taste.
+limit_fps = true
+max_fps = 60
 
 [player]
 speed = 3.0

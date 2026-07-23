@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <cstdlib>
 #include <vector>
 
@@ -27,6 +28,9 @@ struct Engine::Impl {
     int benchmarkFrames = 0;
     std::vector<float> frameSamples;
     bool grabBeforeDebugUi = false;
+    // Frame limiter: minimum seconds per frame (0 = uncapped). Paces the loop
+    // when vsync is off so the GPU isn't driven flat out.
+    float minFrameSec = 0.0f;
 };
 
 Engine::Engine() : mImpl(new Impl) {}
@@ -51,6 +55,11 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     const int width = static_cast<int>(mConfig.getNumber("window.width", 960));
     const int height = static_cast<int>(mConfig.getNumber("window.height", 720));
     const bool vsync = mConfig.getBool("window.vsync", false);
+    if (mConfig.getBool("window.limit_fps", false)) {
+        const double fps = mConfig.getNumber("window.max_fps", 60.0);
+        if (fps > 0.0)
+            mImpl->minFrameSec = float(1.0 / fps);
+    }
 
     if (!mImpl->platform.init(title, width, height))
         return false;
@@ -125,11 +134,22 @@ float Engine::tick()
                 mInput.mImpl->onEvent(e);
         }
     }
-    const auto now = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
     if (!mImpl->hasPrev) {
         mImpl->prev = now;
         mImpl->hasPrev = true;
         return 0.0f;
+    }
+    // Frame limiter: block until this frame has taken at least minFrameSec.
+    if (mImpl->minFrameSec > 0.0f) {
+        const auto target =
+            mImpl->prev + std::chrono::duration_cast<
+                              std::chrono::steady_clock::duration>(
+                              std::chrono::duration<float>(mImpl->minFrameSec));
+        if (now < target) {
+            std::this_thread::sleep_until(target);
+            now = std::chrono::steady_clock::now();
+        }
     }
     const float dt = std::chrono::duration<float>(now - mImpl->prev).count();
     mImpl->prev = now;
