@@ -87,7 +87,8 @@ add_library(
   engine/src/systems/Actions.cpp
   engine/src/systems/Events.cpp
   engine/src/io/FileSystem.cpp
-  engine/src/io/DirectoryWatcher.cpp)
+  engine/src/io/DirectoryWatcher.cpp
+  engine/src/content/TextResource.cpp)
 target_include_directories(
   eng
   PUBLIC engine/include
@@ -277,6 +278,13 @@ if(BUILD_TESTING)
                                          engine/src/io/FileSystem.cpp)
   target_include_directories(directory_watcher_tests PRIVATE engine/include)
   add_test(NAME directory_watcher COMMAND directory_watcher_tests)
+
+  add_executable(content_tests engine/tests/ContentTests.cpp
+                               engine/src/content/TextResource.cpp
+                               engine/src/io/FileSystem.cpp
+                               engine/src/core/Object.cpp)
+  target_include_directories(content_tests PRIVATE engine/include)
+  add_test(NAME content COMMAND content_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
