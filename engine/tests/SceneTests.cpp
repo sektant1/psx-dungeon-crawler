@@ -53,6 +53,20 @@ int main() {
                 "child orphaned");
     }
 
+    // --- transforms ---
+    Scene s2t;
+    const entt::entity root = s2t.create("root");
+    Transform rt;
+    rt.position = {10.0f, 0.0f, 0.0f};
+    s2t.setLocalTransform(root, rt);
+    require(s2t.registry().all_of<Dirty>(root), "setLocalTransform marks Dirty");
+
+    s2t.updateWorldTransforms();
+    require(!s2t.registry().all_of<Dirty>(root), "update clears Dirty");
+    const glm::mat4& wm = s2t.registry().get<WorldTransform>(root).matrix;
+    require(wm[3][0] == 10.0f, "world translation X applied");
+    require(wm[3][1] == 0.0f && wm[3][2] == 0.0f, "world translation Y/Z zero");
+
     std::cout << "SceneTests OK\n";
     return 0;
 }

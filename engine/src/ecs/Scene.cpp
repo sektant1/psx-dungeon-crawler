@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <vector>
 
 namespace eng::ecs {
 
@@ -34,10 +35,56 @@ void Scene::destroy(entt::entity e)
     mReg.destroy(e);
 }
 
-void Scene::setLocalTransform(entt::entity, const Transform&) {}
+void Scene::setLocalTransform(entt::entity e, const Transform& t)
+{
+    if (!mReg.valid(e))
+        return;
+    mReg.get_or_emplace<Transform>(e) = t;
+    markSubtreeDirty(e);
+}
+
+void Scene::markSubtreeDirty(entt::entity e)
+{
+    if (!mReg.valid(e))
+        return;
+    if (!mReg.all_of<Dirty>(e))
+        mReg.emplace<Dirty>(e);
+    if (auto* ch = mReg.try_get<Children>(e))
+        for (entt::entity c : ch->value)
+            markSubtreeDirty(c);
+}
+
+void Scene::resolveWorld(entt::entity e)
+{
+    if (!mReg.all_of<Dirty>(e))
+        return; // already resolved this pass (or never dirty)
+
+    const Transform& t = mReg.get<Transform>(e);
+    glm::mat4 local = glm::translate(glm::mat4(1.0f), t.position);
+    local *= glm::mat4_cast(t.rotation);
+    local = glm::scale(local, t.scale);
+
+    glm::mat4 world = local;
+    if (auto* p = mReg.try_get<Parent>(e); p && p->value != entt::null &&
+                                           mReg.valid(p->value)) {
+        resolveWorld(p->value); // ensure parent world is up to date first
+        world = mReg.get<WorldTransform>(p->value).matrix * local;
+    }
+    mReg.get_or_emplace<WorldTransform>(e).matrix = world;
+    mReg.remove<Dirty>(e);
+}
+
+void Scene::updateWorldTransforms()
+{
+    // Snapshot the dirty set first: resolveWorld removes Dirty as it goes.
+    std::vector<entt::entity> dirty;
+    for (auto e : mReg.view<Dirty>())
+        dirty.push_back(e);
+    for (entt::entity e : dirty)
+        if (mReg.valid(e))
+            resolveWorld(e);
+}
+
 void Scene::setParent(entt::entity, entt::entity) {}
-void Scene::updateWorldTransforms() {}
-void Scene::markSubtreeDirty(entt::entity) {}
-void Scene::resolveWorld(entt::entity) {}
 
 } // namespace eng::ecs
