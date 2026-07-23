@@ -67,6 +67,30 @@ int main() {
     require(wm[3][0] == 10.0f, "world translation X applied");
     require(wm[3][1] == 0.0f && wm[3][2] == 0.0f, "world translation Y/Z zero");
 
+    // --- hierarchy ---
+    Scene s3h;
+    const entt::entity parent = s3h.create("parent");
+    const entt::entity child = s3h.create("child");
+    Transform pt; pt.position = {5.0f, 0.0f, 0.0f};
+    Transform ct; ct.position = {2.0f, 0.0f, 0.0f};
+    s3h.setLocalTransform(parent, pt);
+    s3h.setLocalTransform(child, ct);
+    s3h.setParent(child, parent);
+    require(s3h.registry().get<Parent>(child).value == parent, "parent set");
+    require(s3h.registry().get<Children>(parent).value.size() == 1,
+            "child recorded on parent");
+
+    s3h.updateWorldTransforms();
+    const glm::mat4& cw = s3h.registry().get<WorldTransform>(child).matrix;
+    require(cw[3][0] == 7.0f, "child world = parent + child translation");
+
+    Transform pt2; pt2.position = {0.0f, 3.0f, 0.0f};
+    s3h.setLocalTransform(parent, pt2);
+    require(s3h.registry().all_of<Dirty>(child), "moving parent dirties child");
+    s3h.updateWorldTransforms();
+    const glm::mat4& cw2 = s3h.registry().get<WorldTransform>(child).matrix;
+    require(cw2[3][0] == 2.0f && cw2[3][1] == 3.0f, "child follows parent");
+
     std::cout << "SceneTests OK\n";
     return 0;
 }

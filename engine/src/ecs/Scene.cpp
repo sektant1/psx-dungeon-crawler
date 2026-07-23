@@ -85,6 +85,22 @@ void Scene::updateWorldTransforms()
             resolveWorld(e);
 }
 
-void Scene::setParent(entt::entity, entt::entity) {}
+void Scene::setParent(entt::entity e, entt::entity parent)
+{
+    if (!mReg.valid(e))
+        return;
+    auto& link = mReg.get_or_emplace<Parent>(e);
+    // Remove from the previous parent's Children.
+    if (link.value != entt::null && mReg.valid(link.value)) {
+        if (auto* oc = mReg.try_get<Children>(link.value)) {
+            auto& v = oc->value;
+            v.erase(std::remove(v.begin(), v.end(), e), v.end());
+        }
+    }
+    link.value = parent;
+    if (parent != entt::null && mReg.valid(parent))
+        mReg.get_or_emplace<Children>(parent).value.push_back(e);
+    markSubtreeDirty(e);
+}
 
 } // namespace eng::ecs
