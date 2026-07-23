@@ -29,6 +29,12 @@ private:
     friend class Audio;
     struct Impl;
     explicit SoundInstance(std::unique_ptr<Impl> impl);
+
+    // Release the backend voice while the owning engine is still alive. Called
+    // by Audio::terminate() so instances a caller still holds don't later
+    // uninit against a destroyed engine. After this, every method is a no-op.
+    void finalize();
+
     std::unique_ptr<Impl> mImpl;
 };
 

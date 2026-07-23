@@ -9,6 +9,10 @@ SoundInstance::~SoundInstance() {
     if (mImpl) ma_sound_uninit(&mImpl->sound);
 }
 
+void SoundInstance::finalize() {
+    if (mImpl) { ma_sound_uninit(&mImpl->sound); mImpl.reset(); }
+}
+
 void SoundInstance::setVolume(float v)  { if (mImpl) ma_sound_set_volume(&mImpl->sound, v); }
 void SoundInstance::setPitch(float p)   { if (mImpl) ma_sound_set_pitch(&mImpl->sound, p); }
 void SoundInstance::setLooping(bool l)  { if (mImpl) ma_sound_set_looping(&mImpl->sound, l ? MA_TRUE : MA_FALSE); }

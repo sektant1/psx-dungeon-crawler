@@ -80,6 +80,11 @@ int main(){
     audio.update(0.016f);      // prunes finished
     audio.terminate();
 
+    // Retained handle must survive terminate() without touching a dead engine.
+    require(!inst->isPlaying(), "finalized instance is inert after terminate");
+    inst->setVolume(0.5f);     // no-op, must not crash
+    inst.reset();              // dtor must not double-uninit
+
     std::cout << "AudioTests OK\n";
     return 0;
 }

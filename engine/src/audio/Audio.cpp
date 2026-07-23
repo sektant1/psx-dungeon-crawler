@@ -83,7 +83,10 @@ std::size_t Audio::activeCount() const {
 }
 
 void Audio::terminate() {
-    mInstances.clear();          // uninit every ma_sound before the engine it references
+    // Uninit every voice while the engine is still alive — including instances a
+    // caller still holds a Ptr to (finalize() no-ops their surviving handle).
+    for (auto& p : mInstances) if (p) p->finalize();
+    mInstances.clear();
     if (mImpl && mImpl->haveEngine)  { ma_engine_uninit(&mImpl->engine);  mImpl->haveEngine = false; }
     if (mImpl && mImpl->haveContext) { ma_context_uninit(&mImpl->context); mImpl->haveContext = false; }
     mInitialized = false;
