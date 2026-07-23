@@ -1,0 +1,44 @@
+Fix ImGui overlay window-content flicker on GL3Plus at high/uncapped frame rates.
+
+OGRE's ImGuiOverlay keeps ONE shared dynamic vertex/index buffer and only
+reallocates it when it needs to grow, reusing it across frames otherwise. When
+the CPU runs ahead of the GPU (uncapped frame rate, or vsync scanout timing),
+the next frame's writeData() overwrites a buffer the GPU is still reading from
+the previous frame's draw, so windows drawn later in the frame lose their
+geometry -- seen as flicker/blanking of ImGui window content.
+
+Allocate a fresh vertex+index buffer every frame instead. A brand-new buffer
+cannot alias the previous frame's in-flight draw, and GL defers the old
+buffer's deletion until its draw completes. The buffers are small (tens of KB)
+and the driver pools them, so per-frame allocation is cheap.
+
+--- a/Components/Overlay/src/OgreImGuiOverlay.cpp
++++ b/Components/Overlay/src/OgreImGuiOverlay.cpp
+@@ -374,17 +374,16 @@ void ImGuiOverlay::ImGUIRenderable::updateVertexData(ImDrawData* draw_data)
+ 
+     VertexBufferBinding* bind = mRenderOp.vertexData->vertexBufferBinding;
+ 
+-    if (bind->getBindings().empty() || bind->getBuffer(0)->getNumVertices() < size_t(draw_data->TotalVtxCount))
+-    {
+-        bind->setBinding(0, HardwareBufferManager::getSingleton().createVertexBuffer(
+-                                sizeof(ImDrawVert), draw_data->TotalVtxCount, HBU_CPU_TO_GPU));
+-    }
+-    if (!mRenderOp.indexData->indexBuffer ||
+-        mRenderOp.indexData->indexBuffer->getNumIndexes() < size_t(draw_data->TotalIdxCount))
+-    {
+-        mRenderOp.indexData->indexBuffer = HardwareBufferManager::getSingleton().createIndexBuffer(
+-            HardwareIndexBuffer::IT_16BIT, draw_data->TotalIdxCount, HBU_CPU_TO_GPU);
+-    }
++    // PSX engine patch: allocate a FRESH vertex+index buffer every frame rather
++    // than reusing one across frames. Reuse let the CPU overwrite a buffer the
++    // GPU was still reading from the previous frame's draw (ImGui window content
++    // flicker under GL3Plus at high/uncapped frame rates). A new buffer each
++    // frame cannot alias the in-flight draw; GL defers the old buffer's deletion
++    // until its draw completes.
++    bind->setBinding(0, HardwareBufferManager::getSingleton().createVertexBuffer(
++                            sizeof(ImDrawVert), draw_data->TotalVtxCount, HBU_CPU_TO_GPU));
++    mRenderOp.indexData->indexBuffer = HardwareBufferManager::getSingleton().createIndexBuffer(
++        HardwareIndexBuffer::IT_16BIT, draw_data->TotalIdxCount, HBU_CPU_TO_GPU);
+ 
+     // Copy all vertices
+     size_t vtx_offset = 0;

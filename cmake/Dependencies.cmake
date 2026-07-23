@@ -118,6 +118,10 @@ CPMAddPackage(
     NAME OGRE
     GITHUB_REPOSITORY OGRECave/ogre
     GIT_TAG v14.4.1
+    # Fix ImGui overlay window-content flicker on GL3Plus at high/uncapped frame
+    # rates: the bundled ImGuiOverlay reuses one dynamic vertex/index buffer
+    # across frames, so the CPU can overwrite geometry the GPU is still reading.
+    PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-imgui-overlay-fresh-buffer.patch"
     OPTIONS
         "OGRE_BUILD_DEPENDENCIES ON"
         "OGRE_STATIC OFF"
