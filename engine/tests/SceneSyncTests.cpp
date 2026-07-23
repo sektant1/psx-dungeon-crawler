@@ -59,6 +59,22 @@ int main() {
     sync.sync();
     require(backend.destroys == 1, "node destroyed on entity destroy");
 
+    // --- mesh + light attachment (attach exactly once) ---
+    Scene s2;
+    RecordingBackend b2;
+    SceneSync sync2(s2, b2);
+    const entt::entity lit = s2.create("torch");
+    s2.registry().emplace<MeshRenderer>(lit, MeshHandle{7}, "Flame", false);
+    LightRef lr; lr.desc.range = 5.0f;
+    s2.registry().emplace<LightRef>(lit, lr);
+    sync2.sync();
+    require(b2.meshes == 1, "mesh attached once");
+    require(b2.lights == 1, "light attached once");
+    require(s2.registry().get<LightRef>(lit).handle.valid(),
+            "light handle written back");
+    sync2.sync();
+    require(b2.meshes == 1 && b2.lights == 1, "attachment not repeated");
+
     std::cout << "SceneSyncTests OK\n";
     return 0;
 }
