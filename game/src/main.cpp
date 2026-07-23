@@ -28,6 +28,10 @@
 #include <eng/LoadingScreen.h>
 #include <eng/Log.h>
 #include <eng/Physics.h>
+#include <eng/Profiler.h>
+
+#include <cfloat>
+#include <chrono>
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -471,6 +475,56 @@ struct DynamicProp {
     glm::vec3 renderOffset{0.0f}; // body centre - mesh base (vertical half-height)
 };
 
+// CPU frame-phase timings for the floating Diagnostics window. Each loop
+// iteration writes per-phase milliseconds into ms[] and pushes the total frame
+// time into a rolling history for the plot.
+struct ProfHud {
+    enum Phase { Physics, World, Player, Weapons, Render, kCount };
+    static constexpr const char* kNames[kCount] = {
+        "Physics", "World", "Player", "Weapons", "Render"};
+    float ms[kCount] = {0.0f};
+    static constexpr int kHist = 120;
+    float frameHist[kHist] = {0.0f};
+    int histHead = 0;
+    void pushFrame(float totalMs) {
+        frameHist[histHead] = totalMs;
+        histHead = (histHead + 1) % kHist;
+    }
+};
+
+// Draws the standalone Diagnostics window: rolling frame-time plot, a per-phase
+// CPU bar graph with a numbered legend (Sagel-style), and physics body counts.
+static void drawDiagnostics(const ProfHud& prof, eng::Physics& physics)
+{
+    ImGui::SetNextWindowSize(ImVec2(380.0f, 320.0f), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Diagnostics")) { ImGui::End(); return; }
+
+    float total = 0.0f;
+    for (float m : prof.ms) total += m;
+    char overlay[32];
+    std::snprintf(overlay, sizeof(overlay), "%.2f ms  (%.0f fps)",
+                  total, total > 0.0f ? 1000.0f / total : 0.0f);
+    ImGui::PlotLines("##frame", prof.frameHist, ProfHud::kHist, prof.histHead,
+                     overlay, 0.0f, 33.3f, ImVec2(-1.0f, 48.0f));
+
+    if (ImGui::CollapsingHeader("Systems (ms)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PlotHistogram("##sys", prof.ms, ProfHud::kCount, 0, nullptr,
+                             0.0f, FLT_MAX, ImVec2(150.0f, 90.0f));
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        for (int i = 0; i < ProfHud::kCount; ++i)
+            ImGui::Text("%d: %-8s %5.2f ms", i, ProfHud::kNames[i], prof.ms[i]);
+        ImGui::EndGroup();
+    }
+
+    if (ImGui::CollapsingHeader("Physics", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Bodies active: %d", physics.activeBodyCount());
+        ImGui::Text("Bodies total:  %d", physics.bodyCount());
+    }
+
+    ImGui::End();
+}
+
 int main(int, char**)
 {
     // Dev self-test: PSX_GEN_DUMP=<seed> prints a generated grid and exits,
@@ -848,6 +902,10 @@ int main(int, char**)
         engine.input().setMouseGrab(false);
     });
 
+    // Standalone Diagnostics window (F1), fed by per-phase timers in the loop.
+    ProfHud prof;
+    engine.debugUi().addWindow([&prof, &physics] { drawDiagnostics(prof, physics); });
+
     // ---------------------------------------------------------------- loop ---
     constexpr float kFixedDt = 1.0f / 60.0f;
     float accumulator = 0.0f;
@@ -857,6 +915,10 @@ int main(int, char**)
     while (!engine.shouldClose()) {
         const float dt = engine.tick();
         eng::Input& in = engine.input();
+        using clk = std::chrono::steady_clock;
+        auto phaseMs = [](clk::time_point t0) {
+            return std::chrono::duration<float, std::milli>(clk::now() - t0).count();
+        };
         // First Esc releases the mouse, second quits; click re-grabs.
         // Suspended while the debug panel is open (F1 owns grab then).
         if (!engine.debugUi().visible()) {
@@ -871,6 +933,7 @@ int main(int, char**)
         }
 
         // Fixed-step physics. Cap at 5 steps to prevent spiral of death.
+        auto tPhysics = clk::now();
         accumulator += dt;
         int guard = 0;
         while (accumulator >= kFixedDt && guard++ < 5) {
@@ -896,12 +959,18 @@ int main(int, char**)
         if (dummyAlive)
             dummy.syncRender(physics, r);
 
+        prof.ms[ProfHud::Physics] = phaseMs(tPhysics);
+
+        auto tWorld = clk::now();
         animTime += dt;
         level.update(r, animTime);
         level.updateVisibility(r, player.eyePosition());
+        prof.ms[ProfHud::World] = phaseMs(tWorld);
 
+        auto tPlayer = clk::now();
         if (!portalPreviewMode)
             player.update(in, r, dt);
+        prof.ms[ProfHud::Player] = phaseMs(tPlayer);
 
         targets.clear();
         level.appendTargets(targets, depth);
@@ -957,11 +1026,13 @@ int main(int, char**)
                 swordAttack = true;
             }
         }
+        auto tWeapons = clk::now();
         viewModel.update(r, dt, weapon == WSword && swordAttack,
                          in.mouseGrabbed() &&
                              in.isMouseDown(eng::MouseButton::Right));
         staffModel.update(r, dt, didCast, false);
         torchModel.update(r, dt, weapon == WTorch && swordAttack, false);
+        prof.ms[ProfHud::Weapons] = phaseMs(tWeapons);
 
         // Physics collider wireframe overlay — neon-pink collision view.
         if (showColliders) {
@@ -980,7 +1051,10 @@ int main(int, char**)
             r.setDebugLines({});
         }
 
+        prof.pushFrame(dt * 1000.0f);
+        auto tRender = clk::now();
         engine.renderFrame(dt);
+        prof.ms[ProfHud::Render] = phaseMs(tRender);
     }
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
     teardownDynamicProps();
