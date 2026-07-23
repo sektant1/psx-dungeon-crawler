@@ -26,6 +26,33 @@ int main() {
     require(!scene.registry().valid(a), "destroyed entity invalid");
     require(scene.registry().valid(b), "sibling survives");
 
+    // destroy() removes the entity from its parent's Children list.
+    {
+        Scene s2;
+        auto p = s2.create("parent");
+        auto c = s2.create("child");
+        s2.registry().emplace<Children>(p, std::vector<entt::entity>{c});
+        s2.registry().emplace<Parent>(c, p);
+        s2.destroy(c);
+        require(!s2.registry().valid(c), "child destroyed");
+        require(s2.registry().get<Children>(p).value.empty(),
+                "child removed from parent list");
+    }
+
+    // destroy() orphans the entity's children (keeps them alive).
+    {
+        Scene s3;
+        auto p = s3.create("parent");
+        auto c = s3.create("child");
+        s3.registry().emplace<Children>(p, std::vector<entt::entity>{c});
+        s3.registry().emplace<Parent>(c, p);
+        s3.destroy(p);
+        require(!s3.registry().valid(p), "parent destroyed");
+        require(s3.registry().valid(c), "child survives");
+        require(s3.registry().get<Parent>(c).value == entt::null,
+                "child orphaned");
+    }
+
     std::cout << "SceneTests OK\n";
     return 0;
 }
