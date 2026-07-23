@@ -89,6 +89,8 @@ void Scene::setParent(entt::entity e, entt::entity parent)
 {
     if (!mReg.valid(e))
         return;
+    if (e == parent)
+        return; // self-parenting would infinitely recurse in resolveWorld
     auto& link = mReg.get_or_emplace<Parent>(e);
     // Remove from the previous parent's Children.
     if (link.value != entt::null && mReg.valid(link.value)) {

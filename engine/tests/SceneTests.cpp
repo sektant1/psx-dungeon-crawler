@@ -91,6 +91,17 @@ int main() {
     const glm::mat4& cw2 = s3h.registry().get<WorldTransform>(child).matrix;
     require(cw2[3][0] == 2.0f && cw2[3][1] == 3.0f, "child follows parent");
 
+    // --- unparent ---
+    Scene su;
+    const entt::entity up = su.create("up_parent");
+    const entt::entity uc = su.create("up_child");
+    su.setParent(uc, up);
+    require(su.registry().get<Children>(up).value.size() == 1, "child linked");
+    su.setParent(uc, entt::null);
+    require(su.registry().get<Parent>(uc).value == entt::null, "child unparented");
+    require(su.registry().get<Children>(up).value.empty(),
+            "child removed from old parent on unparent");
+
     std::cout << "SceneTests OK\n";
     return 0;
 }
