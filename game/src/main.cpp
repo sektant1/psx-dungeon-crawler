@@ -8,6 +8,7 @@
 #include "DungeonMap.h"
 #include "FpsController.h"
 #include "LevelEditor.h"
+#include "LevelResource.h"
 #include "LobbyDressing.h"
 #include "Projectiles.h"
 #include "Spells.h"
@@ -24,6 +25,7 @@
 
 #include <imgui.h>
 
+#include <eng/Content.h>
 #include <eng/Engine.h>
 #include <eng/LoadingScreen.h>
 #include <eng/Log.h>
@@ -664,6 +666,10 @@ int main(int, char**)
         dummyAlive = false;
     };
 
+    // New engine content spine drives the lobby load (dual-run; same rows, same
+    // look). Persist so re-entering depth 0 reuses the cached resource.
+    eng::Content levelContent;
+
     // Wipe the scene, build the level at `depth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     const auto enterLevel = [&](bool atExit) {
@@ -672,14 +678,12 @@ int main(int, char**)
         teardownDummy();
         bool loaded = false;
         if (depth == 0) {
-            LevelDocument lobby;
-            std::string error;
-            if (lobby.loadToml(assets + "/lobby.toml", error)) {
+            if (LevelResource* lobby =
+                    levelContent.load<LevelResource>("lobby", assets + "/lobby.toml")) {
                 loaded = level.rebuildLayout(r, physics, assets,
-                                             lobby.validated(), depth);
-            } else {
-                eng::log::error("Lobby: %s", error.c_str());
+                                             lobby->layout(), depth);
             }
+            // load() already logged on failure; leaves `loaded` false.
         } else {
             loaded = level.rebuild(r, physics, assets, seeds[size_t(depth)],
                                    depth);

@@ -139,6 +139,7 @@ add_executable(
   game/src/DungeonMap.cpp
   game/src/DungeonGen.cpp
   game/src/LevelDocument.cpp
+  game/src/LevelResource.cpp
   game/src/LevelEditor.cpp
   game/src/Melee.cpp
   game/src/Projectiles.cpp
@@ -227,6 +228,16 @@ if(BUILD_TESTING)
   target_include_directories(lobby_dressing_tests PRIVATE game/src third_party engine/include)
   target_link_libraries(lobby_dressing_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME lobby_dressing COMMAND lobby_dressing_tests)
+
+  add_executable(level_resource_tests game/tests/LevelResourceTests.cpp
+                                      game/src/LevelResource.cpp
+                                      game/src/LevelDocument.cpp
+                                      game/src/DungeonGen.cpp)
+  target_include_directories(level_resource_tests PRIVATE game/src third_party engine/include)
+  target_link_libraries(level_resource_tests PRIVATE eng_toml glm::glm eng)
+  target_compile_definitions(level_resource_tests PRIVATE
+                             APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+  add_test(NAME level_resource COMMAND level_resource_tests)
 
   add_executable(obj_geometry_tests engine/tests/ObjGeometryTests.cpp
                                      engine/src/ObjLoader.cpp)
