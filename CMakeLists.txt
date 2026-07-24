@@ -171,8 +171,19 @@ eng_target_hardening(game)
 add_executable(
   level_editor
   game/src/editor_main.cpp
-  game/src/EditorCamera.cpp)
-target_include_directories(level_editor PRIVATE third_party)
+  game/src/EditorCamera.cpp
+  game/src/editor/EditorScene.cpp
+  game/src/editor/Picker.cpp
+  game/src/editor/Gizmo.cpp
+  game/src/editor/Commands.cpp
+  game/src/editor/InspectorRegistry.cpp
+  game/src/editor/Palette.cpp
+  game/src/editor/EditorApp.cpp
+  game/src/scene/ByteStream.cpp
+  game/src/scene/ComponentRegistry.cpp
+  game/src/scene/MapSerializer.cpp)
+target_include_directories(level_editor
+  PRIVATE third_party game/src game/src/scene game/src/editor engine/src)
 target_link_libraries(level_editor PRIVATE eng)
 target_compile_definitions(
   level_editor PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
