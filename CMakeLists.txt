@@ -371,6 +371,16 @@ if(BUILD_TESTING)
   target_include_directories(gizmo_math_tests PRIVATE game/src/editor)
   target_link_libraries(gizmo_math_tests PRIVATE glm::glm)
   add_test(NAME gizmo_math COMMAND gizmo_math_tests)
+
+  add_executable(editor_scene_tests
+    game/tests/EditorSceneTests.cpp
+    game/src/editor/EditorScene.cpp
+    engine/src/ecs/Scene.cpp
+    engine/src/ecs/SceneSync.cpp)
+  target_include_directories(editor_scene_tests
+    PRIVATE game/src/editor game/src/scene engine/include engine/src third_party/imgui)
+  target_link_libraries(editor_scene_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME editor_scene COMMAND editor_scene_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
