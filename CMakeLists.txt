@@ -155,10 +155,17 @@ add_executable(
   game/src/Targeting.cpp
   game/src/Dummy.cpp
   game/src/ViewModel.cpp
+  game/src/MapPlay.cpp
+  game/src/scene/MapRuntime.cpp
+  game/src/scene/PhysicsSync.cpp
+  game/src/scene/ByteStream.cpp
+  game/src/scene/ComponentRegistry.cpp
+  game/src/scene/MapSerializer.cpp
   # Compiled directly (not linked via the demo_scene lib) so building `game`
   # never triggers a separate demo target.
   samples/common/DemoScene.cpp)
-target_include_directories(game PRIVATE third_party samples/common engine/src)
+target_include_directories(game PRIVATE third_party samples/common engine/src
+                           game/src game/src/scene)
 target_link_libraries(game PRIVATE eng)
 target_compile_definitions(
   game

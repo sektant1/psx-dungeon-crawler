@@ -10,6 +10,7 @@
 #include "LevelEditor.h"
 #include "LevelResource.h"
 #include "LobbyDressing.h"
+#include "MapPlay.h"
 #include "Projectiles.h"
 #include "Spells.h"
 #include "CombatConfig.h"
@@ -527,7 +528,7 @@ static void drawDiagnostics(const ProfHud& prof, eng::Physics& physics)
     ImGui::End();
 }
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
     // Dev self-test: PSX_GEN_DUMP=<seed> prints a generated grid and exits,
     // no window/Ogre. Eyeball connectivity + room shapes across seeds.
@@ -571,6 +572,19 @@ int main(int, char**)
 
     eng::Physics physics;
     physics.init();
+
+    // `game <file.map>`: play an authored editor scene instead of the
+    // procedural dungeon. Handled here (engine + physics + assets ready, before
+    // the procedural build) and exits with the play loop's return code.
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg.size() > 4 && arg.substr(arg.size() - 4) == ".map") {
+            const int rc = game::playMap(engine, physics, assets, arg);
+            engine.shutdown();
+            return rc;
+        }
+    }
+
     loading.step("Preparing physics", 0.16f);
     loading.present();
 
