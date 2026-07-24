@@ -47,6 +47,10 @@ public:
 
     bool isTerrain(entt::entity e) const { return mReg.all_of<FromLayout>(e); }
 
+    // World size of one tile cell, so callers can map a ground-plane point to a
+    // grid cell (cell (col,row) centres at world {col*cell, 0, row*cell}).
+    float cellSize() const { return mOpts.cell; }
+
 private:
     entt::registry& mReg;
     LevelDocument mTerrain;

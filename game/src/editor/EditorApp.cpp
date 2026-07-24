@@ -25,6 +25,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
@@ -44,7 +45,10 @@ EditorApp::EditorApp(eng::Engine& engine, std::string assetDir)
       mRenderer(engine.renderer()),
       mAssetDir(std::move(assetDir)),
       mBackend(engine.renderer()),
-      mScene(mBackend)
+      mScene(mBackend),
+      mDoc(mScene.registry(),
+           game::SceneGenOptions{4.0f, 3.0f, mAssetDir + "/meshes/tiles/",
+                                 mAssetDir + "/meshes/props/"})
 {
     mRenderer.enableEditorViewport(mVpW, mVpH);
     mRenderer.setAmbient(glm::vec3(0.35f, 0.36f, 0.40f));
@@ -219,6 +223,29 @@ void EditorApp::frame(float dt)
         lines.push_back({centroid, centroid + glm::vec3(0,L,0), {0.2f,1.0f,0.2f}});
         lines.push_back({centroid, centroid + glm::vec3(0,0,L), {0.3f,0.4f,1.0f}});
     }
+
+    // Terrain brush cursor: outline the ground cell under the pointer so the
+    // painter can see the target tile before clicking.
+    if (mTool == Tool::Terrain && mVpHovered && !mLooking &&
+        mVpSize.x >= 1.0f && mVpSize.y >= 1.0f) {
+        const ImGuiIO& io = ImGui::GetIO();
+        const glm::vec2 rel =
+            (glm::vec2(io.MousePos.x, io.MousePos.y) - mVpMin) / mVpSize;
+        const glm::vec2 ndc(rel.x * 2.0f - 1.0f, 1.0f - rel.y * 2.0f);
+        int col, row;
+        if (pointerCell(ndc, col, row)) {
+            const float c = mDoc.cellSize();
+            const float h = c * 0.5f;
+            const glm::vec3 ctr(col * c, 0.02f, row * c); // just above the floor
+            const glm::vec3 brush(0.95f, 0.85f, 0.25f);
+            const glm::vec3 q[4] = {
+                {ctr.x - h, ctr.y, ctr.z - h}, {ctr.x + h, ctr.y, ctr.z - h},
+                {ctr.x + h, ctr.y, ctr.z + h}, {ctr.x - h, ctr.y, ctr.z + h}};
+            for (int i = 0; i < 4; ++i)
+                lines.push_back({q[i], q[(i + 1) % 4], brush});
+        }
+    }
+
     mRenderer.setDebugLines(lines);
 }
 
@@ -252,13 +279,23 @@ void EditorApp::handleViewportInput(float dt)
     }
 
     if (!mVpHovered)
-        return; // picking/gizmo only when the viewport is under the cursor
+        return; // picking/gizmo/paint only when the viewport is under the cursor
 
-    // LMB click: begin gizmo drag if over an axis, else pick.
     const glm::vec2 mouse(io.MousePos.x, io.MousePos.y);
     const glm::vec2 rel = (mouse - mVpMin) / mVpSize; // [0,1]
     glm::vec2 ndc(rel.x * 2.0f - 1.0f, 1.0f - rel.y * 2.0f); // y up
 
+    // Terrain tool: LMB paints the tile under the ground-plane cursor (WC3-style
+    // brush), held-drag paints across cells. No picking/gizmo in this mode.
+    if (mTool == Tool::Terrain) {
+        if (io.MouseDown[0])
+            paintUnderPointer(ndc);
+        else
+            mLastPaintCol = mLastPaintRow = -999999; // reset drag de-dupe
+        return;
+    }
+
+    // LMB click: begin gizmo drag if over an axis, else pick.
     if (io.MouseClicked[0]) {
         // Gizmo hit test: check the three axes from the selection centroid.
         glm::vec3 centroid;
@@ -315,6 +352,33 @@ void EditorApp::handleViewportInput(float dt)
         if (!startedDrag)
             pickAt(ndc, io.KeyCtrl);
     }
+}
+
+bool EditorApp::pointerCell(glm::vec2 ndc, int& col, int& row) const
+{
+    const Ray ray = screenRay(ndc, mCam.flyEye(), mCam.flyOrientation(),
+                              glm::radians(kFovDeg), mVpSize.x / mVpSize.y);
+    glm::vec3 hit;
+    if (!rayPlane(ray, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f), hit))
+        return false; // looking at/above the horizon
+    const float cell = mDoc.cellSize();
+    col = int(std::lround(hit.x / cell));
+    row = int(std::lround(hit.z / cell));
+    return true;
+}
+
+void EditorApp::paintUnderPointer(glm::vec2 ndc)
+{
+    int col, row;
+    if (!pointerCell(ndc, col, row))
+        return;
+    if (col == mLastPaintCol && row == mLastPaintRow)
+        return; // still on the same cell within a held drag
+    mLastPaintCol = col;
+    mLastPaintRow = row;
+    // Paint + re-extrude; new terrain meshes resolve on the next
+    // ensureMeshHandles() (called from frame() below this).
+    mDoc.paintTile(col, row, mBrush);
 }
 
 bool EditorApp::pickBounds(entt::entity e, glm::vec3& mn, glm::vec3& mx)
@@ -655,31 +719,68 @@ void EditorApp::drawToolbar()
         ImGui::EndPopup();
     }
 
+    // Tool tabs (WC3-style): Doodad places/gizmos entities, Terrain paints tiles.
     ImGui::Separator();
-    int mode = int(mGizmoMode);
-    ImGui::TextUnformatted("Gizmo:");
-    ImGui::SameLine(); ImGui::RadioButton("Move (W)", &mode, 0);
-    ImGui::SameLine(); ImGui::RadioButton("Rotate (E)", &mode, 1);
-    ImGui::SameLine(); ImGui::RadioButton("Scale (R)", &mode, 2);
-    mGizmoMode = GizmoMode(mode);
-    ImGui::SameLine();
-    ImGui::Checkbox("Proportional", &mUniformScale);
+    int tool = int(mTool);
+    ImGui::TextUnformatted("Tool:");
+    ImGui::SameLine(); ImGui::RadioButton("Doodad", &tool, 0);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Scale drag affects all axes uniformly");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(110.0f);
-    ImGui::DragFloat("Snap", &mSnapStep, 0.05f, 0.0f, 90.0f, "%.2f");
+        ImGui::SetTooltip("Place + gizmo entities (LMB pick/drag)");
+    ImGui::SameLine(); ImGui::RadioButton("Terrain", &tool, 1);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Gizmo increment. 0 = free. Units for Move/Scale, "
-                          "degrees for Rotate. For Move, the Grid below "
-                          "overrides this when enabled.");
-    ImGui::SameLine();
-    ImGui::Checkbox("Grid", &mGridSnap);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Snap placement + Move to a fixed world grid");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(90.0f);
-    ImGui::DragFloat("Cell", &mGridSize, 0.05f, 0.05f, 32.0f, "%.2f");
+        ImGui::SetTooltip("Paint the tile under the cursor (LMB, hold to drag)");
+    mTool = Tool(tool);
+
+    if (mTool == Tool::Terrain) {
+        // Brush palette: one button per paintable tile glyph.
+        ImGui::SameLine();
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Brush:");
+        struct Tile { char glyph; const char* label; };
+        static const Tile kTiles[] = {
+            {'.', "Floor"}, {'#', "Wall"}, {'A', "Arch"}, {'L', "Torch"},
+            {'S', "Spawn"}, {'X', "Exit"}, {'H', "Chest"}, {'B', "Barrel"},
+            {'R', "Crate"}, {'V', "Urn"}, {' ', "Void"},
+        };
+        for (const Tile& t : kTiles) {
+            ImGui::SameLine();
+            const bool active = mBrush == t.glyph;
+            if (active) ImGui::PushStyleColor(ImGuiCol_Button,
+                                              ImVec4(0.20f, 0.45f, 0.65f, 1.0f));
+            if (ImGui::Button(t.label)) mBrush = t.glyph;
+            if (active) ImGui::PopStyleColor();
+        }
+    }
+
+    // Gizmo/snap controls only apply to the Doodad tool.
+    if (mTool == Tool::Doodad) {
+        ImGui::Separator();
+        int mode = int(mGizmoMode);
+        ImGui::TextUnformatted("Gizmo:");
+        ImGui::SameLine(); ImGui::RadioButton("Move (W)", &mode, 0);
+        ImGui::SameLine(); ImGui::RadioButton("Rotate (E)", &mode, 1);
+        ImGui::SameLine(); ImGui::RadioButton("Scale (R)", &mode, 2);
+        mGizmoMode = GizmoMode(mode);
+        ImGui::SameLine();
+        ImGui::Checkbox("Proportional", &mUniformScale);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Scale drag affects all axes uniformly");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(110.0f);
+        ImGui::DragFloat("Snap", &mSnapStep, 0.05f, 0.0f, 90.0f, "%.2f");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Gizmo increment. 0 = free. Units for Move/Scale, "
+                              "degrees for Rotate. For Move, the Grid below "
+                              "overrides this when enabled.");
+        ImGui::SameLine();
+        ImGui::Checkbox("Grid", &mGridSnap);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Snap placement + Move to a fixed world grid");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(90.0f);
+        ImGui::DragFloat("Cell", &mGridSize, 0.05f, 0.05f, 32.0f, "%.2f");
+    }
 
     ImGui::Separator();
     if (!mStack.canUndo()) ImGui::BeginDisabled();
@@ -856,26 +957,24 @@ void EditorApp::drawPalette()
 void EditorApp::newScene()
 {
     mScene.registry().clear();
+    mDoc.replaceLayout({}); // clear the terrain grid too (empty = no terrain)
     mStack.clear();
     mSel.clear();
 }
 
 void EditorApp::generateDungeon()
 {
-    entt::registry& reg = mScene.registry();
-    reg.clear();
     mSel.clear();
     mStack.clear();
 
     gen::Layout layout = gen::generate(uint32_t(mGenSeed < 0 ? 0 : mGenSeed));
     if (!layout.valid()) return;
 
-    game::SceneGenOptions opts;
-    opts.tileDir = mAssetDir + "/meshes/tiles/";
-    opts.propDir = mAssetDir + "/meshes/props/";
-    game::layoutToScene(layout, opts, reg);
-
-    ensureMeshHandles(); // resolve every generated mesh entity, then sync
+    // Load the generated grid into the terrain layer; EditorDocument extrudes it
+    // (re-extrude destroys only prior terrain, so any doodads survive). This is
+    // also the seed a subsequent brush edit paints on top of.
+    mDoc.replaceLayout(layout.rows());
+    ensureMeshHandles(); // resolve the extruded terrain meshes, then sync
     mScene.sync();
 }
 

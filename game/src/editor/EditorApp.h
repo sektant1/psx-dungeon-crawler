@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CommandStack.h"
+#include "EditorDocument.h"
 #include "EditorScene.h"
 #include "Gizmo.h"
 #include "Palette.h"
@@ -69,11 +70,23 @@ private:
     void openMap(const std::string& path);
     void launchGame();
 
+    // World ground-plane point (y=0) under the pointer -> terrain grid cell.
+    // Returns false if the pointer ray doesn't meet the ground.
+    bool pointerCell(glm::vec2 ndc, int& col, int& row) const;
+    void paintUnderPointer(glm::vec2 ndc);
+
+    // Which manipulation the viewport's LMB performs (WC3-style tool tabs).
+    enum class Tool { Doodad, Terrain };
+
     eng::Engine& mEngine;
     eng::Renderer& mRenderer;
     std::string mAssetDir;
     eng::ecs::RendererSceneBackend mBackend;
     EditorScene mScene;
+    EditorDocument mDoc; // two-layer terrain+doodad document (shares mScene's registry)
+    Tool mTool = Tool::Doodad;
+    char mBrush = '.';       // active terrain tile for the ground brush
+    int mLastPaintCol = -999999, mLastPaintRow = -999999; // de-dupe paint-drag
     Selection mSel;
     CommandStack mStack;
     EditorCamera mCam;
