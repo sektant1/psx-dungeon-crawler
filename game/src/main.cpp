@@ -11,12 +11,9 @@
 #include "LevelResource.h"
 #include "LiveLevel.h"
 #include "MapPlay.h"
-#include "Projectiles.h"
-#include "Spells.h"
-#include "CombatConfig.h"
 #include "SceneFactory.h"
-#include "Melee.h"
 #include "ParticleLibrary.h"
+#include "CombatSystem.h"
 #include "Dummy.h"
 #include "GameContext.h"
 #include "GameDiagnostics.h"
@@ -108,32 +105,26 @@ int main(int argc, char** argv)
     loading.step("Preparing physics", 0.16f);
     loading.present();
 
-    ProjectileSystem projectiles;
-    SpellSystem spells;
-    MeleeSystem melee;
+    game::GameContext ctx{r, physics, engine.input(), assets};
 
-    // Data-oriented attack tunables (speed/range/impulse/colours/particles/
-    // hotkeys), loaded from [combat.*] in game.toml and live-editable in the
-    // "Attacks" debug window. Systems read this each cast/swing.
-    CombatConfig combat;
-    combat.load(assets + "/game.toml");
+    // Attack subsystems (arrows/spells/melee) + data-driven tunables from
+    // [combat.*] in game.toml, live-editable in the "Attacks" debug window.
+    // init() (config load + procedural mesh build) runs after the level is
+    // built, matching the original ordering.
+    game::CombatSystem combat;
 
     ParticleLibrary particles;
     particles.load(r, assets + "/particles.toml");
     loading.step("Loading combat data", 0.26f);
     loading.present();
-    projectiles.setConfig(&combat);
-    spells.setConfig(&combat);
-    melee.setConfig(&combat);
 
     // Dynamic lobby props (crates + barrels): spawned once, synced each frame,
     // torn down before any rebuild. Known limitation: not re-spawned on level
     // transition. Shares the world through GameContext.
     game::PropSystem props;
-    game::GameContext ctx{r, physics, engine.input(), assets};
     Dummy dummy;
     bool dummyAlive = false;
-    melee.setHitCallback([&dummy, &dummyAlive, &physics](
+    combat.melee().setHitCallback([&dummy, &dummyAlive, &physics](
                              eng::BodyHandle body, glm::vec3 point,
                              glm::vec3 normal) {
         if (dummyAlive && dummy.alive() && body == dummy.body())
@@ -228,15 +219,13 @@ int main(int argc, char** argv)
     loading.present();
     enterLevel(false); // depth 0, spawn at entry
 
-    // Initialise the projectile system (builds procedural meshes) and register
-    // the contact seam so arrows stick and bolts despawn on impact.
-    projectiles.init(r);
-    spells.init(r);
+    // Initialise combat (loads [combat.*], builds procedural projectile/spell
+    // meshes) and register the contact seam so arrows stick and bolts despawn.
+    combat.init(ctx, assets + "/game.toml");
     loading.step("Spawning systems", 0.72f);
     loading.present();
-    physics.setContactCallback([&projectiles, &spells, &physics, &r, &dummy, &dummyAlive](const eng::HitEvent& e) {
-        projectiles.onHit(physics, e);
-        spells.onHit(physics, r, e);
+    physics.setContactCallback([&combat, &ctx, &physics, &dummy, &dummyAlive](const eng::HitEvent& e) {
+        combat.onContact(ctx, e);
         if (dummyAlive && dummy.alive() &&
             (e.self == dummy.body() || e.other == dummy.body())) {
             // Arrow hit the dummy: knock it forward and upward
@@ -271,7 +260,7 @@ int main(int argc, char** argv)
                                                                             : "airborne"));
     });
     engine.debugUi().addPanel("Attacks", [&combat, &engine] {
-        combat.drawDebugUi(engine.input());
+        combat.config().drawDebugUi(engine.input());
     });
     engine.debugUi().addPanel("Particles", [&particles, &r] {
         static float particleQuality = 1.0f;
@@ -371,17 +360,14 @@ int main(int argc, char** argv)
         int guard = 0;
         while (accumulator >= kFixedDt && guard++ < 5) {
             physics.update(kFixedDt);
-            projectiles.fixedUpdate(physics, r, kFixedDt);
-            spells.fixedUpdate(physics, r, kFixedDt);
-            melee.fixedUpdate(physics, player.eyePosition(), player.forward(), kFixedDt);
+            combat.fixedStep(ctx, player.eyePosition(), player.forward(), kFixedDt);
             accumulator -= kFixedDt;
         }
         physics.setInterpolationAlpha(accumulator / kFixedDt);
 
         // Sync dynamic prop render nodes from the interpolated physics transform.
         props.sync(ctx);
-        projectiles.syncRender(physics, r);
-        spells.syncRender(physics, r);
+        combat.syncRender(ctx);
         if (dummyAlive)
             dummy.syncRender(physics, r);
 
@@ -436,19 +422,19 @@ int main(int argc, char** argv)
                 applyWeaponVis(r);
             }
             if (in.wasPressed("fire_arrow"))
-                projectiles.fireArrow(physics, r, player.eyePosition(), player.forward());
+                combat.fireArrow(ctx, player.eyePosition(), player.forward());
             // Staff casts only when the staff is equipped.
             if (weapon == WStaff && in.wasPressed("cast_spell")) {
-                spells.castFireball(physics, r, player.eyePosition(), player.forward());
+                combat.castFireball(ctx, player.eyePosition(), player.forward());
                 didCast = true;
             }
             if (weapon == WStaff && in.wasPressed("cast_beam")) {
-                spells.castBeam(physics, r, player.eyePosition(), player.forward());
+                combat.castBeam(ctx, player.eyePosition(), player.forward());
                 didCast = true;
             }
             // Melee swing for the sword and the torch (a light club).
             if ((weapon == WSword || weapon == WTorch) && in.wasMouseClicked()) {
-                melee.startSwing();
+                combat.startSwing();
                 swordAttack = true;
             }
         }
@@ -486,8 +472,7 @@ int main(int argc, char** argv)
     props.teardown(physics);
     teardownDummy();
     level.clearPhysics();
-    projectiles.clear(physics, r);
-    spells.clear(physics, r);
+    combat.clear(ctx);
     physics.shutdown();
     engine.shutdown();
     return 0;
