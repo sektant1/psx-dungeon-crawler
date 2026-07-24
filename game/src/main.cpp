@@ -17,9 +17,9 @@
 #include "GameContext.h"
 #include "GameDiagnostics.h"
 #include "GameScene.h"
+#include "InteractionSystem.h"
 #include "PlayerSystem.h"
 #include "PropSystem.h"
-#include "Targeting.h"
 
 #include <eng/ecs/Components.h>
 
@@ -301,12 +301,12 @@ int main(int argc, char** argv)
     ProfHud prof;
     engine.debugUi().addWindow([&prof, &physics] { game::drawDiagnostics(prof, physics); });
 
+    game::InteractionSystem interaction;
+
     // ---------------------------------------------------------------- loop ---
     constexpr float kFixedDt = 1.0f / 60.0f;
     float accumulator = 0.0f;
     float animTime = 0.0f;
-    std::vector<GameplayTarget> targets;
-    targets.reserve(64);
     while (!engine.shouldClose()) {
         const float dt = engine.tick();
         eng::Input& in = engine.input();
@@ -357,34 +357,23 @@ int main(int argc, char** argv)
             playerSys.update(ctx, dt);
         prof.ms[ProfHud::Player] = phaseMs(tPlayer);
 
-        targets.clear();
-        level.appendTargets(targets, depth);
-        const GameplayTarget* target = aimedTarget(
-            targets, player.eyePosition(), player.forward());
-        if (!target) {
-            engine.debugUi().setHudPrompt({});
-        } else if (target->kind == TargetKind::Torch) {
-            engine.debugUi().setHudPrompt(level.torchIsLit(target->id)
-                                              ? "Press [E] to snuff the torch"
-                                              : "Press [E] to light the torch");
-            if (in.wasPressed("interact"))
-                level.toggleTorch(r, target->id);
-        } else if (target->kind == TargetKind::PortalDown) {
-            engine.debugUi().setHudPrompt("Press [E] to descend");
-            if (in.wasPressed("interact")) {
+        // Look-interaction + portal transitions. Descend appends the next
+        // depth's seed on first visit (so revisits reuse the same layout) and
+        // rebuilds; ascend rebuilds the level below.
+        interaction.update(
+            ctx, level, depth, player.eyePosition(), player.forward(),
+            engine.debugUi(),
+            /*onDescend=*/[&] {
                 if (depth + 1 == int(seeds.size()))
                     seeds.push_back(baseSeed +
                                     uint32_t(depth + 1) * 0x9E3779B9u);
                 ++depth;
                 enterLevel(false);
-            }
-        } else {
-            engine.debugUi().setHudPrompt("Press [E] to ascend");
-            if (in.wasPressed("interact")) {
+            },
+            /*onAscend=*/[&] {
                 --depth;
                 enterLevel(true);
-            }
-        }
+            });
 
         // Attack input — only when mouse is grabbed (not in debug UI). Weapon
         // selection lives with the player; casts/swings are gated on the
