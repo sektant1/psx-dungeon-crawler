@@ -50,6 +50,7 @@ private:
     void duplicateSelection();
 
     glm::vec3 spawnPosInFrontOfCamera() const;
+    glm::vec3 snapToGrid(glm::vec3 p) const; // no-op unless grid snap is on
     bool selectionCentroid(glm::vec3& out);
 
     void buildMaterialCatalog();                               // mesh->material map
@@ -71,6 +72,8 @@ private:
     Palette mPalette;
     GizmoMode mGizmoMode = GizmoMode::Translate;
     bool mUniformScale = true; // scale all axes together (proportional)
+    bool mGridSnap = false;    // snap placement + move to a fixed world grid
+    float mGridSize = 1.0f;    // grid cell size when mGridSnap is on
     std::unordered_map<std::string, std::string> mMatByMesh; // mesh file -> material
     float mSnapStep = 0.0f;
     std::string mMapPath;

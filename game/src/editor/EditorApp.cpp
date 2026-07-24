@@ -91,7 +91,13 @@ EditorApp::EditorApp(eng::Engine& engine, std::string assetDir)
 glm::vec3 EditorApp::spawnPosInFrontOfCamera() const
 {
     const glm::vec3 fwd = mCam.flyOrientation() * glm::vec3(0.0f, 0.0f, -1.0f);
-    return mCam.flyEye() + fwd * 4.0f;
+    return snapToGrid(mCam.flyEye() + fwd * 4.0f);
+}
+
+glm::vec3 EditorApp::snapToGrid(glm::vec3 p) const
+{
+    if (!mGridSnap || mGridSize <= 0.0f) return p;
+    return {snap(p.x, mGridSize), snap(p.y, mGridSize), snap(p.z, mGridSize)};
 }
 
 bool EditorApp::selectionCentroid(glm::vec3& out)
@@ -160,13 +166,18 @@ void EditorApp::frame(float dt)
 
     // Overlays: ground grid + selection AABB wire-box + gizmo axis lines.
     std::vector<eng::Renderer::DebugLine> lines;
-    const glm::vec3 gridCol(0.25f, 0.27f, 0.30f);
+    // Ground grid: brighter when grid-snap is on, spaced to the snap cell so the
+    // snap increment is visible.
+    const bool snapping = mGridSnap && mGridSize > 0.0f;
+    const glm::vec3 gridCol = snapping ? glm::vec3(0.35f, 0.45f, 0.55f)
+                                       : glm::vec3(0.25f, 0.27f, 0.30f);
+    const float step = snapping ? mGridSize : 1.0f;
     const int half = 10;
+    const float ext = half * step;
     for (int i = -half; i <= half; ++i) {
-        lines.push_back({{float(i), 0.0f, float(-half)},
-                         {float(i), 0.0f, float(half)}, gridCol});
-        lines.push_back({{float(-half), 0.0f, float(i)},
-                         {float(half), 0.0f, float(i)}, gridCol});
+        const float p = i * step;
+        lines.push_back({{p, 0.0f, -ext}, {p, 0.0f, ext}, gridCol});
+        lines.push_back({{-ext, 0.0f, p}, {ext, 0.0f, p}, gridCol});
     }
 
     const auto& reg = mScene.registry();
@@ -354,6 +365,7 @@ void EditorApp::updateGizmoDrag()
             cur.position.y = snap(cur.position.y, mSnapStep);
             cur.position.z = snap(cur.position.z, mSnapStep);
         }
+        cur.position = snapToGrid(cur.position); // grid snap overrides when on
     } else if (mGizmoMode == GizmoMode::Rotate) {
         glm::vec3 hit;
         if (!rayPlane(ray, mDragCentroid, axis, hit)) return;
@@ -462,7 +474,7 @@ void EditorApp::duplicateSelection()
                 t->deserialize(r, e, rd);
         }
         if (auto* tr = r.try_get<eng::ecs::Transform>(e))
-            tr->position += glm::vec3(1.0f, 0.0f, 1.0f); // offset so it's visible
+            tr->position = snapToGrid(tr->position + glm::vec3(1.0f, 0.0f, 1.0f));
         r.emplace_or_replace<eng::ecs::Dirty>(e);
         resolveMeshHandle(mRenderer, r, e);
         *slot = e;
@@ -557,6 +569,13 @@ void EditorApp::drawToolbar()
     ImGui::DragFloat("Snap", &mSnapStep, 0.05f, 0.0f, 90.0f, "%.2f");
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("0 = free. Units for Move/Scale, degrees for Rotate.");
+    ImGui::SameLine();
+    ImGui::Checkbox("Grid", &mGridSnap);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Snap placement + Move to a fixed world grid");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(90.0f);
+    ImGui::DragFloat("Cell", &mGridSize, 0.05f, 0.05f, 32.0f, "%.2f");
 
     ImGui::Separator();
     if (!mStack.canUndo()) ImGui::BeginDisabled();
