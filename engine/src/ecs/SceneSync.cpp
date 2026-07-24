@@ -55,6 +55,14 @@ void SceneSync::sync()
         mBackend.setScale(node, t.scale);
     }
 
+    // 3b) Push animated light colours. Cheap (few lights); runs every frame so
+    //     gameplay can drive flicker/pulse by writing the LightColour component.
+    for (auto e : reg.view<LightRef, LightColour>()) {
+        const LightHandle h = reg.get<LightRef>(e).handle;
+        if (h.valid())
+            mBackend.setLightColour(h, reg.get<LightColour>(e).value);
+    }
+
     // 4) Destroyed entities: free their nodes.
     mTracked.erase(std::remove_if(mTracked.begin(), mTracked.end(),
         [&](auto& pair) {

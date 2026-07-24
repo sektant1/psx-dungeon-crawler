@@ -31,6 +31,10 @@ struct Engine::Impl {
     // Frame limiter: minimum seconds per frame (0 = uncapped). Paces the loop
     // when vsync is off so the GPU isn't driven flat out.
     float minFrameSec = 0.0f;
+    // Deterministic capture: when set, tick() returns this fixed dt instead of
+    // wall-clock time, so animTime/physics/particles advance identically every
+    // run and PSX_SCREENSHOT becomes a real pixel-diff regression oracle.
+    float fixedTickDt = 0.0f; // 0 = disabled (normal wall-clock timing)
 };
 
 Engine::Engine() : mImpl(new Impl) {}
@@ -91,12 +95,30 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     const char* shot = std::getenv("PSX_SCREENSHOT");
     if (shot)
         mImpl->screenshotPath = shot;
+    // Screenshot capture drives a fixed timestep so the frame is reproducible
+    // (default 1/60 s). PSX_FIXED_DT overrides it (e.g. to land on a specific
+    // animation phase); set it explicitly to force deterministic timing without
+    // capturing.
+    if (shot)
+        mImpl->fixedTickDt = 1.0f / 60.0f;
+    if (const char* fdt = std::getenv("PSX_FIXED_DT")) {
+        const float v = float(std::atof(fdt));
+        if (v > 0.0f)
+            mImpl->fixedTickDt = v;
+    }
     if (const char* frame = std::getenv("PSX_SCREENSHOT_FRAME"))
         mImpl->screenshotFrame = std::max(1, std::atoi(frame));
     if (const char* frames = std::getenv("PSX_BENCH_FRAMES")) {
         mImpl->benchmarkFrames = std::max(1, std::atoi(frames));
         mImpl->frameSamples.reserve(size_t(mImpl->benchmarkFrames));
     }
+    // Deterministic capture: Ogre's ParticleFX emitters draw from C rand(),
+    // which some init path reseeds from wall-clock time. Pin it to a constant
+    // so fire/ash/spark emission is identical every run (seed here, before any
+    // particle spawns in the game's level build).
+    if (mImpl->fixedTickDt > 0.0f)
+        std::srand(1234u);
+
     mImpl->hasPrev = false;
     return true;
 }
@@ -134,6 +156,11 @@ float Engine::tick()
                 mInput.mImpl->onEvent(e);
         }
     }
+    // Deterministic capture: ignore wall-clock and advance by a fixed step so
+    // every frame is reproducible. Skips the frame limiter (no pacing needed).
+    if (mImpl->fixedTickDt > 0.0f)
+        return mImpl->fixedTickDt;
+
     auto now = std::chrono::steady_clock::now();
     if (!mImpl->hasPrev) {
         mImpl->prev = now;

@@ -23,6 +23,7 @@ public:
     void attachMesh(NodeHandle, MeshHandle, const std::string& material,
                     bool castShadows) override;
     LightHandle attachLight(NodeHandle, const LightDesc&) override;
+    void setLightColour(LightHandle, glm::vec3) override;
 
 private:
     Renderer& mR;

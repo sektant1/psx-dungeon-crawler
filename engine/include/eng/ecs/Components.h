@@ -56,6 +56,13 @@ struct LightRef {
     LightHandle handle;
 };
 
+// Per-frame light colour override (linear, energy pre-multiplied). Present on an
+// entity that also has a LightRef, SceneSync pushes this to the light every
+// frame -- for animated lights (torch flicker, glow pulse) driven by gameplay.
+struct LightColour {
+    glm::vec3 value{1.0f};
+};
+
 // The renderer scene node backing this entity. Populated by SceneSync; callers
 // never set this directly.
 struct NodeRef {

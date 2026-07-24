@@ -29,6 +29,7 @@ struct MockBackend : eng::ecs::SceneBackend {
     { ++meshes; }
     eng::LightHandle attachLight(eng::NodeHandle, const eng::LightDesc&) override
     { ++lights; return eng::LightHandle{next++}; }
+    void setLightColour(eng::LightHandle, glm::vec3) override {}
 };
 
 int main()

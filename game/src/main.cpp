@@ -19,8 +19,11 @@
 #include "ParticleLibrary.h"
 #include "RenderPalette.h"
 #include "Dummy.h"
+#include "GameScene.h"
 #include "Targeting.h"
 #include "ViewModel.h"
+
+#include <eng/ecs/Components.h>
 
 #include <DemoScene.h>
 
@@ -42,6 +45,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -78,8 +82,15 @@ private:
                                 uint32_t, int, const gen::Layout*);
     DungeonMap map;
     DemoScene scene;
+    // Game-side ECS scene: owns per-entity gameplay actors (static set-dressing
+    // props migrated in R1; more actors follow). Pinned on the heap so the
+    // Renderer/Scene refs inside it survive LiveLevel moves. Null until the
+    // first buildLevel. The batched dungeon shell stays in `map`, not here.
+    std::unique_ptr<game::GameScene> gameScene;
     eng::NodeHandle chestBase{}, chestSpin{};
-    eng::LightHandle chestGlow{};
+    // Chest glow is an ECS light actor (R1b): animated position + colour are
+    // written to its components each frame; SceneSync pushes them to the light.
+    entt::entity chestGlowEntity{entt::null};
     glm::vec3 chestGlowColour{0.0f};
     glm::vec3 spawn{0.0f}, exit{0.0f};
     PortalProp downPortal{};
@@ -203,6 +214,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                      const gen::Layout* authored = nullptr)
 {
     LiveLevel lv;
+    lv.gameScene = std::make_unique<game::GameScene>(r);
     const eng::NodeHandle levelRoot =
         r.createNode(eng::kRootNode, glm::vec3(0.0f),
                      "Level Scene depth " + std::to_string(depth));
@@ -251,20 +263,21 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
 
         const std::string props = assets + "/meshes/props/";
         const auto mesh = [&](const char* f) { return r.loadObj(props + f); };
-        const auto place = [&](eng::MeshHandle m, const char* mat,
-                               glm::vec3 pos, float yawDeg,
-                               glm::vec3 scale = glm::vec3(1.0f),
-                               bool cast = true) {
-            eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
-            if (yawDeg != 0.0f)
-                r.setOrientation(n, glm::angleAxis(glm::radians(yawDeg),
-                                                   glm::vec3(0, 1, 0)));
-            if (scale != glm::vec3(1.0f))
-                r.setScale(n, scale);
-            r.attachMesh(n, m, mat, cast);
-            return n;
-        };
         const glm::vec3 noScale{1.0f};
+
+        // ECS path (R1): spawn a static prop as a registry actor; SceneSync
+        // allocates the renderer node and attaches the mesh. yawDeg rotates
+        // about Y (the only rotation the migrated crates need).
+        const auto placeEcs = [&](eng::MeshHandle m, const char* mat,
+                                  glm::vec3 pos, float yawDeg,
+                                  glm::vec3 scale = glm::vec3(1.0f),
+                                  bool cast = true) {
+            const glm::quat q =
+                yawDeg != 0.0f
+                    ? glm::angleAxis(glm::radians(yawDeg), glm::vec3(0, 1, 0))
+                    : glm::quat(1, 0, 0, 0);
+            return lv.gameScene->spawnStatic(m, mat, pos, q, scale, cast);
+        };
 
         eng::MeshHandle crate = mesh("prop_crate.obj");
         eng::MeshHandle pumpkin = mesh("prop_pumpkin.obj");
@@ -283,37 +296,31 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         // --- great hall corner crate stack (per-crate Y offsets, kept in code)
         if (depth == 0) {
             const glm::vec3 c{-9.0f, 0.0f, -4.5f};
-            place(crate, "Game/PropMarket", c, 10.0f, noScale, false);
-            place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f,
-                  noScale, false);
-            place(crate, "Game/PropMarket", c + glm::vec3(0, 0.48f, 0), 40.0f,
-                  noScale, false);
+            placeEcs(crate, "Game/PropMarket", c, 10.0f, noScale, false);
+            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f,
+                     noScale, false);
+            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.48f, 0), 40.0f,
+                     noScale, false);
         }
 
         // --- vault (z ~ -18..-26): sword stabbed into the floor, shield on a
         // barrel. The weapons-pack meshes are authored huge; scale down.
         {
-            eng::NodeHandle sword =
-                r.createNode(eng::kRootNode, {0.0f, 1.15f, -24.0f});
-            r.setScale(sword, glm::vec3(0.06f));
-            r.setOrientation(sword,
-                             glm::angleAxis(glm::radians(168.0f),
-                                            glm::vec3(0, 0, 1)) *
-                                 glm::angleAxis(glm::radians(8.0f),
-                                                glm::vec3(1, 0, 0)));
-            r.attachMesh(sword, mesh("prop_sword.obj"), "Game/PropWeapon");
+            const glm::quat swordRot =
+                glm::angleAxis(glm::radians(168.0f), glm::vec3(0, 0, 1)) *
+                glm::angleAxis(glm::radians(8.0f), glm::vec3(1, 0, 0));
+            lv.gameScene->spawnStatic(mesh("prop_sword.obj"), "Game/PropWeapon",
+                                      {0.0f, 1.15f, -24.0f}, swordRot,
+                                      glm::vec3(0.06f), false);
 
             // The barrel the shield rests on is authored in lobby_dressing.toml.
             const glm::vec3 b{-4.0f, 0.0f, -24.2f};
-            eng::NodeHandle shield =
-                r.createNode(eng::kRootNode, b + glm::vec3(0.0f, 0.55f, -0.75f));
-            r.setScale(shield, glm::vec3(0.08f));
-            r.setOrientation(shield,
-                             glm::angleAxis(glm::radians(180.0f),
-                                            glm::vec3(0, 1, 0)) *
-                                 glm::angleAxis(glm::radians(-20.0f),
-                                                glm::vec3(1, 0, 0)));
-            r.attachMesh(shield, mesh("prop_shield.obj"), "Game/PropWeapon");
+            const glm::quat shieldRot =
+                glm::angleAxis(glm::radians(180.0f), glm::vec3(0, 1, 0)) *
+                glm::angleAxis(glm::radians(-20.0f), glm::vec3(1, 0, 0));
+            lv.gameScene->spawnStatic(mesh("prop_shield.obj"), "Game/PropWeapon",
+                                      b + glm::vec3(0.0f, 0.55f, -0.75f),
+                                      shieldRot, glm::vec3(0.08f), false);
         }
 
         // --- braziers: ground the demo's two omni lamps in open barrels with
@@ -323,9 +330,9 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             buildBraziers(r, assets + "/meshes/props/", omnis[0], omnis[1]);
         {
             const glm::vec3 c{-4.5f, 0.0f, -20.0f};
-            place(crate, "Game/PropMarket", c, -20.0f, noScale, false);
-            place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), 15.0f,
-                  noScale, false);
+            placeEcs(crate, "Game/PropMarket", c, -20.0f, noScale, false);
+            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), 15.0f,
+                     noScale, false);
         }
     }
 
@@ -336,8 +343,14 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     TreasureShrine shrine = buildTreasureShrine(r, assets + "/meshes/props/");
     lv.chestBase = shrine.chestBase;
     lv.chestSpin = shrine.chestSpin;
-    lv.chestGlow = shrine.chestGlow;
     lv.chestGlowColour = shrine.chestGlowColour;
+    // Glow light as an ECS actor at the chest's rest height; LiveLevel::update
+    // animates its position (to ride the hovering chest) and colour (pulse).
+    eng::LightDesc glow;
+    glow.colour = shrine.chestGlowColour;
+    glow.range = shrine.glowRange;
+    lv.chestGlowEntity =
+        lv.gameScene->spawnLight(glow, {0.0f, 1.35f, 0.0f}, "Chest Glow");
 
     }
 
@@ -426,16 +439,30 @@ void LiveLevel::update(eng::Renderer& r, float animationTime)
     scene.update(r, animationTime);
     map.update(r, animationTime);
     if (chestBase.valid()) {
-        r.setPosition(chestBase,
-                      {0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f),
-                       0.0f});
+        const glm::vec3 hover{
+            0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f), 0.0f};
+        r.setPosition(chestBase, hover);
         r.setOrientation(
             chestSpin,
             glm::angleAxis(animationTime * 0.8f, glm::vec3(0, 1, 0)));
         const float pulse = 0.9f + 0.1f * std::sin(animationTime * 1.7f) +
                             0.05f * std::sin(animationTime * 4.3f);
-        r.setLightColour(chestGlow, chestGlowColour * pulse);
+        // Drive the glow light actor through its ECS components; SceneSync
+        // (below) pushes them to the renderer this same frame.
+        if (chestGlowEntity != entt::null && gameScene) {
+            eng::ecs::Transform t;
+            t.position = hover;
+            gameScene->scene().setLocalTransform(chestGlowEntity, t);
+            gameScene->scene()
+                .registry()
+                .get<eng::ecs::LightColour>(chestGlowEntity)
+                .value = chestGlowColour * pulse;
+        }
     }
+    // Reconcile the renderer view with the ECS registry AFTER all actor
+    // mutations this frame (static props, animated glow light).
+    if (gameScene)
+        gameScene->sync();
 }
 
 

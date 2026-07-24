@@ -24,6 +24,9 @@ public:
     virtual void attachMesh(NodeHandle, MeshHandle, const std::string& material,
                             bool castShadows) = 0;
     virtual LightHandle attachLight(NodeHandle, const LightDesc&) = 0;
+    // Retint an existing light (linear, energy pre-multiplied) -- driven per
+    // frame for animated lights.
+    virtual void setLightColour(LightHandle, glm::vec3) = 0;
 };
 
 } // namespace eng::ecs

@@ -67,8 +67,10 @@ bool loadPrimitiveShowcase(eng::Renderer& renderer, const std::string& path,
 struct TreasureShrine {
     eng::NodeHandle chestBase{};
     eng::NodeHandle chestSpin{};
-    eng::LightHandle chestGlow{};
+    // The warm glow is spawned by the caller as an ECS light actor (so its
+    // pulse is driven through the registry), using these authored values.
     glm::vec3 chestGlowColour{0.0f};
+    float glowRange = 6.0f;
 };
 TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& propMeshDir);
 

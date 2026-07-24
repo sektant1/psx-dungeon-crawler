@@ -190,10 +190,8 @@ TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& props) {
     r.attachMesh(sh.chestSpin, r.loadObj(props + "prop_chest.obj"),
                  "Game/PropChest", true);
     r.spawnParticles("sparkles", sh.chestBase);
-    eng::LightDesc glow;
-    glow.colour = sh.chestGlowColour;
-    glow.range = 6.0f;
-    sh.chestGlow = r.attachLight(sh.chestBase, glow);
+    // The glow light is spawned by the caller as an ECS actor (see buildLevel);
+    // sh.chestGlowColour / sh.glowRange carry the authored values.
     return sh;
 }
 

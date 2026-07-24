@@ -32,6 +32,8 @@ struct RecordingBackend : SceneBackend {
     LightHandle attachLight(NodeHandle, const LightDesc&) override {
         ++lights; return LightHandle{nextLight++};
     }
+    int colourPushes = 0;
+    void setLightColour(LightHandle, glm::vec3) override { ++colourPushes; }
 };
 
 int main() {

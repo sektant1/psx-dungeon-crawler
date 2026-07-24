@@ -25,6 +25,7 @@
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -205,7 +206,15 @@ void Physics::init() {
     if (!Factory::sInstance) Factory::sInstance = new Factory();
     RegisterTypes();
     mImpl->temp = std::make_unique<TempAllocatorImpl>(16 * 1024 * 1024);
-    unsigned threads = std::max(1u, std::thread::hardware_concurrency() - 1u);
+    // Deterministic capture: multi-threaded Jolt resolves contacts in a
+    // thread-race order, so dynamic props settle differently every run. Under
+    // PSX_SCREENSHOT/PSX_FIXED_DT force a single worker so the frame is
+    // reproducible (matches Engine's fixed-timestep capture mode).
+    const bool deterministic =
+        std::getenv("PSX_SCREENSHOT") || std::getenv("PSX_FIXED_DT");
+    unsigned threads =
+        deterministic ? 1u
+                      : std::max(1u, std::thread::hardware_concurrency() - 1u);
     mImpl->jobs = std::make_unique<JobSystemThreadPool>(cMaxPhysicsJobs, cMaxPhysicsBarriers, int(threads));
     mImpl->system.Init(4096, 0, 4096, 4096, mImpl->bp, mImpl->ovb, mImpl->opp);
     mImpl->system.SetGravity(Vec3(0, -18.0f, 0));

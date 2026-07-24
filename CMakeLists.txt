@@ -3,7 +3,7 @@ project(dungeon_crawler CXX)
 
 include(CTest)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -80,10 +80,6 @@ add_library(
   engine/src/ecs/SceneSync.cpp
   engine/src/ecs/RendererSceneBackend.cpp
   engine/src/core/Object.cpp
-  engine/src/core/Entity.cpp
-  engine/src/core/Space.cpp
-  engine/src/core/GameSession.cpp
-  engine/src/systems/Factory.cpp
   engine/src/diagnostics/Trace.cpp
   engine/src/diagnostics/Profiler.cpp
   engine/src/systems/Ease.cpp
@@ -141,6 +137,7 @@ add_executable(
   game/src/FpsController.cpp
   game/src/DungeonMap.cpp
   game/src/DungeonGen.cpp
+  game/src/GameScene.cpp
   game/src/LevelDocument.cpp
   game/src/LevelResource.cpp
   game/src/LevelEditor.cpp
@@ -330,18 +327,9 @@ if(BUILD_TESTING)
   add_test(NAME obj_geometry COMMAND obj_geometry_tests)
 
   add_executable(core_object_tests engine/tests/CoreObjectTests.cpp
-                                   engine/src/core/Object.cpp
-                                   engine/src/core/Entity.cpp
-                                   engine/src/core/Space.cpp
-                                   engine/src/core/GameSession.cpp)
+                                   engine/src/core/Object.cpp)
   target_include_directories(core_object_tests PRIVATE engine/include)
   add_test(NAME core_object COMMAND core_object_tests)
-
-  add_executable(factory_tests engine/tests/FactoryTests.cpp
-                               engine/src/systems/Factory.cpp
-                               engine/src/core/Object.cpp)
-  target_include_directories(factory_tests PRIVATE engine/include)
-  add_test(NAME factory COMMAND factory_tests)
 
   add_executable(trace_tests engine/tests/TraceTests.cpp
                              engine/src/diagnostics/Trace.cpp)

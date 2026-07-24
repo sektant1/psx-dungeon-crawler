@@ -23,5 +23,9 @@ LightHandle RendererSceneBackend::attachLight(NodeHandle n, const LightDesc& d)
 {
     return mR.attachLight(n, d);
 }
+void RendererSceneBackend::setLightColour(LightHandle l, glm::vec3 c)
+{
+    mR.setLightColour(l, c);
+}
 
 } // namespace eng::ecs
