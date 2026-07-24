@@ -141,6 +141,10 @@ add_executable(
   game/src/GameDiagnostics.cpp
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
+  game/src/combat/DamageSystem.cpp
+  game/src/combat/StatusEffectSystem.cpp
+  game/src/combat/WeaponLibrary.cpp
+  game/src/combat/CombatDirector.cpp
   game/src/PlayerSystem.cpp
   game/src/InteractionSystem.cpp
   game/src/LiveLevel.cpp
@@ -285,6 +289,23 @@ if(BUILD_TESTING)
     PRIVATE game/src/scene engine/include third_party)
   target_link_libraries(component_registry_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME component_registry COMMAND component_registry_tests)
+
+  add_executable(damage_system_tests
+    game/tests/DamageSystemTests.cpp
+    game/src/combat/DamageSystem.cpp)
+  target_include_directories(damage_system_tests
+    PRIVATE game/src engine/include third_party)
+  target_link_libraries(damage_system_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME damage_system COMMAND damage_system_tests)
+
+  add_executable(status_effect_tests
+    game/tests/StatusEffectTests.cpp
+    game/src/combat/StatusEffectSystem.cpp
+    game/src/combat/DamageSystem.cpp)
+  target_include_directories(status_effect_tests
+    PRIVATE game/src engine/include third_party)
+  target_link_libraries(status_effect_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME status_effect COMMAND status_effect_tests)
 
   add_executable(map_serializer_tests
     game/tests/MapSerializerTests.cpp

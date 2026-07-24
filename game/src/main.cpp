@@ -20,6 +20,7 @@
 #include "InteractionSystem.h"
 #include "PlayerSystem.h"
 #include "PropSystem.h"
+#include "combat/CombatComponents.h"
 
 #include <eng/ecs/Components.h>
 
@@ -123,13 +124,10 @@ int main(int argc, char** argv)
     game::PropSystem props;
     Dummy dummy;
     bool dummyAlive = false;
-    combat.melee().setHitCallback([&dummy, &dummyAlive, &physics](
-                             eng::BodyHandle body, glm::vec3 point,
-                             glm::vec3 normal) {
-        if (dummyAlive && dummy.alive() && body == dummy.body())
-            dummy.kill(physics, -normal * 8.0f + glm::vec3(0.0f, 3.0f, 0.0f),
-                       point);
-    });
+    // Combat-model entities (assigned once the dummy + player exist, below). The
+    // player is a bodiless combatant used only as a damage source (faction gate).
+    entt::entity playerEntity = entt::null;
+    entt::entity dummyEntity = entt::null;
 
     LiveLevel level;
     // Player controller + first-person viewmodels + active weapon selection.
@@ -145,6 +143,8 @@ int main(int argc, char** argv)
     const auto teardownDummy = [&] {
         if (!dummyAlive)
             return;
+        combat.director().removeCombatant(dummy.body()); // drop body->entity link
+        dummyEntity = entt::null;
         dummy.clear(physics, r);
         dummyAlive = false;
     };
@@ -199,12 +199,16 @@ int main(int argc, char** argv)
     combat.init(ctx, assets + "/game.toml");
     loading.step("Spawning systems", 0.72f);
     loading.present();
-    physics.setContactCallback([&combat, &ctx, &physics, &dummy, &dummyAlive](const eng::HitEvent& e) {
+    physics.setContactCallback([&combat, &ctx, &physics, &dummy, &dummyAlive,
+                                &playerEntity](const eng::HitEvent& e) {
         combat.onContact(ctx, e);
         if (dummyAlive && dummy.alive() &&
             (e.self == dummy.body() || e.other == dummy.body())) {
-            // Arrow hit the dummy: knock it forward and upward
-            dummy.kill(physics, glm::vec3(0.0f, 3.0f, 6.0f), e.point);
+            // Projectile hit the dummy: route arrow damage through the combat
+            // model (resistances, crit, death). Knockback pushes it forward/up.
+            combat.director().hitBody(physics, dummy.body(), "arrow",
+                                      playerEntity,
+                                      glm::vec3(0.0f, 0.4f, 1.0f), e.point);
         }
     });
 
@@ -214,6 +218,50 @@ int main(int argc, char** argv)
     // Placed 3 m further toward the anchor room from the crate cluster.
     dummy.init(physics, r, glm::vec3(3.0f, 0.0f, 15.0f));
     dummyAlive = true;
+
+    // ---- combat model wiring -------------------------------------------------
+    // The player is a bodiless combatant used as a damage source (faction gate).
+    // The dummy is an armored, flammable Enemy: resists physical, takes extra
+    // fire. Melee/arrow hits and the "Combat" debug panel drive real damage;
+    // the death callback triggers the existing topple.
+    {
+        game::Health playerHp;
+        playerHp.current = playerHp.max = 100.0f;
+        playerEntity = combat.director().addCombatant(
+            eng::BodyHandle{}, playerHp, game::Resistances{},
+            game::Faction::Player);
+
+        game::Health dummyHp;
+        dummyHp.current = dummyHp.max = 60.0f;
+        game::Resistances dummyResist{};
+        dummyResist[game::DamageType::Physical] = 0.35f; // plated
+        dummyResist[game::DamageType::Fire] = -0.5f;     // flammable
+        dummyEntity = combat.director().addCombatant(
+            dummy.body(), dummyHp, dummyResist, game::Faction::Enemy);
+
+        combat.director().setDeathCallback(
+            [&dummy, &dummyAlive, &physics, dummyEntity](entt::entity e) {
+                if (e != dummyEntity || !dummyAlive || !dummy.alive())
+                    return;
+                glm::vec3 pos;
+                glm::quat rot;
+                physics.getRenderTransform(dummy.body(), pos, rot);
+                dummy.kill(physics, glm::vec3(0.0f, 3.0f, 6.0f), pos);
+            });
+
+        // Melee lands the equipped weapon's payload on the dummy.
+        combat.melee().setHitCallback(
+            [&combat, &dummy, &dummyAlive, &physics, &playerSys, &playerEntity](
+                eng::BodyHandle body, glm::vec3 point, glm::vec3 normal) {
+                if (!dummyAlive || !dummy.alive() || body != dummy.body())
+                    return;
+                const char* w =
+                    playerSys.torchEquipped() ? "torch" : "sword";
+                combat.director().hitBody(physics, body, w, playerEntity,
+                                          -normal, point);
+            });
+    }
+
     loading.step("Ready", 1.0f);
     loading.present();
     loading.finish();
@@ -277,6 +325,57 @@ int main(int argc, char** argv)
         ImGui::Text("stance: %s", player.crouched() ? "crouched"
                     : (player.sliding() ? "sliding" : "standing"));
     });
+    // Live view of the combat model on the dummy: HP, resistances, active
+    // status effects, and buttons that land real weapon hits (so the whole
+    // damage/resist/CC pipeline is observable without aiming).
+    engine.debugUi().addPanel(
+        "Combat", [&combat, &dummy, &dummyAlive, &physics, &playerEntity,
+                   &dummyEntity] {
+            auto& reg = combat.director().registry();
+            if (dummyEntity == entt::null || !reg.valid(dummyEntity)) {
+                ImGui::TextDisabled("no combat target");
+                return;
+            }
+            if (const auto* hp = reg.try_get<game::Health>(dummyEntity)) {
+                const float frac = hp->max > 0.0f ? hp->current / hp->max : 0.0f;
+                ImGui::Text("Dummy  %s", dummy.alive() ? "alive" : "dead");
+                ImGui::ProgressBar(frac, ImVec2(-1.0f, 0.0f));
+                ImGui::Text("%.0f / %.0f HP", hp->current, hp->max);
+            }
+            if (const auto* res = reg.try_get<game::Resistances>(dummyEntity)) {
+                static const char* kNames[game::kDamageTypeCount] = {
+                    "Phys", "Fire", "Frost", "Light", "Poison", "Arcane", "True"};
+                ImGui::SeparatorText("Resistances");
+                for (int i = 0; i < game::kDamageTypeCount; ++i)
+                    ImGui::Text("%-7s %+3.0f%%", kNames[i], res->value[i] * 100.0f);
+            }
+            if (const auto* fx = reg.try_get<game::StatusEffects>(dummyEntity);
+                fx && !fx->active.empty()) {
+                static const char* kCC[] = {"Stun",  "Root", "Silence",
+                                            "Slow",  "Chill", "Burn"};
+                ImGui::SeparatorText("Status effects");
+                for (const auto& a : fx->active)
+                    ImGui::Text("%-8s mag %.2f  %.1fs left",
+                                kCC[int(a.kind)], a.magnitude, a.remaining);
+            }
+            ImGui::SeparatorText("Test hit (from behind)");
+            const glm::vec3 dir(0.0f, 0.3f, 1.0f);
+            glm::vec3 pos{0.0f};
+            glm::quat rot;
+            physics.getRenderTransform(dummy.body(), pos, rot);
+            const auto testHit = [&](const char* w) {
+                if (dummyAlive && dummy.alive())
+                    combat.director().hitBody(physics, dummy.body(), w,
+                                              playerEntity, dir, pos);
+            };
+            if (ImGui::Button("Sword"))    testHit("sword");
+            ImGui::SameLine();
+            if (ImGui::Button("Arrow"))    testHit("arrow");
+            ImGui::SameLine();
+            if (ImGui::Button("Fireball")) testHit("fireball");
+            ImGui::SameLine();
+            if (ImGui::Button("Frost Beam")) testHit("beam");
+        });
     // Self-windowing debug view: projects the generated grid into its own
     // ImGui window, so it registers as a window (not an inline panel).
     engine.debugUi().addWindow([&level, &player] {

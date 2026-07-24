@@ -3,6 +3,7 @@
 #include "Melee.h"
 #include "Projectiles.h"
 #include "Spells.h"
+#include "combat/CombatDirector.h"
 
 #include <glm/glm.hpp>
 
@@ -42,12 +43,20 @@ public:
     MeleeSystem& melee() { return mMelee; }        // hit-callback wiring
     CombatConfig& config() { return mConfig; }     // debug UI
     const CombatConfig& config() const { return mConfig; }
+    // Damage model: HP/resistances/status effects + weapon table. Gameplay
+    // registers combatants and routes hits through this.
+    CombatDirector& director() { return mDirector; }
+
+    // Advance the damage model (i-frames + status effects). Call once per fixed
+    // step, alongside fixedStep.
+    void tickDirector(float dt) { mDirector.tick(dt); }
 
 private:
     ProjectileSystem mProjectiles;
     SpellSystem mSpells;
     MeleeSystem mMelee;
     CombatConfig mConfig;
+    CombatDirector mDirector;
 };
 
 } // namespace game

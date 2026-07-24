@@ -17,6 +17,8 @@ void CombatSystem::init(GameContext& ctx, const std::string& configTomlPath)
     // init builds procedural meshes and registers the contact seam.
     mProjectiles.init(ctx.renderer);
     mSpells.init(ctx.renderer);
+    // Damage model: weapon table (weapons.toml overlays built-in defaults).
+    mDirector.init(ctx.assets + "/weapons.toml");
 }
 
 void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,
@@ -25,6 +27,7 @@ void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,
     mProjectiles.fixedUpdate(ctx.physics, ctx.renderer, dt);
     mSpells.fixedUpdate(ctx.physics, ctx.renderer, dt);
     mMelee.fixedUpdate(ctx.physics, eye, forward, dt);
+    mDirector.tick(dt); // i-frames + status effects (Burn DoT) at fixed cadence
 }
 
 void CombatSystem::syncRender(GameContext& ctx)

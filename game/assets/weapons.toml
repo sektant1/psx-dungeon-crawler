@@ -1,0 +1,49 @@
+# Weapon combat payloads. Overlays the built-in defaults in WeaponLibrary; any
+# omitted field keeps its default. Delivery (melee/projectile/hitscan) is chosen
+# by CombatSystem, not here -- this is only the damage side, so a weapon id can
+# be reused across deliveries.
+#
+# damage_type: physical | fire | frost | lightning | poison | arcane | true
+# cc_on_hit[].kind: stun | root | silence | slow | chill | burn
+#   slow/chill magnitude = movement-speed reduction 0..1
+#   burn magnitude       = damage per second (dealt as fire over `duration`)
+#   stun/root/silence    = magnitude ignored (boolean gate)
+
+[weapon.sword]
+name           = "Iron Sword"
+base_damage    = 22.0
+damage_type    = "physical"
+crit_chance    = 0.15
+crit_multiplier = 2.0
+knockback      = 6.0
+
+[weapon.arrow]
+name           = "Arrow"
+base_damage    = 18.0
+damage_type    = "physical"
+crit_chance    = 0.20
+crit_multiplier = 2.5
+knockback      = 4.0
+
+[weapon.fireball]
+name           = "Fireball"
+base_damage    = 30.0
+damage_type    = "fire"
+crit_chance    = 0.10
+crit_multiplier = 2.0
+knockback      = 5.0
+cc_on_hit      = [ { kind = "burn", magnitude = 6.0, duration = 3.0 } ]
+
+[weapon.beam]
+name           = "Frost Beam"
+base_damage    = 12.0
+damage_type    = "frost"
+knockback      = 1.0
+cc_on_hit      = [ { kind = "chill", magnitude = 0.4, duration = 2.0 } ]
+
+[weapon.torch]
+name           = "Torch"
+base_damage    = 8.0
+damage_type    = "fire"
+knockback      = 3.0
+cc_on_hit      = [ { kind = "burn", magnitude = 3.0, duration = 2.0 } ]
