@@ -250,6 +250,16 @@ if(BUILD_TESTING)
   target_link_libraries(component_registry_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME component_registry COMMAND component_registry_tests)
 
+  add_executable(map_serializer_tests
+    game/tests/MapSerializerTests.cpp
+    game/src/scene/ByteStream.cpp
+    game/src/scene/ComponentRegistry.cpp
+    game/src/scene/MapSerializer.cpp)
+  target_include_directories(map_serializer_tests
+    PRIVATE game/src/scene engine/include third_party)
+  target_link_libraries(map_serializer_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME map_serializer COMMAND map_serializer_tests)
+
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
                                       game/src/RenderPalette.cpp)
   target_include_directories(render_palette_tests PRIVATE game/src third_party engine/include)
