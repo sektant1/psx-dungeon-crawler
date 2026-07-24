@@ -196,6 +196,19 @@ target_compile_definitions(
   level_editor PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(level_editor)
 
+add_executable(
+  mapgen
+  game/src/mapgen_main.cpp
+  game/src/scene/LayoutToScene.cpp
+  game/src/scene/MapSerializer.cpp
+  game/src/scene/ComponentRegistry.cpp
+  game/src/scene/ByteStream.cpp
+  game/src/DungeonGen.cpp)
+target_include_directories(mapgen PRIVATE game/src game/src/scene engine/include third_party)
+target_link_libraries(mapgen PRIVATE glm::glm EnTT::EnTT)
+target_compile_definitions(mapgen PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+eng_target_hardening(mapgen)
+
 if(BUILD_TESTING)
   add_executable(dungeon_layout_tests game/tests/DungeonLayoutTests.cpp
                                       game/src/DungeonGen.cpp)
