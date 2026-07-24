@@ -283,6 +283,14 @@ if(BUILD_TESTING)
   target_link_libraries(lobby_dressing_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME lobby_dressing COMMAND lobby_dressing_tests)
 
+  add_executable(physics_sync_tests
+    game/tests/PhysicsSyncTests.cpp
+    game/src/scene/PhysicsSync.cpp)
+  target_include_directories(physics_sync_tests
+    PRIVATE game/src/scene engine/include third_party)
+  target_link_libraries(physics_sync_tests PRIVATE eng EnTT::EnTT glm::glm)
+  add_test(NAME physics_sync COMMAND physics_sync_tests)
+
   add_executable(level_resource_tests game/tests/LevelResourceTests.cpp
                                       game/src/LevelResource.cpp
                                       game/src/LevelDocument.cpp
