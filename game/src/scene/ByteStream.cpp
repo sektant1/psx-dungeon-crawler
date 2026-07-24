@@ -45,6 +45,7 @@ void ByteWriter::str(const std::string& s) { u32(intern(s)); }
 
 void ByteWriter::patchU32(std::size_t at, uint32_t v)
 {
+    if (at + 4 > mBuf.size()) return; // out-of-range patch is a no-op
     for (int i = 0; i < 4; ++i) mBuf[at + std::size_t(i)] = uint8_t((v >> (8 * i)) & 0xFF);
 }
 

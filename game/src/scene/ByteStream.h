@@ -39,6 +39,7 @@ private:
 
 // Little-endian primitive reader. Never reads out of bounds: once an overrun
 // is attempted, ok() returns false and further reads yield zero/defaults.
+// Borrows the string pool by const reference: the pool MUST outlive the reader.
 class ByteReader {
 public:
     ByteReader(const uint8_t* data, std::size_t len,
