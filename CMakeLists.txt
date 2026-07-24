@@ -199,6 +199,8 @@ add_executable(
   game/src/editor/InspectorRegistry.cpp
   game/src/editor/Palette.cpp
   game/src/editor/EditorApp.cpp
+  game/src/editor/EditorDocument.cpp
+  game/src/LevelDocument.cpp
   game/src/scene/ByteStream.cpp
   game/src/scene/ComponentRegistry.cpp
   game/src/scene/MapSerializer.cpp
@@ -206,7 +208,7 @@ add_executable(
   game/src/DungeonGen.cpp)
 target_include_directories(level_editor
   PRIVATE third_party game/src game/src/scene game/src/editor engine/src)
-target_link_libraries(level_editor PRIVATE eng)
+target_link_libraries(level_editor PRIVATE eng eng_toml)
 target_compile_definitions(
   level_editor PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(level_editor)
@@ -322,6 +324,17 @@ if(BUILD_TESTING)
     PRIVATE game/src/scene engine/include third_party)
   target_link_libraries(map_serializer_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME map_serializer COMMAND map_serializer_tests)
+
+  add_executable(editor_document_tests
+    game/tests/EditorDocumentTests.cpp
+    game/src/editor/EditorDocument.cpp
+    game/src/LevelDocument.cpp
+    game/src/scene/LayoutToScene.cpp
+    game/src/DungeonGen.cpp)
+  target_include_directories(editor_document_tests
+    PRIVATE game/src game/src/editor game/src/scene engine/include third_party)
+  target_link_libraries(editor_document_tests PRIVATE eng_toml glm::glm EnTT::EnTT)
+  add_test(NAME editor_document COMMAND editor_document_tests)
 
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
                                       game/src/RenderPalette.cpp)

@@ -123,6 +123,7 @@ CPMAddPackage(
     # across frames, so the CPU can overwrite geometry the GPU is still reading.
     PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-imgui-overlay-fresh-buffer.patch"
             "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-stbi-alloc-mismatch.patch"
+            "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-cmake16-macrolog.patch"
     OPTIONS
         "OGRE_BUILD_DEPENDENCIES ON"
         "OGRE_STATIC OFF"

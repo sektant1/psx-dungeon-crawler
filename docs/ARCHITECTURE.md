@@ -130,3 +130,37 @@ Kept from the SPEngine port (genuinely used): `Object`, `System`, `Content`,
     text, more weapons + deliveries.
 
 Every step must compile and keep the rendered image pixel-identical.
+
+## Editor → Warcraft-III-style (in progress)
+
+Direction (user, 2026-07-24): the level editor should work like the WC3 World
+Editor — **terrain painting + doodad placement + playtest**, adapted to the 3D
+FPS dungeon crawler on the existing ecs/.map pipeline. Domain vocabulary in
+`CONTEXT.md` (terrain layer / doodad layer / EditorDocument / from-layout tag /
+tool mode). Foundations already exist and are tested: `LevelDocument` (paintable
+tile grid), `layoutToScene` (grid→entities), `Palette` (doodad browser),
+`launchGame` (playtest). So WC3-style is mostly wiring, not a rebuild.
+
+Locked design: terrain entities are tagged (`FromLayout`) and re-extruded on
+paint (doodads, untagged, survive); the tile-paint tool is a new 3D ground brush
+in the `level_editor` exe (retiring the old ASCII `LevelEditor.cpp` debug panel).
+
+- **W1 ✅ done** — `game::editor::EditorDocument` (game/src/editor/): the deep
+  two-layer module owning `LevelDocument` (terrain) + the doodad registry.
+  `paintTile`/`replaceLayout`/`reExtrude` destroy+rebuild only `FromLayout`
+  entities via `layoutToScene`; doodads untouched. Headless-tested
+  (`editor_document_tests`): terrain extrudes, doodads survive every re-extrude,
+  deterministic replacement, invalid mid-edit grids clear terrain. Drove out two
+  domain contracts: the `C` anchor is required, and disconnecting spawn↔exit
+  clears the terrain until the shell re-closes.
+- W2: terrain tool mode + 3D ground brush (viewport ray→cell, brush palette,
+  paint-on-drag) in `EditorApp`, driving `EditorDocument::paintTile`.
+- W3: tool-mode tabs (Terrain/Doodad); fold the report's `GizmoTool` (Candidate
+  A) in as the Doodad-mode tool.
+- W4: playtest polish (spawn-at-cursor / test-from-here).
+- Open (W2+): persist the terrain grid in the `.map` so a saved level stays
+  re-paintable (today the grid lives only in the live `EditorDocument`).
+
+Also fixed en route: `cmake/patches/ogre-cmake16-macrolog.patch` — captures the
+CMake-16 `MACRO_LOG_FEATURE` quoting fix that a fresh OGRE clone needed (was a
+hand-edit on the cached tree only; clean builds now apply it).
