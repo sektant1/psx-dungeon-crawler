@@ -62,17 +62,25 @@ bool writeMap(const std::string& path, const entt::registry& reg,
 
     std::ofstream out(path, std::ios::binary);
     if (!out) return false;
+    // Emit every header integer little-endian to match the LE reader (rd32),
+    // so the format is host-endian independent.
+    auto put16 = [&](uint16_t v) {
+        const char b[2] = {char(v & 0xFF), char((v >> 8) & 0xFF)};
+        out.write(b, 2);
+    };
+    auto put32 = [&](uint32_t v) {
+        const char b[4] = {char(v & 0xFF), char((v >> 8) & 0xFF),
+                           char((v >> 16) & 0xFF), char((v >> 24) & 0xFF)};
+        out.write(b, 4);
+    };
     out.write(kMagic, 8);
-    const uint16_t ver = kVersion, flags = 0;
-    out.write(reinterpret_cast<const char*>(&ver), 2);
-    out.write(reinterpret_cast<const char*>(&flags), 2);
+    put16(kVersion);
+    put16(0); // flags
 
-    const uint32_t poolCount = uint32_t(w.pool().size());
-    out.write(reinterpret_cast<const char*>(&poolCount), 4);
+    put32(uint32_t(w.pool().size()));
     for (const std::string& s : w.pool()) {
-        const uint32_t len = uint32_t(s.size());
-        out.write(reinterpret_cast<const char*>(&len), 4);
-        out.write(s.data(), std::streamsize(len));
+        put32(uint32_t(s.size()));
+        out.write(s.data(), std::streamsize(s.size()));
     }
 
     out.write(reinterpret_cast<const char*>(w.bytes().data()),
@@ -89,8 +97,7 @@ bool readMap(const std::string& path, entt::registry& outReg,
                               std::istreambuf_iterator<char>());
     if (file.size() < 12) return false;
     if (std::memcmp(file.data(), kMagic, 8) != 0) return false;
-    uint16_t ver;
-    std::memcpy(&ver, file.data() + 8, 2);
+    const uint16_t ver = uint16_t(file[8]) | (uint16_t(file[9]) << 8); // LE
     if (ver > kVersion) return false;
 
     const uint8_t* p = file.data() + 12;
@@ -159,8 +166,7 @@ bool dumpMap(const std::string& path, const ComponentRegistry& types)
     std::vector<uint8_t> file((std::istreambuf_iterator<char>(in)),
                               std::istreambuf_iterator<char>());
     if (file.size() < 12 || std::memcmp(file.data(), kMagic, 8) != 0) return false;
-    uint16_t ver;
-    std::memcpy(&ver, file.data() + 8, 2);
+    const uint16_t ver = uint16_t(file[8]) | (uint16_t(file[9]) << 8); // LE
 
     const uint8_t* p = file.data() + 12;
     const uint8_t* end = file.data() + file.size();
