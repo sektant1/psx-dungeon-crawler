@@ -114,5 +114,19 @@ Kept from the SPEngine port (genuinely used): `Object`, `System`, `Content`,
   Gizmo/AssetBrowser panels) editing the shared `.map`.
 - **R5 — Data-driven content** (items/enemies/…) via components + TOML
   archetypes — trivial once there is one model.
+  - **Combat model ✅ (first R5 slice).** `game/src/combat/`: EnTT components
+    (Health/Resistances/FactionTag/StatusEffects/BodyLink), DamageType +
+    CrowdControl enums, a **pure DamageSystem resolver** (percentage resistance,
+    friendly-fire + i-frame gates, CC application; physics-free, returns
+    knockback/kill), StatusEffectSystem (Burn DoT + movement/act/cast gates),
+    WeaponDef + WeaponLibrary (weapons.toml over built-in defaults), and
+    CombatDirector (owns the combat registry + body↔entity map, routes hits,
+    applies Jolt knockback, fires death). Wired to the training dummy; a "Combat"
+    debug panel shows live HP/resist/effects + test hits. Unit-tested
+    (DamageSystemTests, StatusEffectTests). Design calls: % resist (uniform,
+    clamped −1..0.9, True bypasses); one StatusEffects container (new effect
+    kinds need no new component); weapon rolls crit so the resolver stays
+    deterministic/testable. Next: enemy AI, player HP/death, floating combat
+    text, more weapons + deliveries.
 
 Every step must compile and keep the rendered image pixel-identical.
