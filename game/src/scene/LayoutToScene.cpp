@@ -81,12 +81,12 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             const glm::vec3 centre{col * cell, 0.f, row * cell};
 
             // --- Floor tile --------------------------------------------------
+            // Kit tiles are already cell-sized .obj meshes (DungeonMap places
+            // them at scale 1); do not rescale.
             makeMesh(reg,
-                     opts.tileDir + "tile_floor.mesh",
-                     "Dungeon/Floor",
-                     centre,
-                     glm::quat{1.f, 0.f, 0.f, 0.f},
-                     glm::vec3{cell, 1.f, cell});
+                     opts.tileDir + "tile_floor.obj",
+                     "Game/DungeonFloor",
+                     centre);
 
             // Floor collider (thin slab)
             makeCollider(reg,
@@ -95,11 +95,9 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
 
             // --- Ceiling tile ------------------------------------------------
             makeMesh(reg,
-                     opts.tileDir + "tile_ceiling.mesh",
-                     "Dungeon/Ceiling",
-                     centre + glm::vec3{0.f, wallH, 0.f},
-                     glm::quat{1.f, 0.f, 0.f, 0.f},
-                     glm::vec3{cell, 1.f, cell});
+                     opts.tileDir + "tile_ceiling.obj",
+                     "Game/DungeonCeiling",
+                     centre + glm::vec3{0.f, wallH, 0.f});
 
             // --- Wall tiles per exposed edge ---------------------------------
             for (const Dir& d : dirs) {
@@ -116,11 +114,10 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
                 const glm::quat wallRot = glm::angleAxis(yawRad, glm::vec3{0.f, 1.f, 0.f});
 
                 makeMesh(reg,
-                         opts.tileDir + "tile_wall.mesh",
-                         "Dungeon/Wall",
+                         opts.tileDir + "tile_wall.obj",
+                         "Game/DungeonWall",
                          wallPos,
-                         wallRot,
-                         glm::vec3{cell, wallH, 1.f});
+                         wallRot);
 
                 // Wall collider (thin slab perpendicular to face)
                 const glm::vec3 wallHalf{
@@ -167,8 +164,8 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
                 reg.emplace<eng::ecs::LightRef>(e, lr);
                 // Torch prop mesh
                 makeMesh(reg,
-                         opts.propDir + "torch.mesh",
-                         "Dungeon/Torch",
+                         opts.propDir + "prop_torch.obj",
+                         "Game/Torch",
                          centre + glm::vec3{0.f, wallH * 0.6f, 0.f});
                 break;
             }
@@ -176,12 +173,15 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             case 'B': // barrel
             case 'R': // crate
             case 'V': { // urn
-                const char* propName =
-                    (glyph == 'H') ? "chest" :
-                    (glyph == 'B') ? "barrel" :
-                    (glyph == 'R') ? "crate" : "urn";
-                const std::string path = opts.propDir + propName + ".mesh";
-                makeMesh(reg, path, std::string("Dungeon/") + propName, centre);
+                const char* propMesh =
+                    (glyph == 'H') ? "prop_chest.obj" :
+                    (glyph == 'B') ? "prop_barrel_p0.obj" :
+                    (glyph == 'R') ? "prop_crate.obj" : "prop_vase_p0.obj";
+                const char* propMat =
+                    (glyph == 'H') ? "Game/PropChest" :
+                    (glyph == 'B') ? "Game/PropPlanks" :
+                    (glyph == 'R') ? "Game/PropMarket" : "Game/PropTerracotta";
+                makeMesh(reg, opts.propDir + propMesh, propMat, centre);
                 // Prop collider
                 makeCollider(reg, centre + glm::vec3{0.f, 0.5f, 0.f},
                              glm::vec3{0.4f, 0.5f, 0.4f});
