@@ -41,8 +41,12 @@ private:
     void drawPalette();
 
     void handleViewportInput(float dt);
+    void handleShortcuts();
     void pickAt(glm::vec2 ndc, bool additive);
     void updateGizmoDrag();
+    void frameSelection();
+    void deleteSelection();
+    void duplicateSelection();
 
     glm::vec3 spawnPosInFrontOfCamera() const;
     bool selectionCentroid(glm::vec3& out);
@@ -65,6 +69,7 @@ private:
     EditorCamera mCam;
     Palette mPalette;
     GizmoMode mGizmoMode = GizmoMode::Translate;
+    bool mUniformScale = true; // scale all axes together (proportional)
     std::unordered_map<std::string, std::string> mMatByMesh; // mesh file -> material
     float mSnapStep = 0.0f;
     std::string mMapPath;

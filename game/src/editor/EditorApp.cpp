@@ -4,10 +4,13 @@
 #include "InspectorRegistry.h"
 #include "Picker.h"
 
+#include "../scene/ByteStream.h"
 #include "../scene/ComponentRegistry.h"
 #include "../scene/GameComponents.h"
 #include "../scene/MapSerializer.h"
 #include "../scene/MeshSource.h"
+
+#include <memory>
 
 #include <eng/Engine.h>
 #include <eng/Input.h>
@@ -146,6 +149,7 @@ std::string EditorApp::materialForMesh(const std::string& objPath) const
 void EditorApp::frame(float dt)
 {
     handleViewportInput(dt);
+    handleShortcuts();
     mRenderer.setEditorCameraPose(mCam.flyEye(), mCam.flyOrientation(), kFovDeg);
 
     updateGizmoDrag();
@@ -344,13 +348,111 @@ void EditorApp::updateGizmoDrag()
         float factor = t / mDragStartT;
         factor = std::clamp(factor, 0.01f, 100.0f);
         cur.scale = mPreDrag.scale;
-        cur.scale[mDragAxis] = std::max(0.01f, mPreDrag.scale[mDragAxis] * factor);
-        if (mSnapStep > 0.0f)
-            cur.scale[mDragAxis] = std::max(0.01f, snap(cur.scale[mDragAxis], mSnapStep));
+        if (mUniformScale) {
+            cur.scale = glm::max(glm::vec3(0.01f), mPreDrag.scale * factor);
+            if (mSnapStep > 0.0f) {
+                cur.scale.x = std::max(0.01f, snap(cur.scale.x, mSnapStep));
+                cur.scale.y = std::max(0.01f, snap(cur.scale.y, mSnapStep));
+                cur.scale.z = std::max(0.01f, snap(cur.scale.z, mSnapStep));
+            }
+        } else {
+            cur.scale[mDragAxis] = std::max(0.01f, mPreDrag.scale[mDragAxis] * factor);
+            if (mSnapStep > 0.0f)
+                cur.scale[mDragAxis] = std::max(0.01f, snap(cur.scale[mDragAxis], mSnapStep));
+        }
     }
 
     reg.replace<eng::ecs::Transform>(e, cur);
     reg.emplace_or_replace<eng::ecs::Dirty>(e);
+}
+
+// --------------------------------------------------------------------------
+// Keyboard shortcuts + selection ops
+// --------------------------------------------------------------------------
+
+void EditorApp::handleShortcuts()
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    // Don't steal keys from text fields or while RMB-flying (WASD is movement).
+    if (io.WantTextInput || mLooking) return;
+
+    if (ImGui::IsKeyPressed(ImGuiKey_W, false)) mGizmoMode = GizmoMode::Translate;
+    if (ImGui::IsKeyPressed(ImGuiKey_E, false)) mGizmoMode = GizmoMode::Rotate;
+    if (ImGui::IsKeyPressed(ImGuiKey_R, false)) mGizmoMode = GizmoMode::Scale;
+    if (ImGui::IsKeyPressed(ImGuiKey_F, false)) frameSelection();
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) deleteSelection();
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) mSel.clear();
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) duplicateSelection();
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) mStack.undo();
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) mStack.redo();
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false))
+        saveMap(mMapPath.empty() ? "level.map" : mMapPath);
+}
+
+void EditorApp::frameSelection()
+{
+    glm::vec3 c;
+    if (!selectionCentroid(c)) return;
+    // Pull the camera back along its current forward so the pivot is centred.
+    const glm::vec3 fwd = mCam.flyOrientation() * glm::vec3(0, 0, -1);
+    mCam.setFlyPosition(c - fwd * 6.0f);
+}
+
+void EditorApp::deleteSelection()
+{
+    entt::registry& reg = mScene.registry();
+    for (entt::entity e : mSel.items())
+        if (reg.valid(e)) mStack.run(makeDeleteEntity(reg, e));
+    mSel.clear();
+}
+
+void EditorApp::duplicateSelection()
+{
+    entt::registry& reg = mScene.registry();
+    const entt::entity src = mSel.primary();
+    if (src == entt::null || !reg.valid(src)) return;
+
+    // Snapshot the source entity's components into a byte blob.
+    auto blob = std::make_shared<std::vector<uint8_t>>();
+    auto pool = std::make_shared<std::vector<std::string>>();
+    {
+        mapio::ByteWriter w;
+        std::vector<const mapio::ComponentType*> present;
+        for (const mapio::ComponentType& t : mapio::coreRegistry().types())
+            if (t.has(reg, src)) present.push_back(&t);
+        w.u16(uint16_t(present.size()));
+        for (const mapio::ComponentType* t : present) {
+            w.u16(t->stableTypeId);
+            t->serialize(reg, src, w);
+        }
+        *blob = w.bytes();
+        *pool = w.pool();
+    }
+
+    auto slot = std::make_shared<entt::entity>(entt::null);
+    Command c;
+    c.apply = [this, blob, pool, slot] {
+        entt::registry& r = mScene.registry();
+        entt::entity e = r.create();
+        mapio::ByteReader rd(blob->data(), blob->size(), *pool);
+        const uint16_t n = rd.u16();
+        for (uint16_t i = 0; i < n && rd.ok(); ++i) {
+            const uint16_t id = rd.u16();
+            if (const mapio::ComponentType* t = mapio::coreRegistry().find(id))
+                t->deserialize(r, e, rd);
+        }
+        if (auto* tr = r.try_get<eng::ecs::Transform>(e))
+            tr->position += glm::vec3(1.0f, 0.0f, 1.0f); // offset so it's visible
+        r.emplace_or_replace<eng::ecs::Dirty>(e);
+        resolveMeshHandle(mRenderer, r, e);
+        *slot = e;
+        mSel.set(e);
+    };
+    c.revert = [this, slot] {
+        entt::registry& r = mScene.registry();
+        if (r.valid(*slot)) r.destroy(*slot);
+    };
+    mStack.run(c);
 }
 
 // --------------------------------------------------------------------------
@@ -384,7 +486,7 @@ void EditorApp::drawPanels()
         ImGui::DockBuilderAddNode(dockId, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dockId, vp->WorkSize);
         ImGuiID center = dockId, top, left, right, leftBottom;
-        top = ImGui::DockBuilderSplitNode(center, ImGuiDir_Up, 0.08f, nullptr, &center);
+        top = ImGui::DockBuilderSplitNode(center, ImGuiDir_Up, 0.14f, nullptr, &center);
         left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.16f, nullptr, &center);
         right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.22f, nullptr, &center);
         leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.5f, nullptr, &left);
@@ -422,12 +524,19 @@ void EditorApp::drawToolbar()
     ImGui::Separator();
     int mode = int(mGizmoMode);
     ImGui::TextUnformatted("Gizmo:");
-    ImGui::SameLine(); if (ImGui::RadioButton("Translate", &mode, 0)) {}
-    ImGui::SameLine(); if (ImGui::RadioButton("Rotate", &mode, 1)) {}
-    ImGui::SameLine(); if (ImGui::RadioButton("Scale", &mode, 2)) {}
+    ImGui::SameLine(); ImGui::RadioButton("Move (W)", &mode, 0);
+    ImGui::SameLine(); ImGui::RadioButton("Rotate (E)", &mode, 1);
+    ImGui::SameLine(); ImGui::RadioButton("Scale (R)", &mode, 2);
     mGizmoMode = GizmoMode(mode);
-    ImGui::SetNextItemWidth(120.0f);
-    ImGui::DragFloat("Snap", &mSnapStep, 0.05f, 0.0f, 10.0f);
+    ImGui::SameLine();
+    ImGui::Checkbox("Proportional", &mUniformScale);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Scale drag affects all axes uniformly");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(110.0f);
+    ImGui::DragFloat("Snap", &mSnapStep, 0.05f, 0.0f, 90.0f, "%.2f");
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("0 = free. Units for Move/Scale, degrees for Rotate.");
 
     ImGui::Separator();
     if (!mStack.canUndo()) ImGui::BeginDisabled();
@@ -438,7 +547,27 @@ void EditorApp::drawToolbar()
     if (ImGui::Button("Redo")) mStack.redo();
     if (!mStack.canRedo()) ImGui::EndDisabled();
     ImGui::SameLine();
+    const bool hasSel = mSel.primary() != entt::null;
+    if (!hasSel) ImGui::BeginDisabled();
+    if (ImGui::Button("Duplicate")) duplicateSelection();
+    ImGui::SameLine();
+    if (ImGui::Button("Delete")) deleteSelection();
+    ImGui::SameLine();
+    if (ImGui::Button("Frame")) frameSelection();
+    if (!hasSel) ImGui::EndDisabled();
+    ImGui::SameLine();
     if (ImGui::Button("Play")) launchGame();
+
+    // Status line: selection + control hints.
+    const entt::registry& reg = mScene.registry();
+    const entt::entity sel = mSel.primary();
+    std::string selName = "none";
+    if (sel != entt::null && reg.valid(sel) && reg.all_of<eng::ecs::Name>(sel))
+        selName = reg.get<eng::ecs::Name>(sel).value;
+    ImGui::TextDisabled(
+        "Selected: %s  |  RMB+WASD fly, LMB pick / drag axis, F frame, "
+        "Del delete, Ctrl+D dup, Ctrl+Z/Y undo",
+        selName.c_str());
 
     ImGui::End();
 }
