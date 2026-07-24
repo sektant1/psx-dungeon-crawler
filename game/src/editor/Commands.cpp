@@ -32,10 +32,16 @@ Command makeSetTransform(entt::registry& reg, entt::entity e,
                          eng::ecs::Transform next)
 {
     auto prev = std::make_shared<eng::ecs::Transform>();
+    auto captured = std::make_shared<bool>(false);
     Command c;
-    c.apply = [&reg, e, next, prev] {
-        if (reg.all_of<eng::ecs::Transform>(e))
-            *prev = reg.get<eng::ecs::Transform>(e);
+    // Capture the pre-command transform on the FIRST apply only. Re-capturing
+    // on redo would clobber it with the (already-reverted) value.
+    c.apply = [&reg, e, next, prev, captured] {
+        if (!*captured) {
+            if (reg.all_of<eng::ecs::Transform>(e))
+                *prev = reg.get<eng::ecs::Transform>(e);
+            *captured = true;
+        }
         reg.emplace_or_replace<eng::ecs::Transform>(e, next);
     };
     c.revert = [&reg, e, prev] {
