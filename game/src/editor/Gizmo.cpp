@@ -40,4 +40,14 @@ float snap(float v, float step)
     return std::round(v / step) * step;
 }
 
+float signedAngleAround(glm::vec3 from, glm::vec3 to, glm::vec3 axis)
+{
+    const glm::vec3 n = glm::normalize(axis);
+    // Project both vectors onto the plane perpendicular to the axis.
+    const glm::vec3 f = from - n * glm::dot(from, n);
+    const glm::vec3 t = to - n * glm::dot(to, n);
+    if (glm::dot(f, f) < 1e-12f || glm::dot(t, t) < 1e-12f) return 0.0f;
+    return std::atan2(glm::dot(glm::cross(f, t), n), glm::dot(f, t));
+}
+
 } // namespace editor

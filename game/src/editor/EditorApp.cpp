@@ -217,9 +217,18 @@ void EditorApp::handleViewportInput(float dt)
                     mDragging = true;
                     mDragAxis = bestAxis;
                     mPreDrag = mScene.registry().get<eng::ecs::Transform>(e);
+                    mDragCentroid = centroid;
                     float t = 0.0f;
                     closestPointOnAxis(centroid, axes[bestAxis], ray, t);
                     mDragStartHit = centroid + axes[bestAxis] * t;
+                    mDragStartT = t;
+                    // Rotate reference vector: pointer on the plane perpendicular
+                    // to the axis through the pivot.
+                    glm::vec3 hit;
+                    if (rayPlane(ray, centroid, axes[bestAxis], hit))
+                        mDragStartVec = hit - centroid;
+                    else
+                        mDragStartVec = glm::vec3(0.0f);
                     startedDrag = true;
                 }
             }
@@ -264,27 +273,46 @@ void EditorApp::updateGizmoDrag()
         return;
     }
 
-    // Drag: move the selection primary along the chosen axis.
+    // Drag: transform the selection primary about the chosen axis per the
+    // active gizmo mode (Translate / Rotate / Scale).
     const glm::vec2 mouse(io.MousePos.x, io.MousePos.y);
     const glm::vec2 rel = (mouse - mVpMin) / mVpSize;
     const glm::vec2 ndc(rel.x * 2.0f - 1.0f, 1.0f - rel.y * 2.0f);
     const Ray ray = screenRay(ndc, mCam.flyEye(), mCam.flyOrientation(),
                               glm::radians(kFovDeg), mVpSize.x / mVpSize.y);
     const glm::vec3 axes[3] = {{1,0,0},{0,1,0},{0,0,1}};
-    float t = 0.0f;
-    if (!closestPointOnAxis(mDragStartHit, axes[mDragAxis], ray, t))
-        return;
-    glm::vec3 newHit = mDragStartHit + axes[mDragAxis] * t;
-    glm::vec3 delta = newHit - mDragStartHit;
-
+    const glm::vec3 axis = axes[mDragAxis];
     entt::registry& reg = mScene.registry();
     eng::ecs::Transform cur = mPreDrag;
-    cur.position += delta;
-    if (mSnapStep > 0.0f) {
-        cur.position.x = snap(cur.position.x, mSnapStep);
-        cur.position.y = snap(cur.position.y, mSnapStep);
-        cur.position.z = snap(cur.position.z, mSnapStep);
+
+    if (mGizmoMode == GizmoMode::Translate) {
+        float t = 0.0f;
+        if (!closestPointOnAxis(mDragStartHit, axis, ray, t)) return;
+        cur.position = mPreDrag.position + axis * t;
+        if (mSnapStep > 0.0f) {
+            cur.position.x = snap(cur.position.x, mSnapStep);
+            cur.position.y = snap(cur.position.y, mSnapStep);
+            cur.position.z = snap(cur.position.z, mSnapStep);
+        }
+    } else if (mGizmoMode == GizmoMode::Rotate) {
+        glm::vec3 hit;
+        if (!rayPlane(ray, mDragCentroid, axis, hit)) return;
+        float ang = signedAngleAround(mDragStartVec, hit - mDragCentroid, axis);
+        if (mSnapStep > 0.0f) // treat snap as degrees in Rotate mode
+            ang = glm::radians(snap(glm::degrees(ang), mSnapStep));
+        cur.rotation = glm::normalize(glm::angleAxis(ang, axis) * mPreDrag.rotation);
+    } else { // Scale
+        float t = 0.0f;
+        if (!closestPointOnAxis(mDragCentroid, axis, ray, t)) return;
+        if (std::abs(mDragStartT) < 1e-3f) return;
+        float factor = t / mDragStartT;
+        factor = std::clamp(factor, 0.01f, 100.0f);
+        cur.scale = mPreDrag.scale;
+        cur.scale[mDragAxis] = std::max(0.01f, mPreDrag.scale[mDragAxis] * factor);
+        if (mSnapStep > 0.0f)
+            cur.scale[mDragAxis] = std::max(0.01f, snap(cur.scale[mDragAxis], mSnapStep));
     }
+
     reg.replace<eng::ecs::Transform>(e, cur);
     reg.emplace_or_replace<eng::ecs::Dirty>(e);
 }

@@ -31,6 +31,22 @@ int main()
     require(std::abs(snap(1.24f, 0.25f) - 1.25f) < 1e-5f, "snap rounds to step");
     require(std::abs(snap(-0.10f, 0.25f) - 0.0f) < 1e-5f, "snap rounds toward zero");
 
+    // signedAngleAround: +X to +Z about +Y axis is +90deg (right-hand rule:
+    // rotating +X by +90 about +Y gives -Z, so +X->+Z is -90).
+    const float a = signedAngleAround(glm::vec3(1, 0, 0), glm::vec3(0, 0, 1),
+                                      glm::vec3(0, 1, 0));
+    require(std::abs(a + glm::radians(90.0f)) < 1e-4f,
+            "+X to +Z about +Y is -90 degrees");
+    const float b = signedAngleAround(glm::vec3(1, 0, 0), glm::vec3(0, 0, -1),
+                                      glm::vec3(0, 1, 0));
+    require(std::abs(b - glm::radians(90.0f)) < 1e-4f,
+            "+X to -Z about +Y is +90 degrees");
+    // Components parallel to the axis are ignored.
+    const float c = signedAngleAround(glm::vec3(1, 5, 0), glm::vec3(0, -3, 1),
+                                      glm::vec3(0, 1, 0));
+    require(std::abs(c + glm::radians(90.0f)) < 1e-4f,
+            "axis-parallel components do not affect the angle");
+
     std::cout << "GizmoMathTests OK\n";
     return 0;
 }

@@ -79,6 +79,9 @@ private:
     int mDragAxis = 0; // 0=x,1=y,2=z
     eng::ecs::Transform mPreDrag;
     glm::vec3 mDragStartHit{0.0f};
+    glm::vec3 mDragCentroid{0.0f}; // pivot for rotate/scale
+    glm::vec3 mDragStartVec{0.0f}; // rotate reference vector (pivot->pointer)
+    float mDragStartT = 0.0f;      // axis param at grab (scale reference)
 
     char mPathBuf[512] = {0};
 };
