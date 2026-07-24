@@ -134,6 +134,7 @@ bool readMap(const std::string& path, entt::registry& outReg,
             if (t) {
                 t->deserialize(outReg, e, r);
                 const std::size_t consumed = before - r.remaining();
+                if (consumed > len) return false; // deserializer desynced past its payload
                 if (consumed < len) r.skip(len - consumed);
             } else {
                 r.skip(len);
