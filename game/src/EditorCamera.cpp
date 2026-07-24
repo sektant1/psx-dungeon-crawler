@@ -1,5 +1,8 @@
 #include "EditorCamera.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/common.hpp>
+#include <glm/trigonometric.hpp>
 #include <algorithm>
 #include <cmath>
 
@@ -26,4 +29,26 @@ glm::quat EditorCamera::orientation() const {
     const glm::mat4 view = glm::lookAt(eye(), mTarget, glm::vec3(0, 1, 0));
     // orientation = inverse of the view rotation
     return glm::quat_cast(glm::transpose(glm::mat3(view)));
+}
+
+void EditorCamera::setYawPitch(float yawRad, float pitchRad)
+{
+    mYaw = yawRad;
+    mPitch = glm::clamp(pitchRad, glm::radians(-89.9f), glm::radians(89.9f));
+}
+
+void EditorCamera::addYawPitch(float dYawRad, float dPitchRad)
+{
+    setYawPitch(mYaw + dYawRad, mPitch + dPitchRad);
+}
+
+glm::quat EditorCamera::flyOrientation() const
+{
+    return glm::angleAxis(mYaw, glm::vec3(0, 1, 0)) *
+           glm::angleAxis(mPitch, glm::vec3(1, 0, 0));
+}
+
+void EditorCamera::moveLocal(glm::vec3 localDelta)
+{
+    mFlyPos += flyOrientation() * localDelta;
 }
