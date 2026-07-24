@@ -364,6 +364,13 @@ if(BUILD_TESTING)
   target_include_directories(picker_tests PRIVATE game/src/editor)
   target_link_libraries(picker_tests PRIVATE glm::glm)
   add_test(NAME picker COMMAND picker_tests)
+
+  add_executable(gizmo_math_tests game/tests/GizmoMathTests.cpp
+                                  game/src/editor/Gizmo.cpp
+                                  game/src/editor/Picker.cpp)
+  target_include_directories(gizmo_math_tests PRIVATE game/src/editor)
+  target_link_libraries(gizmo_math_tests PRIVATE glm::glm)
+  add_test(NAME gizmo_math COMMAND gizmo_math_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
