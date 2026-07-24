@@ -87,20 +87,28 @@ Kept from the SPEngine port (genuinely used): `Object`, `System`, `Content`,
     `drawDiagnostics`) → `game/src/GameDiagnostics.*`.
   - **R2b ✅** extracted `LiveLevel` + `buildLevel` (level construction/animation/
     transitions) → `game/src/LiveLevel.*`. main.cpp now 612 lines.
-  - **R2c (in progress)** introduce `GameContext` (non-owning refs: Renderer/
-    Physics/Input/assets) and turn inline loop gameplay into cohesive systems.
+  - **R2c ✅ done** introduce `GameContext` (non-owning refs: Renderer/Physics/
+    Input/assets) and turn inline loop gameplay into cohesive systems.
     Design note: the loop has a strict phase order (input→fixedstep→propsync→
     world→player→interaction→weapons→render) and that order *is* the determinism,
     so game systems are cohesive classes invoked at their exact phase (sharing
     GameContext) rather than a single coarse `eng::System::update(dt)` that would
     force reordering. The `eng::System` registry stays for order-independent
     engine systems.
-    - `game::PropSystem` ✅ — lobby dynamic crates/barrels (spawn/sync/teardown).
-    - `game::CombatSystem` ✅ — owns ProjectileSystem+SpellSystem+MeleeSystem+
+    - `game::PropSystem` — lobby dynamic crates/barrels (spawn/sync/teardown).
+    - `game::CombatSystem` — owns ProjectileSystem+SpellSystem+MeleeSystem+
       CombatConfig; consolidates their scattered call sites.
-    - Next: `PlayerSystem` (player.update + loadout + weapon vis), then an
-      interaction/transition system (targeting + prompts + portal descend/ascend).
-    main.cpp: 1113 → 479 so far.
+    - `game::PlayerSystem` — player controller + 3 viewmodels + weapon selection
+      + loadout/respawn.
+    - `game::InteractionSystem` — targeting + HUD prompts + torch toggle + portal
+      descend/ascend (transitions fire via callbacks; level-stack stays in main).
+    **main.cpp: 1113 → 440 lines.** The loop is now thin (input-grab, fixed-step,
+    render sync, world/player update, interaction, attack input, collider debug,
+    render). Remaining state in main = engine/physics bootstrap, debug-panel
+    registration, `enterLevel` + level-stack, and the thin loop — a reasonable
+    game bootstrap/orchestration surface. A future `GameApp` class could absorb
+    `enterLevel`+loop to shrink `main` to ~10 lines, but that has diminishing
+    returns versus R3/R4.
 - **R3 — Split the `Renderer` facade** by concern behind the stable header.
 - **R4 — Editor as its own decomposed target** (Viewport/Outliner/Inspector/
   Gizmo/AssetBrowser panels) editing the shared `.map`.
