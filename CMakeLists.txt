@@ -34,9 +34,15 @@ function(eng_target_hardening tgt)
     set_property(TARGET ${tgt} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
   endif()
   if(ENABLE_ASAN)
-    target_compile_options(${tgt} PRIVATE -fsanitize=address,undefined
-                                          -fno-omit-frame-pointer -g)
-    target_link_options(${tgt} PRIVATE -fsanitize=address,undefined)
+    # -fno-sanitize=vptr/function: UBSan's vtable checks need RTTI, but Jolt is
+    # built -fno-rtti, so leaving them on makes Physics.cpp reference Jolt
+    # typeinfo that doesn't exist (link failure). Everything else in ASan+UBSan+
+    # Leak stays on.
+    target_compile_options(${tgt} PRIVATE
+      -fsanitize=address,undefined -fno-sanitize=vptr
+      -fno-omit-frame-pointer -g)
+    target_link_options(${tgt} PRIVATE
+      -fsanitize=address,undefined -fno-sanitize=vptr)
   endif()
 endfunction()
 

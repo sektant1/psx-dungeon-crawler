@@ -1,0 +1,28 @@
+Fix an alloc/dealloc mismatch in OGRE's STBI image codec (ASan-flagged, UB).
+
+STBIImageCodec::encode() wraps the malloc'd stbi_write_png_to_mem() buffer in a
+MemoryDataStream(freeOnClose=true), whose close() releases it with delete[] --
+freeing a malloc'd pointer with array-delete. Copy into an Ogre-owned buffer and
+free the stb buffer with the matching free(). Hit on every screenshot save.
+
+diff --git a/PlugIns/STBICodec/src/OgreSTBICodec.cpp b/PlugIns/STBICodec/src/OgreSTBICodec.cpp
+index c5a4d4bfa..ea5dd137c 100644
+--- a/PlugIns/STBICodec/src/OgreSTBICodec.cpp
++++ b/PlugIns/STBICodec/src/OgreSTBICodec.cpp
+@@ -146,7 +146,15 @@ namespace Ogre {
+                 "STBIImageCodec::encode");
+         }
+ 
+-        return DataStreamPtr(new MemoryDataStream(data, len, true));
++        // PSX engine patch: stbi_write_png_to_mem allocates `data` with malloc,
++        // but MemoryDataStream(freeOnClose=true) frees it with delete[] -- an
++        // alloc/dealloc mismatch (ASan-flagged, undefined behaviour). Copy into
++        // an Ogre-owned buffer (freed with the matching delete[]) and release
++        // the stb buffer with the matching free().
++        MemoryDataStream* stream = new MemoryDataStream(size_t(len));
++        memcpy(stream->getPtr(), data, size_t(len));
++        free(data);
++        return DataStreamPtr(stream);
+     }
+     //---------------------------------------------------------------------
+     void STBIImageCodec::encodeToFile(const Any& input, const String& outFileName) const

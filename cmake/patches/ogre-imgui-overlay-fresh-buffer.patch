@@ -1,25 +1,44 @@
 Fix ImGui overlay window-content flicker on GL3Plus/Mesa.
 
-OGRE's ImGuiOverlay keeps ONE shared dynamic vertex/index buffer and only
-reallocates it when it needs to grow, reusing it across frames otherwise. When
-the CPU runs ahead of the GPU the next frame's writeData() overwrites a buffer
-the GPU is still reading from the previous frame's draw, so windows drawn later
-in the frame lose their geometry -- seen as flicker/blanking of ImGui content.
+OGRE's ImGuiOverlay reuses one dynamic vertex/index buffer across frames, so the
+CPU can overwrite geometry the GPU is still reading -> ImGui content flicker.
+Allocating fresh each frame and freeing the old buffer immediately is not enough
+on Mesa: once a frame limiter paces the loop, the driver's buffer pool recycles
+the just-freed memory into the next "fresh" allocation, aliasing a draw still
+scanning out (flicker returns with the fps cap on). Allocate fresh AND retain
+the last 4 buffers in a ring so their memory can't be pooled back until the GPU
+is done. The ring lives as ImGUIRenderable members (not function-static) so it
+is released with the overlay, before Ogre::Root -- a function-static ring
+crashes at exit releasing buffers after the manager is gone.
 
-Allocating a fresh buffer every frame and freeing the old one immediately is not
-enough on Mesa: once a frame limiter paces the loop, the driver's buffer pool
-has time to recycle the just-freed memory into the next "fresh" allocation,
-aliasing a draw still being scanned out -- the flicker returns whenever the fps
-cap is on. Instead allocate fresh AND retain the last few buffers in a ring, so
-their memory stays allocated (not pooled) until the GPU is long done with them.
-The fix is then independent of frame pacing. Buffers are small (tens of KB).
-
+diff --git a/Components/Overlay/include/OgreImGuiOverlay.h b/Components/Overlay/include/OgreImGuiOverlay.h
+index 1fa953626..b20829992 100644
+--- a/Components/Overlay/include/OgreImGuiOverlay.h
++++ b/Components/Overlay/include/OgreImGuiOverlay.h
+@@ -82,6 +82,15 @@ private:
+         RenderOperation mRenderOp;
+         TexturePtr mFontTex;
+         MaterialPtr mMaterial;
++        // PSX engine patch: ring of recently-used vertex/index buffers, retained
++        // so their memory can't be pooled back into the next frame's fresh
++        // allocation while the GPU is still reading them (flicker fix). Members
++        // (not function-static) so they are released when the overlay is
++        // destroyed, before Ogre::Root -- avoiding an exit-time crash.
++        static const int kBufferRing = 4;
++        HardwareVertexBufferSharedPtr mVbRing[kBufferRing];
++        HardwareIndexBufferSharedPtr  mIbRing[kBufferRing];
++        int mRingPos = 0;
+     };
+ 
+     ImGUIRenderable mRenderable;
+diff --git a/Components/Overlay/src/OgreImGuiOverlay.cpp b/Components/Overlay/src/OgreImGuiOverlay.cpp
+index 507a067e6..c61e0bed4 100644
 --- a/Components/Overlay/src/OgreImGuiOverlay.cpp
 +++ b/Components/Overlay/src/OgreImGuiOverlay.cpp
-@@ -374,17 +374,26 @@ void ImGuiOverlay::ImGUIRenderable::updateVertexData(ImDrawData* draw_data)
-
+@@ -374,17 +374,25 @@ void ImGuiOverlay::ImGUIRenderable::updateVertexData(ImDrawData* draw_data)
+ 
      VertexBufferBinding* bind = mRenderOp.vertexData->vertexBufferBinding;
-
+ 
 -    if (bind->getBindings().empty() || bind->getBuffer(0)->getNumVertices() < size_t(draw_data->TotalVtxCount))
 -    {
 -        bind->setBinding(0, HardwareBufferManager::getSingleton().createVertexBuffer(
@@ -32,26 +51,24 @@ The fix is then independent of frame pacing. Buffers are small (tens of KB).
 -            HardwareIndexBuffer::IT_16BIT, draw_data->TotalIdxCount, HBU_CPU_TO_GPU);
 -    }
 +    // PSX engine patch: allocate a fresh vertex+index buffer every frame AND
-+    // retain the last few in a ring, so the buffer the GPU is still reading (or
-+    // scanning out) is never freed and its memory can't be pooled back into the
-+    // next frame's "fresh" allocation. Reusing one buffer, or freeing it
-+    // immediately, let the CPU or the driver's buffer pool alias a draw still in
-+    // flight -> ImGui window-content flicker on GL3Plus/Mesa, notably once a
-+    // frame limiter paces the loop so the pool has time to recycle the memory.
-+    static const int kRing = 4;
-+    static HardwareVertexBufferSharedPtr vbRing[kRing];
-+    static HardwareIndexBufferSharedPtr  ibRing[kRing];
-+    static int ringPos = 0;
-+    ringPos = (ringPos + 1) % kRing;
++    // retain the last few in a ring. Reusing one buffer let the CPU overwrite a
++    // buffer the GPU was still reading (flicker). Allocating fresh but freeing
++    // the old one immediately was not enough on Mesa: once a frame limiter paces
++    // the loop, the driver's buffer pool has time to recycle the just-freed
++    // memory into the next "fresh" allocation, aliasing a draw still being
++    // scanned out -> ImGui window-content flicker returns with the fps cap on.
++    // Holding refs to the last kRing buffers keeps that memory allocated (not
++    // pooled) until the GPU is long done, so the fix is independent of pacing.
++    mRingPos = (mRingPos + 1) % kBufferRing;
 +
 +    HardwareVertexBufferSharedPtr vb = HardwareBufferManager::getSingleton().createVertexBuffer(
 +        sizeof(ImDrawVert), draw_data->TotalVtxCount, HBU_CPU_TO_GPU);
 +    HardwareIndexBufferSharedPtr ib = HardwareBufferManager::getSingleton().createIndexBuffer(
 +        HardwareIndexBuffer::IT_16BIT, draw_data->TotalIdxCount, HBU_CPU_TO_GPU);
-+    vbRing[ringPos] = vb; // retained kRing frames so its memory can't be realiased
-+    ibRing[ringPos] = ib;
++    mVbRing[mRingPos] = vb; // retained kBufferRing frames so it can't be realiased
++    mIbRing[mRingPos] = ib;
 +    bind->setBinding(0, vb);
 +    mRenderOp.indexData->indexBuffer = ib;
-
+ 
      // Copy all vertices
      size_t vtx_offset = 0;
