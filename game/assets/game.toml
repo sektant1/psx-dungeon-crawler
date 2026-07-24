@@ -2,12 +2,14 @@
 title = "Debug"
 width = 960
 height = 720
-# vsync=true triggers an ImGui overlay flicker under Mesa/GL3Plus/XWayland
-# (the overlay's dynamic buffer is scanned out while the next frame rewrites
-# it). Run unsynced and pace with the frame limiter below instead.
+# Run unsynced (vsync=true had its own overlay-scanout flicker on this
+# Mesa/GL3Plus/XWayland stack) and pace with the frame limiter below.
 vsync = false
 # Frame limiter: caps the loop so vsync=false doesn't run the GPU flat out.
-# Set limit_fps=false for uncapped, or change max_fps to taste.
+# The ImGui overlay is patched to retain a ring of vertex/index buffers
+# (cmake/patches/ogre-imgui-overlay-fresh-buffer.patch) so capping the fps no
+# longer reintroduces the buffer-aliasing flicker. If flicker ever returns on
+# other hardware, limit_fps=false (uncapped) is the fallback.
 limit_fps = true
 max_fps = 60
 

@@ -1,23 +1,25 @@
-Fix ImGui overlay window-content flicker on GL3Plus at high/uncapped frame rates.
+Fix ImGui overlay window-content flicker on GL3Plus/Mesa.
 
 OGRE's ImGuiOverlay keeps ONE shared dynamic vertex/index buffer and only
 reallocates it when it needs to grow, reusing it across frames otherwise. When
-the CPU runs ahead of the GPU (uncapped frame rate, or vsync scanout timing),
-the next frame's writeData() overwrites a buffer the GPU is still reading from
-the previous frame's draw, so windows drawn later in the frame lose their
-geometry -- seen as flicker/blanking of ImGui window content.
+the CPU runs ahead of the GPU the next frame's writeData() overwrites a buffer
+the GPU is still reading from the previous frame's draw, so windows drawn later
+in the frame lose their geometry -- seen as flicker/blanking of ImGui content.
 
-Allocate a fresh vertex+index buffer every frame instead. A brand-new buffer
-cannot alias the previous frame's in-flight draw, and GL defers the old
-buffer's deletion until its draw completes. The buffers are small (tens of KB)
-and the driver pools them, so per-frame allocation is cheap.
+Allocating a fresh buffer every frame and freeing the old one immediately is not
+enough on Mesa: once a frame limiter paces the loop, the driver's buffer pool
+has time to recycle the just-freed memory into the next "fresh" allocation,
+aliasing a draw still being scanned out -- the flicker returns whenever the fps
+cap is on. Instead allocate fresh AND retain the last few buffers in a ring, so
+their memory stays allocated (not pooled) until the GPU is long done with them.
+The fix is then independent of frame pacing. Buffers are small (tens of KB).
 
 --- a/Components/Overlay/src/OgreImGuiOverlay.cpp
 +++ b/Components/Overlay/src/OgreImGuiOverlay.cpp
-@@ -374,17 +374,16 @@ void ImGuiOverlay::ImGUIRenderable::updateVertexData(ImDrawData* draw_data)
- 
+@@ -374,17 +374,26 @@ void ImGuiOverlay::ImGUIRenderable::updateVertexData(ImDrawData* draw_data)
+
      VertexBufferBinding* bind = mRenderOp.vertexData->vertexBufferBinding;
- 
+
 -    if (bind->getBindings().empty() || bind->getBuffer(0)->getNumVertices() < size_t(draw_data->TotalVtxCount))
 -    {
 -        bind->setBinding(0, HardwareBufferManager::getSingleton().createVertexBuffer(
@@ -29,16 +31,27 @@ and the driver pools them, so per-frame allocation is cheap.
 -        mRenderOp.indexData->indexBuffer = HardwareBufferManager::getSingleton().createIndexBuffer(
 -            HardwareIndexBuffer::IT_16BIT, draw_data->TotalIdxCount, HBU_CPU_TO_GPU);
 -    }
-+    // PSX engine patch: allocate a FRESH vertex+index buffer every frame rather
-+    // than reusing one across frames. Reuse let the CPU overwrite a buffer the
-+    // GPU was still reading from the previous frame's draw (ImGui window content
-+    // flicker under GL3Plus at high/uncapped frame rates). A new buffer each
-+    // frame cannot alias the in-flight draw; GL defers the old buffer's deletion
-+    // until its draw completes.
-+    bind->setBinding(0, HardwareBufferManager::getSingleton().createVertexBuffer(
-+                            sizeof(ImDrawVert), draw_data->TotalVtxCount, HBU_CPU_TO_GPU));
-+    mRenderOp.indexData->indexBuffer = HardwareBufferManager::getSingleton().createIndexBuffer(
++    // PSX engine patch: allocate a fresh vertex+index buffer every frame AND
++    // retain the last few in a ring, so the buffer the GPU is still reading (or
++    // scanning out) is never freed and its memory can't be pooled back into the
++    // next frame's "fresh" allocation. Reusing one buffer, or freeing it
++    // immediately, let the CPU or the driver's buffer pool alias a draw still in
++    // flight -> ImGui window-content flicker on GL3Plus/Mesa, notably once a
++    // frame limiter paces the loop so the pool has time to recycle the memory.
++    static const int kRing = 4;
++    static HardwareVertexBufferSharedPtr vbRing[kRing];
++    static HardwareIndexBufferSharedPtr  ibRing[kRing];
++    static int ringPos = 0;
++    ringPos = (ringPos + 1) % kRing;
++
++    HardwareVertexBufferSharedPtr vb = HardwareBufferManager::getSingleton().createVertexBuffer(
++        sizeof(ImDrawVert), draw_data->TotalVtxCount, HBU_CPU_TO_GPU);
++    HardwareIndexBufferSharedPtr ib = HardwareBufferManager::getSingleton().createIndexBuffer(
 +        HardwareIndexBuffer::IT_16BIT, draw_data->TotalIdxCount, HBU_CPU_TO_GPU);
- 
++    vbRing[ringPos] = vb; // retained kRing frames so its memory can't be realiased
++    ibRing[ringPos] = ib;
++    bind->setBinding(0, vb);
++    mRenderOp.indexData->indexBuffer = ib;
+
      // Copy all vertices
      size_t vtx_offset = 0;
