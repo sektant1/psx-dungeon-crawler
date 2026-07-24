@@ -358,6 +358,12 @@ if(BUILD_TESTING)
   target_include_directories(editor_camera_fly_tests PRIVATE game/src)
   target_link_libraries(editor_camera_fly_tests PRIVATE glm::glm)
   add_test(NAME editor_camera_fly COMMAND editor_camera_fly_tests)
+
+  add_executable(picker_tests game/tests/PickerTests.cpp
+                              game/src/editor/Picker.cpp)
+  target_include_directories(picker_tests PRIVATE game/src/editor)
+  target_link_libraries(picker_tests PRIVATE glm::glm)
+  add_test(NAME picker COMMAND picker_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
