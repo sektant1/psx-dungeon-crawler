@@ -191,7 +191,7 @@ add_executable(
   game/src/scene/MapSerializer.cpp)
 target_include_directories(level_editor
   PRIVATE third_party game/src game/src/scene game/src/editor engine/src)
-target_link_libraries(level_editor PRIVATE eng)
+target_link_libraries(level_editor PRIVATE eng eng_toml)
 target_compile_definitions(
   level_editor PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(level_editor)

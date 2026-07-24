@@ -13,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <unordered_map>
 
 namespace eng {
 class Engine;
@@ -46,6 +47,9 @@ private:
     glm::vec3 spawnPosInFrontOfCamera() const;
     bool selectionCentroid(glm::vec3& out);
 
+    void buildMaterialCatalog();                               // mesh->material map
+    std::string materialForMesh(const std::string& objPath) const;
+
     void newScene();
     void saveMap(const std::string& path);
     void openMap(const std::string& path);
@@ -61,6 +65,7 @@ private:
     EditorCamera mCam;
     Palette mPalette;
     GizmoMode mGizmoMode = GizmoMode::Translate;
+    std::unordered_map<std::string, std::string> mMatByMesh; // mesh file -> material
     float mSnapStep = 0.0f;
     std::string mMapPath;
     bool mQuit = false;

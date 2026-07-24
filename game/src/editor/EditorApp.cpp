@@ -17,6 +17,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <glm/gtc/quaternion.hpp>
+#include <tomlplusplus/toml.hpp>
 
 #include <algorithm>
 #include <cstdlib>
@@ -60,12 +61,13 @@ EditorApp::EditorApp(eng::Engine& engine, std::string assetDir)
     mCam.setYawPitch(0.0f, -0.4f);
 
     mPalette.discover(mAssetDir);
+    buildMaterialCatalog();
 
     // Seed a starter scene so the viewport isn't empty: a floor + a light.
     if (!mPalette.meshes().empty()) {
+        const std::string& seedMesh = mPalette.meshes().front();
         entt::entity floor =
-            mScene.spawnMesh(mPalette.meshes().front(), "Game/DungeonTile",
-                             glm::vec3(0.0f));
+            mScene.spawnMesh(seedMesh, materialForMesh(seedMesh), glm::vec3(0.0f));
         resolveMeshHandle(mRenderer, mScene.registry(), floor);
     } else {
         mScene.spawnMarker(glm::vec3(0.0f), "Floor");
@@ -106,6 +108,45 @@ bool EditorApp::selectionCentroid(glm::vec3& out)
 }
 
 // --------------------------------------------------------------------------
+
+void EditorApp::buildMaterialCatalog()
+{
+    // Mirror the game's mesh->material pairing from dungeon_props.toml so
+    // spawned props carry their own texture instead of a single fallback.
+    try {
+        const toml::table cfg = toml::parse_file(mAssetDir + "/dungeon_props.toml");
+        if (const toml::array* props = cfg["prop"].as_array()) {
+            for (const toml::node& p : *props) {
+                const toml::table* tbl = p.as_table();
+                if (!tbl) continue;
+                const toml::array* meshes = (*tbl)["meshes"].as_array();
+                const toml::array* mats = (*tbl)["materials"].as_array();
+                if (!meshes || !mats) continue;
+                for (size_t i = 0; i < meshes->size() && i < mats->size(); ++i) {
+                    const std::string m = (*meshes)[i].value_or(std::string());
+                    const std::string mat = (*mats)[i].value_or(std::string());
+                    if (!m.empty() && !mat.empty()) mMatByMesh[m] = mat;
+                }
+            }
+        }
+    } catch (const std::exception&) {
+        // Missing/invalid catalog: fall back to keyword heuristics only.
+    }
+}
+
+std::string EditorApp::materialForMesh(const std::string& objPath) const
+{
+    const std::string file = std::filesystem::path(objPath).filename().string();
+    const auto it = mMatByMesh.find(file);
+    if (it != mMatByMesh.end()) return it->second;
+    // Tile heuristics for the modular kit meshes not listed as props.
+    const auto has = [&](const char* k) { return file.find(k) != std::string::npos; };
+    if (has("floor")) return "Game/DungeonFloor";
+    if (has("ceiling")) return "Game/DungeonCeiling";
+    if (has("wall")) return "Game/DungeonWall";
+    if (has("arch") || has("pillar")) return "Game/DungeonTile";
+    return "Game/DungeonTile";
+}
 
 void EditorApp::frame(float dt)
 {
@@ -485,7 +526,7 @@ void EditorApp::drawPalette()
 {
     Palette::Callbacks cbs;
     cbs.spawnMesh = [this](const std::string& path) {
-        entt::entity e = mScene.spawnMesh(path, "Game/DungeonTile",
+        entt::entity e = mScene.spawnMesh(path, materialForMesh(path),
                                           spawnPosInFrontOfCamera());
         resolveMeshHandle(mRenderer, mScene.registry(), e);
         mSel.set(e);
