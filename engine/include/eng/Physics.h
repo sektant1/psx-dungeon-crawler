@@ -24,7 +24,11 @@ struct BodyDesc {
     bool continuousCast = false;
     float mass = 1.0f;
     float friction = 0.5f;
-    float restitution = 0.1f;
+    // No bounce by default: a grounded dungeon wants props to thud and settle
+    // and arrows to stick, not rebound. Jolt combines the two bodies'
+    // restitution, so a non-zero default made even restitution-0 arrows bounce
+    // off walls. Opt in explicitly for anything that should be springy.
+    float restitution = 0.0f;
 };
 
 struct CharacterDesc {
