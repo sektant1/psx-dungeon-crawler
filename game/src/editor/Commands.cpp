@@ -37,6 +37,7 @@ Command makeSetTransform(entt::registry& reg, entt::entity e,
     // Capture the pre-command transform on the FIRST apply only. Re-capturing
     // on redo would clobber it with the (already-reverted) value.
     c.apply = [&reg, e, next, prev, captured] {
+        if (!reg.valid(e)) return; // entity deleted+recreated under us: no-op
         if (!*captured) {
             if (reg.all_of<eng::ecs::Transform>(e))
                 *prev = reg.get<eng::ecs::Transform>(e);
@@ -45,6 +46,7 @@ Command makeSetTransform(entt::registry& reg, entt::entity e,
         reg.emplace_or_replace<eng::ecs::Transform>(e, next);
     };
     c.revert = [&reg, e, prev] {
+        if (!reg.valid(e)) return; // stale handle after an id reuse: skip safely
         reg.emplace_or_replace<eng::ecs::Transform>(e, *prev);
     };
     return c;
@@ -57,6 +59,7 @@ Command makeDeleteEntity(entt::registry& reg, entt::entity e)
     auto slot = std::make_shared<entt::entity>(e);
     Command c;
     c.apply = [&reg, slot, blob, pool] {
+        if (!reg.valid(*slot)) return; // already gone (id reused elsewhere)
         mapio::ByteWriter w;
         const mapio::ComponentRegistry& types = mapio::coreRegistry();
         std::vector<const mapio::ComponentType*> present;
@@ -82,6 +85,21 @@ Command makeDeleteEntity(entt::registry& reg, entt::entity e)
                 t->deserialize(reg, e2, r);
         }
         *slot = e2;
+    };
+    return c;
+}
+
+Command makeComposite(std::vector<Command> commands)
+{
+    auto cmds = std::make_shared<std::vector<Command>>(std::move(commands));
+    Command c;
+    c.apply = [cmds] {
+        for (Command& cc : *cmds)
+            if (cc.apply) cc.apply();
+    };
+    c.revert = [cmds] {
+        for (auto it = cmds->rbegin(); it != cmds->rend(); ++it)
+            if (it->revert) it->revert();
     };
     return c;
 }

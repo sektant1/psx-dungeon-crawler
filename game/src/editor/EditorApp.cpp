@@ -27,23 +27,16 @@
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <limits>
+
+#include <sys/wait.h> // waitpid (POSIX; editor is Linux-only, uses /proc/self/exe)
+#include <unistd.h>   // fork/execl/setenv/_exit
 
 namespace editor {
 
 namespace {
 constexpr float kFovDeg = 60.0f;
-
-// Load the .obj for a freshly spawned mesh entity and patch its MeshRenderer so
-// SceneSync attaches a real Ogre mesh on the next sync (EditorScene leaves the
-// MeshHandle default). Safe to call before the first sync().
-void resolveMeshHandle(eng::Renderer& r, entt::registry& reg, entt::entity e)
-{
-    auto* mr = reg.try_get<eng::ecs::MeshRenderer>(e);
-    auto* src = reg.try_get<mapio::MeshSource>(e);
-    if (mr && src && !src->path.empty())
-        mr->mesh = r.loadObj(src->path);
-}
 } // namespace
 
 EditorApp::EditorApp(eng::Engine& engine, std::string assetDir)
@@ -73,7 +66,7 @@ EditorApp::EditorApp(eng::Engine& engine, std::string assetDir)
         const std::string& seedMesh = mPalette.meshes().front();
         entt::entity floor =
             mScene.spawnMesh(seedMesh, materialForMesh(seedMesh), glm::vec3(0.0f));
-        resolveMeshHandle(mRenderer, mScene.registry(), floor);
+        ensureMeshHandles();    // resolve the .obj before the sync below
         mScene.sync();          // build the node so its gizmo/bounds resolve now
         mSel.set(floor);        // select it so its gizmo is visible immediately
     } else {
@@ -157,6 +150,25 @@ std::string EditorApp::materialForMesh(const std::string& objPath) const
     return "Game/DungeonTile";
 }
 
+void EditorApp::ensureMeshHandles()
+{
+    // Any MeshRenderer whose runtime handle is unresolved (freshly spawned,
+    // deserialized on open/duplicate/undo-delete, or generated) gets its .obj
+    // loaded from MeshSource and is marked dirty so SceneSync attaches it. The
+    // MeshHandle is a runtime id and is never serialized, so this is the single
+    // place that turns a MeshSource path into a live mesh -- callers never have
+    // to remember to resolve.
+    entt::registry& reg = mScene.registry();
+    for (auto e : reg.view<eng::ecs::MeshRenderer, mapio::MeshSource>()) {
+        auto& mr = reg.get<eng::ecs::MeshRenderer>(e);
+        if (mr.mesh.valid()) continue;
+        const auto& src = reg.get<mapio::MeshSource>(e);
+        if (src.path.empty()) continue;
+        mr.mesh = mRenderer.loadObj(src.path);
+        reg.emplace_or_replace<eng::ecs::Dirty>(e);
+    }
+}
+
 void EditorApp::frame(float dt)
 {
     handleViewportInput(dt);
@@ -165,10 +177,13 @@ void EditorApp::frame(float dt)
 
     updateGizmoDrag();
 
+    ensureMeshHandles();
     mScene.sync();
 
     // Overlays: ground grid + selection AABB wire-box + gizmo axis lines.
-    std::vector<eng::Renderer::DebugLine> lines;
+    // Retained buffer, refilled each frame (no per-frame allocation).
+    std::vector<eng::Renderer::DebugLine>& lines = mDebugLines;
+    lines.clear();
     // Ground grid: brighter when grid-snap is on, spaced to the snap cell so the
     // snap increment is visible.
     const bool snapping = mGridSnap && mGridSize > 0.0f;
@@ -273,6 +288,14 @@ void EditorApp::handleViewportInput(float dt)
                     mDragging = true;
                     mDragAxis = bestAxis;
                     mPreDrag = mScene.registry().get<eng::ecs::Transform>(e);
+                    // Snapshot every selected entity's transform so the drag
+                    // moves the whole selection about the gizmo pivot.
+                    mDragPre.clear();
+                    for (entt::entity s : mSel.items())
+                        if (mScene.registry().valid(s) &&
+                            mScene.registry().all_of<eng::ecs::Transform>(s))
+                            mDragPre.push_back(
+                                {s, mScene.registry().get<eng::ecs::Transform>(s)});
                     mDragCentroid = centroid;
                     float t = 0.0f;
                     closestPointOnAxis(centroid, axes[bestAxis], ray, t);
@@ -333,22 +356,28 @@ void EditorApp::updateGizmoDrag()
 {
     if (!mDragging) return;
     const ImGuiIO& io = ImGui::GetIO();
-    entt::entity e = mSel.primary();
-    if (!io.MouseDown[0] || e == entt::null || !mScene.registry().valid(e)) {
-        // Release: rebuild a single undoable command from pre-drag -> final.
-        if (e != entt::null && mScene.registry().valid(e)) {
-            entt::registry& reg = mScene.registry();
-            eng::ecs::Transform finalT = reg.get<eng::ecs::Transform>(e);
-            reg.replace<eng::ecs::Transform>(e, mPreDrag);
-            reg.emplace_or_replace<eng::ecs::Dirty>(e);
-            mStack.run(makeSetTransform(reg, e, finalT));
+    entt::registry& reg = mScene.registry();
+
+    if (!io.MouseDown[0]) {
+        // Release: one undoable step for the whole selection. Restore each
+        // entity's pre-drag transform, then a composite command re-applies the
+        // dragged finals (capturing pre-drag as its revert target).
+        std::vector<Command> cmds;
+        for (auto& [ent, pre] : mDragPre) {
+            if (!reg.valid(ent) || !reg.all_of<eng::ecs::Transform>(ent)) continue;
+            eng::ecs::Transform finalT = reg.get<eng::ecs::Transform>(ent);
+            reg.replace<eng::ecs::Transform>(ent, pre);
+            reg.emplace_or_replace<eng::ecs::Dirty>(ent);
+            cmds.push_back(makeSetTransform(reg, ent, finalT));
         }
+        if (!cmds.empty()) mStack.run(makeComposite(std::move(cmds)));
         mDragging = false;
+        mDragPre.clear();
         return;
     }
 
-    // Drag: transform the selection primary about the chosen axis per the
-    // active gizmo mode (Translate / Rotate / Scale).
+    // Drag: compute the axis delta once, then map it over every selected
+    // entity's pre-drag transform, pivoting on the gizmo centroid.
     const glm::vec2 mouse(io.MousePos.x, io.MousePos.y);
     const glm::vec2 rel = (mouse - mVpMin) / mVpSize;
     const glm::vec2 ndc(rel.x * 2.0f - 1.0f, 1.0f - rel.y * 2.0f);
@@ -356,49 +385,76 @@ void EditorApp::updateGizmoDrag()
                               glm::radians(kFovDeg), mVpSize.x / mVpSize.y);
     const glm::vec3 axes[3] = {{1,0,0},{0,1,0},{0,0,1}};
     const glm::vec3 axis = axes[mDragAxis];
-    entt::registry& reg = mScene.registry();
-    eng::ecs::Transform cur = mPreDrag;
+
+    // Build a per-entity transform map for the active mode.
+    std::function<eng::ecs::Transform(const eng::ecs::Transform&)> xform;
 
     if (mGizmoMode == GizmoMode::Translate) {
         float t = 0.0f;
         if (!closestPointOnAxis(mDragStartHit, axis, ray, t)) return;
-        cur.position = mPreDrag.position + axis * t;
+        // Snap the PRIMARY's resulting position, then move the group by the
+        // same offset so the selection stays rigid and grid-aligned.
+        glm::vec3 primPos = mPreDrag.position + axis * t;
         if (mSnapStep > 0.0f) {
-            cur.position.x = snap(cur.position.x, mSnapStep);
-            cur.position.y = snap(cur.position.y, mSnapStep);
-            cur.position.z = snap(cur.position.z, mSnapStep);
+            primPos.x = snap(primPos.x, mSnapStep);
+            primPos.y = snap(primPos.y, mSnapStep);
+            primPos.z = snap(primPos.z, mSnapStep);
         }
-        cur.position = snapToGrid(cur.position); // grid snap overrides when on
+        primPos = snapToGrid(primPos); // grid snap overrides when on
+        const glm::vec3 offset = primPos - mPreDrag.position;
+        xform = [offset](const eng::ecs::Transform& pre) {
+            eng::ecs::Transform out = pre;
+            out.position = pre.position + offset;
+            return out;
+        };
     } else if (mGizmoMode == GizmoMode::Rotate) {
         glm::vec3 hit;
         if (!rayPlane(ray, mDragCentroid, axis, hit)) return;
         float ang = signedAngleAround(mDragStartVec, hit - mDragCentroid, axis);
         if (mSnapStep > 0.0f) // treat snap as degrees in Rotate mode
             ang = glm::radians(snap(glm::degrees(ang), mSnapStep));
-        cur.rotation = glm::normalize(glm::angleAxis(ang, axis) * mPreDrag.rotation);
+        const glm::quat q = glm::angleAxis(ang, axis);
+        const glm::vec3 pivot = mDragCentroid;
+        xform = [q, pivot](const eng::ecs::Transform& pre) {
+            eng::ecs::Transform out = pre;
+            out.rotation = glm::normalize(q * pre.rotation);
+            out.position = pivot + q * (pre.position - pivot);
+            return out;
+        };
     } else { // Scale
         float t = 0.0f;
         if (!closestPointOnAxis(mDragCentroid, axis, ray, t)) return;
         if (std::abs(mDragStartT) < 1e-3f) return;
-        float factor = t / mDragStartT;
-        factor = std::clamp(factor, 0.01f, 100.0f);
-        cur.scale = mPreDrag.scale;
-        if (mUniformScale) {
-            cur.scale = glm::max(glm::vec3(0.01f), mPreDrag.scale * factor);
-            if (mSnapStep > 0.0f) {
-                cur.scale.x = std::max(0.01f, snap(cur.scale.x, mSnapStep));
-                cur.scale.y = std::max(0.01f, snap(cur.scale.y, mSnapStep));
-                cur.scale.z = std::max(0.01f, snap(cur.scale.z, mSnapStep));
+        float factor = std::clamp(t / mDragStartT, 0.01f, 100.0f);
+        const glm::vec3 pivot = mDragCentroid;
+        const bool uniform = mUniformScale;
+        const int dragAxis = mDragAxis;
+        const float snapStep = mSnapStep;
+        xform = [factor, pivot, uniform, dragAxis, snapStep](
+                    const eng::ecs::Transform& pre) {
+            eng::ecs::Transform out = pre;
+            if (uniform) {
+                out.scale = glm::max(glm::vec3(0.01f), pre.scale * factor);
+                if (snapStep > 0.0f)
+                    for (int i = 0; i < 3; ++i)
+                        out.scale[i] = std::max(0.01f, snap(out.scale[i], snapStep));
+                out.position = pivot + (pre.position - pivot) * factor;
+            } else {
+                out.scale[dragAxis] =
+                    std::max(0.01f, pre.scale[dragAxis] * factor);
+                if (snapStep > 0.0f)
+                    out.scale[dragAxis] =
+                        std::max(0.01f, snap(out.scale[dragAxis], snapStep));
             }
-        } else {
-            cur.scale[mDragAxis] = std::max(0.01f, mPreDrag.scale[mDragAxis] * factor);
-            if (mSnapStep > 0.0f)
-                cur.scale[mDragAxis] = std::max(0.01f, snap(cur.scale[mDragAxis], mSnapStep));
-        }
+            return out;
+        };
     }
 
-    reg.replace<eng::ecs::Transform>(e, cur);
-    reg.emplace_or_replace<eng::ecs::Dirty>(e);
+    for (auto& [ent, pre] : mDragPre) {
+        if (!reg.valid(ent) || !reg.all_of<eng::ecs::Transform>(ent)) continue;
+        reg.replace<eng::ecs::Transform>(ent, xform(pre));
+        reg.emplace_or_replace<eng::ecs::Dirty>(ent);
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -479,7 +535,7 @@ void EditorApp::duplicateSelection()
         if (auto* tr = r.try_get<eng::ecs::Transform>(e))
             tr->position = snapToGrid(tr->position + glm::vec3(1.0f, 0.0f, 1.0f));
         r.emplace_or_replace<eng::ecs::Dirty>(e);
-        resolveMeshHandle(mRenderer, r, e);
+        // Mesh handle (if any) is resolved by ensureMeshHandles() next frame.
         *slot = e;
         mSel.set(e);
     };
@@ -544,7 +600,10 @@ void EditorApp::drawPanels()
 void EditorApp::drawToolbar()
 {
     ImGui::Begin("Editor");
-    if (ImGui::Button("New")) newScene();
+    if (ImGui::Button("New")) {
+        mPendingDestructive = 1;
+        ImGui::OpenPopup("Confirm##editor");
+    }
     ImGui::SameLine();
     if (mPathBuf[0] == 0 && !mMapPath.empty()) {
         std::snprintf(mPathBuf, sizeof(mPathBuf), "%s", mMapPath.c_str());
@@ -552,16 +611,49 @@ void EditorApp::drawToolbar()
     ImGui::SetNextItemWidth(240.0f);
     ImGui::InputText("path", mPathBuf, sizeof(mPathBuf));
     ImGui::SameLine();
-    if (ImGui::Button("Open")) openMap(mPathBuf);
+    if (ImGui::Button("Open")) {
+        mPendingDestructive = 3;
+        ImGui::OpenPopup("Confirm##editor");
+    }
     ImGui::SameLine();
     if (ImGui::Button("Save")) saveMap(mPathBuf[0] ? mPathBuf : "level.map");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80.0f);
     ImGui::InputInt("##seed", &mGenSeed);
     ImGui::SameLine();
-    if (ImGui::Button("Generate")) generateDungeon();
+    if (ImGui::Button("Generate")) {
+        mPendingDestructive = 2;
+        ImGui::OpenPopup("Confirm##editor");
+    }
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Replace the scene with a BSP dungeon from this seed");
+
+    // Confirm gate for the three scene-destroying actions (they also clear undo).
+    if (ImGui::BeginPopupModal("Confirm##editor", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        const char* msg =
+            mPendingDestructive == 1 ? "Discard the current scene and start new?"
+            : mPendingDestructive == 2 ? "Replace the scene with a generated dungeon?"
+                                       : "Discard the current scene and open the file?";
+        ImGui::TextUnformatted(msg);
+        ImGui::TextDisabled("This clears the undo history and cannot be undone.");
+        if (ImGui::Button("OK")) {
+            switch (mPendingDestructive) {
+                case 1: newScene(); break;
+                case 2: generateDungeon(); break;
+                case 3: openMap(mPathBuf); break;
+                default: break;
+            }
+            mPendingDestructive = 0;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            mPendingDestructive = 0;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 
     ImGui::Separator();
     int mode = int(mGizmoMode);
@@ -578,7 +670,9 @@ void EditorApp::drawToolbar()
     ImGui::SetNextItemWidth(110.0f);
     ImGui::DragFloat("Snap", &mSnapStep, 0.05f, 0.0f, 90.0f, "%.2f");
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("0 = free. Units for Move/Scale, degrees for Rotate.");
+        ImGui::SetTooltip("Gizmo increment. 0 = free. Units for Move/Scale, "
+                          "degrees for Rotate. For Move, the Grid below "
+                          "overrides this when enabled.");
     ImGui::SameLine();
     ImGui::Checkbox("Grid", &mGridSnap);
     if (ImGui::IsItemHovered())
@@ -644,12 +738,16 @@ void EditorApp::drawOutliner()
 {
     ImGui::Begin("Outliner");
     auto& reg = mScene.registry();
-    for (auto e : reg.view<eng::ecs::Name>()) {
-        const std::string& name = reg.get<eng::ecs::Name>(e).value;
+    // List every scene entity (anything with a Transform), not only named ones,
+    // so lights/markers/generated geometry are always selectable here.
+    for (auto e : reg.view<eng::ecs::Transform>()) {
+        const auto* nm = reg.try_get<eng::ecs::Name>(e);
         const bool selected = (mSel.primary() == e);
         char label[256];
         std::snprintf(label, sizeof(label), "%s##%u",
-                      name.empty() ? "(unnamed)" : name.c_str(),
+                      (nm && !nm->value.empty())
+                          ? nm->value.c_str()
+                          : "(entity)",
                       unsigned(entt::to_integral(e)));
         if (ImGui::Selectable(label, selected))
             mSel.set(e);
@@ -671,13 +769,28 @@ void EditorApp::drawInspector()
     const auto& insp = inspectorRegistry();
     for (const auto& t : core.types()) {
         if (!t.has || !t.has(reg, e)) continue;
-        if (ImGui::CollapsingHeader(t.name, ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PushID(t.stableTypeId);
+        const bool open = ImGui::CollapsingHeader(t.name, ImGuiTreeNodeFlags_DefaultOpen);
+        // Remove button, right-aligned. Transform is required (pick/gizmo/sync
+        // all depend on it), so it can't be removed.
+        const bool removable = t.remove && std::string(t.name) != "Transform";
+        if (removable) {
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 4.0f);
+            if (ImGui::SmallButton("x")) {
+                t.remove(reg, e);
+                reg.emplace_or_replace<eng::ecs::Dirty>(e);
+                ImGui::PopID();
+                continue;
+            }
+        }
+        if (open) {
             const auto* entry = insp.find(t.stableTypeId);
             if (entry && entry->draw)
                 entry->draw(reg, e);
             else
                 ImGui::TextDisabled("(no inspector)");
         }
+        ImGui::PopID();
     }
 
     ImGui::Separator();
@@ -701,8 +814,7 @@ void EditorApp::drawPalette()
     cbs.spawnMesh = [this](const std::string& path) {
         entt::entity e = mScene.spawnMesh(path, materialForMesh(path),
                                           spawnPosInFrontOfCamera());
-        resolveMeshHandle(mRenderer, mScene.registry(), e);
-        mSel.set(e);
+        mSel.set(e); // ensureMeshHandles() resolves the .obj next frame
     };
     cbs.spawnLight = [this] {
         eng::LightDesc d;
@@ -763,9 +875,7 @@ void EditorApp::generateDungeon()
     opts.propDir = mAssetDir + "/meshes/props/";
     game::layoutToScene(layout, opts, reg);
 
-    // Resolve renderer mesh handles for every generated mesh entity, then sync.
-    for (auto e : reg.view<eng::ecs::MeshRenderer>())
-        resolveMeshHandle(mRenderer, reg, e);
+    ensureMeshHandles(); // resolve every generated mesh entity, then sync
     mScene.sync();
 }
 
@@ -781,12 +891,11 @@ void EditorApp::openMap(const std::string& path)
     if (path.empty()) return;
     mScene.registry().clear();
     mapio::readMap(path, mScene.registry(), mapio::coreRegistry());
-    // Resolve mesh handles + mark everything dirty so SceneSync attaches them.
+    // Mark everything dirty so SceneSync attaches nodes/lights; mesh handles are
+    // resolved by ensureMeshHandles() on the next frame.
     auto& reg = mScene.registry();
-    for (auto e : reg.view<eng::ecs::Transform>()) {
-        resolveMeshHandle(mRenderer, reg, e);
+    for (auto e : reg.view<eng::ecs::Transform>())
         reg.emplace_or_replace<eng::ecs::Dirty>(e);
-    }
     mStack.clear();
     mSel.clear();
     mMapPath = path;
@@ -794,13 +903,37 @@ void EditorApp::openMap(const std::string& path)
 
 void EditorApp::launchGame()
 {
+    // Save the current scene first so Play always runs what's on screen, not a
+    // stale or empty last-saved path.
+    const std::string path =
+        !mMapPath.empty() ? mMapPath
+                          : (mPathBuf[0] ? std::string(mPathBuf) : "level.map");
+    saveMap(path); // sets mMapPath
+    if (mMapPath.empty()) return;
+
     std::string exeDir = ".";
     std::error_code ec;
     const auto self = std::filesystem::canonical("/proc/self/exe", ec);
     if (!ec) exeDir = self.parent_path().string();
-    const std::string cmd = "SDL_VIDEODRIVER=x11 \"" + exeDir + "/game\" \"" +
-                            mMapPath + "\" >/dev/null 2>&1 &";
-    std::system(cmd.c_str());
+    const std::string gameExe = exeDir + "/game";
+
+    // Spawn via fork+exec with an argv array -- no shell, so the map path (from
+    // the editable text field) can never be interpreted as a command. The
+    // grandchild is reparented to init and auto-reaped (double fork).
+    const pid_t pid = ::fork();
+    if (pid == 0) {
+        if (::fork() == 0) {
+            ::setenv("SDL_VIDEODRIVER", "x11", 1);
+            ::execl(gameExe.c_str(), gameExe.c_str(), mMapPath.c_str(),
+                    static_cast<char*>(nullptr));
+            ::_exit(127); // exec failed
+        }
+        ::_exit(0); // intermediate child exits immediately
+    }
+    if (pid > 0) {
+        int status = 0;
+        ::waitpid(pid, &status, 0); // reap the intermediate child
+    }
 }
 
 } // namespace editor
