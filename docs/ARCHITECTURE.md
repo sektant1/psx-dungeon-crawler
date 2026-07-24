@@ -87,10 +87,20 @@ Kept from the SPEngine port (genuinely used): `Object`, `System`, `Content`,
     `drawDiagnostics`) → `game/src/GameDiagnostics.*`.
   - **R2b ✅** extracted `LiveLevel` + `buildLevel` (level construction/animation/
     transitions) → `game/src/LiveLevel.*`. main.cpp now 612 lines.
-  - **R2c (next)** introduce a `GameContext` (shared refs: Renderer/Physics/Input/
-    LiveLevel/combat) and move loop phases into real `eng::System`s
-    (Player/Combat/Level/Portal/Prop) wired via `Engine::registerSystem` +
-    `updateSystems`. The `while` loop becomes thin (~pump/update/render).
+  - **R2c (in progress)** introduce `GameContext` (non-owning refs: Renderer/
+    Physics/Input/assets) and turn inline loop gameplay into cohesive systems.
+    Design note: the loop has a strict phase order (input→fixedstep→propsync→
+    world→player→interaction→weapons→render) and that order *is* the determinism,
+    so game systems are cohesive classes invoked at their exact phase (sharing
+    GameContext) rather than a single coarse `eng::System::update(dt)` that would
+    force reordering. The `eng::System` registry stays for order-independent
+    engine systems.
+    - `game::PropSystem` ✅ — lobby dynamic crates/barrels (spawn/sync/teardown).
+    - `game::CombatSystem` ✅ — owns ProjectileSystem+SpellSystem+MeleeSystem+
+      CombatConfig; consolidates their scattered call sites.
+    - Next: `PlayerSystem` (player.update + loadout + weapon vis), then an
+      interaction/transition system (targeting + prompts + portal descend/ascend).
+    main.cpp: 1113 → 479 so far.
 - **R3 — Split the `Renderer` facade** by concern behind the stable header.
 - **R4 — Editor as its own decomposed target** (Viewport/Outliner/Inspector/
   Gizmo/AssetBrowser panels) editing the shared `.map`.
