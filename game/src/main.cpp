@@ -9,7 +9,7 @@
 #include "FpsController.h"
 #include "LevelEditor.h"
 #include "LevelResource.h"
-#include "LobbyDressing.h"
+#include "LiveLevel.h"
 #include "MapPlay.h"
 #include "Projectiles.h"
 #include "Spells.h"
@@ -17,8 +17,8 @@
 #include "SceneFactory.h"
 #include "Melee.h"
 #include "ParticleLibrary.h"
-#include "RenderPalette.h"
 #include "Dummy.h"
+#include "GameDiagnostics.h"
 #include "GameScene.h"
 #include "Targeting.h"
 #include "ViewModel.h"
@@ -36,465 +36,15 @@
 #include <eng/Physics.h>
 #include <eng/Profiler.h>
 
-#include <cfloat>
 #include <chrono>
 
 #include <glm/gtc/quaternion.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <memory>
 #include <string>
-#include <unordered_set>
 #include <vector>
-
-static eng::TextSpriteStyle showcaseLabelStyle(float worldHeight,
-                                                glm::vec4 accent)
-{
-    eng::TextSpriteStyle style;
-    style.worldHeight = worldHeight;
-    style.accentColour = accent;
-    return style;
-}
-
-// Everything a built level owns that the main loop animates or references.
-// Swapped atomically on a transition (clearScene + buildLevel).
-class LiveLevel {
-public:
-    bool rebuild(eng::Renderer& r, eng::Physics& physics,
-                 const std::string& assets, uint32_t seed, int depth);
-    bool rebuildLayout(eng::Renderer& r, eng::Physics& physics,
-                       const std::string& assets, gen::Layout layout, int depth);
-    void update(eng::Renderer& r, float animationTime);
-    void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
-    void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
-    glm::vec3 spawnPosition() const { return spawn; }
-    glm::vec3 exitPosition() const { return exit; }
-    bool torchIsLit(int index) const { return map.torchLit(index); }
-    void toggleTorch(eng::Renderer& r, int index) { map.toggleTorch(r, index); }
-    const DungeonMap& dungeon() const { return map; }
-    void clearPhysics() { map.clearPhysics(); }
-
-private:
-    friend LiveLevel buildLevel(eng::Renderer&, eng::Physics&, const std::string&,
-                                uint32_t, int, const gen::Layout*);
-    DungeonMap map;
-    DemoScene scene;
-    // Game-side ECS scene: owns per-entity gameplay actors (static set-dressing
-    // props migrated in R1; more actors follow). Pinned on the heap so the
-    // Renderer/Scene refs inside it survive LiveLevel moves. Null until the
-    // first buildLevel. The batched dungeon shell stays in `map`, not here.
-    std::unique_ptr<game::GameScene> gameScene;
-    eng::NodeHandle chestBase{}, chestSpin{};
-    // Chest glow is an ECS light actor (R1b): animated position + colour are
-    // written to its components each frame; SceneSync pushes them to the light.
-    entt::entity chestGlowEntity{entt::null};
-    glm::vec3 chestGlowColour{0.0f};
-    glm::vec3 spawn{0.0f}, exit{0.0f};
-    PortalProp downPortal{};
-    PortalProp upPortal{}; // invalid at depth 0
-    std::vector<ShowcaseExhibit> exhibits;
-    struct WorldLabel {
-        eng::NodeHandle node{};
-        eng::SpriteHandle sprite{};
-        glm::vec3 position{0.0f};
-    };
-    std::vector<WorldLabel> worldLabels;
-};
-
-// Read-only generated-grid inspector. The dungeon owns the data; this only
-// projects it into an ImGui draw list for debugging layout/room segmentation.
-static void drawDungeonMap(const DungeonMap& map, glm::vec3 playerPos)
-{
-    ImGui::SetNextWindowSize(ImVec2(540.0f, 600.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(400.0f, 10.0f), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Generated Dungeon Map")) {
-        ImGui::End();
-        return;
-    }
-
-    const int rows = map.debugRows();
-    const int cols = map.debugColumns();
-    if (rows == 0 || cols == 0) {
-        ImGui::TextUnformatted("No generated level is loaded.");
-        ImGui::End();
-        return;
-    }
-
-    int playerCol, playerRow;
-    map.debugCellOf(playerPos, playerCol, playerRow);
-    ImGui::Text("%d x %d cells  |  player: (%d, %d)", cols, rows,
-                playerCol, playerRow);
-    static bool roomLabels = false;
-    ImGui::SameLine();
-    ImGui::Checkbox("room IDs", &roomLabels);
-
-    const ImVec2 available = ImGui::GetContentRegionAvail();
-    const float cell = std::clamp((available.x - 4.0f) / float(cols), 7.0f, 18.0f);
-    const ImVec2 origin = ImGui::GetCursorScreenPos();
-    const ImVec2 extent(cell * float(cols), cell * float(rows));
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    draw->AddRectFilled(origin, ImVec2(origin.x + extent.x, origin.y + extent.y),
-                        IM_COL32(8, 12, 11, 255));
-
-    static constexpr ImU32 kRooms[] = {
-        IM_COL32(46, 92, 104, 255), IM_COL32(89, 69, 118, 255),
-        IM_COL32(73, 104, 68, 255), IM_COL32(120, 78, 57, 255),
-        IM_COL32(50, 109, 97, 255), IM_COL32(105, 91, 53, 255),
-        IM_COL32(72, 76, 125, 255), IM_COL32(117, 61, 99, 255),
-    };
-    for (int row = 0; row < rows; ++row) {
-        for (int col = 0; col < cols; ++col) {
-            const char tile = map.debugCellAt(col, row);
-            const int room = map.debugRoomAt(col, row);
-            ImU32 colour = IM_COL32(16, 20, 21, 255); // solid/void
-            if (room >= 0)
-                colour = kRooms[size_t(room) % (sizeof(kRooms) / sizeof(kRooms[0]))];
-            if (tile == 'A') colour = IM_COL32(202, 153, 61, 255);
-            if (tile == 'L') colour = IM_COL32(210, 106, 43, 255);
-            if (tile == 'S') colour = IM_COL32(89, 190, 236, 255);
-            if (tile == 'C') colour = IM_COL32(188, 102, 220, 255);
-            if (tile == 'X') colour = IM_COL32(95, 210, 143, 255);
-
-            const ImVec2 p0(origin.x + cell * float(col),
-                             origin.y + cell * float(row));
-            const ImVec2 p1(p0.x + cell, p0.y + cell);
-            draw->AddRectFilled(p0, p1, colour);
-            draw->AddRect(p0, p1, IM_COL32(4, 7, 7, 210));
-            if (tile == 'A') {
-                const bool ns = map.debugArchNorthSouth(col, row);
-                if (ns) {
-                    draw->AddLine({p0.x + cell * 0.25f, p0.y},
-                                  {p0.x + cell * 0.25f, p1.y}, IM_COL32(38, 28, 13, 255));
-                    draw->AddLine({p0.x + cell * 0.75f, p0.y},
-                                  {p0.x + cell * 0.75f, p1.y}, IM_COL32(38, 28, 13, 255));
-                } else {
-                    draw->AddLine({p0.x, p0.y + cell * 0.25f},
-                                  {p1.x, p0.y + cell * 0.25f}, IM_COL32(38, 28, 13, 255));
-                    draw->AddLine({p0.x, p0.y + cell * 0.75f},
-                                  {p1.x, p0.y + cell * 0.75f}, IM_COL32(38, 28, 13, 255));
-                }
-            }
-            if (roomLabels && room >= 0 && cell >= 13.0f) {
-                const std::string label = std::to_string(room);
-                draw->AddText({p0.x + 2.0f, p0.y + 1.0f}, IM_COL32(230, 245, 238, 235),
-                              label.c_str());
-            }
-        }
-    }
-    draw->AddRect(origin, ImVec2(origin.x + extent.x, origin.y + extent.y),
-                  IM_COL32(205, 225, 210, 220), 0.0f, 0, 1.5f);
-    if (playerCol >= 0 && playerRow >= 0 && playerCol < cols && playerRow < rows) {
-        const ImVec2 centre(origin.x + (float(playerCol) + 0.5f) * cell,
-                            origin.y + (float(playerRow) + 0.5f) * cell);
-        draw->AddCircleFilled(centre, std::max(2.5f, cell * 0.24f),
-                              IM_COL32(245, 249, 236, 255));
-        draw->AddCircle(centre, std::max(3.5f, cell * 0.30f),
-                        IM_COL32(7, 10, 8, 255), 12, 1.5f);
-    }
-    ImGui::Dummy(extent); // reserve the draw-list rectangle in window layout
-    ImGui::TextColored(ImVec4(0.35f, 0.75f, 0.92f, 1.0f), "S player spawn");
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.79f, 0.60f, 0.24f, 1.0f), "A arch");
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.83f, 0.42f, 0.17f, 1.0f), "L torch");
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.74f, 0.40f, 0.86f, 1.0f), "C anchor");
-    ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.37f, 0.82f, 0.56f, 1.0f), "X exit");
-    ImGui::End();
-}
-
-// Build a complete level (dungeon + demo scene + props + chest + portals)
-// into the (already-clear) scene. depth>0 adds an up-portal at the entry.
-LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
-                     const std::string& assets, uint32_t seed, int depth,
-                     const gen::Layout* authored = nullptr)
-{
-    LiveLevel lv;
-    lv.gameScene = std::make_unique<game::GameScene>(r);
-    const eng::NodeHandle levelRoot =
-        r.createNode(eng::kRootNode, glm::vec3(0.0f),
-                     "Level Scene depth " + std::to_string(depth));
-    const eng::NodeHandle dungeonRoot =
-        r.createNode(levelRoot, glm::vec3(0.0f), "Procedural Dungeon");
-    const eng::NodeHandle showcaseRoot =
-        r.createNode(levelRoot, glm::vec3(0.0f), "Shared Showcase");
-
-    // --------------------------------------------------------- dungeon ---
-    // Procedurally generated level; the anchor 'C' room lands at the world
-    // origin so the shared DemoScene sits centred inside it.
-    gen::Layout layout = authored ? *authored : gen::generate(seed);
-    if (!lv.map.loadFromRows(r, physics, std::move(layout),
-                             assets + "/meshes/tiles/",
-                             assets + "/meshes/props/", dungeonRoot)) {
-        eng::log::error("buildLevel: map load failed");
-        return lv;
-    }
-    lv.spawn = lv.map.spawn();
-    lv.exit = lv.map.exitPos();
-
-    // ------------------------------------------------------ shared scene ---
-    DemoScene::Options sceneOpts;
-    sceneOpts.crystals = depth == 0; // lobby-only crystal feature gallery
-    sceneOpts.boxes = false;       // movers replaced by the treasure chest
-    lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", showcaseRoot,
-                  sceneOpts);
-
-    RenderPalette palette;
-    loadRenderPalette(assets + "/palettes.toml", depth == 0 ? "lobby" : "dungeon",
-                      palette);
-    applyRenderPalette(r, palette, lv.scene.sunNode(), lv.scene.sunLight());
-
-    // ------------------------------------------------- lobby showcase ---
-    // Depth zero is a deliberately authored, non-combat exhibition hall.
-    // Keep this dense staging out of procedural dungeon floors: those are
-    // dressed by DungeonMap's data-driven marker and ambient prop catalogs.
-    if (depth == 0) {
-    loadPrimitiveShowcase(r, assets + "/lobby_showcase.toml", lv.exhibits);
-    // ------------------------------------------------- set dressing ---
-    // Medieval props placed around the anchor room (positions authored for
-    // the shared centrepiece layout at the world origin).
-    {
-        loadLobbyDressing(r, assets + "/lobby_dressing.toml",
-                          assets + "/meshes/props/");
-
-        const std::string props = assets + "/meshes/props/";
-        const auto mesh = [&](const char* f) { return r.loadObj(props + f); };
-        const glm::vec3 noScale{1.0f};
-
-        // ECS path (R1): spawn a static prop as a registry actor; SceneSync
-        // allocates the renderer node and attaches the mesh. yawDeg rotates
-        // about Y (the only rotation the migrated crates need).
-        const auto placeEcs = [&](eng::MeshHandle m, const char* mat,
-                                  glm::vec3 pos, float yawDeg,
-                                  glm::vec3 scale = glm::vec3(1.0f),
-                                  bool cast = true) {
-            const glm::quat q =
-                yawDeg != 0.0f
-                    ? glm::angleAxis(glm::radians(yawDeg), glm::vec3(0, 1, 0))
-                    : glm::quat(1, 0, 0, 0);
-            return lv.gameScene->spawnStatic(m, mat, pos, q, scale, cast);
-        };
-
-        eng::MeshHandle crate = mesh("prop_crate.obj");
-        eng::MeshHandle pumpkin = mesh("prop_pumpkin.obj");
-
-        // --- entry hall (z ~ +24): child props on the market table. The table
-        // body itself is authored in lobby_dressing.toml; here we mirror its
-        // transform on a bare node so the bread/pumpkin ride along.
-        eng::NodeHandle table = r.createNode(eng::kRootNode, {7.0f, 0.88f, 24.5f});
-        r.setOrientation(table, glm::angleAxis(glm::radians(-120.0f),
-                                               glm::vec3(0, 1, 0)));
-        r.attachMesh(r.createNode(table, {0.3f, 0.53f, -0.2f}),
-                     mesh("prop_bread.obj"), "Game/PropMarketMisc");
-        r.attachMesh(r.createNode(table, {-0.35f, 0.59f, 0.25f}), pumpkin,
-                     "Game/PropMarketMisc");
-
-        // --- great hall corner crate stack (per-crate Y offsets, kept in code)
-        if (depth == 0) {
-            const glm::vec3 c{-9.0f, 0.0f, -4.5f};
-            placeEcs(crate, "Game/PropMarket", c, 10.0f, noScale, false);
-            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f,
-                     noScale, false);
-            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.48f, 0), 40.0f,
-                     noScale, false);
-        }
-
-        // --- vault (z ~ -18..-26): sword stabbed into the floor, shield on a
-        // barrel. The weapons-pack meshes are authored huge; scale down.
-        {
-            const glm::quat swordRot =
-                glm::angleAxis(glm::radians(168.0f), glm::vec3(0, 0, 1)) *
-                glm::angleAxis(glm::radians(8.0f), glm::vec3(1, 0, 0));
-            lv.gameScene->spawnStatic(mesh("prop_sword.obj"), "Game/PropWeapon",
-                                      {0.0f, 1.15f, -24.0f}, swordRot,
-                                      glm::vec3(0.06f), false);
-
-            // The barrel the shield rests on is authored in lobby_dressing.toml.
-            const glm::vec3 b{-4.0f, 0.0f, -24.2f};
-            const glm::quat shieldRot =
-                glm::angleAxis(glm::radians(180.0f), glm::vec3(0, 1, 0)) *
-                glm::angleAxis(glm::radians(-20.0f), glm::vec3(1, 0, 0));
-            lv.gameScene->spawnStatic(mesh("prop_shield.obj"), "Game/PropWeapon",
-                                      b + glm::vec3(0.0f, 0.55f, -0.75f),
-                                      shieldRot, glm::vec3(0.08f), false);
-        }
-
-        // --- braziers: ground the demo's two omni lamps in open barrels with
-        // a fire on the rim and lift the light just above the flames.
-        const auto& omnis = lv.scene.omniNodes();
-        if (omnis.size() >= 2)
-            buildBraziers(r, assets + "/meshes/props/", omnis[0], omnis[1]);
-        {
-            const glm::vec3 c{-4.5f, 0.0f, -20.0f};
-            placeEcs(crate, "Game/PropMarket", c, -20.0f, noScale, false);
-            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), 15.0f,
-                     noScale, false);
-        }
-    }
-
-    // ------------------------------------------- hall centrepiece ---
-    // Treasure shrine: a low-poly chest levitating over the origin (anchor
-    // room centre), ringed by the demo's crystal spires + offering clutter,
-    // with a warm gold spill that pulses like banked coals.
-    TreasureShrine shrine = buildTreasureShrine(r, assets + "/meshes/props/");
-    lv.chestBase = shrine.chestBase;
-    lv.chestSpin = shrine.chestSpin;
-    lv.chestGlowColour = shrine.chestGlowColour;
-    // Glow light as an ECS actor at the chest's rest height; LiveLevel::update
-    // animates its position (to ride the hovering chest) and colour (pulse).
-    eng::LightDesc glow;
-    glow.colour = shrine.chestGlowColour;
-    glow.range = shrine.glowRange;
-    lv.chestGlowEntity =
-        lv.gameScene->spawnLight(glow, {0.0f, 1.35f, 0.0f}, "Chest Glow");
-
-    }
-
-    // Portals: generated low-poly arch + opaque scrolling sprite membrane. The
-    // threshold remains on the cell centre so interaction/navigation stays
-    // deterministic while the tall silhouette reads across a whole room.
-    {
-        PortalPropStyle down;
-        down.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
-        down.lightColour = {0.06f, 0.42f, 0.025f};
-        down.yawDegrees = lv.map.exitYawDegrees();
-        lv.downPortal = createPortalProp(r, lv.exit, down);
-        if (depth == 0) {
-            eng::TextSpriteStyle style = showcaseLabelStyle(
-                0.48f, {0.22f, 0.82f, 0.18f, 1.0f});
-            // Deliberately force a two-line plaque: it remains readable at
-            // the low-resolution presentation target without spanning the
-            // full arch width.
-            style.maxWidthPixels = 72;
-            style.colourRules.push_back(
-                {"PORTAL", {0.48f, 0.92f, 0.30f, 1.0f}});
-            const eng::SpriteHandle sprite =
-                r.attachTextSprite(lv.downPortal.labelAnchor,
-                                   "DUNGEON PORTAL", style);
-            r.setSpriteVisible(sprite, false);
-            lv.worldLabels.push_back({lv.downPortal.labelAnchor, sprite,
-                                      lv.downPortal.labelWorldPosition});
-        }
-        if (depth > 0) {
-            PortalPropStyle up;
-            up.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
-            up.material = "Game/PortalUp";
-            up.lightColour = {0.18f, 0.90f, 1.35f};
-            lv.upPortal = createPortalProp(r, lv.spawn, up);
-        }
-    }
-    if (depth == 0 && !std::getenv("PSX_NO_SHOWCASE_LABELS")) {
-        std::unordered_set<std::string> labelled;
-        for (const ShowcaseExhibit& exhibit : lv.exhibits) {
-            if (exhibit.label.empty() || !labelled.insert(exhibit.id).second)
-                continue;
-            const bool portal = exhibit.id.find("Portal") != std::string::npos;
-            if (portal)
-                continue; // portal labels are anchored to their rotated roots
-            const glm::vec3 anchor = exhibit.position + glm::vec3(
-                0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f);
-            const eng::NodeHandle labelNode = r.createNode(eng::kRootNode, anchor);
-            eng::TextSpriteStyle style = showcaseLabelStyle(
-                0.36f, exhibit.labelAccent);
-            if (!exhibit.labelHighlightPattern.empty())
-                style.colourRules.push_back(
-                    {exhibit.labelHighlightPattern, exhibit.labelHighlight});
-            const eng::SpriteHandle sprite =
-                r.attachTextSprite(labelNode, exhibit.label, style);
-            r.setSpriteVisible(sprite, false);
-            lv.worldLabels.push_back({labelNode, sprite, anchor});
-        }
-    }
-    return lv;
-}
-
-bool LiveLevel::rebuild(eng::Renderer& r, eng::Physics& physics,
-                        const std::string& assets, uint32_t seed, int depth)
-{
-    // Free the outgoing level's collider bodies before overwriting the map.
-    map.clearPhysics();
-    r.clearScene();
-    *this = buildLevel(r, physics, assets, seed, depth);
-    return map.debugRows() > 0;
-}
-
-bool LiveLevel::rebuildLayout(eng::Renderer& r, eng::Physics& physics,
-                              const std::string& assets, gen::Layout layout,
-                              int depth)
-{
-    if (!layout.valid())
-        return false;
-    map.clearPhysics();
-    r.clearScene();
-    *this = buildLevel(r, physics, assets, 0, depth, &layout);
-    return map.debugRows() > 0;
-}
-
-void LiveLevel::update(eng::Renderer& r, float animationTime)
-{
-    scene.update(r, animationTime);
-    map.update(r, animationTime);
-    if (chestBase.valid()) {
-        const glm::vec3 hover{
-            0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f), 0.0f};
-        r.setPosition(chestBase, hover);
-        r.setOrientation(
-            chestSpin,
-            glm::angleAxis(animationTime * 0.8f, glm::vec3(0, 1, 0)));
-        const float pulse = 0.9f + 0.1f * std::sin(animationTime * 1.7f) +
-                            0.05f * std::sin(animationTime * 4.3f);
-        // Drive the glow light actor through its ECS components; SceneSync
-        // (below) pushes them to the renderer this same frame.
-        if (chestGlowEntity != entt::null && gameScene) {
-            eng::ecs::Transform t;
-            t.position = hover;
-            gameScene->scene().setLocalTransform(chestGlowEntity, t);
-            gameScene->scene()
-                .registry()
-                .get<eng::ecs::LightColour>(chestGlowEntity)
-                .value = chestGlowColour * pulse;
-        }
-    }
-    // Reconcile the renderer view with the ECS registry AFTER all actor
-    // mutations this frame (static props, animated glow light).
-    if (gameScene)
-        gameScene->sync();
-}
-
-
-void LiveLevel::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos)
-{
-    map.updateVisibility(r, cameraPos, 30.0f);
-    // Labels ease in over the final metre instead of popping at a hard range.
-    // Scaling a billboard preserves its camera-facing orientation and the
-    // fully hidden state avoids distant gallery clutter and draw cost.
-    constexpr float revealStart = 5.5f;
-    constexpr float fullSizeAt = 4.4f;
-    for (const WorldLabel& label : worldLabels) {
-        const float distance = glm::length(label.position - cameraPos);
-        float t = glm::clamp((revealStart - distance) /
-                                 (revealStart - fullSizeAt),
-                             0.0f, 1.0f);
-        t = t * t * (3.0f - 2.0f * t);
-        r.setSpriteVisible(label.sprite, t > 0.015f);
-        r.setScale(label.node, glm::vec3(t));
-    }
-}
-
-void LiveLevel::appendTargets(std::vector<GameplayTarget>& targets,
-                              int depth) const
-{
-    map.appendTorchTargets(targets);
-    targets.push_back({TargetKind::PortalDown, 0,
-                       exit + glm::vec3(0.0f, 0.4f, 0.0f), 3.0f});
-    if (depth > 0)
-        targets.push_back({TargetKind::PortalUp, 0,
-                           spawn + glm::vec3(0.0f, 0.4f, 0.0f), 3.0f});
-}
 
 // Dynamic physics prop: a render node driven by a Jolt rigid body each frame.
 // renderOffset is subtracted from the body centre to place the mesh origin
@@ -504,56 +54,6 @@ struct DynamicProp {
     eng::BodyHandle body;
     glm::vec3 renderOffset{0.0f}; // body centre - mesh base (vertical half-height)
 };
-
-// CPU frame-phase timings for the floating Diagnostics window. Each loop
-// iteration writes per-phase milliseconds into ms[] and pushes the total frame
-// time into a rolling history for the plot.
-struct ProfHud {
-    enum Phase { Physics, World, Player, Weapons, Render, kCount };
-    static constexpr const char* kNames[kCount] = {
-        "Physics", "World", "Player", "Weapons", "Render"};
-    float ms[kCount] = {0.0f};
-    static constexpr int kHist = 120;
-    float frameHist[kHist] = {0.0f};
-    int histHead = 0;
-    void pushFrame(float totalMs) {
-        frameHist[histHead] = totalMs;
-        histHead = (histHead + 1) % kHist;
-    }
-};
-
-// Draws the standalone Diagnostics window: rolling frame-time plot, a per-phase
-// CPU bar graph with a numbered legend (Sagel-style), and physics body counts.
-static void drawDiagnostics(const ProfHud& prof, eng::Physics& physics)
-{
-    ImGui::SetNextWindowSize(ImVec2(380.0f, 320.0f), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Diagnostics")) { ImGui::End(); return; }
-
-    float total = 0.0f;
-    for (float m : prof.ms) total += m;
-    char overlay[32];
-    std::snprintf(overlay, sizeof(overlay), "%.2f ms  (%.0f fps)",
-                  total, total > 0.0f ? 1000.0f / total : 0.0f);
-    ImGui::PlotLines("##frame", prof.frameHist, ProfHud::kHist, prof.histHead,
-                     overlay, 0.0f, 33.3f, ImVec2(-1.0f, 48.0f));
-
-    if (ImGui::CollapsingHeader("Systems (ms)", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::PlotHistogram("##sys", prof.ms, ProfHud::kCount, 0, nullptr,
-                             0.0f, FLT_MAX, ImVec2(150.0f, 90.0f));
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-        for (int i = 0; i < ProfHud::kCount; ++i)
-            ImGui::Text("%d: %-8s %5.2f ms", i, ProfHud::kNames[i], prof.ms[i]);
-        ImGui::EndGroup();
-    }
-
-    if (ImGui::CollapsingHeader("Physics", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Bodies active: %d", physics.activeBodyCount());
-        ImGui::Text("Bodies total:  %d", physics.bodyCount());
-    }
-
-    ImGui::End();
-}
 
 int main(int argc, char** argv)
 {
@@ -929,7 +429,7 @@ int main(int argc, char** argv)
     // Self-windowing debug view: projects the generated grid into its own
     // ImGui window, so it registers as a window (not an inline panel).
     engine.debugUi().addWindow([&level, &player] {
-        drawDungeonMap(level.dungeon(), player.eyePosition());
+        game::drawDungeonMap(level.dungeon(), player.eyePosition());
     });
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
@@ -948,8 +448,9 @@ int main(int argc, char** argv)
     });
 
     // Standalone Diagnostics window (F1), fed by per-phase timers in the loop.
+    using game::ProfHud;
     ProfHud prof;
-    engine.debugUi().addWindow([&prof, &physics] { drawDiagnostics(prof, physics); });
+    engine.debugUi().addWindow([&prof, &physics] { game::drawDiagnostics(prof, physics); });
 
     // ---------------------------------------------------------------- loop ---
     constexpr float kFixedDt = 1.0f / 60.0f;

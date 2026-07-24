@@ -82,8 +82,15 @@ Kept from the SPEngine port (genuinely used): `Object`, `System`, `Content`,
   has offscreen RTT for the editor). Until then, refactor steps are verified by
   (a) behaviour-preserving-by-construction, (b) the test suite, (c) determinism
   (run-to-run within floor), (d) a gross-regression screenshot.
-- **R2 — Dissolve god-main** into Systems: Player/Combat/Level/Portal. `main`
-  shrinks to ~80 lines.
+- **R2 — Dissolve god-main.** main.cpp was 1113 lines.
+  - **R2a ✅** extracted the debug/diagnostics UI (`drawDungeonMap`, `ProfHud`,
+    `drawDiagnostics`) → `game/src/GameDiagnostics.*`.
+  - **R2b ✅** extracted `LiveLevel` + `buildLevel` (level construction/animation/
+    transitions) → `game/src/LiveLevel.*`. main.cpp now 612 lines.
+  - **R2c (next)** introduce a `GameContext` (shared refs: Renderer/Physics/Input/
+    LiveLevel/combat) and move loop phases into real `eng::System`s
+    (Player/Combat/Level/Portal/Prop) wired via `Engine::registerSystem` +
+    `updateSystems`. The `while` loop becomes thin (~pump/update/render).
 - **R3 — Split the `Renderer` facade** by concern behind the stable header.
 - **R4 — Editor as its own decomposed target** (Viewport/Outliner/Inspector/
   Gizmo/AssetBrowser panels) editing the shared `.map`.
