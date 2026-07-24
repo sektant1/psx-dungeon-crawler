@@ -6,7 +6,6 @@
 
 #include "DungeonGen.h"
 #include "DungeonMap.h"
-#include "FpsController.h"
 #include "LevelEditor.h"
 #include "LevelResource.h"
 #include "LiveLevel.h"
@@ -18,9 +17,9 @@
 #include "GameContext.h"
 #include "GameDiagnostics.h"
 #include "GameScene.h"
+#include "PlayerSystem.h"
 #include "PropSystem.h"
 #include "Targeting.h"
-#include "ViewModel.h"
 
 #include <eng/ecs/Components.h>
 
@@ -133,37 +132,13 @@ int main(int argc, char** argv)
     });
 
     LiveLevel level;
-    FpsController player;
-    ViewModel viewModel;
-    ViewModel staffModel;
-    ViewModel torchModel;
-    // Active weapon, cycled by the swap_weapon bind. Drives which viewmodel is
-    // shown and which action input is accepted:
-    //   Sword -> melee (LMB), Staff -> spells (cast keys), Torch -> light + bash.
-    enum Weapon { WSword = 0, WStaff = 1, WTorch = 2, WeaponCount = 3 };
-    int weapon = WSword;
-    // Show only the active viewmodel.
-    const auto applyWeaponVis = [&](eng::Renderer& rr) {
-        viewModel.setVisible(rr, weapon == WSword);
-        staffModel.setVisible(rr, weapon == WStaff);
-        torchModel.setVisible(rr, weapon == WTorch);
-    };
-    // Re-attach the carried light and the three viewmodels to the player's
-    // fresh head node after a respawn/rebuild (the old head node is destroyed
-    // by clearScene), then show only the active weapon. Called from every
-    // path that rebuilds the level under the player.
-    const auto attachPlayerLoadout = [&] {
-        eng::LightDesc carry;
-        carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
-                                 std::pow(0.58f, 2.2f)) * 0.95f;
-        carry.range = 7.0f;
-        r.attachLight(player.headNode(), carry);
-        viewModel.init(r, player.headNode(), assets + "/meshes/props");
-        staffModel.initStaff(r, player.headNode(),
-                             assets + "/meshes/crystal_spire1.obj");
-        torchModel.initTorch(r, player.headNode());
-        applyWeaponVis(r);
-    };
+    // Player controller + first-person viewmodels + active weapon selection.
+    // Weapon cycles on the swap_weapon bind and drives which viewmodel shows and
+    // which attack input CombatSystem accepts (Sword->melee, Staff->spells,
+    // Torch->light+bash).
+    game::PlayerSystem playerSys;
+    playerSys.setTuning(speed, sens);
+    FpsController& player = playerSys.controller();
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
@@ -207,12 +182,12 @@ int main(int argc, char** argv)
         const glm::vec3 p = portalPreview
             ? level.exitPosition() + portalFront * 4.0f
             : (atExit ? level.exitPosition() : level.spawnPosition());
-        player.init(r, physics, p, speed, sens, glm::vec3(-1000.0f), glm::vec3(1000.0f));
+        playerSys.spawnAt(ctx, p);
         if (portalPreview) {
             player.setViewAngles(portalYaw);
             player.present(r);
         }
-        attachPlayerLoadout();
+        playerSys.attachLoadout(ctx);
         engine.input().setMouseGrab(!portalPreview);
     };
     loading.step("Building level", 0.42f);
@@ -310,16 +285,14 @@ int main(int argc, char** argv)
     LevelEditor editor(level.dungeon().debugLayoutRows(),
                        assets + "/editor_level.toml");
     engine.debugUi().addWindow([&level, &player, &editor, &r, &physics,
-                                &assets, &depth, speed, sens, &engine,
-                                &attachPlayerLoadout] {
+                                &assets, &depth, &engine, &playerSys, &ctx] {
         if (!editor.draw(level.dungeon(), player.eyePosition()))
             return;
         const gen::Layout layout = editor.takeLayout();
         if (!level.rebuildLayout(r, physics, assets, layout, depth))
             return;
-        player.init(r, physics, level.spawnPosition(), speed, sens,
-                    glm::vec3(-1000.0f), glm::vec3(1000.0f));
-        attachPlayerLoadout();
+        playerSys.spawnAt(ctx, level.spawnPosition());
+        playerSys.attachLoadout(ctx);
         engine.input().setMouseGrab(false);
     });
 
@@ -381,7 +354,7 @@ int main(int argc, char** argv)
 
         auto tPlayer = clk::now();
         if (!portalPreviewMode)
-            player.update(in, r, dt);
+            playerSys.update(ctx, dt);
         prof.ms[ProfHud::Player] = phaseMs(tPlayer);
 
         targets.clear();
@@ -413,37 +386,36 @@ int main(int argc, char** argv)
             }
         }
 
-        // Projectile firing — only when mouse is grabbed (not in debug UI).
+        // Attack input — only when mouse is grabbed (not in debug UI). Weapon
+        // selection lives with the player; casts/swings are gated on the
+        // equipped weapon and dispatched to combat.
         bool swordAttack = false;
         bool didCast = false;
         if (in.mouseGrabbed()) {
-            if (in.wasPressed("swap_weapon")) {
-                weapon = (weapon + 1) % WeaponCount;
-                applyWeaponVis(r);
-            }
+            if (in.wasPressed("swap_weapon"))
+                playerSys.swapWeapon(ctx);
             if (in.wasPressed("fire_arrow"))
                 combat.fireArrow(ctx, player.eyePosition(), player.forward());
             // Staff casts only when the staff is equipped.
-            if (weapon == WStaff && in.wasPressed("cast_spell")) {
+            if (playerSys.staffEquipped() && in.wasPressed("cast_spell")) {
                 combat.castFireball(ctx, player.eyePosition(), player.forward());
                 didCast = true;
             }
-            if (weapon == WStaff && in.wasPressed("cast_beam")) {
+            if (playerSys.staffEquipped() && in.wasPressed("cast_beam")) {
                 combat.castBeam(ctx, player.eyePosition(), player.forward());
                 didCast = true;
             }
             // Melee swing for the sword and the torch (a light club).
-            if ((weapon == WSword || weapon == WTorch) && in.wasMouseClicked()) {
+            if ((playerSys.swordEquipped() || playerSys.torchEquipped()) &&
+                in.wasMouseClicked()) {
                 combat.startSwing();
                 swordAttack = true;
             }
         }
         auto tWeapons = clk::now();
-        viewModel.update(r, dt, weapon == WSword && swordAttack,
-                         in.mouseGrabbed() &&
-                             in.isMouseDown(eng::MouseButton::Right));
-        staffModel.update(r, dt, didCast, false);
-        torchModel.update(r, dt, weapon == WTorch && swordAttack, false);
+        const bool aiming =
+            in.mouseGrabbed() && in.isMouseDown(eng::MouseButton::Right);
+        playerSys.updateViewmodels(ctx, dt, swordAttack, didCast, aiming);
         prof.ms[ProfHud::Weapons] = phaseMs(tWeapons);
 
         // Physics collider wireframe overlay — neon-pink collision view.

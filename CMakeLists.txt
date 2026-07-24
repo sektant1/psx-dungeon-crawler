@@ -141,6 +141,7 @@ add_executable(
   game/src/GameDiagnostics.cpp
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
+  game/src/PlayerSystem.cpp
   game/src/LiveLevel.cpp
   game/src/LevelDocument.cpp
   game/src/LevelResource.cpp
