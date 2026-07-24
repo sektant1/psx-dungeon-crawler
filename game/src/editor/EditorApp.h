@@ -71,6 +71,8 @@ private:
     glm::vec2 mVpMin{0.0f};
     glm::vec2 mVpSize{0.0f};
     bool mVpHovered = false;
+    bool mLooking = false;     // RMB free-look latch
+    bool mBuiltLayout = false; // one-time dock layout guard
 
     // Gizmo drag state.
     bool mDragging = false;

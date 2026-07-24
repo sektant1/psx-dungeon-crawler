@@ -15,6 +15,7 @@
 #include <eng/ecs/Components.h>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
@@ -152,12 +153,19 @@ void EditorApp::frame(float dt)
 
 void EditorApp::handleViewportInput(float dt)
 {
-    if (!mVpHovered || mVpSize.x < 1.0f || mVpSize.y < 1.0f)
+    if (mVpSize.x < 1.0f || mVpSize.y < 1.0f)
         return;
     const ImGuiIO& io = ImGui::GetIO();
 
-    // RMB free-look + WASD fly.
-    if (io.MouseDown[1]) {
+    // RMB free-look latch: begin only when pressing over the viewport, then keep
+    // capturing look + WASD until RMB releases even if the cursor leaves the
+    // image rect (avoids drops from hover flicker while turning).
+    if (mLooking && !io.MouseDown[1])
+        mLooking = false;
+    if (!mLooking && mVpHovered && io.MouseClicked[1])
+        mLooking = true;
+
+    if (mLooking) {
         mCam.addYawPitch(-io.MouseDelta.x * 0.005f, -io.MouseDelta.y * 0.005f);
         const float speed = 8.0f * dt;
         glm::vec3 move(0.0f);
@@ -171,6 +179,9 @@ void EditorApp::handleViewportInput(float dt)
             mCam.moveLocal(move * speed);
         return; // don't pick/drag while flying
     }
+
+    if (!mVpHovered)
+        return; // picking/gizmo only when the viewport is under the cursor
 
     // LMB click: begin gizmo drag if over an axis, else pick.
     const glm::vec2 mouse(io.MousePos.x, io.MousePos.y);
@@ -284,6 +295,44 @@ void EditorApp::updateGizmoDrag()
 
 void EditorApp::drawPanels()
 {
+    // Full-window dock host so the panels tile instead of overlapping. Pattern
+    // mirrors engine EditorUi: a borderless host window carrying the DockSpace,
+    // with a one-time default layout built once the real window size arrives.
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize(vp->WorkSize);
+    ImGui::SetNextWindowViewport(vp->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    const ImGuiWindowFlags host =
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoNavFocus;
+    ImGui::Begin("##EditorHost", nullptr, host);
+    ImGui::PopStyleVar(3);
+    const ImGuiID dockId = ImGui::GetID("EditorDockSpace");
+    ImGui::DockSpace(dockId, ImVec2(0, 0), ImGuiDockNodeFlags_PassthruCentralNode);
+    if (!mBuiltLayout && vp->WorkSize.x > 200.0f && vp->WorkSize.y > 200.0f) {
+        mBuiltLayout = true;
+        ImGui::DockBuilderRemoveNode(dockId);
+        ImGui::DockBuilderAddNode(dockId, ImGuiDockNodeFlags_DockSpace);
+        ImGui::DockBuilderSetNodeSize(dockId, vp->WorkSize);
+        ImGuiID center = dockId, top, left, right, leftBottom;
+        top = ImGui::DockBuilderSplitNode(center, ImGuiDir_Up, 0.08f, nullptr, &center);
+        left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.16f, nullptr, &center);
+        right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.22f, nullptr, &center);
+        leftBottom = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, 0.5f, nullptr, &left);
+        ImGui::DockBuilderDockWindow("Editor", top);
+        ImGui::DockBuilderDockWindow("Outliner", left);
+        ImGui::DockBuilderDockWindow("Palette", leftBottom);
+        ImGui::DockBuilderDockWindow("Inspector", right);
+        ImGui::DockBuilderDockWindow("Viewport", center);
+        ImGui::DockBuilderFinish(dockId);
+    }
+    ImGui::End();
+
     drawToolbar();
     drawViewport();
     drawOutliner();
