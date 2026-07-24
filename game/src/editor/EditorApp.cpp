@@ -71,6 +71,8 @@ EditorApp::EditorApp(eng::Engine& engine, std::string assetDir)
         entt::entity floor =
             mScene.spawnMesh(seedMesh, materialForMesh(seedMesh), glm::vec3(0.0f));
         resolveMeshHandle(mRenderer, mScene.registry(), floor);
+        mScene.sync();          // build the node so its gizmo/bounds resolve now
+        mSel.set(floor);        // select it so its gizmo is visible immediately
     } else {
         mScene.spawnMarker(glm::vec3(0.0f), "Floor");
     }
@@ -171,7 +173,7 @@ void EditorApp::frame(float dt)
     entt::entity sel = mSel.primary();
     if (sel != entt::null && reg.valid(sel)) {
         glm::vec3 mn, mx;
-        if (mScene.entityBounds(sel, mn, mx)) {
+        if (pickBounds(sel, mn, mx)) {
             const glm::vec3 col(0.55f, 0.8f, 1.0f);
             const glm::vec3 v[8] = {
                 {mn.x,mn.y,mn.z},{mx.x,mn.y,mn.z},{mx.x,mn.y,mx.z},{mn.x,mn.y,mx.z},
@@ -278,6 +280,24 @@ void EditorApp::handleViewportInput(float dt)
     }
 }
 
+bool EditorApp::pickBounds(entt::entity e, glm::vec3& mn, glm::vec3& mx)
+{
+    // Prefer the real rendered mesh AABB so large/offset models are clickable;
+    // fall back to a fixed box for markers/lights that have no renderable node.
+    entt::registry& reg = mScene.registry();
+    if (const auto* nr = reg.try_get<eng::ecs::NodeRef>(e)) {
+        glm::vec3 c(0.0f);
+        float r = 0.0f;
+        if (nr->handle.valid() && mRenderer.nodeWorldBounds(nr->handle, c, r) &&
+            r > 0.0f) {
+            mn = c - glm::vec3(r);
+            mx = c + glm::vec3(r);
+            return true;
+        }
+    }
+    return mScene.entityBounds(e, mn, mx);
+}
+
 void EditorApp::pickAt(glm::vec2 ndc, bool additive)
 {
     const Ray ray = screenRay(ndc, mCam.flyEye(), mCam.flyOrientation(),
@@ -287,7 +307,7 @@ void EditorApp::pickAt(glm::vec2 ndc, bool additive)
     float bestT = std::numeric_limits<float>::max();
     for (auto e : reg.view<eng::ecs::Transform>()) {
         glm::vec3 mn, mx;
-        if (!mScene.entityBounds(e, mn, mx)) continue;
+        if (!pickBounds(e, mn, mx)) continue;
         float t = 0.0f;
         if (rayAabb(ray, mn, mx, t) && t < bestT) { bestT = t; best = e; }
     }

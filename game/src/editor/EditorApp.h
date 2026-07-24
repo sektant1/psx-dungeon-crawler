@@ -42,6 +42,7 @@ private:
 
     void handleViewportInput(float dt);
     void handleShortcuts();
+    bool pickBounds(entt::entity e, glm::vec3& mn, glm::vec3& mx); // real mesh AABB
     void pickAt(glm::vec2 ndc, bool additive);
     void updateGizmoDrag();
     void frameSelection();
