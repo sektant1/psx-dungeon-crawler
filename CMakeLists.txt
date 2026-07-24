@@ -241,6 +241,15 @@ if(BUILD_TESTING)
   target_link_libraries(byte_stream_tests PRIVATE glm::glm)
   add_test(NAME byte_stream COMMAND byte_stream_tests)
 
+  add_executable(component_registry_tests
+    game/tests/ComponentRegistryTests.cpp
+    game/src/scene/ByteStream.cpp
+    game/src/scene/ComponentRegistry.cpp)
+  target_include_directories(component_registry_tests
+    PRIVATE game/src/scene engine/include third_party)
+  target_link_libraries(component_registry_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME component_registry COMMAND component_registry_tests)
+
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
                                       game/src/RenderPalette.cpp)
   target_include_directories(render_palette_tests PRIVATE game/src third_party engine/include)
