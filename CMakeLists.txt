@@ -445,6 +445,15 @@ if(BUILD_TESTING)
     PRIVATE game/src/scene engine/include engine/src third_party third_party/imgui)
   target_link_libraries(map_runtime_tests PRIVATE eng EnTT::EnTT glm::glm)
   add_test(NAME map_runtime COMMAND map_runtime_tests)
+
+  add_executable(layout_to_scene_tests
+    game/tests/LayoutToSceneTests.cpp
+    game/src/scene/LayoutToScene.cpp
+    game/src/DungeonGen.cpp)
+  target_include_directories(layout_to_scene_tests
+    PRIVATE game/src/scene game/src engine/include third_party)
+  target_link_libraries(layout_to_scene_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME layout_to_scene COMMAND layout_to_scene_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
