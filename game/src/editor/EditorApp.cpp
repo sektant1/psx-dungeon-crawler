@@ -7,8 +7,11 @@
 #include "../scene/ByteStream.h"
 #include "../scene/ComponentRegistry.h"
 #include "../scene/GameComponents.h"
+#include "../scene/LayoutToScene.h"
 #include "../scene/MapSerializer.h"
 #include "../scene/MeshSource.h"
+
+#include "../DungeonGen.h"
 
 #include <memory>
 
@@ -552,6 +555,13 @@ void EditorApp::drawToolbar()
     if (ImGui::Button("Open")) openMap(mPathBuf);
     ImGui::SameLine();
     if (ImGui::Button("Save")) saveMap(mPathBuf[0] ? mPathBuf : "level.map");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80.0f);
+    ImGui::InputInt("##seed", &mGenSeed);
+    ImGui::SameLine();
+    if (ImGui::Button("Generate")) generateDungeon();
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Replace the scene with a BSP dungeon from this seed");
 
     ImGui::Separator();
     int mode = int(mGizmoMode);
@@ -736,6 +746,27 @@ void EditorApp::newScene()
     mScene.registry().clear();
     mStack.clear();
     mSel.clear();
+}
+
+void EditorApp::generateDungeon()
+{
+    entt::registry& reg = mScene.registry();
+    reg.clear();
+    mSel.clear();
+    mStack.clear();
+
+    gen::Layout layout = gen::generate(uint32_t(mGenSeed < 0 ? 0 : mGenSeed));
+    if (!layout.valid()) return;
+
+    game::SceneGenOptions opts;
+    opts.tileDir = mAssetDir + "/meshes/tiles/";
+    opts.propDir = mAssetDir + "/meshes/props/";
+    game::layoutToScene(layout, opts, reg);
+
+    // Resolve renderer mesh handles for every generated mesh entity, then sync.
+    for (auto e : reg.view<eng::ecs::MeshRenderer>())
+        resolveMeshHandle(mRenderer, reg, e);
+    mScene.sync();
 }
 
 void EditorApp::saveMap(const std::string& path)

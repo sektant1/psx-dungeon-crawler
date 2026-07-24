@@ -57,6 +57,7 @@ private:
     std::string materialForMesh(const std::string& objPath) const;
 
     void newScene();
+    void generateDungeon();
     void saveMap(const std::string& path);
     void openMap(const std::string& path);
     void launchGame();
@@ -74,6 +75,7 @@ private:
     bool mUniformScale = true; // scale all axes together (proportional)
     bool mGridSnap = false;    // snap placement + move to a fixed world grid
     float mGridSize = 1.0f;    // grid cell size when mGridSnap is on
+    int mGenSeed = 1;          // BSP seed for the Generate button
     std::unordered_map<std::string, std::string> mMatByMesh; // mesh file -> material
     float mSnapStep = 0.0f;
     std::string mMapPath;

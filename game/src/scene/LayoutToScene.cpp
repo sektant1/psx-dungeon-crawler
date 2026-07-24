@@ -28,6 +28,13 @@ static entt::entity makeMesh(entt::registry& reg,
                               glm::vec3 scale = glm::vec3{1.f})
 {
     entt::entity e = reg.create();
+    // Name from the mesh filename stem so generated entities list in the editor.
+    std::string name = path;
+    if (const auto slash = name.find_last_of('/'); slash != std::string::npos)
+        name = name.substr(slash + 1);
+    if (const auto dot = name.find_last_of('.'); dot != std::string::npos)
+        name = name.substr(0, dot);
+    reg.emplace<eng::ecs::Name>(e, eng::ecs::Name{name});
     reg.emplace<mapio::MeshSource>(e, path);
     reg.emplace<eng::ecs::MeshRenderer>(e, eng::MeshHandle{}, material, false);
     reg.emplace<eng::ecs::Transform>(e, pos, rot, scale);
@@ -133,6 +140,7 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             case 'S': {
                 // Player spawn marker
                 entt::entity e = reg.create();
+                reg.emplace<eng::ecs::Name>(e, eng::ecs::Name{"PlayerSpawn"});
                 reg.emplace<eng::ecs::Transform>(e,
                     centre + glm::vec3{0.f, 0.f, 0.f},
                     glm::quat{1.f, 0.f, 0.f, 0.f},
@@ -143,6 +151,7 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             case 'X': {
                 // Level exit
                 entt::entity e = reg.create();
+                reg.emplace<eng::ecs::Name>(e, eng::ecs::Name{"Exit"});
                 reg.emplace<eng::ecs::Transform>(e,
                     centre,
                     glm::quat{1.f, 0.f, 0.f, 0.f},
@@ -153,6 +162,7 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             case 'L': {
                 // Torch light
                 entt::entity e = reg.create();
+                reg.emplace<eng::ecs::Name>(e, eng::ecs::Name{"Torch"});
                 reg.emplace<eng::ecs::Transform>(e,
                     centre + glm::vec3{0.f, wallH * 0.75f, 0.f},
                     glm::quat{1.f, 0.f, 0.f, 0.f},

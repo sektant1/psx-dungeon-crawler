@@ -188,7 +188,9 @@ add_executable(
   game/src/editor/EditorApp.cpp
   game/src/scene/ByteStream.cpp
   game/src/scene/ComponentRegistry.cpp
-  game/src/scene/MapSerializer.cpp)
+  game/src/scene/MapSerializer.cpp
+  game/src/scene/LayoutToScene.cpp
+  game/src/DungeonGen.cpp)
 target_include_directories(level_editor
   PRIVATE third_party game/src game/src/scene game/src/editor engine/src)
 target_link_libraries(level_editor PRIVATE eng)
