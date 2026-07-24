@@ -391,6 +391,20 @@ if(BUILD_TESTING)
     PRIVATE game/src/editor game/src/scene engine/include third_party)
   target_link_libraries(editor_command_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME editor_command COMMAND editor_command_tests)
+
+  add_executable(inspector_registry_tests
+    game/tests/InspectorRegistryTests.cpp
+    game/src/editor/InspectorRegistry.cpp
+    game/src/scene/ComponentRegistry.cpp
+    game/src/scene/ByteStream.cpp
+    third_party/imgui/imgui.cpp
+    third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp
+    third_party/imgui/imgui_widgets.cpp)
+  target_include_directories(inspector_registry_tests
+    PRIVATE game/src/editor game/src/scene engine/include third_party third_party/imgui)
+  target_link_libraries(inspector_registry_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME inspector_registry COMMAND inspector_registry_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
