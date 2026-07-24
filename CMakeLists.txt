@@ -235,6 +235,12 @@ if(BUILD_TESTING)
   target_link_libraries(editor_camera_tests PRIVATE glm::glm)
   add_test(NAME editor_camera_tests COMMAND editor_camera_tests)
 
+  add_executable(byte_stream_tests game/tests/ByteStreamTests.cpp
+                                   game/src/scene/ByteStream.cpp)
+  target_include_directories(byte_stream_tests PRIVATE game/src/scene)
+  target_link_libraries(byte_stream_tests PRIVATE glm::glm)
+  add_test(NAME byte_stream COMMAND byte_stream_tests)
+
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
                                       game/src/RenderPalette.cpp)
   target_include_directories(render_palette_tests PRIVATE game/src third_party engine/include)
