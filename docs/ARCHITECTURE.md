@@ -153,8 +153,12 @@ in the `level_editor` exe (retiring the old ASCII `LevelEditor.cpp` debug panel)
   deterministic replacement, invalid mid-edit grids clear terrain. Drove out two
   domain contracts: the `C` anchor is required, and disconnecting spawn↔exit
   clears the terrain until the shell re-closes.
-- W2: terrain tool mode + 3D ground brush (viewport ray→cell, brush palette,
-  paint-on-drag) in `EditorApp`, driving `EditorDocument::paintTile`.
+- **W2 ✅ done** — Terrain tool mode + 3D ground brush in `EditorApp`. Toolbar
+  Doodad/Terrain tabs; Terrain shows a brush palette. LMB paints the ground-plane
+  cell under the cursor (hold to drag), brush-cursor outline shows the target;
+  `pointerCell` (ray→y=0 plane→round to `cellSize`) → `EditorDocument::paintTile`.
+  Generate loads the grid into the terrain layer (paintable on top); New resets
+  it. Registry mutated only through the tested EditorDocument seam.
 - W3: tool-mode tabs (Terrain/Doodad); fold the report's `GizmoTool` (Candidate
   A) in as the Doodad-mode tool.
 - W4: playtest polish (spawn-at-cursor / test-from-here).
