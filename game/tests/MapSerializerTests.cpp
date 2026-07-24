@@ -74,6 +74,10 @@ int main()
     partial.view<eng::ecs::Transform>().each([&](auto...) { ++partialCount; });
     require(partialCount == 2, "all entities load even with unknown components");
 
+    require(mapio::dumpMap(path, mapio::coreRegistry()), "dumpMap succeeds on a valid file");
+    require(!mapio::dumpMap("does_not_exist.map", mapio::coreRegistry()),
+            "dumpMap fails on a missing file");
+
     std::remove(path.c_str());
     std::cout << "MapSerializerTests OK\n";
     return 0;

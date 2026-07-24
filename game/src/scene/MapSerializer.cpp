@@ -154,8 +154,53 @@ bool readMap(const std::string& path, entt::registry& outReg,
 
 bool dumpMap(const std::string& path, const ComponentRegistry& types)
 {
-    (void)path; (void)types;
-    return false; // implemented in the next task
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return false;
+    std::vector<uint8_t> file((std::istreambuf_iterator<char>(in)),
+                              std::istreambuf_iterator<char>());
+    if (file.size() < 12 || std::memcmp(file.data(), kMagic, 8) != 0) return false;
+    uint16_t ver;
+    std::memcpy(&ver, file.data() + 8, 2);
+
+    const uint8_t* p = file.data() + 12;
+    const uint8_t* end = file.data() + file.size();
+    auto rd32 = [&](const uint8_t*& q) -> uint32_t {
+        uint32_t v = 0; for (int i = 0; i < 4; ++i) v |= uint32_t(q[i]) << (8 * i);
+        q += 4; return v;
+    };
+    std::printf("PSXMAP version %u\n", unsigned(ver));
+    if (end - p < 4) return false;
+    const uint32_t poolCount = rd32(p);
+    std::printf("string pool (%u):\n", poolCount);
+    std::vector<std::string> pool;
+    for (uint32_t i = 0; i < poolCount; ++i) {
+        if (end - p < 4) return false;
+        const uint32_t len = rd32(p);
+        if (std::size_t(end - p) < len) return false;
+        pool.emplace_back(reinterpret_cast<const char*>(p), len);
+        std::printf("  [%u] \"%s\"\n", i, pool.back().c_str());
+        p += len;
+    }
+
+    ByteReader r(p, std::size_t(end - p), pool);
+    const uint32_t count = r.u32();
+    std::printf("entities (%u):\n", count);
+    for (uint32_t i = 0; i < count && r.ok(); ++i) {
+        const uint32_t local = r.u32();
+        const uint32_t parent = r.u32();
+        const uint16_t comps = r.u16();
+        std::printf("  entity %u parent=%d components=%u\n", local,
+                    parent == kNoParent ? -1 : int(parent), unsigned(comps));
+        for (uint16_t c = 0; c < comps && r.ok(); ++c) {
+            const uint16_t typeId = r.u16();
+            const uint32_t len = r.u32();
+            const ComponentType* t = types.find(typeId);
+            std::printf("    - %s (id %u, %u bytes)\n",
+                        t ? t->name : "<unknown>", unsigned(typeId), len);
+            r.skip(len);
+        }
+    }
+    return r.ok();
 }
 
 } // namespace mapio
