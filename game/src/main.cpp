@@ -18,8 +18,10 @@
 #include "Melee.h"
 #include "ParticleLibrary.h"
 #include "Dummy.h"
+#include "GameContext.h"
 #include "GameDiagnostics.h"
 #include "GameScene.h"
+#include "PropSystem.h"
 #include "Targeting.h"
 #include "ViewModel.h"
 
@@ -45,15 +47,6 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
-
-// Dynamic physics prop: a render node driven by a Jolt rigid body each frame.
-// renderOffset is subtracted from the body centre to place the mesh origin
-// (which sits at the model's base) at the correct world position.
-struct DynamicProp {
-    eng::NodeHandle node;
-    eng::BodyHandle body;
-    glm::vec3 renderOffset{0.0f}; // body centre - mesh base (vertical half-height)
-};
 
 int main(int argc, char** argv)
 {
@@ -133,13 +126,11 @@ int main(int argc, char** argv)
     spells.setConfig(&combat);
     melee.setConfig(&combat);
 
-    // Dynamic prop table: bodies spawned once for the depth-0 lobby and
-    // synced to render nodes every frame while propsAlive is true.
-    // Known limitation: props are not re-spawned on level transition; their
-    // bodies are removed and propsAlive set false before any rebuild.
-    std::vector<DynamicProp> dynamicProps;
-    bool propsAlive = false;
-    eng::BodyHandle propGroundBody{};
+    // Dynamic lobby props (crates + barrels): spawned once, synced each frame,
+    // torn down before any rebuild. Known limitation: not re-spawned on level
+    // transition. Shares the world through GameContext.
+    game::PropSystem props;
+    game::GameContext ctx{r, physics, engine.input(), assets};
     Dummy dummy;
     bool dummyAlive = false;
     melee.setHitCallback([&dummy, &dummyAlive, &physics](
@@ -185,21 +176,6 @@ int main(int argc, char** argv)
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
-    // Destroy the lobby's dynamic prop bodies (+ their ground slab) before a
-    // clearScene wipes the render nodes they drive. Called on every level
-    // transition and at shutdown.
-    const auto teardownDynamicProps = [&] {
-        if (!propsAlive)
-            return;
-        for (auto& dp : dynamicProps)
-            physics.removeBody(dp.body);
-        dynamicProps.clear();
-        propsAlive = false;
-        if (propGroundBody.valid()) {
-            physics.removeBody(propGroundBody);
-            propGroundBody = {};
-        }
-    };
     const auto teardownDummy = [&] {
         if (!dummyAlive)
             return;
@@ -215,7 +191,7 @@ int main(int argc, char** argv)
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     const auto enterLevel = [&](bool atExit) {
         // Destroy dynamic prop + dummy bodies before clearScene wipes their nodes.
-        teardownDynamicProps();
+        props.teardown(physics);
         teardownDummy();
         bool loaded = false;
         if (depth == 0) {
@@ -268,96 +244,7 @@ int main(int argc, char** argv)
         }
     });
 
-    // Spawn dynamic crates and barrels in the lobby entry hall.
-    // Props sit a few metres in front of the spawn (toward the anchor room).
-    // Mesh origins are at the base; body centres are offset up by halfHeight.
-    // Crate: 0.8 m cube -> halfExtents {0.4, 0.4, 0.4}, body centre y = 0.4.
-    // Barrel: r=0.28, h=0.9 -> halfHeight 0.45, body centre y = 0.45.
-    {
-        const std::string props = assets + "/meshes/props/";
-        eng::MeshHandle mCrate   = r.loadObj(props + "prop_crate.obj");
-        eng::MeshHandle mBarrel0 = r.loadObj(props + "prop_barrel_p0.obj");
-        eng::MeshHandle mBarrel1 = r.loadObj(props + "prop_barrel_p1.obj");
-
-        const auto spawnCrate = [&](glm::vec3 bodyPos, float yawDeg) {
-            constexpr float hh = 0.4f;
-            eng::BodyDesc bd;
-            bd.kind = eng::ShapeKind::Box;
-            bd.halfExtents = {0.4f, hh, 0.4f};
-            bd.position = bodyPos + glm::vec3(0.0f, 0.02f, 0.0f);
-            bd.layer = eng::BodyLayer::Prop;
-            bd.dynamic = true;
-            bd.mass = 5.0f;
-            bd.friction = 0.6f;
-            eng::BodyHandle bh = physics.createBody(bd);
-            // Node origin at mesh base = body centre lowered by halfHeight
-            glm::vec3 nodePos = bodyPos - glm::vec3(0.0f, hh, 0.0f);
-            eng::NodeHandle nh = r.createNode(eng::kRootNode, nodePos);
-            if (yawDeg != 0.0f)
-                r.setOrientation(nh, glm::angleAxis(glm::radians(yawDeg),
-                                                    glm::vec3(0.0f, 1.0f, 0.0f)));
-            r.attachMesh(nh, mCrate, "Game/PropMarket");
-            DynamicProp dp;
-            dp.node = nh;
-            dp.body = bh;
-            dp.renderOffset = glm::vec3(0.0f, hh, 0.0f);
-            dynamicProps.push_back(dp);
-        };
-
-        const auto spawnBarrel = [&](glm::vec3 bodyPos, float yawDeg) {
-            constexpr float halfH = 0.45f;
-            constexpr float radius = 0.28f;
-            eng::BodyDesc bd;
-            bd.kind = eng::ShapeKind::Cylinder;
-            bd.halfHeight = halfH;
-            bd.radius = radius;
-            bd.position = bodyPos + glm::vec3(0.0f, 0.02f, 0.0f);
-            bd.layer = eng::BodyLayer::Prop;
-            bd.dynamic = true;
-            bd.mass = 8.0f;
-            bd.friction = 0.6f;
-            eng::BodyHandle bh = physics.createBody(bd);
-            glm::vec3 nodePos = bodyPos - glm::vec3(0.0f, halfH, 0.0f);
-            eng::NodeHandle nh = r.createNode(eng::kRootNode, nodePos);
-            if (yawDeg != 0.0f)
-                r.setOrientation(nh, glm::angleAxis(glm::radians(yawDeg),
-                                                    glm::vec3(0.0f, 1.0f, 0.0f)));
-            r.attachMesh(nh, mBarrel0, "Game/PropPlanks");
-            r.attachMesh(nh, mBarrel1, "Game/PropBauerhaus");
-            DynamicProp dp;
-            dp.node = nh;
-            dp.body = bh;
-            dp.renderOffset = glm::vec3(0.0f, halfH, 0.0f);
-            dynamicProps.push_back(dp);
-        };
-
-        // Guaranteed solid ground beneath the lobby prop staging. Per-cell
-        // DungeonMap floor slabs do not reliably cover these hardcoded world
-        // positions, so props were sinking / a barrel tipped half-in-floor.
-        // Thin static box, top at y=0.
-        {
-            eng::BodyDesc gd;
-            gd.kind = eng::ShapeKind::Box;
-            gd.halfExtents = {4.0f, 0.10f, 3.0f};
-            gd.position = {3.3f, -0.10f, 18.0f}; // top = -0.10 + 0.10 = 0.0
-            gd.layer = eng::BodyLayer::Static;
-            gd.dynamic = false;
-            propGroundBody = physics.createBody(gd);
-        }
-
-        // Two crates stacked near the entry hall (spawn side of the anchor room)
-        spawnCrate({3.0f, 0.4f, 18.0f},   10.0f);   // ground crate
-        spawnCrate({3.0f, 1.2f, 18.0f},  -15.0f);   // stacked on top
-        // A third crate to the side
-        spawnCrate({1.5f, 0.4f, 17.0f},   30.0f);
-        // Two barrels next to them
-        spawnBarrel({4.5f, 0.45f, 17.5f},   0.0f);
-        spawnBarrel({5.2f, 0.45f, 18.5f},  20.0f);
-        // One more loose crate for variety
-        spawnCrate({2.2f, 0.4f, 19.5f},  -20.0f);
-
-        propsAlive = true;
-    }
+    props.spawnLobby(ctx);
 
     // Spawn a topple dummy alongside the lobby props (entry hall area).
     // Placed 3 m further toward the anchor room from the crate cluster.
@@ -492,14 +379,7 @@ int main(int argc, char** argv)
         physics.setInterpolationAlpha(accumulator / kFixedDt);
 
         // Sync dynamic prop render nodes from the interpolated physics transform.
-        if (propsAlive) {
-            for (auto& dp : dynamicProps) {
-                glm::vec3 p; glm::quat q;
-                physics.getRenderTransform(dp.body, p, q);
-                r.setPosition(dp.node, p - dp.renderOffset);
-                r.setOrientation(dp.node, q);
-            }
-        }
+        props.sync(ctx);
         projectiles.syncRender(physics, r);
         spells.syncRender(physics, r);
         if (dummyAlive)
@@ -603,7 +483,7 @@ int main(int argc, char** argv)
         prof.ms[ProfHud::Render] = phaseMs(tRender);
     }
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
-    teardownDynamicProps();
+    props.teardown(physics);
     teardownDummy();
     level.clearPhysics();
     projectiles.clear(physics, r);

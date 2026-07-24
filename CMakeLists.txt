@@ -139,6 +139,7 @@ add_executable(
   game/src/DungeonGen.cpp
   game/src/GameScene.cpp
   game/src/GameDiagnostics.cpp
+  game/src/PropSystem.cpp
   game/src/LiveLevel.cpp
   game/src/LevelDocument.cpp
   game/src/LevelResource.cpp
