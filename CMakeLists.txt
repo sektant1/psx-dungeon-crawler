@@ -424,6 +424,20 @@ if(BUILD_TESTING)
     PRIVATE game/src/editor game/src/scene engine/include third_party third_party/imgui)
   target_link_libraries(inspector_registry_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME inspector_registry COMMAND inspector_registry_tests)
+
+  add_executable(map_runtime_tests
+    game/tests/MapRuntimeTests.cpp
+    game/src/scene/MapRuntime.cpp
+    game/src/scene/PhysicsSync.cpp
+    game/src/scene/MapSerializer.cpp
+    game/src/scene/ComponentRegistry.cpp
+    game/src/scene/ByteStream.cpp
+    engine/src/ecs/Scene.cpp
+    engine/src/ecs/SceneSync.cpp)
+  target_include_directories(map_runtime_tests
+    PRIVATE game/src/scene engine/include engine/src third_party third_party/imgui)
+  target_link_libraries(map_runtime_tests PRIVATE eng EnTT::EnTT glm::glm)
+  add_test(NAME map_runtime COMMAND map_runtime_tests)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.
