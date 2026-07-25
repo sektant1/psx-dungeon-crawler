@@ -142,6 +142,10 @@ add_executable(
   game/src/combat/StatusEffectSystem.cpp
   game/src/combat/WeaponLibrary.cpp
   game/src/combat/CombatDirector.cpp
+  game/src/combat/StaminaSystem.cpp
+  game/src/combat/PoiseSystem.cpp
+  game/src/combat/ActionStateSystem.cpp
+  game/src/combat/DefenseSystem.cpp
   game/src/PlayerSystem.cpp
   game/src/InteractionSystem.cpp
   game/src/LiveLevel.cpp

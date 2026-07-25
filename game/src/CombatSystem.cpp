@@ -1,6 +1,9 @@
 #include "CombatSystem.h"
 
 #include "GameContext.h"
+#include "combat/ActionStateSystem.h"
+#include "combat/PoiseSystem.h"
+#include "combat/StaminaSystem.h"
 
 #include <eng/Physics.h>
 
@@ -28,6 +31,14 @@ void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,
     mSpells.fixedUpdate(ctx.physics, ctx.renderer, dt);
     mMelee.fixedUpdate(ctx.physics, eye, forward, dt);
     mDirector.tick(dt); // i-frames + status effects (Burn DoT) at fixed cadence
+
+    // Feel layer: advance every combatant's action-state machine, then regen
+    // stamina and poise (and count down stagger/immunity timers). Runs on the
+    // director's registry each fixed step so timings stay deterministic.
+    entt::registry& reg = mDirector.registry();
+    feel::actionstate::advance(reg, dt);
+    feel::stamina::tick(reg, dt);
+    feel::poise::tick(reg, dt);
 }
 
 void CombatSystem::syncRender(GameContext& ctx)

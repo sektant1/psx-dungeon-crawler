@@ -20,6 +20,10 @@
 #include "PlayerSystem.h"
 #include "PropSystem.h"
 #include "combat/CombatComponents.h"
+#include "combat/ActionStateSystem.h"
+#include "combat/DefenseSystem.h"
+#include "combat/FeelComponents.h"
+#include "combat/PoiseSystem.h"
 
 #include <eng/ecs/Components.h>
 
@@ -224,6 +228,22 @@ int main(int argc, char** argv)
         dummyEntity = combat.director().addCombatant(
             dummy.body(), dummyHp, dummyResist, game::Faction::Enemy);
 
+        // Feel layer: give the player and the dummy a stamina/poise/action-state
+        // profile. The player uses defaults; the dummy is a goblin-like target
+        // with low poise so one heavy hit or a kick staggers it.
+        {
+            entt::registry& creg = combat.director().registry();
+            creg.emplace<game::Stamina>(playerEntity);
+            creg.emplace<game::Mana>(playerEntity);
+            creg.emplace<game::Poise>(playerEntity);
+            creg.emplace<game::ActionState>(playerEntity);
+
+            creg.emplace<game::Stamina>(dummyEntity);
+            creg.emplace<game::ActionState>(dummyEntity);
+            game::Poise& dp = creg.emplace<game::Poise>(dummyEntity);
+            dp.current = dp.max = 20.0f;
+        }
+
         combat.director().setDeathCallback(
             [&dummy, &dummyAlive, &physics, dummyEntity](entt::entity e) {
                 if (e != dummyEntity || !dummyAlive || !dummy.alive())
@@ -244,6 +264,15 @@ int main(int argc, char** argv)
                     playerSys.torchEquipped() ? "torch" : "sword";
                 combat.director().hitBody(physics, body, w, playerEntity,
                                           -normal, point);
+                // Feel layer: chip the victim's poise by the weapon's payload so
+                // heavy/blunt hits can stagger it (opening a crit window).
+                entt::entity victim = combat.director().entityForBody(body);
+                if (victim != entt::null) {
+                    const float pd =
+                        combat.director().weapons().get(w).timing.poiseDamage;
+                    game::feel::poise::apply(combat.director().registry(),
+                                             victim, pd);
+                }
             });
     }
 
@@ -340,11 +369,50 @@ int main(int argc, char** argv)
                 combat.castBeam(ctx, player.eyePosition(), player.forward());
                 didCast = true;
             }
-            // Melee swing for the sword and the torch (a light club).
+            // Melee swing for the sword and the torch (a light club). Gated on
+            // the feel layer: the swing costs stamina and only starts from Idle
+            // (so it can't interrupt a dodge/deflect/stagger).
             if ((playerSys.swordEquipped() || playerSys.torchEquipped()) &&
                 in.wasMouseClicked()) {
-                combat.startSwing();
-                swordAttack = true;
+                entt::registry& creg = combat.director().registry();
+                const char* w =
+                    playerSys.torchEquipped() ? "torch" : "sword";
+                game::ActionState& pas =
+                    creg.get<game::ActionState>(playerEntity);
+                game::Stamina& pst = creg.get<game::Stamina>(playerEntity);
+                const game::WeaponDef& wd = combat.director().weapons().get(w);
+                if (game::feel::actionstate::beginAttack(pas, pst, wd.timing)) {
+                    combat.startSwing();
+                    swordAttack = true;
+                }
+            }
+
+            // Feel-layer defense. Deflect opens a brief negate window; dodge
+            // grants i-frames (reuses Health.invulnTimer) and costs stamina;
+            // kick shoves a target in front and chips its poise (env-kills /
+            // make-room). Bound to V / B / G in game.toml.
+            {
+                entt::registry& creg = combat.director().registry();
+                game::ActionState& pas =
+                    creg.get<game::ActionState>(playerEntity);
+                if (in.wasPressed("deflect"))
+                    game::feel::defense::beginDeflect(pas);
+                if (in.wasPressed("dodge"))
+                    game::feel::defense::beginDodge(creg, playerEntity, 0.4f,
+                                                    0.2f);
+                if (in.wasPressed("kick") && dummyAlive && dummy.alive()) {
+                    // Only shove the dummy when it is roughly in front and close.
+                    glm::vec3 dpos;
+                    glm::quat drot;
+                    physics.getRenderTransform(dummy.body(), dpos, drot);
+                    glm::vec3 toD = dpos - player.eyePosition();
+                    if (glm::length(toD) < 3.0f &&
+                        glm::dot(glm::normalize(toD), player.forward()) > 0.4f) {
+                        glm::vec3 imp = game::feel::defense::kick(
+                            creg, dummyEntity, player.forward(), 8.0f, 25.0f);
+                        physics.applyImpulse(dummy.body(), imp, dpos);
+                    }
+                }
             }
         }
         auto tWeapons = clk::now();

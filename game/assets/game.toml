@@ -33,6 +33,9 @@ fire_arrow = "F"
 cast_spell = "Q"
 cast_beam = "R"
 swap_weapon = "X"
+deflect = "V"
+dodge = "B"
+kick = "G"
 
 # Attack tunables. Every value is also live-editable in the "Attacks" debug
 # panel; edits there apply immediately but are not written back here.
