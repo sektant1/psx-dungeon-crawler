@@ -108,6 +108,20 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(miniaudio INTERFACE m dl pthread)
 endif()
 
+# --- ImGuizmo (ImGui gizmo widget) -------------------------------------------
+# DOWNLOAD_ONLY: fetch the source and expose its include dir only. Not compiled
+# into any target yet -- ImGuizmo draws through an active ImGui frame, and the
+# ImGui overlay was removed. When a UI is wired back, a target compiles
+# ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp and links the eng imgui.
+CPMAddPackage(
+    NAME imguizmo
+    GITHUB_REPOSITORY cedricguillemet/ImGuizmo
+    GIT_TAG dc25afb98bc3ebe00dfc9a23ba7235fead2ccb1d
+    DOWNLOAD_ONLY YES
+)
+add_library(eng_imguizmo INTERFACE)
+target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
+
 # --- OGRE 14 (renderer, built from source) -----------------------------------
 # The single heavy dependency. First configure fetches + builds OGRE and its
 # bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. We build
