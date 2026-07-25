@@ -292,6 +292,14 @@ if(BUILD_TESTING)
   target_link_libraries(feel_components_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME feel_components COMMAND feel_components_tests)
 
+  add_executable(stamina_system_tests
+    game/tests/StaminaSystemTests.cpp
+    game/src/combat/StaminaSystem.cpp)
+  target_include_directories(stamina_system_tests
+    PRIVATE game/src engine/include third_party)
+  target_link_libraries(stamina_system_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME stamina_system COMMAND stamina_system_tests)
+
   add_executable(status_effect_tests
     game/tests/StatusEffectTests.cpp
     game/src/combat/StatusEffectSystem.cpp
