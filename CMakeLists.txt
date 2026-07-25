@@ -317,6 +317,16 @@ if(BUILD_TESTING)
   target_link_libraries(action_state_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME action_state COMMAND action_state_tests)
 
+  add_executable(defense_system_tests
+    game/tests/DefenseSystemTests.cpp
+    game/src/combat/DefenseSystem.cpp
+    game/src/combat/PoiseSystem.cpp
+    game/src/combat/StaminaSystem.cpp)
+  target_include_directories(defense_system_tests
+    PRIVATE game/src engine/include third_party)
+  target_link_libraries(defense_system_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME defense_system COMMAND defense_system_tests)
+
   add_executable(status_effect_tests
     game/tests/StatusEffectTests.cpp
     game/src/combat/StatusEffectSystem.cpp
