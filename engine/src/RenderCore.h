@@ -10,8 +10,6 @@ class RenderWindow;
 class SceneManager;
 class Camera;
 class Viewport;
-class OverlaySystem;
-class ImGuiOverlay;
 } // namespace Ogre
 
 namespace eng {
@@ -62,7 +60,6 @@ public:
     Ogre::Camera* camera() const { return mCamera; }
     Ogre::Viewport* viewport() const { return mViewport; }
     Ogre::RenderWindow* window() const { return mWindow; }
-    Ogre::ImGuiOverlay* imguiOverlay() const { return mImGuiOverlay; }
 
 private:
     Ogre::Root* mRoot = nullptr;
@@ -74,8 +71,6 @@ private:
     bool mChainEnabled = false; // chain was ever requested (one-way; gates the
                                 // setPixelSize re-add on cold start)
     int mPixelSize = 3;
-    Ogre::OverlaySystem* mOverlaySystem = nullptr; // deleted before Root
-    Ogre::ImGuiOverlay* mImGuiOverlay = nullptr;   // owned by OverlayManager
 
     // Editor offscreen RTT (scene + post baked into a texture for ImGui::Image).
     Ogre::TexturePtr mOffscreenTex;

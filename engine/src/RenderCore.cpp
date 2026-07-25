@@ -5,9 +5,8 @@
 #include <OgreCompositor.h>
 #include <OgreCompositorChain.h>
 #include <OgreCompositorManager.h>
-#include <OgreImGuiOverlay.h>
-#include <OgreOverlayManager.h>
-#include <OgreOverlaySystem.h>
+
+#include <imgui.h> // headless ImGui context for text-sprite font rasterization
 
 #include <algorithm>
 #include <filesystem>
@@ -113,37 +112,23 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     mViewport = mWindow->addViewport(mCamera);
     mViewport->setBackgroundColour(Ogre::ColourValue::Black);
 
-    // Debug UI: ImGui renders through the overlay queue. The ImGuiOverlay
-    // constructor creates the ImGui context; OverlayManager owns the overlay.
-    mOverlaySystem = new Ogre::OverlaySystem();
-    mSceneMgr->addRenderQueueListener(mOverlaySystem);
-    mImGuiOverlay = new Ogre::ImGuiOverlay();
-    mImGuiOverlay->setZOrder(300);
-    // The ImGuiOverlay ctor created the ImGui context. Enable docking (single
-    // OS window: DockSpace only, no multi-viewport -- that would need a platform
-    // backend Ogre's overlay renderer doesn't provide). This lets the editor
-    // dock panels around the RTT viewport. Persist layout to imgui.ini.
+    // Headless ImGui context: created directly (no Ogre ImGuiOverlay) so the
+    // text-sprite path can still rasterize world-label glyphs from ImGui's font
+    // atlas (see Renderer::attachTextSprite). The overlay's per-frame dynamic
+    // vertex buffer was the source of the GL3Plus/Mesa window-content flicker,
+    // and all debug/editor UI that rendered through it has been removed -- so
+    // nothing draws imgui to the screen any more. The imgui dependency stays
+    // available for a future UI.
+    ImGui::CreateContext();
     {
         ImGuiIO& io = ImGui::GetIO();
-        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.IniFilename = nullptr;                       // no imgui.ini
+        io.DisplaySize = ImVec2(float(width), float(height)); // non-zero, quiets asserts
+        io.Fonts->AddFontDefault();
+        unsigned char* px = nullptr;
+        int fw = 0, fh = 0;
+        io.Fonts->GetTexDataAsRGBA32(&px, &fw, &fh);    // force the atlas to build
     }
-    // show() runs the (private) Overlay::initialise() override, which builds
-    // the ImGui font atlas and creates "ImGui/material". Without it the first
-    // ImGuiOverlay::NewFrame() dereferences an unbuilt atlas and crashes.
-    // Hide again immediately; DebugUi re-shows after its first NewFrame().
-    mImGuiOverlay->show();
-    mImGuiOverlay->hide();
-
-    // OGRE's ImGui material is fixed-function, which GL3Plus cannot render
-    // ("no Vertex Shader ... use RTSS"). Swap in the hand-written GLSL pair
-    // so the whole engine stays RTSS-free (imgui.program / imgui.{vert,frag}).
-    if (auto imguiMat = Ogre::MaterialManager::getSingleton().getByName(
-            "ImGui/material", Ogre::RGN_INTERNAL)) {
-        Ogre::Pass* pass = imguiMat->getTechnique(0)->getPass(0);
-        pass->setVertexProgram("ImGui/VS");
-        pass->setFragmentProgram("ImGui/FS");
-    }
-    Ogre::OverlayManager::getSingleton().addOverlay(mImGuiOverlay);
     return true;
 }
 
@@ -354,13 +339,10 @@ void RenderCore::shutdown()
     }
     if (mViewport && mWindow)
         Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);
-    if (mSceneMgr && mOverlaySystem)
-        mSceneMgr->removeRenderQueueListener(mOverlaySystem);
     if (mSceneMgr)
         mRoot->destroySceneManager(mSceneMgr);
-    delete mOverlaySystem; // destroys OverlayManager + ImGuiOverlay (+ImGui ctx)
-    mOverlaySystem = nullptr;
-    mImGuiOverlay = nullptr;
+    if (ImGui::GetCurrentContext())
+        ImGui::DestroyContext(); // headless context created in init()
     delete mRoot; // last: tears down window, render system, resource managers
     mRoot = nullptr;
     mWindow = nullptr;

@@ -1,14 +1,12 @@
 #pragma once
-#include <glm/glm.hpp>
-
-class DungeonMap;
-namespace eng { class Physics; }
+#include <eng/Log.h>
 
 namespace game {
 
-// CPU frame-phase timings for the Diagnostics window. The game loop writes
-// per-phase milliseconds into ms[] each iteration and pushes the frame total
-// into a rolling history for the plot.
+// CPU frame-phase timings. The game loop writes per-phase milliseconds into ms[]
+// each iteration; logSummary() emits a periodic line so profiling survives
+// without any on-screen UI (the ImGui debug windows were removed). A future UI
+// can read ms[]/frameHist directly.
 struct ProfHud {
     enum Phase { Physics, World, Player, Weapons, Render, kCount };
     static constexpr const char* kNames[kCount] = {
@@ -17,18 +15,22 @@ struct ProfHud {
     static constexpr int kHist = 120;
     float frameHist[kHist] = {0.0f};
     int histHead = 0;
+
     void pushFrame(float totalMs) {
         frameHist[histHead] = totalMs;
         histHead = (histHead + 1) % kHist;
     }
+
+    // Log a one-line per-phase breakdown. Call every N frames from the loop.
+    void logSummary() const {
+        float total = 0.0f;
+        for (float m : ms) total += m;
+        eng::log::info(
+            "Frame %.2f ms (%.0f fps) | Physics %.2f World %.2f Player %.2f "
+            "Weapons %.2f Render %.2f",
+            total, total > 0.0f ? 1000.0f / total : 0.0f, ms[Physics], ms[World],
+            ms[Player], ms[Weapons], ms[Render]);
+    }
 };
-
-// Read-only generated-grid inspector: projects the dungeon grid into its own
-// ImGui window (owns its Begin/End). The dungeon owns the data; this only draws.
-void drawDungeonMap(const DungeonMap& map, glm::vec3 playerPos);
-
-// Standalone Diagnostics window: rolling frame-time plot, per-phase CPU bar
-// graph with a numbered legend, and physics body counts.
-void drawDiagnostics(const ProfHud& prof, eng::Physics& physics);
 
 } // namespace game

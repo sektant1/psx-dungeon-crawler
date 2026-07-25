@@ -2,8 +2,6 @@
 #include <glm/glm.hpp>
 #include <string>
 
-namespace eng { class Input; }
-
 // Data-oriented tunables for every attack, loaded from game.toml's [combat.*]
 // tables and live-editable in the debug UI. Systems (SpellSystem,
 // ProjectileSystem, MeleeSystem) hold a pointer to one instance and read it
@@ -65,8 +63,4 @@ struct CombatConfig {
     // Missing keys keep their defaults. Returns false only if the file fails to
     // parse (values are always best-effort filled).
     bool load(const std::string& tomlPath);
-
-    // Render the ImGui body of the "Attacks" debug window. `input` is used to
-    // apply live hotkey rebinds.
-    void drawDebugUi(eng::Input& input);
 };

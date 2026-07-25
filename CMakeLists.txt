@@ -65,20 +65,12 @@ add_library(
   engine/src/ObjLoader.cpp
   engine/src/ProceduralMeshes.cpp
   engine/src/Renderer.cpp
-  engine/src/MaterialPreview.cpp
-  engine/src/LoadingScreen.cpp
   engine/src/Particles.cpp
   engine/src/Log.cpp
   engine/src/Config.cpp
   engine/src/Input.cpp
   engine/src/Platform.cpp
   engine/src/Engine.cpp
-  engine/src/EditorUi.cpp
-  engine/src/DebugUi.cpp
-  engine/src/UiContext.cpp
-  engine/src/panels/RenderTuningPanel.cpp
-  engine/src/panels/ScenePanel.cpp
-  engine/src/panels/InspectorPanel.cpp
   engine/src/Physics.cpp
   engine/src/RenderPresets.cpp
   engine/src/SceneRegistry.cpp
@@ -144,7 +136,6 @@ add_executable(
   game/src/DungeonMap.cpp
   game/src/DungeonGen.cpp
   game/src/GameScene.cpp
-  game/src/GameDiagnostics.cpp
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
   game/src/combat/DamageSystem.cpp
@@ -156,7 +147,6 @@ add_executable(
   game/src/LiveLevel.cpp
   game/src/LevelDocument.cpp
   game/src/LevelResource.cpp
-  game/src/LevelEditor.cpp
   game/src/Melee.cpp
   game/src/Projectiles.cpp
   game/src/Spells.cpp
@@ -187,32 +177,6 @@ target_compile_definitions(
     DEMO_SCENE_TOML="${CMAKE_CURRENT_SOURCE_DIR}/samples/common/assets/demo_scene.toml"
 )
 eng_target_hardening(game)
-
-add_executable(
-  level_editor
-  game/src/editor_main.cpp
-  game/src/EditorCamera.cpp
-  game/src/editor/EditorScene.cpp
-  game/src/editor/Picker.cpp
-  game/src/editor/Gizmo.cpp
-  game/src/editor/Commands.cpp
-  game/src/editor/InspectorRegistry.cpp
-  game/src/editor/Palette.cpp
-  game/src/editor/GizmoTool.cpp
-  game/src/editor/EditorApp.cpp
-  game/src/editor/EditorDocument.cpp
-  game/src/LevelDocument.cpp
-  game/src/scene/ByteStream.cpp
-  game/src/scene/ComponentRegistry.cpp
-  game/src/scene/MapSerializer.cpp
-  game/src/scene/LayoutToScene.cpp
-  game/src/DungeonGen.cpp)
-target_include_directories(level_editor
-  PRIVATE third_party game/src game/src/scene game/src/editor engine/src)
-target_link_libraries(level_editor PRIVATE eng eng_toml)
-target_compile_definitions(
-  level_editor PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
-eng_target_hardening(level_editor)
 
 add_executable(
   mapgen
@@ -278,12 +242,6 @@ if(BUILD_TESTING)
   target_link_libraries(scene_sync_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME scene_sync_tests COMMAND scene_sync_tests)
 
-  add_executable(editor_camera_tests game/tests/EditorCameraTests.cpp
-                                     game/src/EditorCamera.cpp)
-  target_include_directories(editor_camera_tests PRIVATE game/src)
-  target_link_libraries(editor_camera_tests PRIVATE glm::glm)
-  add_test(NAME editor_camera_tests COMMAND editor_camera_tests)
-
   add_executable(byte_stream_tests game/tests/ByteStreamTests.cpp
                                    game/src/scene/ByteStream.cpp)
   target_include_directories(byte_stream_tests PRIVATE game/src/scene)
@@ -325,30 +283,6 @@ if(BUILD_TESTING)
     PRIVATE game/src/scene engine/include third_party)
   target_link_libraries(map_serializer_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME map_serializer COMMAND map_serializer_tests)
-
-  add_executable(editor_document_tests
-    game/tests/EditorDocumentTests.cpp
-    game/src/editor/EditorDocument.cpp
-    game/src/LevelDocument.cpp
-    game/src/scene/LayoutToScene.cpp
-    game/src/DungeonGen.cpp)
-  target_include_directories(editor_document_tests
-    PRIVATE game/src game/src/editor game/src/scene engine/include third_party)
-  target_link_libraries(editor_document_tests PRIVATE eng_toml glm::glm EnTT::EnTT)
-  add_test(NAME editor_document COMMAND editor_document_tests)
-
-  add_executable(gizmo_tool_tests
-    game/tests/GizmoToolTests.cpp
-    game/src/editor/GizmoTool.cpp
-    game/src/editor/Commands.cpp
-    game/src/editor/Gizmo.cpp
-    game/src/editor/Picker.cpp
-    game/src/scene/ByteStream.cpp
-    game/src/scene/ComponentRegistry.cpp)
-  target_include_directories(gizmo_tool_tests
-    PRIVATE game/src game/src/editor game/src/scene engine/include third_party)
-  target_link_libraries(gizmo_tool_tests PRIVATE glm::glm EnTT::EnTT)
-  add_test(NAME gizmo_tool COMMAND gizmo_tool_tests)
 
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
                                       game/src/RenderPalette.cpp)
@@ -441,59 +375,6 @@ if(BUILD_TESTING)
   target_include_directories(audio_tests PRIVATE engine/include engine/src/audio)
   target_link_libraries(audio_tests PRIVATE miniaudio)
   add_test(NAME audio COMMAND audio_tests)
-
-  add_executable(editor_camera_fly_tests game/tests/EditorCameraFlyTests.cpp
-                                         game/src/EditorCamera.cpp)
-  target_include_directories(editor_camera_fly_tests PRIVATE game/src)
-  target_link_libraries(editor_camera_fly_tests PRIVATE glm::glm)
-  add_test(NAME editor_camera_fly COMMAND editor_camera_fly_tests)
-
-  add_executable(picker_tests game/tests/PickerTests.cpp
-                              game/src/editor/Picker.cpp)
-  target_include_directories(picker_tests PRIVATE game/src/editor)
-  target_link_libraries(picker_tests PRIVATE glm::glm)
-  add_test(NAME picker COMMAND picker_tests)
-
-  add_executable(gizmo_math_tests game/tests/GizmoMathTests.cpp
-                                  game/src/editor/Gizmo.cpp
-                                  game/src/editor/Picker.cpp)
-  target_include_directories(gizmo_math_tests PRIVATE game/src/editor)
-  target_link_libraries(gizmo_math_tests PRIVATE glm::glm)
-  add_test(NAME gizmo_math COMMAND gizmo_math_tests)
-
-  add_executable(editor_scene_tests
-    game/tests/EditorSceneTests.cpp
-    game/src/editor/EditorScene.cpp
-    engine/src/ecs/Scene.cpp
-    engine/src/ecs/SceneSync.cpp)
-  target_include_directories(editor_scene_tests
-    PRIVATE game/src/editor game/src/scene engine/include engine/src third_party/imgui)
-  target_link_libraries(editor_scene_tests PRIVATE glm::glm EnTT::EnTT)
-  add_test(NAME editor_scene COMMAND editor_scene_tests)
-
-  add_executable(editor_command_tests
-    game/tests/EditorCommandTests.cpp
-    game/src/editor/Commands.cpp
-    game/src/scene/ByteStream.cpp
-    game/src/scene/ComponentRegistry.cpp)
-  target_include_directories(editor_command_tests
-    PRIVATE game/src/editor game/src/scene engine/include third_party)
-  target_link_libraries(editor_command_tests PRIVATE glm::glm EnTT::EnTT)
-  add_test(NAME editor_command COMMAND editor_command_tests)
-
-  add_executable(inspector_registry_tests
-    game/tests/InspectorRegistryTests.cpp
-    game/src/editor/InspectorRegistry.cpp
-    game/src/scene/ComponentRegistry.cpp
-    game/src/scene/ByteStream.cpp
-    third_party/imgui/imgui.cpp
-    third_party/imgui/imgui_draw.cpp
-    third_party/imgui/imgui_tables.cpp
-    third_party/imgui/imgui_widgets.cpp)
-  target_include_directories(inspector_registry_tests
-    PRIVATE game/src/editor game/src/scene engine/include third_party third_party/imgui)
-  target_link_libraries(inspector_registry_tests PRIVATE glm::glm EnTT::EnTT)
-  add_test(NAME inspector_registry COMMAND inspector_registry_tests)
 
   add_executable(map_runtime_tests
     game/tests/MapRuntimeTests.cpp

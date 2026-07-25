@@ -2,7 +2,6 @@
 
 #include <eng/Log.h>
 
-#include "DebugUiImpl.h"
 #include "InputImpl.h"
 #include "Platform.h"
 #include "RenderCore.h"
@@ -27,7 +26,6 @@ struct Engine::Impl {
     int screenshotFrame = 90;
     int benchmarkFrames = 0;
     std::vector<float> frameSamples;
-    bool grabBeforeDebugUi = false;
     // Frame limiter: minimum seconds per frame (0 = uncapped). Paces the loop
     // when vsync is off so the GPU isn't driven flat out.
     float minFrameSec = 0.0f;
@@ -73,9 +71,6 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
         return false;
     }
     detail::registerRoot(mRenderer);
-    mDebugUi.mImpl->init(&detail::coreOf(mRenderer), &mRenderer);
-    if (std::getenv("PSX_DEBUG_UI"))
-        mDebugUi.setVisible(true);
     if (const char* presetName = std::getenv("PSX_RENDER_PRESET")) {
         int id = renderPresetFromName(presetName);
         if (id > 0)
@@ -136,24 +131,10 @@ float Engine::tick()
                  e.window.event == SDL_WINDOWEVENT_CLOSE)
             mClose = true;
         else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
-                 e.key.keysym.sym == SDLK_F1) {
-            const bool show = !mDebugUi.visible();
-            if (show) {
-                mImpl->grabBeforeDebugUi = mInput.mouseGrabbed();
-                mInput.setMouseGrab(false);
-            } else {
-                mInput.setMouseGrab(mImpl->grabBeforeDebugUi);
-            }
-            mDebugUi.setVisible(show);
-        } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 &&
                    e.key.keysym.sym == SDLK_F2) {
             mRenderer.setWireframeDebug(!mRenderer.envState().wireframe);
         } else {
-            const bool consumed = mDebugUi.mImpl->onEvent(e);
-            // KEYUP always reaches Input (no stuck keys); everything else
-            // stops here when ImGui captured it.
-            if (!consumed || e.type == SDL_KEYUP)
-                mInput.mImpl->onEvent(e);
+            mInput.mImpl->onEvent(e);
         }
     }
     // Deterministic capture: ignore wall-clock and advance by a fixed step so
@@ -185,7 +166,6 @@ float Engine::tick()
 
 void Engine::renderFrame(float dt)
 {
-    mDebugUi.mImpl->buildFrame(dt);
     mRenderer.updateParticles(dt); // recycle finished one-shot particle systems
     detail::coreOf(mRenderer).renderFrame(dt);
     // Headless-friendly performance regression hook. Skip the first 60 frames
@@ -211,14 +191,6 @@ void Engine::renderFrame(float dt)
         detail::coreOf(mRenderer).writeScreenshot(mImpl->screenshotPath);
         mClose = true;
     }
-}
-
-void Engine::presentLoadingFrame(const std::string& title,
-                                 const std::string& label,
-                                 float progress01)
-{
-    mDebugUi.mImpl->buildLoadingFrame(title, label, progress01);
-    detail::coreOf(mRenderer).renderFrame(0.0f);
 }
 
 void Engine::shutdown()

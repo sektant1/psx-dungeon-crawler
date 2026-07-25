@@ -1,6 +1,5 @@
 #pragma once
 #include <eng/Config.h>
-#include <eng/DebugUi.h>
 #include <eng/Input.h>
 #include <eng/Renderer.h>
 #include <eng/System.h>
@@ -29,15 +28,11 @@ public:
     bool shouldClose() const { return mClose; }
     void requestClose() { mClose = true; }
     void renderFrame(float dt); // may set shouldClose() (screenshot hook)
-    void presentLoadingFrame(const std::string& title,
-                             const std::string& label,
-                             float progress01);
     void shutdown();
 
     Renderer& renderer() { return mRenderer; }
     Input& input() { return mInput; }
     Config& config() { return mConfig; }
-    DebugUi& debugUi() { return mDebugUi; }
 
     // System registry (SPEngine-style). Additive: the existing tick()/
     // renderFrame() loop is unchanged; a game opts in by registering systems
@@ -57,7 +52,6 @@ private:
     Config mConfig;
     Input mInput;
     Renderer mRenderer;
-    DebugUi mDebugUi;
     bool mClose = false;
     std::vector<System::StrongPtr> mSystems;
 };

@@ -6,7 +6,6 @@
 
 #include "DungeonGen.h"
 #include "DungeonMap.h"
-#include "LevelEditor.h"
 #include "LevelResource.h"
 #include "LiveLevel.h"
 #include "MapPlay.h"
@@ -26,11 +25,9 @@
 
 #include <DemoScene.h>
 
-#include <imgui.h>
 
 #include <eng/Content.h>
 #include <eng/Engine.h>
-#include <eng/LoadingScreen.h>
 #include <eng/Log.h>
 #include <eng/Physics.h>
 #include <eng/Profiler.h>
@@ -61,10 +58,6 @@ int main(int argc, char** argv)
     if (!engine.init(assets + "/game.toml", assets))
         return 1;
     eng::Renderer& r = engine.renderer();
-    eng::LoadingScreen loading(engine);
-    loading.begin("Loading dungeon");
-    loading.step("Preparing renderer", 0.08f);
-    loading.present();
 
     r.setCameraFov(70.0f);
     // With the current 0.05 exponential fog, a 90 m far plane retains only
@@ -102,8 +95,6 @@ int main(int argc, char** argv)
         }
     }
 
-    loading.step("Preparing physics", 0.16f);
-    loading.present();
 
     game::GameContext ctx{r, physics, engine.input(), assets};
 
@@ -115,8 +106,6 @@ int main(int argc, char** argv)
 
     ParticleLibrary particles;
     particles.load(r, assets + "/particles.toml");
-    loading.step("Loading combat data", 0.26f);
-    loading.present();
 
     // Dynamic lobby props (crates + barrels): spawned once, synced each frame,
     // torn down before any rebuild. Known limitation: not re-spawned on level
@@ -190,15 +179,11 @@ int main(int argc, char** argv)
         playerSys.attachLoadout(ctx);
         engine.input().setMouseGrab(!portalPreview);
     };
-    loading.step("Building level", 0.42f);
-    loading.present();
     enterLevel(false); // depth 0, spawn at entry
 
     // Initialise combat (loads [combat.*], builds procedural projectile/spell
     // meshes) and register the contact seam so arrows stick and bolts despawn.
     combat.init(ctx, assets + "/game.toml");
-    loading.step("Spawning systems", 0.72f);
-    loading.present();
     physics.setContactCallback([&combat, &ctx, &physics, &dummy, &dummyAlive,
                                 &playerEntity](const eng::HitEvent& e) {
         combat.onContact(ctx, e);
@@ -262,143 +247,9 @@ int main(int argc, char** argv)
             });
     }
 
-    loading.step("Ready", 1.0f);
-    loading.present();
-    loading.finish();
-
-    engine.debugUi().addPanel("Player", [&player] {
-        ImGui::SliderFloat("move speed", &player.speed(), 0.5f, 15.0f);
-        ImGui::SliderFloat("mouse sensitivity", &player.sensitivity(), 0.0005f,
-                           0.01f, "%.4f");
-        float baseFov = player.baseFov();
-        if (ImGui::SliderFloat("locomotion base FOV", &baseFov, 30.0f, 120.0f,
-                               "%.0f"))
-            player.setBaseFov(baseFov);
-        ImGui::Text("stance: %s", player.crouched() ? "crouched" : "standing");
-        ImGui::Text("sprint: %s  stamina: %3.0f%%",
-                    player.sprinting() ? "active" : "ready",
-                    player.sprintStamina() * 100.0f);
-        ImGui::Text("movement: %s", player.sliding() ? "sliding"
-                                                       : (player.grounded() ? "grounded"
-                                                                            : "airborne"));
-    });
-    engine.debugUi().addPanel("Attacks", [&combat, &engine] {
-        combat.config().drawDebugUi(engine.input());
-    });
-    engine.debugUi().addPanel("Particles", [&particles, &r] {
-        static float particleQuality = 1.0f;
-        if (ImGui::SliderFloat("global quality", &particleQuality, 0.25f, 1.0f))
-            r.setParticleQuality(particleQuality);
-        ImGui::TextDisabled("lower = fewer particles in heavy scenes");
-        ImGui::Separator();
-        auto& descs = particles.descs();
-        for (size_t i = 0; i < descs.size(); ++i) {
-            eng::ParticleEffectDesc& d = descs[i];
-            if (!ImGui::TreeNode(d.name.c_str())) continue;
-            ImGui::SliderInt("quota", &d.quota, 1, 128);
-            if (!d.emitters.empty())
-                ImGui::SliderFloat("emission", &d.emitters[0].emissionRate, 0.0f, 200.0f);
-            ImGui::SliderFloat("base w", &d.baseWidth, 0.02f, 0.6f);
-            ImGui::SliderFloat("base h", &d.baseHeight, 0.02f, 0.6f);
-            for (size_t s = 0; s < d.colourRamp.size(); ++s) {
-                ImGui::PushID(int(s));
-                ImGui::ColorEdit4("ramp stop", &d.colourRamp[s].rgba.x);
-                ImGui::PopID();
-            }
-            ImGui::SliderFloat("scale jitter", &d.scaleJitter, 0.0f, 0.5f);
-            if (ImGui::Button("apply"))
-                particles.reregister(r, i);
-            ImGui::TreePop();
-        }
-    });
-    engine.debugUi().addPanel("Physics", [&physics, &player, &showColliders] {
-        ImGui::Text("active bodies: %d", physics.activeBodyCount());
-        float g = physics.gravityY();
-        if (ImGui::SliderFloat("gravity Y", &g, -40.0f, 0.0f, "%.1f"))
-            physics.setGravity(g);
-        ImGui::Checkbox("show colliders", &showColliders);
-        ImGui::Separator();
-        ImGui::Text("grounded: %s", player.grounded() ? "yes" : "no");
-        const glm::vec3 n = player.groundNormal();
-        ImGui::Text("ground normal: %.2f %.2f %.2f", n.x, n.y, n.z);
-        ImGui::Text("horizontal speed: %.2f m/s", player.horizontalSpeed());
-        ImGui::Text("stance: %s", player.crouched() ? "crouched"
-                    : (player.sliding() ? "sliding" : "standing"));
-    });
-    // Live view of the combat model on the dummy: HP, resistances, active
-    // status effects, and buttons that land real weapon hits (so the whole
-    // damage/resist/CC pipeline is observable without aiming).
-    engine.debugUi().addPanel(
-        "Combat", [&combat, &dummy, &dummyAlive, &physics, &playerEntity,
-                   &dummyEntity] {
-            auto& reg = combat.director().registry();
-            if (dummyEntity == entt::null || !reg.valid(dummyEntity)) {
-                ImGui::TextDisabled("no combat target");
-                return;
-            }
-            if (const auto* hp = reg.try_get<game::Health>(dummyEntity)) {
-                const float frac = hp->max > 0.0f ? hp->current / hp->max : 0.0f;
-                ImGui::Text("Dummy  %s", dummy.alive() ? "alive" : "dead");
-                ImGui::ProgressBar(frac, ImVec2(-1.0f, 0.0f));
-                ImGui::Text("%.0f / %.0f HP", hp->current, hp->max);
-            }
-            if (const auto* res = reg.try_get<game::Resistances>(dummyEntity)) {
-                static const char* kNames[game::kDamageTypeCount] = {
-                    "Phys", "Fire", "Frost", "Light", "Poison", "Arcane", "True"};
-                ImGui::SeparatorText("Resistances");
-                for (int i = 0; i < game::kDamageTypeCount; ++i)
-                    ImGui::Text("%-7s %+3.0f%%", kNames[i], res->value[i] * 100.0f);
-            }
-            if (const auto* fx = reg.try_get<game::StatusEffects>(dummyEntity);
-                fx && !fx->active.empty()) {
-                static const char* kCC[] = {"Stun",  "Root", "Silence",
-                                            "Slow",  "Chill", "Burn"};
-                ImGui::SeparatorText("Status effects");
-                for (const auto& a : fx->active)
-                    ImGui::Text("%-8s mag %.2f  %.1fs left",
-                                kCC[int(a.kind)], a.magnitude, a.remaining);
-            }
-            ImGui::SeparatorText("Test hit (from behind)");
-            const glm::vec3 dir(0.0f, 0.3f, 1.0f);
-            glm::vec3 pos{0.0f};
-            glm::quat rot;
-            physics.getRenderTransform(dummy.body(), pos, rot);
-            const auto testHit = [&](const char* w) {
-                if (dummyAlive && dummy.alive())
-                    combat.director().hitBody(physics, dummy.body(), w,
-                                              playerEntity, dir, pos);
-            };
-            if (ImGui::Button("Sword"))    testHit("sword");
-            ImGui::SameLine();
-            if (ImGui::Button("Arrow"))    testHit("arrow");
-            ImGui::SameLine();
-            if (ImGui::Button("Fireball")) testHit("fireball");
-            ImGui::SameLine();
-            if (ImGui::Button("Frost Beam")) testHit("beam");
-        });
-    // Self-windowing debug view: projects the generated grid into its own
-    // ImGui window, so it registers as a window (not an inline panel).
-    engine.debugUi().addWindow([&level, &player] {
-        game::drawDungeonMap(level.dungeon(), player.eyePosition());
-    });
-    LevelEditor editor(level.dungeon().debugLayoutRows(),
-                       assets + "/editor_level.toml");
-    engine.debugUi().addWindow([&level, &player, &editor, &r, &physics,
-                                &assets, &depth, &engine, &playerSys, &ctx] {
-        if (!editor.draw(level.dungeon(), player.eyePosition()))
-            return;
-        const gen::Layout layout = editor.takeLayout();
-        if (!level.rebuildLayout(r, physics, assets, layout, depth))
-            return;
-        playerSys.spawnAt(ctx, level.spawnPosition());
-        playerSys.attachLoadout(ctx);
-        engine.input().setMouseGrab(false);
-    });
-
-    // Standalone Diagnostics window (F1), fed by per-phase timers in the loop.
+    // Per-phase CPU timing; logged periodically (no on-screen UI).
     using game::ProfHud;
     ProfHud prof;
-    engine.debugUi().addWindow([&prof, &physics] { game::drawDiagnostics(prof, physics); });
 
     game::InteractionSystem interaction;
 
@@ -414,17 +265,14 @@ int main(int argc, char** argv)
             return std::chrono::duration<float, std::milli>(clk::now() - t0).count();
         };
         // First Esc releases the mouse, second quits; click re-grabs.
-        // Suspended while the debug panel is open (F1 owns grab then).
-        if (!engine.debugUi().visible()) {
-            if (in.wasPressed("quit")) {
-                if (in.mouseGrabbed())
-                    in.setMouseGrab(false);
-                else
-                    engine.requestClose();
-            }
-            if (!in.mouseGrabbed() && in.wasMouseClicked())
-                in.setMouseGrab(true);
+        if (in.wasPressed("quit")) {
+            if (in.mouseGrabbed())
+                in.setMouseGrab(false);
+            else
+                engine.requestClose();
         }
+        if (!in.mouseGrabbed() && in.wasMouseClicked())
+            in.setMouseGrab(true);
 
         // Fixed-step physics. Cap at 5 steps to prevent spiral of death.
         auto tPhysics = clk::now();
@@ -461,7 +309,6 @@ int main(int argc, char** argv)
         // rebuilds; ascend rebuilds the level below.
         interaction.update(
             ctx, level, depth, player.eyePosition(), player.forward(),
-            engine.debugUi(),
             /*onDescend=*/[&] {
                 if (depth + 1 == int(seeds.size()))
                     seeds.push_back(baseSeed +
@@ -527,6 +374,11 @@ int main(int argc, char** argv)
         auto tRender = clk::now();
         engine.renderFrame(dt);
         prof.ms[ProfHud::Render] = phaseMs(tRender);
+
+        // Periodic profile log (replaces the removed Diagnostics window).
+        static int profTick = 0;
+        if (std::getenv("PSX_PROFILE") && ++profTick % 120 == 0)
+            prof.logSummary();
     }
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
     props.teardown(physics);
