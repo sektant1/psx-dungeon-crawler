@@ -1,0 +1,23 @@
+# Example action-simulation script. Run with: make sim SCRIPT=game/sim/scripts/smoke.txt
+# Grammar is documented at the top of game/sim/sim_main.cpp.
+
+# An armored, flammable dummy vs the player.
+combatant dummy hp=60 faction=enemy physical=0.35 fire=-0.5
+combatant hero  hp=100 faction=player
+
+# Sword: physical, resisted -> not lethal.
+hit dummy sword hero
+assert dummy.alive
+assert dummy.hp < 60
+
+# Fireball: fire (dummy is vulnerable) + applies a burn DoT.
+hit dummy fireball hero
+assert dummy.effects > 0
+
+# Friendly fire is gated: a "hit" from the hero on itself does nothing.
+hit hero sword hero
+assert hero.hp == 100
+
+# Let the burn tick out; it finishes the dummy.
+wait 4.0
+assert dummy.dead

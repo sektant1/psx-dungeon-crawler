@@ -191,11 +191,31 @@ target_link_libraries(mapgen PRIVATE glm::glm EnTT::EnTT)
 target_compile_definitions(mapgen PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(mapgen)
 
+# Headless action-simulation harness: drives the renderer-free combat + physics
+# systems from a text action script (game/sim/), no window. Links eng for
+# Physics; combat sources compiled in directly.
+add_executable(
+  game_sim
+  game/sim/sim_main.cpp
+  game/sim/SimWorld.cpp
+  game/src/combat/DamageSystem.cpp
+  game/src/combat/StatusEffectSystem.cpp
+  game/src/combat/WeaponLibrary.cpp
+  game/src/combat/CombatDirector.cpp)
+target_include_directories(game_sim PRIVATE game/src game/sim engine/include third_party)
+target_link_libraries(game_sim PRIVATE eng glm::glm EnTT::EnTT)
+target_compile_definitions(game_sim PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+eng_target_hardening(game_sim)
+
 if(BUILD_TESTING)
   add_executable(dungeon_layout_tests game/tests/DungeonLayoutTests.cpp
                                       game/src/DungeonGen.cpp)
   target_include_directories(dungeon_layout_tests PRIVATE game/src)
   add_test(NAME dungeon_layout COMMAND dungeon_layout_tests)
+
+  # The simulation harness doubles as a regression test: its built-in smoke
+  # script must pass (exit 0).
+  add_test(NAME sim_smoke COMMAND game_sim)
 
   add_executable(
     level_document_tests game/tests/LevelDocumentTests.cpp
