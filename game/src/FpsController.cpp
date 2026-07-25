@@ -305,15 +305,15 @@ void FpsController::simulate(const Command& command, float dt)
     const float speedRatio = glm::clamp(horizontalSpeed / std::max(mSpeed, 0.001f),
                                         0.0f, kSprintMultiplier);
     const bool actuallyMoving = horizontalSpeed > 0.01f;
-    mBobPhase += dt * (actuallyMoving ? (8.5f + speedRatio * 3.0f) : 0.0f);
+    mBobPhase += dt * (actuallyMoving ? (mBobSpeed + speedRatio * 3.0f) : 0.0f);
     const float targetEye = mCrouched ? kCrouchEyeHeight : kEyeHeight;
     mEyeHeight = approach(mEyeHeight, targetEye, 3.4f * dt);
-    const float bobAmount = actuallyMoving ? 0.025f * speedRatio : 0.0f;
+    const float bobAmount = actuallyMoving ? mBobAmount * speedRatio : 0.0f;
     mHeadOffset = {
         std::sin(mBobPhase * 0.5f) * bobAmount * 0.55f,
         mEyeHeight + std::abs(std::sin(mBobPhase)) * bobAmount,
         0.0f};
-    mFovKick = mSprinting ? 4.0f * speedRatio : 0.0f;
+    mFovKick = mSprinting ? mSprintFovKick * speedRatio : 0.0f;
 }
 
 void FpsController::present(eng::Renderer& r)

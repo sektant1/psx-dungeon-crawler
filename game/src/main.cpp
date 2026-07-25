@@ -297,8 +297,26 @@ int main(int argc, char** argv)
     constexpr float kFixedDt = 1.0f / 60.0f;
     float accumulator = 0.0f;
     float animTime = 0.0f;
+    // Stop-motion animation clock (OSRS look): particles, world anim, viewmodels
+    // and enemy/prop render-sync advance in 1/animFps snaps. 0/negative = full
+    // rate. Runtime var so a debug slider can retune it live.
+    float animFps = float(engine.config().getNumber("render.anim_fps", 15.0));
+    float visualAccum = 0.0f;
     while (!engine.shouldClose()) {
         const float dt = engine.tick();
+        // Quantize the animation clock. visualDt is 0 on most frames and jumps
+        // one (or more, if the frame ran long) step on a tick frame; camera,
+        // input and physics stay full-rate so only the *look* is choppy.
+        float visualDt = dt;
+        bool visualStep = true;
+        if (animFps > 0.0f) {
+            const float stepDur = 1.0f / animFps;
+            visualAccum += dt;
+            const int steps = int(visualAccum / stepDur);
+            visualDt = float(steps) * stepDur;
+            visualAccum -= visualDt;
+            visualStep = steps > 0;
+        }
         eng::Input& in = engine.input();
         using clk = std::chrono::steady_clock;
         auto phaseMs = [](clk::time_point t0) {
@@ -341,23 +359,29 @@ int main(int argc, char** argv)
         }
         physics.setInterpolationAlpha(accumulator / kFixedDt);
 
-        // Sync dynamic prop render nodes from the interpolated physics transform.
+        // Props, projectiles and spells stay full-rate (smooth). Only the enemy
+        // creature snaps at animFps: on non-tick frames its render node holds its
+        // last pose (physics still runs at 60 Hz above), giving the stop-motion
+        // creature movement without stepping projectiles/particles.
         props.sync(ctx);
         combat.syncRender(ctx);
-        if (dummyAlive)
+        if (dummyAlive && visualStep)
             dummy.syncRender(physics, r);
 
         prof.ms[ProfHud::Physics] = phaseMs(tPhysics);
 
         auto tWorld = clk::now();
-        animTime += dt;
+        animTime += visualDt; // world anim (torch flicker) snaps at animFps
         level.update(r, animTime);
         level.updateVisibility(r, player.eyePosition());
         prof.ms[ProfHud::World] = phaseMs(tWorld);
 
         auto tPlayer = clk::now();
         if (!portalPreviewMode && !debugUi.visible())
-            playerSys.update(ctx, dt);
+            playerSys.update(ctx, dt); // simulate + present
+        else
+            player.present(r); // sim frozen, but still apply camera/FOV tweaks
+                               // so the debug-UI camera sliders take effect live
         prof.ms[ProfHud::Player] = phaseMs(tPlayer);
 
         // Look-interaction + portal transitions. Descend appends the next
@@ -445,7 +469,10 @@ int main(int argc, char** argv)
         auto tWeapons = clk::now();
         const bool aiming =
             in.mouseGrabbed() && in.isMouseDown(eng::MouseButton::Right);
-        playerSys.updateViewmodels(ctx, dt, swordAttack, didCast, aiming);
+        // Player viewmodel (hands/weapon) snaps at animFps — the player half of
+        // the stop-motion look. Camera/movement stay full-rate above, so only
+        // the weapon animation is stepped, not the view itself.
+        playerSys.updateViewmodels(ctx, visualDt, swordAttack, didCast, aiming);
         prof.ms[ProfHud::Weapons] = phaseMs(tWeapons);
 
         prof.pushFrame(dt * 1000.0f);
@@ -504,7 +531,7 @@ int main(int argc, char** argv)
         }
 
         auto tRender = clk::now();
-        engine.renderFrame(dt);
+        engine.renderFrame(dt); // full-rate: particles + Ogre anim stay smooth
         prof.ms[ProfHud::Render] = phaseMs(tRender);
 
         // Periodic profile log (replaces the removed Diagnostics window).

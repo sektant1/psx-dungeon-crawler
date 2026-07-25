@@ -13,6 +13,12 @@ vsync = false
 limit_fps = false
 max_fps = 144
 
+[render]
+# Stop-motion animation rate (OSRS look): player viewmodel, enemy creatures and
+# world animation (torch flicker) snap at 1/anim_fps. Camera, movement,
+# projectiles, spells and particles stay full-rate. 0 = full rate everything.
+anim_fps = 19
+
 [player]
 speed = 3.0
 mouse_sensitivity = 0.002

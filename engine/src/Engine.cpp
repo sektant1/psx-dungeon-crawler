@@ -192,10 +192,13 @@ bool Engine::imguiWantsKeyboard() const
     return ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureKeyboard;
 }
 
-void Engine::renderFrame(float dt)
+void Engine::renderFrame(float dt, float animDt)
 {
-    mRenderer.updateParticles(dt); // recycle finished one-shot particle systems
-    detail::coreOf(mRenderer).renderFrame(dt);
+    // animDt drives Ogre's particle + animation advance; dt stays wall time for
+    // the benchmark/screenshot hooks below. animDt<0 means "same as dt".
+    const float adt = (animDt < 0.0f) ? dt : animDt;
+    mRenderer.updateParticles(adt); // recycle finished one-shot particle systems
+    detail::coreOf(mRenderer).renderFrame(adt);
     // Headless-friendly performance regression hook. Skip the first 60 frames
     // so shader/texture warm-up cannot masquerade as steady-state spikes.
     if (mImpl->benchmarkFrames > 0 && mImpl->frameCount >= 60 && dt > 0.0f) {

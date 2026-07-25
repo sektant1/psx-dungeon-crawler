@@ -461,6 +461,21 @@ void DebugOverlay::drawPlayerTab(const Deps& d)
         float fov = f->baseFov();
         if (ImGui::SliderFloat("Base FOV", &fov, 40.0f, 110.0f, "%.0f"))
             f->setBaseFov(fov);
+        // Near/far clip: read the live values off the renderer, write back on
+        // change. Tight near planes reduce z-fighting; far drives cull distance.
+        if (d.renderer) {
+            const eng::EnvState& env = d.renderer->envState();
+            float nearC = env.nearClip, farC = env.farClip;
+            bool clipChanged = false;
+            clipChanged |= ImGui::SliderFloat("Near clip", &nearC, 0.01f, 1.0f, "%.3f");
+            clipChanged |= ImGui::SliderFloat("Far clip", &farC, 10.0f, 4000.0f, "%.0f");
+            if (clipChanged)
+                d.renderer->setCameraClip(nearC, farC);
+        }
+        ImGui::SeparatorText("Feel");
+        ImGui::SliderFloat("Sprint FOV kick", &f->sprintFovKick(), 0.0f, 20.0f, "%.1f");
+        ImGui::SliderFloat("Head-bob amount", &f->bobAmount(), 0.0f, 0.1f, "%.3f");
+        ImGui::SliderFloat("Head-bob speed", &f->bobSpeed(), 0.0f, 20.0f, "%.1f");
         ImGui::Separator();
         ImGui::Text("Horizontal speed: %.2f m/s", f->horizontalSpeed());
         ImGui::ProgressBar(f->sprintStamina(), ImVec2(-FLT_MIN, 0), "sprint stamina");

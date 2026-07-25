@@ -27,7 +27,12 @@ public:
     float tick(); // pump events, update input; returns dt clamped to 0.1 s
     bool shouldClose() const { return mClose; }
     void requestClose() { mClose = true; }
-    void renderFrame(float dt); // may set shouldClose() (screenshot hook)
+    // dt = wall time (drives the benchmark/screenshot hooks); animDt = the time
+    // Ogre advances particles + time-based animation by. Pass animDt < 0 (the
+    // default) to use dt. A game can quantize animDt (e.g. hold it at 0 between
+    // 15 Hz ticks) for a stop-motion / OSRS look while the scene still renders
+    // and the camera still moves every frame.
+    void renderFrame(float dt, float animDt = -1.0f);
     void shutdown();
 
     // --- Dear ImGui debug overlay ----------------------------------------

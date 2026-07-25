@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "RenderCore.h"
 #include "eng/Log.h"
 

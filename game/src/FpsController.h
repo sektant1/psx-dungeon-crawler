@@ -54,6 +54,12 @@ public:
     void setBaseFov(float degrees);
     void setViewAngles(float yawRadians, float pitchRadians = 0.0f);
 
+    // Camera-feel knobs (debug-UI tunable): sprint FOV kick in degrees, head-bob
+    // vertical amplitude in metres, and head-bob cycle speed.
+    float& sprintFovKick() { return mSprintFovKick; }
+    float& bobAmount() { return mBobAmount; }
+    float& bobSpeed() { return mBobSpeed; }
+
     // Eye position (feet + eye height) and view direction, for interaction
     // ray checks.
     glm::vec3 eyePosition() const;
@@ -84,6 +90,9 @@ private:
     float mBaseFov = 70.0f;
     float mLastAppliedFov = 70.0f;
     float mFovKick = 0.0f;
+    float mSprintFovKick = 4.0f; // degrees added at full sprint
+    float mBobAmount = 0.025f;   // head-bob vertical amplitude (m)
+    float mBobSpeed = 8.5f;      // head-bob base cycle speed
     float mCoyoteTime = 0.0f;
     float mJumpBufferTime = 0.0f;
     bool mCrouched = false;

@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "Platform.h"
 
 #include <eng/Log.h>
@@ -26,7 +27,8 @@ bool Platform::init(const std::string& title, int width, int height)
     }
     mWindow = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
                                SDL_WINDOWPOS_CENTERED, width, height,
-                               SDL_WINDOW_RESIZABLE);
+                               SDL_WINDOW_RESIZABLE |
+                               (std::getenv("PSX_FULLSCREEN") ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     if (!mWindow) {
         log::error("Platform: SDL_CreateWindow failed: %s", SDL_GetError());
         return false;
