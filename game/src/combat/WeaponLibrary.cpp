@@ -17,6 +17,9 @@ float num(const toml::table& t, const char* key, float fb) {
 DamageType parseType(const std::string& s, DamageType fb) {
     static const std::array<std::pair<const char*, DamageType>, kDamageTypeCount>
         kMap{{{"physical", DamageType::Physical},
+              {"slash", DamageType::Slash},
+              {"pierce", DamageType::Pierce},
+              {"blunt", DamageType::Blunt},
               {"fire", DamageType::Fire},
               {"frost", DamageType::Frost},
               {"lightning", DamageType::Lightning},

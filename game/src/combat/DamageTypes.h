@@ -9,7 +9,10 @@ namespace game {
 // Elemental damage channels. Resistances are keyed by this; True bypasses all
 // mitigation. Keep Count last.
 enum class DamageType {
-    Physical,
+    Physical,   // generic / environmental / unarmed fallback
+    Slash,      // blades: sword
+    Pierce,     // points: arrow, spear
+    Blunt,      // impact: mace, hammer, kick
     Fire,
     Frost,
     Lightning,

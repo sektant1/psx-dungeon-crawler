@@ -12,7 +12,7 @@
 [weapon.sword]
 name           = "Iron Sword"
 base_damage    = 22.0
-damage_type    = "physical"
+damage_type    = "slash"
 crit_chance    = 0.15
 crit_multiplier = 2.0
 knockback      = 6.0
@@ -20,7 +20,7 @@ knockback      = 6.0
 [weapon.arrow]
 name           = "Arrow"
 base_damage    = 18.0
-damage_type    = "physical"
+damage_type    = "pierce"
 crit_chance    = 0.20
 crit_multiplier = 2.5
 knockback      = 4.0
@@ -44,6 +44,14 @@ cc_on_hit      = [ { kind = "chill", magnitude = 0.4, duration = 2.0 } ]
 [weapon.torch]
 name           = "Torch"
 base_damage    = 8.0
-damage_type    = "fire"
+damage_type    = "blunt"
 knockback      = 3.0
 cc_on_hit      = [ { kind = "burn", magnitude = 3.0, duration = 2.0 } ]
+
+[weapon.mace]
+name           = "Iron Mace"
+base_damage    = 26.0
+damage_type    = "blunt"
+crit_chance    = 0.10
+crit_multiplier = 2.0
+knockback      = 8.0
