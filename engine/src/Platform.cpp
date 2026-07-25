@@ -14,6 +14,12 @@ bool Platform::init(const std::string& title, int width, int height)
     // Ogre rejects ("Invalid parentWindowHandle") before the first frame.
     // Respect an explicit user override; otherwise pin the driver.
     SDL_setenv("SDL_VIDEODRIVER", "x11", 0 /* no overwrite */);
+    // Stable window class/app-id so tiling compositors (Hyprland) can target the
+    // window with a float rule instead of tiling it (which resizes the render
+    // surface). Set before SDL_Init; honours a user override. X11 name is
+    // "<instance> <class>"; the class (2nd token) is what Hyprland matches.
+    SDL_setenv("SDL_VIDEO_X11_WMCLASS", "psx-dungeon-crawler", 0);
+    SDL_setenv("SDL_VIDEO_WAYLAND_WMCLASS", "psx-dungeon-crawler", 0);
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         log::error("Platform: SDL_Init failed: %s", SDL_GetError());
         return false;
