@@ -285,6 +285,13 @@ if(BUILD_TESTING)
   target_link_libraries(damage_system_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME damage_system COMMAND damage_system_tests)
 
+  add_executable(feel_components_tests
+    game/tests/FeelComponentsTests.cpp)
+  target_include_directories(feel_components_tests
+    PRIVATE game/src engine/include third_party)
+  target_link_libraries(feel_components_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME feel_components COMMAND feel_components_tests)
+
   add_executable(status_effect_tests
     game/tests/StatusEffectTests.cpp
     game/src/combat/StatusEffectSystem.cpp
