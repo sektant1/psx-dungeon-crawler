@@ -4,6 +4,7 @@
 #include "EditorDocument.h"
 #include "EditorScene.h"
 #include "Gizmo.h"
+#include "GizmoTool.h"
 #include "Palette.h"
 #include "Selection.h"
 
@@ -111,17 +112,10 @@ private:
     bool mBuiltLayout = false; // one-time dock layout guard
     int mPendingDestructive = 0; // 1=New 2=Generate 3=Open: awaiting confirm
 
-    // Gizmo drag state.
-    bool mDragging = false;
-    int mDragAxis = 0; // 0=x,1=y,2=z
-    eng::ecs::Transform mPreDrag; // primary's transform at grab (translate ref)
-    // Pre-drag transforms for every selected entity, so a drag moves the whole
-    // selection about the gizmo pivot (not just the primary).
-    std::vector<std::pair<entt::entity, eng::ecs::Transform>> mDragPre;
-    glm::vec3 mDragStartHit{0.0f};
-    glm::vec3 mDragCentroid{0.0f}; // pivot for rotate/scale
-    glm::vec3 mDragStartVec{0.0f}; // rotate reference vector (pivot->pointer)
-    float mDragStartT = 0.0f;      // axis param at grab (scale reference)
+    // Doodad manipulation (axis hit-test + translate/rotate/scale drag +
+    // undoable release). All mid-drag state lives inside GizmoTool.
+    GizmoTool mGizmo;
+    GizmoConfig gizmoConfig() const; // snapshot the toolbar tunables for a drag
 
     // Retained per-frame overlay line buffer (grid + selection box + axes);
     // cleared and refilled each frame instead of reallocating.

@@ -198,6 +198,7 @@ add_executable(
   game/src/editor/Commands.cpp
   game/src/editor/InspectorRegistry.cpp
   game/src/editor/Palette.cpp
+  game/src/editor/GizmoTool.cpp
   game/src/editor/EditorApp.cpp
   game/src/editor/EditorDocument.cpp
   game/src/LevelDocument.cpp
@@ -335,6 +336,19 @@ if(BUILD_TESTING)
     PRIVATE game/src game/src/editor game/src/scene engine/include third_party)
   target_link_libraries(editor_document_tests PRIVATE eng_toml glm::glm EnTT::EnTT)
   add_test(NAME editor_document COMMAND editor_document_tests)
+
+  add_executable(gizmo_tool_tests
+    game/tests/GizmoToolTests.cpp
+    game/src/editor/GizmoTool.cpp
+    game/src/editor/Commands.cpp
+    game/src/editor/Gizmo.cpp
+    game/src/editor/Picker.cpp
+    game/src/scene/ByteStream.cpp
+    game/src/scene/ComponentRegistry.cpp)
+  target_include_directories(gizmo_tool_tests
+    PRIVATE game/src game/src/editor game/src/scene engine/include third_party)
+  target_link_libraries(gizmo_tool_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME gizmo_tool COMMAND gizmo_tool_tests)
 
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
                                       game/src/RenderPalette.cpp)
