@@ -159,9 +159,21 @@ in the `level_editor` exe (retiring the old ASCII `LevelEditor.cpp` debug panel)
   `pointerCell` (ray→y=0 plane→round to `cellSize`) → `EditorDocument::paintTile`.
   Generate loads the grid into the terrain layer (paintable on top); New resets
   it. Registry mutated only through the tested EditorDocument seam.
-- W3: tool-mode tabs (Terrain/Doodad); fold the report's `GizmoTool` (Candidate
-  A) in as the Doodad-mode tool.
+- **W3 ✅ done** — tool-mode tabs (W2) + extracted the report's `GizmoTool`
+  (Candidate A) as a deep begin/drag/release module. The 8 mid-drag fields + the
+  translate/rotate/scale math left `EditorApp`; the group-drag/pivot/snap math is
+  now headless-tested (`gizmo_tool_tests`: axis grab, group offset, snap, miss,
+  undo/redo command round-trip).
 - W4: playtest polish (spawn-at-cursor / test-from-here).
+- **Post-W4 (requested): playthrough/action simulation API.** A headless,
+  scriptable seam to drive the game — feed a sequence of actions (move, look,
+  attack, interact, descend) into the fixed-step loop with no window, and read
+  back state (player pos/HP, combat results, level transitions). Lets playtests
+  and regressions run as tests. Natural home: a `GameContext`-driven harness that
+  advances the same systems the loop does (Player/Combat/Interaction) from a
+  scripted `InputFrame` stream instead of live SDL input, asserting on the
+  ecs/combat state. Builds on the deterministic-capture work
+  ([[screenshot-nondeterministic]] fixed-dt) so runs are reproducible.
 - Open (W2+): persist the terrain grid in the `.map` so a saved level stays
   re-paintable (today the grid lives only in the live `EditorDocument`).
 
