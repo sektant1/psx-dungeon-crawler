@@ -308,6 +308,15 @@ if(BUILD_TESTING)
   target_link_libraries(poise_system_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME poise_system COMMAND poise_system_tests)
 
+  add_executable(action_state_tests
+    game/tests/ActionStateSystemTests.cpp
+    game/src/combat/ActionStateSystem.cpp
+    game/src/combat/StaminaSystem.cpp)
+  target_include_directories(action_state_tests
+    PRIVATE game/src engine/include third_party)
+  target_link_libraries(action_state_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME action_state COMMAND action_state_tests)
+
   add_executable(status_effect_tests
     game/tests/StatusEffectTests.cpp
     game/src/combat/StatusEffectSystem.cpp
