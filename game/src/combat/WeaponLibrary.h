@@ -17,6 +17,10 @@ public:
     // intact and returns false (already logged by the caller if it cares).
     bool load(const std::string& tomlPath);
 
+    // Overlay definitions from an in-memory TOML string (same format as the
+    // file variant). Useful for tests that don't want a real file on disk.
+    bool loadFromString(const char* tomlSrc);
+
     // Look up by id ("sword", "arrow", "fireball", ...). Never null: unknown ids
     // resolve to a neutral unarmed def.
     const WeaponDef& get(const std::string& id) const;

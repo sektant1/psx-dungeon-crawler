@@ -335,6 +335,14 @@ if(BUILD_TESTING)
   target_link_libraries(damage_types_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME damage_types COMMAND damage_types_tests)
 
+  add_executable(weapon_timing_tests
+    game/tests/WeaponTimingTests.cpp
+    game/src/combat/WeaponLibrary.cpp)
+  target_include_directories(weapon_timing_tests
+    PRIVATE game/src engine/include third_party)
+  target_link_libraries(weapon_timing_tests PRIVATE eng_toml glm::glm EnTT::EnTT)
+  add_test(NAME weapon_timing COMMAND weapon_timing_tests)
+
   add_executable(status_effect_tests
     game/tests/StatusEffectTests.cpp
     game/src/combat/StatusEffectSystem.cpp

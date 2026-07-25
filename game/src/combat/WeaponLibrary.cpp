@@ -44,6 +44,57 @@ CrowdControl parseCC(const std::string& s, bool& ok) {
     return CrowdControl::Stun;
 }
 
+void parseWeapons(const toml::table& root,
+                  std::unordered_map<std::string, WeaponDef>& mDefs) {
+    const toml::table* weapons = root["weapon"].as_table();
+    if (!weapons)
+        return;
+
+    for (auto&& [key, node] : *weapons) {
+        const toml::table* t = node.as_table();
+        if (!t)
+            continue;
+        WeaponDef def = mDefs.count(std::string(key.str()))
+                            ? mDefs[std::string(key.str())]
+                            : WeaponDef{};
+        def.name = t->at_path("name").value_or(def.name);
+        def.baseDamage = num(*t, "base_damage", def.baseDamage);
+        if (auto s = (*t)["damage_type"].value<std::string>())
+            def.damageType = parseType(*s, def.damageType);
+        def.critChance = num(*t, "crit_chance", def.critChance);
+        def.critMultiplier = num(*t, "crit_multiplier", def.critMultiplier);
+        def.knockback = num(*t, "knockback", def.knockback);
+        // Optional CC array: each is { kind, magnitude, duration }.
+        if (const toml::array* cc = (*t)["cc_on_hit"].as_array()) {
+            def.ccOnHit.clear();
+            for (auto&& elem : *cc) {
+                const toml::table* c = elem.as_table();
+                if (!c)
+                    continue;
+                bool ok = false;
+                const std::string kind =
+                    (*c)["kind"].value_or(std::string{});
+                CrowdControl k = parseCC(kind, ok);
+                if (!ok)
+                    continue;
+                def.ccOnHit.push_back({k, num(*c, "magnitude", 0.0f),
+                                       num(*c, "duration", 0.0f)});
+            }
+        }
+        // Feel-layer timing (defaults preserve AttackDef{} when omitted).
+        def.timing.windup      = num(*t, "windup",       def.timing.windup);
+        def.timing.active      = num(*t, "active",       def.timing.active);
+        def.timing.recovery    = num(*t, "recovery",     def.timing.recovery);
+        def.timing.staminaCost = num(*t, "stamina_cost", def.timing.staminaCost);
+        def.timing.poiseDamage = num(*t, "poise_damage", def.timing.poiseDamage);
+        def.timing.isSweep     = (*t)["is_sweep"].value_or(def.timing.isSweep);
+        def.timing.arc         = num(*t, "arc",          def.timing.arc);
+        def.drawTime           = num(*t, "draw_time",    def.drawTime);
+        def.fullDrawMult       = num(*t, "full_draw_mult", def.fullDrawMult);
+        mDefs[std::string(key.str())] = def;
+    }
+}
+
 } // namespace
 
 WeaponLibrary::WeaponLibrary() {
@@ -98,44 +149,15 @@ bool WeaponLibrary::load(const std::string& tomlPath) {
     toml::parse_result parsed = toml::parse_file(tomlPath);
     if (!parsed)
         return false;
-    const toml::table& root = parsed.table();
-    const toml::table* weapons = root["weapon"].as_table();
-    if (!weapons)
-        return false;
+    parseWeapons(parsed.table(), mDefs);
+    return true;
+}
 
-    for (auto&& [key, node] : *weapons) {
-        const toml::table* t = node.as_table();
-        if (!t)
-            continue;
-        WeaponDef def = mDefs.count(std::string(key.str()))
-                            ? mDefs[std::string(key.str())]
-                            : WeaponDef{};
-        def.name = t->at_path("name").value_or(def.name);
-        def.baseDamage = num(*t, "base_damage", def.baseDamage);
-        if (auto s = (*t)["damage_type"].value<std::string>())
-            def.damageType = parseType(*s, def.damageType);
-        def.critChance = num(*t, "crit_chance", def.critChance);
-        def.critMultiplier = num(*t, "crit_multiplier", def.critMultiplier);
-        def.knockback = num(*t, "knockback", def.knockback);
-        // Optional CC array: each is { kind, magnitude, duration }.
-        if (const toml::array* cc = (*t)["cc_on_hit"].as_array()) {
-            def.ccOnHit.clear();
-            for (auto&& elem : *cc) {
-                const toml::table* c = elem.as_table();
-                if (!c)
-                    continue;
-                bool ok = false;
-                const std::string kind =
-                    (*c)["kind"].value_or(std::string{});
-                CrowdControl k = parseCC(kind, ok);
-                if (!ok)
-                    continue;
-                def.ccOnHit.push_back({k, num(*c, "magnitude", 0.0f),
-                                       num(*c, "duration", 0.0f)});
-            }
-        }
-        mDefs[std::string(key.str())] = def;
-    }
+bool WeaponLibrary::loadFromString(const char* tomlSrc) {
+    toml::parse_result parsed = toml::parse(tomlSrc);
+    if (!parsed)
+        return false;
+    parseWeapons(parsed.table(), mDefs);
     return true;
 }
 

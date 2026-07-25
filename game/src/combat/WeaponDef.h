@@ -1,5 +1,6 @@
 #pragma once
 #include "DamageTypes.h"
+#include "FeelComponents.h"
 
 #include <glm/glm.hpp>
 
@@ -20,6 +21,10 @@ struct WeaponDef {
     float critMultiplier = 2.0f;  // damage x this on a crit
     float knockback = 0.0f;       // world impulse magnitude along the hit dir
     std::vector<CCApplication> ccOnHit; // effects applied to the victim on hit
+
+    AttackDef timing{};        // windup/active/recovery/stamina/poise for this attack
+    float drawTime = 0.0f;     // bows: seconds to full draw (0 = not a draw weapon)
+    float fullDrawMult = 1.0f; // bows: damage multiplier at full draw
 
     // Build a resolved DamagePacket for a hit. `dir` is the normalized impact
     // direction (for knockback); `roll01` is a uniform [0,1) crit roll supplied
