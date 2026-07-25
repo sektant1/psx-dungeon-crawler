@@ -30,6 +30,17 @@ public:
     void renderFrame(float dt); // may set shouldClose() (screenshot hook)
     void shutdown();
 
+    // --- Dear ImGui debug overlay ----------------------------------------
+    // Call beginImGuiFrame(dt) once per frame BEFORE building any ImGui/ImGuizmo
+    // windows, then build them; renderFrame(dt) paints them over the window.
+    // Frames where beginImGuiFrame is not called draw nothing. imguiWants*()
+    // report whether imgui is currently eating input, so the game can gate
+    // gameplay controls while the console is open.
+    void beginImGuiFrame(float dt);
+    bool imguiReady() const;
+    bool imguiWantsMouse() const;
+    bool imguiWantsKeyboard() const;
+
     Renderer& renderer() { return mRenderer; }
     Input& input() { return mInput; }
     Config& config() { return mConfig; }

@@ -140,13 +140,15 @@ material PSX/LightVolume    // psx_light-volume.gdshader (NO_TEXTURE + LIGHT_VOL
 }
 
 // Debug line overlay: immediate-mode lines with per-vertex colour.
-// Used by Renderer::setDebugLines (physics collider wireframes etc.).
-// depth_write off so lines show through geometry; depth_check on so they
-// occlude correctly against nearer surfaces.
+// Used by Renderer::setDebugLines (physics collider wireframes etc.). Depth
+// state left DEFAULT (check+write on), exactly like PSX/DebugWireframe, so the
+// lines integrate into the scene MRT the same way the working wireframe view
+// does. DebugLines_FS writes valid normal/depth metadata so the PSX stylize
+// pass treats them as real surfaces (zero metadata made them vanish except
+// where they overlapped geometry -- the "lines only inside objects" bug).
 material PSX/DebugLines
 {
     technique { pass {
-        depth_write off
         cull_hardware none
         vertex_program_ref PSX_VS_Unlit { }
         fragment_program_ref DebugLines_FS { }

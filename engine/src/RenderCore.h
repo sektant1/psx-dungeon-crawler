@@ -3,6 +3,7 @@
 #include <string>
 
 #include <OgreTexture.h> // Ogre::TexturePtr member
+#include <OgreRenderTargetListener.h> // base: draws imgui after the window RT
 
 namespace Ogre {
 class Root;
@@ -15,14 +16,18 @@ class Viewport;
 namespace eng {
 
 // Internal: owns Ogre::Root and hides Ogre lifetime rules. Root is the first
-// Ogre object created and the last destroyed.
-class RenderCore
+// Ogre object created and the last destroyed. Also a RenderTargetListener: it
+// paints the engine's own Dear ImGui frame onto the window after the scene (and
+// PSX post chain) have drawn, but before the buffer swap.
+class RenderCore : public Ogre::RenderTargetListener
 {
 public:
     ~RenderCore(); // calls shutdown(); safe if already shut down
-    bool init(uintptr_t nativeWindowHandle, int width, int height,
-              const std::string& title, const std::string& appAssetDir,
-              bool vsync);
+    // sdlWindow is the SDL_Window* (as void*) the imgui SDL2 backend binds to
+    // for input, cursors, and display size.
+    bool init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
+              int height, const std::string& title,
+              const std::string& appAssetDir, bool vsync);
     // Brings up the PSX post chain (scene downscale + bloom + dither) if not
     // already active. Idempotent; the chain stays on once up.
     void enablePostChain();
@@ -44,6 +49,18 @@ public:
     void setEditorCameraPose(float px, float py, float pz,
                              float qw, float qx, float qy, float qz,
                              float fovDeg);
+
+    // --- Dear ImGui (on-screen debug UI) ----------------------------------
+    // The ImGui context + SDL2/OpenGL3 backends are created in init(). Call
+    // beginImGuiFrame() once per frame BEFORE building any ImGui/ImGuizmo
+    // windows; renderFrame() then calls ImGui::Render() and the window
+    // RenderTargetListener blits the draw data over the final image. Frames
+    // where beginImGuiFrame() is not called draw nothing (no windows built).
+    void beginImGuiFrame(float dt);
+    bool imguiReady() const { return mImGuiInit; }
+
+    // Ogre::RenderTargetListener: paint imgui after the window's own render.
+    void postRenderTargetUpdate(const Ogre::RenderTargetEvent& evt) override;
 
     void renderFrame(float dt);
     void onResize(int width, int height);
@@ -67,6 +84,10 @@ private:
     Ogre::SceneManager* mSceneMgr = nullptr;
     Ogre::Camera* mCamera = nullptr;
     Ogre::Viewport* mViewport = nullptr;
+    void* mSdlWindow = nullptr;      // SDL_Window* for the imgui SDL2 backend
+    bool mImGuiInit = false;         // context + backends up
+    bool mImGuiFrameStarted = false; // beginImGuiFrame() called this frame
+    bool mImGuiRendered = false;     // ImGui::Render() done -> listener may blit
     bool mChainAdded = false;   // compositor instance exists on the viewport
     bool mChainEnabled = false; // chain was ever requested (one-way; gates the
                                 // setPixelSize re-add on cold start)

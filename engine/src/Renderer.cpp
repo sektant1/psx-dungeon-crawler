@@ -1080,6 +1080,39 @@ void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
     mImpl->debugLines->end();
 }
 
+void Renderer::frameStats(size_t& batches, size_t& triangles) const
+{
+    mImpl->core.frameStats(batches, triangles);
+}
+
+glm::mat4 Renderer::cameraViewProj() const
+{
+    Ogre::Camera* cam = mImpl->core.camera();
+    if (!cam)
+        return glm::mat4(1.0f);
+    // Ogre matrices are row-major; glm is column-major -> transpose on copy.
+    const Ogre::Matrix4 vp = cam->getProjectionMatrix() * cam->getViewMatrix();
+    glm::mat4 g;
+    for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+            g[c][r] = float(vp[r][c]);
+    return g;
+}
+
+void Renderer::setDebugLinesXray(bool xray)
+{
+    // Flip depth-check on the PSX/DebugLines pass. Off (xray) => lines pass the
+    // depth test everywhere and draw over all geometry; on => normal occlusion.
+    Ogre::MaterialPtr m = Ogre::MaterialManager::getSingleton().getByName(
+        "PSX/DebugLines");
+    if (!m || m->getTechniques().empty())
+        return;
+    Ogre::Technique* t = m->getTechnique(0);
+    if (t->getPasses().empty())
+        return;
+    t->getPass(0)->setDepthCheckEnabled(!xray);
+}
+
 void Renderer::setLightRange(LightHandle light, float range)
 {
     // Mirror attachLight: Ogre's attenuation range is pinned huge so the light

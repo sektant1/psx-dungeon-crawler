@@ -705,67 +705,195 @@ void Physics::setContactCallback(HitCallback cb) {
     mImpl->contactCb = std::move(cb);
 }
 
-// ---- debug draw ----
-static void pushBoxEdges(std::vector<Physics::DebugLine>& out,
-                         const glm::vec3& mn, const glm::vec3& mx,
-                         const glm::vec3& col)
+// ---- debug draw ----------------------------------------------------------
+// A proper collider debugger draws each body's ACTUAL collision shape, oriented
+// by the body transform and at its true dimensions (not a world-axis AABB): an
+// oriented box, sphere great-circles, a capsule, a cylinder. That is what makes
+// the overlay reveal that a collider is rotated, or larger than the visual mesh.
+namespace {
+
+constexpr int kCircleSegs = 20; // segments per debug circle
+
+// Transform a shape-local point by a Jolt body transform into glm world space.
+inline glm::vec3 xf(const JPH::RMat44& m, float x, float y, float z)
 {
-    // 8 corners of the AABB
-    glm::vec3 c[8] = {
-        {mn.x, mn.y, mn.z}, {mx.x, mn.y, mn.z},
-        {mx.x, mn.y, mx.z}, {mn.x, mn.y, mx.z},
-        {mn.x, mx.y, mn.z}, {mx.x, mx.y, mn.z},
-        {mx.x, mx.y, mx.z}, {mn.x, mx.y, mx.z},
-    };
-    // 12 edges: 4 bottom, 4 top, 4 vertical
-    static const int edges[12][2] = {
-        {0,1},{1,2},{2,3},{3,0}, // bottom
-        {4,5},{5,6},{6,7},{7,4}, // top
-        {0,4},{1,5},{2,6},{3,7}, // verticals
-    };
-    for (auto& e : edges)
-        out.push_back({c[e[0]], c[e[1]], col});
+    JPH::RVec3 w = m * JPH::Vec3(x, y, z);
+    return glm::vec3(float(w.GetX()), float(w.GetY()), float(w.GetZ()));
 }
 
-void Physics::debugDraw(std::vector<DebugLine>& out) const
+void pushOrientedBox(std::vector<Physics::DebugLine>& out, const JPH::RMat44& m,
+                     JPH::Vec3Arg he, const glm::vec3& col)
+{
+    const float x = he.GetX(), y = he.GetY(), z = he.GetZ();
+    const glm::vec3 c[8] = {
+        xf(m, -x, -y, -z), xf(m, x, -y, -z), xf(m, x, -y, z), xf(m, -x, -y, z),
+        xf(m, -x, y, -z),  xf(m, x, y, -z),  xf(m, x, y, z),  xf(m, -x, y, z),
+    };
+    static const int e[12][2] = {{0,1},{1,2},{2,3},{3,0}, {4,5},{5,6},{6,7},{7,4},
+                                 {0,4},{1,5},{2,6},{3,7}};
+    for (auto& ed : e)
+        out.push_back({c[ed[0]], c[ed[1]], col});
+}
+
+// A circle of radius r in the plane spanned by local axes (axisA, axisB),
+// centred at local `centre`. axis chars: 0=X,1=Y,2=Z.
+void pushCircle(std::vector<Physics::DebugLine>& out, const JPH::RMat44& m,
+                const glm::vec3& centre, float r, int axisA, int axisB,
+                const glm::vec3& col)
+{
+    glm::vec3 prev;
+    for (int i = 0; i <= kCircleSegs; ++i) {
+        const float t = float(i) / kCircleSegs * 6.2831853f;
+        float p[3] = {centre.x, centre.y, centre.z};
+        p[axisA] += r * std::cos(t);
+        p[axisB] += r * std::sin(t);
+        const glm::vec3 cur = xf(m, p[0], p[1], p[2]);
+        if (i > 0)
+            out.push_back({prev, cur, col});
+        prev = cur;
+    }
+}
+
+void pushSphere(std::vector<Physics::DebugLine>& out, const JPH::RMat44& m,
+                float r, const glm::vec3& col)
+{
+    pushCircle(out, m, {0,0,0}, r, 0, 1, col); // XY
+    pushCircle(out, m, {0,0,0}, r, 0, 2, col); // XZ
+    pushCircle(out, m, {0,0,0}, r, 1, 2, col); // YZ
+}
+
+// Capsule / cylinder along the local Y axis (Jolt convention). hh = half height
+// of the cylindrical section; capped = hemispherical end caps (capsule).
+void pushCapsuleOrCylinder(std::vector<Physics::DebugLine>& out,
+                           const JPH::RMat44& m, float hh, float r, bool capped,
+                           const glm::vec3& col)
+{
+    pushCircle(out, m, {0,  hh, 0}, r, 0, 2, col); // top ring
+    pushCircle(out, m, {0, -hh, 0}, r, 0, 2, col); // bottom ring
+    // 4 side lines connecting the rings.
+    const float ang[4] = {0.0f, 1.5707963f, 3.1415927f, 4.712389f};
+    for (float a : ang) {
+        const float dx = r * std::cos(a), dz = r * std::sin(a);
+        out.push_back({xf(m, dx, hh, dz), xf(m, dx, -hh, dz), col});
+    }
+    if (capped) {
+        // Two vertical great-circle arcs through the hemispherical caps.
+        for (int i = 0; i < kCircleSegs; ++i) {
+            const float t0 = float(i) / kCircleSegs * 6.2831853f;
+            const float t1 = float(i + 1) / kCircleSegs * 6.2831853f;
+            auto capPt = [&](float t, int horiz) {
+                const float y = r * std::sin(t);
+                const float rad = r * std::cos(t);
+                const float off = (y >= 0.0f) ? hh : -hh;
+                return horiz == 0 ? xf(m, rad, off + y, 0)
+                                  : xf(m, 0, off + y, rad);
+            };
+            out.push_back({capPt(t0, 0), capPt(t1, 0), col});
+            out.push_back({capPt(t0, 1), capPt(t1, 1), col});
+        }
+    }
+}
+
+glm::vec3 layerColour(BodyLayer layer)
+{
+    switch (layer) {
+        case BodyLayer::Static:     return {0.5f, 0.5f, 0.5f};
+        case BodyLayer::Prop:       return {0.2f, 1.0f, 0.2f};
+        case BodyLayer::Projectile: return {1.0f, 1.0f, 0.2f};
+        case BodyLayer::Player:     return {0.2f, 0.8f, 1.0f};
+        case BodyLayer::Trigger:    return {1.0f, 0.4f, 1.0f};
+    }
+    return {1.0f, 1.0f, 1.0f};
+}
+
+// Distinct colour per collision-shape kind (Unity-debug-display style).
+glm::vec3 shapeColour(JPH::EShapeSubType sub)
+{
+    using JPH::EShapeSubType;
+    switch (sub) {
+        case EShapeSubType::Box:      return {0.30f, 1.00f, 0.45f}; // green
+        case EShapeSubType::Sphere:   return {0.30f, 0.85f, 1.00f}; // cyan
+        case EShapeSubType::Capsule:  return {1.00f, 0.90f, 0.30f}; // yellow
+        case EShapeSubType::Cylinder: return {1.00f, 0.60f, 0.20f}; // orange
+        default:                      return {1.00f, 0.30f, 0.90f}; // magenta (mesh/hull)
+    }
+}
+
+// Draw one shape's wireframe under transform `m`. Handles the primitive shapes
+// props/characters use; anything else (mesh/hull/compound) falls back to its
+// oriented local bounding box.
+void pushShape(std::vector<Physics::DebugLine>& out, const JPH::Shape* shape,
+               const JPH::RMat44& m, const glm::vec3& col)
+{
+    using JPH::EShapeSubType;
+    switch (shape->GetSubType()) {
+        case EShapeSubType::Box:
+            pushOrientedBox(out, m,
+                static_cast<const JPH::BoxShape*>(shape)->GetHalfExtent(), col);
+            return;
+        case EShapeSubType::Sphere:
+            pushSphere(out, m,
+                static_cast<const JPH::SphereShape*>(shape)->GetRadius(), col);
+            return;
+        case EShapeSubType::Capsule: {
+            auto* c = static_cast<const JPH::CapsuleShape*>(shape);
+            pushCapsuleOrCylinder(out, m, c->GetHalfHeightOfCylinder(),
+                                  c->GetRadius(), true, col);
+            return;
+        }
+        case EShapeSubType::Cylinder: {
+            auto* c = static_cast<const JPH::CylinderShape*>(shape);
+            pushCapsuleOrCylinder(out, m, c->GetHalfHeight(), c->GetRadius(),
+                                  false, col);
+            return;
+        }
+        default: {
+            // Mesh / convex hull / compound: oriented local-bounds box.
+            const JPH::AABox b = shape->GetLocalBounds();
+            const JPH::Vec3 he = b.GetExtent();
+            const JPH::Vec3 ctr = b.GetCenter();
+            pushOrientedBox(out, m * JPH::RMat44::sTranslation(
+                                        JPH::RVec3(ctr.GetX(), ctr.GetY(),
+                                                   ctr.GetZ())),
+                            he, col);
+            return;
+        }
+    }
+}
+
+} // namespace
+
+void Physics::debugDraw(std::vector<DebugLine>& out, ColliderPalette palette,
+                        bool includeStatic) const
 {
     if (!mImpl->inited) return;
+    const bool byShape = palette == ColliderPalette::ByShape;
 
     for (const auto& rec : mImpl->bodies) {
         if (!rec.alive) continue;
-
-        // Colour by layer
-        glm::vec3 col{1.0f, 1.0f, 1.0f};
-        switch (rec.layer) {
-            case BodyLayer::Static:     col = {0.5f, 0.5f, 0.5f}; break;
-            case BodyLayer::Prop:       col = {0.2f, 1.0f, 0.2f}; break;
-            case BodyLayer::Projectile: col = {1.0f, 1.0f, 0.2f}; break;
-            case BodyLayer::Player:     col = {0.2f, 0.8f, 1.0f}; break;
-            case BodyLayer::Trigger:    col = {1.0f, 0.4f, 1.0f}; break;
-        }
-
-        // Read the body's world-space AABB under a lock to avoid races.
+        if (!includeStatic && rec.layer == BodyLayer::Static) continue;
         JPH::BodyLockRead lock(mImpl->system.GetBodyLockInterface(), rec.id);
         if (!lock.Succeeded()) continue;
-        const JPH::AABox& box = lock.GetBody().GetWorldSpaceBounds();
-        const JPH::Vec3& mn = box.mMin;
-        const JPH::Vec3& mx = box.mMax;
-        pushBoxEdges(out,
-                     {mn.GetX(), mn.GetY(), mn.GetZ()},
-                     {mx.GetX(), mx.GetY(), mx.GetZ()},
-                     col);
+        const JPH::Body& body = lock.GetBody();
+        const JPH::Shape* shape = body.GetShape();
+        const glm::vec3 col = byShape ? shapeColour(shape->GetSubType())
+                                      : layerColour(rec.layer);
+        // Center-of-mass transform is where the shape lives; draw the shape in
+        // that frame so rotation and true size show correctly.
+        pushShape(out, shape, body.GetCenterOfMassTransform(), col);
     }
 
-    // Characters: draw a box from their radius/height
-    const glm::vec3 charCol{0.2f, 0.8f, 1.0f};
+    // Kinematic characters expose radius/height, not a body shape: draw the
+    // capsule they collide with, oriented upright at their world position.
+    const glm::vec3 charCol = byShape ? shapeColour(JPH::EShapeSubType::Capsule)
+                                      : layerColour(BodyLayer::Player);
     for (const auto& rec : mImpl->characters) {
         if (!rec.alive || !rec.ch) continue;
         JPH::RVec3 p = rec.ch->GetPosition();
-        const float r = rec.radius;
-        const float h = rec.height;
-        glm::vec3 centre(float(p.GetX()), float(p.GetY()) + h * 0.5f, float(p.GetZ()));
-        glm::vec3 half{r, h * 0.5f, r};
-        pushBoxEdges(out, centre - half, centre + half, charCol);
+        const JPH::RMat44 m = JPH::RMat44::sTranslation(
+            JPH::RVec3(p.GetX(), p.GetY() + rec.height * 0.5f, p.GetZ()));
+        pushCapsuleOrCylinder(out, m, rec.height * 0.5f, rec.radius, true,
+                              charCol);
     }
 }
 

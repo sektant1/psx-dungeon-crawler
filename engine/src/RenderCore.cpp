@@ -6,7 +6,12 @@
 #include <OgreCompositorChain.h>
 #include <OgreCompositorManager.h>
 
-#include <imgui.h> // headless ImGui context for text-sprite font rasterization
+#include <imgui.h>
+#include <ImGuizmo.h>
+#include <backends/imgui_impl_sdl2.h>
+#include <backends/imgui_impl_opengl3.h>
+
+#include <SDL2/SDL.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -17,10 +22,11 @@ namespace eng {
 
 RenderCore::~RenderCore() { shutdown(); }
 
-bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
-                      const std::string& title, const std::string& appAssetDir,
-                      bool vsync)
+bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
+                      int height, const std::string& title,
+                      const std::string& appAssetDir, bool vsync)
 {
+    mSdlWindow = sdlWindow;
     // Fully programmatic setup: no plugins.cfg / ogre.cfg, no RTSS -- all
     // materials are hand-written GLSL.
     mRoot = new Ogre::Root("", "", "ogre.log");
@@ -112,24 +118,50 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, int width, int height,
     mViewport = mWindow->addViewport(mCamera);
     mViewport->setBackgroundColour(Ogre::ColourValue::Black);
 
-    // Headless ImGui context: created directly (no Ogre ImGuiOverlay) so the
-    // text-sprite path can still rasterize world-label glyphs from ImGui's font
-    // atlas (see Renderer::attachTextSprite). The overlay's per-frame dynamic
-    // vertex buffer was the source of the GL3Plus/Mesa window-content flicker,
-    // and all debug/editor UI that rendered through it has been removed -- so
-    // nothing draws imgui to the screen any more. The imgui dependency stays
-    // available for a future UI.
+    // Engine-owned Dear ImGui: our own context + the official SDL2 + OpenGL3
+    // backends, built against the vendored imgui (NOT Ogre's ImGuiOverlay,
+    // whose imgui copy has a mismatched ABI -> flicker + EndFrame segfault).
+    // The same context's font atlas also backs world-label text sprites
+    // (Renderer::attachTextSprite). Ogre's GL context is current here, so the
+    // GL3 loader in ImGui_ImplOpenGL3_Init() resolves against it.
+    IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    {
-        ImGuiIO& io = ImGui::GetIO();
-        io.IniFilename = nullptr;                       // no imgui.ini
-        io.DisplaySize = ImVec2(float(width), float(height)); // non-zero, quiets asserts
-        io.Fonts->AddFontDefault();
-        unsigned char* px = nullptr;
-        int fw = 0, fh = 0;
-        io.Fonts->GetTexDataAsRGBA32(&px, &fw, &fh);    // force the atlas to build
-    }
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr; // no imgui.ini persistence
+    io.DisplaySize = ImVec2(float(width), float(height));
+    ImGui::StyleColorsDark();
+    if (mSdlWindow)
+        ImGui_ImplSDL2_InitForOpenGL(static_cast<SDL_Window*>(mSdlWindow),
+                                     nullptr);
+    ImGui_ImplOpenGL3_Init("#version 150");
+    // Force the font atlas to build now (text sprites read it immediately, and
+    // ImGui_ImplOpenGL3 uploads it lazily on first render otherwise).
+    ImGui_ImplOpenGL3_CreateFontsTexture();
+    // Paint imgui after the window RT finishes its scene + post chain.
+    mWindow->addListener(this);
+    mImGuiInit = true;
     return true;
+}
+
+void RenderCore::beginImGuiFrame(float /*dt*/)
+{
+    if (!mImGuiInit)
+        return;
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+    ImGuizmo::BeginFrame();
+    mImGuiFrameStarted = true;
+}
+
+void RenderCore::postRenderTargetUpdate(const Ogre::RenderTargetEvent&)
+{
+    // Called during renderOneFrame after the window's viewport has drawn, before
+    // the buffer swap. Blit the imgui draw data on top. ImGui_ImplOpenGL3 backs
+    // up and restores all GL state it touches, so Ogre's GL state cache stays
+    // coherent for the next frame.
+    if (mImGuiRendered)
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void RenderCore::enablePostChain()
@@ -283,7 +315,19 @@ void RenderCore::markPostChainDirty()
         chain->_markDirty();
 }
 
-void RenderCore::renderFrame(float dt) { mRoot->renderOneFrame(dt); }
+void RenderCore::renderFrame(float dt)
+{
+    // Close the imgui frame before Ogre renders so GetDrawData() is valid inside
+    // postRenderTargetUpdate. If the app didn't start a frame (e.g. a headless
+    // tool), skip Render entirely -- the listener then blits nothing.
+    if (mImGuiFrameStarted) {
+        ImGui::Render();
+        mImGuiRendered = true;
+    }
+    mRoot->renderOneFrame(dt);
+    mImGuiFrameStarted = false;
+    mImGuiRendered = false;
+}
 
 void RenderCore::frameStats(size_t& batches, size_t& triangles) const
 {
@@ -339,10 +383,18 @@ void RenderCore::shutdown()
     }
     if (mViewport && mWindow)
         Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);
+    // Tear down imgui while Ogre's GL context is still current (the GL3 backend
+    // deletes GL objects), before the scene manager / root go.
+    if (mImGuiInit) {
+        if (mWindow)
+            mWindow->removeListener(this);
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplSDL2_Shutdown();
+        ImGui::DestroyContext();
+        mImGuiInit = false;
+    }
     if (mSceneMgr)
         mRoot->destroySceneManager(mSceneMgr);
-    if (ImGui::GetCurrentContext())
-        ImGui::DestroyContext(); // headless context created in init()
     delete mRoot; // last: tears down window, render system, resource managers
     mRoot = nullptr;
     mWindow = nullptr;

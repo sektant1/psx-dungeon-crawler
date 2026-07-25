@@ -158,6 +158,9 @@ public:
     // --- camera -----------------------------------------------------------
     void setCameraFov(float degrees); // vertical FOV
     void setCameraClip(float nearDist, float farDist);
+    // Current camera view-projection (world -> clip). For projecting debug
+    // overlays (collider gizmos) to screen space at full window resolution.
+    glm::mat4 cameraViewProj() const;
 
     // --- materials --------------------------------------------------------
     void setMaterialParam(const std::string& materialName,
@@ -196,6 +199,9 @@ public:
     void setGradeParams(float desaturate, float contrast,
                         glm::vec3 shadowTint, glm::vec3 midTint);
     void writeScreenshot(const std::string& path);
+    // Whole-frame draw-call (batch) + triangle counts across the window and the
+    // live PSX post-chain targets. For the on-screen performance HUD.
+    void frameStats(size_t& batches, size_t& triangles) const;
 
     // --- editor offscreen viewport ---------------------------------------
     void enableEditorViewport(int w, int h);
@@ -211,6 +217,9 @@ public:
     // Replace the debug line set for this frame. Pass empty to clear. Rebuilt
     // into a single unlit line-list; call once per frame when the overlay is on.
     void setDebugLines(const std::vector<DebugLine>& lines);
+    // X-ray toggle for the debug lines: on = ignore depth (draw over all
+    // geometry), off = depth-tested so they occlude behind nearer surfaces.
+    void setDebugLinesXray(bool xray);
 
 private:
     friend class Engine; // Engine constructs, initialises, and drives it

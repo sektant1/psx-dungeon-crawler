@@ -385,6 +385,10 @@ fragment_program Wire_FS glsl
 fragment_program DebugLines_FS glsl
 {
     source debug_lines.frag
+    default_params
+    {
+        param_named_auto farClip far_clip_distance
+    }
 }
 
 // --------------------------------------------------------- post process ---

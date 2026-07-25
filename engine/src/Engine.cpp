@@ -7,6 +7,9 @@
 #include "RenderCore.h"
 #include "RenderPresets.h"
 
+#include <imgui.h>
+#include <backends/imgui_impl_sdl2.h>
+
 #include <algorithm>
 #include <chrono>
 #include <thread>
@@ -65,8 +68,9 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
 
     if (!mImpl->platform.init(title, width, height))
         return false;
-    if (!detail::coreOf(mRenderer).init(mImpl->platform.nativeHandle(), width,
-                                        height, title, appAssetDir, vsync)) {
+    if (!detail::coreOf(mRenderer).init(mImpl->platform.nativeHandle(),
+                                        mImpl->platform.window(), width, height,
+                                        title, appAssetDir, vsync)) {
         shutdown();
         return false;
     }
@@ -136,6 +140,10 @@ float Engine::tick()
         } else {
             mInput.mImpl->onEvent(e);
         }
+        // Mirror every event into imgui's SDL2 backend (mouse, wheel, keys,
+        // text, cursor). Cheap when no UI is shown; gives the debug console
+        // correct mouse/scroll/cursor when it is open.
+        ImGui_ImplSDL2_ProcessEvent(&e);
     }
     // Deterministic capture: ignore wall-clock and advance by a fixed step so
     // every frame is reproducible. Skips the frame limiter (no pacing needed).
@@ -162,6 +170,26 @@ float Engine::tick()
     const float dt = std::chrono::duration<float>(now - mImpl->prev).count();
     mImpl->prev = now;
     return std::min(dt, 0.1f);
+}
+
+void Engine::beginImGuiFrame(float dt)
+{
+    detail::coreOf(mRenderer).beginImGuiFrame(dt);
+}
+
+bool Engine::imguiReady() const
+{
+    return detail::coreOf(const_cast<Renderer&>(mRenderer)).imguiReady();
+}
+
+bool Engine::imguiWantsMouse() const
+{
+    return ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse;
+}
+
+bool Engine::imguiWantsKeyboard() const
+{
+    return ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureKeyboard;
 }
 
 void Engine::renderFrame(float dt)

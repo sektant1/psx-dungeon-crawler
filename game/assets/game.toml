@@ -10,8 +10,8 @@ vsync = false
 # (cmake/patches/ogre-imgui-overlay-fresh-buffer.patch) so capping the fps no
 # longer reintroduces the buffer-aliasing flicker. If flicker ever returns on
 # other hardware, limit_fps=false (uncapped) is the fallback.
-limit_fps = true
-max_fps = 60
+limit_fps = false
+max_fps = 144
 
 [player]
 speed = 3.0
@@ -36,6 +36,9 @@ swap_weapon = "X"
 deflect = "V"
 dodge = "B"
 kick = "G"
+debug_ui = "F1"
+show_colliders = "F3"
+show_perf = "F4"
 
 # Attack tunables. Every value is also live-editable in the "Attacks" debug
 # panel; edits there apply immediately but are not written back here.

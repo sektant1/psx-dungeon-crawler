@@ -14,6 +14,7 @@ public:
     bool init(const std::string& title, int width, int height);
     void shutdown(); // call AFTER RenderCore::shutdown (Ogre holds the handle)
     uintptr_t nativeHandle() const { return mNativeHandle; }
+    SDL_Window* window() const { return mWindow; } // for the imgui SDL2 backend
 
 private:
     SDL_Window* mWindow = nullptr;

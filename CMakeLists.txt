@@ -61,6 +61,11 @@ add_library(
   third_party/imgui/imgui_draw.cpp
   third_party/imgui/imgui_tables.cpp
   third_party/imgui/imgui_widgets.cpp
+  # Own imgui rendering path (not Ogre's ImGuiOverlay): official SDL2 + OpenGL3
+  # backends + ImGuizmo, all built against the vendored imgui above.
+  third_party/imgui/backends/imgui_impl_sdl2.cpp
+  third_party/imgui/backends/imgui_impl_opengl3.cpp
+  ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
   engine/src/RenderCore.cpp
   engine/src/ObjLoader.cpp
   engine/src/ProceduralMeshes.cpp
@@ -97,10 +102,15 @@ target_include_directories(
 # <imgui.h> resolves to the docking copy everywhere in the engine + game.
 target_include_directories(eng BEFORE
                            PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui)
+# imgui backend sources include "imgui_impl_opengl3_loader.h" etc. by name, and
+# consumers may include the gizmo header; expose both dirs.
+target_include_directories(
+  eng PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends)
+find_package(OpenGL REQUIRED)
 target_link_libraries(
   eng
-  PUBLIC glm::glm OgreOverlay EnTT::EnTT
-  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio)
+  PUBLIC glm::glm OgreOverlay EnTT::EnTT eng_imguizmo
+  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS})
 target_compile_definitions(
   eng
   PRIVATE ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
@@ -138,6 +148,7 @@ add_executable(
   game/src/GameScene.cpp
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
+  game/src/DebugOverlay.cpp
   game/src/combat/DamageSystem.cpp
   game/src/combat/StatusEffectSystem.cpp
   game/src/combat/WeaponLibrary.cpp

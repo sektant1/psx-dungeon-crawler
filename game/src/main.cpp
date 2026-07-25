@@ -12,6 +12,7 @@
 #include "SceneFactory.h"
 #include "ParticleLibrary.h"
 #include "CombatSystem.h"
+#include "DebugOverlay.h"
 #include "Dummy.h"
 #include "GameContext.h"
 #include "GameDiagnostics.h"
@@ -39,6 +40,8 @@
 #include <chrono>
 
 #include <glm/gtc/quaternion.hpp>
+
+#include <imgui.h> // collider gizmos drawn via the imgui screen-space draw list
 
 #include <cmath>
 #include <cstdio>
@@ -82,7 +85,8 @@ int main(int argc, char** argv)
     const float sens =
         float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
 
-    bool showColliders = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
+    game::ColliderDebug colliderDbg;
+    colliderDbg.enabled = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
 
     eng::Physics physics;
     physics.init();
@@ -280,6 +284,13 @@ int main(int argc, char** argv)
     using game::ProfHud;
     ProfHud prof;
 
+    // On-screen debug/tuning console (F1). Docked side panel, one tab per
+    // system; every control writes straight to the live system.
+    game::DebugOverlay debugUi;
+    if (std::getenv("PSX_DEBUG_UI")) // start with the console open (testing)
+        debugUi.setVisible(true);
+    game::PerfOverlay perf; // top-left perf HUD, on by default, F4 toggles
+
     game::InteractionSystem interaction;
 
     // ---------------------------------------------------------------- loop ---
@@ -300,8 +311,24 @@ int main(int argc, char** argv)
             else
                 engine.requestClose();
         }
-        if (!in.mouseGrabbed() && in.wasMouseClicked())
+        // F1 toggles the debug console. Opening it releases the mouse so the
+        // cursor can drive the panel; the click-to-regrab above is suppressed
+        // while it is open (see the guard on that branch is implicit: opening
+        // sets grab off and the panel captures the click).
+        if (in.wasPressed("debug_ui")) {
+            debugUi.toggle();
+            if (debugUi.visible())
+                in.setMouseGrab(false);
+        }
+        if (!in.mouseGrabbed() && !debugUi.visible() && in.wasMouseClicked())
             in.setMouseGrab(true);
+
+        // F3 toggles the collider wireframe overlay (drawn below).
+        if (in.wasPressed("show_colliders"))
+            colliderDbg.enabled = !colliderDbg.enabled;
+        // F4 toggles the performance HUD.
+        if (in.wasPressed("show_perf"))
+            perf.toggle();
 
         // Fixed-step physics. Cap at 5 steps to prevent spiral of death.
         auto tPhysics = clk::now();
@@ -329,7 +356,7 @@ int main(int argc, char** argv)
         prof.ms[ProfHud::World] = phaseMs(tWorld);
 
         auto tPlayer = clk::now();
-        if (!portalPreviewMode)
+        if (!portalPreviewMode && !debugUi.visible())
             playerSys.update(ctx, dt);
         prof.ms[ProfHud::Player] = phaseMs(tPlayer);
 
@@ -421,24 +448,61 @@ int main(int argc, char** argv)
         playerSys.updateViewmodels(ctx, dt, swordAttack, didCast, aiming);
         prof.ms[ProfHud::Weapons] = phaseMs(tWeapons);
 
-        // Physics collider wireframe overlay — neon-pink collision view.
-        if (showColliders) {
-            // Hot neon pink (~#FF14C8), pushed slightly >1 so it stays vivid
-            // through tonemapping/dither and reads as an emissive outline.
-            const glm::vec3 kNeonPink(1.30f, 0.08f, 0.78f);
-            static std::vector<eng::Physics::DebugLine> pl;
-            pl.clear();
-            physics.debugDraw(pl);
-            static std::vector<eng::Renderer::DebugLine> dl;
-            dl.clear();
-            for (const auto& l : pl)
-                dl.push_back({l.a, l.b, kNeonPink});
-            r.setDebugLines(dl);
-        } else {
-            r.setDebugLines({});
+        prof.pushFrame(dt * 1000.0f);
+
+        // Debug UI + overlays: one imgui frame per rendered frame (NewFrame and
+        // Render must pair). The console early-returns when hidden.
+        engine.beginImGuiFrame(dt);
+        {
+            game::DebugOverlay::Deps deps;
+            deps.renderer = &r;
+            deps.combat = &combat.config();
+            deps.fps = &player;
+            deps.registry = &combat.director().registry();
+            deps.player = playerEntity;
+            deps.prof = &prof;
+            deps.colliders = &colliderDbg;
+            debugUi.draw(deps);
+            perf.draw(&prof, &r);
+
+            // Collider gizmos: drawn as a SCREEN-SPACE imgui overlay (project
+            // each 3D line to the window at full resolution), so they stay crisp
+            // and identical regardless of the PSX pixelation / render profile.
+            if (colliderDbg.enabled) {
+                using Pal = eng::Physics::ColliderPalette;
+                const Pal pal = (colliderDbg.colorMode == 1) ? Pal::ByLayer
+                                                             : Pal::ByShape;
+                static std::vector<eng::Physics::DebugLine> pl;
+                pl.clear();
+                physics.debugDraw(pl, pal, colliderDbg.includeStatic);
+
+                const glm::mat4 vp = r.cameraViewProj();
+                const ImVec2 ds = ImGui::GetIO().DisplaySize;
+                ImDrawList* draw = ImGui::GetBackgroundDrawList();
+                const bool uniform = colliderDbg.colorMode == 2;
+                auto project = [&](const glm::vec3& w, ImVec2& out) -> bool {
+                    const glm::vec4 c = vp * glm::vec4(w, 1.0f);
+                    if (c.w <= 1e-4f) return false; // behind the camera
+                    const float x = (c.x / c.w * 0.5f + 0.5f) * ds.x;
+                    const float y = (1.0f - (c.y / c.w * 0.5f + 0.5f)) * ds.y;
+                    out = ImVec2(x, y);
+                    return true;
+                };
+                for (const auto& l : pl) {
+                    ImVec2 a, b;
+                    if (!project(l.a, a) || !project(l.b, b))
+                        continue; // skip segments crossing the near plane
+                    glm::vec3 col = uniform ? colliderDbg.uniformColor : l.colour;
+                    col = glm::clamp(col * colliderDbg.brightness, 0.0f, 1.0f);
+                    // 70% opacity so colliders read as an overlay, not solid
+                    // geometry; the rest of the frame stays fully opaque.
+                    const ImU32 c = IM_COL32(int(col.r * 255), int(col.g * 255),
+                                             int(col.b * 255), 179);
+                    draw->AddLine(a, b, c, colliderDbg.thickness);
+                }
+            }
         }
 
-        prof.pushFrame(dt * 1000.0f);
         auto tRender = clk::now();
         engine.renderFrame(dt);
         prof.ms[ProfHud::Render] = phaseMs(tRender);

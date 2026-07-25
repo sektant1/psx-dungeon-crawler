@@ -109,10 +109,9 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # --- ImGuizmo (ImGui gizmo widget) -------------------------------------------
-# DOWNLOAD_ONLY: fetch the source and expose its include dir only. Not compiled
-# into any target yet -- ImGuizmo draws through an active ImGui frame, and the
-# ImGui overlay was removed. When a UI is wired back, a target compiles
-# ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp and links the eng imgui.
+# DOWNLOAD_ONLY: fetch the source + expose its include dir. eng compiles
+# ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp (see CMakeLists) so it draws through
+# the engine's own ImGui frame (RenderCore's SDL2/OpenGL3 backend).
 CPMAddPackage(
     NAME imguizmo
     GITHUB_REPOSITORY cedricguillemet/ImGuizmo
@@ -157,7 +156,13 @@ CPMAddPackage(
         "OGRE_BUILD_PLUGIN_ASSIMP OFF"
         "OGRE_BUILD_PLUGIN_FREEIMAGE OFF"
         "OGRE_BUILD_COMPONENT_OVERLAY ON"
-        "OGRE_BUILD_COMPONENT_OVERLAY_IMGUI ON"
+        # OFF on purpose: Ogre's ImGuiOverlay compiles against Ogre's OWN imgui
+        # copy, but the engine links the vendored imgui (third_party/imgui,
+        # docking branch). Their ImGuiIO/ImDrawData layouts differ -> the whole
+        # overlay flickers and ImGui::EndFrame segfaults. The engine instead
+        # drives its own imgui through the official SDL2 + OpenGL3 backends (see
+        # RenderCore), rendered via an Ogre window RenderTargetListener.
+        "OGRE_BUILD_COMPONENT_OVERLAY_IMGUI OFF"
         # Bites is the SDL2-based app framework; the engine drives Ogre::Root
         # programmatically. Building it drags our CPM SDL2 into Ogre's install
         # export set, which breaks generation ("SDL2 not in any export set").
