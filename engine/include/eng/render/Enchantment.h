@@ -24,6 +24,9 @@ struct EnchantmentDesc {
     float pulseSpeed = 3.1f;
     float pulseDepth = 0.18f;
     float edgeIntensity = 0.35f;
+    float bandCount = 4.0f;
+    float pixelScale = 18.0f;
+    float coreBoost = 1.35f;
     bool recursive = true;
 };
 
@@ -142,6 +145,18 @@ inline EnchantmentDesc sanitizeEnchantmentDesc(const EnchantmentDesc& desc)
         std::isfinite(clean.edgeIntensity) ? clean.edgeIntensity
                                            : defaults.edgeIntensity,
         0.0f, 4.0f);
+    clean.bandCount = std::clamp(
+        std::isfinite(clean.bandCount) ? clean.bandCount
+                                       : defaults.bandCount,
+        2.0f, 8.0f);
+    clean.pixelScale = std::clamp(
+        std::isfinite(clean.pixelScale) ? clean.pixelScale
+                                        : defaults.pixelScale,
+        4.0f, 64.0f);
+    clean.coreBoost = std::clamp(
+        std::isfinite(clean.coreBoost) ? clean.coreBoost
+                                       : defaults.coreBoost,
+        0.0f, 3.0f);
     return clean;
 }
 

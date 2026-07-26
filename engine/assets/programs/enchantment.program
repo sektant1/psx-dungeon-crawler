@@ -17,6 +17,9 @@ fragment_program Enchantment/FS glsl
         param_named enchantPulseSpeed float 3.1
         param_named enchantPulseDepth float 0.18
         param_named enchantEdgeIntensity float 0.35
+        param_named enchantBandCount float 4.0
+        param_named enchantPixelScale float 18.0
+        param_named enchantCoreBoost float 1.35
         param_named_auto time time 1.0
         param_named_auto cameraPositionObject camera_position_object_space
     }

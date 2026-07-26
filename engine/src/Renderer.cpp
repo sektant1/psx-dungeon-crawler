@@ -448,6 +448,7 @@ void Renderer::setNodeEnchantment(NodeHandle node,
                     pass->setDepthWriteEnabled(false);
                     pass->setDepthFunction(Ogre::CMPF_LESS_EQUAL);
                     pass->setCullingMode(Ogre::CULL_NONE);
+                    pass->setLightingEnabled(false);
                     pass->setVertexProgram("Enchantment/VS");
                     pass->setFragmentProgram("Enchantment/FS");
                     Ogre::GpuProgramParametersSharedPtr params =
@@ -469,6 +470,12 @@ void Renderer::setNodeEnchantment(NodeHandle node,
                                              clean.pulseDepth);
                     params->setNamedConstant("enchantEdgeIntensity",
                                              clean.edgeIntensity);
+                    params->setNamedConstant("enchantBandCount",
+                                             clean.bandCount);
+                    params->setNamedConstant("enchantPixelScale",
+                                             clean.pixelScale);
+                    params->setNamedConstant("enchantCoreBoost",
+                                             clean.coreBoost);
                     enchanted->load();
                     mImpl->enchantments.replace(
                         sub, {baseName, cloneName, root});

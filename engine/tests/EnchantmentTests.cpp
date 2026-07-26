@@ -67,6 +67,12 @@ int main()
         require(desc.pulseDepth == 0.18f, "default pulse depth changed");
         require(desc.edgeIntensity == 0.35f,
                 "default edge intensity changed");
+        require(desc.bandCount == 4.0f,
+                "default enchant band count changed");
+        require(desc.pixelScale == 18.0f,
+                "default enchant pixel scale changed");
+        require(desc.coreBoost == 1.35f,
+                "default enchant core boost changed");
         require(desc.recursive, "enchantments no longer recurse by default");
     }
 
@@ -81,6 +87,9 @@ int main()
         invalid.pulseSpeed = -4.0f;
         invalid.pulseDepth = 8.0f;
         invalid.edgeIntensity = -2.0f;
+        invalid.bandCount = 99.0f;
+        invalid.pixelScale = -4.0f;
+        invalid.coreBoost = std::numeric_limits<float>::quiet_NaN();
         invalid.recursive = false;
 
         const EnchantmentDesc clean = sanitizeEnchantmentDesc(invalid);
@@ -98,6 +107,12 @@ int main()
                 "pulse depth was not clamped to a modulation fraction");
         require(clean.edgeIntensity == 0.0f,
                 "negative edge intensity was not clamped");
+        require(clean.bandCount == 8.0f,
+                "enchant band count was not clamped");
+        require(clean.pixelScale == 4.0f,
+                "enchant pixel scale was not clamped");
+        require(clean.coreBoost == 1.35f,
+                "non-finite core boost did not use the default");
         require(!clean.recursive, "sanitization changed recursion intent");
 
         EnchantmentDesc excessive;
@@ -218,6 +233,12 @@ int main()
                 "fragment shader lacks normal-weighted triplanar projection");
     requireText(fragment, "floor(",
                 "fragment shader lacks quantized rune cells");
+    requireText(fragment, "quantizeBand",
+                "fragment shader lacks intensity banding");
+    requireText(fragment, "runeBody",
+                "fragment shader lacks a readable rune body");
+    requireText(fragment, "runeCore",
+                "fragment shader lacks a separate bloom core");
     requireText(fragment, "cameraPositionObject",
                 "fragment shader lacks object-space view direction");
     requireNoText(fragment, "fragNormalDepth",
@@ -226,7 +247,9 @@ int main()
     for (const char* uniform :
          {"enchantColour", "enchantStrength", "enchantRuneScale",
           "enchantScroll", "enchantPulseSpeed", "enchantPulseDepth",
-          "enchantEdgeIntensity", "time", "cameraPositionObject"}) {
+          "enchantEdgeIntensity", "enchantBandCount",
+          "enchantPixelScale", "enchantCoreBoost",
+          "time", "cameraPositionObject"}) {
         requireText(fragment, uniform,
                     "fragment shader is missing a required uniform");
         requireText(program, uniform,
@@ -235,7 +258,8 @@ int main()
     for (const char* uniform :
          {"enchantColour", "enchantStrength", "enchantRuneScale",
           "enchantScroll", "enchantPulseSpeed", "enchantPulseDepth",
-          "enchantEdgeIntensity"}) {
+          "enchantEdgeIntensity", "enchantBandCount",
+          "enchantPixelScale", "enchantCoreBoost"}) {
         requireText(renderer, uniform,
                     "renderer does not bind a required enchantment uniform");
     }
@@ -253,6 +277,8 @@ int main()
                 "enchantment pass is no longer additive");
     requireText(renderer, "setDepthWriteEnabled(false)",
                 "enchantment pass writes depth");
+    requireText(renderer, "setLightingEnabled(false)",
+                "enchantment overlay inherits base lighting");
 
     std::cout << "EnchantmentTests OK\n";
 }
