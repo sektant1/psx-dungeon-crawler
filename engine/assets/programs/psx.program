@@ -518,6 +518,8 @@ fragment_program Stylize_FS glsl
         param_named outlineSharpness float 0.85
         param_named outlineDistFade float 0.08
         param_named outlineDarkFade float 0.12
+        param_named edgeConvexity float 1.0
+        param_named edgeConvexBias float 0.05
     }
 }
 
@@ -550,5 +552,6 @@ fragment_program BloomComposite_FS glsl
         param_named bloomTex int 1
         param_named bloomIntensity float 0.6
         param_named bloomEnabled float 1.0
+        param_named bloomPixelSnap float 0.0
     }
 }

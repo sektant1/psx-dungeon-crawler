@@ -75,12 +75,43 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
         return false;
     }
     detail::registerRoot(mRenderer);
+    // There is no unprofiled path: the default look ("dungeon") is a profile
+    // like any other, so something is always applied here. The game's per-level
+    // render palette still runs later and overrides the art-direction fields it
+    // owns -- the profile sets the pipeline and the baseline look under it.
+    int presetId = kDefaultRenderPreset;
     if (const char* presetName = std::getenv("PSX_RENDER_PRESET")) {
-        int id = renderPresetFromName(presetName);
+        const int id = renderPresetFromName(presetName);
         if (id > 0)
-            applyRenderPreset(mRenderer, renderPresetValues(id));
+            presetId = id;
         else
-            log::warn("Unknown PSX_RENDER_PRESET '%s'", presetName);
+            log::warn("Unknown PSX_RENDER_PRESET '%s'; using the default "
+                      "profile instead", presetName);
+    }
+    applyRenderPreset(mRenderer, renderPresetValues(presetId));
+
+    { // Step clock (stop-motion timing) from the [animation] config table.
+        StepRates sr = mStepClock.rates();
+        sr.enabled = mConfig.getBool("animation.enabled", sr.enabled);
+        sr.scale = float(mConfig.getNumber("animation.scale", sr.scale));
+        sr.phaseJitter =
+            float(mConfig.getNumber("animation.phase_jitter", sr.phaseJitter));
+        // render.anim_fps predates the per-channel table and used to drive every
+        // stepped system at one rate. Honour it as the base for the stylised
+        // channels so existing configs keep their tuning; projectiles keep their
+        // own faster default because a single rate never suited them.
+        const float legacy =
+            float(mConfig.getNumber("render.anim_fps",
+                                    sr.rate[int(StepChannel::Characters)]));
+        for (StepChannel c : {StepChannel::Characters, StepChannel::Viewmodel,
+                              StepChannel::World, StepChannel::Particles})
+            sr.rate[int(c)] = legacy;
+        for (int i = 0; i < kStepChannelCount; ++i) {
+            const std::string key = std::string("animation.") +
+                                    stepChannelName(StepChannel(i)) + "_fps";
+            sr.rate[i] = float(mConfig.getNumber(key, sr.rate[i]));
+        }
+        mStepClock.setRates(sr);
     }
     // Safe before any attachMesh: entities created later join the debug
     // view through the attachMesh wireframe hook.
@@ -145,6 +176,15 @@ float Engine::tick()
         // correct mouse/scroll/cursor when it is open.
         ImGui_ImplSDL2_ProcessEvent(&e);
     }
+    const float dt = measureFrameDelta();
+    // One advance per frame, on every path, so quantised time cannot desync from
+    // real time (a missed advance would strand every stepped channel).
+    mStepClock.advance(dt);
+    return dt;
+}
+
+float Engine::measureFrameDelta()
+{
     // Deterministic capture: ignore wall-clock and advance by a fixed step so
     // every frame is reproducible. Skips the frame limiter (no pacing needed).
     if (mImpl->fixedTickDt > 0.0f)
@@ -195,8 +235,24 @@ bool Engine::imguiWantsKeyboard() const
 void Engine::renderFrame(float dt, float animDt)
 {
     // animDt drives Ogre's particle + animation advance; dt stays wall time for
-    // the benchmark/screenshot hooks below. animDt<0 means "same as dt".
-    const float adt = (animDt < 0.0f) ? dt : animDt;
+    // the benchmark/screenshot hooks below. animDt < 0 means "take it from the
+    // step clock", so particle VFX step with the rest of the scene by default --
+    // smooth particles beside stepped characters are the most common way the
+    // stop-motion illusion breaks. delta() returns dt unchanged when the
+    // Particles channel is continuous or the clock is disabled.
+    const float adt = (animDt < 0.0f)
+                          ? mStepClock.delta(StepChannel::Particles)
+                          : animDt;
+    { // TEMP-VERIFY
+        static int frames = 0, partSteps = 0, charSteps = 0, projSteps = 0;
+        ++frames;
+        partSteps += (adt > 0.0f) ? 1 : 0;
+        charSteps += mStepClock.stepped(StepChannel::Characters) ? 1 : 0;
+        projSteps += mStepClock.stepped(StepChannel::Projectiles) ? 1 : 0;
+        if (frames == 120)
+            log::warn("TEMP-VERIFY %d frames: particleAdvance=%d chars=%d proj=%d",
+                      frames, partSteps, charSteps, projSteps);
+    }
     mRenderer.updateParticles(adt); // recycle finished one-shot particle systems
     detail::coreOf(mRenderer).renderFrame(adt);
     // Headless-friendly performance regression hook. Skip the first 60 frames

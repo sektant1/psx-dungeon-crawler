@@ -566,14 +566,24 @@ SpriteHandle Renderer::attachTextSprite(NodeHandle node, const std::string& text
         float(lineHeight + padding * 2);
     clip.worldSize = {float(width) * pixelToWorld,
                       float(height) * pixelToWorld};
-    // Text plaques are deliberately opaque: the PSX compositor consumes a
-    // second normal/depth target, and blending that target makes translucent
-    // billboards invalidate the full-screen reconstruction pass.
+    // Depth-independent and opaque: glyph antialiasing was already resolved
+    // into the plaque above, so nothing here needs GPU blending.
     clip.blend = SpriteBlend::Overlay;
     const SpriteHandle sprite = attachSprite(node, clip);
-    // Queue 80 is after ordinary scene geometry but remains inside the PSX
-    // compositor's scene pass (queue 99/overlay is intentionally excluded).
-    mImpl->sprites[sprite.id - 1]->setRenderQueueGroup(Ogre::RENDER_QUEUE_8);
+    // Text is UI, so it must not be resampled through the pixelated buffer:
+    // PSX/Stylized draws these plaques itself, at native window resolution,
+    // in an extra render_scene pass on target_output (after stylize/bloom/
+    // dither). Two things put them there and only there:
+    //   - queue 100 (OVERLAY), which Ogre's implicit original-scene pass
+    //     (queues 0..95) never touches, and which the compositor chain's
+    //     render-queue listener refuses to skip on any target;
+    //   - the reserved visibility bit, which `target mrt` masks off -- that
+    //     is what actually keeps the plaque out of the low-res pass, since
+    //     queue 100 alone would still be drawn into it.
+    Ogre::BillboardSet* set = mImpl->sprites[sprite.id - 1];
+    set->setRenderQueueGroup(Ogre::RENDER_QUEUE_OVERLAY);
+    set->setVisibilityFlags(kFullResUiVisibilityFlag);
+    set->setCastShadows(false); // world UI, never a stencil-shadow caster
     return sprite;
 }
 
@@ -866,6 +876,11 @@ void Renderer::setPixelSize(int pixelSize)
 {
     mImpl->env.pixelSize = std::clamp(pixelSize, 1, 16);
     mImpl->core.setPixelSize(mImpl->env.pixelSize);
+}
+
+void Renderer::setRenderResolution(int width, int height)
+{
+    mImpl->core.setRenderResolution(width, height);
 }
 
 void Renderer::setPerPixelLightingEnabled(bool enabled)

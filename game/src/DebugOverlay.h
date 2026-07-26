@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 
 #include "RenderPresets.h" // eng::RenderPresetValues editable profile cache
+#include <eng/StepClock.h> // eng::StepChannel/StepRates in the Animation tab
 
 namespace eng { class Renderer; }
 
@@ -48,6 +49,7 @@ public:
         entt::entity player = entt::null;    // player entity in `registry`
         const ProfHud* prof = nullptr;
         ColliderDebug* colliders = nullptr;  // F3 collider-view settings
+        eng::StepClock* steps = nullptr;     // stop-motion animation rates
     };
 
     bool visible() const { return mVisible; }
@@ -59,6 +61,7 @@ public:
 
 private:
     void drawRenderTab(const Deps& d);
+    void drawAnimationTab(const Deps& d);
     void drawShadersTab(const Deps& d);
     void drawCombatTab(const Deps& d);
     void drawFeelTab(const Deps& d);
@@ -70,7 +73,9 @@ private:
     void loadProfile(const Deps& d, int id);
 
     bool mVisible = false;
-    int mPreset = 5;      // render-profile combo index (0-based; modern-ps1)
+    // Render-profile combo index (0-based; id = index + 1). Starts on the
+    // engine default so the panel opens showing the look that is actually live.
+    int mPreset = eng::kDefaultRenderPreset - 1; // dungeon
     bool mProfileInit = false; // mRp seeded from the initial profile yet?
     // Editable copy of the active render profile. Every Render/Shaders slider
     // edits a field here and pushes just that field to the renderer, so a full

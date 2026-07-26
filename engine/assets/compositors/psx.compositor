@@ -1,4 +1,6 @@
-// PSX post stack: scene -> low-res MRT -> stylizer -> dither -> window.
+// PSX post stack: scene -> low-res MRT -> stylizer -> dither -> window,
+// then world-space UI (text plaques) straight onto the window at native
+// resolution so its glyphs are never pixelated by the stack above.
 //
 // Texture sizes are target_width_scaled/target_height_scaled with factor
 // 1/pixelSize; RenderCore::setPixelSize patches the factors on the definition
@@ -20,6 +22,11 @@ compositor PSX/Stylized
 
         target mrt
         {
+            // Everything except world-space UI. Bit 30 is eng::kFullResUiVisibilityFlag
+            // (RenderCore.h): text plaques carry ONLY that bit, so masking it
+            // off culls them here while ordinary movables (default 0xFFFFFFFF
+            // flags) still pass. They are re-rendered full-res in target_output.
+            visibility_mask 0xBFFFFFFF
             input previous
         }
         target rt_post
@@ -87,10 +94,22 @@ compositor PSX/Stylized
         target_output
         {
             input none
+            // Ogre's implicit original-scene pass (feeding `target mrt` via
+            // `input previous`) covers queues BACKGROUND..TRANSPARENTS (0..95),
+            // so queue 100 is untouched by everything above. World-space text
+            // plaques live there and are drawn here instead: full window
+            // resolution, after pixelization/bloom/dither, so their glyphs are
+            // never resampled through the low-res buffer.
+            shadows off
             pass render_quad
             {
                 material PSX/DitherPost
                 input 0 rt_resolve
+            }
+            pass render_scene
+            {
+                first_render_queue 100
+                last_render_queue 100
             }
         }
     }

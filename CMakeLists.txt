@@ -78,6 +78,7 @@ add_library(
   engine/src/Engine.cpp
   engine/src/Physics.cpp
   engine/src/RenderPresets.cpp
+  engine/src/StepClock.cpp
   engine/src/SceneRegistry.cpp
   engine/src/ecs/Scene.cpp
   engine/src/ecs/SceneSync.cpp
@@ -134,6 +135,7 @@ eng_target_hardening(demo_scene)
 
 add_executable(psx_demo samples/psx-demo/src/main.cpp)
 target_link_libraries(psx_demo PRIVATE demo_scene)
+target_include_directories(psx_demo PRIVATE engine/src)
 target_compile_definitions(
   psx_demo
   PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/psx-demo/assets")
@@ -178,13 +180,10 @@ add_executable(
   game/src/scene/PhysicsSync.cpp
   game/src/scene/ByteStream.cpp
   game/src/scene/ComponentRegistry.cpp
-  game/src/scene/MapSerializer.cpp
-  # Compiled directly (not linked via the demo_scene lib) so building `game`
-  # never triggers a separate demo target.
-  samples/common/DemoScene.cpp)
+  game/src/scene/MapSerializer.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
                            game/src game/src/scene)
-target_link_libraries(game PRIVATE eng)
+target_link_libraries(game PRIVATE demo_scene)
 target_compile_definitions(
   game
   PRIVATE
@@ -424,6 +423,11 @@ if(BUILD_TESTING)
   target_include_directories(obj_geometry_tests PRIVATE engine/src engine/include)
   target_link_libraries(obj_geometry_tests PRIVATE eng glm::glm)
   add_test(NAME obj_geometry COMMAND obj_geometry_tests)
+
+  add_executable(step_clock_tests engine/tests/StepClockTests.cpp
+                                  engine/src/StepClock.cpp)
+  target_include_directories(step_clock_tests PRIVATE engine/include)
+  add_test(NAME step_clock COMMAND step_clock_tests)
 
   add_executable(core_object_tests engine/tests/CoreObjectTests.cpp
                                    engine/src/core/Object.cpp)

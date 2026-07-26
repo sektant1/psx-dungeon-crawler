@@ -190,6 +190,24 @@ void RenderCore::enablePostChain()
 void RenderCore::setPixelSize(int pixelSize)
 {
     mPixelSize = std::clamp(pixelSize, 1, 16);
+    mTargetW = mTargetH = 0; // divisor mode wins; drop any absolute target
+    applyChainSizes();
+}
+
+void RenderCore::setRenderResolution(int width, int height)
+{
+    // 0 in either axis means "go back to the window/pixelSize divisor".
+    if (width <= 0 || height <= 0) {
+        mTargetW = mTargetH = 0;
+    } else {
+        mTargetW = std::clamp(width, 64, 4096);
+        mTargetH = std::clamp(height, 64, 4096);
+    }
+    applyChainSizes();
+}
+
+void RenderCore::applyChainSizes()
+{
     if (!mViewport)
         return;
     Ogre::CompositorPtr comp =
@@ -199,20 +217,29 @@ void RenderCore::setPixelSize(int pixelSize)
     // Patch the definition; instances are rebuilt from it on re-add. Scaled
     // (widthFactor/heightFactor) textures also track window resizes for free.
     // Add a hair of upward rounding so the float size derivation truncates to
-    // window/pixelSize exactly (e.g. 960 * (1/3) must give 320, not 319).
-    const float f = 1.0f / float(mPixelSize) + 1e-6f;
-    const float fHalf = 0.5f / float(mPixelSize) + 1e-6f;
+    // the intended size exactly (e.g. 960 * (1/3) must give 320, not 319).
+    float fx = 1.0f / float(mPixelSize) + 1e-6f;
+    float fy = fx;
+    if (mTargetW > 0) {
+        // Absolute target: the console profiles want their real framebuffer
+        // (PS2 640x448, GameCube 640x480), not a fraction of whatever window
+        // the player happens to have. Per-axis factors, so the target holds its
+        // own aspect regardless of the window's -- Ogre keeps widthFactor and
+        // heightFactor separate for exactly this.
+        fx = float(mTargetW) / float(mViewport->getActualWidth()) + 1e-6f;
+        fy = float(mTargetH) / float(mViewport->getActualHeight()) + 1e-6f;
+    }
     const std::pair<const char*, float> texFactors[] = {
-        {"mrt", f}, {"rt_post", f}, {"rt_final", f}, {"rt_resolve", f},
-        {"rt_bright", fHalf}, {"rt_blur", fHalf},
+        {"mrt", 1.0f}, {"rt_post", 1.0f}, {"rt_final", 1.0f},
+        {"rt_resolve", 1.0f}, {"rt_bright", 0.5f}, {"rt_blur", 0.5f},
     };
     Ogre::CompositionTechnique* tech = comp->getTechnique(0);
-    for (auto& [name, factor] : texFactors) {
+    for (auto& [name, scale] : texFactors) {
         auto* def = tech->getTextureDefinition(name);
         if (!def)
             continue; // compositor script and this list drifted apart
-        def->widthFactor = factor;
-        def->heightFactor = factor;
+        def->widthFactor = fx * scale;
+        def->heightFactor = fy * scale;
     }
     // Rebuild the window's chain instance so it picks up the new sizes. The
     // editor RTT deliberately runs NO post chain (a clean, Godot-like scene
@@ -363,6 +390,13 @@ void RenderCore::onResize(int width, int height)
         return;
     mWindow->resize(width, height);
     mWindow->windowMovedOrResized();
+    // Divisor mode needs nothing here: Ogre rescales the chain's targets from
+    // the stored factors on its own. An absolute target does need it, because
+    // those same factors are relative to the window that was current when they
+    // were computed -- left alone, a resize would silently rescale a "640x448"
+    // buffer to something else.
+    if (mTargetW > 0)
+        applyChainSizes();
 }
 
 void RenderCore::writeScreenshot(const std::string& path)

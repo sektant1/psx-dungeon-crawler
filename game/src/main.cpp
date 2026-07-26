@@ -296,27 +296,15 @@ int main(int argc, char** argv)
     // ---------------------------------------------------------------- loop ---
     constexpr float kFixedDt = 1.0f / 60.0f;
     float accumulator = 0.0f;
-    float animTime = 0.0f;
-    // Stop-motion animation clock (OSRS look): particles, world anim, viewmodels
-    // and enemy/prop render-sync advance in 1/animFps snaps. 0/negative = full
-    // rate. Runtime var so a debug slider can retune it live.
-    float animFps = float(engine.config().getNumber("render.anim_fps", 15.0));
-    float visualAccum = 0.0f;
+    // Stop-motion animation clock (OSRS look). Engine::tick() advances it; each
+    // animated system below reads its own channel instead of the raw frame
+    // delta, so rates can differ per family (see eng/StepClock.h for why they
+    // must). Camera, input and physics stay full-rate: only the *look* is
+    // choppy. Rates come from [animation] in game.toml and are live-tweakable
+    // through the debug overlay's Animation section.
+    eng::StepClock& steps = engine.stepClock();
     while (!engine.shouldClose()) {
         const float dt = engine.tick();
-        // Quantize the animation clock. visualDt is 0 on most frames and jumps
-        // one (or more, if the frame ran long) step on a tick frame; camera,
-        // input and physics stay full-rate so only the *look* is choppy.
-        float visualDt = dt;
-        bool visualStep = true;
-        if (animFps > 0.0f) {
-            const float stepDur = 1.0f / animFps;
-            visualAccum += dt;
-            const int steps = int(visualAccum / stepDur);
-            visualDt = float(steps) * stepDur;
-            visualAccum -= visualDt;
-            visualStep = steps > 0;
-        }
         eng::Input& in = engine.input();
         using clk = std::chrono::steady_clock;
         auto phaseMs = [](clk::time_point t0) {
@@ -359,20 +347,29 @@ int main(int argc, char** argv)
         }
         physics.setInterpolationAlpha(accumulator / kFixedDt);
 
-        // Props, projectiles and spells stay full-rate (smooth). Only the enemy
-        // creature snaps at animFps: on non-tick frames its render node holds its
-        // last pose (physics still runs at 60 Hz above), giving the stop-motion
-        // creature movement without stepping projectiles/particles.
-        props.sync(ctx);
-        combat.syncRender(ctx);
-        if (dummyAlive && visualStep)
+        // Render-sync stepping. Each of these copies a physics transform onto a
+        // render node, so skipping the copy on a hold frame *is* the stop-motion:
+        // the node keeps its last pose while the 60 Hz simulation above carries
+        // on underneath, leaving collisions and hit registration untouched.
+        // Projectiles get their own faster channel so an arrow stays trackable
+        // rather than teleporting across the room in metre-long jumps.
+        if (steps.stepped(eng::StepChannel::World))
+            props.sync(ctx);
+        if (steps.stepped(eng::StepChannel::Projectiles))
+            combat.syncRender(ctx);
+        // Per-creature phase seed: with several enemies on screen and
+        // phase_jitter above 0 they stop snapping in unison like one puppet.
+        if (dummyAlive &&
+            steps.stepped(eng::StepChannel::Characters, dummy.body().id))
             dummy.syncRender(physics, r);
 
         prof.ms[ProfHud::Physics] = phaseMs(tPhysics);
 
         auto tWorld = clk::now();
-        animTime += visualDt; // world anim (torch flicker) snaps at animFps
-        level.update(r, animTime);
+        // World anim (torch flicker, animated dressing) is pose-from-time, so it
+        // takes the quantised clock directly rather than accumulating a delta --
+        // no drift, and it re-bases correctly if the rate is changed live.
+        level.update(r, steps.time(eng::StepChannel::World));
         level.updateVisibility(r, player.eyePosition());
         prof.ms[ProfHud::World] = phaseMs(tWorld);
 
@@ -469,10 +466,13 @@ int main(int argc, char** argv)
         auto tWeapons = clk::now();
         const bool aiming =
             in.mouseGrabbed() && in.isMouseDown(eng::MouseButton::Right);
-        // Player viewmodel (hands/weapon) snaps at animFps — the player half of
-        // the stop-motion look. Camera/movement stay full-rate above, so only
-        // the weapon animation is stepped, not the view itself.
-        playerSys.updateViewmodels(ctx, visualDt, swordAttack, didCast, aiming);
+        // Player viewmodel (hands/weapon) — the player's half of the look. Its
+        // own channel because it sits centimetres from the eye, where the rate
+        // that suits a distant creature reads about twice as harsh. Camera and
+        // movement stay full-rate above: the weapon animation is stepped, the
+        // view is not.
+        playerSys.updateViewmodels(ctx, steps.delta(eng::StepChannel::Viewmodel),
+                                   swordAttack, didCast, aiming);
         prof.ms[ProfHud::Weapons] = phaseMs(tWeapons);
 
         prof.pushFrame(dt * 1000.0f);
@@ -489,6 +489,7 @@ int main(int argc, char** argv)
             deps.player = playerEntity;
             deps.prof = &prof;
             deps.colliders = &colliderDbg;
+            deps.steps = &steps;
             debugUi.draw(deps);
             perf.draw(&prof, &r);
 

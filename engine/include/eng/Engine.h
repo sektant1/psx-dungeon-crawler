@@ -2,6 +2,7 @@
 #include <eng/Config.h>
 #include <eng/Input.h>
 #include <eng/Renderer.h>
+#include <eng/StepClock.h>
 #include <eng/System.h>
 
 #include <memory>
@@ -28,10 +29,12 @@ public:
     bool shouldClose() const { return mClose; }
     void requestClose() { mClose = true; }
     // dt = wall time (drives the benchmark/screenshot hooks); animDt = the time
-    // Ogre advances particles + time-based animation by. Pass animDt < 0 (the
-    // default) to use dt. A game can quantize animDt (e.g. hold it at 0 between
-    // 15 Hz ticks) for a stop-motion / OSRS look while the scene still renders
-    // and the camera still moves every frame.
+    // Ogre advances particles + time-based animation by.
+    //
+    // Pass animDt < 0 (the default) to take it from the step clock's Particles
+    // channel, so particle VFX are stepped in step with everything else without
+    // each game having to remember to do it. Pass an explicit value to override,
+    // or 0 to freeze Ogre-side animation for a frame.
     void renderFrame(float dt, float animDt = -1.0f);
     void shutdown();
 
@@ -50,6 +53,13 @@ public:
     Input& input() { return mInput; }
     Config& config() { return mConfig; }
 
+    // Quantised animation clock (stop-motion / OSRS stepping). tick() advances
+    // it, so a game only reads from it: ask each animated system's channel for
+    // its time/delta instead of using the raw frame delta. Rates are seeded from
+    // the [animation] config table in init() and are live-tweakable.
+    StepClock& stepClock() { return mStepClock; }
+    const StepClock& stepClock() const { return mStepClock; }
+
     // System registry (SPEngine-style). Additive: the existing tick()/
     // renderFrame() loop is unchanged; a game opts in by registering systems
     // and calling updateSystems(dt) from its loop.
@@ -63,11 +73,17 @@ public:
     }
 
 private:
+    // Frame-clock half of tick(): frame limiter, fixed-step capture override,
+    // and the 0.1 s spike clamp. Split out so tick() has one exit point and can
+    // always feed the step clock.
+    float measureFrameDelta();
+
     struct Impl;
     std::unique_ptr<Impl> mImpl;
     Config mConfig;
     Input mInput;
     Renderer mRenderer;
+    StepClock mStepClock;
     bool mClose = false;
     std::vector<System::StrongPtr> mSystems;
 };

@@ -1,5 +1,5 @@
 [window]
-title = "ogre-psx-demo"
+title = "PSX Dungeon Crawler -- Engine Tech Demo"
 width = 960
 height = 720
 
@@ -7,3 +7,5 @@ height = 720
 pause = ["Space", "Return"]
 restart = "R"
 quit = "Escape"
+preset_next = "Tab"
+preset_prev = "Backspace"

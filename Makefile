@@ -1,7 +1,7 @@
 # Convenience wrapper around the CMake build + run/test CLI.
 #
 # Quick start:
-#   make            configure (if needed) + build everything
+#   make            configure (if needed) + build the game
 #   make run        build + run the game
 #   make help       full target + option reference
 #
@@ -57,16 +57,42 @@ endif
 # Positional game argument (e.g. a .map file to play).
 RUN_ARGS := $(MAP)
 
-.PHONY: all build run game demo mapgen sim test asan bench screenshot \
-        deps docs debug clean help
+.PHONY: all configure build build-all build-game build-demo build-mapgen build-sim \
+        run game demo mapgen sim test asan bench screenshot deps docs debug \
+        clean help
 
 all: build
 
 # ---- build -----------------------------------------------------------------
-build:
-	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
-	      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+# Avoid re-running CMake on every invocation. CMake's generated build system
+# still performs its own dependency check, so edits to CMake inputs regenerate
+# normally when cmake --build runs.
+configure:
+	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ] || \
+	    ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
+		cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
+		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON; \
+	fi
+
+build-all: configure
 	cmake --build $(BUILD_DIR) -j$(JOBS)
+
+# Run-oriented commands build only their required target. In particular this
+# keeps the demo, map generator, simulation harness, and test executables out
+# of the edit/build/run loop for the game.
+build-game: configure
+	cmake --build $(BUILD_DIR) --target game -j$(JOBS)
+
+build: build-game
+
+build-demo: configure
+	cmake --build $(BUILD_DIR) --target psx_demo -j$(JOBS)
+
+build-mapgen: configure
+	cmake --build $(BUILD_DIR) --target mapgen -j$(JOBS)
+
+build-sim: configure
+	cmake --build $(BUILD_DIR) --target game_sim -j$(JOBS)
 
 # Detects pacman/apt/dnf/zypper/apk/brew; installs toolchain + SDL2 + glm,
 # then OGRE >= 14 (distro package where available, source build otherwise).
@@ -75,25 +101,25 @@ deps:
 
 # ---- run -------------------------------------------------------------------
 # `run` is the primary entry point; `game` is a back-compat alias.
-run game: build
+run game: build-game
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game $(RUN_ARGS)
 
-demo: build
+demo: build-demo
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./psx_demo
 
 # Generate a .map from a BSP seed: make mapgen SEED=7 OUT=out.map
-mapgen: build
+mapgen: build-mapgen
 	cd $(BUILD_DIR) && ./mapgen $(if $(SEED),$(SEED),1) $(if $(OUT),$(OUT),out.map)
 
 # Headless playthrough/action simulation (no window). Runs a scripted action
 # sequence through the game systems and reports pass/fail.
 #   make sim                       run the built-in smoke script
 #   make sim SCRIPT=path/to.txt    run a custom action script
-sim: build
+sim: build-sim
 	cd $(BUILD_DIR) && ./game_sim $(if $(SCRIPT),$(abspath $(SCRIPT)),)
 
 # ---- test / analysis -------------------------------------------------------
-test: build
+test: build-all
 	cd $(BUILD_DIR) && ctest --output-on-failure
 
 # Address/UB/Leak sanitizer build of game + game_sim (test targets aren't
@@ -103,11 +129,11 @@ asan:
 	cmake --build build-asan --target game game_sim -j$(JOBS)
 
 # Frame-time percentiles over N frames (default 300), vsync off for real cost.
-bench: build
+bench: build-game
 	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_BENCH_FRAMES=$(if $(BENCH),$(BENCH),300) ./game
 
 # Deterministic screenshot capture (fixed timestep). Requires SHOT=<path>.
-screenshot: build
+screenshot: build-game
 ifndef SHOT
 	$(error set SHOT=<path.png> (optional FRAME=<n>, SEED=<n>, PRESET=<name>))
 endif
@@ -136,7 +162,8 @@ help:
 	@echo "psx-dungeon-crawler build/run CLI"
 	@echo ""
 	@echo "Targets:"
-	@echo "  make [build]        configure + build all targets"
+	@echo "  make [build]        configure + build the game"
+	@echo "  make build-all      build every executable and test target"
 	@echo "  make run            build + run the game (alias: game)"
 	@echo "  make demo           build + run the PSX shader sample"
 	@echo "  make mapgen         generate a .map (SEED=, OUT=)"

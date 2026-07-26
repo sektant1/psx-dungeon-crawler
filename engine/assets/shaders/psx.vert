@@ -48,6 +48,14 @@ smooth out vec3 vNormalSmooth;
 const vec2 base_snap_res = vec2(512.0, 448.0);
 vec4 get_snapped_pos(vec4 base_pos)
 {
+    // Vertices at or behind the eye have w <= 0, where the NDC divide sends xy
+    // to +/-inf and floor() folds them back across the screen as a stray
+    // triangle. Leave those to the clipper. Godot's version gets away without
+    // the guard because it snaps at a resolution fine enough to hide it; the
+    // PS1 profile's grid is coarse enough that it shows.
+    if (base_pos.w < 1e-4)
+        return base_pos;
+
     vec4 snapped_pos = base_pos;
     snapped_pos.xyz = base_pos.xyz / base_pos.w; // to NDC
     vec2 snap_res = floor(base_snap_res * precisionMultiplier);

@@ -185,6 +185,10 @@ public:
     // --- post + verification ---------------------------------------------
     void setDitherEnabled(bool enabled);
     void setPixelSize(int pixelSize);      // 1..16, rebuilds the post chain
+    // Absolute post-chain resolution, held across window resizes, for profiles
+    // that emulate a specific console framebuffer (PS2 640x448, GameCube
+    // 640x480). Overrides setPixelSize; 0 in either axis reverts to it.
+    void setRenderResolution(int width, int height);
     void setPerPixelLightingEnabled(bool enabled); // off = authentic vertex-lit
     void setOmniAttenuation(float exponent); // omni falloff curve, 1 = linear
     void setLightSteps(float steps); // posterized diffuse bands, 0 = smooth

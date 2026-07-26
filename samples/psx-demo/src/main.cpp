@@ -3,13 +3,16 @@
 // is shared with the game: samples/common/DemoScene + demo_scene.toml.
 
 #include "DemoScene.h"
+#include "RenderPresets.h"
 
 #include <eng/Engine.h>
 #include <eng/Math.h>
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <array>
 #include <cmath>
+#include <cstdlib>
 #include <string>
 
 namespace {
@@ -22,6 +25,46 @@ struct OrbitCamera {
     {
         r.setOrientation(node, glm::angleAxis(baseYaw + t, glm::vec3(0, 1, 0)));
     }
+};
+
+// The engine's flagship feature: live-swappable render profiles. All of these
+// mirror PSX_RENDER_PRESET names. "Dungeon" leads because it is the engine
+// default (eng::kDefaultRenderPreset) -- the game's own dark-fantasy look
+// rather than an era emulation; 1-6 are the console/pixel-art profiles.
+struct PresetEntry { int id; const char* name; };
+constexpr std::array<PresetEntry, 7> kPresets{{
+    {7, "Dungeon"}, {1, "PS1"}, {2, "PS2"}, {3, "GameCube"},
+    {4, "N64"}, {5, "Pixel-3D"}, {6, "Modern PS1"},
+}};
+
+// Floating placard (same diegetic label style as the game's showcase
+// exhibits) naming the demo and the live preset. Text sprites have no
+// update-in-place API, so refreshing the label means destroying and
+// re-attaching the node.
+class PresetSign {
+public:
+    explicit PresetSign(eng::NodeHandle parent) : mParent(parent) {}
+
+    void show(eng::Renderer& r, const std::string& presetName)
+    {
+        if (mNode.valid())
+            r.destroyNode(mNode);
+        mNode = r.createNode(mParent, {0.0f, 1.15f, 0.0f});
+        eng::TextSpriteStyle style;
+        style.worldHeight = 0.30f;
+        style.accentColour = {0.90f, 0.70f, 0.30f, 1.0f};
+        style.colourRules.push_back({presetName, {0.95f, 0.82f, 0.38f, 1.0f}});
+        r.attachTextSprite(
+            mNode,
+            "PSX DUNGEON CRAWLER -- ENGINE DEMO\n"
+            "Preset: " + presetName + "\n"
+            "[Tab]/[Backspace] preset  [Space] pause  [R] restart  [Esc] quit",
+            style);
+    }
+
+private:
+    eng::NodeHandle mParent;
+    eng::NodeHandle mNode{};
 };
 
 } // namespace
@@ -102,6 +145,19 @@ int main(int, char**)
         glow.range = 6.0f;
         chestGlow = r.attachLight(chestBase, glow);
     }
+
+    // ------------------------------------------------------ preset sign ---
+    // Seed from PSX_RENDER_PRESET (already applied once by Engine::init) so
+    // the label matches reality, then let Tab/Backspace cycle it live.
+    size_t presetIndex = 0;
+    if (const char* presetName = std::getenv("PSX_RENDER_PRESET")) {
+        const int id = eng::renderPresetFromName(presetName);
+        for (size_t i = 0; i < kPresets.size(); ++i)
+            if (kPresets[i].id == id)
+                presetIndex = i;
+    }
+    PresetSign sign(chestBase);
+    sign.show(r, kPresets[presetIndex].name);
 
     // ------------------------------------------------------ set dressing ---
     // Medieval props (meshes/props, materials/props.material — same
@@ -275,6 +331,14 @@ int main(int, char**)
             paused = !paused;
         if (in.wasPressed("restart"))
             animTime = 0.0f;
+        if (in.wasPressed("preset_next") || in.wasPressed("preset_prev")) {
+            const size_t n = kPresets.size();
+            presetIndex = in.wasPressed("preset_next")
+                              ? (presetIndex + 1) % n
+                              : (presetIndex + n - 1) % n;
+            eng::applyRenderPreset(r, eng::renderPresetValues(kPresets[presetIndex].id));
+            sign.show(r, kPresets[presetIndex].name);
+        }
 
         if (!paused)
             animTime += dt;

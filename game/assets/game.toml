@@ -13,11 +13,28 @@ vsync = false
 limit_fps = false
 max_fps = 144
 
-[render]
-# Stop-motion animation rate (OSRS look): player viewmodel, enemy creatures and
-# world animation (torch flicker) snap at 1/anim_fps. Camera, movement,
-# projectiles, spells and particles stay full-rate. 0 = full rate everything.
-anim_fps = 19
+# Stop-motion animation stepping (OSRS / claymation look). Each channel holds
+# its pose between snaps at its own rate; 0 = that channel runs smooth. See
+# engine/include/eng/StepClock.h for what each channel covers.
+#
+# Camera, player movement, physics and UI are deliberately NOT stepped and have
+# no channel here: stepping the view reads as input lag and makes people motion
+# sick, and stepping locomotion makes the controls feel broken rather than
+# stylised. Physics keeps running at 60 Hz under every stepped channel, so
+# collisions and hit registration are never affected by these numbers.
+#
+# 12 Hz is the rate the look is named after: classic stop-motion is 24 fps shot
+# on twos, i.e. 12 distinct poses a second. Tune live in the debug overlay's
+# Animation tab (F1) and paste the result back here.
+[animation]
+enabled = true
+scale = 1.0            # multiplies every rate below
+characters_fps = 12    # enemies/NPCs: the channel that carries the look
+viewmodel_fps = 14     # hands/weapon: a touch faster, it sits next to the eye
+world_fps = 12         # props, torch flicker, animated dressing
+particles_fps = 12     # VFX; smooth particles beside stepped chars look broken
+projectiles_fps = 30   # arrows/spells must stay trackable, so: fast
+phase_jitter = 0.35    # spread per-object step phase so crowds aren't one puppet
 
 [player]
 speed = 3.0

@@ -33,6 +33,11 @@ int main()
         "col_depth = 15.0\n"
         "sun_colour_srgb = [0.1, 0.2, 0.3]\n");
 
+    // Compared against instead of literals: these assertions are about the
+    // inheritance rule ("absent key -> struct default"), not about what the
+    // current look happens to be, so retuning the palette must not break them.
+    const RenderPalette def;
+
     // Present keys override; absent keys keep struct defaults.
     RenderPalette p;
     require(loadRenderPalette(path, "dungeon", p), "dungeon table must load");
@@ -42,21 +47,23 @@ int main()
                 near(p.sunColourSrgb.z, 0.3f),
             "sun_colour_srgb parsed as 3-vector");
     // An unspecified field keeps its default.
-    require(near(p.ambientScale, 0.25f), "unspecified field keeps default");
-    require(near(p.bloomIntensity, 0.72f), "unspecified bloom keeps default");
+    require(near(p.ambientScale, def.ambientScale),
+            "unspecified field keeps default");
+    require(near(p.bloomIntensity, def.bloomIntensity),
+            "unspecified bloom keeps default");
 
     // Missing table returns false and leaves the struct untouched.
     RenderPalette q;
     require(!loadRenderPalette(path, "nonexistent", q),
             "missing table must return false");
-    require(near(q.fogDensity, 0.050f), "failed load leaves defaults");
+    require(near(q.fogDensity, def.fogDensity), "failed load leaves defaults");
 
     // Unparseable file returns false.
     writeFile(path, "this is = = not valid toml [[[\n");
     RenderPalette r;
     require(!loadRenderPalette(path, "dungeon", r),
             "unparseable file must return false");
-    require(near(r.fogDensity, 0.050f), "parse failure leaves defaults");
+    require(near(r.fogDensity, def.fogDensity), "parse failure leaves defaults");
 
     std::cout << "RenderPaletteTests: OK\n";
     return 0;

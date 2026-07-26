@@ -15,6 +15,15 @@ class Viewport;
 
 namespace eng {
 
+// Visibility bit reserved for full-resolution world-space UI (text plaques).
+// Objects tagged with ONLY this bit are culled from PSX/Stylized's low-res
+// scene pass (`target mrt` masks it off) and drawn instead by the extra
+// render_scene pass on target_output, at native window resolution. Ordinary
+// movables keep Ogre's default 0xFFFFFFFF flags, so they pass both masks.
+// MUST stay in sync with the visibility_mask in assets/compositors/psx.compositor.
+inline constexpr uint32_t kFullResUiVisibilityFlag = 0x40000000u;
+inline constexpr uint32_t kLowResSceneVisibilityMask = ~kFullResUiVisibilityFlag;
+
 // Internal: owns Ogre::Root and hides Ogre lifetime rules. Root is the first
 // Ogre object created and the last destroyed. Also a RenderTargetListener: it
 // paints the engine's own Dear ImGui frame onto the window after the scene (and
@@ -32,7 +41,12 @@ public:
     // already active. Idempotent; the chain stays on once up.
     void enablePostChain();
     // Rebuilds the chain with RT sizes = window / pixelSize. Clamped 1..16.
+    // Clears any absolute resolution set by setRenderResolution().
     void setPixelSize(int pixelSize);
+    // Rebuilds the chain at an absolute RT size, independent of the window, for
+    // the profiles that emulate a specific console framebuffer. Held across
+    // window resizes. 0 in either axis reverts to the pixelSize divisor.
+    void setRenderResolution(int width, int height);
     // Material edits on compositor render_quad passes need a chain recompile
     // before the cloned pass material sees the new GPU params.
     void markPostChainDirty();
@@ -92,6 +106,12 @@ private:
     bool mChainEnabled = false; // chain was ever requested (one-way; gates the
                                 // setPixelSize re-add on cold start)
     int mPixelSize = 3;
+    // > 0: absolute chain resolution, overriding mPixelSize (see
+    // setRenderResolution). Both axes are set/cleared together.
+    int mTargetW = 0, mTargetH = 0;
+    // Patches the compositor definition's texture factors from mPixelSize or
+    // mTargetW/H and rebuilds the window's chain instance.
+    void applyChainSizes();
 
     // Editor offscreen RTT (scene + post baked into a texture for ImGui::Image).
     Ogre::TexturePtr mOffscreenTex;

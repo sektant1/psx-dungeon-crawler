@@ -20,8 +20,11 @@ namespace {
 
 constexpr float kPanelWidth = 360.0f;
 
-const char* const kPresetNames[] = {"ps1",  "ps2",      "gamecube",
-                                    "n64",  "pixel-3d", "modern-ps1"};
+// Index i maps to profile id i+1, so this must stay in renderPresetFromName's
+// numbering order. "dungeon" (id 7) is eng::kDefaultRenderPreset.
+const char* const kPresetNames[] = {"ps1",      "ps2",        "gamecube",
+                                    "n64",      "pixel-3d",   "modern-ps1",
+                                    "dungeon"};
 
 bool section(const char* label)
 {
@@ -69,6 +72,7 @@ void DebugOverlay::draw(const Deps& d)
 
     if (ImGui::BeginTabBar("##dbgtabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
         if (ImGui::BeginTabItem("Render"))    { drawRenderTab(d);    ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Animation")) { drawAnimationTab(d); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Shaders"))   { drawShadersTab(d);   ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Colliders")) { drawCollidersTab(d); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Combat"))    { drawCombatTab(d);    ImGui::EndTabItem(); }
@@ -110,8 +114,28 @@ void DebugOverlay::drawRenderTab(const Deps& d)
     }
 
     if (section("Pixelation")) {
-        if (ImGui::SliderInt("Pixel size", &v.pixelSize, 1, 16))
+        // Absolute resolution wins over the divisor when both are set, so show
+        // which one is actually live rather than leaving the slider lying.
+        bool absRes = v.targetWidth > 0 && v.targetHeight > 0;
+        if (ImGui::Checkbox("Absolute resolution", &absRes)) {
+            if (absRes) {
+                v.targetWidth = 640; v.targetHeight = 448;
+                r->setRenderResolution(v.targetWidth, v.targetHeight);
+            } else {
+                v.targetWidth = v.targetHeight = 0;
+                r->setPixelSize(v.pixelSize); // also clears the absolute target
+            }
+        }
+        if (absRes) {
+            int wh[2] = {v.targetWidth, v.targetHeight};
+            if (ImGui::InputInt2("Resolution", wh)) {
+                v.targetWidth = std::clamp(wh[0], 64, 4096);
+                v.targetHeight = std::clamp(wh[1], 64, 4096);
+                r->setRenderResolution(v.targetWidth, v.targetHeight);
+            }
+        } else if (ImGui::SliderInt("Pixel size", &v.pixelSize, 1, 16)) {
             r->setPixelSize(v.pixelSize);
+        }
         if (ImGui::Checkbox("Per-pixel lighting", &v.perPixel))
             r->setPerPixelLightingEnabled(v.perPixel);
         if (ImGui::SliderFloat("Precision mult", &v.precisionMultiplier, 0.25f, 4.0f))
@@ -136,6 +160,14 @@ void DebugOverlay::drawRenderTab(const Deps& d)
         ch |= ImGui::SliderFloat("Intensity", &v.bloomIntensity, 0.0f, 2.0f);
         if (ch)
             r->setBloomParams(v.bloomThreshold, v.bloomIntensity);
+        // Off: bilinear upsample from the half-res blur, so the glow ramps
+        // across a render pixel. On: the glow is built out of render pixels.
+        bool snap = v.bloomPixelSnap >= 0.5f;
+        if (ImGui::Checkbox("Snap to pixel grid##bloom", &snap)) {
+            v.bloomPixelSnap = snap ? 1.0f : 0.0f;
+            r->setMaterialParam("PSX/BloomComposite", "bloomPixelSnap",
+                                v.bloomPixelSnap);
+        }
     }
 
     if (section("Colour Grade")) {
@@ -199,6 +231,92 @@ void DebugOverlay::drawRenderTab(const Deps& d)
     }
 }
 
+// ------------------------------------------------------------- Animation ----
+// Stop-motion / OSRS stepping rates, per channel. See eng/StepClock.h for what
+// each channel covers and why the camera, player movement and UI are absent.
+
+void DebugOverlay::drawAnimationTab(const Deps& d)
+{
+    eng::StepClock* clk = d.steps;
+    if (!clk) { ImGui::TextDisabled("Step clock unavailable."); return; }
+    eng::StepRates& sr = clk->rates();
+
+    if (section("Master")) {
+        ImGui::Checkbox("Stepping enabled", &sr.enabled);
+        ImGui::SliderFloat("Rate scale", &sr.scale, 0.25f, 4.0f, "%.2fx");
+        ImGui::TextDisabled("Scales every channel at once: <1 chunkier, >1 smoother.");
+        ImGui::SliderFloat("Phase jitter", &sr.phaseJitter, 0.0f, 1.0f);
+        ImGui::TextDisabled("0 = whole channel snaps on one frame.\n"
+                            "1 = each object gets its own step phase, so a\n"
+                            "crowd stops moving like a single puppet.");
+    }
+
+    if (section("Channels (Hz, 0 = smooth)")) {
+        for (int i = 0; i < eng::kStepChannelCount; ++i) {
+            const eng::StepChannel c = eng::StepChannel(i);
+            ImGui::PushID(i);
+            ImGui::SliderFloat(eng::stepChannelName(c), &sr.rate[i], 0.0f, 60.0f,
+                               "%.0f");
+            // Effective rate after scale/enable, so the slider never lies about
+            // what is actually running.
+            const float step = clk->stepDuration(c);
+            ImGui::SameLine();
+            if (step > 0.0f)
+                ImGui::TextDisabled("= %.0f Hz (%.0f ms)", 1.0f / step,
+                                    step * 1000.0f);
+            else
+                ImGui::TextDisabled("= smooth");
+            ImGui::PopID();
+        }
+        ImGui::TextDisabled(
+            "12 Hz is the classic stop-motion rate (24 fps shot on twos).\n"
+            "Keep projectiles well above the rest or arrows teleport.");
+    }
+
+    if (section("Presets")) {
+        // Whole-look starting points, since the interesting part is the ratio
+        // between channels rather than any single number.
+        struct Row { const char* name; float ch, vm, wo, pa, pr; const char* hint; };
+        static constexpr Row kRows[] = {
+            {"Off (smooth)",   0, 0, 0, 0, 0,  "Everything continuous."},
+            {"Subtle (24/30)", 24, 24, 24, 24, 60, "Barely stepped; reads as low-budget anim."},
+            {"OSRS-ish (15)",  15, 15, 15, 15, 30, "Middle ground; what this game shipped with."},
+            {"Stop-motion (12)", 12, 12, 12, 12, 30, "Classic on-twos. The default."},
+            {"Puppet (8)",     8, 8, 10, 8, 24, "Heavily stylised; hurts readability."},
+        };
+        for (const Row& r : kRows) {
+            if (ImGui::Button(r.name, ImVec2(-FLT_MIN, 0))) {
+                sr.enabled = r.ch > 0.0f || r.pr > 0.0f;
+                sr.rate[int(eng::StepChannel::Characters)] = r.ch;
+                sr.rate[int(eng::StepChannel::Viewmodel)] = r.vm;
+                sr.rate[int(eng::StepChannel::World)] = r.wo;
+                sr.rate[int(eng::StepChannel::Particles)] = r.pa;
+                sr.rate[int(eng::StepChannel::Projectiles)] = r.pr;
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", r.hint);
+        }
+    }
+
+    if (section("Export")) {
+        if (ImGui::Button("Copy as TOML", ImVec2(-FLT_MIN, 0))) {
+            char buf[512];
+            std::snprintf(buf, sizeof(buf),
+                "[animation]\nenabled = %s\nscale = %.3f\nphase_jitter = %.3f\n"
+                "characters_fps = %.1f\nviewmodel_fps = %.1f\nworld_fps = %.1f\n"
+                "particles_fps = %.1f\nprojectiles_fps = %.1f\n",
+                sr.enabled ? "true" : "false", sr.scale, sr.phaseJitter,
+                sr.rate[int(eng::StepChannel::Characters)],
+                sr.rate[int(eng::StepChannel::Viewmodel)],
+                sr.rate[int(eng::StepChannel::World)],
+                sr.rate[int(eng::StepChannel::Particles)],
+                sr.rate[int(eng::StepChannel::Projectiles)]);
+            ImGui::SetClipboardText(buf);
+        }
+        ImGui::TextDisabled("Paste into game.toml to make it the default.");
+    }
+}
+
 // --------------------------------------------------------------- Shaders ----
 // Every PSX stylize-shader parameter, so a render profile is fully reproducible.
 
@@ -243,7 +361,9 @@ void DebugOverlay::drawShadersTab(const Deps& d)
             r->setMaterialParam(kStylize, "outlineEnabled", v.outlinesEnabled ? 1.0f : 0.0f);
         if (ImGui::SliderFloat("Opacity##ol", &v.outlineOpacity, 0.0f, 1.0f))
             r->setMaterialParam(kStylize, "outlineOpacity", v.outlineOpacity);
-        if (ImGui::SliderFloat("Thickness##ol", &v.outlineThickness, 0.5f, 4.0f))
+        // Whole render pixels: the shader rounds the kernel offset to a texel,
+        // so fractional widths only ever landed on one of these anyway.
+        if (ImGui::SliderFloat("Thickness (px)##ol", &v.outlineThickness, 1.0f, 4.0f, "%.0f"))
             r->setMaterialParam(kStylize, "outlineThickness", v.outlineThickness);
         if (ImGui::SliderFloat("Depth sens##ol", &v.outlineDepthSens, 0.0f, 32.0f))
             r->setMaterialParam(kStylize, "outlineDepthSens", v.outlineDepthSens);
@@ -259,6 +379,17 @@ void DebugOverlay::drawShadersTab(const Deps& d)
             r->setMaterialParam(kStylize, "outlineColor", v.outlineColor);
     }
 
+    // Splits interior normal edges between the highlight and the crease terms.
+    // At 1.0 a convex fold can only ever be highlighted and a concave one can
+    // only ever be inked, which is what makes low-res edges read as geometry.
+    if (section("Edge classification")) {
+        if (ImGui::SliderFloat("Convex split", &v.edgeConvexity, 0.0f, 1.0f))
+            r->setMaterialParam(kStylize, "edgeConvexity", v.edgeConvexity);
+        if (ImGui::SliderFloat("Convex bias", &v.edgeConvexBias, 0.001f, 0.5f))
+            r->setMaterialParam(kStylize, "edgeConvexBias", v.edgeConvexBias);
+        ImGui::TextDisabled("0 = every edge feeds both terms (legacy).");
+    }
+
     if (section("Hardware Resolve")) {
         if (ImGui::SliderFloat("Mode", &v.hardwareResolveMode, 0.0f, 8.0f, "%.0f"))
             r->setMaterialParam("PSX/HardwareResolve", "resolveMode", v.hardwareResolveMode);
@@ -268,12 +399,13 @@ void DebugOverlay::drawShadersTab(const Deps& d)
 
     ImGui::Separator();
     if (ImGui::Button("Copy profile as TOML", ImVec2(-FLT_MIN, 0))) {
-        char buf[2048];
+        char buf[3072];
         std::snprintf(buf, sizeof(buf),
             "[render_profile]\n"
-            "pixel_size = %d\nprecision_multiplier = %.4f\naffine_amount = %.4f\n"
+            "pixel_size = %d\ntarget_width = %d\ntarget_height = %d\n"
+            "precision_multiplier = %.4f\naffine_amount = %.4f\n"
             "per_pixel = %s\nbanded_lighting = %s\nband_light_steps = %.3f\nstep_softness = %.4f\n"
-            "bloom = %s\nbloom_threshold = %.4f\nbloom_intensity = %.4f\n"
+            "bloom = %s\nbloom_threshold = %.4f\nbloom_intensity = %.4f\nbloom_pixel_snap = %.4f\n"
             "grade_desaturate = %.4f\ngrade_contrast = %.4f\ngrade_saturation = %.4f\n"
             "grade_tint_strength = %.4f\ngrade_black_lift = %.4f\n"
             "grade_shadow = [%.4f, %.4f, %.4f]\ngrade_mid = [%.4f, %.4f, %.4f]\n"
@@ -282,10 +414,12 @@ void DebugOverlay::drawShadersTab(const Deps& d)
             "stylize = %s\nink = %s\nink_strength = %.4f\nink_threshold = %.4f\nink_color = [%.4f, %.4f, %.4f]\n"
             "highlights = %s\nhighlight_strength = %.4f\nhighlight_threshold = %.4f\nhighlight_dark_fade = %.4f\nhighlight_color = [%.4f, %.4f, %.4f]\n"
             "outlines = %s\noutline_opacity = %.4f\noutline_thickness = %.4f\noutline_depth_sens = %.4f\noutline_normal_sens = %.4f\noutline_sharpness = %.4f\noutline_dist_fade = %.4f\noutline_dark_fade = %.4f\noutline_color = [%.4f, %.4f, %.4f]\n"
+            "edge_convexity = %.4f\nedge_convex_bias = %.4f\n"
             "hw_resolve_mode = %.3f\nhw_resolve_strength = %.4f\n",
-            v.pixelSize, v.precisionMultiplier, v.affineAmount,
+            v.pixelSize, v.targetWidth, v.targetHeight,
+            v.precisionMultiplier, v.affineAmount,
             v.perPixel?"true":"false", v.bandedLightingEnabled?"true":"false", v.bandedLightSteps, v.stepSoftness,
-            v.bloom?"true":"false", v.bloomThreshold, v.bloomIntensity,
+            v.bloom?"true":"false", v.bloomThreshold, v.bloomIntensity, v.bloomPixelSnap,
             v.gradeDesaturate, v.gradeContrast, v.gradeSaturation, v.gradeTintStrength, v.gradeBlackLift,
             v.gradeShadow.x, v.gradeShadow.y, v.gradeShadow.z, v.gradeMid.x, v.gradeMid.y, v.gradeMid.z,
             v.colDepth, v.ditherBanding, v.ditherDarkFade,
@@ -293,6 +427,7 @@ void DebugOverlay::drawShadersTab(const Deps& d)
             v.stylizeEnabled?"true":"false", v.inkEnabled?"true":"false", v.inkStrength, v.inkThreshold, v.inkColor.x, v.inkColor.y, v.inkColor.z,
             v.highlightsEnabled?"true":"false", v.highlightStrength, v.highlightThreshold, v.highlightDarkFade, v.highlightColor.x, v.highlightColor.y, v.highlightColor.z,
             v.outlinesEnabled?"true":"false", v.outlineOpacity, v.outlineThickness, v.outlineDepthSens, v.outlineNormalSens, v.outlineSharpness, v.outlineDistFade, v.outlineDarkFade, v.outlineColor.x, v.outlineColor.y, v.outlineColor.z,
+            v.edgeConvexity, v.edgeConvexBias,
             v.hardwareResolveMode, v.hardwareResolveStrength);
         ImGui::SetClipboardText(buf);
     }
