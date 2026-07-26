@@ -16,7 +16,7 @@ namespace eng { class Renderer; }
 struct PortalPropStyle {
     std::string material = "Game/PortalDown";
     std::string frameMaterial = "Game/DungeonTileTwoSided";
-    std::string particles = "sparkles"; // particle EFFECT name (particles.toml)
+    std::string particles = "engine.portal_wisps";
     glm::vec3 lightColour{1.05f, 0.20f, 1.45f};
     float yawDegrees = 0.0f;
     float lightRange = 5.5f;

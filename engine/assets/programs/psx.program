@@ -511,6 +511,34 @@ fragment_program BlockParticle_FS glsl
     }
 }
 
+fragment_program MoteParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_MOTE=1
+    default_params { param_named alphaScissor float 0.04 }
+}
+
+fragment_program ShardParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_SHARD=1
+    default_params { param_named alphaScissor float 0.04 }
+}
+
+fragment_program BubbleParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_BUBBLE=1
+    default_params { param_named alphaScissor float 0.025 }
+}
+
+fragment_program WispParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_WISP=1
+    default_params { param_named alphaScissor float 0.03 }
+}
+
 vertex_program Stylize_VS glsl
 {
     source quad.vert
@@ -531,6 +559,7 @@ fragment_program Stylize_FS glsl
         param_named shadowStrength float 0.4
         param_named highlightStrength float 0.1
         param_named shadowColor float3 0.0 0.0 0.0
+        param_named highlightColorOverride float 0.0
         param_named highlightColor float3 1.0 1.0 1.0
         param_named outlineThickness float 1.0
         param_named shadowThreshold float 0.25

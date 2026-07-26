@@ -41,6 +41,10 @@ int main()
     const std::string materials = read("engine/assets/materials/psx.material");
     const std::string shader = read("engine/assets/shaders/particle.frag");
     const std::string runtime = read("engine/src/particles/Particles.cpp");
+    const std::string presets =
+        read("engine/src/particles/ParticlePresets.cpp");
+    const std::string presetHeader =
+        read("engine/include/eng/particles/ParticlePresets.h");
 
     requireText(runtime, "kNonVisibleUpdateTimeout = 0.25f",
                 "particles need a short offscreen simulation grace");
@@ -68,6 +72,39 @@ int main()
     require(shader.find("defined(PROCEDURAL_RAIN)") != std::string::npos,
             "particle shader implements procedural rain");
 
+    for (const char* preset :
+         {"engine.arcane_motes", "engine.frost_shards",
+          "engine.toxic_bubbles", "engine.portal_wisps"}) {
+        requireText(presetHeader, preset,
+                    "modern pixel particle preset is missing");
+    }
+    for (const char* define :
+         {"PROCEDURAL_MOTE", "PROCEDURAL_SHARD",
+          "PROCEDURAL_BUBBLE", "PROCEDURAL_WISP"}) {
+        requireText(shader, define,
+                    "modern pixel particle mask is missing");
+        requireText(programs, define,
+                    "modern pixel particle program is missing");
+    }
+    for (const char* materialName :
+         {"material Engine/Particles/ArcaneMote",
+          "material Engine/Particles/FrostShard",
+          "material Engine/Particles/ToxicBubble",
+          "material Engine/Particles/PortalWisp"}) {
+        requireText(materials, materialName,
+                    "modern pixel particle material is missing");
+    }
+    requireText(presets,
+                "base(Fire, \"Engine/Particles/Fire\", 0.22f, 0.27f, 64)",
+                "fire particles lack the quality-first size/quota");
+    requireText(presets,
+                "base(Poison, \"Engine/Particles/Poison\", 0.20f, 0.26f, 72)",
+                "poison particles lack the quality-first size/quota");
+    requireText(presets, "{1.35f,0.12f,0.025f",
+                "fire palette is not saturated HDR");
+    requireText(presets, "{0.18f,1.30f,0.045f",
+                "poison palette is not saturated HDR");
+
     const std::string showcase = read("game/assets/lobby_showcase.toml");
     for (const char* id : {"fire_particles", "smoke_particles",
                            "rain_volume"}) {
@@ -82,7 +119,7 @@ int main()
                 "poison altar has nested particle options");
     requireText(poison, "size_scale = 1.8",
                 "poison altar enlarges its particles");
-    requireText(poison, "amount_scale = 2.0",
+    requireText(poison, "amount_scale = 3.0",
                 "poison altar increases particle density");
     requireText(poison, "lifetime_scale = 1.15",
                 "poison altar extends particle lifetime");
@@ -96,7 +133,7 @@ int main()
                 "lava ash altar has nested particle options");
     requireText(lavaAsh, "size_scale = 1.7",
                 "lava ash altar enlarges its particles");
-    requireText(lavaAsh, "amount_scale = 2.25",
+    requireText(lavaAsh, "amount_scale = 3.0",
                 "lava ash altar increases particle density");
     requireText(lavaAsh, "lifetime_scale = 1.2",
                 "lava ash altar extends particle lifetime");

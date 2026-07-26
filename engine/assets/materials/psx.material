@@ -212,6 +212,50 @@ material Engine/Particles/Rain
     } }
 }
 
+material Engine/Particles/ArcaneMote
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref MoteParticle_FS { }
+    } }
+}
+
+material Engine/Particles/FrostShard
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref ShardParticle_FS { }
+    } }
+}
+
+material Engine/Particles/ToxicBubble
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref BubbleParticle_FS { }
+    } }
+}
+
+material Engine/Particles/PortalWisp
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref WispParticle_FS { }
+    } }
+}
+
 material PSX/LitAlphaScissor    // psx_lit_alpha-scissor.gdshader
 {
     technique { pass {

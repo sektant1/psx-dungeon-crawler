@@ -68,6 +68,39 @@ void main()
                       step(2.0, p.x) * step(p.x, 2.0) *
                       step(0.0, p.y) * step(p.y, 1.0));
     fragColour = vec4(particleColour.rgb, alpha * particleColour.a);
+#elif defined(PROCEDURAL_MOTE)
+    vec2 cell = floor(particleUV * 5.0);
+    vec2 d = abs(cell - vec2(2.0));
+    float body = 1.0 - step(2.1, d.x + d.y);
+    float core = 1.0 - step(0.6, max(d.x, d.y));
+    vec3 colour = particleColour.rgb * (0.72 + core * 0.72);
+    fragColour = vec4(colour, body * particleColour.a);
+#elif defined(PROCEDURAL_SHARD)
+    vec2 cell = floor(particleUV * vec2(5.0, 7.0));
+    float y = cell.y;
+    float halfWidth = y < 2.0 ? 0.5 : (y < 5.0 ? 1.5 : 0.5);
+    float body = 1.0 - step(halfWidth + 0.1, abs(cell.x - 2.0));
+    float facet = step(2.0, y) * (1.0 - step(4.1, y)) *
+                  step(2.0, cell.x);
+    vec3 colour = particleColour.rgb * (0.70 + facet * 0.62);
+    fragColour = vec4(colour, body * particleColour.a);
+#elif defined(PROCEDURAL_BUBBLE)
+    vec2 cell = floor(particleUV * 7.0) - vec2(3.0);
+    float radius2 = dot(cell, cell);
+    float outer = 1.0 - step(10.5, radius2);
+    float inner = 1.0 - step(4.5, radius2);
+    float ring = outer * (1.0 - inner);
+    float glint = step(1.5, -cell.x) * step(1.5, cell.y);
+    vec3 colour = particleColour.rgb * (0.78 + glint * 0.58);
+    fragColour = vec4(colour, max(ring, glint) * particleColour.a);
+#elif defined(PROCEDURAL_WISP)
+    vec2 cell = floor(particleUV * vec2(7.0, 9.0));
+    float curve = 3.0 + sin((cell.y + 1.0) * 0.72) * 1.35;
+    float width = mix(1.8, 0.55, cell.y / 8.0);
+    float body = 1.0 - step(width, abs(cell.x - curve));
+    float head = (1.0 - step(1.25, length(cell - vec2(3.0, 6.5))));
+    vec3 colour = particleColour.rgb * (0.68 + head * 0.78);
+    fragColour = vec4(colour, max(body * 0.82, head) * particleColour.a);
 #else
     vec4 texel = texture(albedoTex, particleUV);
     fragColour = texel * particleColour;
