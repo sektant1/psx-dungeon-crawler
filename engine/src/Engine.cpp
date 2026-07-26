@@ -1,6 +1,7 @@
 #include <eng/Engine.h>
 
 #include <eng/Log.h>
+#include <eng/render/FrameCapture.h>
 
 #include "InputImpl.h"
 #include "Platform.h"
@@ -29,6 +30,7 @@ struct Engine::Impl {
     int screenshotFrame = 90;
     int benchmarkFrames = 0;
     std::vector<float> frameSamples;
+    FrameCapture frameCapture;
     // Frame limiter: minimum seconds per frame (0 = uncapped). Paces the loop
     // when vsync is off so the GPU isn't driven flat out.
     float minFrameSec = 0.0f;
@@ -142,6 +144,10 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
         mImpl->benchmarkFrames = std::max(1, std::atoi(frames));
         mImpl->frameSamples.reserve(size_t(mImpl->benchmarkFrames));
     }
+    mImpl->frameCapture = FrameCapture::fromEnvironment();
+    if (mImpl->frameCapture.requested())
+        log::info("RenderDoc: capture requested for frame %d",
+                  mImpl->frameCapture.requestedFrame());
     // Deterministic capture: Ogre's ParticleFX emitters draw from C rand(),
     // which some init path reseeds from wall-clock time. Pin it to a constant
     // so fire/ash/spark emission is identical every run (seed here, before any
@@ -254,7 +260,19 @@ void Engine::renderFrame(float dt, float animDt)
                       frames, partSteps, charSteps, projSteps);
     }
     mRenderer.updateParticles(adt); // recycle finished one-shot particle systems
+    const int renderedFrame = mImpl->frameCount + 1;
+    mImpl->frameCapture.beforeFrame(renderedFrame);
     detail::coreOf(mRenderer).renderFrame(adt);
+    mImpl->frameCapture.afterFrame(renderedFrame);
+    if (mImpl->frameCapture.failed()) {
+        log::error("RenderDoc: requested frame %d was not captured",
+                   mImpl->frameCapture.requestedFrame());
+        mClose = true;
+    } else if (mImpl->frameCapture.completed()) {
+        log::info("RenderDoc: captured frame %d",
+                  mImpl->frameCapture.requestedFrame());
+        mClose = true;
+    }
     // Headless-friendly performance regression hook. Skip the first 60 frames
     // so shader/texture warm-up cannot masquerade as steady-state spikes.
     if (mImpl->benchmarkFrames > 0 && mImpl->frameCount >= 60 && dt > 0.0f) {

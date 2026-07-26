@@ -7,6 +7,7 @@
 
 #include <eng/Engine.h>
 #include <eng/Math.h>
+#include <eng/Primitive.h>
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -93,7 +94,12 @@ int main(int, char**)
     r.attachCamera(camNode);
 
     // --------------------------------------------------------- Background ---
-    eng::MeshHandle bgMesh = r.createInteriorBox(40.0f, 25);
+    eng::PrimitiveMeshDesc background;
+    background.kind = eng::PrimitiveKind::Box;
+    background.size = glm::vec3(40.0f);
+    background.inwardFacing = true;
+    background.subdivisions = 25;
+    eng::MeshHandle bgMesh = r.createPrimitiveMesh(background);
     r.attachMesh(r.createNode(eng::kRootNode, {0.0f, 20.0f, 0.0f}), bgMesh,
                  "PSX/Floor");
 

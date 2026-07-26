@@ -4,105 +4,308 @@
 #include <glm/glm.hpp>
 
 #include <fstream>
+#include <memory>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 namespace ObjLoader {
 
 namespace {
+
+Ogre::Matrix4 toOgre(const glm::mat4& matrix)
+{
+    Ogre::Matrix4 result;
+    for (int row = 0; row < 4; ++row)
+        for (int column = 0; column < 4; ++column)
+            result[row][column] = matrix[column][row];
+    return result;
+}
+
 struct Vert {
-    Ogre::Vector3 p;
-    Ogre::ColourValue c{1, 1, 1, 1};
+    Ogre::Vector3 position;
+    Ogre::ColourValue colour{1, 1, 1, 1};
 };
 
-// "1/2/3" | "1//3" | "1" -> zero-based indices (OBJ is 1-based, may be negative)
-void parseFaceRef(const std::string& tok, int nv, int nt, int nn,
-                  int& vi, int& ti, int& ni)
-{
-    vi = ti = ni = -1;
-    int part = 0;
-    size_t start = 0;
-    for (size_t i = 0; i <= tok.size(); ++i) {
-        if (i == tok.size() || tok[i] == '/') {
-            if (i > start) {
-                int idx = std::stoi(tok.substr(start, i - start));
-                int count = part == 0 ? nv : (part == 1 ? nt : nn);
-                idx = idx > 0 ? idx - 1 : count + idx;
-                (part == 0 ? vi : part == 1 ? ti : ni) = idx;
-            }
-            start = i + 1;
-            ++part;
-        }
-    }
-}
-} // namespace
+struct FaceVertex {
+    int position = -1;
+    int uv = -1;
+    int normal = -1;
+};
 
-void load(const std::string& filePath, const std::string& meshName,
-          const Ogre::Matrix4& bake)
-{
-    std::ifstream in(filePath);
-    if (!in)
-        OGRE_EXCEPT(Ogre::Exception::ERR_FILE_NOT_FOUND, filePath, "ObjLoader::load");
+struct Face {
+    std::vector<FaceVertex> vertices;
+    std::string material;
+};
 
-    const Ogre::Matrix3 nrmMat =
-        bake.linear().Inverse().Transpose(); // normals: inverse transpose
-
+// One source representation is parsed once, then transformed and consumed by
+// both Ogre upload and CPU collision capture.
+struct ParsedObj {
     std::vector<Vert> positions;
     std::vector<Ogre::Vector2> uvs;
     std::vector<Ogre::Vector3> normals;
+    std::vector<Face> faces;
+    std::vector<std::string> materialLibraries;
+};
 
-    auto* mo = new Ogre::ManualObject(meshName + "_mo");
-    mo->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
-    Ogre::uint32 nextIndex = 0;
+struct PartialMeshGuard {
+    explicit PartialMeshGuard(std::string resourceName)
+        : name(std::move(resourceName))
+    {}
 
-    std::string line;
-    while (std::getline(in, line)) {
-        std::istringstream ls(line);
-        std::string tag;
-        if (!(ls >> tag) || tag.empty() || tag[0] == '#')
-            continue;
-        if (tag == "v") {
-            Vert v;
-            ls >> v.p.x >> v.p.y >> v.p.z;
-            float r, g, b, a;
-            if (ls >> r >> g >> b) {
-                v.c.r = r; v.c.g = g; v.c.b = b;
-                if (ls >> a) v.c.a = a;
-            }
-            v.p = bake * v.p;
-            positions.push_back(v);
-        } else if (tag == "vt") {
-            Ogre::Vector2 t;
-            ls >> t.x >> t.y;
-            t.y = 1.0f - t.y; // Godot OBJ importer convention
-            uvs.push_back(t);
-        } else if (tag == "vn") {
-            Ogre::Vector3 n;
-            ls >> n.x >> n.y >> n.z;
-            n = nrmMat * n;
-            n.normalise();
-            normals.push_back(n);
-        } else if (tag == "f") {
-            std::vector<Ogre::uint32> face;
-            std::string tok;
-            while (ls >> tok) {
-                int vi, ti, ni;
-                parseFaceRef(tok, (int)positions.size(), (int)uvs.size(),
-                             (int)normals.size(), vi, ti, ni);
-                const Vert& v = positions[vi];
-                mo->position(v.p);
-                mo->normal(ni >= 0 ? normals[ni] : Ogre::Vector3::UNIT_Y);
-                mo->textureCoord(ti >= 0 ? uvs[ti] : Ogre::Vector2::ZERO);
-                mo->colour(v.c);
-                face.push_back(nextIndex++);
-            }
-            for (size_t i = 2; i < face.size(); ++i) // fan-triangulate polygons
-                mo->triangle(face[0], face[i - 1], face[i]);
+    ~PartialMeshGuard()
+    {
+        if (keep)
+            return;
+        try {
+            Ogre::MeshManager* manager =
+                Ogre::MeshManager::getSingletonPtr();
+            if (manager && manager->getByName(name))
+                manager->remove(name);
+        } catch (...) {
+            // Cleanup must never replace the original load exception.
         }
     }
-    mo->end();
-    mo->convertToMesh(meshName);
-    delete mo;
+
+    std::string name;
+    bool keep = false;
+};
+
+// "1/2/3" | "1//3" | "1" -> zero-based indices (OBJ is 1-based, may be
+// negative).
+FaceVertex parseFaceRef(const std::string& token, int positionCount,
+                        int uvCount, int normalCount)
+{
+    FaceVertex result;
+    int part = 0;
+    size_t start = 0;
+    for (size_t i = 0; i <= token.size(); ++i) {
+        if (i != token.size() && token[i] != '/')
+            continue;
+        if (i > start) {
+            int index = std::stoi(token.substr(start, i - start));
+            const int count =
+                part == 0 ? positionCount :
+                (part == 1 ? uvCount : normalCount);
+            index = index > 0 ? index - 1 : count + index;
+            if (part == 0)
+                result.position = index;
+            else if (part == 1)
+                result.uv = index;
+            else
+                result.normal = index;
+        }
+        start = i + 1;
+        ++part;
+    }
+    return result;
+}
+
+ParsedObj parse(const std::string& filePath)
+{
+    std::ifstream input(filePath);
+    if (!input)
+        OGRE_EXCEPT(Ogre::Exception::ERR_FILE_NOT_FOUND, filePath,
+                    "ObjLoader::parse");
+
+    ParsedObj parsed;
+    std::string activeMaterial;
+    std::string line;
+    while (std::getline(input, line)) {
+        std::istringstream values(line);
+        std::string tag;
+        if (!(values >> tag) || tag.empty() || tag[0] == '#')
+            continue;
+
+        if (tag == "v") {
+            Vert vertex;
+            values >> vertex.position.x >> vertex.position.y >>
+                vertex.position.z;
+            float red, green, blue, alpha;
+            if (values >> red >> green >> blue) {
+                vertex.colour.r = red;
+                vertex.colour.g = green;
+                vertex.colour.b = blue;
+                if (values >> alpha)
+                    vertex.colour.a = alpha;
+            }
+            parsed.positions.push_back(vertex);
+        } else if (tag == "vt") {
+            Ogre::Vector2 uv;
+            values >> uv.x >> uv.y;
+            uv.y = 1.0f - uv.y;
+            parsed.uvs.push_back(uv);
+        } else if (tag == "vn") {
+            Ogre::Vector3 normal;
+            values >> normal.x >> normal.y >> normal.z;
+            parsed.normals.push_back(normal);
+        } else if (tag == "mtllib") {
+            std::string library;
+            while (values >> library)
+                parsed.materialLibraries.push_back(library);
+        } else if (tag == "usemtl") {
+            std::getline(values >> std::ws, activeMaterial);
+        } else if (tag == "f") {
+            Face face;
+            face.material = activeMaterial;
+            std::string token;
+            while (values >> token)
+                face.vertices.push_back(parseFaceRef(
+                    token, int(parsed.positions.size()),
+                    int(parsed.uvs.size()), int(parsed.normals.size())));
+            parsed.faces.push_back(std::move(face));
+        }
+    }
+    return parsed;
+}
+
+std::vector<glm::vec3> sourcePositions(const ParsedObj& parsed)
+{
+    std::vector<glm::vec3> result;
+    result.reserve(parsed.positions.size());
+    for (const Vert& vertex : parsed.positions)
+        result.push_back({vertex.position.x, vertex.position.y,
+                          vertex.position.z});
+    return result;
+}
+
+void transform(ParsedObj& parsed, const Ogre::Matrix4& bake)
+{
+    const Ogre::Matrix3 normalMatrix =
+        bake.linear().Inverse().Transpose();
+    for (Vert& vertex : parsed.positions)
+        vertex.position = bake * vertex.position;
+    for (Ogre::Vector3& normal : parsed.normals) {
+        normal = normalMatrix * normal;
+        normal.normalise();
+    }
+}
+
+ParsedObj parseCanonical(const std::string& filePath,
+                         const eng::ModelImportOptions& options)
+{
+    ParsedObj parsed = parse(filePath);
+    const std::vector<glm::vec3> positions =
+        sourcePositions(parsed);
+    if (positions.empty())
+        OGRE_EXCEPT(Ogre::Exception::ERR_INVALIDPARAMS,
+                    "OBJ contains no usable positions",
+                    "ObjLoader::parseCanonical");
+    transform(parsed, toOgre(
+        eng::modelImportBakeMatrix(options, positions)));
+    return parsed;
+}
+
+void captureGeometry(const ParsedObj& parsed,
+                     std::vector<glm::vec3>& outVerts,
+                     std::vector<uint32_t>& outIndices)
+{
+    outVerts.clear();
+    outIndices.clear();
+    outVerts.reserve(parsed.positions.size());
+    for (const Vert& vertex : parsed.positions)
+        outVerts.push_back({vertex.position.x, vertex.position.y,
+                            vertex.position.z});
+    for (const Face& face : parsed.faces) {
+        std::vector<uint32_t> positions;
+        positions.reserve(face.vertices.size());
+        for (const FaceVertex& vertex : face.vertices)
+            if (vertex.position >= 0 &&
+                vertex.position < int(parsed.positions.size()))
+                positions.push_back(uint32_t(vertex.position));
+        detail::appendTriangleFan(positions, outIndices);
+    }
+}
+
+void upload(ParsedObj& parsed, const std::string& meshName,
+            std::vector<glm::vec3>* outVerts,
+            std::vector<uint32_t>* outIndices)
+{
+    PartialMeshGuard partialMesh(meshName);
+    auto manual = std::make_unique<Ogre::ManualObject>(meshName + "_mo");
+    // The existing loader intentionally produces one submesh. Parsed material
+    // declarations are retained for future indexed remapping, but the current
+    // attachment path remains source-compatible.
+    manual->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
+    Ogre::uint32 nextIndex = 0;
+
+    if (outVerts && outIndices)
+        captureGeometry(parsed, *outVerts, *outIndices);
+    else {
+        if (outVerts) {
+            std::vector<uint32_t> ignored;
+            captureGeometry(parsed, *outVerts, ignored);
+        }
+        if (outIndices) {
+            std::vector<glm::vec3> ignored;
+            captureGeometry(parsed, ignored, *outIndices);
+        }
+    }
+
+    for (const Face& face : parsed.faces) {
+        std::vector<Ogre::uint32> renderFace;
+        renderFace.reserve(face.vertices.size());
+        for (const FaceVertex& reference : face.vertices) {
+            if (reference.position < 0 ||
+                reference.position >= int(parsed.positions.size()))
+                continue;
+            const Vert& vertex = parsed.positions[reference.position];
+            manual->position(vertex.position);
+            manual->normal(
+                reference.normal >= 0 &&
+                        reference.normal < int(parsed.normals.size())
+                    ? parsed.normals[reference.normal]
+                    : Ogre::Vector3::UNIT_Y);
+            manual->textureCoord(
+                reference.uv >= 0 &&
+                        reference.uv < int(parsed.uvs.size())
+                    ? parsed.uvs[reference.uv]
+                    : Ogre::Vector2::ZERO);
+            manual->colour(vertex.colour);
+            renderFace.push_back(nextIndex++);
+        }
+        for (size_t i = 2; i < renderFace.size(); ++i)
+            manual->triangle(renderFace[0], renderFace[i - 1],
+                             renderFace[i]);
+    }
+    manual->end();
+    manual->convertToMesh(meshName);
+    partialMesh.keep = true;
+}
+
+} // namespace
+
+namespace detail {
+
+void appendTriangleFan(const std::vector<uint32_t>& face,
+                       std::vector<uint32_t>& outIndices)
+{
+    for (size_t i = 2; i < face.size(); ++i) {
+        outIndices.push_back(face[0]);
+        outIndices.push_back(face[i - 1]);
+        outIndices.push_back(face[i]);
+    }
+}
+
+} // namespace detail
+
+void load(const std::string& filePath, const std::string& meshName,
+          const Ogre::Matrix4& bake,
+          std::vector<glm::vec3>* outVerts,
+          std::vector<uint32_t>* outIndices)
+{
+    ParsedObj parsed = parse(filePath);
+    transform(parsed, bake);
+    upload(parsed, meshName, outVerts, outIndices);
+}
+
+void load(const std::string& filePath, const std::string& meshName,
+          const eng::ModelImportOptions& options,
+          std::vector<glm::vec3>* outVerts,
+          std::vector<uint32_t>* outIndices)
+{
+    ParsedObj parsed = parseCanonical(filePath, options);
+    upload(parsed, meshName, outVerts, outIndices);
 }
 
 bool loadGeometry(const std::string& filePath,
@@ -110,38 +313,32 @@ bool loadGeometry(const std::string& filePath,
                   std::vector<uint32_t>& outIndices,
                   const Ogre::Matrix4& bake)
 {
-    std::ifstream file(filePath);
-    if (!file) return false;
-    std::vector<Ogre::Vector3> positions;
-    std::string line;
-    while (std::getline(file, line)) {
-        std::istringstream ss(line);
-        std::string tag;
-        ss >> tag;
-        if (tag == "v") {
-            float x, y, z;
-            ss >> x >> y >> z;
-            Ogre::Vector3 p = bake * Ogre::Vector3(x, y, z);
-            positions.push_back(p);
-        } else if (tag == "f") {
-            std::vector<int> vs;
-            std::string tok;
-            while (ss >> tok) {
-                int vi, ti, ni;
-                parseFaceRef(tok, int(positions.size()), 0, 0, vi, ti, ni);
-                if (vi >= 0) vs.push_back(vi);
-            }
-            for (size_t i = 2; i < vs.size(); ++i) {
-                outIndices.push_back(uint32_t(vs[0]));
-                outIndices.push_back(uint32_t(vs[i - 1]));
-                outIndices.push_back(uint32_t(vs[i]));
-            }
-        }
+    try {
+        ParsedObj parsed = parse(filePath);
+        transform(parsed, bake);
+        captureGeometry(parsed, outVerts, outIndices);
+        return true;
+    } catch (...) {
+        outVerts.clear();
+        outIndices.clear();
+        return false;
     }
-    outVerts.reserve(positions.size());
-    for (const Ogre::Vector3& p : positions)
-        outVerts.push_back(glm::vec3(p.x, p.y, p.z));
-    return true;
+}
+
+bool loadGeometry(const std::string& filePath,
+                  std::vector<glm::vec3>& outVerts,
+                  std::vector<uint32_t>& outIndices,
+    const eng::ModelImportOptions& options)
+{
+    try {
+        ParsedObj parsed = parseCanonical(filePath, options);
+        captureGeometry(parsed, outVerts, outIndices);
+        return true;
+    } catch (...) {
+        outVerts.clear();
+        outIndices.clear();
+        return false;
+    }
 }
 
 } // namespace ObjLoader

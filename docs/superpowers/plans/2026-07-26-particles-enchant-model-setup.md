@@ -11,6 +11,8 @@
 ## Global Constraints
 
 - Existing particle spawn and enchantment calls remain source-compatible.
+- Model import may intentionally replace legacy pivot/unit/material behavior;
+  migrate in-repository callers instead of preserving inconsistent conventions.
 - Pooled particle overrides must never leak into later spawns.
 - Enchantments preserve every submesh's base material and work without usable UVs.
 - Dynamic triangle-mesh colliders are rejected; dynamic defaults use primitive colliders.
@@ -108,7 +110,150 @@
 - [ ] Ensure failed body creation destroys the render node and cleanup invalidates returned handles.
 - [ ] Run model and physics tests; expect pass.
 
-### Task 5: Integration verification
+### Task 5: Standardized model import
+
+**Files:**
+- Create: `engine/include/eng/render/ModelImport.h`
+- Modify: `engine/include/eng/Renderer.h`
+- Modify: `engine/src/Renderer.cpp`
+- Modify: `engine/src/ObjLoader.h`
+- Modify: `engine/src/ObjLoader.cpp`
+- Modify: `engine/include/eng/Model.h`
+- Create: `engine/tests/ModelImportTests.cpp`
+- Modify: `CMakeLists.txt`
+
+**Interfaces:**
+- Consumes: mesh bounds/collision geometry and `spawnModel` from Task 4.
+- Produces: `ModelImportOptions`, `PivotMode`, stable import cache keys, and option-aware OBJ/model loading.
+
+- [ ] Write failing pure tests for Source, BoundsCenter, BottomCenter, and Custom pivot transforms using asymmetric bounds.
+- [ ] Test canonical metres/+Y-up/-Z-forward defaults, normal transforms, and rejection of non-finite/zero transforms.
+- [ ] Test that transformed render positions, bounds, and collision positions use the identical canonical matrix.
+- [ ] Add deterministic cache-key tests proving distinct pivot/custom transforms never alias and identical options do.
+- [ ] Implement `ModelImportOptions` and pure sanitization/matrix/cache-key helpers.
+- [ ] Route option-aware OBJ loading through one transformed geometry stream used for both Ogre mesh creation and collision capture.
+- [ ] Migrate in-repository authored-pivot callers to explicit Source import;
+  legacy import overloads may be removed when the cleaner API replaces them.
+- [ ] Add default material fallback plus indexed submesh remapping to model setup; log and use the engine prototype material for missing names.
+- [ ] Run model-import, model, OBJ-geometry, engine, and game tests.
+
+### Task 6: Performance regression audit and optimization
+
+**Files:**
+- Modify: focused renderer/particle/showcase files identified by measurements
+- Create: `engine/tests/RenderCostTests.cpp` if stable structural budgets can be tested
+- Modify: `CMakeLists.txt` only when adding the focused test
+
+**Interfaces:**
+- Consumes all visual systems from Tasks 1–5.
+- Produces measured feature-level cost evidence and optimized runtime behavior.
+
+- [ ] Record the reported regression baseline: approximately 3 ms / 66 draw
+  calls / 19k triangles before versus 9 ms / 172 draw calls / 42k triangles
+  after in the lobby.
+- [ ] Add or use existing feature toggles to isolate enchant passes, particles,
+  labels, showcase composite props, shadows, and lobby dressing one at a time.
+- [ ] Capture render time, draw calls, triangles, live particle counts, cloned
+  enchant materials/passes, loaded meshes, and visible text sprites per case.
+- [ ] Rank measured costs and state one root-cause hypothesis per optimization.
+- [ ] Add structural regression tests for the dominant deterministic counts
+  before changing production code.
+- [ ] Optimize dominant causes using shared meshes/material variants, static
+  batching/instancing where valid, visibility/range culling, particle quotas,
+  and avoiding unnecessary enchant passes or shadow casters.
+- [ ] Preserve visual identity and per-use customization; do not globally
+  disable particles, enchantments, labels, or shadows.
+- [ ] Rebuild and rerun focused tests after each isolated optimization.
+- [ ] Report before/after draw-call, triangle, and render-time evidence. If the
+  environment cannot open the graphical runtime, provide a reproducible
+  benchmark command and mark user-side FPS confirmation explicitly pending.
+
+### Task 7: Unified primitive shape API and ring removal
+
+**Files:**
+- Create: `engine/include/eng/Primitive.h`
+- Create: `engine/src/render/Primitive.cpp`
+- Modify: `engine/include/eng/Renderer.h`
+- Modify: `engine/src/Renderer.cpp`
+- Modify: `engine/src/ProceduralMeshes.h`
+- Modify: `engine/src/ProceduralMeshes.cpp`
+- Modify: `game/src/SceneFactory.cpp`
+- Modify: affected game/demo authored content
+- Create: `engine/tests/PrimitiveTests.cpp`
+- Modify: `CMakeLists.txt`
+
+**Interfaces:**
+- Consumes: Renderer, Physics, enchant descriptors, and model-style instance
+  ownership.
+- Produces: one render/physics primitive descriptor and removes generic rings.
+
+- [ ] Define `PrimitiveKind`: Box, BeveledBox, Sphere, Capsule, Cylinder, Cone,
+  Plane, and Disc; do not include Ring.
+- [ ] Define `PrimitiveDesc` with transform, dimensions, tessellation, material,
+  shadows, optional enchantment, collider mode/layer/dynamics, and physical
+  properties.
+- [ ] Add pure validation plus mapping from each render shape to its default
+  physics shape/dimensions; plane uses configurable thin box collision and cone
+  uses a documented cylinder approximation unless collision is disabled.
+- [ ] Add or consolidate procedural mesh generators so
+  `Renderer::createPrimitiveMesh(desc)` is the only generic primitive entry.
+- [ ] Add `spawnPrimitive(Renderer&, Physics&, desc)` and matching cleanup,
+  returning node/mesh/body handles with the same ownership guarantees as models.
+- [ ] Remove `createPortalRing`/generic ring generation and migrate every call:
+  particle altars use cylinder/disc bowls and staffs use sphere/cone
+  composition.
+- [ ] Remove authored portal-arch mesh usage and its dedicated assets. Build
+  portals from two beveled primitive pillars, a primitive lintel, and the
+  membrane; no ring or arch mesh remains.
+- [ ] Search the repository to prove no ring primitive/model/material use remains
+  except unrelated prose/math terminology.
+- [ ] Add tests covering mesh dispatch, collider mappings, validation, cleanup,
+  and the repository ring-removal contract.
+- [ ] Build engine/game and run primitive/model/physics/lobby tests.
+
+### Task 8: Headless visual benchmark and RenderDoc AI tooling
+
+**Files:**
+- Create: `engine/include/eng/render/FrameCapture.h`
+- Create: `engine/src/render/FrameCapture.cpp`
+- Modify: `engine/src/Engine.cpp`
+- Create: `tools/visual_test.py`
+- Create: `tools/renderdoc-mcp.example.toml`
+- Modify: `Makefile`
+- Modify: `CMakeLists.txt`
+- Create: `engine/tests/FrameCaptureTests.cpp`
+- Create: `docs/renderdoc-ai-testing.md`
+
+**Interfaces:**
+- Consumes: screenshot/benchmark environment hooks and RenderDoc 1.45 API when
+  available.
+- Produces: deterministic headless run/capture commands and machine-readable
+  JSON artifacts for AI CLI/MCP consumers.
+
+- [ ] Add a probe that reports JSON capability state for display, GL/EGL,
+  `renderdoccmd`, RenderDoc app API, screenshot output, and MCP CLI.
+- [ ] Add a headless runner using `xvfb-run`/Xvfb with llvmpipe fallback,
+  isolated temporary Xauthority/display selection, deterministic fixed timestep,
+  and explicit actionable errors when the system dependency is missing.
+- [ ] Add `make visual-test`, `make visual-bench`, and `make renderdoc-capture`
+  targets that call the runner and write JSON metrics/screenshots/captures under
+  a caller-selected artifact directory.
+- [ ] Dynamically discover the RenderDoc in-application API and support
+  `PSX_RENDERDOC_FRAME=<n>` plus `PSX_RENDERDOC_CAPTURE=<path>` without a hard
+  runtime dependency. Start/end exactly one frame and log capture status.
+- [ ] Wrap `renderdoccmd capture` with no-vsync/no-fullscreen, working directory,
+  wait-for-exit, deterministic capture template, and benchmark/screenshot env.
+- [ ] Provide an AI CLI JSON schema/commands for probe, benchmark, screenshot,
+  capture, latest-artifact, and validation.
+- [ ] Provide a RenderDoc MCP configuration example compatible with the
+  third-party `renderdoc-mcp` stdio server, but keep it optional and never
+  download/execute third-party binaries silently.
+- [ ] Add tests for command construction, capability JSON, artifact discovery,
+  and missing-dependency diagnostics.
+- [ ] Run an actual headless screenshot/benchmark and RenderDoc capture in this
+  environment after installing/locating Xvfb; verify nonempty PNG/JSON/RDC.
+
+### Task 9: Integration verification
 
 **Files:**
 - Modify only files needed to resolve integration failures.

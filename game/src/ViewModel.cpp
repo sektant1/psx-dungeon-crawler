@@ -5,6 +5,7 @@
 #include "ViewModel.h"
 #include "ParticleEffects.h"
 
+#include <eng/Primitive.h>
 #include <eng/Renderer.h>
 
 #include <glm/glm.hpp>
@@ -116,7 +117,10 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
 
     // Shaft: a unit beveled box stretched long+thin via a child node, so the
     // uniform viewmodel scale stays on mNode (mirrors the barrel multi-mesh).
-    const eng::MeshHandle shaft = r.createBeveledBox(0.06f);
+    eng::PrimitiveMeshDesc shaftDesc;
+    shaftDesc.kind = eng::PrimitiveKind::BeveledBox;
+    shaftDesc.bevel = 0.06f;
+    const eng::MeshHandle shaft = r.createPrimitiveMesh(shaftDesc);
     eng::NodeHandle shaftNode = r.createNode(mNode, glm::vec3(0.0f));
     r.attachMesh(shaftNode, shaft, "Game/PropPlanks", false, true);
     r.setScale(shaftNode, glm::vec3(1.0f, 12.0f, 1.0f));
@@ -159,7 +163,10 @@ void ViewModel::initTorch(eng::Renderer& r, eng::NodeHandle headNode,
     mNode = r.createNode(headNode, mPose.position);
 
     // Handle: a short wood rod (unit box stretched on a child node).
-    const eng::MeshHandle handle = r.createBeveledBox(0.06f);
+    eng::PrimitiveMeshDesc handleDesc;
+    handleDesc.kind = eng::PrimitiveKind::BeveledBox;
+    handleDesc.bevel = 0.06f;
+    const eng::MeshHandle handle = r.createPrimitiveMesh(handleDesc);
     eng::NodeHandle handleNode = r.createNode(mNode, glm::vec3(0.0f));
     r.attachMesh(handleNode, handle, "Game/PropPlanks", false, true);
     r.setScale(handleNode, glm::vec3(1.0f, 8.0f, 1.0f));

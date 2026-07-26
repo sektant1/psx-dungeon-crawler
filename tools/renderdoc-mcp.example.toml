@@ -1,0 +1,10 @@
+# Example only. Replace every /absolute/path placeholder before use.
+# Register through `codex mcp add`; do not copy a user-specific config into git.
+[mcp_servers.renderdoc]
+command = "/absolute/path/renderdoc-mcp/.venv/bin/python"
+args = ["-m", "renderdoc_mcp"]
+startup_timeout_sec = 120
+
+[mcp_servers.renderdoc.env]
+PYTHONPATH = "/absolute/path/renderdoc-mcp/src"
+RENDERDOC_MODULE_PATH = "/absolute/path/renderdoc-python-module-directory"

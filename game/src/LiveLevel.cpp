@@ -2,6 +2,7 @@
 
 #include "LobbyDressing.h"
 #include "RenderPalette.h"
+#include "ShowcaseVisibility.h"
 
 #include <eng/Log.h>
 #include <eng/Renderer.h>
@@ -112,7 +113,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                      "Game/PropMarketMisc");
 
         // --- great hall corner crate stack (per-crate Y offsets, kept in code)
-        if (depth == 0) {
+        if (depth == 0 && lv.downPortal.valid()) {
             const glm::vec3 c{-9.0f, 0.0f, -4.5f};
             placeEcs(crate, "Game/PropMarket", c, 10.0f, noScale, false);
             placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f,
@@ -177,7 +178,6 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     // deterministic while the tall silhouette reads across a whole room.
     {
         PortalPropStyle down;
-        down.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
         down.lightColour = {0.06f, 0.42f, 0.025f};
         down.yawDegrees = lv.map.exitYawDegrees();
         lv.downPortal = createPortalProp(r, lv.exit, down);
@@ -199,7 +199,6 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         }
         if (depth > 0) {
             PortalPropStyle up;
-            up.frameMesh = assets + "/meshes/props/portal_stone_arch.obj";
             up.material = "Game/PortalUp";
             up.lightColour = {0.18f, 0.90f, 1.35f};
             lv.upPortal = createPortalProp(r, lv.spawn, up);
@@ -214,7 +213,8 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             if (portal)
                 continue; // portal labels are anchored to their rotated roots
             const glm::vec3 anchor = exhibit.position + glm::vec3(
-                0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f);
+                0.0f, std::max(0.7f, exhibit.halfExtents.y) + 0.40f, 0.0f) +
+                exhibit.labelOffset;
             const eng::NodeHandle labelNode = r.createNode(eng::kRootNode, anchor);
             eng::TextSpriteStyle style = showcaseLabelStyle(
                 0.36f, exhibit.labelAccent);
@@ -287,6 +287,24 @@ void LiveLevel::update(eng::Renderer& r, float animationTime)
 void LiveLevel::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos)
 {
     map.updateVisibility(r, cameraPos, 30.0f);
+    constexpr float exhibitHysteresis = 2.0f;
+    for (ShowcaseExhibit& exhibit : exhibits) {
+        if (!exhibit.root.valid() || exhibit.visibilityRange <= 0.0f)
+            continue;
+        const bool visible = showcaseVisibleAtDistance(
+            exhibit.visibility, glm::length(exhibit.position - cameraPos),
+            exhibit.visibilityRange, exhibitHysteresis);
+        // Authored roots start visible in Ogre. Uninitialized evaluation must
+        // nevertheless use the entry threshold; only issue a renderer call
+        // when the evaluated state differs from the live starting state.
+        const bool wasVisible =
+            exhibit.visibility != ShowcaseVisibilityState::Hidden;
+        if (visible != wasVisible)
+            r.setNodeVisible(exhibit.root, visible);
+        exhibit.visibility =
+            visible ? ShowcaseVisibilityState::Visible
+                    : ShowcaseVisibilityState::Hidden;
+    }
     // Labels ease in over the final metre instead of popping at a hard range.
     // Scaling a billboard preserves its camera-facing orientation and the
     // fully hidden state avoids distant gallery clutter and draw cost.

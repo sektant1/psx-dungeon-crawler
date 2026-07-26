@@ -2,6 +2,7 @@
 
 #include "CombatConfig.h"
 
+#include <eng/Primitive.h>
 #include <eng/Renderer.h>
 
 #include <glm/gtc/quaternion.hpp>
@@ -37,8 +38,17 @@ static glm::quat rotateFromTo(glm::vec3 from, glm::vec3 to) {
 // ---- init ----
 
 void SpellSystem::init(eng::Renderer& r) {
-    mFireballMesh = r.createSphere(0.14f, 10, 14); // glowing spherical core
-    mBeamMesh     = r.createBeveledBox(0.02f);     // thin segment, scaled per cast
+    eng::PrimitiveMeshDesc sphere;
+    sphere.kind = eng::PrimitiveKind::Sphere;
+    sphere.radius = 0.14f;
+    sphere.rings = 10;
+    sphere.segments = 14;
+    mFireballMesh = r.createPrimitiveMesh(sphere);
+
+    eng::PrimitiveMeshDesc beam;
+    beam.kind = eng::PrimitiveKind::BeveledBox;
+    beam.bevel = 0.02f;
+    mBeamMesh = r.createPrimitiveMesh(beam);
 }
 
 // ---- transient bursts ----

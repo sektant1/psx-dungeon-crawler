@@ -1,14 +1,12 @@
 #version 330 core
 in vec4 vertex;
-in vec2 uv0;
+in vec3 normal;
 uniform mat4 worldViewProj;
-uniform float time;
-uniform vec2 enchantScroll;
-out vec2 enchantUV;
-out float enchantPulse;
+out vec3 objectPosition;
+out vec3 objectNormal;
 void main()
 {
-    enchantUV = uv0 * 5.0 + enchantScroll * time;
-    enchantPulse = 0.82 + 0.18 * sin(time * 3.1);
+    objectPosition = vertex.xyz;
+    objectNormal = normal;
     gl_Position = worldViewProj * vertex;
 }

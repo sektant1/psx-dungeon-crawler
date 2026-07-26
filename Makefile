@@ -58,8 +58,8 @@ endif
 RUN_ARGS := $(MAP)
 
 .PHONY: all configure build build-all build-game build-demo build-mapgen build-sim \
-        run game demo mapgen sim test asan bench screenshot deps docs debug \
-        clean help
+        run game demo mapgen sim test asan bench screenshot visual-test \
+        visual-bench renderdoc-capture deps docs debug clean help
 
 all: build
 
@@ -140,6 +140,27 @@ endif
 	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_SCREENSHOT=$(SHOT) \
 	    PSX_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game $(RUN_ARGS)
 
+# JSON-emitting visual/GPU regression entry points. Artifacts default to
+# artifacts/visual and may be redirected with ARTIFACT_DIR=<path>.
+VISUAL_COMMON = --build-dir $(BUILD_DIR) \
+	--artifact-dir $(if $(ARTIFACT_DIR),$(ARTIFACT_DIR),artifacts/visual)
+VISUAL_ARGS = --frame $(if $(FRAME),$(FRAME),90) \
+	--fixed-dt $(if $(FIXED_DT),$(FIXED_DT),0.016666667) \
+	--seed $(if $(SEED),$(SEED),1) \
+	--display-mode $(if $(DISPLAY_MODE),$(DISPLAY_MODE),auto) \
+	$(if $(PRESET),--preset $(PRESET),) \
+	$(if $(MAP),--map $(MAP),)
+
+visual-test: build-game
+	python tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
+
+visual-bench: build-game
+	python tools/visual_test.py $(VISUAL_COMMON) benchmark $(VISUAL_ARGS) \
+		--frames $(if $(BENCH),$(BENCH),120)
+
+renderdoc-capture: build-game
+	python tools/visual_test.py $(VISUAL_COMMON) capture $(VISUAL_ARGS)
+
 # ---- docs / debug / clean --------------------------------------------------
 docs:
 	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
@@ -172,6 +193,9 @@ help:
 	@echo "  make asan           ASan+UBSan+Leak build of game + game_sim"
 	@echo "  make bench          frame-time percentiles (BENCH=<frames>)"
 	@echo "  make screenshot     deterministic capture (SHOT=<path> FRAME=)"
+	@echo "  make visual-test    screenshot + JSON artifact validation"
+	@echo "  make visual-bench   frame metrics + JSON (BENCH=<frames>)"
+	@echo "  make renderdoc-capture  deterministic single-frame .rdc"
 	@echo "  make deps           install build dependencies (any distro)"
 	@echo "  make docs           generate + open API docs"
 	@echo "  make debug          Debug build in build-debug/"

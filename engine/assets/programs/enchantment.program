@@ -3,8 +3,6 @@ vertex_program Enchantment/VS glsl
     source enchantment.vert
     default_params {
         param_named_auto worldViewProj worldviewproj_matrix
-        param_named_auto time time 1.0
-        param_named enchantScroll float2 0.18 -0.12
     }
 }
 
@@ -14,5 +12,12 @@ fragment_program Enchantment/FS glsl
     default_params {
         param_named enchantColour float4 0.55 0.35 1.0 0.65
         param_named enchantStrength float 1.0
+        param_named enchantRuneScale float 3.5
+        param_named enchantScroll float3 0.12 0.20 0.08
+        param_named enchantPulseSpeed float 3.1
+        param_named enchantPulseDepth float 0.18
+        param_named enchantEdgeIntensity float 0.35
+        param_named_auto time time 1.0
+        param_named_auto cameraPositionObject camera_position_object_space
     }
 }

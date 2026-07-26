@@ -3,6 +3,7 @@
 #include "CombatConfig.h"
 
 #include <eng/Physics.h>
+#include <eng/Primitive.h>
 #include <eng/Renderer.h>
 
 #include <glm/gtc/quaternion.hpp>
@@ -34,7 +35,12 @@ static glm::quat rotateFromTo(glm::vec3 from, glm::vec3 to) {
 
 void ProjectileSystem::init(eng::Renderer& r) {
     // Arrow: thin cone (radius 0.03, height 0.5) to represent the shaft tip
-    mArrowMesh = r.createCone(0.03f, 0.5f, 6);
+    eng::PrimitiveMeshDesc mesh;
+    mesh.kind = eng::PrimitiveKind::Cone;
+    mesh.radius = 0.03f;
+    mesh.height = 0.5f;
+    mesh.segments = 6;
+    mArrowMesh = r.createPrimitiveMesh(mesh);
 }
 
 // ---- fire ----

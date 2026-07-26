@@ -1,17 +1,21 @@
 #version 330 core
-in vec2 enchantUV;
-in float enchantPulse;
+in vec3 objectPosition;
+in vec3 objectNormal;
 uniform vec4 enchantColour;
 uniform float enchantStrength;
+uniform float enchantRuneScale;
+uniform vec3 enchantScroll;
+uniform float enchantPulseSpeed;
+uniform float enchantPulseDepth;
+uniform float enchantEdgeIntensity;
+uniform float time;
+uniform vec3 cameraPositionObject;
 layout(location = 0) out vec4 fragColour;
-layout(location = 1) out vec4 fragNormalDepth;
-void main()
+
+float runeField(vec2 coordinate)
 {
-    // A moving field of varied low-resolution runes. Each UV cell selects one
-    // of three signed-distance motifs, avoiding the repetitive diagonal bars
-    // of the old placeholder shader.
-    vec2 cell = floor(enchantUV);
-    vec2 p = fract(enchantUV) - 0.5;
+    vec2 cell = floor(coordinate);
+    vec2 p = fract(coordinate) - 0.5;
     float hash = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
 
     float diamond = abs(abs(p.x) + abs(p.y) - 0.27);
@@ -22,11 +26,34 @@ void main()
 
     float rune = 1.0 - smoothstep(0.035, 0.085, dist);
     float core = 1.0 - smoothstep(0.0, 0.025, dist);
-    float scan = 0.72 + 0.28 * sin((enchantUV.x + enchantUV.y) * 2.4);
-    float alpha = enchantColour.a * enchantStrength * rune *
-                  enchantPulse * scan;
-    vec3 colour = enchantColour.rgb * (0.75 + rune * 0.65) +
-                  vec3(core * 0.35);
-    fragColour = vec4(colour * alpha, alpha);
-    fragNormalDepth = vec4(0.0);
+    return rune * (0.82 + core * 0.38);
+}
+
+void main()
+{
+    vec3 normal = normalize(objectNormal);
+    vec3 triplanarWeights = pow(abs(normal), vec3(4.0));
+    triplanarWeights /= max(dot(triplanarWeights, vec3(1.0)), 0.0001);
+
+    // Scroll before scaling so enchantScroll remains in object-space units
+    // per second regardless of the requested rune density.
+    vec3 runePosition =
+        (objectPosition + enchantScroll * time) * enchantRuneScale;
+    float runes =
+        runeField(runePosition.yz) * triplanarWeights.x +
+        runeField(runePosition.xz) * triplanarWeights.y +
+        runeField(runePosition.xy) * triplanarWeights.z;
+
+    float pulseWave = 0.5 + 0.5 * sin(time * enchantPulseSpeed);
+    float pulse = 1.0 - enchantPulseDepth +
+                  enchantPulseDepth * pulseWave;
+    vec3 viewDirection =
+        normalize(cameraPositionObject - objectPosition);
+    float fresnel = pow(
+        1.0 - max(dot(normal, viewDirection), 0.0), 3.0);
+    float intensity = enchantColour.a * enchantStrength *
+                      (runes * pulse + fresnel * enchantEdgeIntensity);
+    vec3 colour = enchantColour.rgb * intensity +
+                  vec3(runes * intensity * 0.22);
+    fragColour = vec4(colour, intensity);
 }

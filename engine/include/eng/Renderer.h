@@ -2,6 +2,8 @@
 #include <eng/Handles.h>
 #include <eng/LightDesc.h>
 #include <eng/particles/ParticleEffectDesc.h>
+#include <eng/render/Enchantment.h>
+#include <eng/render/ModelImport.h>
 #include <eng/Sprite.h>
 
 #include <glm/glm.hpp>
@@ -13,11 +15,10 @@
 
 namespace eng {
 
-enum class EnchantmentStyle { Arcane, Fire, Poison, Frost };
-
 class RenderCore; // internal; forward-declared only, no Ogre leak
 class Renderer;
 class SceneView; // read-only scene-graph facade, defined in Renderer.cpp
+struct PrimitiveMeshDesc;
 
 namespace detail {
 // Engine-only backdoor to the internal core (defined in Renderer.cpp).
@@ -54,6 +55,12 @@ struct EnvState {
     glm::vec3 gradeMidTint{1.0f, 0.96f, 0.88f};
 };
 
+struct NodeTransform {
+    glm::vec3 position{0.0f};
+    glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 scale{1.0f};
+};
+
 // Public renderer facade. All Ogre types stay inside engine/src.
 // Colour convention: shading runs in linear space; callers linearise
 // sRGB-picked colours themselves (pow 2.2), as the PSX shaders expect.
@@ -64,19 +71,21 @@ public:
     // bake, when given, is multiplied into vertex positions (normals get
     // its inverse-transpose) -- for transforms TRS nodes can't represent.
     MeshHandle loadObj(const std::string& path, const glm::mat4* bake = nullptr);
-    MeshHandle createInteriorBox(float size, int subdivide);
-    MeshHandle createPlane(float size);
-    // Stylized outward-facing construction primitives. A unit beveled box
-    // can be non-uniformly scaled into masonry, beams, plinths, and furniture.
-    MeshHandle createBeveledBox(float bevel = 0.12f);
-    MeshHandle createCone(float radius = 0.5f, float height = 1.0f,
-                          int segments = 8);
-    MeshHandle createSphere(float radius = 0.5f, int rings = 12,
-                            int segments = 16);
-    // Low-poly vertical fantasy portal components (facing +/-Z).
-    MeshHandle createPortalRing(float outerRadius, float innerRadius,
-                                float depth, int segments = 20);
-    MeshHandle createPortalDisc(float radius, int segments = 20);
+    MeshHandle loadObj(const std::string& path,
+                       const ModelImportOptions& options);
+    // Sole generic primitive entry point. The descriptor's dimensions are
+    // baked into the mesh; node scale remains available for placement.
+    MeshHandle createPrimitiveMesh(const PrimitiveMeshDesc&);
+    bool meshBounds(MeshHandle mesh, MeshBounds& out) const;
+    // OBJ geometry captured during the render-mesh load, never reparsed or
+    // read back from Ogre. Returns false for meshes without cached triangles.
+    bool meshCollisionGeometry(MeshHandle mesh,
+                               std::vector<glm::vec3>& vertices,
+                               std::vector<uint32_t>& indices) const;
+    // Releases one Renderer-created mesh and its CPU collision cache. Safe for
+    // invalid/already-released handles; callers must first destroy attachments
+    // that use this uniquely owned mesh.
+    bool releaseMesh(MeshHandle mesh);
 
     // --- scene graph ------------------------------------------------------
     NodeHandle createNode(NodeHandle parent, glm::vec3 position = glm::vec3(0.0f),
@@ -84,10 +93,14 @@ public:
     void setPosition(NodeHandle node, glm::vec3 position);
     void setOrientation(NodeHandle node, glm::quat orientation);
     void setScale(NodeHandle node, glm::vec3 scale);
+    // Derived world transform using the same parent orientation/scale
+    // inheritance as Ogre. Returns false for invalid or destroyed handles.
+    bool nodeWorldTransform(NodeHandle node, NodeTransform& out) const;
     // Live-swap the material on every mesh attached to a node (editor tweaks).
     void setNodeMaterial(NodeHandle node, const std::string& materialName);
     // Adds/removes a scrolling Minecraft-like enchantment pass while
     // preserving each mesh's underlying material.
+    void setNodeEnchantment(NodeHandle node, const EnchantmentDesc& desc);
     void setNodeEnchantment(NodeHandle node, EnchantmentStyle style,
                             float strength = 1.0f);
     void clearNodeEnchantment(NodeHandle node);
@@ -95,6 +108,7 @@ public:
     // .material at init), sorted, with engine/Ogre internals filtered out. For
     // editor material pickers -- discovered, never hard-coded.
     std::vector<std::string> materialNames() const;
+    bool materialAvailable(const std::string& materialName) const;
     // World-space bounds of everything attached under a node (recursive), for
     // editor auto-framing. Returns false if the node has no renderable bounds.
     bool nodeWorldBounds(NodeHandle node, glm::vec3& center, float& radius) const;
@@ -113,6 +127,13 @@ public:
     void attachMesh(NodeHandle node, MeshHandle mesh,
                     const std::string& materialName, bool castShadows = false,
                     bool renderOnTop = false);
+    void attachMesh(NodeHandle node, MeshHandle mesh,
+                    const std::string& materialName,
+                    const std::string& fallbackMaterial,
+                    bool castShadows = false, bool renderOnTop = false);
+    void attachMesh(NodeHandle node, MeshHandle mesh,
+                    const ResolvedModelMaterial& material,
+                    bool castShadows = false, bool renderOnTop = false);
 
     // Sprite seam: createSpriteMaterial applies a clip to arbitrary mesh UVs;
     // attachSprite uses the same clip as a camera-facing world billboard.
@@ -142,11 +163,25 @@ public:
     ParticleEffectId particleEffectId(const std::string& name); // by desc.name
     ParticlesHandle  spawnParticles(ParticleEffectId fx, NodeHandle parent,
                                     glm::vec3 localPos = glm::vec3(0.0f));
+    ParticlesHandle  spawnParticles(ParticleEffectId fx, NodeHandle parent,
+                                    const ParticleSpawnOptions& options);
+    ParticlesHandle  spawnParticles(ParticleEffectId fx, NodeHandle parent,
+                                    glm::vec3 localPos,
+                                    const ParticleSpawnOptions& options);
     ParticlesHandle  spawnParticles(ParticleEffectId fx, glm::vec3 worldPos);
+    ParticlesHandle  spawnParticles(ParticleEffectId fx, glm::vec3 worldPos,
+                                    const ParticleSpawnOptions& options);
     // Convenience: resolve the effect by name and spawn (invalid name = no-op).
     ParticlesHandle  spawnParticles(const std::string& name, NodeHandle parent,
                                     glm::vec3 localPos = glm::vec3(0.0f));
+    ParticlesHandle  spawnParticles(const std::string& name, NodeHandle parent,
+                                    const ParticleSpawnOptions& options);
+    ParticlesHandle  spawnParticles(const std::string& name, NodeHandle parent,
+                                    glm::vec3 localPos,
+                                    const ParticleSpawnOptions& options);
     ParticlesHandle  spawnParticles(const std::string& name, glm::vec3 worldPos);
+    ParticlesHandle  spawnParticles(const std::string& name, glm::vec3 worldPos,
+                                    const ParticleSpawnOptions& options);
     void stopParticles(ParticlesHandle h);
     void despawnParticles(ParticlesHandle h);
     void setParticleQuality(float q);

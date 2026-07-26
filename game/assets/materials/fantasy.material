@@ -139,8 +139,8 @@ material Fantasy/ArcaneGlow
 {
     technique { pass {
         scene_blend add
-        // Closed ring geometry must depth-test itself; otherwise its front,
-        // back, inner and outer shells add together into a blown-out slab.
+        // Closed glow geometry must depth-test itself; otherwise overlapping
+        // front and back faces add together into a blown-out slab.
         depth_write on
         vertex_program_ref Sprite/VS { param_named spriteScroll float2 0.03 -0.04 }
         fragment_program_ref Sprite/FS

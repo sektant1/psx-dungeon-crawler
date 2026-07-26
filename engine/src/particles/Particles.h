@@ -24,6 +24,10 @@ public:
 
     ParticlesHandle spawn(ParticleEffectId fx, Ogre::SceneNode* parent,
                           glm::vec3 localPos, bool ownsParent = false);
+    ParticlesHandle spawn(ParticleEffectId fx, Ogre::SceneNode* parent,
+                          glm::vec3 localPos,
+                          const ParticleSpawnOptions& options,
+                          bool ownsParent = false);
     void stop(ParticlesHandle h);
     void despawn(ParticlesHandle h);
 
@@ -42,6 +46,7 @@ private:
         Ogre::ParticleSystem* ps = nullptr;
         float age = 0.0f;
         float maxLife = 0.0f;
+        float particleLife = 0.0f;
         bool  oneShot = false;
         bool  active = false;
         bool  ownsParent = false;
@@ -50,6 +55,8 @@ private:
 
     Ogre::ParticleSystem* build(const ParticleEffectDesc& d);
     void applyQuota(Ogre::ParticleSystem* ps, const ParticleEffectDesc& d);
+    void configure(Ogre::ParticleSystem* ps, const ParticleEffectDesc& d,
+                   const ResolvedParticleSpawn& resolved);
 
     Ogre::SceneManager* mSm = nullptr;
     std::vector<Effect> mEffects;

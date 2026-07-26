@@ -70,6 +70,10 @@ add_library(
   engine/src/ObjLoader.cpp
   engine/src/ProceduralMeshes.cpp
   engine/src/Renderer.cpp
+  engine/src/render/FrameCapture.cpp
+  engine/src/render/Model.cpp
+  engine/src/render/Primitive.cpp
+  engine/src/render/PrimitiveGeometry.cpp
   engine/src/particles/Particles.cpp
   engine/src/particles/ParticlePresets.cpp
   engine/src/Log.cpp
@@ -400,6 +404,16 @@ if(BUILD_TESTING)
   target_link_libraries(lobby_dressing_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME lobby_dressing COMMAND lobby_dressing_tests)
 
+  add_executable(showcase_visibility_tests
+                 game/tests/ShowcaseVisibilityTests.cpp)
+  target_include_directories(showcase_visibility_tests
+                             PRIVATE game/src third_party)
+  target_link_libraries(showcase_visibility_tests PRIVATE eng_toml)
+  target_compile_definitions(
+    showcase_visibility_tests
+    PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+  add_test(NAME showcase_visibility COMMAND showcase_visibility_tests)
+
   add_executable(physics_sync_tests
     game/tests/PhysicsSyncTests.cpp
     game/src/scene/PhysicsSync.cpp)
@@ -444,6 +458,12 @@ if(BUILD_TESTING)
   target_include_directories(profiler_tests PRIVATE engine/include)
   add_test(NAME profiler COMMAND profiler_tests)
 
+  add_executable(frame_capture_tests engine/tests/FrameCaptureTests.cpp
+                                     engine/src/render/FrameCapture.cpp)
+  target_include_directories(frame_capture_tests PRIVATE engine/include)
+  target_link_libraries(frame_capture_tests PRIVATE ${CMAKE_DL_LIBS})
+  add_test(NAME frame_capture COMMAND frame_capture_tests)
+
   add_executable(actions_tests engine/tests/ActionsTests.cpp
                                engine/src/systems/Ease.cpp
                                engine/src/systems/Actions.cpp
@@ -479,6 +499,35 @@ if(BUILD_TESTING)
   target_compile_definitions(
     particle_asset_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME particle_assets COMMAND particle_asset_tests)
+
+  add_executable(particle_options_tests engine/tests/ParticleOptionsTests.cpp)
+  target_include_directories(particle_options_tests PRIVATE engine/include)
+  target_link_libraries(particle_options_tests PRIVATE glm::glm)
+  add_test(NAME particle_options COMMAND particle_options_tests)
+
+  add_executable(enchantment_tests engine/tests/EnchantmentTests.cpp)
+  target_include_directories(enchantment_tests PRIVATE engine/include)
+  target_link_libraries(enchantment_tests PRIVATE glm::glm)
+  target_compile_definitions(
+    enchantment_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME enchantment COMMAND enchantment_tests)
+
+  add_executable(model_tests engine/tests/ModelTests.cpp)
+  target_include_directories(model_tests PRIVATE engine/include engine/src)
+  target_link_libraries(model_tests PRIVATE eng glm::glm)
+  add_test(NAME model COMMAND model_tests)
+
+  add_executable(primitive_tests engine/tests/PrimitiveTests.cpp)
+  target_include_directories(primitive_tests PRIVATE engine/include engine/src)
+  target_link_libraries(primitive_tests PRIVATE eng glm::glm)
+  target_compile_definitions(
+    primitive_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME primitive COMMAND primitive_tests)
+
+  add_executable(model_import_tests engine/tests/ModelImportTests.cpp)
+  target_include_directories(model_import_tests PRIVATE engine/include)
+  target_link_libraries(model_import_tests PRIVATE eng glm::glm)
+  add_test(NAME model_import COMMAND model_import_tests)
 
   add_executable(audio_tests engine/tests/AudioTests.cpp
                              engine/src/audio/Audio.cpp

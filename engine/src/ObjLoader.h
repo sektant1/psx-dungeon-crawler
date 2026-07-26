@@ -1,4 +1,6 @@
 #pragma once
+#include <eng/render/ModelImport.h>
+
 #include <OgreMatrix4.h>
 #include <glm/glm.hpp>
 #include <cstdint>
@@ -18,8 +20,19 @@
 //
 // v texture coordinates are flipped (1 - v), matching Godot's OBJ importer.
 namespace ObjLoader {
+namespace detail {
+void appendTriangleFan(const std::vector<uint32_t>& face,
+                       std::vector<uint32_t>& outIndices);
+}
+
 void load(const std::string& filePath, const std::string& meshName,
-          const Ogre::Matrix4& bake = Ogre::Matrix4::IDENTITY);
+          const Ogre::Matrix4& bake = Ogre::Matrix4::IDENTITY,
+          std::vector<glm::vec3>* outVerts = nullptr,
+          std::vector<uint32_t>* outIndices = nullptr);
+void load(const std::string& filePath, const std::string& meshName,
+          const eng::ModelImportOptions& options,
+          std::vector<glm::vec3>* outVerts = nullptr,
+          std::vector<uint32_t>* outIndices = nullptr);
 
 // CPU-side geometry read for physics/analysis (no Ogre mesh created). Fills
 // triangulated positions + indices in the OBJ's own space, with the same
@@ -29,4 +42,8 @@ bool loadGeometry(const std::string& filePath,
                   std::vector<glm::vec3>& outVerts,
                   std::vector<uint32_t>& outIndices,
                   const Ogre::Matrix4& bake = Ogre::Matrix4::IDENTITY);
+bool loadGeometry(const std::string& filePath,
+                  std::vector<glm::vec3>& outVerts,
+                  std::vector<uint32_t>& outIndices,
+                  const eng::ModelImportOptions& options);
 }

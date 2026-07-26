@@ -1,8 +1,9 @@
 #include "SceneFactory.h"
 #include "ParticleEffects.h"
 
-#include <eng/Renderer.h>
 #include <eng/Log.h>
+#include <eng/Primitive.h>
+#include <eng/Renderer.h>
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -16,41 +17,62 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
                             const PortalPropStyle& style)
 {
     PortalProp out;
-    const bool authoredFrame = !style.frameMesh.empty();
-    const eng::MeshHandle membrane = authoredFrame
-        ? r.createPlane(style.innerRadius * 2.0f)
-        : r.createPortalDisc(style.innerRadius, style.segments);
+    eng::PrimitiveMeshDesc membraneDesc;
+    membraneDesc.kind = eng::PrimitiveKind::Disc;
+    membraneDesc.radius = style.innerRadius;
+    membraneDesc.segments = style.segments;
+    const eng::MeshHandle membrane =
+        r.createPrimitiveMesh(membraneDesc);
+
+    eng::PrimitiveMeshDesc frameDesc;
+    frameDesc.kind = eng::PrimitiveKind::BeveledBox;
+    frameDesc.bevel = style.frameBevel;
+    const eng::MeshHandle framePrimitive =
+        r.createPrimitiveMesh(frameDesc);
+    if (!membrane.valid() || !framePrimitive.valid()) {
+        eng::log::error(
+            "PortalProp: failed to create membrane or frame primitive");
+        if (membrane.valid())
+            r.releaseMesh(membrane);
+        if (framePrimitive.valid())
+            r.releaseMesh(framePrimitive);
+        return {};
+    }
+
     out.root = r.createNode(eng::kRootNode, floorPosition);
     r.setOrientation(out.root,
                      glm::angleAxis(glm::radians(style.yawDegrees),
                                     glm::vec3(0, 1, 0)));
-    if (!style.frameMesh.empty()) {
-        // The authored arch occupies x[0,4], y[0,3], z[-4,0]. Centre its
-        // facade directly on the wall plane instead of offsetting the whole
-        // four-metre source tunnel into the room.
-        eng::NodeHandle frame = r.createNode(out.root, style.frameOffset);
-        // The source kit piece is a four-metre-deep passage module. Compress
-        // only its depth so it reads as a monumental portal surround rather
-        // than a short tunnel, without distorting the authored front arch.
-        r.setScale(frame, style.frameScale);
-        r.attachMesh(frame, r.loadObj(style.frameMesh), style.frameMaterial,
-                     false);
-    }
-    // Overscan the opaque field behind the opening and keep it only a few
-    // centimetres behind the facade. The frame masks its edges from every
-    // playable angle without exposing an unlit recess.
+
     const eng::NodeHandle arch = r.createNode(
-        out.root, {0.0f, style.height,
-                   style.frameMesh.empty() ? 0.0f : style.membraneInset});
-    out.field = r.createNode(arch);
-    if (authoredFrame) {
-        r.setScale(out.field, {style.fieldScale.x, 1.0f, style.fieldScale.y});
-        r.setOrientation(out.field,
-                         glm::angleAxis(glm::radians(90.0f),
-                                        glm::vec3(1, 0, 0)));
-    } else {
-        r.setScale(out.field, {style.fieldScale.x, style.fieldScale.y, 1.0f});
-    }
+        out.root, {0.0f, style.height, 0.0f});
+    const eng::NodeHandle frame = r.createNode(arch);
+    r.setScale(frame, style.frameScale);
+    const float openingHalfWidth =
+        style.innerRadius * style.fieldScale.x;
+    const float openingHalfHeight =
+        style.innerRadius * style.fieldScale.y;
+    const auto framePart = [&](glm::vec3 position, glm::vec3 scale) {
+        const eng::NodeHandle part = r.createNode(frame, position);
+        r.setScale(part, scale);
+        r.attachMesh(part, framePrimitive, style.frameMaterial, false);
+    };
+    framePart({-openingHalfWidth - style.frameWidth * 0.5f, 0.0f, 0.0f},
+              {style.frameWidth, openingHalfHeight * 2.0f,
+               style.frameDepth});
+    framePart({openingHalfWidth + style.frameWidth * 0.5f, 0.0f, 0.0f},
+              {style.frameWidth, openingHalfHeight * 2.0f,
+               style.frameDepth});
+    framePart({0.0f, openingHalfHeight + style.frameWidth * 0.5f, 0.0f},
+              {openingHalfWidth * 2.0f + style.frameWidth * 2.0f,
+               style.frameWidth, style.frameDepth});
+
+    out.field = r.createNode(arch, {0.0f, 0.0f, style.membraneInset});
+    r.setScale(out.field,
+               {style.fieldScale.x, 1.0f, style.fieldScale.y});
+    r.setOrientation(out.field,
+                     glm::angleAxis(glm::radians(90.0f),
+                                    glm::vec3(1, 0, 0)));
     r.attachMesh(out.field, membrane, style.material);
     if (!style.particles.empty())
         r.spawnParticles(style.particles, out.root);
@@ -85,13 +107,28 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
     std::unordered_map<std::string, eng::MeshHandle> meshes;
     const auto meshFor = [&](const std::string& shape) -> eng::MeshHandle {
         if (const auto it = meshes.find(shape); it != meshes.end()) return it->second;
-        eng::MeshHandle mesh;
-        if (shape == "box") mesh = r.createBeveledBox(0.14f);
-        else if (shape == "cone") mesh = r.createCone(0.5f, 1.0f, 8);
-        else if (shape == "sphere") mesh = r.createSphere(0.5f, 10, 12);
-        else if (shape == "plane") mesh = r.createPlane(1.0f);
-        else if (shape == "disc") mesh = r.createPortalDisc(0.5f, 16);
-        else if (shape == "ring") mesh = r.createPortalRing(0.5f, 0.32f, 0.12f, 16);
+        eng::PrimitiveMeshDesc desc;
+        if (shape == "box") {
+            desc.kind = eng::PrimitiveKind::BeveledBox;
+            desc.bevel = 0.14f;
+        } else if (shape == "cone") {
+            desc.kind = eng::PrimitiveKind::Cone;
+            desc.segments = 8;
+        } else if (shape == "sphere") {
+            desc.kind = eng::PrimitiveKind::Sphere;
+            desc.rings = 10;
+            desc.segments = 12;
+        } else if (shape == "cylinder") {
+            desc.kind = eng::PrimitiveKind::Cylinder;
+            desc.segments = 12;
+        } else if (shape == "plane") {
+            desc.kind = eng::PrimitiveKind::Plane;
+        } else if (shape == "disc") {
+            desc.kind = eng::PrimitiveKind::Disc;
+        } else {
+            return {};
+        }
+        const eng::MeshHandle mesh = r.createPrimitiveMesh(desc);
         if (mesh.valid()) meshes.emplace(shape, mesh);
         return mesh;
     };
@@ -102,6 +139,15 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         return glm::vec3(float((*a)[0].value_or(double(fallback.x))),
                          float((*a)[1].value_or(double(fallback.y))),
                          float((*a)[2].value_or(double(fallback.z))));
+    };
+    const auto vec4 = [](const toml::table& t, const char* key,
+                         glm::vec4 fallback) {
+        const toml::array* a = t[key].as_array();
+        if (!a || a->size() != 4) return fallback;
+        return glm::vec4(float((*a)[0].value_or(double(fallback.x))),
+                         float((*a)[1].value_or(double(fallback.y))),
+                         float((*a)[2].value_or(double(fallback.z))),
+                         float((*a)[3].value_or(double(fallback.w))));
     };
     size_t loaded = 0;
     for (const toml::node& node : *exhibits) {
@@ -180,17 +226,16 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
                  meshFor("box"), "Fantasy/AgedWood");
             part(display, {0, 2.80f, 0}, {0.42f, 0.18f, 0.42f},
                  meshFor("sphere"), "Fantasy/DarkIron");
-            const eng::NodeHandle crown =
-                part(display, {0, 3.25f, 0}, {0.78f, 0.78f, 0.78f},
-                     meshFor("ring"), material, true);
-            r.setOrientation(crown, glm::angleAxis(
-                glm::radians(90.0f), glm::vec3(1, 0, 0)));
             part(display, {0, 3.25f, 0}, {0.42f, 0.42f, 0.42f},
                  meshFor("sphere"), material, true);
+            part(display, {0, 3.72f, 0}, {0.30f, 0.48f, 0.30f},
+                 meshFor("cone"), material, true);
         } else if (isParticleAltar) {
-            part(display, {0, 0.46f, 0}, {0.82f, 0.18f, 0.82f},
-                 meshFor("ring"), material);
-            part(display, {0, 0.40f, 0}, {0.48f, 0.18f, 0.48f},
+            part(display, {0, 0.34f, 0}, {0.82f, 0.32f, 0.82f},
+                 meshFor("cylinder"), material);
+            part(display, {0, 0.55f, 0}, {0.62f, 0.08f, 0.62f},
+                 meshFor("disc"), material);
+            part(display, {0, 0.48f, 0}, {0.46f, 0.16f, 0.46f},
                  meshFor("sphere"), "Fantasy/DarkIron");
         } else {
             r.attachMesh(display, mesh, material, false);
@@ -201,11 +246,29 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             r.setNodeEnchantment(display, enchantStyle, enchantStrength);
         if (const std::string particles =
                 (*e)["particles"].value_or(std::string()); !particles.empty()) {
-            const glm::vec3 particleOffset = vec3(*e, "particle_offset", {});
-            const eng::NodeHandle emitterNode =
-                particleOffset == glm::vec3(0.0f)
-                    ? placed : r.createNode(placed, particleOffset);
-            r.spawnParticles(particles, emitterNode);
+            eng::ParticleSpawnOptions particleOptions;
+            particleOptions.localOffset =
+                vec3(*e, "particle_offset", glm::vec3(0.0f));
+            if (const toml::table* options =
+                    (*e)["particle_options"].as_table()) {
+                particleOptions.sizeScale =
+                    float((*options)["size_scale"].value_or(1.0));
+                particleOptions.amountScale =
+                    float((*options)["amount_scale"].value_or(1.0));
+                particleOptions.lifetimeScale =
+                    float((*options)["lifetime_scale"].value_or(1.0));
+                particleOptions.speedScale =
+                    float((*options)["speed_scale"].value_or(1.0));
+                particleOptions.radiusScale =
+                    float((*options)["radius_scale"].value_or(1.0));
+                particleOptions.emitterRadius =
+                    float((*options)["emitter_radius"].value_or(0.0));
+                particleOptions.colourTint =
+                    vec4(*options, "colour_tint", glm::vec4(1.0f));
+                particleOptions.localOffset = vec3(
+                    *options, "local_offset", particleOptions.localOffset);
+            }
+            r.spawnParticles(particles, placed, particleOptions);
         }
         if (const toml::array* colour = (*e)["light_colour"].as_array();
             colour && colour->size() == 3) {
@@ -215,6 +278,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             r.attachLight(placed, light);
         }
         ShowcaseExhibit info;
+        info.root = placed;
         info.id = id;
         info.label = (*e)["label"].value_or(id);
         info.labelHighlightPattern =
@@ -224,7 +288,10 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         const glm::vec3 highlight = vec3(
             *e, "label_highlight_colour", {1.0f, 0.78f, 0.22f});
         info.labelHighlight = {highlight, 1.0f};
+        info.labelOffset = vec3(*e, "label_offset", glm::vec3(0.0f));
         info.position = position;
+        info.visibilityRange =
+            float((*e)["visibility_range"].value_or(0.0));
         // Visual bounds drive label placement even when an exhibit does not
         // participate in collision. Plane height is intentionally zero.
         info.halfExtents = glm::abs(scale) * 0.5f;

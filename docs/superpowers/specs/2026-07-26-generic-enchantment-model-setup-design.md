@@ -48,6 +48,30 @@ The returned `ModelInstance` owns a node, mesh, and optional body handle.
 Dynamic callers continue using the existing physics/render synchronization;
 the helper does not create a second scene or hidden update loop.
 
+## Standardized Model Import
+
+Engine model assets use metres, +Y as up, and -Z as forward. OBJ source data
+is normalized through `ModelImportOptions` rather than one-off bake matrices.
+The default pivot is bottom-centre of the imported bounds so world props share
+a predictable floor contact point.
+
+Pivot modes are `Source`, `BoundsCenter`, `BottomCenter`, and `Custom`.
+Per-model options may also apply a source scale, source orientation, and custom
+pivot. The importer bakes this canonical transform into positions and normals,
+then recomputes final bounds and collision geometry from the same transformed
+data. Rendering and collision therefore cannot disagree about pivot/scale.
+
+Model cache identity includes canonical path plus all import options. A model
+loaded with a custom weapon pivot cannot alias the bottom-centred prop variant.
+Material setup supports a default fallback and indexed submesh remapping;
+missing mappings use the fallback prototype material and log once.
+
+Validation rejects non-finite transforms, zero source scale, invalid custom
+pivots, empty material names, and render/collision geometry mismatches.
+In-repository callers that require an authored pivot explicitly select
+`Source`; obsolete import overloads and inconsistent legacy asset assumptions
+do not constrain the new API.
+
 ## Failure Handling
 
 Missing mesh/material data returns an invalid instance and logs the path.
@@ -60,7 +84,9 @@ callers never receive a half-valid object.
 Tests cover descriptor defaults, bounds-to-collider conversion under
 nonuniform scale, static-mesh/dynamic rejection, no-collider setup, cleanup,
 recursive enchant state, repeated application without pass stacking, clear
-restoration, and shader source/program contracts for triplanar coordinates.
+restoration, shader source/program contracts for triplanar coordinates,
+canonical pivot transforms, final bounds/collision agreement, import-cache
+identity, and fallback material selection.
 
 ## Non-goals
 
