@@ -1,0 +1,47 @@
+vertex_program PixelVfx/PortalVS glsl
+{
+    source portal.vert
+    default_params {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program PixelVfx/PortalFS glsl
+{
+    source portal.frag
+    default_params {
+        param_named portalTexture int 0
+        param_named portalDark float4 0.03 0.08 0.02 1.0
+        param_named portalMid float4 0.18 0.72 0.08 1.0
+        param_named portalBright float4 0.70 1.45 0.22 1.0
+        param_named portalStepFps float 10.0
+        param_named portalFlowSpeed float 0.24
+        param_named portalPixelGrid float 48.0
+        param_named_auto time time 1.0
+    }
+}
+
+vertex_program PixelVfx/LiquidVS glsl
+{
+    source liquid.vert
+    default_params {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program PixelVfx/LiquidFS glsl
+{
+    source liquid.frag
+    default_params {
+        param_named liquidTexture int 0
+        param_named liquidDark float4 0.02 0.08 0.16 1.0
+        param_named liquidMid float4 0.05 0.42 0.78 1.0
+        param_named liquidBright float4 0.28 0.90 1.0 1.0
+        param_named liquidFlowA float2 0.07 0.035
+        param_named liquidFlowB float2 -0.035 0.055
+        param_named liquidStepFps float 8.0
+        param_named liquidPixelGrid float 32.0
+        param_named liquidEmission float 0.0
+        param_named_auto time time 1.0
+    }
+}

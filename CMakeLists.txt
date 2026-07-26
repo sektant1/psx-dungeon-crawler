@@ -512,6 +512,11 @@ if(BUILD_TESTING)
     enchantment_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME enchantment COMMAND enchantment_tests)
 
+  add_executable(vfx_shader_asset_tests engine/tests/VfxShaderAssetTests.cpp)
+  target_compile_definitions(
+    vfx_shader_asset_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME vfx_shader_assets COMMAND vfx_shader_asset_tests)
+
   add_executable(model_tests engine/tests/ModelTests.cpp)
   target_include_directories(model_tests PRIVATE engine/include engine/src)
   target_link_libraries(model_tests PRIVATE eng glm::glm)
