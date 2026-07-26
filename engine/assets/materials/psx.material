@@ -96,6 +96,122 @@ material PSX/UnlitTransparent    // psx_unlit_transparent.gdshader
     } }
 }
 
+material Engine/PrototypeSurface
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture EnginePrototypeSurface.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Engine-owned particle fallback. Its generated orange/cyan diagnostic sprite
+// is deliberately distinct from missing surface and sprite textures.
+material Engine/PrototypeParticle
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref BlockParticle_FS
+        {
+            param_named alphaScissor float 0.05
+        }
+        texture_unit
+        {
+            texture EnginePrototypeParticle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Reusable retro VFX atlas rows: fire, smoke, poison, lava ash.
+material Engine/Particles/Fire
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 0.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 10.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+    } }
+}
+
+material Engine/Particles/Smoke
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 1.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 6.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+    } }
+}
+
+material Engine/Particles/Poison
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 2.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 7.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+    } }
+}
+
+material Engine/Particles/LavaAsh
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 3.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 8.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+    } }
+}
+
+material Engine/Particles/Rain
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref RainParticle_FS { }
+    } }
+}
+
 material PSX/LitAlphaScissor    // psx_lit_alpha-scissor.gdshader
 {
     technique { pass {

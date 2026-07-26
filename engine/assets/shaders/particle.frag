@@ -7,7 +7,14 @@ layout(location = 0) out vec4 fragColour;
 layout(location = 1) out vec4 fragNormalDepth;
 void main()
 {
-#if defined(PROCEDURAL_FLAME)
+#if defined(ATLAS_PARTICLE)
+    vec3 texel = texture(albedoTex, particleUV).rgb;
+    // The generated atlas is black-keyed. Luminance becomes alpha, preserving
+    // soft smoke while fire/poison/embers retain their authored colour.
+    float keyAlpha = max(texel.r, max(texel.g, texel.b));
+    vec3 tint = mix(vec3(1.0), particleColour.rgb, 0.55);
+    fragColour = vec4(texel * tint, keyAlpha * particleColour.a);
+#elif defined(PROCEDURAL_FLAME)
     // Quantized tapered card: Minecraft-like readable blocks, animated by the
     // particle system's motion/scale/rotation rather than a fragile sprite.
     vec2 p = (floor(particleUV * vec2(7.0, 8.0)) + 0.5) / vec2(7.0, 8.0);
@@ -36,6 +43,21 @@ void main()
     vec3 smoke = particleColour.rgb * mix(0.72, 1.0,
                                            smoothstep(0.46, 0.0, radius));
     fragColour = vec4(smoke, alpha * particleColour.a);
+#elif defined(PROCEDURAL_RAIN)
+    // A continuous, slightly slanted streak with tapered ends. Rain used to
+    // select PROCEDURAL_BLOCK, stretching the ember/ash pixel mask into
+    // conspicuous dashed bars.
+    vec2 p = particleUV;
+    float slantedX = p.x + (p.y - 0.5) * 0.10;
+    float side = 1.0 - smoothstep(0.32, 0.49, abs(slantedX - 0.5));
+    float head = smoothstep(0.0, 0.16, p.y);
+    float tail = 1.0 - smoothstep(0.72, 1.0, p.y);
+    float alpha = side * head * tail;
+    float highlight = 1.0 - smoothstep(
+        0.0, 0.13, abs(slantedX - 0.46));
+    vec3 rain = mix(particleColour.rgb, vec3(0.82, 0.90, 1.0),
+                    0.25 + highlight * 0.35);
+    fragColour = vec4(rain, alpha * particleColour.a * 0.72);
 #elif defined(PROCEDURAL_BLOCK)
     // Embers and ash are compact pixel clusters, never sampled star sprites.
     vec2 p = floor(particleUV * 5.0);

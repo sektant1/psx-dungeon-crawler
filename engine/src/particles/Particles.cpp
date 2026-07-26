@@ -1,13 +1,16 @@
 #include "Particles.h"
 #include <eng/Log.h>
+#include <eng/render/PrototypeAssets.h>
 #include <OgreSceneManager.h>
 #include <OgreParticleSystem.h>
 #include <OgreParticleEmitter.h>
 #include <OgreParticleAffector.h>
+#include <OgreMaterialManager.h>
 #include <OgreSceneNode.h>
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <utility>
 
 namespace eng {
 namespace {
@@ -32,7 +35,7 @@ Ogre::ParticleSystem* Particles::build(const ParticleEffectDesc& d){
     ps->setDefaultDimensions(d.baseWidth, d.baseHeight);
     // World space so a moving emitter (fireball) leaves particles behind as a
     // trail instead of dragging them along with it.
-    ps->setKeepParticlesInLocalSpace(false);
+    ps->setKeepParticlesInLocalSpace(d.localSpace);
     // setRenderer exists (verified in OgreParticleSystem.h line 86). Uses the
     // string "billboard" which is the built-in Ogre billboard renderer type.
     ps->setRenderer("billboard");
@@ -41,16 +44,27 @@ Ogre::ParticleSystem* Particles::build(const ParticleEffectDesc& d){
     applyQuota(ps, d);
     const float qscale = 1.0f - d.qualityWeight * (1.0f - mQuality);
     for (const auto& e : d.emitters){
-        // addEmitter("Point") — built-in point emitter type.
-        Ogre::ParticleEmitter* em = ps->addEmitter("Point");
+        Ogre::ParticleEmitter* em = ps->addEmitter(
+            e.shape == ParticleEmitterShape::Box ? "Box" : "Point");
+        if (e.shape == ParticleEmitterShape::Box) {
+            em->setParameter("width", f2s(e.boxSize.x));
+            em->setParameter("height", f2s(e.boxSize.y));
+            em->setParameter("depth", f2s(e.boxSize.z));
+        }
+        em->setParameter("position", v3s(e.position));
         em->setParameter("angle", f2s(e.angleDegrees));
         em->setParameter("direction", v3s(e.direction));
         if (d.loop){
             em->setParameter("emission_rate", f2s(e.emissionRate * qscale));
         } else {
-            // One-shot: burst over a short window so Ogre sees a finite emission_rate.
+            // One-shot: burst over a short window so Ogre sees a finite
+            // emission_rate. burstCount describes the whole effect, not an
+            // accidental multiplier for every emitter.
             const float window = 0.05f;
-            em->setParameter("emission_rate", f2s(std::max(1.0f, d.burstCount * qscale)/window));
+            const float count = d.burstCount * qscale /
+                                float(std::max<size_t>(1, d.emitters.size()));
+            em->setParameter("emission_rate",
+                             f2s(std::max(1.0f, count) / window));
             em->setParameter("duration", f2s(window));
         }
         em->setParameter("time_to_live_min", f2s(e.ttlMin));
@@ -84,23 +98,72 @@ Ogre::ParticleSystem* Particles::build(const ParticleEffectDesc& d){
         rot->setParameter("rotation_speed_range_start", f2s(-d.rotationJitterDeg));
         rot->setParameter("rotation_speed_range_end", f2s(d.rotationJitterDeg));
     }
+    if (glm::dot(d.acceleration, d.acceleration) > 1e-8f) {
+        Ogre::ParticleAffector* force = ps->addAffector("LinearForce");
+        force->setParameter("force_vector", v3s(d.acceleration));
+        force->setParameter("force_application", "add");
+    }
     ps->setEmitting(false);
     return ps;
 }
 
 ParticleEffectId Particles::registerEffect(const ParticleEffectDesc& desc){
+    if (!mSm || desc.name.empty() || desc.material.empty() || desc.emitters.empty()) {
+        log::error("Particles: effect requires a name, material, and emitter");
+        return {};
+    }
+
+    ParticleEffectDesc clean = desc;
+    if (!Ogre::MaterialManager::getSingleton().getByName(clean.material)) {
+        log::error("Particles: effect '%s' material '%s' is missing; using '%s'",
+                   clean.name.c_str(), clean.material.c_str(),
+                   prototype::kParticleMaterial);
+        clean.material = prototype::kParticleMaterial;
+    }
+    clean.baseWidth = std::max(0.001f, clean.baseWidth);
+    clean.baseHeight = std::max(0.001f, clean.baseHeight);
+    clean.quota = std::max(1, clean.quota);
+    clean.burstCount = std::max(0.0f, clean.burstCount);
+    clean.qualityWeight = std::clamp(clean.qualityWeight, 0.0f, 1.0f);
+    clean.hueJitter = std::clamp(clean.hueJitter, 0.0f, 1.0f);
+    clean.scaleJitter = std::clamp(clean.scaleJitter, 0.0f, 0.95f);
+    for (auto& emitter : clean.emitters) {
+        emitter.boxSize = glm::max(emitter.boxSize, glm::vec3(0.001f));
+        emitter.angleDegrees = std::clamp(emitter.angleDegrees, 0.0f, 180.0f);
+        emitter.emissionRate = std::max(0.0f, emitter.emissionRate);
+        emitter.ttlMin = std::max(0.001f, emitter.ttlMin);
+        emitter.ttlMax = std::max(0.001f, emitter.ttlMax);
+        emitter.velocityMin = std::max(0.0f, emitter.velocityMin);
+        emitter.velocityMax = std::max(0.0f, emitter.velocityMax);
+        if (emitter.ttlMin > emitter.ttlMax) std::swap(emitter.ttlMin, emitter.ttlMax);
+        if (emitter.velocityMin > emitter.velocityMax)
+            std::swap(emitter.velocityMin, emitter.velocityMax);
+        if (glm::dot(emitter.direction, emitter.direction) < 1e-8f)
+            emitter.direction = {0.0f, 1.0f, 0.0f};
+        else
+            emitter.direction = glm::normalize(emitter.direction);
+    }
+    auto sortStops = [](auto& stops) {
+        for (auto& stop : stops) stop.t = std::clamp(stop.t, 0.0f, 1.0f);
+        std::stable_sort(stops.begin(), stops.end(),
+                         [](const auto& a, const auto& b) { return a.t < b.t; });
+    };
+    sortStops(clean.colourRamp);
+    sortStops(clean.sizeRamp);
+
     for (size_t i=0;i<mEffects.size();++i){
-        if (mEffects[i].desc.name == desc.name){
+        if (mEffects[i].desc.name == clean.name){
             // Re-register: flush pool for this effect so stale built systems are gone.
             for (auto* ps : mEffects[i].free) mSm->destroyParticleSystem(ps);
             mEffects[i].free.clear();
-            mEffects[i].desc = desc;
+            mEffects[i].desc = std::move(clean);
+            ++mEffects[i].generation;
             return ParticleEffectId{ uint32_t(i+1) };
         }
     }
-    mEffects.push_back({ desc, {} });
+    mEffects.push_back({ std::move(clean), {}, 1 });
     const uint32_t id = uint32_t(mEffects.size());
-    mByName[desc.name] = id;
+    mByName[mEffects.back().desc.name] = id;
     return ParticleEffectId{ id };
 }
 
@@ -109,7 +172,8 @@ ParticleEffectId Particles::find(const std::string& name) const {
     return it == mByName.end() ? ParticleEffectId{} : ParticleEffectId{ it->second };
 }
 
-ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent, glm::vec3 localPos){
+ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent,
+                                 glm::vec3 localPos, bool ownsParent){
     if (!fx.valid() || fx.id > mEffects.size() || !parent) return {};
     Effect& e = mEffects[fx.id-1];
     Ogre::ParticleSystem* ps = nullptr;
@@ -123,7 +187,17 @@ ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent, g
     parent->attachObject(ps);
     (void)localPos;
     ps->clear();
-    for (unsigned short i=0;i<ps->getNumEmitters();++i) ps->getEmitter(i)->setEnabled(true);
+    const float initialScale =
+        e.desc.sizeRamp.empty() ? 1.0f : e.desc.sizeRamp.front().scale;
+    ps->setDefaultDimensions(e.desc.baseWidth * initialScale,
+                             e.desc.baseHeight * initialScale);
+    for (unsigned short i=0;i<ps->getNumEmitters();++i) {
+        ps->getEmitter(i)->setEnabled(true);
+        const auto& emitter = e.desc.emitters[std::min<size_t>(i, e.desc.emitters.size()-1)];
+        const glm::vec4 colour = e.desc.colourRamp.empty()
+            ? emitter.startColour : e.desc.colourRamp.front().rgba;
+        ps->getEmitter(i)->setParameter("colour", c4s(colour));
+    }
 
     // Per-spawn variety: seed a cheap deterministic RNG from the handle counter so
     // repeated casts differ but a given spawn is reproducible.
@@ -134,18 +208,19 @@ ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent, g
                          return (s & 0xffffff) / float(0xffffff); }; // 0..1
         if (d.scaleJitter > 0.0f){
             const float j = 1.0f + (rnd()*2.0f - 1.0f) * d.scaleJitter;
-            ps->setDefaultDimensions(d.baseWidth * j, d.baseHeight * j);
+            ps->setDefaultDimensions(d.baseWidth * initialScale * j,
+                                     d.baseHeight * initialScale * j);
         }
         if (d.hueJitter > 0.0f){
             const float j = (rnd()*2.0f - 1.0f) * d.hueJitter;
-            glm::vec4 c = d.colourRamp.empty()
-                ? (d.emitters.empty() ? glm::vec4(1.0f) : d.emitters[0].startColour)
-                : d.colourRamp.front().rgba;
-            c.r = std::clamp(c.r + j, 0.0f, 1.0f);
-            c.b = std::clamp(c.b - j, 0.0f, 1.0f);
-            for (unsigned short i=0;i<ps->getNumEmitters();++i)
-                ps->getEmitter(i)->setParameter("colour",
-                    c4s(c));
+            for (unsigned short i=0;i<ps->getNumEmitters();++i) {
+                glm::vec4 c = d.colourRamp.empty()
+                    ? d.emitters[std::min<size_t>(i, d.emitters.size()-1)].startColour
+                    : d.colourRamp.front().rgba;
+                c.r = std::clamp(c.r + j, 0.0f, 1.0f);
+                c.b = std::clamp(c.b - j, 0.0f, 1.0f);
+                ps->getEmitter(i)->setParameter("colour", c4s(c));
+            }
         }
     }
 
@@ -154,6 +229,7 @@ ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent, g
     for (const auto& em : e.desc.emitters) maxTtl = std::max(maxTtl, em.ttlMax);
     Live lv; lv.effect = fx.id; lv.ps = ps; lv.oneShot = !e.desc.loop;
     lv.maxLife = 0.05f + maxTtl; lv.active = true;
+    lv.ownsParent = ownsParent; lv.generation = e.generation;
     const uint32_t id = mNextHandle++;
     mLive[id] = lv;
     return ParticlesHandle{ id };
@@ -173,8 +249,15 @@ void Particles::despawn(ParticlesHandle h){
     Ogre::ParticleSystem* ps = it->second.ps;
     ps->setEmitting(false); ps->clear();
     // detachObject(MovableObject*) verified in OgreSceneNode.h line 151.
-    if (ps->getParentSceneNode()) ps->getParentSceneNode()->detachObject(ps);
-    mEffects[it->second.effect-1].free.push_back(ps);
+    Ogre::SceneNode* parent = ps->getParentSceneNode();
+    if (parent) parent->detachObject(ps);
+    Effect& effect = mEffects[it->second.effect-1];
+    if (it->second.generation == effect.generation)
+        effect.free.push_back(ps);
+    else
+        mSm->destroyParticleSystem(ps);
+    if (it->second.ownsParent && parent)
+        mSm->destroySceneNode(parent);
     mLive.erase(it);
 }
 
@@ -184,7 +267,7 @@ void Particles::setQuality(float q){
     for (auto& e : mEffects){ for (auto* ps : e.free) mSm->destroyParticleSystem(ps); e.free.clear(); }
 }
 
-void Particles::update(float dt){
+std::vector<uint32_t> Particles::update(float dt){
     std::vector<uint32_t> done;
     for (auto& [id, lv] : mLive){
         if (!lv.oneShot) continue;
@@ -192,6 +275,7 @@ void Particles::update(float dt){
         if (lv.age >= lv.maxLife && lv.ps->getNumParticles()==0) done.push_back(id);
     }
     for (uint32_t id : done) despawn(ParticlesHandle{ id });
+    return done;
 }
 
 void Particles::clear(){

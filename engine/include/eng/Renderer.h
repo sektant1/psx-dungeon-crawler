@@ -1,7 +1,7 @@
 #pragma once
 #include <eng/Handles.h>
 #include <eng/LightDesc.h>
-#include <eng/ParticleEffectDesc.h>
+#include <eng/particles/ParticleEffectDesc.h>
 #include <eng/Sprite.h>
 
 #include <glm/glm.hpp>
@@ -12,6 +12,8 @@
 #include <vector>
 
 namespace eng {
+
+enum class EnchantmentStyle { Arcane, Fire, Poison, Frost };
 
 class RenderCore; // internal; forward-declared only, no Ogre leak
 class Renderer;
@@ -84,6 +86,11 @@ public:
     void setScale(NodeHandle node, glm::vec3 scale);
     // Live-swap the material on every mesh attached to a node (editor tweaks).
     void setNodeMaterial(NodeHandle node, const std::string& materialName);
+    // Adds/removes a scrolling Minecraft-like enchantment pass while
+    // preserving each mesh's underlying material.
+    void setNodeEnchantment(NodeHandle node, EnchantmentStyle style,
+                            float strength = 1.0f);
+    void clearNodeEnchantment(NodeHandle node);
     // All user-facing material names currently loaded (Ogre parsed every
     // .material at init), sorted, with engine/Ogre internals filtered out. For
     // editor material pickers -- discovered, never hard-coded.

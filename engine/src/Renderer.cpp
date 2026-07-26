@@ -1,10 +1,12 @@
 #include <eng/Renderer.h>
 
 #include <eng/Log.h>
+#include <eng/render/PrototypeAssets.h>
+#include <eng/particles/ParticlePresets.h>
 #include <eng/SceneView.h>
 
 #include "ObjLoader.h"
-#include "Particles.h"
+#include "particles/Particles.h"
 #include "ProceduralMeshes.h"
 #include "RenderCore.h"
 #include "SceneRegistry.h"
@@ -14,6 +16,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <regex>
 #include <unordered_map>
 #include <vector>
@@ -52,6 +55,7 @@ struct Renderer::Impl {
     // Original sub-entity materials, saved while the wireframe debug view
     // holds every entity on PSX/DebugWireframe.
     std::unordered_map<Ogre::SubEntity*, std::string> savedMaterials;
+    std::unordered_map<Ogre::SubEntity*, std::string> enchantBaseMaterials;
 
     // Immediate-mode debug line overlay (physics collider wireframes etc.)
     // Created lazily on first use; recreated if clearScene destroyed it.
@@ -223,22 +227,86 @@ void Renderer::setNodeVisible(NodeHandle node, bool show)
 
 void Renderer::setNodeMaterial(NodeHandle node, const std::string& materialName)
 {
-    if (!Ogre::MaterialManager::getSingleton().getByName(materialName)) {
-        log::warn("Renderer: setNodeMaterial unknown material '%s'",
-                  materialName.c_str());
-        return;
+    std::string resolved = materialName;
+    if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
+        log::error("Renderer: material '%s' is missing; using '%s'",
+                   materialName.c_str(), prototype::kSurfaceMaterial);
+        resolved = prototype::kSurfaceMaterial;
     }
     Ogre::SceneNode* n = mImpl->node(node, "setNodeMaterial");
     for (size_t i = 0; i < n->numAttachedObjects(); ++i)
         if (auto* e = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i))) {
-            e->setMaterialName(materialName);
+            e->setMaterialName(resolved);
             // Keep the wireframe restore map coherent if the debug view is on.
             for (Ogre::SubEntity* se : e->getSubEntities())
                 if (mImpl->savedMaterials.count(se))
-                    mImpl->savedMaterials[se] = materialName;
+                    mImpl->savedMaterials[se] = resolved;
         }
     // Reflect the change in the editor's scene mirror (first mesh attachment).
-    mImpl->mScene.setMeshMaterial(node, materialName);
+    mImpl->mScene.setMeshMaterial(node, resolved);
+}
+
+void Renderer::clearNodeEnchantment(NodeHandle node)
+{
+    Ogre::SceneNode* n = mImpl->node(node, "clearNodeEnchantment");
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i)
+        if (auto* entity = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i)))
+            for (Ogre::SubEntity* sub : entity->getSubEntities()) {
+                auto found = mImpl->enchantBaseMaterials.find(sub);
+                if (found == mImpl->enchantBaseMaterials.end()) continue;
+                sub->setMaterialName(found->second);
+                mImpl->enchantBaseMaterials.erase(found);
+            }
+}
+
+void Renderer::setNodeEnchantment(NodeHandle node, EnchantmentStyle style,
+                                  float strength)
+{
+    clearNodeEnchantment(node);
+    if (strength <= 0.0f) return;
+
+    glm::vec4 colour;
+    glm::vec2 scroll;
+    switch (style) {
+    case EnchantmentStyle::Fire:
+        colour = {1.0f, 0.24f, 0.03f, 0.75f}; scroll = {0.24f, -0.14f}; break;
+    case EnchantmentStyle::Poison:
+        colour = {0.32f, 1.0f, 0.08f, 0.68f}; scroll = {-0.14f, 0.19f}; break;
+    case EnchantmentStyle::Frost:
+        colour = {0.22f, 0.72f, 1.0f, 0.68f}; scroll = {0.10f, 0.22f}; break;
+    default:
+        colour = {0.62f, 0.32f, 1.0f, 0.68f}; scroll = {0.18f, -0.12f}; break;
+    }
+
+    Ogre::SceneNode* n = mImpl->node(node, "setNodeEnchantment");
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i)
+        if (auto* entity = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i)))
+            for (Ogre::SubEntity* sub : entity->getSubEntities()) {
+                const std::string baseName = sub->getMaterialName();
+                Ogre::MaterialPtr base =
+                    Ogre::MaterialManager::getSingleton().getByName(baseName);
+                if (!base) continue;
+                const std::string cloneName = mImpl->nextName("enchantment");
+                Ogre::MaterialPtr enchanted = base->clone(cloneName);
+                Ogre::Pass* pass = enchanted->getTechnique(0)->createPass();
+                pass->setSceneBlending(Ogre::SBT_ADD);
+                pass->setDepthWriteEnabled(false);
+                pass->setDepthFunction(Ogre::CMPF_LESS_EQUAL);
+                pass->setCullingMode(Ogre::CULL_NONE);
+                pass->setVertexProgram("Enchantment/VS");
+                pass->setFragmentProgram("Enchantment/FS");
+                pass->getVertexProgramParameters()->setNamedConstant(
+                    "enchantScroll", Ogre::Vector2(scroll.x, scroll.y));
+                pass->getFragmentProgramParameters()->setNamedConstant(
+                    "enchantColour",
+                    Ogre::Vector4(colour.r, colour.g, colour.b, colour.a));
+                pass->getFragmentProgramParameters()->setNamedConstant(
+                    "enchantStrength", std::clamp(strength, 0.0f, 2.0f));
+                enchanted->load();
+                mImpl->spriteMaterials.push_back(cloneName);
+                mImpl->enchantBaseMaterials[sub] = baseName;
+                sub->setMaterialName(cloneName);
+            }
 }
 
 std::vector<std::string> Renderer::materialNames() const
@@ -293,6 +361,24 @@ bool Renderer::nodeWorldBounds(NodeHandle node, glm::vec3& center,
 
 void Renderer::destroyNode(NodeHandle node)
 {
+    // Reclaim particle systems throughout the subtree before the Ogre nodes
+    // disappear. Merely detaching them would leave looping systems alive in
+    // Particles::mLive forever and make their handles impossible to stop.
+    std::vector<ParticlesHandle> particleHandles;
+    std::function<void(NodeHandle)> gatherParticles = [&](NodeHandle current) {
+        const NodeRecord* record = mImpl->mScene.find(current);
+        if (!record) return;
+        for (const AttachRecord& attachment : record->attachments)
+            if (attachment.kind == NodeAttachKind::Particles)
+                particleHandles.push_back(
+                    ParticlesHandle{static_cast<uint32_t>(attachment.handle)});
+        for (NodeHandle child : record->children)
+            gatherParticles(child);
+    };
+    gatherParticles(node);
+    for (ParticlesHandle particles : particleHandles)
+        despawnParticles(particles);
+
     mImpl->mScene.removeNode(node);
     if (!node.valid() || node.id > mImpl->nodes.size()) return;
     Ogre::SceneNode* n = mImpl->nodes[node.id - 1];
@@ -322,22 +408,26 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
                           const std::string& materialName, bool castShadows,
                           bool renderOnTop)
 {
-    if (!Ogre::MaterialManager::getSingleton().getByName(materialName))
-        log::fatal("Renderer: unknown material '%s'", materialName.c_str());
+    std::string resolved = materialName;
+    if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
+        log::error("Renderer: material '%s' is missing; using '%s'",
+                   materialName.c_str(), prototype::kSurfaceMaterial);
+        resolved = prototype::kSurfaceMaterial;
+    }
     Ogre::Entity* e =
         mImpl->core.sceneMgr()->createEntity(mImpl->mesh(mesh, "attachMesh"));
-    e->setMaterialName(materialName);
+    e->setMaterialName(resolved);
     e->setCastShadows(castShadows);
     if (renderOnTop)
         e->setRenderQueueGroup(Ogre::RENDER_QUEUE_8);
     if (mImpl->env.wireframe) { // debug view active: join it immediately
         for (Ogre::SubEntity* se : e->getSubEntities()) {
-            mImpl->savedMaterials[se] = materialName;
+            mImpl->savedMaterials[se] = resolved;
             se->setMaterialName("PSX/DebugWireframe");
         }
     }
     mImpl->node(node, "attachMesh")->attachObject(e);
-    mImpl->mScene.addAttachment(node, {NodeAttachKind::Mesh, 0, materialName});
+    mImpl->mScene.addAttachment(node, {NodeAttachKind::Mesh, 0, resolved});
 }
 
 std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
@@ -356,9 +446,9 @@ std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
     const bool generated = bool(Ogre::TextureManager::getSingleton().getByName(texture));
     if (!generated &&
         !Ogre::ResourceGroupManager::getSingleton().resourceExistsInAnyGroup(texture)) {
-        log::error("Sprite: texture '%s' is missing; using PINKY.png",
-                   texture.c_str());
-        texture = "PINKY.png";
+        log::error("Sprite: texture '%s' is missing; using %s",
+                   texture.c_str(), prototype::kSpriteTexture);
+        texture = prototype::kSpriteTexture;
     }
     pass->getTextureUnitState(0)->setTextureName(texture);
     auto vp = pass->getVertexProgramParameters();
@@ -612,10 +702,14 @@ void Renderer::addToStaticBatch(StaticBatchHandle batch, MeshHandle mesh,
     if (!batch.valid() || batch.id > mImpl->staticBatches.size())
         log::fatal("Renderer: invalid batch handle %u in addToStaticBatch",
                    batch.id);
-    if (!Ogre::MaterialManager::getSingleton().getByName(materialName))
-        log::fatal("Renderer: unknown material '%s'", materialName.c_str());
+    std::string resolved = materialName;
+    if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
+        log::error("Renderer: material '%s' is missing; using '%s'",
+                   materialName.c_str(), prototype::kSurfaceMaterial);
+        resolved = prototype::kSurfaceMaterial;
+    }
     mImpl->staticBatches[batch.id - 1].recs.push_back(
-        {mesh, materialName, pos, yawDeg});
+        {mesh, resolved, pos, yawDeg});
 }
 
 void Renderer::buildStaticBatch(StaticBatchHandle batch)
@@ -673,6 +767,7 @@ void Renderer::clearScene()
     mImpl->generatedTextures.clear();
     mImpl->staticBatches.clear();
     mImpl->savedMaterials.clear();
+    mImpl->enchantBaseMaterials.clear();
     mImpl->meshNames.clear();
     mImpl->debugLines = nullptr; // destroyAllManualObjects freed it
     mImpl->mScene.clear();
@@ -707,23 +802,38 @@ ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, NodeHandle parent,
     // A non-zero local offset gets its own child node so the particle inherits
     // an offset transform without disturbing the parent (the particle system
     // itself has no per-attachment offset in Ogre).
-    if (glm::dot(localPos, localPos) > 1e-8f)
+    const bool ownsNode = glm::dot(localPos, localPos) > 1e-8f;
+    if (ownsNode)
         n = n->createChildSceneNode(toOgre(localPos));
-    ParticlesHandle ph = mImpl->particles.spawn(fx, n, glm::vec3(0.0f));
-    mImpl->mScene.addAttachment(parent, {NodeAttachKind::Particles, ph.id, ""});
+    ParticlesHandle ph =
+        mImpl->particles.spawn(fx, n, glm::vec3(0.0f), ownsNode);
+    if (ph.valid())
+        mImpl->mScene.addAttachment(parent, {NodeAttachKind::Particles, ph.id, ""});
+    else if (ownsNode)
+        mImpl->core.sceneMgr()->destroySceneNode(n);
     return ph;
 }
 
 ParticlesHandle Renderer::spawnParticles(ParticleEffectId fx, glm::vec3 worldPos)
 {
-    NodeHandle n = createNode(kRootNode, worldPos);
-    return spawnParticles(fx, n, glm::vec3(0.0f));
+    Ogre::SceneNode* n =
+        mImpl->core.sceneMgr()->getRootSceneNode()->createChildSceneNode(toOgre(worldPos));
+    ParticlesHandle ph = mImpl->particles.spawn(fx, n, glm::vec3(0.0f), true);
+    if (!ph.valid())
+        mImpl->core.sceneMgr()->destroySceneNode(n);
+    return ph;
 }
 
 void Renderer::stopParticles(ParticlesHandle h) { mImpl->particles.stop(h); }
-void Renderer::despawnParticles(ParticlesHandle h) { mImpl->particles.despawn(h); }
+void Renderer::despawnParticles(ParticlesHandle h) {
+    mImpl->particles.despawn(h);
+    mImpl->mScene.removeAttachment(NodeAttachKind::Particles, h.id);
+}
 void Renderer::setParticleQuality(float q) { mImpl->particles.setQuality(q); }
-void Renderer::updateParticles(float dt) { mImpl->particles.update(dt); }
+void Renderer::updateParticles(float dt) {
+    for (uint32_t id : mImpl->particles.update(dt))
+        mImpl->mScene.removeAttachment(NodeAttachKind::Particles, id);
+}
 
 void Renderer::attachCamera(NodeHandle node)
 {
@@ -1197,6 +1307,7 @@ void registerRoot(Renderer& r)
 {
     r.mImpl->nodes.push_back(r.mImpl->core.sceneMgr()->getRootSceneNode());
     r.mImpl->particles.init(r.mImpl->core.sceneMgr());
+    particle_presets::registerDefaults(r);
 }
 
 } // namespace detail

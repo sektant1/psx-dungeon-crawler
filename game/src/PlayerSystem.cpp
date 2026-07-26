@@ -5,6 +5,7 @@
 #include <eng/LightDesc.h>
 #include <eng/Renderer.h>
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -14,6 +15,7 @@ void PlayerSystem::spawnAt(GameContext& ctx, glm::vec3 pos)
 {
     mPlayer.init(ctx.renderer, ctx.physics, pos, mSpeed, mSens,
                  glm::vec3(-1000.0f), glm::vec3(1000.0f));
+    mPlayer.setCeilingHeight(3.0f);
 }
 
 void PlayerSystem::attachLoadout(GameContext& ctx)
@@ -36,6 +38,14 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
 void PlayerSystem::update(GameContext& ctx, float dt)
 {
     mPlayer.update(ctx.input, ctx.renderer, dt);
+    mFootstepFxCooldown = std::max(0.0f, mFootstepFxCooldown - dt);
+    if (mPlayer.grounded() && mPlayer.horizontalSpeed() > 1.2f &&
+        mFootstepFxCooldown <= 0.0f) {
+        ctx.renderer.spawnParticles(
+            "engine.footstep_dust",
+            mPlayer.position() + glm::vec3(0.0f, 0.03f, 0.0f));
+        mFootstepFxCooldown = mPlayer.sprinting() ? 0.20f : 0.32f;
+    }
 }
 
 void PlayerSystem::updateViewmodels(GameContext& ctx, float dt,

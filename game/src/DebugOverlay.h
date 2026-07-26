@@ -8,7 +8,7 @@
 namespace eng { class Renderer; }
 
 struct CombatConfig;
-class FpsController; // global namespace (game/src/FpsController.h)
+namespace eng { class FpsController; }
 
 namespace game {
 
@@ -44,7 +44,7 @@ public:
     struct Deps {
         eng::Renderer* renderer = nullptr;
         CombatConfig* combat = nullptr;
-        ::FpsController* fps = nullptr;
+        eng::FpsController* fps = nullptr;
         entt::registry* registry = nullptr; // combat director registry
         entt::entity player = entt::null;    // player entity in `registry`
         const ProfHud* prof = nullptr;

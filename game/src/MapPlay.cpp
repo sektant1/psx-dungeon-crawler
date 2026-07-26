@@ -4,7 +4,7 @@
 
 #include "MapPlay.h"
 
-#include "FpsController.h"
+#include <eng/controllers/FpsController.h>
 #include "scene/MapRuntime.h"
 
 #include <eng/Engine.h>
@@ -77,7 +77,7 @@ int playMap(eng::Engine& engine, eng::Physics& physics,
         r.attachLight(keyNode, key);
     }
 
-    FpsController player;
+    eng::FpsController player;
     player.init(r, physics, rt.playerSpawn(), 6.0f, 0.0025f,
                 glm::vec3(-500.0f), glm::vec3(500.0f));
     engine.input().setMouseGrab(true);

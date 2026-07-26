@@ -26,6 +26,20 @@ materials = ["Game/PropJute"]
 position = [-5.0, 0.0, 22.8]
 yaw = 100.0
 
+# Paired landmark lamps frame the arrival-to-reliquary transition without
+# blocking its centre arch or flanking movement routes.
+[[prop]]
+meshes = ["prop_lamp.obj"]
+materials = ["Game/PropLamp"]
+position = [-6.0, 0.0, 16.0]
+yaw = 90.0
+
+[[prop]]
+meshes = ["prop_lamp.obj"]
+materials = ["Game/PropLamp"]
+position = [6.0, 0.0, 16.0]
+yaw = -90.0
+
 # --- great hall corners (x +-10, z +-6 interior)
 [[prop]]
 meshes = ["prop_barrel_p0.obj", "prop_barrel_p1.obj"]
@@ -70,6 +84,20 @@ meshes = ["prop_jutesack.obj"]
 materials = ["Game/PropJute"]
 position = [9.1, 0.0, -3.4]
 yaw = -15.0
+
+# Matching lamps announce the portal proving ground and visually bracket the
+# open combat lane toward the dummy and dungeon gate.
+[[prop]]
+meshes = ["prop_lamp.obj"]
+materials = ["Game/PropLamp"]
+position = [-6.0, 0.0, -16.0]
+yaw = 90.0
+
+[[prop]]
+meshes = ["prop_lamp.obj"]
+materials = ["Game/PropLamp"]
+position = [6.0, 0.0, -16.0]
+yaw = -90.0
 
 # --- vault (z ~ -24): barrel the shield rests on (shield stays in code).
 [[prop]]

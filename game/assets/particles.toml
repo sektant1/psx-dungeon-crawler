@@ -1,12 +1,15 @@
 # Spell VFX ---------------------------------------------------------------
 [[effect]]
 name = "spell_muzzle"
-material = "Game/SpellMuzzle"
+material = "Engine/Particles/Fire"
 base_width = 0.18
 base_height = 0.18
 quota = 32
 loop = false
 burst_count = 20
+acceleration = [0.0, -2.5, 0.0]
+rotation_jitter_deg = 140
+scale_jitter = 0.18
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 60
@@ -15,15 +18,22 @@ ttl_max = 0.18
 velocity_min = 0.6
 velocity_max = 1.2
 start_colour = [1.0, 0.97, 0.72, 1.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.35
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.15
 
 [[effect]]
 name = "fireball_trail"
-material = "Game/FireballTrail"
+material = "Engine/Particles/Fire"
 base_width = 0.16
 base_height = 0.16
 quota = 96
 loop = true
 scale_jitter = 0.1
+acceleration = [0.0, 0.35, 0.0]
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 55
@@ -38,15 +48,24 @@ rgba = [1.0, 0.45, 0.08, 0.80]
 [[effect.colour_ramp]]
 t = 1.0
 rgba = [1.0, 0.70, 0.22, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.30
 
 [[effect]]
 name = "fireball_impact"
-material = "Game/FireballImpact"
+material = "Engine/Particles/Fire"
 base_width = 0.16
 base_height = 0.16
 quota = 64
 loop = false
 burst_count = 40
+acceleration = [0.0, -3.5, 0.0]
+rotation_jitter_deg = 180
+scale_jitter = 0.25
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 180
@@ -60,6 +79,12 @@ rgba = [1.0, 0.30, 0.04, 0.9]
 [[effect.colour_ramp]]
 t = 1.0
 rgba = [1.0, 0.60, 0.12, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.15
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.20
 
 [[effect]]
 name = "beam_core"
@@ -86,6 +111,8 @@ base_height = 0.10
 quota = 48
 loop = false
 burst_count = 32
+acceleration = [0.0, -1.2, 0.0]
+rotation_jitter_deg = 160
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 180
@@ -99,16 +126,24 @@ rgba = [0.20, 0.85, 1.0, 0.9]
 [[effect.colour_ramp]]
 t = 1.0
 rgba = [0.60, 1.0, 1.0, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.12
 
 # Torch / flame -----------------------------------------------------------
 [[effect]]
 name = "torch_fire"
-material = "Game/FireParticle"
+material = "Engine/Particles/Fire"
 base_width = 0.14
 base_height = 0.16
 quota = 20
 loop = true
 rotation_jitter_deg = 90
+acceleration = [0.0, 0.30, 0.0]
+scale_jitter = 0.14
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 16
@@ -126,14 +161,21 @@ rgba = [1.0, 0.42, 0.10, 0.56]
 [[effect.colour_ramp]]
 t = 1.0
 rgba = [0.55, 0.07, 0.02, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.05
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.28
 
 [[effect]]
 name = "torch_glow"
-material = "Game/FireParticle"
+material = "Engine/Particles/Fire"
 base_width = 0.20
 base_height = 0.22
 quota = 6
 loop = true
+acceleration = [0.0, 0.18, 0.0]
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 7
@@ -151,6 +193,12 @@ rgba = [1.0, 0.30, 0.06, 0.20]
 [[effect.colour_ramp]]
 t = 1.0
 rgba = [0.45, 0.03, 0.01, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.15
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.45
 
 [[effect]]
 name = "torch_ash"
@@ -160,6 +208,7 @@ base_height = 0.09
 quota = 24
 loop = true
 rotation_jitter_deg = 120
+acceleration = [0.06, 0.12, 0.02]
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 18
@@ -181,12 +230,14 @@ start_colour = [0.30, 0.34, 0.28, 0.8]
 
 [[effect]]
 name = "fire_smoke"
-material = "Game/SmokeParticle"
+material = "Engine/Particles/Smoke"
 base_width = 0.13
 base_height = 0.13
 quota = 12
 loop = true
 rotation_jitter_deg = 35
+acceleration = [0.025, 0.10, 0.015]
+scale_jitter = 0.22
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 20
@@ -201,6 +252,12 @@ rgba = [0.20, 0.19, 0.22, 0.22]
 [[effect.colour_ramp]]
 t = 1.0
 rgba = [0.34, 0.32, 0.36, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.65
+[[effect.size_ramp]]
+t = 1.0
+scale = 2.15
 
 # Scene sparkles ----------------------------------------------------------
 [[effect]]
@@ -210,6 +267,9 @@ base_width = 0.3
 base_height = 0.3
 quota = 32
 loop = true
+acceleration = [0.0, -0.12, 0.0]
+rotation_jitter_deg = 90
+scale_jitter = 0.12
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 180

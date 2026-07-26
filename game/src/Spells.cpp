@@ -143,6 +143,7 @@ void SpellSystem::castBeam(eng::Physics& phys, eng::Renderer& r,
 
     if (struck) {
         spawnBurst(r, endPt, bm.impactParticle, 0.25f, bm.lightColour, bm.lightRange);
+        r.spawnParticles("engine.hit_sparks", endPt);
         if (chosen.body.valid())
             phys.applyImpulse(chosen.body, fwd * bm.impulse, endPt);
     }
@@ -159,6 +160,7 @@ void SpellSystem::onHit(eng::Physics& phys, eng::Renderer& r,
             f.ttl  = 0.0f;
             const CombatConfig::Fireball& fb = mCfg->fireball;
             spawnBurst(r, e.point, fb.impactParticle, 0.35f, fb.lightColour, fb.lightRange);
+            r.spawnParticles("engine.hit_sparks", e.point);
             eng::BodyHandle target = (f.body == e.self) ? e.other : e.self;
             if (target.valid())
                 phys.applyImpulse(target, -e.normal * fb.impactImpulse, e.point);

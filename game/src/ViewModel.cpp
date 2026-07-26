@@ -3,7 +3,7 @@
 // offsets layered on top of a fixed rest pose each frame.
 
 #include "ViewModel.h"
-#include "ParticleLibrary.h"
+#include "ParticleEffects.h"
 
 #include <eng/Renderer.h>
 
@@ -77,6 +77,7 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
         glm::translate(glm::mat4(1.0f), -mPose.gripPivot);
     const eng::MeshHandle weapon = r.loadObj(meshPath, &pivotBake);
     r.attachMesh(mNode, weapon, materialName, false, true);
+    r.setNodeEnchantment(mNode, eng::EnchantmentStyle::Arcane, 0.55f);
 
     // The prop_sword.obj is authored at world scale (used in scene dressing at
     // 0.06x).  As a viewmodel it needs to be much smaller, but readable.
@@ -134,6 +135,7 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
 
     r.setScale(mNode, glm::vec3(mPose.scale));
     r.setOrientation(mNode, poseOrientation(mPose));
+    r.setNodeEnchantment(tipNode, eng::EnchantmentStyle::Frost, 0.85f);
 
     // Reset animation state on every re-init (level transition).
     mAttackTime = -1.0f;
@@ -176,6 +178,7 @@ void ViewModel::initTorch(eng::Renderer& r, eng::NodeHandle headNode,
 
     r.setScale(mNode, glm::vec3(mPose.scale));
     r.setOrientation(mNode, poseOrientation(mPose));
+    r.setNodeEnchantment(handleNode, eng::EnchantmentStyle::Fire, 0.35f);
 
     mAttackTime = -1.0f;
     mParry      = 0.0f;

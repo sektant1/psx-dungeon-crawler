@@ -1,6 +1,6 @@
 #include "DungeonMap.h"
 #include "ObjLoader.h"
-#include "ParticleLibrary.h"
+#include "ParticleEffects.h"
 
 #include <eng/Log.h>
 #include <eng/Physics.h>

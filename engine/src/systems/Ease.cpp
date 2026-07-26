@@ -1,4 +1,4 @@
-#include <eng/Ease.h>
+#include <eng/systems/Ease.h>
 #include <cmath>
 
 namespace eng {

@@ -70,10 +70,12 @@ add_library(
   engine/src/ObjLoader.cpp
   engine/src/ProceduralMeshes.cpp
   engine/src/Renderer.cpp
-  engine/src/Particles.cpp
+  engine/src/particles/Particles.cpp
+  engine/src/particles/ParticlePresets.cpp
   engine/src/Log.cpp
   engine/src/Config.cpp
   engine/src/Input.cpp
+  engine/src/controllers/FpsController.cpp
   engine/src/Platform.cpp
   engine/src/Engine.cpp
   engine/src/Physics.cpp
@@ -92,6 +94,7 @@ add_library(
   engine/src/io/FileSystem.cpp
   engine/src/io/DirectoryWatcher.cpp
   engine/src/content/TextResource.cpp
+  engine/src/particles/ParticleLibrary.cpp
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
   engine/src/audio/Audio.cpp)
@@ -144,7 +147,6 @@ eng_target_hardening(psx_demo)
 add_executable(
   game
   game/src/main.cpp
-  game/src/FpsController.cpp
   game/src/DungeonMap.cpp
   game/src/DungeonGen.cpp
   game/src/GameScene.cpp
@@ -169,7 +171,7 @@ add_executable(
   game/src/Spells.cpp
   game/src/CombatConfig.cpp
   game/src/LobbyDressing.cpp
-  game/src/ParticleLibrary.cpp
+  game/src/ParticleEffects.cpp
   game/src/SceneFactory.cpp
   game/src/RenderPalette.cpp
   game/src/Targeting.cpp
@@ -244,9 +246,7 @@ if(BUILD_TESTING)
   target_link_libraries(targeting_tests PRIVATE glm::glm)
   add_test(NAME targeting COMMAND targeting_tests)
 
-  add_executable(fps_controller_tests game/tests/FpsControllerTests.cpp
-                                      game/src/FpsController.cpp)
-  target_include_directories(fps_controller_tests PRIVATE game/src)
+  add_executable(fps_controller_tests game/tests/FpsControllerTests.cpp)
   target_link_libraries(fps_controller_tests PRIVATE eng)
   add_test(NAME fps_controller COMMAND fps_controller_tests)
 
@@ -474,6 +474,11 @@ if(BUILD_TESTING)
                                engine/src/core/Object.cpp)
   target_include_directories(content_tests PRIVATE engine/include)
   add_test(NAME content COMMAND content_tests)
+
+  add_executable(particle_asset_tests engine/tests/ParticleAssetTests.cpp)
+  target_compile_definitions(
+    particle_asset_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME particle_assets COMMAND particle_asset_tests)
 
   add_executable(audio_tests engine/tests/AudioTests.cpp
                              engine/src/audio/Audio.cpp

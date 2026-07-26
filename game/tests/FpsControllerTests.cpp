@@ -1,4 +1,4 @@
-#include "FpsController.h"
+#include <eng/controllers/FpsController.h>
 
 #include <cstdlib>
 
@@ -6,10 +6,10 @@
 // locomotion + the sustained-sprint stamina model.
 int main()
 {
-    FpsController player;
+    eng::FpsController player;
     player.reset(glm::vec3(0.0f), 3.0f, 0.002f,
                  glm::vec3(-100.0f), glm::vec3(100.0f));
-    FpsController::Command command;
+    eng::FpsController::Command command;
     command.move.y = 1.0f;
 
     // Walks forward under normal input.

@@ -13,7 +13,11 @@ int main(){
     require(r.find(H(1))->children.size()==2, "root has two children");
     require(r.find(H(2))->name=="child", "name stored");
     r.addAttachment(H(2), {NodeAttachKind::Light, 7, "torch"});
+    r.addAttachment(H(3), {NodeAttachKind::Particles, 8, "smoke"});
     require(r.find(H(2))->attachments.size()==1, "attachment recorded");
+    r.removeAttachment(NodeAttachKind::Particles, 8);
+    require(r.find(H(3))->attachments.empty(), "attachment removed by handle");
+    require(r.find(H(2))->attachments.size()==1, "unrelated attachment retained");
     require(r.autoName(H(5))=="Node 5", "autoName");
     r.removeNode(H(1)); // recursive
     require(r.find(H(1))==nullptr && r.find(H(2))==nullptr && r.find(H(3))==nullptr, "recursive prune");

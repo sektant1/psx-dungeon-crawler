@@ -1,5 +1,5 @@
 #pragma once
-#include <eng/Ease.h>
+#include <eng/systems/Ease.h>
 #include <functional>
 #include <memory>
 #include <glm/glm.hpp>

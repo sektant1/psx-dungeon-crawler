@@ -27,6 +27,7 @@ class SceneRegistry {
 public:
     void addNode(NodeHandle node, NodeHandle parent, std::string name);
     void addAttachment(NodeHandle node, AttachRecord rec);
+    void removeAttachment(NodeAttachKind kind, uint64_t handle);
     void setMeshMaterial(NodeHandle node, const std::string& material); // first mesh
     void removeNode(NodeHandle node);   // unlinks from parent + recurses into children
     void clear();

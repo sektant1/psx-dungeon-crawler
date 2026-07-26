@@ -2,14 +2,14 @@
 #include <eng/Handles.h>
 
 #include <glm/glm.hpp>
+#include <limits>
 
 namespace eng {
 class Input;
 class Physics;
 class Renderer;
-} // namespace eng
 
-// Grounded first-person controller inspired by the Godot FPS templates:
+// Reusable grounded first-person controller:
 // acceleration/deceleration, exhaustion-safe sprint stamina, grounded jump,
 // sprint-slide, hold-to-crouch and restrained camera bob/FOV feedback. Yaw
 // lives on the body, pitch on the head.
@@ -46,12 +46,13 @@ public:
     glm::vec3 groundNormal() const { return mGroundNormal; }
     float horizontalSpeed() const { return glm::length(mVelocity); }
     glm::vec3 position() const { return mPos; }
-    // Horizontal capsule footprint used by the dungeon's rendered-wall sweep.
-    // Kept below the 0.8 m half-width arch opening for comfortable traversal.
+    // Horizontal capsule footprint, useful to gameplay-side movement sweeps.
     float collisionRadius() const { return mCollisionRadius; }
     // Keeps locomotion feedback separate from a designer/debug-camera FOV.
     float baseFov() const { return mBaseFov; }
     void setBaseFov(float degrees);
+    // Optional game-geometry constraint. Infinity (default) disables it.
+    void setCeilingHeight(float height) { mCeilingHeight = height; }
     void setViewAngles(float yawRadians, float pitchRadians = 0.0f);
 
     // Camera-feel knobs (debug-UI tunable): sprint FOV kick in degrees, head-bob
@@ -66,11 +67,11 @@ public:
     glm::vec3 forward() const;
 
     // Head node (camera parent), e.g. for attaching a player-carried light.
-    eng::NodeHandle headNode() const { return mHead; }
+    NodeHandle headNode() const { return mHead; }
 
 private:
-    eng::NodeHandle mBody{};
-    eng::NodeHandle mHead{};
+    NodeHandle mBody{};
+    NodeHandle mHead{};
     glm::vec3 mPos{0.0f};
     glm::vec3 mMin{0.0f};
     glm::vec3 mMax{0.0f};
@@ -102,6 +103,9 @@ private:
     bool mSliding = false;
     bool mCharGrounded = false;
     glm::vec3 mGroundNormal{0,1,0};
-    eng::Physics* mPhysics = nullptr;
-    eng::CharacterHandle mCharacter{};
+    float mCeilingHeight = std::numeric_limits<float>::infinity();
+    Physics* mPhysics = nullptr;
+    CharacterHandle mCharacter{};
 };
+
+} // namespace eng

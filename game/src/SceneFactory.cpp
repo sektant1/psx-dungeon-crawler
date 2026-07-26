@@ -1,5 +1,5 @@
 #include "SceneFactory.h"
-#include "ParticleLibrary.h"
+#include "ParticleEffects.h"
 
 #include <eng/Renderer.h>
 #include <eng/Log.h>
@@ -88,6 +88,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         eng::MeshHandle mesh;
         if (shape == "box") mesh = r.createBeveledBox(0.14f);
         else if (shape == "cone") mesh = r.createCone(0.5f, 1.0f, 8);
+        else if (shape == "sphere") mesh = r.createSphere(0.5f, 10, 12);
         else if (shape == "plane") mesh = r.createPlane(1.0f);
         else if (shape == "disc") mesh = r.createPortalDisc(0.5f, 16);
         else if (shape == "ring") mesh = r.createPortalRing(0.5f, 0.32f, 0.12f, 16);
@@ -109,8 +110,13 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         const std::string shape = (*e)["shape"].value_or(std::string());
         const std::string material = (*e)["material"].value_or(std::string());
         const std::string id = (*e)["id"].value_or(shape);
-        const eng::MeshHandle mesh = meshFor(shape);
-        if (!mesh.valid() || material.empty()) {
+        const bool isSword = shape == "sword";
+        const bool isStaff = shape == "staff";
+        const bool isParticleAltar = shape == "particle_altar";
+        const bool isComposite = isSword || isStaff || isParticleAltar;
+        const eng::MeshHandle mesh = isComposite ? eng::MeshHandle{}
+                                                  : meshFor(shape);
+        if ((!isComposite && !mesh.valid()) || material.empty()) {
             eng::log::error("Showcase: skipping invalid '%s' exhibit",
                             shape.c_str());
             continue;
@@ -120,14 +126,87 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         eng::NodeHandle placed = r.createNode(eng::kRootNode, position);
         r.setScale(placed, scale);
         const glm::vec3 degrees = vec3(*e, "rotation", {});
-        r.setOrientation(placed,
+        const eng::NodeHandle display = isComposite
+            ? r.createNode(placed) : placed;
+        r.setOrientation(display,
             glm::angleAxis(glm::radians(degrees.y), glm::vec3(0,1,0)) *
             glm::angleAxis(glm::radians(degrees.x), glm::vec3(1,0,0)) *
             glm::angleAxis(glm::radians(degrees.z), glm::vec3(0,0,1)));
-        r.attachMesh(placed, mesh, material, false);
+
+        eng::EnchantmentStyle enchantStyle = eng::EnchantmentStyle::Arcane;
+        const std::string enchantment =
+            (*e)["enchantment"].value_or(std::string());
+        if (enchantment == "fire") enchantStyle = eng::EnchantmentStyle::Fire;
+        else if (enchantment == "poison")
+            enchantStyle = eng::EnchantmentStyle::Poison;
+        else if (enchantment == "frost")
+            enchantStyle = eng::EnchantmentStyle::Frost;
+        const float enchantStrength =
+            float((*e)["enchantment_strength"].value_or(0.75));
+        const auto part = [&](eng::NodeHandle parent, glm::vec3 offset,
+                              glm::vec3 partScale, eng::MeshHandle partMesh,
+                              const std::string& partMaterial,
+                              bool enchanted = false) {
+            const eng::NodeHandle child = r.createNode(parent, offset);
+            r.setScale(child, partScale);
+            r.attachMesh(child, partMesh, partMaterial, false);
+            if (enchanted && !enchantment.empty())
+                r.setNodeEnchantment(child, enchantStyle, enchantStrength);
+            return child;
+        };
+
+        if (isComposite) {
+            // A stable carved plinth keeps the prop readable even when the
+            // displayed weapon is posed at an angle.
+            part(placed, {0, 0.12f, 0}, {1.18f, 0.24f, 1.18f},
+                 meshFor("box"), "Fantasy/CarvedStone");
+        }
+        if (isSword) {
+            part(display, {0, 0.50f, 0}, {0.17f, 0.38f, 0.17f},
+                 meshFor("box"), "Fantasy/AgedWood");
+            part(display, {0, 0.18f, 0}, {0.23f, 0.18f, 0.23f},
+                 meshFor("sphere"), "Fantasy/DarkIron");
+            part(display, {0, 0.94f, 0}, {0.78f, 0.10f, 0.20f},
+                 meshFor("box"), "Fantasy/DarkIron");
+            part(display, {0, 2.02f, 0}, {0.24f, 1.02f, 0.075f},
+                 meshFor("box"), material, true);
+            const eng::NodeHandle tip =
+                part(display, {0, 3.18f, 0}, {0.24f, 0.34f, 0.075f},
+                     meshFor("cone"), material, true);
+            r.setOrientation(tip, glm::angleAxis(
+                glm::radians(45.0f), glm::vec3(0, 1, 0)));
+        } else if (isStaff) {
+            part(display, {0, 1.42f, 0}, {0.13f, 1.30f, 0.13f},
+                 meshFor("box"), "Fantasy/AgedWood");
+            part(display, {0, 2.80f, 0}, {0.42f, 0.18f, 0.42f},
+                 meshFor("sphere"), "Fantasy/DarkIron");
+            const eng::NodeHandle crown =
+                part(display, {0, 3.25f, 0}, {0.78f, 0.78f, 0.78f},
+                     meshFor("ring"), material, true);
+            r.setOrientation(crown, glm::angleAxis(
+                glm::radians(90.0f), glm::vec3(1, 0, 0)));
+            part(display, {0, 3.25f, 0}, {0.42f, 0.42f, 0.42f},
+                 meshFor("sphere"), material, true);
+        } else if (isParticleAltar) {
+            part(display, {0, 0.46f, 0}, {0.82f, 0.18f, 0.82f},
+                 meshFor("ring"), material);
+            part(display, {0, 0.40f, 0}, {0.48f, 0.18f, 0.48f},
+                 meshFor("sphere"), "Fantasy/DarkIron");
+        } else {
+            r.attachMesh(display, mesh, material, false);
+        }
+        if (const std::string enchantment =
+                (*e)["enchantment"].value_or(std::string());
+            !enchantment.empty() && !isComposite)
+            r.setNodeEnchantment(display, enchantStyle, enchantStrength);
         if (const std::string particles =
-                (*e)["particles"].value_or(std::string()); !particles.empty())
-            r.spawnParticles(particles, placed);
+                (*e)["particles"].value_or(std::string()); !particles.empty()) {
+            const glm::vec3 particleOffset = vec3(*e, "particle_offset", {});
+            const eng::NodeHandle emitterNode =
+                particleOffset == glm::vec3(0.0f)
+                    ? placed : r.createNode(placed, particleOffset);
+            r.spawnParticles(particles, emitterNode);
+        }
         if (const toml::array* colour = (*e)["light_colour"].as_array();
             colour && colour->size() == 3) {
             eng::LightDesc light;
@@ -150,8 +229,12 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         // participate in collision. Plane height is intentionally zero.
         info.halfExtents = glm::abs(scale) * 0.5f;
         if (shape == "plane") info.halfExtents.y = 0.0f;
+        if (isSword || isStaff)
+            info.halfExtents = glm::abs(scale) * glm::vec3(1.2f, 3.7f, 1.2f);
+        else if (isParticleAltar)
+            info.halfExtents = glm::abs(scale) * glm::vec3(1.2f, 0.7f, 1.2f);
         info.blocksMovement = (*e)["collision"].value_or(
-            shape == "box" || shape == "cone");
+            shape == "box" || shape == "cone" || isComposite);
         if (info.blocksMovement) {
             // Thin stands remain comfortably collidable; vertical size is
             // irrelevant to the ground-plane FPS resolver.

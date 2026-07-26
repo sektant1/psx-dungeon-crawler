@@ -3,7 +3,7 @@
 #include <eng/Input.h>
 #include <eng/Renderer.h>
 #include <eng/StepClock.h>
-#include <eng/System.h>
+#include <eng/systems/System.h>
 
 #include <memory>
 #include <string>

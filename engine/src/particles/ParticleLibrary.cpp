@@ -1,4 +1,4 @@
-#include "ParticleLibrary.h"
+#include <eng/particles/ParticleLibrary.h>
 
 #include <eng/Renderer.h>
 #include <eng/Log.h>
@@ -26,12 +26,17 @@ glm::vec4 vec4(const toml::array* a, glm::vec4 d) {
 }
 } // namespace
 
-bool ParticleLibrary::load(eng::Renderer& r, const std::string& path) {
+namespace eng {
+
+bool ParticleLibrary::load(Renderer& r, const std::string& path) {
     toml::parse_result parsed = toml::parse_file(path);
     if (!parsed) { eng::log::error("ParticleLibrary: parse failed: %s", path.c_str()); return false; }
     const toml::array* effects = parsed.table()["effect"].as_array();
     if (!effects) { eng::log::error("ParticleLibrary: no [[effect]] array"); return false; }
 
+    mDescs.clear();
+    mIds.clear();
+    mByName.clear();
     for (const toml::node& node : *effects) {
         const toml::table* e = node.as_table();
         if (!e) continue;
@@ -54,6 +59,12 @@ bool ParticleLibrary::load(eng::Renderer& r, const std::string& path) {
                 const toml::table* et = en.as_table();
                 if (!et) continue;
                 eng::ParticleEmitterDesc em;
+                const std::string shape =
+                    (*et)["shape"].value_or(std::string("point"));
+                em.shape = shape == "box" ? ParticleEmitterShape::Box
+                                           : ParticleEmitterShape::Point;
+                em.boxSize     = vec3(*et, "box_size", {1,1,1});
+                em.position    = vec3(*et, "position", {0,0,0});
                 em.direction   = vec3(*et, "direction", {0,1,0});
                 em.angleDegrees= num(*et, "angle", 20.0f);
                 em.emissionRate= num(*et, "emission_rate", 20.0f);
@@ -64,6 +75,8 @@ bool ParticleLibrary::load(eng::Renderer& r, const std::string& path) {
                 em.startColour = vec4((*et)["start_colour"].as_array(), glm::vec4(1.0f));
                 d.emitters.push_back(em);
             }
+        d.localSpace = (*e)["local_space"].value_or(false);
+        d.acceleration = vec3(*e, "acceleration", {0,0,0});
         if (const toml::array* cr = (*e)["colour_ramp"].as_array())
             for (const toml::node& sn : *cr) {
                 const toml::table* st = sn.as_table();
@@ -78,30 +91,34 @@ bool ParticleLibrary::load(eng::Renderer& r, const std::string& path) {
                 d.sizeRamp.push_back({ num(*st, "t", 0.0f), num(*st, "scale", 1.0f) });
             }
 
+        if (mByName.count(d.name)) {
+            log::error("ParticleLibrary: duplicate effect '%s'; ignoring later definition",
+                       d.name.c_str());
+            continue;
+        }
+        const ParticleEffectId registered = r.registerParticleEffect(d);
+        if (!registered.valid()) {
+            log::error("ParticleLibrary: invalid effect '%s'; skipping",
+                       d.name.c_str());
+            continue;
+        }
         const size_t idx = mDescs.size();
         mDescs.push_back(d);
-        mIds.push_back(r.registerParticleEffect(d));
+        mIds.push_back(registered);
         mByName[d.name] = idx;
     }
     eng::log::info("ParticleLibrary: loaded %zu effects", mDescs.size());
     return true;
 }
 
-eng::ParticleEffectId ParticleLibrary::id(const std::string& name) const {
+ParticleEffectId ParticleLibrary::id(const std::string& name) const {
     auto it = mByName.find(name);
     return it == mByName.end() ? eng::ParticleEffectId{} : mIds[it->second];
 }
 
-void ParticleLibrary::reregister(eng::Renderer& r, size_t index) {
+void ParticleLibrary::reregister(Renderer& r, size_t index) {
     if (index < mDescs.size())
         mIds[index] = r.registerParticleEffect(mDescs[index]);
 }
 
-namespace particlefx {
-void spawnFlame(eng::Renderer& r, eng::NodeHandle node) {
-    r.spawnParticles("torch_glow", node);
-    r.spawnParticles("torch_fire", node);
-    r.spawnParticles("torch_ash",  node);
-    r.spawnParticles("fire_smoke", node, glm::vec3(0.0f, 0.12f, 0.0f));
-}
-} // namespace particlefx
+} // namespace eng

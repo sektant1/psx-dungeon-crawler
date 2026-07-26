@@ -11,8 +11,9 @@
 
 namespace game {
 
-// Spawn dynamic crates and barrels in the lobby entry hall.
-// Props sit a few metres in front of the spawn (toward the anchor room).
+// Spawn a dedicated physics sandbox in the lobby's east arrival bay. Keeping
+// it off the centre path lets players deliberately enter it to kick/shoot
+// props instead of tripping over the showcase during every traversal.
 // Mesh origins are at the base; body centres are offset up by halfHeight.
 // Crate: 0.8 m cube -> halfExtents {0.4, 0.4, 0.4}, body centre y = 0.4.
 // Barrel: r=0.28, h=0.9 -> halfHeight 0.45, body centre y = 0.45.
@@ -76,23 +77,23 @@ void PropSystem::spawnLobby(GameContext& ctx)
     {
         eng::BodyDesc gd;
         gd.kind = eng::ShapeKind::Box;
-        gd.halfExtents = {4.0f, 0.10f, 3.0f};
-        gd.position = {3.3f, -0.10f, 18.0f}; // top = -0.10 + 0.10 = 0.0
+        gd.halfExtents = {3.5f, 0.10f, 3.0f};
+        gd.position = {9.5f, -0.10f, 18.5f}; // top = 0
         gd.layer = eng::BodyLayer::Static;
         gd.dynamic = false;
         mGroundBody = physics.createBody(gd);
     }
 
     // Two crates stacked near the entry hall (spawn side of the anchor room)
-    spawnCrate({3.0f, 0.4f, 18.0f},   10.0f);   // ground crate
-    spawnCrate({3.0f, 1.2f, 18.0f},  -15.0f);   // stacked on top
+    spawnCrate({9.0f, 0.4f, 18.0f},   10.0f);   // ground crate
+    spawnCrate({9.0f, 1.2f, 18.0f},  -15.0f);   // stacked on top
     // A third crate to the side
-    spawnCrate({1.5f, 0.4f, 17.0f},   30.0f);
+    spawnCrate({7.5f, 0.4f, 17.0f},   30.0f);
     // Two barrels next to them
-    spawnBarrel({4.5f, 0.45f, 17.5f},   0.0f);
-    spawnBarrel({5.2f, 0.45f, 18.5f},  20.0f);
+    spawnBarrel({10.5f, 0.45f, 17.5f},   0.0f);
+    spawnBarrel({11.2f, 0.45f, 18.5f},  20.0f);
     // One more loose crate for variety
-    spawnCrate({2.2f, 0.4f, 19.5f},  -20.0f);
+    spawnCrate({8.2f, 0.4f, 19.5f},  -20.0f);
 
     mAlive = true;
 }

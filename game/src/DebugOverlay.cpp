@@ -1,7 +1,7 @@
 #include "DebugOverlay.h"
 
 #include "CombatConfig.h"
-#include "FpsController.h"
+#include <eng/controllers/FpsController.h>
 #include "GameDiagnostics.h"
 #include "combat/FeelComponents.h"
 
@@ -588,7 +588,7 @@ void DebugOverlay::drawPlayerTab(const Deps& d)
             ImGui::Text("%-9s %6.2f ms", ProfHud::kNames[i], pr.ms[i]);
     }
 
-    FpsController* f = d.fps;
+    eng::FpsController* f = d.fps;
     if (!f) { ImGui::TextDisabled("FPS controller unavailable."); return; }
     if (section("Movement & Camera")) {
         ImGui::SliderFloat("Move speed", &f->speed(), 0.5f, 12.0f);

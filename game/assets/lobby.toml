@@ -1,9 +1,9 @@
 # The Reliquary: authored depth-zero lobby and engine/asset showcase.
 #
-# The open centre preserves a strong spawn -> shrine -> portal sightline.
-# Curated prop markers form readable exhibit bays along the walls, while the
-# runtime showcase supplies the animated chest, crystals, particles, graded
-# fog, shadow-casting fire, weapon display, market table, and stacked clutter.
+# Three connected rooms create a readable tour:
+# arrival gallery -> central reliquary -> portal proving ground.
+# Each transition has a ceremonial centre arch and two wider side routes, so
+# combat/movement testing never bottlenecks at a single tile.
 # Edit this file in the standalone level editor (`make editor`).
 
 [dungeon]
@@ -16,13 +16,13 @@ rows = [
     "#B.............R#",
     "#...............#",
     "#H.............H#",
-    "########A########",
+    "#####..#A#..#####",
     "#L.............L#",
     "#.......C.......#",
     "#L.............L#",
     "#...............#",
     "#R.............B#",
-    "########A########",
+    "#####..#A#..#####",
     "#V.............V#",
     "#...............#",
     "#...L...S...L...#",

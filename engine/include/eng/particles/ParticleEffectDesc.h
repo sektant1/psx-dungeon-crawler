@@ -9,7 +9,12 @@ namespace eng {
 struct ColourStop { float t = 0.0f; glm::vec4 rgba{1.0f}; };
 struct SizeStop   { float t = 0.0f; float scale = 1.0f; };
 
+enum class ParticleEmitterShape { Point, Box };
+
 struct ParticleEmitterDesc {
+    ParticleEmitterShape shape = ParticleEmitterShape::Point;
+    glm::vec3 boxSize{1.0f};         // width/height/depth for Box emitters
+    glm::vec3 position{0.0f};        // local offset from the system origin
     glm::vec3 direction{0.0f, 1.0f, 0.0f};
     float angleDegrees = 20.0f;      // cone half-spread
     float emissionRate = 20.0f;      // particles/sec (looping)
@@ -18,7 +23,7 @@ struct ParticleEmitterDesc {
     glm::vec4 startColour{1.0f};     // used when colourRamp is empty
 };
 
-// Ogre-agnostic description of one particle effect. eng::Particles translates
+// Renderer-agnostic description of one particle effect. eng::Particles translates
 // this into a pooled Ogre ParticleSystem.
 struct ParticleEffectDesc {
     std::string name;                // stable id, e.g. "fireball_trail"
@@ -38,6 +43,8 @@ struct ParticleEffectDesc {
     float burstCount = 0.0f;         // one-shot: emit ~this many, then stop
     float qualityWeight = 1.0f;      // 0 = ignore quality, 1 = full scale
     bool  softDepthFade = false;     // Task 8: use the soft-fade material variant
+    bool  localSpace = false;        // true: particles follow the parent node
+    glm::vec3 acceleration{0.0f};    // constant world/local force (gravity, wind)
 };
 
 } // namespace eng

@@ -10,7 +10,8 @@
 #include "LiveLevel.h"
 #include "MapPlay.h"
 #include "SceneFactory.h"
-#include "ParticleLibrary.h"
+#include <eng/particles/ParticleLibrary.h>
+#include <eng/controllers/FpsController.h>
 #include "CombatSystem.h"
 #include "DebugOverlay.h"
 #include "Dummy.h"
@@ -112,7 +113,7 @@ int main(int argc, char** argv)
     // built, matching the original ordering.
     game::CombatSystem combat;
 
-    ParticleLibrary particles;
+    eng::ParticleLibrary particles;
     particles.load(r, assets + "/particles.toml");
 
     // Dynamic lobby props (crates + barrels): spawned once, synced each frame,
@@ -133,7 +134,7 @@ int main(int argc, char** argv)
     // Torch->light+bash).
     game::PlayerSystem playerSys;
     playerSys.setTuning(speed, sens);
-    FpsController& player = playerSys.controller();
+    eng::FpsController& player = playerSys.controller();
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
 
@@ -207,9 +208,10 @@ int main(int argc, char** argv)
 
     props.spawnLobby(ctx);
 
-    // Spawn a topple dummy alongside the lobby props (entry hall area).
-    // Placed 3 m further toward the anchor room from the crate cluster.
-    dummy.init(physics, r, glm::vec3(3.0f, 0.0f, 15.0f));
+    // Portal proving-ground target: far enough from spawn to establish a
+    // readable combat lane, centred so arrows, spells and enchantments are
+    // tested against the strongest architectural sightline.
+    dummy.init(physics, r, glm::vec3(0.0f, 0.0f, -18.0f));
     dummyAlive = true;
 
     // ---- combat model wiring -------------------------------------------------

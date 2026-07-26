@@ -2,7 +2,7 @@
 #include <eng/Object.h>
 #include <memory>
 
-namespace eng {
+namespace eng { // base runtime system contract
 
 // Abstract engine subsystem updated once per frame by eng::Engine.
 class System : public Object {

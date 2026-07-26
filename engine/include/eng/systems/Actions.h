@@ -1,6 +1,6 @@
 #pragma once
-#include <eng/ActionSet.h>
-#include <eng/System.h>
+#include <eng/systems/ActionSet.h>
+#include <eng/systems/System.h>
 #include <memory>
 #include <vector>
 

@@ -1,0 +1,18 @@
+vertex_program Enchantment/VS glsl
+{
+    source enchantment.vert
+    default_params {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto time time 1.0
+        param_named enchantScroll float2 0.18 -0.12
+    }
+}
+
+fragment_program Enchantment/FS glsl
+{
+    source enchantment.frag
+    default_params {
+        param_named enchantColour float4 0.55 0.35 1.0 0.65
+        param_named enchantStrength float 1.0
+    }
+}

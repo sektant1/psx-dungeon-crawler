@@ -6,6 +6,7 @@
 #include "combat/StaminaSystem.h"
 
 #include <eng/Physics.h>
+#include <eng/Renderer.h>
 
 namespace game {
 
@@ -20,6 +21,9 @@ void CombatSystem::init(GameContext& ctx, const std::string& configTomlPath)
     // init builds procedural meshes and registers the contact seam.
     mProjectiles.init(ctx.renderer);
     mSpells.init(ctx.renderer);
+    mMelee.setHitCallback([&ctx](eng::BodyHandle, glm::vec3 point, glm::vec3) {
+        ctx.renderer.spawnParticles("engine.hit_sparks", point);
+    });
     // Damage model: weapon table (weapons.toml overlays built-in defaults).
     mDirector.init(ctx.assets + "/weapons.toml");
 }

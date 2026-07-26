@@ -398,6 +398,22 @@ vertex_program Dither_VS glsl
     default_params
     {
         param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto time time 1.0
+        param_named atlasGrid float2 1.0 1.0
+        param_named atlasRow float 0.0
+        param_named atlasFrames float 1.0
+        param_named atlasFps float 0.0
+    }
+}
+
+fragment_program AtlasParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines ATLAS_PARTICLE=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named alphaScissor float 0.025
     }
 }
 
@@ -472,6 +488,16 @@ fragment_program SmokeParticle_FS glsl
     default_params
     {
         param_named alphaScissor float 0.025
+    }
+}
+
+fragment_program RainParticle_FS glsl
+{
+    source particle.frag
+    preprocessor_defines PROCEDURAL_RAIN=1
+    default_params
+    {
+        param_named alphaScissor float 0.02
     }
 }
 

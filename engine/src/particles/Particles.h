@@ -1,6 +1,6 @@
 #pragma once
 #include <eng/Handles.h>
-#include <eng/ParticleEffectDesc.h>
+#include <eng/particles/ParticleEffectDesc.h>
 
 #include <glm/glm.hpp>
 #include <cstdint>
@@ -23,18 +23,19 @@ public:
     ParticleEffectId find(const std::string& name) const;
 
     ParticlesHandle spawn(ParticleEffectId fx, Ogre::SceneNode* parent,
-                          glm::vec3 localPos);
+                          glm::vec3 localPos, bool ownsParent = false);
     void stop(ParticlesHandle h);
     void despawn(ParticlesHandle h);
 
     void setQuality(float q);
-    void update(float dt);
+    std::vector<uint32_t> update(float dt);
     void clear();
 
 private:
     struct Effect {
         ParticleEffectDesc desc;
         std::vector<Ogre::ParticleSystem*> free;
+        uint32_t generation = 1;
     };
     struct Live {
         uint32_t effect = 0;
@@ -43,6 +44,8 @@ private:
         float maxLife = 0.0f;
         bool  oneShot = false;
         bool  active = false;
+        bool  ownsParent = false;
+        uint32_t generation = 0;
     };
 
     Ogre::ParticleSystem* build(const ParticleEffectDesc& d);

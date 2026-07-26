@@ -1,4 +1,4 @@
-#include "FpsController.h"
+#include <eng/controllers/FpsController.h>
 
 #include <eng/Input.h>
 #include <eng/Physics.h>
@@ -31,7 +31,6 @@ constexpr float kJumpVelocity = 5.0f;
 constexpr float kGravity = 18.0f;
 constexpr float kCoyoteDuration = 0.10f;
 constexpr float kJumpBufferDuration = 0.12f;
-constexpr float kDungeonCeilingY = 3.0f;
 constexpr float kCeilingClearance = 0.10f;
 constexpr float kSlideDuration = 0.55f;
 constexpr float kSlideMultiplier = 2.0f;
@@ -44,6 +43,8 @@ float approach(float value, float target, float maxDelta)
     return std::max(value - maxDelta, target);
 }
 } // namespace
+
+namespace eng {
 
 glm::vec3 FpsController::eyePosition() const
 {
@@ -260,7 +261,7 @@ void FpsController::simulate(const Command& command, float dt)
             mVerticalVelocity = 0.0f;
 
         // Ceiling clamp: keep camera from poking through the roof mesh.
-        const float maxFeetY = kDungeonCeilingY - mEyeHeight - kCeilingClearance;
+        const float maxFeetY = mCeilingHeight - mEyeHeight - kCeilingClearance;
         if (mPos.y > maxFeetY) {
             mPos.y = maxFeetY;
             mVerticalVelocity = 0.0f;
@@ -274,9 +275,8 @@ void FpsController::simulate(const Command& command, float dt)
         if (!grounded() || mVerticalVelocity > 0.0f) {
             mVerticalVelocity -= kGravity * dt;
             mPos.y += mVerticalVelocity * dt;
-            // Every dungeon tile renders its roof at y=3. Keep the camera below
-            // it rather than allowing a jump to pass through visible geometry.
-            const float maxFeetY = kDungeonCeilingY - mEyeHeight - kCeilingClearance;
+            // Apply the optional game-supplied ceiling constraint.
+            const float maxFeetY = mCeilingHeight - mEyeHeight - kCeilingClearance;
             if (mPos.y > maxFeetY) {
                 mPos.y = maxFeetY;
                 mVerticalVelocity = 0.0f;
@@ -332,3 +332,5 @@ void FpsController::present(eng::Renderer& r)
     r.setOrientation(mBody, glm::angleAxis(mYaw, glm::vec3(0, 1, 0)));
     r.setOrientation(mHead, glm::angleAxis(mPitch, glm::vec3(1, 0, 0)));
 }
+
+} // namespace eng

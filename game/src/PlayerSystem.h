@@ -1,5 +1,5 @@
 #pragma once
-#include "FpsController.h"
+#include <eng/controllers/FpsController.h>
 #include "ViewModel.h"
 
 #include <glm/glm.hpp>
@@ -46,19 +46,20 @@ public:
     bool staffEquipped() const { return mWeapon == WStaff; }
     bool torchEquipped() const { return mWeapon == WTorch; }
 
-    FpsController& controller() { return mPlayer; }
-    const FpsController& controller() const { return mPlayer; }
+    eng::FpsController& controller() { return mPlayer; }
+    const eng::FpsController& controller() const { return mPlayer; }
 
 private:
     void applyWeaponVis(GameContext& ctx);
 
-    FpsController mPlayer;
+    eng::FpsController mPlayer;
     ViewModel mSwordModel;
     ViewModel mStaffModel;
     ViewModel mTorchModel;
     int mWeapon = WSword;
     float mSpeed = 3.0f;
     float mSens = 0.002f;
+    float mFootstepFxCooldown = 0.0f;
 };
 
 } // namespace game

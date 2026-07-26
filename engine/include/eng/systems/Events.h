@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace eng {
+namespace eng { // engine event system
 
 // Base of all events. Concrete events derive and add payload fields.
 class Event {
