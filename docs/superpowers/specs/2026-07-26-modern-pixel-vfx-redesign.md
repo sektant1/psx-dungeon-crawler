@@ -61,6 +61,10 @@ registered presets or leaking state through pooled instances.
   bright origin point.
 - Use effect-specific pixel masks. Fire, poison, ash, smoke, rain, spell cores,
   trails, and impacts must not all resemble variants of the sparkle texture.
+- Add reusable arcane mote, frost shard, toxic bubble, and portal wisp effects
+  where they strengthen showcase or combat presentation. Prefer shader masks or
+  additional atlas cells; add bitmap textures only when they produce a
+  materially better silhouette.
 - Add variation through size, rotation, lifetime, velocity, palette, and
   animation phase where the available particle attributes permit stable
   per-particle variation.
