@@ -35,6 +35,8 @@ The four effect families will share a small set of conventions rather than one
 over-generalized shader:
 
 - Quantized color ramps with effect-specific palettes.
+- Saturated high-chroma particle palettes with separated luminance bands so
+  hues survive bloom instead of clipping uniformly toward white.
 - Pixel-grid masks sampled with nearest filtering.
 - Stepped secondary animation layered over smooth world-space motion.
 - Hard interior silhouettes with a narrow optional soft outer band.
@@ -62,6 +64,9 @@ registered presets or leaking state through pooled instances.
 - Add variation through size, rotation, lifetime, velocity, palette, and
   animation phase where the available particle attributes permit stable
   per-particle variation.
+- Increase palette saturation for fire, poison, lava ash, spell trails, and
+  impacts. Preserve darker body colors beside emissive cores so the increased
+  saturation remains visible under bloom.
 - Use deliberate size and alpha curves: establish, readable body, then a clean
   breakup or fade.
 - Layer selected hero effects into a colored body and a smaller emissive core.
@@ -185,7 +190,7 @@ can express the defect.
 ## Acceptance Criteria
 
 - Particles are visibly larger, denser, more varied, and more polished while
-  retaining crisp internal pixel structure.
+  retaining crisp internal pixel structure and distinctly saturated palettes.
 - Hero particles and emissive surfaces produce stronger shaped bloom without
   becoming featureless additive blobs.
 - Enchantment runes read clearly on UV-less and composite low-poly meshes.
