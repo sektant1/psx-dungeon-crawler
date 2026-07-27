@@ -101,8 +101,7 @@ add_library(
   engine/src/particles/ParticleLibrary.cpp
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
-  engine/src/audio/Audio.cpp
-  engine/src/SceneRegistry.cpp)
+  engine/src/audio/Audio.cpp)
 
 add_dependencies(eng RenderSystem_GL3Plus Plugin_ParticleFX Codec_STBI)
 
