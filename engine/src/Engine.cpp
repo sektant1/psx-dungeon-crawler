@@ -249,16 +249,6 @@ void Engine::renderFrame(float dt, float animDt)
     const float adt = (animDt < 0.0f)
                           ? mStepClock.delta(StepChannel::Particles)
                           : animDt;
-    { // TEMP-VERIFY
-        static int frames = 0, partSteps = 0, charSteps = 0, projSteps = 0;
-        ++frames;
-        partSteps += (adt > 0.0f) ? 1 : 0;
-        charSteps += mStepClock.stepped(StepChannel::Characters) ? 1 : 0;
-        projSteps += mStepClock.stepped(StepChannel::Projectiles) ? 1 : 0;
-        if (frames == 120)
-            log::warn("TEMP-VERIFY %d frames: particleAdvance=%d chars=%d proj=%d",
-                      frames, partSteps, charSteps, projSteps);
-    }
     mRenderer.updateParticles(adt); // recycle finished one-shot particle systems
     const int renderedFrame = mImpl->frameCount + 1;
     mImpl->frameCapture.beforeFrame(renderedFrame);

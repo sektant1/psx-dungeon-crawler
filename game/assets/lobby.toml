@@ -1,0 +1,36 @@
+# The Reliquary: authored depth-zero lobby and engine/asset showcase.
+#
+# Three connected rooms create a readable tour:
+# arrival gallery -> central reliquary -> portal proving ground.
+# Each transition has a ceremonial centre arch and two wider side routes, so
+# combat/movement testing never bottlenecks at a single tile.
+# Edit this file in the standalone level editor (`make editor`).
+
+[dungeon]
+cell_size = 4.0
+wall_height = 3.0
+rows = [
+    "#################",
+    "#V..L...X...L..V#",
+    "#...............#",
+    "#B.............R#",
+    "#...............#",
+    "#H.............H#",
+    "#####..#A#..#####",
+    "#L.............L#",
+    "#.......C.......#",
+    "#L.............L#",
+    "#...............#",
+    "#R.............B#",
+    "#####..#A#..#####",
+    "#V.............V#",
+    "#...............#",
+    "#...L...S...L...#",
+    "#################",
+]
+
+[dungeon.light]
+colour_srgb = [1.0, 0.68, 0.34]
+energy = 4.4
+range = 6.5
+y = 1.9
