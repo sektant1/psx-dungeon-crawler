@@ -81,13 +81,12 @@ material Fantasy/Lava
     technique { pass {
         depth_write on
         vertex_program_ref PixelVfx/LiquidVS { }
-        fragment_program_ref PixelVfx/LiquidFS {
-            param_named liquidDark float4 0.22 0.015 0.005 1.0
-            param_named liquidMid float4 1.10 0.16 0.015 1.0
-            param_named liquidBright float4 1.55 0.82 0.08 1.0
-            param_named liquidFlowA float2 0.045 -0.025
-            param_named liquidFlowB float2 -0.020 0.032
-            param_named liquidEmission float 0.55
+        fragment_program_ref PixelVfx/LavaFS {
+            param_named lavaDark float4 0.10 0.003 0.001 1.0
+            param_named lavaCrust float4 0.42 0.018 0.003 1.0
+            param_named lavaHot float4 1.70 0.30 0.012 1.0
+            param_named lavaCore float4 2.15 1.02 0.10 1.0
+            param_named lavaFlowSpeed float 0.24
         }
         texture_unit {
             texture lava_stylized.png

@@ -31,6 +31,9 @@ struct RenderPresetValues {
     float highlightStrength = 0.10f;
     float highlightThreshold = 0.50f;
     float highlightDarkFade = 0.15f;
+    // False keeps highlights in the surface's own hue. True uses the authored
+    // highlightColor as a global tint.
+    bool highlightColorOverride = false;
     glm::vec3 highlightColor{1.0f, 0.72f, 0.42f};
     float outlineOpacity = 0.26f;
     float outlineThickness = 1.0f;

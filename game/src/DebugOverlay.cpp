@@ -352,8 +352,14 @@ void DebugOverlay::drawShadersTab(const Deps& d)
             r->setMaterialParam(kStylize, "highlightThreshold", v.highlightThreshold);
         if (ImGui::SliderFloat("Dark fade##hl", &v.highlightDarkFade, 0.0f, 1.0f))
             r->setMaterialParam(kStylize, "highlightDarkFade", v.highlightDarkFade);
-        if (ImGui::ColorEdit3("Colour##hl", &v.highlightColor.x))
+        if (ImGui::Checkbox("Override colour##hl", &v.highlightColorOverride))
+            r->setMaterialParam(kStylize, "highlightColorOverride",
+                                v.highlightColorOverride ? 1.0f : 0.0f);
+        if (ImGui::ColorEdit3("Colour##hl", &v.highlightColor.x)) {
+            v.highlightColorOverride = true;
             r->setMaterialParam(kStylize, "highlightColor", v.highlightColor);
+            r->setMaterialParam(kStylize, "highlightColorOverride", 1.0f);
+        }
     }
 
     if (section("Outlines")) {
@@ -412,7 +418,7 @@ void DebugOverlay::drawShadersTab(const Deps& d)
             "col_depth = %.3f\ndither_banding = %.4f\ndither_dark_fade = %.4f\n"
             "vignette = %s\nvignette_strength = %.4f\nvignette_color = [%.4f, %.4f, %.4f]\n"
             "stylize = %s\nink = %s\nink_strength = %.4f\nink_threshold = %.4f\nink_color = [%.4f, %.4f, %.4f]\n"
-            "highlights = %s\nhighlight_strength = %.4f\nhighlight_threshold = %.4f\nhighlight_dark_fade = %.4f\nhighlight_color = [%.4f, %.4f, %.4f]\n"
+            "highlights = %s\nhighlight_strength = %.4f\nhighlight_threshold = %.4f\nhighlight_dark_fade = %.4f\nhighlight_color_override = %s\nhighlight_color = [%.4f, %.4f, %.4f]\n"
             "outlines = %s\noutline_opacity = %.4f\noutline_thickness = %.4f\noutline_depth_sens = %.4f\noutline_normal_sens = %.4f\noutline_sharpness = %.4f\noutline_dist_fade = %.4f\noutline_dark_fade = %.4f\noutline_color = [%.4f, %.4f, %.4f]\n"
             "edge_convexity = %.4f\nedge_convex_bias = %.4f\n"
             "hw_resolve_mode = %.3f\nhw_resolve_strength = %.4f\n",
@@ -425,7 +431,7 @@ void DebugOverlay::drawShadersTab(const Deps& d)
             v.colDepth, v.ditherBanding, v.ditherDarkFade,
             v.vignetteEnabled?"true":"false", v.vignetteStrength, v.vignetteColor.x, v.vignetteColor.y, v.vignetteColor.z,
             v.stylizeEnabled?"true":"false", v.inkEnabled?"true":"false", v.inkStrength, v.inkThreshold, v.inkColor.x, v.inkColor.y, v.inkColor.z,
-            v.highlightsEnabled?"true":"false", v.highlightStrength, v.highlightThreshold, v.highlightDarkFade, v.highlightColor.x, v.highlightColor.y, v.highlightColor.z,
+            v.highlightsEnabled?"true":"false", v.highlightStrength, v.highlightThreshold, v.highlightDarkFade, v.highlightColorOverride?"true":"false", v.highlightColor.x, v.highlightColor.y, v.highlightColor.z,
             v.outlinesEnabled?"true":"false", v.outlineOpacity, v.outlineThickness, v.outlineDepthSens, v.outlineNormalSens, v.outlineSharpness, v.outlineDistFade, v.outlineDarkFade, v.outlineColor.x, v.outlineColor.y, v.outlineColor.z,
             v.edgeConvexity, v.edgeConvexBias,
             v.hardwareResolveMode, v.hardwareResolveStrength);

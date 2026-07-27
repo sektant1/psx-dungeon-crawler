@@ -146,7 +146,12 @@ material Engine/Particles/Fire
             param_named atlasFps float 10.0
         }
         fragment_program_ref AtlasParticle_FS { }
-        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
     } }
 }
 
@@ -163,7 +168,12 @@ material Engine/Particles/Smoke
             param_named atlasFps float 6.0
         }
         fragment_program_ref AtlasParticle_FS { }
-        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
     } }
 }
 
@@ -180,7 +190,12 @@ material Engine/Particles/Poison
             param_named atlasFps float 7.0
         }
         fragment_program_ref AtlasParticle_FS { }
-        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
     } }
 }
 
@@ -197,7 +212,12 @@ material Engine/Particles/LavaAsh
             param_named atlasFps float 8.0
         }
         fragment_program_ref AtlasParticle_FS { }
-        texture_unit { texture retro_particle_atlas.png filtering none tex_address_mode clamp }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
     } }
 }
 

@@ -51,6 +51,21 @@ int main()
             "unspecified field keeps default");
     require(near(p.bloomIntensity, def.bloomIntensity),
             "unspecified bloom keeps default");
+    require(!p.highlightColourOverride,
+            "unspecified highlight colour keeps adaptive highlights");
+
+    writeFile(path,
+        "[palette.dungeon]\n"
+        "highlight_colour = [0.2, 0.4, 0.8]\n");
+    RenderPalette explicitHighlight;
+    require(loadRenderPalette(path, "dungeon", explicitHighlight),
+            "explicit highlight palette must load");
+    require(explicitHighlight.highlightColourOverride,
+            "specified highlight colour enables the colour override");
+    require(near(explicitHighlight.highlightColour.x, 0.2f) &&
+                near(explicitHighlight.highlightColour.y, 0.4f) &&
+                near(explicitHighlight.highlightColour.z, 0.8f),
+            "specified highlight colour is parsed");
 
     // Missing table returns false and leaves the struct untouched.
     RenderPalette q;

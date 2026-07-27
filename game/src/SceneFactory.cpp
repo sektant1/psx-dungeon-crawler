@@ -1,5 +1,6 @@
 #include "SceneFactory.h"
 #include "ParticleEffects.h"
+#include "PortalGeometry.h"
 
 #include <eng/Log.h>
 #include <eng/Primitive.h>
@@ -47,25 +48,19 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
     const eng::NodeHandle arch = r.createNode(
         out.root, {0.0f, style.height, 0.0f});
     const eng::NodeHandle frame = r.createNode(arch);
-    r.setScale(frame, style.frameScale);
     const float openingHalfWidth =
         style.innerRadius * style.fieldScale.x;
     const float openingHalfHeight =
         style.innerRadius * style.fieldScale.y;
-    const auto framePart = [&](glm::vec3 position, glm::vec3 scale) {
-        const eng::NodeHandle part = r.createNode(frame, position);
-        r.setScale(part, scale);
+    const auto framePart = [&](const PortalBlock& block) {
+        const eng::NodeHandle part = r.createNode(frame, block.position);
+        r.setScale(part, block.scale * style.frameScale);
         r.attachMesh(part, framePrimitive, style.frameMaterial, false);
     };
-    framePart({-openingHalfWidth - style.frameWidth * 0.5f, 0.0f, 0.0f},
-              {style.frameWidth, openingHalfHeight * 2.0f,
-               style.frameDepth});
-    framePart({openingHalfWidth + style.frameWidth * 0.5f, 0.0f, 0.0f},
-              {style.frameWidth, openingHalfHeight * 2.0f,
-               style.frameDepth});
-    framePart({0.0f, openingHalfHeight + style.frameWidth * 0.5f, 0.0f},
-              {openingHalfWidth * 2.0f + style.frameWidth * 2.0f,
-               style.frameWidth, style.frameDepth});
+    for (const PortalBlock& block : buildSteppedPortalBlocks({
+             openingHalfWidth, openingHalfHeight, style.frameWidth,
+             style.frameDepth}))
+        framePart(block);
 
     out.field = r.createNode(arch, {0.0f, 0.0f, style.membraneInset});
     r.setScale(out.field,
@@ -75,7 +70,7 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
                                     glm::vec3(1, 0, 0)));
     r.attachMesh(out.field, membrane, style.material);
     if (!style.particles.empty())
-        r.spawnParticles(style.particles, out.root);
+        r.spawnParticles(style.particles, arch);
     eng::LightDesc glow;
     glow.colour = style.lightColour;
     glow.range = style.lightRange;

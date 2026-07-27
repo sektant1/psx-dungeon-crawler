@@ -18,6 +18,7 @@ uniform sampler2D sceneTex, normalDepthTex;
 uniform float nearClip, farClip, stylizeEnabled, shadowsEnabled, highlightsEnabled;
 uniform float shadowStrength, highlightStrength, outlineThickness, shadowThreshold;
 uniform float highlightThreshold, highlightDarkFade, outlineEnabled, outlineOpacity;
+uniform float highlightColorOverride;
 uniform float outlineDepthSens, outlineNormalSens, outlineSharpness, outlineDistFade;
 uniform float outlineDarkFade;
 uniform float edgeConvexity;  // 1 = convex-only highlights + concave-only creases
@@ -74,7 +75,13 @@ void main() {
     float hi=smoothstep(highlightThreshold-.3,highlightThreshold+.3,hiEdge)*highlightsEnabled*acceptsHighlight*smoothstep(.02,max(highlightDarkFade,.05),luminance)*nearFade;
     float rel=max(max(du+dd-2.*d,dl+dr-2.*d),0.)/max(d,.001);
     float ink=smoothstep(.5-max((1.-outlineSharpness)*.5,.01),.5+max((1.-outlineSharpness)*.5,.01),clamp(rel*outlineDepthSens+creaseEdge*outlineNormalSens,0.,1.))*outlineEnabled*outlineOpacity*exp(-d*outlineDistFade)*smoothstep(.02,max(outlineDarkFade,.03),luminance)*nearFade;
-    vec3 outc=mix(original,mix(original,highlightColor,highlightStrength),hi);
+    // The default highlight stays in the material's own hue by lifting its
+    // brightest channel to one. An authored colour remains available for
+    // palettes that want a single environmental tint (torchlight, moonlight).
+    float peak=max(max(original.r,original.g),original.b);
+    vec3 matchedHighlight=original/max(peak,1e-4);
+    vec3 highlightTarget=mix(matchedHighlight,highlightColor,highlightColorOverride);
+    vec3 outc=mix(original,mix(original,highlightTarget,highlightStrength),hi);
     outc=mix(outc,mix(original,shadowColor,shadowStrength),shadow*nearFade);
     fragColour=vec4(mix(outc,outlineColor,ink),1);
 }

@@ -132,7 +132,7 @@ RenderPresetValues renderPresetValues(int preset)
         // undivided test, so each one carries more weight and can start lower.
         v.highlightStrength = 0.26f; v.highlightThreshold = 0.28f;
         v.highlightDarkFade = 0.12f;
-        v.highlightColor = {0.48f, 0.78f, 1.0f};
+        v.highlightColorOverride = false;
         v.outlineOpacity = 0.52f; v.outlineDepthSens = 10.0f;
         // outlineNormalSens now feeds concave folds alone; raised so creases
         // still read once the convex half of the signal moved to highlights.
@@ -194,6 +194,7 @@ RenderPresetValues renderPresetValues(int preset)
         // highlightDarkFade so nothing rim-lights itself out of the dark.
         v.highlightStrength = 0.10f; v.highlightThreshold = 0.34f;
         v.highlightDarkFade = 0.22f;
+        v.highlightColorOverride = true;
         v.highlightColor = {1.0f, 0.70f, 0.40f};
         // Readability, not style: a low-opacity depth outline is the thing that
         // separates a player-shaped silhouette from the black behind it. Faded
@@ -275,6 +276,8 @@ void applyRenderPreset(Renderer& r, const RenderPresetValues& v)
     r.setMaterialParam("PSX/PixelStylize", "highlightStrength", v.highlightStrength);
     r.setMaterialParam("PSX/PixelStylize", "highlightThreshold", v.highlightThreshold);
     r.setMaterialParam("PSX/PixelStylize", "highlightDarkFade", v.highlightDarkFade);
+    r.setMaterialParam("PSX/PixelStylize", "highlightColorOverride",
+                       v.highlightColorOverride ? 1.0f : 0.0f);
     r.setMaterialParam("PSX/PixelStylize", "highlightColor", v.highlightColor);
     r.setMaterialParam("PSX/PixelStylize", "outlineOpacity", v.outlineOpacity);
     r.setMaterialParam("PSX/PixelStylize", "outlineThickness", v.outlineThickness);

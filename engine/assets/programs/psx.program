@@ -398,11 +398,6 @@ vertex_program Dither_VS glsl
     default_params
     {
         param_named_auto worldViewProj worldviewproj_matrix
-        param_named_auto time time 1.0
-        param_named atlasGrid float2 1.0 1.0
-        param_named atlasRow float 0.0
-        param_named atlasFrames float 1.0
-        param_named atlasFps float 0.0
     }
 }
 
@@ -458,6 +453,11 @@ vertex_program Particle_VS glsl
     default_params
     {
         param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto time time 1.0
+        param_named atlasGrid float2 1.0 1.0
+        param_named atlasRow float 0.0
+        param_named atlasFrames float 1.0
+        param_named atlasFps float 0.0
     }
 }
 

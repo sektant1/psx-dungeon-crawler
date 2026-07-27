@@ -48,6 +48,8 @@ int main()
         read("engine/assets/shaders/portal.frag");
     const std::string liquidFragment =
         read("engine/assets/shaders/liquid.frag");
+    const std::string lavaFragment =
+        read("engine/assets/shaders/lava.frag");
     const std::string gameMaterials =
         read("game/assets/materials/game.material");
     const std::string fantasyMaterials =
@@ -61,6 +63,8 @@ int main()
                 "dedicated liquid vertex program is missing");
     requireText(program, "fragment_program PixelVfx/LiquidFS glsl",
                 "dedicated liquid fragment program is missing");
+    requireText(program, "fragment_program PixelVfx/LavaFS glsl",
+                "dedicated lava fragment program is missing");
 
     requireText(portalFragment, "floor(time * portalStepFps)",
                 "portal animation is not frame-stepped");
@@ -70,6 +74,12 @@ int main()
                 "liquid animation is not frame-stepped");
     requireText(liquidFragment, "liquidPalette",
                 "liquid output is not palette quantized");
+    requireText(lavaFragment, "lavaFbm",
+                "lava shader lacks procedural multi-scale flow");
+    requireText(lavaFragment, "domainWarp",
+                "lava shader lacks animated domain warping");
+    requireText(lavaFragment, "lavaPalette",
+                "lava output is not palette quantized");
 
     for (const char* name : {"Game/PortalDown", "Game/PortalUp"}) {
         const std::string block = material(gameMaterials, name);
@@ -86,8 +96,7 @@ int main()
                     "portal texture is not nearest filtered");
     }
 
-    for (const char* name :
-         {"Fantasy/Water", "Fantasy/Lava", "Fantasy/ToxicSlime"}) {
+    for (const char* name : {"Fantasy/Water", "Fantasy/ToxicSlime"}) {
         const std::string block = material(fantasyMaterials, name);
         require(!block.empty(), "liquid material is missing");
         requireText(block, "vertex_program_ref PixelVfx/LiquidVS",
@@ -99,6 +108,13 @@ int main()
         requireText(block, "filtering none",
                     "liquid texture is not nearest filtered");
     }
+    const std::string lava = material(fantasyMaterials, "Fantasy/Lava");
+    requireText(lava, "fragment_program_ref PixelVfx/LavaFS",
+                "lava still uses the generic liquid fragment shader");
+    requireText(lava, "depth_write on",
+                "lava material does not write depth");
+    requireText(lava, "filtering none",
+                "lava texture is not nearest filtered");
 
     std::cout << "VfxShaderAssetTests OK\n";
 }

@@ -45,3 +45,19 @@ fragment_program PixelVfx/LiquidFS glsl
         param_named_auto time time 1.0
     }
 }
+
+fragment_program PixelVfx/LavaFS glsl
+{
+    source lava.frag
+    default_params {
+        param_named lavaTexture int 0
+        param_named lavaDark float4 0.12 0.004 0.001 1.0
+        param_named lavaCrust float4 0.46 0.025 0.004 1.0
+        param_named lavaHot float4 1.65 0.36 0.018 1.0
+        param_named lavaCore float4 2.20 1.10 0.12 1.0
+        param_named lavaStepFps float 10.0
+        param_named lavaPixelGrid float 40.0
+        param_named lavaFlowSpeed float 0.22
+        param_named_auto time time 1.0
+    }
+}

@@ -44,6 +44,7 @@ struct RenderPalette {
     glm::vec3 shadowColour{0.020f, 0.020f, 0.035f};
     float     shadowStrength = 0.20f;
     glm::vec3 highlightColour{1.0f, 0.70f, 0.40f}; // convex edges catch torches
+    bool      highlightColourOverride = false;
     float     highlightStrength = 0.10f;
     glm::vec3 outlineColour{0.015f, 0.015f, 0.028f};
     float     outlineOpacity = 0.30f; // silhouette vs. the black behind it

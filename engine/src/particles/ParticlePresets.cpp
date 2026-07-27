@@ -42,11 +42,11 @@ void add(Renderer& renderer, ParticleEffectDesc effect)
 void registerDefaults(Renderer& renderer)
 {
     {
-        auto d = base(Fire, "Engine/Particles/Fire", 0.22f, 0.27f, 64);
+        auto d = base(Fire, "Engine/Particles/Fire", 0.32f, 0.38f, 96);
         d.acceleration = {0, 0.35f, 0};
         d.rotationJitterDeg = 70;
         d.scaleJitter = 0.16f;
-        d.emitters = {emitter({0,1,0}, 22, 26, 0.34f, 0.68f, 0.16f, 0.52f)};
+        d.emitters = {emitter({0,1,0}, 24, 42, 0.38f, 0.78f, 0.16f, 0.56f)};
         d.colourRamp = {{0, {1.35f,0.12f,0.025f,0.98f}},
                         {0.42f, {1.65f,0.62f,0.04f,0.9f}},
                         {1, {0.72f,0.025f,0.005f,0}}};
@@ -177,7 +177,7 @@ void registerDefaults(Renderer& renderer)
         d.scaleJitter = 0.30f;
         auto e = emitter({0,1,0}, 68, 30, 0.8f, 1.8f, 0.08f, 0.48f);
         e.shape = ParticleEmitterShape::Box;
-        e.boxSize = {1.45f, 1.15f, 0.18f};
+        e.boxSize = {3.45f, 2.55f, 0.16f};
         d.emitters = {e};
         d.colourRamp = {{0, {0.38f,1.45f,0.08f,0.92f}},
                         {0.5f, {0.10f,0.72f,1.35f,0.76f}},

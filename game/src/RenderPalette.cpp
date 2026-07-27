@@ -77,7 +77,10 @@ bool loadRenderPalette(const std::string& tomlPath, const std::string& name,
     r.ditherDarkFade    = num(t, "dither_dark_fade", r.ditherDarkFade);
     r.shadowColour      = vec3Of(t, "shadow_colour", r.shadowColour);
     r.shadowStrength    = num(t, "shadow_strength", r.shadowStrength);
-    r.highlightColour   = vec3Of(t, "highlight_colour", r.highlightColour);
+    if (t.contains("highlight_colour")) {
+        r.highlightColour = vec3Of(t, "highlight_colour", r.highlightColour);
+        r.highlightColourOverride = true;
+    }
     r.highlightStrength = num(t, "highlight_strength", r.highlightStrength);
     r.outlineColour     = vec3Of(t, "outline_colour", r.outlineColour);
     r.outlineOpacity    = num(t, "outline_opacity", r.outlineOpacity);
@@ -130,6 +133,8 @@ void applyRenderPalette(eng::Renderer& r, const RenderPalette& p,
     r.setMaterialParam("PSX/PixelStylize", "shadowColor", p.shadowColour);
     r.setMaterialParam("PSX/PixelStylize", "shadowStrength", p.shadowStrength);
     r.setMaterialParam("PSX/PixelStylize", "highlightColor", p.highlightColour);
+    r.setMaterialParam("PSX/PixelStylize", "highlightColorOverride",
+                       p.highlightColourOverride ? 1.0f : 0.0f);
     r.setMaterialParam("PSX/PixelStylize", "highlightStrength", p.highlightStrength);
     r.setMaterialParam("PSX/PixelStylize", "outlineColor", p.outlineColour);
     r.setMaterialParam("PSX/PixelStylize", "outlineOpacity", p.outlineOpacity);

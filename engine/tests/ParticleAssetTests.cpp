@@ -62,6 +62,20 @@ int main()
     require(programs.find("preprocessor_defines PROCEDURAL_RAIN=1") !=
                 std::string::npos,
             "rain program selects the procedural rain shader");
+    const std::size_t particleVertex =
+        programs.find("vertex_program Particle_VS glsl");
+    const std::size_t particleVertexEnd =
+        programs.find("fragment_program", particleVertex);
+    const std::string particleVertexBlock =
+        programs.substr(particleVertex, particleVertexEnd - particleVertex);
+    requireText(particleVertexBlock, "param_named_auto time time 1.0",
+                "particle vertex program does not bind animation time");
+    requireText(particleVertexBlock, "param_named atlasGrid float2",
+                "particle vertex program does not bind atlas dimensions");
+    require(materials.find(
+                "texture_unit { texture retro_particle_atlas.png filtering") ==
+                std::string::npos,
+            "particle atlas texture unit uses parser-unsafe one-line syntax");
 
     const std::size_t rainMaterial =
         materials.find("material Engine/Particles/Rain");
@@ -95,8 +109,11 @@ int main()
                     "modern pixel particle material is missing");
     }
     requireText(presets,
-                "base(Fire, \"Engine/Particles/Fire\", 0.22f, 0.27f, 64)",
-                "fire particles lack the quality-first size/quota");
+                "base(Fire, \"Engine/Particles/Fire\", 0.32f, 0.38f, 96)",
+                "fire particles are not substantially larger or more numerous");
+    requireText(presets,
+                "emitter({0,1,0}, 24, 42, 0.38f, 0.78f",
+                "fire emission is not dense enough");
     requireText(presets,
                 "base(Poison, \"Engine/Particles/Poison\", 0.20f, 0.26f, 72)",
                 "poison particles lack the quality-first size/quota");
@@ -104,6 +121,11 @@ int main()
                 "fire palette is not saturated HDR");
     requireText(presets, "{0.18f,1.30f,0.045f",
                 "poison palette is not saturated HDR");
+    requireText(presets, "e.boxSize = {3.45f, 2.55f, 0.16f}",
+                "portal wisps do not cover the portal opening");
+    requireText(read("game/src/SceneFactory.cpp"),
+                "r.spawnParticles(style.particles, arch)",
+                "portal wisps are not centered on the portal membrane");
 
     const std::string showcase = read("game/assets/lobby_showcase.toml");
     for (const char* id : {"fire_particles", "smoke_particles",

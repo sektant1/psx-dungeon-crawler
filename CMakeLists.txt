@@ -118,7 +118,8 @@ find_package(OpenGL REQUIRED)
 target_link_libraries(
   eng
   PUBLIC glm::glm OgreOverlay EnTT::EnTT eng_imguizmo
-  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS})
+  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS}
+          eng_ogre_plugins)
 target_compile_definitions(
   eng
   PRIVATE ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
@@ -177,6 +178,7 @@ add_executable(
   game/src/LobbyDressing.cpp
   game/src/ParticleEffects.cpp
   game/src/SceneFactory.cpp
+  game/src/PortalGeometry.cpp
   game/src/RenderPalette.cpp
   game/src/Targeting.cpp
   game/src/Dummy.cpp
@@ -516,6 +518,12 @@ if(BUILD_TESTING)
   target_compile_definitions(
     vfx_shader_asset_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME vfx_shader_assets COMMAND vfx_shader_asset_tests)
+
+  add_executable(portal_geometry_tests game/tests/PortalGeometryTests.cpp
+                                       game/src/PortalGeometry.cpp)
+  target_include_directories(portal_geometry_tests PRIVATE game/src)
+  target_link_libraries(portal_geometry_tests PRIVATE glm::glm)
+  add_test(NAME portal_geometry COMMAND portal_geometry_tests)
 
   add_executable(model_tests engine/tests/ModelTests.cpp)
   target_include_directories(model_tests PRIVATE engine/include engine/src)
