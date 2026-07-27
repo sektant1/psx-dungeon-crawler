@@ -74,6 +74,7 @@ add_library(
   engine/src/render/Model.cpp
   engine/src/render/Primitive.cpp
   engine/src/render/PrimitiveGeometry.cpp
+  engine/src/render/PrototypeAssets.cpp
   engine/src/particles/Particles.cpp
   engine/src/particles/ParticlePresets.cpp
   engine/src/Log.cpp

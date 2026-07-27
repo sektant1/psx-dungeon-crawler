@@ -24,40 +24,6 @@
 namespace eng {
 namespace {
 
-void createPrototypeTexture(const char* name, int category)
-{
-    constexpr uint32_t size = 32;
-    std::vector<uint8_t> pixels(size * size * 4, 255);
-    for (uint32_t y = 0; y < size; ++y)
-        for (uint32_t x = 0; x < size; ++x) {
-            const size_t p = (y * size + x) * 4;
-            const bool checker = ((x / 4) ^ (y / 4)) & 1;
-            if (category == 0) { // surface: magenta/black checker
-                pixels[p+0] = checker ? 255 : 35;
-                pixels[p+1] = 0;
-                pixels[p+2] = checker ? 210 : 35;
-            } else if (category == 1) { // sprite: cyan frame/cross
-                const bool mark = x < 3 || y < 3 || x >= size-3 || y >= size-3 ||
-                                  x == y || x + y == size-1;
-                pixels[p+0] = mark ? 20 : 5;
-                pixels[p+1] = mark ? 240 : 45;
-                pixels[p+2] = mark ? 255 : 70;
-            } else { // particle: orange diamond with transparent corners
-                const int distance = std::abs(int(x) - 15) + std::abs(int(y) - 15);
-                pixels[p+0] = 255;
-                pixels[p+1] = distance < 8 ? 245 : 80;
-                pixels[p+2] = distance < 8 ? 80 : 15;
-                pixels[p+3] = distance < 15 ? 255 : 0;
-            }
-        }
-    Ogre::TexturePtr texture = Ogre::TextureManager::getSingleton().createManual(
-        name, Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
-        Ogre::TEX_TYPE_2D, size, size, 0, Ogre::PF_BYTE_RGBA,
-        Ogre::TU_STATIC_WRITE_ONLY);
-    const Ogre::PixelBox source(size, size, 1, Ogre::PF_BYTE_RGBA, pixels.data());
-    texture->getBuffer()->blitFromMemory(source);
-}
-
 } // namespace
 
 RenderCore::~RenderCore() { shutdown(); }
@@ -102,9 +68,15 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
         if (std::filesystem::is_directory(dir))
             rgm.addResourceLocation(dir, "FileSystem", "General");
     }
-    createPrototypeTexture(prototype::kSurfaceTexture, 0);
-    createPrototypeTexture(prototype::kSpriteTexture, 1);
-    createPrototypeTexture(prototype::kParticleTexture, 2);
+    // The prototype textures ship as real files in engine/assets/textures, so
+    // the material scripts' texture units resolve like any other texture. They
+    // used to be createManual'd here before this call, which made the script
+    // compiler compare its own declaration against the manual texture and
+    // reject the mismatch on every run ("overriding previous declarations of
+    // texture ... with different parameters"). Generating them after this call
+    // is not an option either: the declarations would find no file and group
+    // initialisation would fail, taking the rest of the group's resources with
+    // it. A file on disk is what both halves of that bind actually want.
     rgm.initialiseAllResourceGroups();
 
     // The PSX shaders bind 16 light slots (psx_lighting.glsl); Ogre's

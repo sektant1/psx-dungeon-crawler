@@ -50,10 +50,12 @@ int main()
         read("engine/assets/shaders/liquid.frag");
     const std::string lavaFragment =
         read("engine/assets/shaders/lava.frag");
+    // The portal and liquid profiles moved into one vfx.material when the
+    // prototype content reset removed game.material/fantasy.material; the
+    // shader-driven materials survived that reset deliberately.
     const std::string gameMaterials =
-        read("game/assets/materials/game.material");
-    const std::string fantasyMaterials =
-        read("game/assets/materials/fantasy.material");
+        read("game/assets/materials/vfx.material");
+    const std::string& fantasyMaterials = gameMaterials;
 
     requireText(program, "vertex_program PixelVfx/PortalVS glsl",
                 "dedicated portal vertex program is missing");

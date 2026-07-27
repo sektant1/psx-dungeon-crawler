@@ -76,6 +76,13 @@ public:
     // Sole generic primitive entry point. The descriptor's dimensions are
     // baked into the mesh; node scale remains available for placement.
     MeshHandle createPrimitiveMesh(const PrimitiveMeshDesc&);
+    // Stand-in for a mesh that failed to load, mirroring the
+    // Engine/PrototypeSurface material fallback: a missing asset should read as
+    // an obviously untextured placeholder, not abort the frame. The primitive is
+    // chosen from the asset's filename (prototype::meshShapeFor) so a missing
+    // wall is wall-shaped; each distinct shape is built once and shared. Pass an
+    // empty path for a plain unit box.
+    MeshHandle prototypeMesh(const std::string& assetPath = {});
     bool meshBounds(MeshHandle mesh, MeshBounds& out) const;
     // OBJ geometry captured during the render-mesh load, never reparsed or
     // read back from Ogre. Returns false for meshes without cached triangles.

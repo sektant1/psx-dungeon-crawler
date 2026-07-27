@@ -21,6 +21,7 @@
 #include <cmath>
 #include <functional>
 #include <regex>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -58,6 +59,9 @@ struct Renderer::Impl {
     std::vector<Ogre::BillboardSet*> sprites; // sprites[id-1]
     std::vector<std::string> spriteMaterials;
     std::vector<std::string> generatedTextures;
+    // Prototype meshes keyed by prototype::MeshShape::role -- one shared mesh
+    // per distinct shape, built on first miss. See prototypeMesh().
+    std::unordered_map<std::string, MeshHandle> prototypeMeshes;
     int nameCounter = 0;
     EnvState env;
     // Original sub-entity materials, saved while the wireframe debug view
@@ -190,14 +194,15 @@ MeshHandle Renderer::loadObj(const std::string& path, const glm::mat4* bake)
                         &geometry.vertices, &geometry.indices);
     } catch (const std::exception& e) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s", path.c_str(),
-                   e.what());
-        return {};
+        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+                   path.c_str(), e.what());
+        return prototypeMesh(path);
     } catch (...) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error",
+        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+                   "using prototype mesh",
                    path.c_str());
-        return {};
+        return prototypeMesh(path);
     }
     return mImpl->registerMesh(name, std::move(geometry));
 }
@@ -221,14 +226,15 @@ MeshHandle Renderer::loadObj(const std::string& path,
                         &geometry.indices);
     } catch (const std::exception& e) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s", path.c_str(),
-                   e.what());
-        return {};
+        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+                   path.c_str(), e.what());
+        return prototypeMesh(path);
     } catch (...) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error",
+        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+                   "using prototype mesh",
                    path.c_str());
-        return {};
+        return prototypeMesh(path);
     }
     // Identity metadata is retained, but every load still owns a distinct Ogre
     // resource/handle so destroying one ModelInstance cannot unload another.
@@ -251,6 +257,15 @@ MeshHandle Renderer::createPrimitiveMesh(const PrimitiveMeshDesc& desc)
         cached.vertices.push_back(vertex.position);
     cached.indices = primitive->indices;
     return mImpl->registerMesh(name, std::move(cached));
+}
+
+MeshHandle Renderer::prototypeMesh(const std::string& assetPath)
+{
+    const prototype::MeshShape shape = prototype::meshShapeFor(assetPath);
+    MeshHandle& cached = mImpl->prototypeMeshes[shape.role];
+    if (!cached.valid())
+        cached = createPrimitiveMesh(shape.desc);
+    return cached;
 }
 
 bool Renderer::meshBounds(MeshHandle mesh, MeshBounds& out) const
@@ -358,9 +373,11 @@ void Renderer::setNodeMaterial(NodeHandle node, const std::string& materialName)
 {
     std::string resolved = materialName;
     if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
+        const std::string fallback =
+            prototype::fallbackMaterialFor(materialName);
         log::error("Renderer: material '%s' is missing; using '%s'",
-                   materialName.c_str(), prototype::kSurfaceMaterial);
-        resolved = prototype::kSurfaceMaterial;
+                   materialName.c_str(), fallback.c_str());
+        resolved = fallback;
     }
     Ogre::SceneNode* n = mImpl->node(node, "setNodeMaterial");
     for (size_t i = 0; i < n->numAttachedObjects(); ++i)
@@ -604,8 +621,9 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
                           const std::string& materialName, bool castShadows,
                           bool renderOnTop)
 {
-    attachMesh(node, mesh, materialName, prototype::kSurfaceMaterial,
-               castShadows, renderOnTop);
+    attachMesh(node, mesh, materialName,
+               prototype::fallbackMaterialFor(materialName), castShadows,
+               renderOnTop);
 }
 
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
@@ -653,8 +671,11 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
         mImpl->missingMaterialWarnings.shouldLog(material.requested, true))
         log::error("Renderer: material '%s' is missing; using '%s'",
                    material.requested.c_str(), material.material.c_str());
+    // Resolve against what was originally asked for, not the already-substituted
+    // name, so a missing portal still lands on the portal prototype.
     attachMesh(node, mesh, material.material,
-               prototype::kSurfaceMaterial, castShadows, renderOnTop);
+               prototype::fallbackMaterialFor(material.requested), castShadows,
+               renderOnTop);
 }
 
 std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
@@ -931,9 +952,11 @@ void Renderer::addToStaticBatch(StaticBatchHandle batch, MeshHandle mesh,
                    batch.id);
     std::string resolved = materialName;
     if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
+        const std::string fallback =
+            prototype::fallbackMaterialFor(materialName);
         log::error("Renderer: material '%s' is missing; using '%s'",
-                   materialName.c_str(), prototype::kSurfaceMaterial);
-        resolved = prototype::kSurfaceMaterial;
+                   materialName.c_str(), fallback.c_str());
+        resolved = fallback;
     }
     mImpl->staticBatches[batch.id - 1].recs.push_back(
         {mesh, resolved, pos, yawDeg});
@@ -1176,8 +1199,19 @@ void applyMaterialParam(const std::string& materialName,
 {
     Ogre::MaterialPtr mat =
         Ogre::MaterialManager::getSingleton().getByName(materialName);
-    if (!mat)
-        log::fatal("Renderer: unknown material '%s'", materialName.c_str());
+    if (!mat) {
+        // The mesh using this material already drew with the prototype
+        // fallback; there is simply nothing here to parameterise. Tuning a
+        // missing material is not worth killing the frame over, and we must not
+        // write the params onto the shared prototype -- every other missing
+        // material would inherit them. Warn once per name and move on.
+        static std::set<std::string> warned;
+        if (warned.insert(materialName).second)
+            log::error("Renderer: cannot set '%s' on missing material '%s'; "
+                       "it is drawing with the prototype fallback",
+                       paramName.c_str(), materialName.c_str());
+        return;
+    }
     bool found = false;
     for (Ogre::Technique* tech : mat->getTechniques()) {
         for (Ogre::Pass* pass : tech->getPasses()) {

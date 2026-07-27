@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <set>
 #include <unordered_map>
 
@@ -221,7 +222,13 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     std::vector<PropDef> ambientCatalog;
     int ambientChance = 13;
     std::vector<std::string> roomRoles;
-    const std::string catalogPath = propMeshDir + "../../dungeon_props.toml";
+    // Normalise lexically: propMeshDir may not exist on disk (prototype trees
+    // ship no prop meshes), and resolving ".." through a missing directory
+    // fails at the OS level even though the catalog beside it is present.
+    const std::string catalogPath =
+        std::filesystem::path(propMeshDir + "../../dungeon_props.toml")
+            .lexically_normal()
+            .string();
     toml::parse_result catalogResult = toml::parse_file(catalogPath);
     if (!catalogResult) {
         eng::log::error("DungeonMap: prop catalog failed: %s",

@@ -1,0 +1,162 @@
+// Shader-driven VFX materials, recovered intact from the pre-purge tree.
+//
+// These survive the prototype content reset on purpose. They are shader
+// profiles, not art dressing: each is a palette + flow tuning of a PixelVfx
+// program, and the only textures they need are the small stylised flow maps in
+// textures/vfx/, which came back with them. Everything here should look exactly
+// as it did before the reset -- the parameter values are unchanged.
+//
+// The engine keeps art-free equivalents of the same profiles in
+// engine/assets/materials/prototype_vfx.material, used as fallbacks when a
+// scene has no VFX textures at all.
+
+// --- portals ---------------------------------------------------------------
+// Descent portal: opaque emissive sprite material with a continuously
+// scrolling texture. Values above 1 intentionally feed the bloom pass.
+material Game/PortalDown
+{
+    technique { pass {
+        cull_hardware none
+        depth_write on
+        vertex_program_ref PixelVfx/PortalVS { }
+        fragment_program_ref PixelVfx/PortalFS
+        {
+            param_named portalDark float4 0.025 0.075 0.015 1.0
+            param_named portalMid float4 0.12 0.92 0.055 1.0
+            param_named portalBright float4 0.80 1.65 0.18 1.0
+            param_named portalFlowSpeed float 0.28
+        }
+        texture_unit
+        {
+            texture slime_stylized.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Ascent portal: the same continuous flow reversed and recoloured arcane-blue.
+material Game/PortalUp
+{
+    technique { pass {
+        cull_hardware none
+        depth_write on
+        vertex_program_ref PixelVfx/PortalVS { }
+        fragment_program_ref PixelVfx/PortalFS
+        {
+            param_named portalDark float4 0.015 0.04 0.15 1.0
+            param_named portalMid float4 0.08 0.58 1.10 1.0
+            param_named portalBright float4 0.32 1.15 1.80 1.0
+            param_named portalFlowSpeed float -0.22
+        }
+        texture_unit
+        {
+            texture water_stylized.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// --- liquids ---------------------------------------------------------------
+
+material Fantasy/Lava
+{
+    technique { pass {
+        depth_write on
+        vertex_program_ref PixelVfx/LiquidVS { }
+        fragment_program_ref PixelVfx/LavaFS {
+            param_named lavaDark float4 0.10 0.003 0.001 1.0
+            param_named lavaCrust float4 0.42 0.018 0.003 1.0
+            param_named lavaHot float4 1.70 0.30 0.012 1.0
+            param_named lavaCore float4 2.15 1.02 0.10 1.0
+            param_named lavaFlowSpeed float 0.24
+        }
+        texture_unit {
+            texture lava_stylized.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Fantasy/Water
+{
+    technique { pass {
+        depth_write on
+        vertex_program_ref PixelVfx/LiquidVS { }
+        fragment_program_ref PixelVfx/LiquidFS {
+            param_named liquidDark float4 0.015 0.07 0.20 1.0
+            param_named liquidMid float4 0.03 0.42 0.92 1.0
+            param_named liquidBright float4 0.22 0.92 1.20 1.0
+            param_named liquidFlowA float2 0.07 0.035
+            param_named liquidFlowB float2 -0.035 0.055
+            param_named liquidEmission float 0.0
+        }
+        texture_unit {
+            texture water_stylized.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Fantasy/ToxicSlime
+{
+    technique { pass {
+        depth_write on
+        vertex_program_ref PixelVfx/LiquidVS { }
+        fragment_program_ref PixelVfx/LiquidFS {
+            param_named liquidDark float4 0.025 0.14 0.015 1.0
+            param_named liquidMid float4 0.12 0.95 0.025 1.0
+            param_named liquidBright float4 0.78 1.38 0.08 1.0
+            param_named liquidFlowA float2 -0.035 0.055
+            param_named liquidFlowB float2 0.045 -0.020
+            param_named liquidEmission float 0.20
+        }
+        texture_unit {
+            texture slime_stylized.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// --- energy ----------------------------------------------------------------
+
+material Fantasy/FelEnergy
+{
+    technique { pass {
+        cull_hardware none
+        depth_write on
+        vertex_program_ref Sprite/VS {
+            param_named spriteUvScale float2 1.35 1.35
+            param_named spriteScroll float2 0.28 -0.20
+        }
+        fragment_program_ref Sprite/FS
+        { param_named spriteTint float4 0.34 0.58 0.16 1.0 }
+        texture_unit {
+            texture slime_stylized.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Fantasy/ArcaneGlow
+{
+    technique { pass {
+        scene_blend add
+        // Closed glow geometry must depth-test itself; otherwise overlapping
+        // front and back faces add together into a blown-out slab.
+        depth_write on
+        vertex_program_ref Sprite/VS { param_named spriteScroll float2 0.03 -0.04 }
+        fragment_program_ref Sprite/FS
+        { param_named spriteTint float4 0.35 0.42 1.0 0.80 }
+        texture_unit {
+            texture glow_radial.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
