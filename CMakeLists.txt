@@ -84,7 +84,6 @@ add_library(
   engine/src/Engine.cpp
   engine/src/Physics.cpp
   engine/src/RenderPresets.cpp
-<<<<<<< Updated upstream
   engine/src/StepClock.cpp
   engine/src/SceneRegistry.cpp
   engine/src/ecs/Scene.cpp
@@ -103,12 +102,6 @@ add_library(
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
   engine/src/audio/Audio.cpp)
-=======
-  engine/src/SceneRegistry.cpp)
-
-add_dependencies(eng RenderSystem_GL3Plus Plugin_ParticleFX Codec_STBI)
-
->>>>>>> Stashed changes
 target_include_directories(
   eng
   PUBLIC engine/include

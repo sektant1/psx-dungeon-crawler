@@ -9,21 +9,27 @@
 # top-level CMakeLists). Bump a version by editing the pinned tag here and
 # nowhere else. Every pin is exact and deliberate — never track a branch.
 #
-# Exposed targets after include(): glm::glm                 (header-only math)
-# SDL2::SDL2               (windowing/input) Jolt                     (physics)
-# tomlplusplus::tomlplusplus + <tomlplusplus/toml.hpp> compat include OgreMain /
-# OgreOverlay   (renderer; plugins built as shared libs) eng_ogre_plugins
-# (INTERFACE: forces the runtime plugin .so builds)
+# Exposed targets after include():
+#   glm::glm                 (header-only math)
+#   SDL2::SDL2               (windowing/input)
+#   Jolt                     (physics)
+#   tomlplusplus::tomlplusplus + <tomlplusplus/toml.hpp> compat include
+#   OgreMain / OgreOverlay   (renderer; plugins built as shared libs)
+#   eng_ogre_plugins         (INTERFACE: forces the runtime plugin .so builds)
 #
 # OGRE-owned locations, resolved for the source build (were SDK paths before):
-# ENG_OGRE_PLUGIN_DIR      generator-expr dir holding RenderSystem_GL3Plus etc.
-# ENG_OGRE_MEDIA_DIR       OGRE's stock Media/ (shadow-extrude programs, fonts)
+#   ENG_OGRE_PLUGIN_DIR      generator-expr dir holding RenderSystem_GL3Plus etc.
+#   ENG_OGRE_MEDIA_DIR       OGRE's stock Media/ (shadow-extrude programs, fonts)
 # =============================================================================
 
 include(${CMAKE_CURRENT_LIST_DIR}/CPM.cmake)
 
 # --- glm ---------------------------------------------------------------------
-cpmaddpackage(NAME glm GITHUB_REPOSITORY g-truc/glm GIT_TAG 1.0.1)
+CPMAddPackage(
+    NAME glm
+    GITHUB_REPOSITORY g-truc/glm
+    GIT_TAG 1.0.1
+)
 
 # --- EnTT (header-only ECS) --------------------------------------------------
 # Scene-data source of truth. Header-only: just an include target, no build.
@@ -36,7 +42,6 @@ CPMAddPackage(
 # --- SDL2 --------------------------------------------------------------------
 # Shared by default so we don't statically pull SDL's system backends into our
 # binaries; the build tree ships the .so next to the executables.
-<<<<<<< Updated upstream
 CPMAddPackage(
     NAME SDL2
     GITHUB_REPOSITORY libsdl-org/SDL
@@ -51,49 +56,35 @@ CPMAddPackage(
         # SDL for windowing/input; audio still negotiates ALSA/PulseAudio.
         "SDL_PIPEWIRE OFF"
 )
-=======
-cpmaddpackage(
-  NAME
-  SDL2
-  GITHUB_REPOSITORY
-  libsdl-org/SDL
-  GIT_TAG
-  release-2.30.11
-  OPTIONS
-  "SDL2_DISABLE_INSTALL ON"
-  "SDL_TEST OFF"
-  "SDL_SHARED ON"
-  "SDL_STATIC OFF")
->>>>>>> Stashed changes
 
 # --- Jolt Physics ------------------------------------------------------------
 # CMake lives in the Build/ subdir. Options mirror our determinism/perf posture;
 # Vulkan compute (debug renderer) pulls in DXC, so it stays off.
-cpmaddpackage(
-  NAME
-  JoltPhysics
-  GITHUB_REPOSITORY
-  jrouwe/JoltPhysics
-  GIT_TAG
-  v5.6.0
-  SOURCE_SUBDIR
-  Build
-  OPTIONS
-  "DOUBLE_PRECISION OFF"
-  "GENERATE_DEBUG_SYMBOLS ON"
-  "CROSS_PLATFORM_DETERMINISTIC OFF"
-  "INTERPROCEDURAL_OPTIMIZATION OFF"
-  "ENABLE_ALL_WARNINGS OFF"
-  "DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF"
-  "DEBUG_RENDERER_IN_DISTRIBUTION OFF"
-  "JPH_USE_VK OFF")
+CPMAddPackage(
+    NAME JoltPhysics
+    GITHUB_REPOSITORY jrouwe/JoltPhysics
+    GIT_TAG v5.6.0
+    SOURCE_SUBDIR Build
+    OPTIONS
+        "DOUBLE_PRECISION OFF"
+        "GENERATE_DEBUG_SYMBOLS ON"
+        "CROSS_PLATFORM_DETERMINISTIC OFF"
+        "INTERPROCEDURAL_OPTIMIZATION OFF"
+        "ENABLE_ALL_WARNINGS OFF"
+        "DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF"
+        "DEBUG_RENDERER_IN_DISTRIBUTION OFF"
+        "JPH_USE_VK OFF"
+)
 
 # --- toml++ ------------------------------------------------------------------
 # Code includes it as <tomlplusplus/toml.hpp> (this repo's historic spelling).
 # Upstream ships <toml++/toml.hpp>, so generate a forwarding header into the
 # build tree instead of editing every call site.
-cpmaddpackage(NAME tomlplusplus GITHUB_REPOSITORY marzer/tomlplusplus GIT_TAG
-              v3.4.0)
+CPMAddPackage(
+    NAME tomlplusplus
+    GITHUB_REPOSITORY marzer/tomlplusplus
+    GIT_TAG v3.4.0
+)
 set(_toml_compat "${CMAKE_BINARY_DIR}/compat-include")
 file(WRITE "${_toml_compat}/tomlplusplus/toml.hpp"
      "#pragma once\n#include <toml++/toml.hpp>\n")
@@ -131,7 +122,6 @@ add_library(eng_imguizmo INTERFACE)
 target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 
 # --- OGRE 14 (renderer, built from source) -----------------------------------
-<<<<<<< Updated upstream
 # The single heavy dependency. First configure fetches + builds OGRE and its
 # bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. We build
 # ONLY what the engine loads at runtime: GL3Plus RS, ParticleFX, STBI codec,
@@ -190,164 +180,13 @@ CPMAddPackage(
         "OGRE_BUILD_COMPONENT_JAVA OFF"
         "OGRE_BUILD_COMPONENT_CSHARP OFF"
 )
-=======
-cpmaddpackage(
-  NAME
-  OGRE
-  GITHUB_REPOSITORY
-  OGRECave/ogre
-  GIT_TAG
-  v14.4.1
-  DOWNLOAD_ONLY
-  YES)
->>>>>>> Stashed changes
 
-# OGRE 14.4.1's legacy macro_log_feature() accesses ARGV4..ARGV6 even when
-# callers provide only four arguments. When OGRE is configured through CPM,
-# those missing arguments can resolve to CPMAddPackage's outer argument list.
-# Replace the macro with a scoped function and guarded optional arguments.
-set(_ogre_macro_log_feature
-    "${OGRE_SOURCE_DIR}/CMake/Utils/MacroLogFeature.cmake")
-
-file(READ "${_ogre_macro_log_feature}" _ogre_macro_contents)
-
-string(
-  REPLACE
-    "MACRO(MACRO_LOG_FEATURE _var _package _description _url ) # _required _minvers _comments)"
-    "FUNCTION(MACRO_LOG_FEATURE _var _package _description _url) # _required _minvers _comments)"
-    _ogre_macro_contents
-    "${_ogre_macro_contents}")
-
-string(
-  REPLACE
-    "   SET(_required \"\${ARGV4}\")\n   SET(_minvers \"\${ARGV5}\")\n   SET(_comments \"\${ARGV6}\")"
-    [=[
-   SET(_required FALSE)
-   SET(_minvers "")
-   SET(_comments "")
-
-   IF(ARGC GREATER 4)
-     SET(_required "${ARGV4}")
-   ENDIF()
-   IF(ARGC GREATER 5)
-     SET(_minvers "${ARGV5}")
-   ENDIF()
-   IF(ARGC GREATER 6)
-     SET(_comments "${ARGV6}")
-   ENDIF()
-]=]
-    _ogre_macro_contents
-    "${_ogre_macro_contents}")
-
-string(REPLACE "ENDMACRO(MACRO_LOG_FEATURE)" "ENDFUNCTION(MACRO_LOG_FEATURE)"
-               _ogre_macro_contents "${_ogre_macro_contents}")
-
-file(WRITE "${_ogre_macro_log_feature}" "${_ogre_macro_contents}")
-
-# Set OGRE options explicitly before add_subdirectory. FORCE is appropriate
-# because this file is the project's single source of dependency configuration.
-set(OGRE_BUILD_DEPENDENCIES
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_STATIC
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_SAMPLES
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_TOOLS
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_TESTS
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_INSTALL_SAMPLES
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_INSTALL_TOOLS
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_INSTALL_DOCS
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_INSTALL_PDB
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_BUILD_RENDERSYSTEM_GL3PLUS
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_RENDERSYSTEM_GL
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_RENDERSYSTEM_GLES2
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_RENDERSYSTEM_VULKAN
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_BUILD_PLUGIN_PFX
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_STBI
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_DOT_SCENE
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_ASSIMP
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_FREEIMAGE
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_BUILD_COMPONENT_OVERLAY
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_OVERLAY_IMGUI
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_BITES
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_RTSHADERSYSTEM
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_TERRAIN
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_PAGING
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_VOLUME
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_MESHLODGENERATOR
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_PROPERTY
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_BULLET
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_PYTHON
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_JAVA
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_CSHARP
-    OFF
-    CACHE BOOL "" FORCE)
-
-add_subdirectory("${OGRE_SOURCE_DIR}" "${OGRE_BINARY_DIR}" EXCLUDE_FROM_ALL)
 # The runtime loads these plugins by path (see RenderCore). They are separate
 # CMake targets, not linked into libeng, so nothing would build them otherwise:
 # gather them behind one INTERFACE target the engine depends on, and expose
 # their output directory (all land together) via a generator expression.
+add_library(eng_ogre_plugins INTERFACE)
+add_dependencies(eng_ogre_plugins
+    RenderSystem_GL3Plus Plugin_ParticleFX Codec_STBI)
 set(ENG_OGRE_PLUGIN_DIR "$<TARGET_FILE_DIR:RenderSystem_GL3Plus>")
 set(ENG_OGRE_MEDIA_DIR "${OGRE_SOURCE_DIR}/Media")
