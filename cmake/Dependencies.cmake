@@ -36,7 +36,6 @@ CPMAddPackage(
 # --- SDL2 --------------------------------------------------------------------
 # Shared by default so we don't statically pull SDL's system backends into our
 # binaries; the build tree ships the .so next to the executables.
-<<<<<<< Updated upstream
 CPMAddPackage(
     NAME SDL2
     GITHUB_REPOSITORY libsdl-org/SDL
@@ -51,20 +50,6 @@ CPMAddPackage(
         # SDL for windowing/input; audio still negotiates ALSA/PulseAudio.
         "SDL_PIPEWIRE OFF"
 )
-=======
-cpmaddpackage(
-  NAME
-  SDL2
-  GITHUB_REPOSITORY
-  libsdl-org/SDL
-  GIT_TAG
-  release-2.30.11
-  OPTIONS
-  "SDL2_DISABLE_INSTALL ON"
-  "SDL_TEST OFF"
-  "SDL_SHARED ON"
-  "SDL_STATIC OFF")
->>>>>>> Stashed changes
 
 # --- Jolt Physics ------------------------------------------------------------
 # CMake lives in the Build/ subdir. Options mirror our determinism/perf posture;
@@ -131,7 +116,6 @@ add_library(eng_imguizmo INTERFACE)
 target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 
 # --- OGRE 14 (renderer, built from source) -----------------------------------
-<<<<<<< Updated upstream
 # The single heavy dependency. First configure fetches + builds OGRE and its
 # bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. We build
 # ONLY what the engine loads at runtime: GL3Plus RS, ParticleFX, STBI codec,
@@ -141,6 +125,9 @@ CPMAddPackage(
     NAME OGRE
     GITHUB_REPOSITORY OGRECave/ogre
     GIT_TAG v14.4.1
+    # OGRE is configured below after its legacy macro is fixed and project
+    # options are pinned. Fetching only avoids CPM adding it a second time.
+    DOWNLOAD_ONLY YES
     # Fix ImGui overlay window-content flicker on GL3Plus at high/uncapped frame
     # rates: the bundled ImGuiOverlay reuses one dynamic vertex/index buffer
     # across frames, so the CPU can overwrite geometry the GPU is still reading.
@@ -190,17 +177,6 @@ CPMAddPackage(
         "OGRE_BUILD_COMPONENT_JAVA OFF"
         "OGRE_BUILD_COMPONENT_CSHARP OFF"
 )
-=======
-cpmaddpackage(
-  NAME
-  OGRE
-  GITHUB_REPOSITORY
-  OGRECave/ogre
-  GIT_TAG
-  v14.4.1
-  DOWNLOAD_ONLY
-  YES)
->>>>>>> Stashed changes
 
 # OGRE 14.4.1's legacy macro_log_feature() accesses ARGV4..ARGV6 even when
 # callers provide only four arguments. When OGRE is configured through CPM,
@@ -308,7 +284,7 @@ set(OGRE_BUILD_COMPONENT_OVERLAY
     ON
     CACHE BOOL "" FORCE)
 set(OGRE_BUILD_COMPONENT_OVERLAY_IMGUI
-    ON
+    OFF
     CACHE BOOL "" FORCE)
 set(OGRE_BUILD_COMPONENT_BITES
     OFF

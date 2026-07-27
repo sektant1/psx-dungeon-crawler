@@ -38,11 +38,11 @@ function(eng_target_hardening tgt)
     # built -fno-rtti, so leaving them on makes Physics.cpp reference Jolt
     # typeinfo that doesn't exist (link failure). Everything else in ASan+UBSan+
     # Leak stays on.
-    target_compile_options(${tgt} PRIVATE
-      -fsanitize=address,undefined -fno-sanitize=vptr
-      -fno-omit-frame-pointer -g)
-    target_link_options(${tgt} PRIVATE
-      -fsanitize=address,undefined -fno-sanitize=vptr)
+    target_compile_options(
+      ${tgt} PRIVATE -fsanitize=address,undefined -fno-sanitize=vptr
+                     -fno-omit-frame-pointer -g)
+    target_link_options(${tgt} PRIVATE -fsanitize=address,undefined
+                        -fno-sanitize=vptr)
   endif()
 endfunction()
 
@@ -84,7 +84,6 @@ add_library(
   engine/src/Engine.cpp
   engine/src/Physics.cpp
   engine/src/RenderPresets.cpp
-<<<<<<< Updated upstream
   engine/src/StepClock.cpp
   engine/src/SceneRegistry.cpp
   engine/src/ecs/Scene.cpp
@@ -102,13 +101,11 @@ add_library(
   engine/src/particles/ParticleLibrary.cpp
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
-  engine/src/audio/Audio.cpp)
-=======
+  engine/src/audio/Audio.cpp
   engine/src/SceneRegistry.cpp)
 
 add_dependencies(eng RenderSystem_GL3Plus Plugin_ParticleFX Codec_STBI)
 
->>>>>>> Stashed changes
 target_include_directories(
   eng
   PUBLIC engine/include
@@ -125,8 +122,7 @@ find_package(OpenGL REQUIRED)
 target_link_libraries(
   eng
   PUBLIC glm::glm OgreOverlay EnTT::EnTT eng_imguizmo
-  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS}
-          eng_ogre_plugins)
+  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS})
 target_compile_definitions(
   eng
   PRIVATE ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
@@ -197,7 +193,7 @@ add_executable(
   game/src/scene/ComponentRegistry.cpp
   game/src/scene/MapSerializer.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
-                           game/src game/src/scene)
+                                        game/src game/src/scene)
 target_link_libraries(game PRIVATE demo_scene)
 target_compile_definitions(
   game
@@ -209,15 +205,14 @@ eng_target_hardening(game)
 
 add_executable(
   mapgen
-  game/src/mapgen_main.cpp
-  game/src/scene/LayoutToScene.cpp
-  game/src/scene/MapSerializer.cpp
-  game/src/scene/ComponentRegistry.cpp
-  game/src/scene/ByteStream.cpp
-  game/src/DungeonGen.cpp)
-target_include_directories(mapgen PRIVATE game/src game/src/scene engine/include third_party)
+  game/src/mapgen_main.cpp game/src/scene/LayoutToScene.cpp
+  game/src/scene/MapSerializer.cpp game/src/scene/ComponentRegistry.cpp
+  game/src/scene/ByteStream.cpp game/src/DungeonGen.cpp)
+target_include_directories(mapgen PRIVATE game/src game/src/scene
+                                          engine/include third_party)
 target_link_libraries(mapgen PRIVATE glm::glm EnTT::EnTT)
-target_compile_definitions(mapgen PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+target_compile_definitions(
+  mapgen PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(mapgen)
 
 # Headless action-simulation harness: drives the renderer-free combat + physics
@@ -225,15 +220,14 @@ eng_target_hardening(mapgen)
 # Physics; combat sources compiled in directly.
 add_executable(
   game_sim
-  game/sim/sim_main.cpp
-  game/sim/SimWorld.cpp
-  game/src/combat/DamageSystem.cpp
-  game/src/combat/StatusEffectSystem.cpp
-  game/src/combat/WeaponLibrary.cpp
+  game/sim/sim_main.cpp game/sim/SimWorld.cpp game/src/combat/DamageSystem.cpp
+  game/src/combat/StatusEffectSystem.cpp game/src/combat/WeaponLibrary.cpp
   game/src/combat/CombatDirector.cpp)
-target_include_directories(game_sim PRIVATE game/src game/sim engine/include third_party)
+target_include_directories(game_sim PRIVATE game/src game/sim engine/include
+                                            third_party)
 target_link_libraries(game_sim PRIVATE eng glm::glm EnTT::EnTT)
-target_compile_definitions(game_sim PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+target_compile_definitions(
+  game_sim PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(game_sim)
 
 if(BUILD_TESTING)
@@ -276,16 +270,16 @@ if(BUILD_TESTING)
 
   add_executable(scene_tests engine/tests/SceneTests.cpp
                              engine/src/ecs/Scene.cpp)
-  target_include_directories(
-    scene_tests PRIVATE engine/include engine/src third_party/imgui)
+  target_include_directories(scene_tests PRIVATE engine/include engine/src
+                                                 third_party/imgui)
   target_link_libraries(scene_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME scene_tests COMMAND scene_tests)
 
-  add_executable(scene_sync_tests engine/tests/SceneSyncTests.cpp
-                                  engine/src/ecs/Scene.cpp
-                                  engine/src/ecs/SceneSync.cpp)
-  target_include_directories(
-    scene_sync_tests PRIVATE engine/include engine/src third_party/imgui)
+  add_executable(
+    scene_sync_tests engine/tests/SceneSyncTests.cpp engine/src/ecs/Scene.cpp
+                     engine/src/ecs/SceneSync.cpp)
+  target_include_directories(scene_sync_tests PRIVATE engine/include engine/src
+                                                      third_party/imgui)
   target_link_libraries(scene_sync_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME scene_sync_tests COMMAND scene_sync_tests)
 
@@ -295,155 +289,150 @@ if(BUILD_TESTING)
   target_link_libraries(byte_stream_tests PRIVATE glm::glm)
   add_test(NAME byte_stream COMMAND byte_stream_tests)
 
-  add_executable(component_registry_tests
-    game/tests/ComponentRegistryTests.cpp
-    game/src/scene/ByteStream.cpp
+  add_executable(
+    component_registry_tests
+    game/tests/ComponentRegistryTests.cpp game/src/scene/ByteStream.cpp
     game/src/scene/ComponentRegistry.cpp)
   target_include_directories(component_registry_tests
-    PRIVATE game/src/scene engine/include third_party)
+                             PRIVATE game/src/scene engine/include third_party)
   target_link_libraries(component_registry_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME component_registry COMMAND component_registry_tests)
 
-  add_executable(damage_system_tests
-    game/tests/DamageSystemTests.cpp
-    game/src/combat/DamageSystem.cpp)
+  add_executable(damage_system_tests game/tests/DamageSystemTests.cpp
+                                     game/src/combat/DamageSystem.cpp)
   target_include_directories(damage_system_tests
-    PRIVATE game/src engine/include third_party)
+                             PRIVATE game/src engine/include third_party)
   target_link_libraries(damage_system_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME damage_system COMMAND damage_system_tests)
 
-  add_executable(feel_components_tests
-    game/tests/FeelComponentsTests.cpp)
+  add_executable(feel_components_tests game/tests/FeelComponentsTests.cpp)
   target_include_directories(feel_components_tests
-    PRIVATE game/src engine/include third_party)
+                             PRIVATE game/src engine/include third_party)
   target_link_libraries(feel_components_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME feel_components COMMAND feel_components_tests)
 
-  add_executable(stamina_system_tests
-    game/tests/StaminaSystemTests.cpp
-    game/src/combat/StaminaSystem.cpp)
+  add_executable(stamina_system_tests game/tests/StaminaSystemTests.cpp
+                                      game/src/combat/StaminaSystem.cpp)
   target_include_directories(stamina_system_tests
-    PRIVATE game/src engine/include third_party)
+                             PRIVATE game/src engine/include third_party)
   target_link_libraries(stamina_system_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME stamina_system COMMAND stamina_system_tests)
 
-  add_executable(poise_system_tests
-    game/tests/PoiseSystemTests.cpp
-    game/src/combat/PoiseSystem.cpp)
-  target_include_directories(poise_system_tests
-    PRIVATE game/src engine/include third_party)
+  add_executable(poise_system_tests game/tests/PoiseSystemTests.cpp
+                                    game/src/combat/PoiseSystem.cpp)
+  target_include_directories(poise_system_tests PRIVATE game/src engine/include
+                                                        third_party)
   target_link_libraries(poise_system_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME poise_system COMMAND poise_system_tests)
 
-  add_executable(action_state_tests
-    game/tests/ActionStateSystemTests.cpp
-    game/src/combat/ActionStateSystem.cpp
+  add_executable(
+    action_state_tests
+    game/tests/ActionStateSystemTests.cpp game/src/combat/ActionStateSystem.cpp
     game/src/combat/StaminaSystem.cpp)
-  target_include_directories(action_state_tests
-    PRIVATE game/src engine/include third_party)
+  target_include_directories(action_state_tests PRIVATE game/src engine/include
+                                                        third_party)
   target_link_libraries(action_state_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME action_state COMMAND action_state_tests)
 
-  add_executable(defense_system_tests
-    game/tests/DefenseSystemTests.cpp
-    game/src/combat/DefenseSystem.cpp
-    game/src/combat/PoiseSystem.cpp
-    game/src/combat/StaminaSystem.cpp)
+  add_executable(
+    defense_system_tests
+    game/tests/DefenseSystemTests.cpp game/src/combat/DefenseSystem.cpp
+    game/src/combat/PoiseSystem.cpp game/src/combat/StaminaSystem.cpp)
   target_include_directories(defense_system_tests
-    PRIVATE game/src engine/include third_party)
+                             PRIVATE game/src engine/include third_party)
   target_link_libraries(defense_system_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME defense_system COMMAND defense_system_tests)
 
-  add_executable(damage_types_tests
-    game/tests/DamageTypesTests.cpp
-    game/src/combat/DamageSystem.cpp)
-  target_include_directories(damage_types_tests
-    PRIVATE game/src engine/include third_party)
+  add_executable(damage_types_tests game/tests/DamageTypesTests.cpp
+                                    game/src/combat/DamageSystem.cpp)
+  target_include_directories(damage_types_tests PRIVATE game/src engine/include
+                                                        third_party)
   target_link_libraries(damage_types_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME damage_types COMMAND damage_types_tests)
 
-  add_executable(weapon_timing_tests
-    game/tests/WeaponTimingTests.cpp
-    game/src/combat/WeaponLibrary.cpp)
+  add_executable(weapon_timing_tests game/tests/WeaponTimingTests.cpp
+                                     game/src/combat/WeaponLibrary.cpp)
   target_include_directories(weapon_timing_tests
-    PRIVATE game/src engine/include third_party)
-  target_link_libraries(weapon_timing_tests PRIVATE eng_toml glm::glm EnTT::EnTT)
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(weapon_timing_tests PRIVATE eng_toml glm::glm
+                                                    EnTT::EnTT)
   add_test(NAME weapon_timing COMMAND weapon_timing_tests)
 
-  add_executable(combat_scenario_tests
-    game/tests/CombatScenarioTests.cpp
-    game/src/combat/DamageSystem.cpp
-    game/src/combat/PoiseSystem.cpp
-    game/src/combat/DefenseSystem.cpp
-    game/src/combat/ActionStateSystem.cpp
-    game/src/combat/StaminaSystem.cpp)
+  add_executable(
+    combat_scenario_tests
+    game/tests/CombatScenarioTests.cpp game/src/combat/DamageSystem.cpp
+    game/src/combat/PoiseSystem.cpp game/src/combat/DefenseSystem.cpp
+    game/src/combat/ActionStateSystem.cpp game/src/combat/StaminaSystem.cpp)
   target_include_directories(combat_scenario_tests
-    PRIVATE game/src engine/include third_party)
+                             PRIVATE game/src engine/include third_party)
   target_link_libraries(combat_scenario_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME combat_scenario COMMAND combat_scenario_tests)
 
-  add_executable(status_effect_tests
-    game/tests/StatusEffectTests.cpp
-    game/src/combat/StatusEffectSystem.cpp
+  add_executable(
+    status_effect_tests
+    game/tests/StatusEffectTests.cpp game/src/combat/StatusEffectSystem.cpp
     game/src/combat/DamageSystem.cpp)
   target_include_directories(status_effect_tests
-    PRIVATE game/src engine/include third_party)
+                             PRIVATE game/src engine/include third_party)
   target_link_libraries(status_effect_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME status_effect COMMAND status_effect_tests)
 
-  add_executable(map_serializer_tests
-    game/tests/MapSerializerTests.cpp
-    game/src/scene/ByteStream.cpp
-    game/src/scene/ComponentRegistry.cpp
-    game/src/scene/MapSerializer.cpp)
+  add_executable(
+    map_serializer_tests
+    game/tests/MapSerializerTests.cpp game/src/scene/ByteStream.cpp
+    game/src/scene/ComponentRegistry.cpp game/src/scene/MapSerializer.cpp)
   target_include_directories(map_serializer_tests
-    PRIVATE game/src/scene engine/include third_party)
+                             PRIVATE game/src/scene engine/include third_party)
   target_link_libraries(map_serializer_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME map_serializer COMMAND map_serializer_tests)
 
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
                                       game/src/RenderPalette.cpp)
-  target_include_directories(render_palette_tests PRIVATE game/src third_party engine/include)
+  target_include_directories(render_palette_tests PRIVATE game/src third_party
+                                                          engine/include)
   target_link_libraries(render_palette_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME render_palette COMMAND render_palette_tests)
 
   add_executable(lobby_dressing_tests game/tests/LobbyDressingTests.cpp
-                                       game/src/LobbyDressing.cpp)
-  target_include_directories(lobby_dressing_tests PRIVATE game/src third_party engine/include)
+                                      game/src/LobbyDressing.cpp)
+  target_include_directories(lobby_dressing_tests PRIVATE game/src third_party
+                                                          engine/include)
   target_link_libraries(lobby_dressing_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME lobby_dressing COMMAND lobby_dressing_tests)
 
   add_executable(showcase_visibility_tests
                  game/tests/ShowcaseVisibilityTests.cpp)
-  target_include_directories(showcase_visibility_tests
-                             PRIVATE game/src third_party)
+  target_include_directories(showcase_visibility_tests PRIVATE game/src
+                                                               third_party)
   target_link_libraries(showcase_visibility_tests PRIVATE eng_toml)
   target_compile_definitions(
     showcase_visibility_tests
     PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
   add_test(NAME showcase_visibility COMMAND showcase_visibility_tests)
 
-  add_executable(physics_sync_tests
-    game/tests/PhysicsSyncTests.cpp
-    game/src/scene/PhysicsSync.cpp)
+  add_executable(physics_sync_tests game/tests/PhysicsSyncTests.cpp
+                                    game/src/scene/PhysicsSync.cpp)
   target_include_directories(physics_sync_tests
-    PRIVATE game/src/scene engine/include third_party)
+                             PRIVATE game/src/scene engine/include third_party)
   target_link_libraries(physics_sync_tests PRIVATE eng EnTT::EnTT glm::glm)
   add_test(NAME physics_sync COMMAND physics_sync_tests)
 
-  add_executable(level_resource_tests game/tests/LevelResourceTests.cpp
-                                      game/src/LevelResource.cpp
-                                      game/src/LevelDocument.cpp
-                                      game/src/DungeonGen.cpp)
-  target_include_directories(level_resource_tests PRIVATE game/src third_party engine/include)
+  add_executable(
+    level_resource_tests
+    game/tests/LevelResourceTests.cpp game/src/LevelResource.cpp
+    game/src/LevelDocument.cpp game/src/DungeonGen.cpp)
+  target_include_directories(level_resource_tests PRIVATE game/src third_party
+                                                          engine/include)
   target_link_libraries(level_resource_tests PRIVATE eng_toml glm::glm eng)
-  target_compile_definitions(level_resource_tests PRIVATE
-                             APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+  target_compile_definitions(
+    level_resource_tests
+    PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
   add_test(NAME level_resource COMMAND level_resource_tests)
 
   add_executable(obj_geometry_tests engine/tests/ObjGeometryTests.cpp
-                                     engine/src/ObjLoader.cpp)
-  target_include_directories(obj_geometry_tests PRIVATE engine/src engine/include)
+                                    engine/src/ObjLoader.cpp)
+  target_include_directories(obj_geometry_tests PRIVATE engine/src
+                                                        engine/include)
   target_link_libraries(obj_geometry_tests PRIVATE eng glm::glm)
   add_test(NAME obj_geometry COMMAND obj_geometry_tests)
 
@@ -473,10 +462,9 @@ if(BUILD_TESTING)
   target_link_libraries(frame_capture_tests PRIVATE ${CMAKE_DL_LIBS})
   add_test(NAME frame_capture COMMAND frame_capture_tests)
 
-  add_executable(actions_tests engine/tests/ActionsTests.cpp
-                               engine/src/systems/Ease.cpp
-                               engine/src/systems/Actions.cpp
-                               engine/src/core/Object.cpp)
+  add_executable(
+    actions_tests engine/tests/ActionsTests.cpp engine/src/systems/Ease.cpp
+                  engine/src/systems/Actions.cpp engine/src/core/Object.cpp)
   target_include_directories(actions_tests PRIVATE engine/include)
   target_link_libraries(actions_tests PRIVATE glm::glm)
   add_test(NAME actions COMMAND actions_tests)
@@ -491,22 +479,23 @@ if(BUILD_TESTING)
   target_include_directories(filesystem_tests PRIVATE engine/include)
   add_test(NAME filesystem COMMAND filesystem_tests)
 
-  add_executable(directory_watcher_tests engine/tests/DirectoryWatcherTests.cpp
-                                         engine/src/io/DirectoryWatcher.cpp
-                                         engine/src/io/FileSystem.cpp)
+  add_executable(
+    directory_watcher_tests
+    engine/tests/DirectoryWatcherTests.cpp engine/src/io/DirectoryWatcher.cpp
+    engine/src/io/FileSystem.cpp)
   target_include_directories(directory_watcher_tests PRIVATE engine/include)
   add_test(NAME directory_watcher COMMAND directory_watcher_tests)
 
-  add_executable(content_tests engine/tests/ContentTests.cpp
-                               engine/src/content/TextResource.cpp
-                               engine/src/io/FileSystem.cpp
-                               engine/src/core/Object.cpp)
+  add_executable(
+    content_tests
+    engine/tests/ContentTests.cpp engine/src/content/TextResource.cpp
+    engine/src/io/FileSystem.cpp engine/src/core/Object.cpp)
   target_include_directories(content_tests PRIVATE engine/include)
   add_test(NAME content COMMAND content_tests)
 
   add_executable(particle_asset_tests engine/tests/ParticleAssetTests.cpp)
-  target_compile_definitions(
-    particle_asset_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  target_compile_definitions(particle_asset_tests
+                             PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME particle_assets COMMAND particle_asset_tests)
 
   add_executable(particle_options_tests engine/tests/ParticleOptionsTests.cpp)
@@ -517,13 +506,13 @@ if(BUILD_TESTING)
   add_executable(enchantment_tests engine/tests/EnchantmentTests.cpp)
   target_include_directories(enchantment_tests PRIVATE engine/include)
   target_link_libraries(enchantment_tests PRIVATE glm::glm)
-  target_compile_definitions(
-    enchantment_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  target_compile_definitions(enchantment_tests
+                             PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME enchantment COMMAND enchantment_tests)
 
   add_executable(vfx_shader_asset_tests engine/tests/VfxShaderAssetTests.cpp)
-  target_compile_definitions(
-    vfx_shader_asset_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  target_compile_definitions(vfx_shader_asset_tests
+                             PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME vfx_shader_assets COMMAND vfx_shader_asset_tests)
 
   add_executable(portal_geometry_tests game/tests/PortalGeometryTests.cpp
@@ -540,8 +529,8 @@ if(BUILD_TESTING)
   add_executable(primitive_tests engine/tests/PrimitiveTests.cpp)
   target_include_directories(primitive_tests PRIVATE engine/include engine/src)
   target_link_libraries(primitive_tests PRIVATE eng glm::glm)
-  target_compile_definitions(
-    primitive_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  target_compile_definitions(primitive_tests
+                             PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME primitive COMMAND primitive_tests)
 
   add_executable(model_import_tests engine/tests/ModelImportTests.cpp)
@@ -549,17 +538,18 @@ if(BUILD_TESTING)
   target_link_libraries(model_import_tests PRIVATE eng glm::glm)
   add_test(NAME model_import COMMAND model_import_tests)
 
-  add_executable(audio_tests engine/tests/AudioTests.cpp
-                             engine/src/audio/Audio.cpp
-                             engine/src/audio/SoundInstance.cpp
-                             engine/src/audio/SoundResource.cpp
-                             engine/src/io/FileSystem.cpp
-                             engine/src/core/Object.cpp)
-  target_include_directories(audio_tests PRIVATE engine/include engine/src/audio)
+  add_executable(
+    audio_tests
+    engine/tests/AudioTests.cpp engine/src/audio/Audio.cpp
+    engine/src/audio/SoundInstance.cpp engine/src/audio/SoundResource.cpp
+    engine/src/io/FileSystem.cpp engine/src/core/Object.cpp)
+  target_include_directories(audio_tests PRIVATE engine/include
+                                                 engine/src/audio)
   target_link_libraries(audio_tests PRIVATE miniaudio)
   add_test(NAME audio COMMAND audio_tests)
 
-  add_executable(map_runtime_tests
+  add_executable(
+    map_runtime_tests
     game/tests/MapRuntimeTests.cpp
     game/src/scene/MapRuntime.cpp
     game/src/scene/PhysicsSync.cpp
@@ -568,17 +558,19 @@ if(BUILD_TESTING)
     game/src/scene/ByteStream.cpp
     engine/src/ecs/Scene.cpp
     engine/src/ecs/SceneSync.cpp)
-  target_include_directories(map_runtime_tests
-    PRIVATE game/src/scene engine/include engine/src third_party third_party/imgui)
+  target_include_directories(
+    map_runtime_tests PRIVATE game/src/scene engine/include engine/src
+                              third_party third_party/imgui)
   target_link_libraries(map_runtime_tests PRIVATE eng EnTT::EnTT glm::glm)
   add_test(NAME map_runtime COMMAND map_runtime_tests)
 
-  add_executable(layout_to_scene_tests
-    game/tests/LayoutToSceneTests.cpp
-    game/src/scene/LayoutToScene.cpp
+  add_executable(
+    layout_to_scene_tests
+    game/tests/LayoutToSceneTests.cpp game/src/scene/LayoutToScene.cpp
     game/src/DungeonGen.cpp)
-  target_include_directories(layout_to_scene_tests
-    PRIVATE game/src/scene game/src engine/include third_party)
+  target_include_directories(
+    layout_to_scene_tests PRIVATE game/src/scene game/src engine/include
+                                  third_party)
   target_link_libraries(layout_to_scene_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME layout_to_scene COMMAND layout_to_scene_tests)
 endif()
