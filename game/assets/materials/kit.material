@@ -1,0 +1,156 @@
+// Materials for the modular dungeon kit (meshes/kit, catalog in kit.toml).
+//
+// The kit is atlas-mapped, which is why there are five materials for 44 pieces
+// rather than twenty: 31 of them -- every wall, floor, block, stair, pillar,
+// arch and architectural prop -- read from one 256x256 atlas. That is also
+// what makes the kit cheap to draw, since a whole room batches into one
+// submission per atlas.
+//
+// uvScale stays 1.0 everywhere except Kit/Stone: atlas UVs are authored
+// sub-rectangles and scaling them samples a neighbouring tile.
+
+// --- the architecture atlas -------------------------------------------------
+// Walls, floors, blocks, stairs, pillars, arches, doorframes, skull walls,
+// candles, debris, spikes, wall decor.
+material Kit/Dungeon
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 1.0 1.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture Dungeon_Map.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Two-sided variant for pieces a player sees from both faces: arch fences,
+// grilles, window openings. The dungeon atlas is otherwise identical.
+material Kit/DungeonTwoSided
+{
+    technique { pass {
+        cull_hardware none
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 1.0 1.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture Dungeon_Map.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// --- doors ------------------------------------------------------------------
+// The three door leaves share a 128x128 atlas; their frames are architecture
+// and use Kit/Dungeon.
+material Kit/Doors
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 1.0 1.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture Doors_Map.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// --- containers -------------------------------------------------------------
+// Barrel, box, chest base and lid.
+material Kit/Containers
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 1.0 1.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture CratesAndBarrels_Map.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// --- metal --------------------------------------------------------------
+// Chain and chandelier: hung ironwork, lit like metal rather than stone.
+material Kit/Metal
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 1.0 1.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_LitMetal { }
+        texture_unit
+        {
+            texture TEX_Chain_02.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// --- timber -----------------------------------------------------------------
+// The wall-mounted table.
+material Kit/Wood
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 1.0 1.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture TEX_Planks_01.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// --- tiling stone -----------------------------------------------------------
+// Arch_Roof and Hexagon are the two pieces whose UVs run outside 0..1 (the
+// roof tiles from -3.25 to 4.25), so they need a wrapping, tileable texture
+// rather than an atlas -- sampling an atlas with those UVs would smear every
+// neighbouring tile across the surface.
+material Kit/Stone
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 1.0 1.0
+            param_named uvOffset float2 0.0 0.0
+        }
+        fragment_program_ref PSX_FS_Dungeon { }
+        texture_unit
+        {
+            texture TEX_Wall_03.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
