@@ -113,6 +113,20 @@ add_library(
 target_include_directories(eng_core PUBLIC engine/include PRIVATE third_party)
 target_link_libraries(eng_core PUBLIC glm::glm)
 
+# Render Hardware Interface: the graphics-backend contract and its
+# implementations. Sits beside eng_platform rather than inside eng_systems
+# because it must not see the renderer -- the dependency runs the other way,
+# once anything above starts driving it. Today nothing does: the engine still
+# renders through OGRE. See engine/src/rhi/README.md.
+add_library(
+  eng_rhi STATIC
+  engine/src/rhi/Registry.cpp
+  engine/src/rhi/null/NullDevice.cpp
+  engine/src/rhi/gl/GLDevice.cpp
+  engine/src/rhi/vulkan/VulkanDevice.cpp)
+target_include_directories(eng_rhi PRIVATE engine/src/rhi)
+target_link_libraries(eng_rhi PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>")
+
 add_library(eng_platform STATIC engine/src/Platform.cpp engine/src/Input.cpp
                                 engine/src/Config.cpp)
 target_include_directories(eng_platform PRIVATE third_party engine/src)
@@ -143,7 +157,8 @@ target_include_directories(eng_systems PRIVATE third_party engine/src
                                                engine/src/audio)
 target_link_libraries(
   eng_systems
-  PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_platform>" OgreOverlay eng_imgui
+  PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_platform>"
+         "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_rhi>" OgreOverlay eng_imgui
   PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS})
 target_compile_definitions(
   eng_systems
@@ -167,7 +182,8 @@ target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
 target_compile_definitions(
   eng PRIVATE ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets")
 
-foreach(_layer eng_imgui eng_core eng_platform eng_systems eng_framework eng)
+foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_systems
+               eng_framework eng)
   eng_target_hardening(${_layer})
 endforeach()
 # imgui is third-party: build it without our warning set.
@@ -345,6 +361,10 @@ if(BUILD_TESTING)
                                                       third_party/imgui)
   target_link_libraries(scene_sync_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME scene_sync_tests COMMAND scene_sync_tests)
+
+  add_executable(rhi_contract_tests engine/tests/RhiContractTests.cpp)
+  target_link_libraries(rhi_contract_tests PRIVATE eng_rhi)
+  add_test(NAME rhi_contract COMMAND rhi_contract_tests)
 
   add_executable(byte_stream_tests game/tests/ByteStreamTests.cpp
                                    engine/src/io/ByteStream.cpp)

@@ -20,6 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Layers, lowest first. A file may include its own layer and anything below.
+# "platform" holds both the window/input layer and the RHI: both sit directly
+# on core, neither may see the other, and systems is the first layer allowed to
+# use either.
 LAYERS = ["core", "platform", "systems", "framework", "app"]
 
 # Layer of a source file, by path relative to engine/. First match wins, so
@@ -33,6 +36,7 @@ SOURCE_RULES: list[tuple[str, str]] = [
     ("src/StepClock.cpp", "core"),
     ("src/core/", "core"),
     ("src/io/", "core"),
+    ("src/rhi/", "platform"),
     ("src/content/", "core"),
     ("src/diagnostics/", "core"),
     ("src/systems/", "core"),  # Ease/Actions/Events are core utilities
@@ -63,6 +67,7 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("StepClock.h", "core"),
     ("systems/", "core"),
     ("io/", "core"),
+    ("rhi/", "platform"),
     ("ecs/", "framework"),
     ("controllers/", "framework"),
     ("", "systems"),  # everything else: renderer/physics/audio/particles API
