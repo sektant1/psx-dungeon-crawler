@@ -155,7 +155,7 @@ void test_primitive_body_copies_physics_properties()
 {
     eng::ModelDesc desc = modelDesc();
     desc.collider = eng::ColliderMode::AutoBox;
-    desc.bodyLayer = eng::BodyLayer::Projectile;
+    desc.bodyLayer = eng::CollisionLayer{3};
     desc.dynamic = true;
     desc.sensor = true;
     desc.mass = 7.0f;
@@ -168,7 +168,7 @@ void test_primitive_body_copies_physics_properties()
     const auto resolved = eng::resolveModelCollider(desc, bounds);
 
     require(resolved.has_value(), "primitive property test was rejected");
-    require(resolved->body.layer == eng::BodyLayer::Projectile,
+    require(resolved->body.layer == eng::CollisionLayer{3},
             "body layer was not copied");
     require(resolved->body.dynamic, "dynamic flag was not copied");
     require(resolved->body.sensor, "sensor flag was not copied");

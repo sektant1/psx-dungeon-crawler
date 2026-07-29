@@ -1,4 +1,5 @@
 #include "LayoutToScene.h"
+#include "GameCollision.h"
 
 #include "GameComponents.h"
 #include "MeshSource.h"
@@ -51,7 +52,7 @@ static entt::entity makeCollider(entt::registry& reg,
     game::Collider col;
     col.shape = eng::ShapeKind::Box;
     col.size  = halfExtents;
-    col.layer = eng::BodyLayer::Static;
+    col.layer = game::layer::Static;
     reg.emplace<game::Collider>(e, col);
     return e;
 }

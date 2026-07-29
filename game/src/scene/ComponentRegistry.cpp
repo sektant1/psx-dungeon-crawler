@@ -87,7 +87,7 @@ void deCollider(entt::registry& r, entt::entity e, ByteReader& b)
 {
     game::Collider c;
     c.shape = eng::ShapeKind(b.u8()); c.size = b.vec3();
-    c.layer = eng::BodyLayer(b.u8());
+    c.layer = eng::CollisionLayer(b.u8());
     r.emplace_or_replace<game::Collider>(e, c);
 }
 

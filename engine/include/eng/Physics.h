@@ -2,13 +2,101 @@
 #include <eng/Handles.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <array>
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace eng {
 
-enum class BodyLayer { Static, Player, Prop, Projectile, Trigger };
+// Collision layers are plain indices into a table the *application* defines:
+// the engine ships the mechanism (a layer table, a symmetric collision matrix,
+// broad-phase bucketing) and no taxonomy. What "player" or "projectile" means
+// is a game decision, and a game that grows a new one must not have to edit
+// the physics engine to get it.
+using CollisionLayer = uint8_t;
+inline constexpr int kMaxCollisionLayers = 16;
+
+// Queries take a mask, not a layer, so "everything solid" is one cast instead
+// of one cast per layer with the results merged by hand. It is a distinct type
+// rather than an alias for the layer's integer: a layer index silently used as
+// a mask selects the wrong set (layer 0 becomes the empty mask), and that reads
+// as "the ray hit nothing" rather than as a mistake.
+enum class CollisionMask : uint32_t {};
+
+constexpr CollisionMask layerMask(CollisionLayer layer)
+{
+    return CollisionMask{uint32_t{1} << layer};
+}
+constexpr CollisionMask operator|(CollisionMask a, CollisionMask b)
+{
+    return CollisionMask{uint32_t(a) | uint32_t(b)};
+}
+constexpr CollisionMask operator&(CollisionMask a, CollisionMask b)
+{
+    return CollisionMask{uint32_t(a) & uint32_t(b)};
+}
+constexpr CollisionMask operator~(CollisionMask m)
+{
+    return CollisionMask{~uint32_t(m)};
+}
+constexpr CollisionMask& operator|=(CollisionMask& a, CollisionMask b)
+{
+    return a = a | b;
+}
+constexpr CollisionMask& operator&=(CollisionMask& a, CollisionMask b)
+{
+    return a = a & b;
+}
+constexpr bool any(CollisionMask m) { return uint32_t(m) != 0; }
+
+inline constexpr CollisionMask kAllLayers = CollisionMask{~uint32_t{0}};
+inline constexpr CollisionMask kNoLayers = CollisionMask{0};
+
+struct CollisionLayerDesc {
+    std::string name = "layer"; // tooling and logs only
+    // Broad-phase bucket. Level geometry is non-moving; anything simulated or
+    // teleported around every frame is moving. Getting this wrong costs
+    // performance, not correctness.
+    bool moving = true;
+    glm::vec3 debugColour{1.0f, 1.0f, 1.0f}; // ColliderPalette::ByLayer
+};
+
+// Everything the physics world needs to know about the application's layers.
+// Passed once to Physics::init.
+struct PhysicsSetup {
+    // Index i describes layer i. Empty means the generic default below.
+    std::vector<CollisionLayerDesc> layers;
+    // collides[a] has bit b set when layers a and b interact. Symmetric;
+    // maintain it through setPair.
+    std::array<CollisionMask, kMaxCollisionLayers> collides{};
+    // Layer that character controllers are created on.
+    CollisionLayer characterLayer = 0;
+
+    void setPair(CollisionLayer a, CollisionLayer b, bool collides_)
+    {
+        auto apply = [&](CollisionLayer x, CollisionLayer y) {
+            if (collides_) collides[x] |= layerMask(y);
+            else           collides[x] &= ~layerMask(y);
+        };
+        apply(a, b);
+        apply(b, a);
+    }
+
+    // All layers collide with all others, then subtract. Convenient because
+    // most tables are "everything hits everything except these few pairs".
+    void collideAll()
+    {
+        for (auto& m : collides) m = kAllLayers;
+    }
+
+    // Two generic layers -- 0 static, 1 dynamic -- for callers with no layer
+    // scheme of their own (tests, tools, the sample apps).
+    static PhysicsSetup generic();
+};
+
 enum class ShapeKind { Box, Sphere, Capsule, Cylinder };
 
 struct BodyDesc {
@@ -18,7 +106,7 @@ struct BodyDesc {
     float halfHeight = 0.5f;
     glm::vec3 position{0.0f};
     glm::quat orientation{1,0,0,0};
-    BodyLayer layer = BodyLayer::Prop;
+    CollisionLayer layer = 0;
     bool dynamic = true;
     bool sensor = false;
     bool continuousCast = false;
@@ -59,7 +147,7 @@ class Physics {
 public:
     Physics();
     ~Physics();
-    void init();
+    void init(const PhysicsSetup& setup = PhysicsSetup::generic());
     void shutdown();
     void update(float fixedDt, int collisionSteps = 1);
     float interpolationAlpha() const;
@@ -68,7 +156,7 @@ public:
     BodyHandle createBody(const BodyDesc&);
     BodyHandle createMeshBody(const std::vector<glm::vec3>& verts,
                               const std::vector<uint32_t>& indices,
-                              glm::vec3 pos, glm::quat rot, BodyLayer);
+                              glm::vec3 pos, glm::quat rot, CollisionLayer);
     void removeBody(BodyHandle);
     void setBodyTransform(BodyHandle, glm::vec3, glm::quat);
     void getRenderTransform(BodyHandle, glm::vec3& pos, glm::quat& rot) const;
@@ -86,11 +174,12 @@ public:
     CharacterState characterState(CharacterHandle) const;
     void characterSetShape(CharacterHandle, float radius, float height);
 
-    bool rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit&, BodyLayer mask) const;
+    bool rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit&,
+                 CollisionMask mask = kAllLayers) const;
     int  shapeCast(const BodyDesc& shape, glm::vec3 from, glm::vec3 to,
-                   std::vector<ShapeHit>&, BodyLayer mask) const;
-    int  overlap(const BodyDesc& shape, glm::vec3 at,
-                 std::vector<ShapeHit>&, BodyLayer mask) const;
+                   std::vector<ShapeHit>&, CollisionMask mask = kAllLayers) const;
+    int  overlap(const BodyDesc& shape, glm::vec3 at, std::vector<ShapeHit>&,
+                 CollisionMask mask = kAllLayers) const;
 
     using HitCallback = std::function<void(const HitEvent&)>;
     void setContactCallback(HitCallback);
@@ -103,13 +192,14 @@ public:
     // How the emitted line colours are chosen.
     enum class ColliderPalette {
         ByShape, // box/sphere/capsule/cylinder/mesh each get a distinct colour
-        ByLayer, // static/prop/projectile/player/trigger each get a colour
+        ByLayer, // each layer draws in its CollisionLayerDesc::debugColour
     };
-    // includeStatic=false skips Static-layer bodies (level geometry) so only
-    // props/dynamic colliders show -- much less clutter in a built dungeon.
+    // `include` filters by layer: dropping the level-geometry layer leaves
+    // just the props and dynamic bodies, which is far less cluttered inside a
+    // built dungeon.
     void debugDraw(std::vector<DebugLine>& out,
                    ColliderPalette palette = ColliderPalette::ByShape,
-                   bool includeStatic = true) const;
+                   CollisionMask include = kAllLayers) const;
 
 private:
     friend class EngContactListener;

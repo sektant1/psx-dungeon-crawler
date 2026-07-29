@@ -1,4 +1,5 @@
 #include "MapRuntime.h"
+#include "GameCollision.h"
 
 #include "GameComponents.h"
 #include "MeshSource.h"
@@ -44,7 +45,7 @@ int main()
         reg.emplace<mapio::MeshSource>(floor, mapio::MeshSource{"meshes/tiles/floor.obj"});
         reg.emplace<eng::ecs::MeshRenderer>(floor, eng::ecs::MeshRenderer{});
         reg.emplace<Collider>(floor, Collider{eng::ShapeKind::Box, glm::vec3(4, 0.5f, 4),
-                                              eng::BodyLayer::Static});
+                                              game::layer::Static});
         entt::entity spawn = reg.create();
         eng::ecs::Transform st; st.position = glm::vec3(3, 1, -2);
         reg.emplace<eng::ecs::Transform>(spawn, st);
@@ -53,7 +54,7 @@ int main()
     }
 
     eng::Physics physics;
-    physics.init();
+    physics.init(game::layer::physicsSetup());
     MockBackend backend;
     MapRuntime rt(backend, physics);
 

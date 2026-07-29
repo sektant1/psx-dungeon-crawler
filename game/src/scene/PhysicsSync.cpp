@@ -1,4 +1,5 @@
 #include "PhysicsSync.h"
+#include "GameCollision.h"
 
 #include "GameComponents.h"
 #include "RuntimeComponents.h"
@@ -50,7 +51,7 @@ void PhysicsSync::sync()
         d.halfHeight = tr.size.y;
         d.position = posOf(mReg, e);
         d.orientation = rotOf(mReg, e);
-        d.layer = eng::BodyLayer::Trigger;
+        d.layer = game::layer::Trigger;
         d.dynamic = false;
         d.sensor = true;
         const eng::BodyHandle h = mPhysics.createBody(d);

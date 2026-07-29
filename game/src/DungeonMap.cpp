@@ -1,4 +1,5 @@
 #include "DungeonMap.h"
+#include "GameCollision.h"
 #include "ObjLoader.h"
 #include "ParticleEffects.h"
 
@@ -289,7 +290,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
         d.kind = eng::ShapeKind::Box;
         d.halfExtents = halfExtents;
         d.position = centre;
-        d.layer = eng::BodyLayer::Static;
+        d.layer = game::layer::Static;
         d.dynamic = false;
         mColliders.push_back(mPhysics->createBody(d));
     };
@@ -300,7 +301,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             return; // geometry load failed; floor/ceiling slabs still protect
         const glm::quat q = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0, 1, 0));
         mColliders.push_back(mPhysics->createMeshBody(
-            archVerts, archIndices, pos, q, eng::BodyLayer::Static));
+            archVerts, archIndices, pos, q, game::layer::Static));
     };
     const auto growRoomAabb = [&](int room, glm::vec3 cellMin, glm::vec3 cellMax) {
         Room& rm = mRooms[size_t(room)];

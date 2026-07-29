@@ -33,7 +33,7 @@ struct ModelDesc {
     ColliderMode collider = ColliderMode::None;
     std::optional<glm::vec3> colliderHalfExtents;
     std::optional<float> colliderRadius;
-    BodyLayer bodyLayer = BodyLayer::Prop;
+    CollisionLayer bodyLayer = 0;
     bool dynamic = false;
     bool sensor = false;
     float mass = 1.0f;

@@ -1,4 +1,5 @@
 #include "Dummy.h"
+#include "GameCollision.h"
 
 #include <eng/Physics.h>
 #include <eng/Renderer.h>
@@ -23,7 +24,7 @@ void Dummy::init(eng::Physics& phys, eng::Renderer& r, glm::vec3 feetPos)
     bd.radius     = kRadius;
     bd.halfHeight = kHalfHeight;
     bd.position   = feetPos + glm::vec3(0.0f, kCentreY, 0.0f);
-    bd.layer      = eng::BodyLayer::Prop;
+    bd.layer      = game::layer::Prop;
     bd.dynamic    = true;
     bd.mass       = 40.0f;
     bd.friction   = 0.6f;

@@ -314,6 +314,7 @@ if(BUILD_TESTING)
   add_test(NAME fps_controller COMMAND fps_controller_tests)
 
   add_executable(physics_tests game/tests/PhysicsTests.cpp)
+  target_include_directories(physics_tests PRIVATE game/src)
   target_link_libraries(physics_tests PRIVATE eng)
   add_test(NAME physics_tests COMMAND physics_tests)
 
@@ -349,8 +350,9 @@ if(BUILD_TESTING)
     component_registry_tests
     game/tests/ComponentRegistryTests.cpp game/src/scene/ByteStream.cpp
     game/src/scene/ComponentRegistry.cpp)
-  target_include_directories(component_registry_tests
-                             PRIVATE game/src/scene engine/include third_party)
+  target_include_directories(
+    component_registry_tests PRIVATE game/src game/src/scene engine/include
+                                     third_party)
   target_link_libraries(component_registry_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME component_registry COMMAND component_registry_tests)
 
@@ -437,8 +439,9 @@ if(BUILD_TESTING)
     map_serializer_tests
     game/tests/MapSerializerTests.cpp game/src/scene/ByteStream.cpp
     game/src/scene/ComponentRegistry.cpp game/src/scene/MapSerializer.cpp)
-  target_include_directories(map_serializer_tests
-                             PRIVATE game/src/scene engine/include third_party)
+  target_include_directories(
+    map_serializer_tests PRIVATE game/src game/src/scene engine/include
+                                 third_party)
   target_link_libraries(map_serializer_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME map_serializer COMMAND map_serializer_tests)
 
@@ -468,8 +471,9 @@ if(BUILD_TESTING)
 
   add_executable(physics_sync_tests game/tests/PhysicsSyncTests.cpp
                                     game/src/scene/PhysicsSync.cpp)
-  target_include_directories(physics_sync_tests
-                             PRIVATE game/src/scene engine/include third_party)
+  target_include_directories(
+    physics_sync_tests PRIVATE game/src game/src/scene engine/include
+                               third_party)
   target_link_libraries(physics_sync_tests PRIVATE eng EnTT::EnTT glm::glm)
   add_test(NAME physics_sync COMMAND physics_sync_tests)
 
@@ -615,7 +619,7 @@ if(BUILD_TESTING)
     game/src/scene/ComponentRegistry.cpp
     game/src/scene/ByteStream.cpp)
   target_include_directories(
-    map_runtime_tests PRIVATE game/src/scene engine/include engine/src
+    map_runtime_tests PRIVATE game/src game/src/scene engine/include engine/src
                               third_party third_party/imgui)
   target_link_libraries(map_runtime_tests PRIVATE eng EnTT::EnTT glm::glm)
   add_test(NAME map_runtime COMMAND map_runtime_tests)

@@ -49,7 +49,7 @@ struct PrimitiveDesc {
     bool castShadows = false;
     std::optional<EnchantmentDesc> enchantment;
     bool collision = false;
-    BodyLayer bodyLayer = BodyLayer::Prop;
+    CollisionLayer bodyLayer = 0;
     bool dynamic = false;
     bool sensor = false;
     float mass = 1.0f;

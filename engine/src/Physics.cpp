@@ -56,7 +56,7 @@ struct BodyRec {
     JPH::RVec3 prevPos = JPH::RVec3::sZero(), curPos  = JPH::RVec3::sZero();
     JPH::Quat  prevRot = JPH::Quat::sIdentity(), curRot = JPH::Quat::sIdentity();
     bool alive = false;
-    BodyLayer layer = BodyLayer::Prop;
+    CollisionLayer layer = 0;
 };
 
 // ---- character record ----
@@ -70,6 +70,9 @@ struct CharacterRec {
 struct Physics::Impl {
     std::unique_ptr<TempAllocatorImpl>   temp;
     std::unique_ptr<JobSystemThreadPool> jobs;
+    // The application's layer table, held for the lifetime of the world: the
+    // Jolt filters below keep a pointer into it.
+    PhysicsSetup                   setup;
     phys::BPLayerInterface        bp;
     phys::ObjectVsBroadPhaseFilter ovb;
     phys::ObjectPairFilter         opp;
@@ -146,23 +149,15 @@ static JPH::RefConst<JPH::Shape> makeCharShape(float radius, float height) {
         JPH::Vec3(0, height * 0.5f, 0), JPH::Quat::sIdentity(), capsule).Create().Get();
 }
 
-static JPH::ObjectLayer mapLayer(BodyLayer l) {
-    switch (l) {
-        case BodyLayer::Static:     return phys::Layers::STATIC;
-        case BodyLayer::Player:     return phys::Layers::PLAYER;
-        case BodyLayer::Prop:       return phys::Layers::PROP;
-        case BodyLayer::Projectile: return phys::Layers::PROJECTILE;
-        case BodyLayer::Trigger:    return phys::Layers::TRIGGER;
+// Narrow-phase query filter: collide with every layer in the caller's mask.
+// Shared by rayCast/shapeCast/overlap.
+struct MaskLayerFilter final : public JPH::ObjectLayerFilter {
+    CollisionMask mask;
+    explicit MaskLayerFilter(CollisionMask m) : mask(m) {}
+    bool ShouldCollide(JPH::ObjectLayer l) const override {
+        return l < kMaxCollisionLayers &&
+               any(mask & layerMask(CollisionLayer(l)));
     }
-    return phys::Layers::PROP;
-}
-
-// Narrow-phase query filter: collide only with one object layer. Shared by
-// rayCast/shapeCast/overlap (was re-declared inline in each).
-struct SingleLayerFilter final : public JPH::ObjectLayerFilter {
-    JPH::ObjectLayer want;
-    explicit SingleLayerFilter(JPH::ObjectLayer w) : want(w) {}
-    bool ShouldCollide(JPH::ObjectLayer l) const override { return l == want; }
 };
 
 static JPH::ShapeRefC makeShape(const BodyDesc& d) {
@@ -201,7 +196,31 @@ Physics::Physics() : mImpl(std::make_unique<Impl>()) {
 }
 Physics::~Physics() { shutdown(); }
 
-void Physics::init() {
+PhysicsSetup PhysicsSetup::generic()
+{
+    PhysicsSetup s;
+    s.layers = {
+        {"static", /*moving=*/false, {0.5f, 0.5f, 0.5f}},
+        {"dynamic", /*moving=*/true, {0.2f, 1.0f, 0.2f}},
+    };
+    s.collideAll();
+    s.setPair(0, 0, false); // static geometry against itself is dead work
+    s.characterLayer = 1;
+    return s;
+}
+
+void Physics::init(const PhysicsSetup& setup) {
+    mImpl->setup = setup;
+    if (mImpl->setup.layers.empty())
+        mImpl->setup = PhysicsSetup::generic();
+    if (mImpl->setup.layers.size() > kMaxCollisionLayers) {
+        log::error("Physics: %zu layers requested, %d supported; extra layers "
+                   "are ignored",
+                   mImpl->setup.layers.size(), kMaxCollisionLayers);
+        mImpl->setup.layers.resize(kMaxCollisionLayers);
+    }
+    mImpl->bp.setup  = &mImpl->setup;
+    mImpl->opp.setup = &mImpl->setup;
     RegisterDefaultAllocator();
     if (!Factory::sInstance) Factory::sInstance = new Factory();
     RegisterTypes();
@@ -307,7 +326,7 @@ BodyHandle Physics::createBody(const BodyDesc& desc) {
     ShapeRefC shape = makeShape(desc);
 
     EMotionType motionType = desc.dynamic ? EMotionType::Dynamic : EMotionType::Static;
-    ObjectLayer layer      = mapLayer(desc.layer);
+    ObjectLayer layer      = ObjectLayer(desc.layer);
 
     RVec3 pos(desc.position.x, desc.position.y, desc.position.z);
     Quat  rot(desc.orientation.x, desc.orientation.y, desc.orientation.z, desc.orientation.w);
@@ -397,7 +416,7 @@ void Physics::removeBody(BodyHandle h) {
 // ---- mesh body ----
 BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
                                    const std::vector<uint32_t>& indices,
-                                   glm::vec3 pos, glm::quat rot, BodyLayer layer) {
+                                   glm::vec3 pos, glm::quat rot, CollisionLayer layer) {
     if (!mImpl->inited) return {};
 
     VertexList jverts;
@@ -420,7 +439,7 @@ BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
 
     RVec3 jpos(pos.x, pos.y, pos.z);
     Quat  jrot(rot.x, rot.y, rot.z, rot.w);
-    BodyCreationSettings bcs(shape, jpos, jrot, EMotionType::Static, mapLayer(layer));
+    BodyCreationSettings bcs(shape, jpos, jrot, EMotionType::Static, ObjectLayer(layer));
 
     BodyID bid = mImpl->system.GetBodyInterface().CreateAndAddBody(bcs, EActivation::DontActivate);
     if (bid.IsInvalid()) return {};
@@ -444,7 +463,8 @@ BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
 }
 
 // ---- ray cast ----
-bool Physics::rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit& outHit, BodyLayer mask) const {
+bool Physics::rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit& outHit,
+                      CollisionMask mask) const {
     if (!mImpl->inited) return false;
 
     glm::vec3 normDir = glm::normalize(dir);
@@ -452,7 +472,7 @@ bool Physics::rayCast(glm::vec3 from, glm::vec3 dir, float dist, RayHit& outHit,
                   Vec3(normDir.x * dist, normDir.y * dist, normDir.z * dist) };
     RayCastResult result;
 
-    SingleLayerFilter layerFilter(mapLayer(mask));
+    MaskLayerFilter layerFilter(mask);
     bool hit = mImpl->system.GetNarrowPhaseQuery().CastRay(ray, result, {}, layerFilter);
     if (!hit) return false;
 
@@ -484,7 +504,7 @@ CharacterHandle Physics::createCharacter(const CharacterDesc& desc) {
     settings.mMaxSlopeAngle = glm::radians(desc.maxSlopeDeg);
     settings.mMass = desc.mass;
     settings.mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -desc.radius);
-    settings.mInnerBodyLayer = phys::Layers::PLAYER;
+    settings.mInnerBodyLayer = ObjectLayer(mImpl->setup.characterLayer);
     settings.mInnerBodyShape = settings.mShape;
 
     JPH::Ref<JPH::CharacterVirtual> cv = new JPH::CharacterVirtual(
@@ -546,8 +566,10 @@ void Physics::characterUpdate(CharacterHandle h, float dt) {
         dt,
         mImpl->system.GetGravity(),
         us,
-        mImpl->system.GetDefaultBroadPhaseLayerFilter(phys::Layers::PLAYER),
-        mImpl->system.GetDefaultLayerFilter(phys::Layers::PLAYER),
+        mImpl->system.GetDefaultBroadPhaseLayerFilter(
+            ObjectLayer(mImpl->setup.characterLayer)),
+        mImpl->system.GetDefaultLayerFilter(
+            ObjectLayer(mImpl->setup.characterLayer)),
         {},
         {},
         *mImpl->temp);
@@ -585,8 +607,10 @@ void Physics::characterSetShape(CharacterHandle h, float radius, float height) {
     bool ok = rec.ch->SetShape(
         newShape,
         FLT_MAX,
-        mImpl->system.GetDefaultBroadPhaseLayerFilter(phys::Layers::PLAYER),
-        mImpl->system.GetDefaultLayerFilter(phys::Layers::PLAYER),
+        mImpl->system.GetDefaultBroadPhaseLayerFilter(
+            ObjectLayer(mImpl->setup.characterLayer)),
+        mImpl->system.GetDefaultLayerFilter(
+            ObjectLayer(mImpl->setup.characterLayer)),
         {},
         {},
         *mImpl->temp);
@@ -620,12 +644,12 @@ void Physics::setBodyKinematic(BodyHandle h, bool kinematic) {
                      JPH::EActivation::Activate);
 }
 int Physics::shapeCast(const BodyDesc& shape, glm::vec3 from, glm::vec3 to,
-                       std::vector<ShapeHit>& out, BodyLayer mask) const {
+                       std::vector<ShapeHit>& out, CollisionMask mask) const {
     if (!mImpl->inited) return 0;
 
     JPH::ShapeRefC shapeRef = makeShape(shape);
 
-    SingleLayerFilter layerFilter(mapLayer(mask));
+    MaskLayerFilter layerFilter(mask);
 
     JPH::Vec3 dir(to.x - from.x, to.y - from.y, to.z - from.z);
     JPH::RShapeCast cast(
@@ -664,12 +688,12 @@ int Physics::shapeCast(const BodyDesc& shape, glm::vec3 from, glm::vec3 to,
 }
 
 int Physics::overlap(const BodyDesc& shape, glm::vec3 at,
-                     std::vector<ShapeHit>& out, BodyLayer mask) const {
+                     std::vector<ShapeHit>& out, CollisionMask mask) const {
     if (!mImpl->inited) return 0;
 
     JPH::ShapeRefC shapeRef = makeShape(shape);
 
-    SingleLayerFilter layerFilter(mapLayer(mask));
+    MaskLayerFilter layerFilter(mask);
 
     JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
     mImpl->system.GetNarrowPhaseQuery().CollideShape(
@@ -794,15 +818,12 @@ void pushCapsuleOrCylinder(std::vector<Physics::DebugLine>& out,
     }
 }
 
-glm::vec3 layerColour(BodyLayer layer)
+// The colour is the application's, from its layer table; the engine has no
+// opinion on which layer is which.
+glm::vec3 layerColour(const PhysicsSetup& setup, CollisionLayer layer)
 {
-    switch (layer) {
-        case BodyLayer::Static:     return {0.5f, 0.5f, 0.5f};
-        case BodyLayer::Prop:       return {0.2f, 1.0f, 0.2f};
-        case BodyLayer::Projectile: return {1.0f, 1.0f, 0.2f};
-        case BodyLayer::Player:     return {0.2f, 0.8f, 1.0f};
-        case BodyLayer::Trigger:    return {1.0f, 0.4f, 1.0f};
-    }
+    if (size_t(layer) < setup.layers.size())
+        return setup.layers[size_t(layer)].debugColour;
     return {1.0f, 1.0f, 1.0f};
 }
 
@@ -864,20 +885,20 @@ void pushShape(std::vector<Physics::DebugLine>& out, const JPH::Shape* shape,
 } // namespace
 
 void Physics::debugDraw(std::vector<DebugLine>& out, ColliderPalette palette,
-                        bool includeStatic) const
+                        CollisionMask include) const
 {
     if (!mImpl->inited) return;
     const bool byShape = palette == ColliderPalette::ByShape;
 
     for (const auto& rec : mImpl->bodies) {
         if (!rec.alive) continue;
-        if (!includeStatic && rec.layer == BodyLayer::Static) continue;
+        if (!any(include & layerMask(rec.layer))) continue;
         JPH::BodyLockRead lock(mImpl->system.GetBodyLockInterface(), rec.id);
         if (!lock.Succeeded()) continue;
         const JPH::Body& body = lock.GetBody();
         const JPH::Shape* shape = body.GetShape();
         const glm::vec3 col = byShape ? shapeColour(shape->GetSubType())
-                                      : layerColour(rec.layer);
+                                      : layerColour(mImpl->setup, rec.layer);
         // Center-of-mass transform is where the shape lives; draw the shape in
         // that frame so rotation and true size show correctly.
         pushShape(out, shape, body.GetCenterOfMassTransform(), col);
@@ -886,7 +907,8 @@ void Physics::debugDraw(std::vector<DebugLine>& out, ColliderPalette palette,
     // Kinematic characters expose radius/height, not a body shape: draw the
     // capsule they collide with, oriented upright at their world position.
     const glm::vec3 charCol = byShape ? shapeColour(JPH::EShapeSubType::Capsule)
-                                      : layerColour(BodyLayer::Player);
+                                      : layerColour(mImpl->setup,
+                                                    mImpl->setup.characterLayer);
     for (const auto& rec : mImpl->characters) {
         if (!rec.alive || !rec.ch) continue;
         JPH::RVec3 p = rec.ch->GetPosition();

@@ -1,4 +1,5 @@
 #include "Spells.h"
+#include "GameCollision.h"
 
 #include "CombatConfig.h"
 
@@ -89,7 +90,7 @@ void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
     d.kind          = eng::ShapeKind::Sphere;
     d.radius        = fb.radius;
     d.position      = spawn;
-    d.layer         = eng::BodyLayer::Projectile;
+    d.layer         = game::layer::Projectile;
     d.dynamic       = true;
     d.continuousCast = true;
     d.mass          = fb.mass;
@@ -128,17 +129,11 @@ void SpellSystem::castBeam(eng::Physics& phys, eng::Renderer& r,
     fwd = glm::normalize(fwd);
     const float range = bm.range;
 
-    // rayCast takes a single BodyLayer mask; query Prop and Static, keep nearer.
-    eng::RayHit hitProp, hitStatic;
-    bool hp = phys.rayCast(eye, fwd, range, hitProp,   eng::BodyLayer::Prop);
-    bool hs = phys.rayCast(eye, fwd, range, hitStatic, eng::BodyLayer::Static);
-
-    glm::vec3 endPt = eye + fwd * range;
-    bool struck = false;
     eng::RayHit chosen;
-    if (hp && (!hs || hitProp.fraction <= hitStatic.fraction)) { chosen = hitProp;   struck = true; }
-    else if (hs)                                               { chosen = hitStatic; struck = true; }
-    if (struck) endPt = chosen.point;
+    const bool struck =
+        phys.rayCast(eye, fwd, range, chosen, game::layer::kSolid);
+
+    glm::vec3 endPt = struck ? chosen.point : eye + fwd * range;
 
     float len = glm::length(endPt - eye);
 

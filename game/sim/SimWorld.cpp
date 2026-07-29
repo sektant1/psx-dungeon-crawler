@@ -1,10 +1,11 @@
 #include "SimWorld.h"
+#include "GameCollision.h"
 
 namespace game::sim {
 
 World::World()
 {
-    mPhysics.init();
+    mPhysics.init(game::layer::physicsSetup());
     mPhysics.setGravity(0.0f); // combat sim: no falling, hits/DoT only
 }
 

@@ -1,4 +1,5 @@
 #include "PropSystem.h"
+#include "GameCollision.h"
 
 #include "GameContext.h"
 
@@ -32,7 +33,7 @@ void PropSystem::spawnLobby(GameContext& ctx)
         bd.kind = eng::ShapeKind::Box;
         bd.halfExtents = {0.4f, hh, 0.4f};
         bd.position = bodyPos + glm::vec3(0.0f, 0.02f, 0.0f);
-        bd.layer = eng::BodyLayer::Prop;
+        bd.layer = game::layer::Prop;
         bd.dynamic = true;
         bd.mass = 5.0f;
         bd.friction = 0.6f;
@@ -55,7 +56,7 @@ void PropSystem::spawnLobby(GameContext& ctx)
         bd.halfHeight = halfH;
         bd.radius = radius;
         bd.position = bodyPos + glm::vec3(0.0f, 0.02f, 0.0f);
-        bd.layer = eng::BodyLayer::Prop;
+        bd.layer = game::layer::Prop;
         bd.dynamic = true;
         bd.mass = 8.0f;
         bd.friction = 0.6f;
@@ -79,7 +80,7 @@ void PropSystem::spawnLobby(GameContext& ctx)
         gd.kind = eng::ShapeKind::Box;
         gd.halfExtents = {3.5f, 0.10f, 3.0f};
         gd.position = {9.5f, -0.10f, 18.5f}; // top = 0
-        gd.layer = eng::BodyLayer::Static;
+        gd.layer = game::layer::Static;
         gd.dynamic = false;
         mGroundBody = physics.createBody(gd);
     }

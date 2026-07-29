@@ -7,19 +7,15 @@
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+#include <eng/Physics.h>
 #include <mutex>
 #include <vector>
 
 namespace eng::phys {
 
-namespace Layers {
-    static constexpr JPH::ObjectLayer STATIC     = 0;
-    static constexpr JPH::ObjectLayer PLAYER     = 1;
-    static constexpr JPH::ObjectLayer PROP       = 2;
-    static constexpr JPH::ObjectLayer PROJECTILE = 3;
-    static constexpr JPH::ObjectLayer TRIGGER    = 4;
-    static constexpr JPH::ObjectLayer COUNT      = 5;
-}
+// Jolt object layers map one-to-one onto eng::CollisionLayer indices, so the
+// filters below are pure lookups into the application's PhysicsSetup. Nothing
+// here knows what any layer means.
 
 namespace BroadPhaseLayers {
     static constexpr JPH::BroadPhaseLayer NON_MOVING(0);
@@ -29,10 +25,13 @@ namespace BroadPhaseLayers {
 
 class BPLayerInterface final : public JPH::BroadPhaseLayerInterface {
 public:
+    const PhysicsSetup* setup = nullptr;
+
     unsigned int GetNumBroadPhaseLayers() const override { return BroadPhaseLayers::COUNT; }
     JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer l) const override {
-        return (l == Layers::STATIC || l == Layers::TRIGGER)
-             ? BroadPhaseLayers::NON_MOVING : BroadPhaseLayers::MOVING;
+        const bool moving = !setup || size_t(l) >= setup->layers.size()
+                                   || setup->layers[size_t(l)].moving;
+        return moving ? BroadPhaseLayers::MOVING : BroadPhaseLayers::NON_MOVING;
     }
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
     const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer) const override { return "layer"; }
@@ -46,16 +45,12 @@ public:
 
 class ObjectPairFilter final : public JPH::ObjectLayerPairFilter {
 public:
+    const PhysicsSetup* setup = nullptr;
+
     bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
-        using namespace Layers;
-        auto pair = [&](JPH::ObjectLayer x, JPH::ObjectLayer y){ return (a==x&&b==y)||(a==y&&b==x); };
-        if (a == STATIC && b == STATIC) return false;
-        if (pair(PROJECTILE, PROJECTILE)) return false;
-        if (pair(PROJECTILE, TRIGGER)) return false;
-        if (a == TRIGGER && b == TRIGGER) return false;
-        if (pair(TRIGGER, PROP)) return false;
-        if (pair(TRIGGER, PROJECTILE)) return false;
-        return true;
+        if (!setup || a >= kMaxCollisionLayers || b >= kMaxCollisionLayers)
+            return true;
+        return any(setup->collides[a] & layerMask(CollisionLayer(b)));
     }
 };
 

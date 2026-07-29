@@ -1,4 +1,5 @@
 #include "Projectiles.h"
+#include "GameCollision.h"
 
 #include "CombatConfig.h"
 
@@ -72,7 +73,7 @@ void ProjectileSystem::fireArrow(eng::Physics& phys, eng::Renderer& r,
     d.halfHeight    = halfHeight;
     d.position      = spawnPos;
     d.orientation   = orient;
-    d.layer         = eng::BodyLayer::Projectile;
+    d.layer         = game::layer::Projectile;
     d.dynamic       = true;
     d.continuousCast = true;
     d.mass          = mass;

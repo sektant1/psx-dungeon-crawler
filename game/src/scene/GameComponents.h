@@ -1,6 +1,7 @@
 #pragma once
 
-#include <eng/Physics.h> // eng::ShapeKind, eng::BodyLayer
+#include <eng/Physics.h> // eng::ShapeKind, eng::CollisionLayer
+#include "GameCollision.h"
 
 #include <glm/glm.hpp>
 
@@ -15,7 +16,7 @@ namespace game {
 struct Collider {
     eng::ShapeKind shape = eng::ShapeKind::Box;
     glm::vec3 size{0.5f}; // half-extents (box) / radius in x (sphere)
-    eng::BodyLayer layer = eng::BodyLayer::Static;
+    eng::CollisionLayer layer = game::layer::Static;
 };
 
 // Unique player start.

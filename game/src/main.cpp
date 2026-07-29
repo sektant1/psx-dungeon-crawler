@@ -5,6 +5,7 @@
 // transitions (portals) clear the scene and rebuild.
 
 #include "DungeonGen.h"
+#include "GameCollision.h"
 #include "DungeonMap.h"
 #include "LevelResource.h"
 #include "LiveLevel.h"
@@ -90,7 +91,7 @@ int main(int argc, char** argv)
     colliderDbg.enabled = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
 
     eng::Physics physics;
-    physics.init();
+    physics.init(game::layer::physicsSetup());
 
     // `game <file.map>`: play an authored editor scene instead of the
     // procedural dungeon. Handled here (engine + physics + assets ready, before
@@ -504,7 +505,10 @@ int main(int argc, char** argv)
                                                              : Pal::ByShape;
                 static std::vector<eng::Physics::DebugLine> pl;
                 pl.clear();
-                physics.debugDraw(pl, pal, colliderDbg.includeStatic);
+                physics.debugDraw(pl, pal,
+                                  colliderDbg.includeStatic
+                                      ? eng::kAllLayers
+                                      : ~eng::layerMask(game::layer::Static));
 
                 const glm::mat4 vp = r.cameraViewProj();
                 const ImVec2 ds = ImGui::GetIO().DisplaySize;

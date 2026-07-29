@@ -1,4 +1,5 @@
 #include "PhysicsSync.h"
+#include "GameCollision.h"
 #include "RuntimeComponents.h"
 
 #include "GameComponents.h"
@@ -19,7 +20,7 @@ static void require(bool c, const char* m)
 int main()
 {
     eng::Physics physics;
-    physics.init();
+    physics.init(game::layer::physicsSetup());
 
     entt::registry reg;
     PhysicsSync sync(reg, physics);
@@ -29,7 +30,7 @@ int main()
     t.position = glm::vec3(2, 0, 0);
     reg.emplace<eng::ecs::Transform>(wall, t);
     reg.emplace<Collider>(wall, Collider{eng::ShapeKind::Box, glm::vec3(1, 2, 1),
-                                         eng::BodyLayer::Static});
+                                         game::layer::Static});
 
     const int before = physics.bodyCount();
     sync.sync();
