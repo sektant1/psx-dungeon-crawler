@@ -6,6 +6,7 @@
 
 #include "DungeonGen.h"
 #include "GameCollision.h"
+#include "PrototypeCatalogLoader.h"
 #include "DungeonMap.h"
 #include "LevelResource.h"
 #include "LiveLevel.h"
@@ -67,6 +68,14 @@ int main(int argc, char** argv)
     if (!engine.init(assets + "/game.toml", assets))
         return 1;
     eng::Renderer& r = engine.renderer();
+
+    // What a failed load is replaced with. Registered before any level builds,
+    // so the very first missing asset already reads as what it was meant to be.
+    {
+        eng::prototype::PrototypeCatalog prototypes;
+        game::loadPrototypeCatalog(assets + "/prototypes.toml", prototypes);
+        r.setPrototypeCatalog(std::move(prototypes));
+    }
 
     r.setCameraFov(70.0f);
     // With the current 0.05 exponential fog, a 90 m far plane retains only

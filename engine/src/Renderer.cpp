@@ -62,6 +62,7 @@ struct Renderer::Impl {
     // Prototype meshes keyed by prototype::MeshShape::role -- one shared mesh
     // per distinct shape, built on first miss. See prototypeMesh().
     std::unordered_map<std::string, MeshHandle> prototypeMeshes;
+    prototype::PrototypeCatalog prototypes;
     int nameCounter = 0;
     EnvState env;
     // Original sub-entity materials, saved while the wireframe debug view
@@ -259,9 +260,16 @@ MeshHandle Renderer::createPrimitiveMesh(const PrimitiveMeshDesc& desc)
     return mImpl->registerMesh(name, std::move(cached));
 }
 
+void Renderer::setPrototypeCatalog(prototype::PrototypeCatalog catalog)
+{
+    mImpl->prototypes = std::move(catalog);
+    // Cached meshes were built from the old rules; the next miss rebuilds.
+    mImpl->prototypeMeshes.clear();
+}
+
 MeshHandle Renderer::prototypeMesh(const std::string& assetPath)
 {
-    const prototype::MeshShape shape = prototype::meshShapeFor(assetPath);
+    const prototype::MeshShape shape = mImpl->prototypes.meshFor(assetPath);
     MeshHandle& cached = mImpl->prototypeMeshes[shape.role];
     if (!cached.valid())
         cached = createPrimitiveMesh(shape.desc);
@@ -374,7 +382,7 @@ void Renderer::setNodeMaterial(NodeHandle node, const std::string& materialName)
     std::string resolved = materialName;
     if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
         const std::string fallback =
-            prototype::fallbackMaterialFor(materialName);
+            mImpl->prototypes.materialFor(materialName);
         log::error("Renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), fallback.c_str());
         resolved = fallback;
@@ -624,7 +632,7 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
                           bool renderOnTop)
 {
     attachMesh(node, mesh, materialName,
-               prototype::fallbackMaterialFor(materialName), castShadows,
+               mImpl->prototypes.materialFor(materialName), castShadows,
                renderOnTop);
 }
 
@@ -676,7 +684,7 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     // Resolve against what was originally asked for, not the already-substituted
     // name, so a missing portal still lands on the portal prototype.
     attachMesh(node, mesh, material.material,
-               prototype::fallbackMaterialFor(material.requested), castShadows,
+               mImpl->prototypes.materialFor(material.requested), castShadows,
                renderOnTop);
 }
 
@@ -955,7 +963,7 @@ void Renderer::addToStaticBatch(StaticBatchHandle batch, MeshHandle mesh,
     std::string resolved = materialName;
     if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
         const std::string fallback =
-            prototype::fallbackMaterialFor(materialName);
+            mImpl->prototypes.materialFor(materialName);
         log::error("Renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), fallback.c_str());
         resolved = fallback;

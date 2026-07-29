@@ -56,18 +56,30 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     // a shadow technique is set.
     rgm.addResourceLocation(std::string(OGRE_MEDIA_DIR) + "/Main",
                             "FileSystem", "General");
-    const std::string engBase = ENG_ASSET_DIR;
-    for (const char* sub : {"/shaders", "/programs", "/materials",
-                            "/compositors", "/textures"})
-        rgm.addResourceLocation(engBase + sub, "FileSystem", "General");
-    for (const char* sub : {"/materials", "/textures", "/textures/props",
-                            "/textures/dungeon",
-                            "/textures/prototype", "/textures/vfx",
-                            "/textures/surfaces", "/particles"}) {
-        const std::string dir = appAssetDir + sub;
-        if (std::filesystem::is_directory(dir))
-            rgm.addResourceLocation(dir, "FileSystem", "General");
-    }
+    // Every directory under both asset roots, discovered rather than listed.
+    // Ogre's FileSystem locations are not recursive, so each subdirectory has
+    // to be registered on its own; enumerating them means adding a texture
+    // folder is a matter of creating it, not of editing and rebuilding the
+    // engine. Meshes are loaded by path and are deliberately not part of this.
+    const auto addTree = [&rgm](const std::string& root) {
+        if (!std::filesystem::is_directory(root))
+            return;
+        rgm.addResourceLocation(root, "FileSystem", "General");
+        std::error_code ec;
+        for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+             it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            if (ec) {
+                log::error("RenderCore: walking '%s': %s", root.c_str(),
+                           ec.message().c_str());
+                break;
+            }
+            if (it->is_directory())
+                rgm.addResourceLocation(it->path().string(), "FileSystem",
+                                        "General");
+        }
+    };
+    addTree(ENG_ASSET_DIR);
+    addTree(appAssetDir);
     // The prototype textures ship as real files in engine/assets/textures, so
     // the material scripts' texture units resolve like any other texture. They
     // used to be createManual'd here before this call, which made the script

@@ -223,6 +223,7 @@ add_executable(
   game/src/LobbyDressing.cpp
   game/src/ParticleEffects.cpp
   game/src/SceneFactory.cpp
+  game/src/PrototypeCatalogLoader.cpp
   game/src/PortalGeometry.cpp
   game/src/RenderPalette.cpp
   game/src/Targeting.cpp

@@ -4,6 +4,7 @@
 #include <eng/particles/ParticleEffectDesc.h>
 #include <eng/render/Enchantment.h>
 #include <eng/render/ModelImport.h>
+#include <eng/render/PrototypeAssets.h>
 #include <eng/Sprite.h>
 
 #include <glm/glm.hpp>
@@ -83,6 +84,11 @@ public:
     // wall is wall-shaped; each distinct shape is built once and shared. Pass an
     // empty path for a plain unit box.
     MeshHandle prototypeMesh(const std::string& assetPath = {});
+    // Rules for what a missing mesh or material is replaced with. Empty by
+    // default: with no rules every miss is a unit box in the checkered
+    // prototype material, which is correct but unreadable in a dressed scene.
+    // See eng::prototype::PrototypeCatalog for why the application owns these.
+    void setPrototypeCatalog(prototype::PrototypeCatalog catalog);
     bool meshBounds(MeshHandle mesh, MeshBounds& out) const;
     // OBJ geometry captured during the render-mesh load, never reparsed or
     // read back from Ogre. Returns false for meshes without cached triangles.
