@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ShowcaseVisibility.h"
+#include "combat/CombatVocabulary.h"
 
 #include <eng/Handles.h>
 
@@ -68,8 +69,11 @@ PortalProp createPortalProp(eng::Renderer& renderer, glm::vec3 floorPosition,
 
 // Loads a TOML-authored primitive/material gallery. Returns false and logs a
 // useful error if the file is malformed; individual unknown shapes are skipped.
+// `vocabulary` resolves the `enchantment` key -- a school name authored in the
+// document -- into the palette the renderer takes.
 bool loadPrimitiveShowcase(eng::Renderer& renderer, const std::string& path,
-                           std::vector<ShowcaseExhibit>& loaded);
+                           std::vector<ShowcaseExhibit>& loaded,
+                           const game::CombatVocabulary& vocabulary);
 
 // Levitating treasure chest + offerings + warm glow. The chest/glow are
 // animated by the caller, so their handles come back in the result.

@@ -1,4 +1,5 @@
 #pragma once
+#include <eng/render/Enchantment.h>
 #include <eng/Handles.h>
 #include <glm/glm.hpp>
 #include <string>
@@ -8,6 +9,14 @@ namespace eng { class Renderer; }
 // Shared camera-space socket for first-person equipment. New weapons inherit
 // this framing automatically and only need to override fields when their
 // authored axis or dimensions differ substantially.
+// The enchantment glow a viewmodel wears. Which school that is comes from the
+// game's magic.toml, so the viewmodel takes the resolved palette and has no
+// list of schools of its own. strength 0 = no glow.
+struct ViewmodelGlow {
+    eng::EnchantmentPalette palette;
+    float strength = 0.0f;
+};
+
 struct WeaponViewmodelPose {
     // Lunacid-style idle: grip low-right, blade upright along the screen edge.
     glm::vec3 position{0.31f, -0.35f, -0.72f};
@@ -32,26 +41,27 @@ class ViewModel {
 public:
     // Call once after every player.init() (the head node is new each time).
     void init(eng::Renderer& r, eng::NodeHandle headNode,
-              const std::string& propsDir,
+              const std::string& propsDir, ViewmodelGlow glow = {},
               const WeaponViewmodelPose& pose = {});
 
     // Generic seam for future first-person weapons. `init` above is the
     // sword convenience wrapper used by the current game.
     void initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
                     const std::string& meshPath,
-                    const std::string& materialName,
+                    const std::string& materialName, ViewmodelGlow glow = {},
                     const WeaponViewmodelPose& pose = {});
 
     // Procedural caster staff: a long thin shaft plus a crystal tip, attached to
     // the viewmodel node. Reuses the shared attack animation for a cast thrust.
     void initStaff(eng::Renderer& r, eng::NodeHandle headNode,
-                   const std::string& crystalMeshPath,
+                   const std::string& crystalMeshPath, ViewmodelGlow tipGlow = {},
                    const WeaponViewmodelPose& pose = {});
 
     // Procedural handheld torch (no wall bracket): a short wood handle with a
     // live flame — fire/glow/ash particles plus a warm point light — at its top,
     // so it lights the scene while equipped. Reuses the attack thrust animation.
     void initTorch(eng::Renderer& r, eng::NodeHandle headNode,
+                   ViewmodelGlow handleGlow = {},
                    const WeaponViewmodelPose& pose = {});
 
     // Call once per frame (variable dt is fine — this is cosmetic only).

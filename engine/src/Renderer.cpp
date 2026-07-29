@@ -427,8 +427,7 @@ void Renderer::setNodeEnchantment(NodeHandle node,
     if (clean.strength <= 0.0f)
         return;
 
-    const EnchantmentPalette palette = enchantmentPalette(clean.style);
-    const glm::vec3 scroll = clean.scroll * palette.scrollDirection;
+    const glm::vec3 scroll = clean.scroll * clean.palette.scrollDirection;
     Ogre::SceneNode* root = mImpl->node(node, "setNodeEnchantment");
     const auto children = [](Ogre::SceneNode* current) {
         std::vector<Ogre::SceneNode*> result;
@@ -472,8 +471,10 @@ void Renderer::setNodeEnchantment(NodeHandle node,
                         pass->getFragmentProgramParameters();
                     params->setNamedConstant(
                         "enchantColour",
-                        Ogre::Vector4(palette.colour.r, palette.colour.g,
-                                      palette.colour.b, palette.colour.a));
+                        Ogre::Vector4(clean.palette.colour.r,
+                                      clean.palette.colour.g,
+                                      clean.palette.colour.b,
+                                      clean.palette.colour.a));
                     params->setNamedConstant("enchantStrength",
                                              clean.strength);
                     params->setNamedConstant("enchantRuneScale",
@@ -504,11 +505,12 @@ void Renderer::setNodeEnchantment(NodeHandle node,
             }
 }
 
-void Renderer::setNodeEnchantment(NodeHandle node, EnchantmentStyle style,
+void Renderer::setNodeEnchantment(NodeHandle node,
+                                  const EnchantmentPalette& palette,
                                   float strength)
 {
     EnchantmentDesc desc;
-    desc.style = style;
+    desc.palette = palette;
     desc.strength = strength;
     setNodeEnchantment(node, desc);
 }

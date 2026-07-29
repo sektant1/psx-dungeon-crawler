@@ -1,6 +1,7 @@
 #pragma once
 #include "combat/CombatComponents.h"
 #include "combat/CombatDirector.h"
+#include "combat/CombatVocabulary.h"
 
 #include <eng/Physics.h>
 
@@ -28,6 +29,10 @@ public:
     // Load a weapons.toml over the built-in defaults (optional).
     void loadWeapons(const std::string& tomlPath);
 
+    // Damage channels + schools, as the game defines them. Loaded from
+    // APP_ASSET_DIR/magic.toml at construction, so scripts can name channels.
+    const CombatVocabulary& vocabulary() const { return mVocabulary; }
+
     // Register a named combatant. Returns false if the name is already taken.
     bool addCombatant(const std::string& name, float hp, Faction faction,
                       const Resistances& resist = {});
@@ -48,6 +53,7 @@ public:
     CombatDirector& combat() { return mCombat; }
 
 private:
+    CombatVocabulary mVocabulary;
     entt::entity entityOf(const std::string& name) const;
 
     eng::Physics mPhysics;

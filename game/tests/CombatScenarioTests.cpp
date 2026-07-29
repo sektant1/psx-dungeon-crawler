@@ -31,7 +31,7 @@ int main() {
     {
         entt::registry reg;
         auto g = goblin(reg);
-        DamagePacket p; p.amount = 22.0f; p.type = DamageType::Physical;
+        DamagePacket p; p.amount = 22.0f; p.type = 0;
         auto r1 = damage::apply(reg, g, p);
         check(!r1.killed, "one hit does not kill goblin");
         auto r2 = damage::apply(reg, g, p);
@@ -53,7 +53,7 @@ int main() {
         auto pl = reg.create();
         reg.emplace<Health>(pl, Health{100.0f, 100.0f, 0.0f});
         reg.emplace<FactionTag>(pl, FactionTag{Faction::Player});
-        DamagePacket hit; hit.amount = 40.0f; hit.type = DamageType::Physical;
+        DamagePacket hit; hit.amount = 40.0f; hit.type = 0;
         damage::apply(reg, pl, hit);
         damage::apply(reg, pl, hit);
         check(!reg.get<Health>(pl).dead(), "player survives two goblin hits");

@@ -28,10 +28,15 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
                              std::pow(0.58f, 2.2f)) * 0.95f;
     carry.range = 7.0f;
     r.attachLight(mPlayer.headNode(), carry);
-    mSwordModel.init(r, mPlayer.headNode(), assets + "/meshes/props");
+    // Weapon glows name schools; magic.toml decides what they look like.
+    const CombatVocabulary& vocab = ctx.vocabulary;
+    mSwordModel.init(r, mPlayer.headNode(), assets + "/meshes/props",
+                     {vocab.palette("arcane"), 0.55f});
     mStaffModel.initStaff(r, mPlayer.headNode(),
-                          assets + "/meshes/crystal_spire1.obj");
-    mTorchModel.initTorch(r, mPlayer.headNode());
+                          assets + "/meshes/crystal_spire1.obj",
+                          {vocab.palette("frost"), 0.85f});
+    mTorchModel.initTorch(r, mPlayer.headNode(),
+                          {vocab.palette("fire"), 0.35f});
     applyWeaponVis(ctx);
 }
 

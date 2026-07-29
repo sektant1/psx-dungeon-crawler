@@ -205,6 +205,7 @@ add_executable(
   game/src/combat/DamageSystem.cpp
   game/src/combat/StatusEffectSystem.cpp
   game/src/combat/WeaponLibrary.cpp
+  game/src/combat/CombatVocabulary.cpp
   game/src/combat/CombatDirector.cpp
   game/src/combat/StaminaSystem.cpp
   game/src/combat/PoiseSystem.cpp
@@ -263,10 +264,10 @@ add_executable(
   game_sim
   game/sim/sim_main.cpp game/sim/SimWorld.cpp game/src/combat/DamageSystem.cpp
   game/src/combat/StatusEffectSystem.cpp game/src/combat/WeaponLibrary.cpp
-  game/src/combat/CombatDirector.cpp)
+  game/src/combat/CombatDirector.cpp game/src/combat/CombatVocabulary.cpp)
 target_include_directories(game_sim PRIVATE game/src game/sim engine/include
                                             third_party)
-target_link_libraries(game_sim PRIVATE eng glm::glm EnTT::EnTT)
+target_link_libraries(game_sim PRIVATE eng eng_toml glm::glm EnTT::EnTT)
 target_compile_definitions(
   game_sim PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(game_sim)
@@ -401,18 +402,26 @@ if(BUILD_TESTING)
   target_link_libraries(defense_system_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME defense_system COMMAND defense_system_tests)
 
-  add_executable(damage_types_tests game/tests/DamageTypesTests.cpp
-                                    game/src/combat/DamageSystem.cpp)
+  add_executable(
+    damage_types_tests game/tests/DamageTypesTests.cpp
+                       game/src/combat/DamageSystem.cpp
+                       game/src/combat/CombatVocabulary.cpp)
   target_include_directories(damage_types_tests PRIVATE game/src engine/include
                                                         third_party)
-  target_link_libraries(damage_types_tests PRIVATE glm::glm EnTT::EnTT)
+  target_link_libraries(damage_types_tests PRIVATE eng_toml eng_core glm::glm
+                                                   EnTT::EnTT)
+  target_compile_definitions(
+    damage_types_tests
+    PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
   add_test(NAME damage_types COMMAND damage_types_tests)
 
-  add_executable(weapon_timing_tests game/tests/WeaponTimingTests.cpp
-                                     game/src/combat/WeaponLibrary.cpp)
+  add_executable(
+    weapon_timing_tests game/tests/WeaponTimingTests.cpp
+                        game/src/combat/WeaponLibrary.cpp
+                        game/src/combat/CombatVocabulary.cpp)
   target_include_directories(weapon_timing_tests
                              PRIVATE game/src engine/include third_party)
-  target_link_libraries(weapon_timing_tests PRIVATE eng_toml glm::glm
+  target_link_libraries(weapon_timing_tests PRIVATE eng_toml eng_core glm::glm
                                                     EnTT::EnTT)
   add_test(NAME weapon_timing COMMAND weapon_timing_tests)
 
@@ -429,10 +438,11 @@ if(BUILD_TESTING)
   add_executable(
     status_effect_tests
     game/tests/StatusEffectTests.cpp game/src/combat/StatusEffectSystem.cpp
-    game/src/combat/DamageSystem.cpp)
+    game/src/combat/DamageSystem.cpp game/src/combat/CombatVocabulary.cpp)
   target_include_directories(status_effect_tests
                              PRIVATE game/src engine/include third_party)
-  target_link_libraries(status_effect_tests PRIVATE glm::glm EnTT::EnTT)
+  target_link_libraries(status_effect_tests PRIVATE eng_toml eng_core
+                                                   glm::glm EnTT::EnTT)
   add_test(NAME status_effect COMMAND status_effect_tests)
 
   add_executable(

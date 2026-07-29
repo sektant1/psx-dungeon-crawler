@@ -106,7 +106,15 @@ int main(int argc, char** argv)
     }
 
 
-    game::GameContext ctx{r, physics, engine.input(), assets};
+    // Damage channels and schools of magic. Loaded before anything that names
+    // one, and owned here because the level builder, the viewmodels and the
+    // combat model all resolve names through the same table.
+    game::CombatVocabulary vocabulary;
+    if (!vocabulary.load(assets + "/magic.toml"))
+        eng::log::error("magic.toml failed to load; combat names resolve to "
+                        "nothing and weapons fall back to the first channel");
+
+    game::GameContext ctx{r, physics, engine.input(), assets, vocabulary};
 
     // Attack subsystems (arrows/spells/melee) + data-driven tunables from
     // [combat.*] in game.toml, live-editable in the "Attacks" debug window.
@@ -162,13 +170,13 @@ int main(int argc, char** argv)
         if (depth == 0) {
             if (LevelResource* lobby =
                     levelContent.load<LevelResource>("lobby", assets + "/lobby.toml")) {
-                loaded = level.rebuildLayout(r, physics, assets,
-                                             lobby->layout(), depth);
+                loaded = level.rebuildLayout(r, physics, vocabulary,
+                                             assets, lobby->layout(), depth);
             }
             // load() already logged on failure; leaves `loaded` false.
         } else {
-            loaded = level.rebuild(r, physics, assets, seeds[size_t(depth)],
-                                   depth);
+            loaded = level.rebuild(r, physics, vocabulary, assets,
+                                   seeds[size_t(depth)], depth);
         }
         if (!loaded) {
             eng::log::error("Level %d failed to load", depth);
@@ -230,8 +238,10 @@ int main(int argc, char** argv)
         game::Health dummyHp;
         dummyHp.current = dummyHp.max = 60.0f;
         game::Resistances dummyResist{};
-        dummyResist[game::DamageType::Physical] = 0.35f; // plated
-        dummyResist[game::DamageType::Fire] = -0.5f;     // flammable
+        // Channels by name: which ids these are is magic.toml's business.
+        const game::CombatVocabulary& vocab = vocabulary;
+        dummyResist[vocab.damageType("physical")] = 0.35f; // plated
+        dummyResist[vocab.damageType("fire")] = -0.5f;     // flammable
         dummyEntity = combat.director().addCombatant(
             dummy.body(), dummyHp, dummyResist, game::Faction::Enemy);
 

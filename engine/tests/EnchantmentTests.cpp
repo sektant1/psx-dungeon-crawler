@@ -57,8 +57,11 @@ int main()
 
     {
         const EnchantmentDesc desc;
-        require(desc.style == EnchantmentStyle::Arcane,
-                "default style is not Arcane");
+        require(equal(desc.palette.colour,
+                      glm::vec4(0.62f, 0.32f, 1.0f, 0.68f)),
+                "default palette colour changed");
+        require(equal(desc.palette.scrollDirection, glm::vec3(1.0f)),
+                "default palette scroll direction changed");
         require(desc.strength == 1.0f, "default strength changed");
         require(desc.runeScale == 3.5f, "default rune scale changed");
         require(equal(desc.scroll, glm::vec3(0.12f, 0.20f, 0.08f)),
@@ -80,7 +83,8 @@ int main()
         const float nan = std::numeric_limits<float>::quiet_NaN();
         const float infinity = std::numeric_limits<float>::infinity();
         EnchantmentDesc invalid;
-        invalid.style = static_cast<EnchantmentStyle>(99);
+        invalid.palette.colour = {nan, 9.0f, infinity, 0.5f};
+        invalid.palette.scrollDirection = {-9.0f, nan, 1.0f};
         invalid.strength = nan;
         invalid.runeScale = -infinity;
         invalid.scroll = {nan, 2.0f, infinity};
@@ -93,8 +97,17 @@ int main()
         invalid.recursive = false;
 
         const EnchantmentDesc clean = sanitizeEnchantmentDesc(invalid);
-        require(clean.style == EnchantmentStyle::Arcane,
-                "invalid style did not fall back to Arcane");
+        const EnchantmentPalette defaults;
+        require(clean.palette.colour.r == defaults.colour.r,
+                "non-finite palette channel did not use the default");
+        require(clean.palette.colour.g == 4.0f,
+                "out-of-range palette channel was not clamped");
+        require(clean.palette.colour.a == 0.5f,
+                "a valid palette channel was not preserved");
+        require(clean.palette.scrollDirection.x == -4.0f,
+                "out-of-range scroll axis was not clamped");
+        require(clean.palette.scrollDirection.y == defaults.scrollDirection.y,
+                "non-finite scroll axis did not use the default");
         require(clean.strength == 1.0f,
                 "non-finite strength did not use the default");
         require(clean.runeScale == 3.5f,
@@ -130,31 +143,16 @@ int main()
     }
 
     {
-        const EnchantmentPalette arcane =
-            enchantmentPalette(EnchantmentStyle::Arcane);
-        const EnchantmentPalette fire =
-            enchantmentPalette(EnchantmentStyle::Fire);
-        const EnchantmentPalette poison =
-            enchantmentPalette(EnchantmentStyle::Poison);
-        const EnchantmentPalette frost =
-            enchantmentPalette(EnchantmentStyle::Frost);
-        require(!equal(arcane.colour, fire.colour) &&
-                    !equal(arcane.colour, poison.colour) &&
-                    !equal(arcane.colour, frost.colour) &&
-                    !equal(fire.colour, poison.colour) &&
-                    !equal(fire.colour, frost.colour) &&
-                    !equal(poison.colour, frost.colour),
-                "enchantment styles do not have distinct colours");
-        require(!equal(arcane.scrollDirection, fire.scrollDirection) &&
-                    !equal(arcane.scrollDirection, poison.scrollDirection) &&
-                    !equal(arcane.scrollDirection, frost.scrollDirection) &&
-                    !equal(fire.scrollDirection, poison.scrollDirection) &&
-                    !equal(fire.scrollDirection, frost.scrollDirection) &&
-                    !equal(poison.scrollDirection, frost.scrollDirection),
-                "enchantment styles do not have distinct scroll directions");
-        require(equal(enchantmentPalette(static_cast<EnchantmentStyle>(99)).colour,
-                      arcane.colour),
-                "invalid palette style did not fall back to Arcane");
+        // A palette travels through the desc untouched when it is already
+        // valid: the engine has no table of its own to fall back to.
+        EnchantmentDesc desc;
+        desc.palette.colour = {0.1f, 0.2f, 0.3f, 0.4f};
+        desc.palette.scrollDirection = {-1.0f, 0.5f, 2.0f};
+        const EnchantmentDesc clean = sanitizeEnchantmentDesc(desc);
+        require(equal(clean.palette.colour, desc.palette.colour),
+                "a valid palette colour was modified");
+        require(equal(clean.palette.scrollDirection, desc.palette.scrollDirection),
+                "a valid scroll direction was modified");
     }
 
     {

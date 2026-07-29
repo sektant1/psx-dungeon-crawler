@@ -28,7 +28,10 @@ public:
     using DeathFn = std::function<void(entt::entity)>;
 
     // Load weapons.toml (built-in defaults remain if the file is absent).
-    void init(const std::string& weaponsTomlPath);
+    // `vocabulary` must outlive the director: weapon damage channels and the
+    // burn channel are resolved against it.
+    void init(const std::string& weaponsTomlPath,
+              const CombatVocabulary& vocabulary);
 
     // Register a combatant backed by a physics body. Returns its entity.
     entt::entity addCombatant(eng::BodyHandle body, const Health& hp,
@@ -58,6 +61,7 @@ public:
 private:
     entt::registry mReg;
     WeaponLibrary mWeapons;
+    const CombatVocabulary* mVocabulary = nullptr;
     std::unordered_map<std::uint32_t, entt::entity> mByBody;
     std::mt19937 mRng{0xC0FFEEu}; // fixed seed: crit rolls stay reproducible
     DeathFn mOnDeath;

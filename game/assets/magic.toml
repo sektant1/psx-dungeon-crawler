@@ -1,0 +1,85 @@
+# The combat vocabulary: what damage channels exist, and what schools of magic
+# exist. Nothing here is compiled in -- add a damage type or a school by adding
+# an entry, remove one by deleting it. Code refers to both by string id.
+#
+# Ids are matched exactly and are what weapons.toml, level documents and prop
+# documents write. Renaming an id renames it everywhere it is referenced, so
+# grep before you do.
+
+# --- damage channels ---------------------------------------------------------
+# `bypasses_mitigation` skips the target's resistance table entirely -- the
+# channel that exists so scripted and environmental damage cannot be resisted
+# to zero. Order here is the storage order of a Resistances row; appending is
+# free, reordering rewrites the meaning of every saved resistance table.
+
+[[damage_type]]
+id = "physical" # generic / environmental / unarmed fallback
+
+[[damage_type]]
+id = "slash" # blades: sword
+
+[[damage_type]]
+id = "pierce" # points: arrow, spear
+
+[[damage_type]]
+id = "blunt" # impact: mace, hammer, kick
+
+[[damage_type]]
+id = "fire"
+
+[[damage_type]]
+id = "frost"
+
+[[damage_type]]
+id = "lightning"
+
+[[damage_type]]
+id = "poison"
+
+[[damage_type]]
+id = "arcane"
+
+[[damage_type]]
+id = "true"
+bypasses_mitigation = true
+
+# --- schools of magic --------------------------------------------------------
+# A school ties a damage channel to the look of an enchanted weapon or prop.
+# `colour` is the enchantment tint (rgba; alpha is the pass opacity, values
+# above 1 feed the bloom pass). `scroll` is the per-axis hue-drift direction --
+# a negative axis makes the drift read as heat or frost creeping across the
+# surface rather than as a colour cycle.
+
+[[school]]
+id = "arcane" # the fallback for anything enchanted without a named school
+damage_type = "arcane"
+colour = [0.62, 0.32, 1.0, 0.68]
+scroll = [1.0, 1.0, 1.0]
+
+[[school]]
+id = "fire"
+damage_type = "fire"
+colour = [1.0, 0.24, 0.03, 0.75]
+scroll = [1.0, -0.65, 0.35]
+
+[[school]]
+id = "poison"
+damage_type = "poison"
+colour = [0.32, 1.0, 0.08, 0.68]
+scroll = [-0.55, 0.85, -1.0]
+
+[[school]]
+id = "frost"
+damage_type = "frost"
+colour = [0.22, 0.72, 1.0, 0.68]
+scroll = [0.35, 1.0, -0.70]
+
+# --- status effects ----------------------------------------------------------
+
+[status]
+# Which channel a burn ticks through, so its damage is resisted like any other
+# fire and a fire-immune enemy cannot be burned.
+burn_damage_type = "fire"
+# Enchantment strength a prop gets when its document names a school but no
+# strength of its own.
+default_enchant_strength = 0.75

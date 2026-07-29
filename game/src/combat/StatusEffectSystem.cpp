@@ -7,7 +7,8 @@
 
 namespace game::status {
 
-void tick(entt::registry& reg, float dt, std::vector<entt::entity>& killed)
+void tick(entt::registry& reg, float dt, std::vector<entt::entity>& killed,
+          BurnChannel burn)
 {
     for (auto e : reg.view<StatusEffects>()) {
         auto& fx = reg.get<StatusEffects>(e);
@@ -21,7 +22,8 @@ void tick(entt::registry& reg, float dt, std::vector<entt::entity>& killed)
                     fxa.tickAccum -= kDotInterval;
                     const float raw = fxa.magnitude * kDotInterval;
                     hp->current -=
-                        damage::mitigate(raw, DamageType::Fire, resist);
+                        damage::mitigate(raw, burn.type, resist,
+                                         burn.ignoresResistances);
                     if (hp->dead()) {
                         killed.push_back(e);
                         break;

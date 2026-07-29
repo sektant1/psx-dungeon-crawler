@@ -4,6 +4,7 @@
 #include "Projectiles.h"
 #include "Spells.h"
 #include "combat/CombatDirector.h"
+#include "combat/CombatVocabulary.h"
 
 #include <glm/glm.hpp>
 
@@ -41,6 +42,7 @@ public:
     void startSwing() { mMelee.startSwing(); }
 
     MeleeSystem& melee() { return mMelee; }        // hit-callback wiring
+
     CombatConfig& config() { return mConfig; }     // debug UI
     const CombatConfig& config() const { return mConfig; }
     // Damage model: HP/resistances/status effects + weapon table. Gameplay

@@ -108,7 +108,7 @@ public:
     // Adds/removes a scrolling Minecraft-like enchantment pass while
     // preserving each mesh's underlying material.
     void setNodeEnchantment(NodeHandle node, const EnchantmentDesc& desc);
-    void setNodeEnchantment(NodeHandle node, EnchantmentStyle style,
+    void setNodeEnchantment(NodeHandle node, const EnchantmentPalette& palette,
                             float strength = 1.0f);
     void clearNodeEnchantment(NodeHandle node);
     // All user-facing material names currently loaded (Ogre parsed every

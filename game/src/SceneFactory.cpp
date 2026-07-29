@@ -86,7 +86,8 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
 }
 
 bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
-                           std::vector<ShowcaseExhibit>& loadedExhibits)
+                           std::vector<ShowcaseExhibit>& loadedExhibits,
+                           const game::CombatVocabulary& vocabulary)
 {
     const toml::parse_result parsed = toml::parse_file(path);
     if (!parsed) {
@@ -174,16 +175,15 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             glm::angleAxis(glm::radians(degrees.x), glm::vec3(1,0,0)) *
             glm::angleAxis(glm::radians(degrees.z), glm::vec3(0,0,1)));
 
-        eng::EnchantmentStyle enchantStyle = eng::EnchantmentStyle::Arcane;
+        // A school name, resolved through magic.toml. An unknown name lands
+        // on the default school rather than dropping the enchantment.
         const std::string enchantment =
             (*e)["enchantment"].value_or(std::string());
-        if (enchantment == "fire") enchantStyle = eng::EnchantmentStyle::Fire;
-        else if (enchantment == "poison")
-            enchantStyle = eng::EnchantmentStyle::Poison;
-        else if (enchantment == "frost")
-            enchantStyle = eng::EnchantmentStyle::Frost;
+        const eng::EnchantmentPalette enchantPalette =
+            vocabulary.palette(enchantment);
         const float enchantStrength =
-            float((*e)["enchantment_strength"].value_or(0.75));
+            float((*e)["enchantment_strength"].value_or(
+                double(vocabulary.defaultEnchantStrength())));
         const auto part = [&](eng::NodeHandle parent, glm::vec3 offset,
                               glm::vec3 partScale, eng::MeshHandle partMesh,
                               const std::string& partMaterial,
@@ -192,7 +192,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             r.setScale(child, partScale);
             r.attachMesh(child, partMesh, partMaterial, false);
             if (enchanted && !enchantment.empty())
-                r.setNodeEnchantment(child, enchantStyle, enchantStrength);
+                r.setNodeEnchantment(child, enchantPalette, enchantStrength);
             return child;
         };
 
@@ -238,7 +238,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         if (const std::string enchantment =
                 (*e)["enchantment"].value_or(std::string());
             !enchantment.empty() && !isComposite)
-            r.setNodeEnchantment(display, enchantStyle, enchantStrength);
+            r.setNodeEnchantment(display, enchantPalette, enchantStrength);
         if (const std::string particles =
                 (*e)["particles"].value_or(std::string()); !particles.empty()) {
             eng::ParticleSpawnOptions particleOptions;

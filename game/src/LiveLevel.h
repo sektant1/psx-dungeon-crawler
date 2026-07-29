@@ -1,4 +1,5 @@
 #pragma once
+#include "combat/CombatVocabulary.h"
 #include "DungeonGen.h"    // gen::Layout
 #include "DungeonMap.h"
 #include "GameScene.h"
@@ -23,8 +24,10 @@ namespace eng { class Renderer; class Physics; }
 class LiveLevel {
 public:
     bool rebuild(eng::Renderer& r, eng::Physics& physics,
+                 const game::CombatVocabulary& vocabulary,
                  const std::string& assets, uint32_t seed, int depth);
     bool rebuildLayout(eng::Renderer& r, eng::Physics& physics,
+                       const game::CombatVocabulary& vocabulary,
                        const std::string& assets, gen::Layout layout, int depth);
     void update(eng::Renderer& r, float animationTime);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
@@ -37,7 +40,8 @@ public:
     void clearPhysics() { map.clearPhysics(); }
 
 private:
-    friend LiveLevel buildLevel(eng::Renderer&, eng::Physics&, const std::string&,
+    friend LiveLevel buildLevel(eng::Renderer&, eng::Physics&,
+                                const std::string&, const game::CombatVocabulary&,
                                 uint32_t, int, const gen::Layout*);
     DungeonMap map;
     DemoScene scene;
@@ -67,5 +71,6 @@ private:
 // or tools could build a level directly; defined in LiveLevel.cpp. depth>0 adds
 // an up-portal at the entry.
 LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
-                     const std::string& assets, uint32_t seed, int depth,
-                     const gen::Layout* authored = nullptr);
+                     const std::string& assets,
+                     const game::CombatVocabulary& vocabulary, uint32_t seed,
+                     int depth, const gen::Layout* authored = nullptr);

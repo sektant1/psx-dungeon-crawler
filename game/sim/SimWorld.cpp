@@ -7,6 +7,8 @@ World::World()
 {
     mPhysics.init(game::layer::physicsSetup());
     mPhysics.setGravity(0.0f); // combat sim: no falling, hits/DoT only
+    mVocabulary.load(std::string(APP_ASSET_DIR) + "/magic.toml");
+    mCombat.init(std::string(APP_ASSET_DIR) + "/weapons.toml", mVocabulary);
 }
 
 World::~World()
@@ -16,7 +18,7 @@ World::~World()
 
 void World::loadWeapons(const std::string& tomlPath)
 {
-    mCombat.init(tomlPath);
+    mCombat.init(tomlPath, mVocabulary);
 }
 
 bool World::addCombatant(const std::string& name, float hp, Faction faction,

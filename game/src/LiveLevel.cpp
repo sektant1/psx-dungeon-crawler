@@ -29,8 +29,9 @@ static eng::TextSpriteStyle showcaseLabelStyle(float worldHeight,
 // Build a complete level (dungeon + demo scene + props + chest + portals)
 // into the (already-clear) scene. depth>0 adds an up-portal at the entry.
 LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
-                     const std::string& assets, uint32_t seed, int depth,
-                     const gen::Layout* authored)
+                     const std::string& assets,
+                     const game::CombatVocabulary& vocabulary, uint32_t seed,
+                     int depth, const gen::Layout* authored)
 {
     LiveLevel lv;
     lv.gameScene = std::make_unique<game::GameScene>(r);
@@ -72,7 +73,8 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     // Keep this dense staging out of procedural dungeon floors: those are
     // dressed by DungeonMap's data-driven marker and ambient prop catalogs.
     if (depth == 0) {
-    loadPrimitiveShowcase(r, assets + "/lobby_showcase.toml", lv.exhibits);
+    loadPrimitiveShowcase(r, assets + "/lobby_showcase.toml", lv.exhibits,
+                          vocabulary);
     // ------------------------------------------------- set dressing ---
     // Medieval props placed around the anchor room (positions authored for
     // the shared centrepiece layout at the world origin).
@@ -231,16 +233,18 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
 }
 
 bool LiveLevel::rebuild(eng::Renderer& r, eng::Physics& physics,
+                        const game::CombatVocabulary& vocabulary,
                         const std::string& assets, uint32_t seed, int depth)
 {
     // Free the outgoing level's collider bodies before overwriting the map.
     map.clearPhysics();
     r.clearScene();
-    *this = buildLevel(r, physics, assets, seed, depth);
+    *this = buildLevel(r, physics, assets, vocabulary, seed, depth);
     return map.debugRows() > 0;
 }
 
 bool LiveLevel::rebuildLayout(eng::Renderer& r, eng::Physics& physics,
+                              const game::CombatVocabulary& vocabulary,
                               const std::string& assets, gen::Layout layout,
                               int depth)
 {
@@ -248,7 +252,7 @@ bool LiveLevel::rebuildLayout(eng::Renderer& r, eng::Physics& physics,
         return false;
     map.clearPhysics();
     r.clearScene();
-    *this = buildLevel(r, physics, assets, 0, depth, &layout);
+    *this = buildLevel(r, physics, assets, vocabulary, 0, depth, &layout);
     return map.debugRows() > 0;
 }
 

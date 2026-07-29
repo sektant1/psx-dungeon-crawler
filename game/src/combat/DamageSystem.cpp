@@ -4,9 +4,10 @@
 
 namespace game::damage {
 
-float mitigate(float amount, DamageType type, const Resistances* resist)
+float mitigate(float amount, DamageTypeId type, const Resistances* resist,
+               bool ignoresResistances)
 {
-    if (type == DamageType::True || !resist)
+    if (ignoresResistances || !resist)
         return std::max(0.0f, amount);
     const float r = std::clamp((*resist)[type], -1.0f, 0.9f);
     return std::max(0.0f, amount * (1.0f - r));
@@ -32,7 +33,8 @@ DamageResult apply(entt::registry& reg, entt::entity target,
     }
 
     const Resistances* resist = reg.try_get<Resistances>(target);
-    const float dealt = mitigate(packet.amount, packet.type, resist);
+    const float dealt = mitigate(packet.amount, packet.type, resist,
+                                 packet.ignoresResistances);
     hp->current -= dealt;
 
     // Push crowd-control onto the target (one container, ticked elsewhere).
