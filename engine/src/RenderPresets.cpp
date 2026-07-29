@@ -1,20 +1,27 @@
 #include "RenderPresets.h"
+#include "eng/RenderPresetInfo.h"
 #include "eng/Renderer.h"
 #include <cstring>
 
 namespace eng {
 
+// The single place the name -> id mapping is written down. Both the lookup
+// below and every UI that lists presets read this, so neither can drift.
+const std::vector<RenderPresetInfo>& renderPresets()
+{
+    static const std::vector<RenderPresetInfo> kPresets = {
+        {"ps1", 1},      {"ps2", 2},        {"gamecube", 3}, {"n64", 4},
+        {"pixel-3d", 5}, {"modern-ps1", 6}, {"dungeon", 7},
+    };
+    return kPresets;
+}
+
 int renderPresetFromName(const char* name)
 {
     if (!name) return -1;
-    if (!std::strcmp(name, "ps1")) return 1;
-    if (!std::strcmp(name, "ps2")) return 2;
-    if (!std::strcmp(name, "gamecube")) return 3;
-    if (!std::strcmp(name, "n64")) return 4;
-    if (!std::strcmp(name, "pixel-3d")) return 5;
-    if (!std::strcmp(name, "modern-ps1")) return 6;
-    if (!std::strcmp(name, "dungeon")) return 7;
     if (!std::strcmp(name, "default")) return kDefaultRenderPreset;
+    for (const RenderPresetInfo& p : renderPresets())
+        if (!std::strcmp(name, p.name)) return p.id;
     return -1;
 }
 

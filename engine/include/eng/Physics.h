@@ -28,7 +28,9 @@ enum class CollisionMask : uint32_t {};
 
 constexpr CollisionMask layerMask(CollisionLayer layer)
 {
-    return CollisionMask{uint32_t{1} << layer};
+    return layer < kMaxCollisionLayers
+               ? CollisionMask{uint32_t{1} << layer}
+               : CollisionMask{0};
 }
 constexpr CollisionMask operator|(CollisionMask a, CollisionMask b)
 {
@@ -75,8 +77,33 @@ struct PhysicsSetup {
     // Layer that character controllers are created on.
     CollisionLayer characterLayer = 0;
 
+    // Multi-threaded simulation. Off by default, and that default is a
+    // gameplay decision rather than a performance oversight: Jolt with more
+    // than one worker resolves contacts in whatever order the threads win the
+    // race, so a stack of props settles differently every run and a boss-fight
+    // retry is not the same fight. Single-worker simulation is reproducible
+    // frame for frame, which is what retries, replays and any future netcode
+    // need. Opt in only where a scene is heavy enough that the physics step
+    // actually shows up in the frame and reproducibility does not matter.
+    bool multithreaded = false;
+    // Workers to use when `multithreaded`. 0 means hardware_concurrency() - 1.
+    // Ignored entirely when `multithreaded` is false.
+    int workerThreads = 0;
+
+    // World gravity, in m/s^2. Deliberately stronger than Earth: a shorter,
+    // snappier fall arc is what a fast first-person game wants, and the value
+    // is pure feel, so the application supplies it.
+    glm::vec3 gravity{0.0f, -18.0f, 0.0f};
+
+    // How hard a character controller shoves a dynamic body it walks into,
+    // as a multiple of the character's speed along the contact normal. 0
+    // disables the shove and props become immovable walls to the player.
+    float characterPushImpulse = 2.0f;
+
     void setPair(CollisionLayer a, CollisionLayer b, bool collides_)
     {
+        if (a >= kMaxCollisionLayers || b >= kMaxCollisionLayers)
+            return;
         auto apply = [&](CollisionLayer x, CollisionLayer y) {
             if (collides_) collides[x] |= layerMask(y);
             else           collides[x] &= ~layerMask(y);
@@ -170,7 +197,13 @@ public:
     CharacterHandle createCharacter(const CharacterDesc&);
     void removeCharacter(CharacterHandle);
     void characterSetVelocity(CharacterHandle, glm::vec3 velocity);
-    void characterUpdate(CharacterHandle, float dt);
+    // `mask` narrows the character controller's own sweep on top of the world
+    // collision matrix: the character collides with a layer only if the matrix
+    // allows it *and* the mask names it. The default is every layer, i.e. the
+    // matrix alone, so callers that do not care are unaffected. Clearing a bit
+    // is how gameplay makes a layer pass-through for this character only.
+    void characterUpdate(CharacterHandle, float dt,
+                         CollisionMask mask = kAllLayers);
     CharacterState characterState(CharacterHandle) const;
     void characterSetShape(CharacterHandle, float radius, float height);
 
@@ -200,6 +233,59 @@ public:
     void debugDraw(std::vector<DebugLine>& out,
                    ColliderPalette palette = ColliderPalette::ByShape,
                    CollisionMask include = kAllLayers) const;
+
+    // A render mesh's world bounds, paired with the body that is supposed to
+    // represent it. Drawn alongside the collider so the two can be compared by
+    // eye: that is the only way to see a collider that is the wrong *size*,
+    // because a collider on its own always looks plausible.
+    //
+    // An invalid `body` means this mesh has no collider at all. That case is
+    // drawn in alarm red at full brightness rather than being silently absent,
+    // because "nothing was drawn here" and "this prop has no collision" look
+    // identical otherwise, and they are the two failures hardest to tell apart
+    // when walking a dungeon looking for holes.
+    //
+    // Handle-based on purpose: the engine has no idea what a render mesh is,
+    // so the caller -- which owns both the node and the body -- supplies the
+    // pairing rather than the engine reaching across into the renderer.
+    struct DebugReference {
+        BodyHandle body{};
+        glm::vec3 centre{0.0f};      // world-space centre of the mesh bounds
+        glm::vec3 halfExtents{0.0f}; // world-space half extents
+    };
+
+    struct DebugDrawOptions {
+        ColliderPalette palette = ColliderPalette::ByShape;
+        CollisionMask include = kAllLayers;
+
+        // Range limit and distance fade. A whole dungeon of colliders drawn at
+        // full brightness is a wall of lines you cannot read anything out of;
+        // limiting to what is near the player is what makes it a diagnostic
+        // rather than a light show. `range` <= 0 disables both.
+        glm::vec3 viewer{0.0f};
+        float range = 0.0f;
+        // Distance at which fading begins. <= 0 means fade over the outer
+        // third of `range`.
+        float fadeStart = 0.0f;
+
+        // Character controllers: the capsule they collide with, plus the
+        // volume they are about to sweep through this step, drawn dashed at
+        // the position their current velocity takes them to. Seeing the sweep
+        // separately is what shows a tunnelling or step-up problem, which the
+        // resting capsule alone never does.
+        bool drawCharacters = true;
+        float sweepDt = 1.0f / 60.0f;
+
+        // Sensors are drawn dashed, solids continuous. A trigger volume and a
+        // wall look the same as wireframes and behave nothing alike, and the
+        // usual bug is one being the other by mistake.
+        bool drawSensors = true;
+
+        // Optional; not retained past the call.
+        const std::vector<DebugReference>* references = nullptr;
+    };
+    void debugDraw(std::vector<DebugLine>& out,
+                   const DebugDrawOptions& options) const;
 
 private:
     friend class EngContactListener;

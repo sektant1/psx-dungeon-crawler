@@ -29,7 +29,7 @@ int main(int argc, char** argv)
 
     entt::registry reg;
     game::SceneGenOptions opts;
-    opts.tileDir = assetDir + "/meshes/tiles/";
+    opts.kitDir = assetDir + "/meshes/kit/";
     opts.propDir = assetDir + "/meshes/props/";
     game::layoutToScene(layout, opts, reg);
 

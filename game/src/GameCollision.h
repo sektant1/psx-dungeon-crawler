@@ -27,7 +27,17 @@ inline constexpr eng::CollisionMask kHittable =
 //   - projectile/projectile: arrows pass through each other;
 //   - trigger against props and projectiles: interaction volumes exist for the
 //     player, and a barrel rolling through a door trigger must not open it.
-inline eng::PhysicsSetup physicsSetup()
+// The tuning half of the physics setup, kept separate from the layer table so
+// callers that only need a world (tests, the sim harness) get the same feel
+// defaults without having to own a config file. main.cpp overrides these from
+// the [physics] section of game.toml.
+struct PhysicsTuning {
+    float gravity = -18.0f;         // m/s^2, downward
+    float characterPushImpulse = 2.0f;
+    bool multithreaded = false;     // off: determinism beats ~0.2ms
+};
+
+inline eng::PhysicsSetup physicsSetup(const PhysicsTuning& tuning = {})
 {
     eng::PhysicsSetup s;
     s.layers.resize(5);
@@ -47,6 +57,10 @@ inline eng::PhysicsSetup physicsSetup()
     s.setPair(Trigger, Projectile, false);
 
     s.characterLayer = Player;
+
+    s.gravity = {0.0f, tuning.gravity, 0.0f};
+    s.characterPushImpulse = tuning.characterPushImpulse;
+    s.multithreaded = tuning.multithreaded;
     return s;
 }
 

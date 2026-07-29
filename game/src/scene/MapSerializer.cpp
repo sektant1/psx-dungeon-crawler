@@ -145,7 +145,7 @@ bool readMap(const std::string& path, entt::registry& outReg,
             const std::size_t before = r.remaining();
             const eng::ecs::ComponentType* t = types.find(typeId);
             if (t) {
-                t->deserialize(outReg, e, r);
+                t->deserialize(outReg, e, r, len);
                 const std::size_t consumed = before - r.remaining();
                 if (consumed > len) return false; // deserializer desynced past its payload
                 if (consumed < len) r.skip(len - consumed);

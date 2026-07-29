@@ -27,7 +27,7 @@ void remove(entt::registry& r, entt::entity e) { r.remove<T>(e); }
 
 void serName(const entt::registry& r, entt::entity e, ByteWriter& w)
 { w.str(r.get<Name>(e).value); }
-void deName(entt::registry& r, entt::entity e, ByteReader& b)
+void deName(entt::registry& r, entt::entity e, ByteReader& b, uint32_t)
 { r.emplace_or_replace<Name>(e, Name{b.str()}); }
 
 void serTransform(const entt::registry& r, entt::entity e, ByteWriter& w)
@@ -35,7 +35,7 @@ void serTransform(const entt::registry& r, entt::entity e, ByteWriter& w)
     const auto& t = r.get<Transform>(e);
     w.vec3(t.position); w.quat(t.rotation); w.vec3(t.scale);
 }
-void deTransform(entt::registry& r, entt::entity e, ByteReader& b)
+void deTransform(entt::registry& r, entt::entity e, ByteReader& b, uint32_t)
 {
     Transform t;
     t.position = b.vec3(); t.rotation = b.quat(); t.scale = b.vec3();
@@ -49,7 +49,7 @@ void serMesh(const entt::registry& r, entt::entity e, ByteWriter& w)
     w.str(m.material);
     w.u8(m.castShadows ? 1 : 0);
 }
-void deMesh(entt::registry& r, entt::entity e, ByteReader& b)
+void deMesh(entt::registry& r, entt::entity e, ByteReader& b, uint32_t)
 {
     const std::string path = b.str();
     const std::string material = b.str();
@@ -69,7 +69,7 @@ void serLight(const entt::registry& r, entt::entity e, ByteWriter& w)
     w.f32(l.range);
     w.u8(l.castShadows ? 1 : 0);
 }
-void deLight(entt::registry& r, entt::entity e, ByteReader& b)
+void deLight(entt::registry& r, entt::entity e, ByteReader& b, uint32_t)
 {
     LightDesc d;
     d.type = LightDesc::Type(b.u8());

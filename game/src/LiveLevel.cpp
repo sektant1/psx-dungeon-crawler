@@ -48,7 +48,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     // origin so the shared DemoScene sits centred inside it.
     gen::Layout layout = authored ? *authored : gen::generate(seed);
     if (!lv.map.loadFromRows(r, physics, std::move(layout),
-                             assets + "/meshes/tiles/",
+                             assets + "/meshes/kit/",
                              assets + "/meshes/props/", dungeonRoot)) {
         eng::log::error("buildLevel: map load failed");
         return lv;

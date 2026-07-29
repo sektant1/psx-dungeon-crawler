@@ -57,6 +57,9 @@ public:
 class CharacterPushListener final : public JPH::CharacterContactListener {
 public:
     JPH::PhysicsSystem* system = nullptr;
+    // Multiplier on the character's speed into the prop. Pure feel, so it
+    // comes from the application's PhysicsSetup rather than living here.
+    float pushImpulse = 2.0f;
 
     void OnContactAdded(const JPH::CharacterVirtual* inCharacter,
                         const JPH::CharacterContact& inContact,
@@ -70,7 +73,8 @@ public:
         v.SetY(0.0f);
         float into = -inContact.mContactNormal.Dot(v);   // speed into the prop
         if (into <= 0.0f) return;
-        JPH::Vec3 push = -inContact.mContactNormal * (into * 2.0f);
+        if (pushImpulse <= 0.0f) return;
+        JPH::Vec3 push = -inContact.mContactNormal * (into * pushImpulse);
         bi.AddImpulse(inContact.mBodyB, push);
     }
 };

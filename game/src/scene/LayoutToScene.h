@@ -11,7 +11,7 @@ namespace game {
 struct SceneGenOptions {
     float cell = 4.0f;
     float wallHeight = 3.0f;
-    std::string tileDir; // absolute, trailing slash
+    std::string kitDir; // meshes/kit, absolute, trailing slash
     std::string propDir; // absolute, trailing slash
 };
 

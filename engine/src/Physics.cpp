@@ -160,6 +160,22 @@ struct MaskLayerFilter final : public JPH::ObjectLayerFilter {
     }
 };
 
+// Character sweep filter: the collision matrix row for the character's own
+// layer, further narrowed by the caller's mask. With the default kAllLayers
+// this is exactly Jolt's GetDefaultLayerFilter, i.e. unchanged behaviour;
+// clearing a bit is how gameplay makes something pass-through for the player
+// (a ghost phase, a one-way gate) without touching the world matrix, which
+// every other body still shares.
+struct CharacterSweepFilter final : public JPH::ObjectLayerFilter {
+    CollisionMask allowed;
+    CharacterSweepFilter(const PhysicsSetup& setup, CollisionMask mask)
+        : allowed(setup.collides[setup.characterLayer] & mask) {}
+    bool ShouldCollide(JPH::ObjectLayer l) const override {
+        return l < kMaxCollisionLayers &&
+               any(allowed & layerMask(CollisionLayer(l)));
+    }
+};
+
 static JPH::ShapeRefC makeShape(const BodyDesc& d) {
     switch (d.kind) {
         case ShapeKind::Box:
@@ -211,13 +227,26 @@ PhysicsSetup PhysicsSetup::generic()
 
 void Physics::init(const PhysicsSetup& setup) {
     mImpl->setup = setup;
-    if (mImpl->setup.layers.empty())
-        mImpl->setup = PhysicsSetup::generic();
+    if (mImpl->setup.layers.empty()) {
+        // Supply only the missing collision taxonomy. Keep caller-provided
+        // tuning such as gravity and worker policy intact.
+        PhysicsSetup defaults = PhysicsSetup::generic();
+        mImpl->setup.layers = std::move(defaults.layers);
+        mImpl->setup.collides = defaults.collides;
+        mImpl->setup.characterLayer = defaults.characterLayer;
+    }
     if (mImpl->setup.layers.size() > kMaxCollisionLayers) {
         log::error("Physics: %zu layers requested, %d supported; extra layers "
                    "are ignored",
                    mImpl->setup.layers.size(), kMaxCollisionLayers);
         mImpl->setup.layers.resize(kMaxCollisionLayers);
+    }
+    if (mImpl->setup.characterLayer >= mImpl->setup.layers.size()) {
+        log::error("Physics: character layer %u is outside the %zu configured "
+                   "layers; using layer 0",
+                   unsigned(mImpl->setup.characterLayer),
+                   mImpl->setup.layers.size());
+        mImpl->setup.characterLayer = 0;
     }
     mImpl->bp.setup  = &mImpl->setup;
     mImpl->opp.setup = &mImpl->setup;
@@ -225,18 +254,27 @@ void Physics::init(const PhysicsSetup& setup) {
     if (!Factory::sInstance) Factory::sInstance = new Factory();
     RegisterTypes();
     mImpl->temp = std::make_unique<TempAllocatorImpl>(16 * 1024 * 1024);
-    // Deterministic capture: multi-threaded Jolt resolves contacts in a
-    // thread-race order, so dynamic props settle differently every run. Under
-    // PSX_SCREENSHOT/PSX_FIXED_DT force a single worker so the frame is
-    // reproducible (matches Engine's fixed-timestep capture mode).
-    const bool deterministic =
+    // Determinism by default: multi-threaded Jolt resolves contacts in a
+    // thread-race order, so dynamic props settle differently every run. A
+    // single worker is reproducible frame for frame, which is what boss-fight
+    // retries and deterministic capture both need, so that is the default and
+    // PhysicsSetup::multithreaded is the explicit opt-out. Capture mode
+    // (PSX_SCREENSHOT/PSX_FIXED_DT, matching Engine's fixed-timestep capture)
+    // still forces a single worker even if the application opted in, so a
+    // capture is reproducible regardless of how the game is configured.
+    const bool forceDeterministic =
         std::getenv("PSX_SCREENSHOT") || std::getenv("PSX_FIXED_DT");
-    unsigned threads =
-        deterministic ? 1u
-                      : std::max(1u, std::thread::hardware_concurrency() - 1u);
+    unsigned threads = 1u;
+    if (mImpl->setup.multithreaded && !forceDeterministic) {
+        const unsigned hardwareThreads = std::thread::hardware_concurrency();
+        threads = mImpl->setup.workerThreads > 0
+                      ? unsigned(mImpl->setup.workerThreads)
+                      : (hardwareThreads > 1u ? hardwareThreads - 1u : 1u);
+    }
     mImpl->jobs = std::make_unique<JobSystemThreadPool>(cMaxPhysicsJobs, cMaxPhysicsBarriers, int(threads));
     mImpl->system.Init(4096, 0, 4096, 4096, mImpl->bp, mImpl->ovb, mImpl->opp);
-    mImpl->system.SetGravity(Vec3(0, -18.0f, 0));
+    mImpl->system.SetGravity(Vec3(mImpl->setup.gravity.x, mImpl->setup.gravity.y,
+                                  mImpl->setup.gravity.z));
     // Register the contact listener so we can forward HitEvents to game code.
     // The listener is owned by the Impl; it must outlive the PhysicsSystem.
     mImpl->contactShared.contactCb      = &mImpl->contactCb;
@@ -246,6 +284,7 @@ void Physics::init(const PhysicsSetup& setup) {
     mImpl->listener = std::make_unique<EngContactListener>(&mImpl->contactShared);
     mImpl->system.SetContactListener(mImpl->listener.get());
     mImpl->charPushListener.system = &mImpl->system;
+    mImpl->charPushListener.pushImpulse = mImpl->setup.characterPushImpulse;
     mImpl->inited = true;
 }
 
@@ -310,8 +349,12 @@ void Physics::shutdown() {
         bi.DestroyBody(rec.id);
         rec.alive = false;
     }
+    mImpl->liveBodies = 0;
     mImpl->idToSlot.clear();
     mImpl->freeList.clear();
+    mImpl->pendingContacts.clear();
+    mImpl->system.SetContactListener(nullptr);
+    mImpl->listener.reset();
     mImpl->jobs.reset();
     mImpl->temp.reset();
     UnregisterTypes();
@@ -322,6 +365,11 @@ void Physics::shutdown() {
 // ---- body management ----
 BodyHandle Physics::createBody(const BodyDesc& desc) {
     if (!mImpl->inited) return {};
+    if (desc.layer >= mImpl->setup.layers.size()) {
+        log::error("Physics: body layer %u is outside the %zu configured layers",
+                   unsigned(desc.layer), mImpl->setup.layers.size());
+        return {};
+    }
 
     ShapeRefC shape = makeShape(desc);
 
@@ -418,6 +466,12 @@ BodyHandle Physics::createMeshBody(const std::vector<glm::vec3>& verts,
                                    const std::vector<uint32_t>& indices,
                                    glm::vec3 pos, glm::quat rot, CollisionLayer layer) {
     if (!mImpl->inited) return {};
+    if (layer >= mImpl->setup.layers.size()) {
+        log::error("Physics: mesh body layer %u is outside the %zu configured "
+                   "layers",
+                   unsigned(layer), mImpl->setup.layers.size());
+        return {};
+    }
 
     VertexList jverts;
     jverts.reserve(verts.size());
@@ -552,7 +606,7 @@ void Physics::characterSetVelocity(CharacterHandle h, glm::vec3 velocity) {
     rec.desiredVelocity = JPH::Vec3(velocity.x, velocity.y, velocity.z);
 }
 
-void Physics::characterUpdate(CharacterHandle h, float dt) {
+void Physics::characterUpdate(CharacterHandle h, float dt, CollisionMask mask) {
     if (!h.valid() || h.id >= uint32_t(mImpl->characters.size())) return;
     CharacterRec& rec = mImpl->characters[h.id];
     if (!rec.alive) return;
@@ -568,8 +622,7 @@ void Physics::characterUpdate(CharacterHandle h, float dt) {
         us,
         mImpl->system.GetDefaultBroadPhaseLayerFilter(
             ObjectLayer(mImpl->setup.characterLayer)),
-        mImpl->system.GetDefaultLayerFilter(
-            ObjectLayer(mImpl->setup.characterLayer)),
+        CharacterSweepFilter(mImpl->setup, mask),
         {},
         {},
         *mImpl->temp);
@@ -620,8 +673,25 @@ void Physics::characterSetShape(CharacterHandle h, float radius, float height) {
     }
 }
 
-// ---- stubs for later tasks (must exist so the header links) ----
-void Physics::setBodyTransform(BodyHandle, glm::vec3, glm::quat) {}
+void Physics::setBodyTransform(BodyHandle h, glm::vec3 position,
+                               glm::quat orientation) {
+    if (!h.valid() || h.id >= uint32_t(mImpl->bodies.size())) return;
+    BodyRec& rec = mImpl->bodies[h.id];
+    if (!rec.alive) return;
+
+    const JPH::RVec3 p(position.x, position.y, position.z);
+    const JPH::Quat q(orientation.x, orientation.y, orientation.z,
+                      orientation.w);
+    mImpl->system.GetBodyInterface().SetPositionAndRotation(
+        rec.id, p, q,
+        rec.isStatic ? JPH::EActivation::DontActivate
+                     : JPH::EActivation::Activate);
+
+    // A transform assignment is a teleport, not a simulated step. Reset both
+    // interpolation endpoints so presentation cannot smear from the old pose.
+    rec.prevPos = rec.curPos = p;
+    rec.prevRot = rec.curRot = q;
+}
 
 void Physics::applyImpulse(BodyHandle h, glm::vec3 impulse, glm::vec3 atPoint) {
     if (!h.valid() || h.id >= uint32_t(mImpl->bodies.size())) return;
@@ -642,6 +712,11 @@ void Physics::setBodyKinematic(BodyHandle h, bool kinematic) {
     bi.SetMotionType(rec.id,
                      kinematic ? JPH::EMotionType::Kinematic : JPH::EMotionType::Dynamic,
                      JPH::EActivation::Activate);
+    // Kinematic and dynamic bodies both participate in transform readback and
+    // interpolation. Without this, a body created static and promoted to
+    // kinematic remains frozen in the render-facing record.
+    rec.dynamic = true;
+    rec.isStatic = false;
 }
 int Physics::shapeCast(const BodyDesc& shape, glm::vec3 from, glm::vec3 to,
                        std::vector<ShapeHit>& out, CollisionMask mask) const {
@@ -801,19 +876,26 @@ void pushCapsuleOrCylinder(std::vector<Physics::DebugLine>& out,
         out.push_back({xf(m, dx, hh, dz), xf(m, dx, -hh, dz), col});
     }
     if (capped) {
-        // Two vertical great-circle arcs through the hemispherical caps.
-        for (int i = 0; i < kCircleSegs; ++i) {
-            const float t0 = float(i) / kCircleSegs * 6.2831853f;
-            const float t1 = float(i + 1) / kCircleSegs * 6.2831853f;
-            auto capPt = [&](float t, int horiz) {
-                const float y = r * std::sin(t);
-                const float rad = r * std::cos(t);
-                const float off = (y >= 0.0f) ? hh : -hh;
-                return horiz == 0 ? xf(m, rad, off + y, 0)
-                                  : xf(m, 0, off + y, rad);
-            };
-            out.push_back({capPt(t0, 0), capPt(t1, 0), col});
-            out.push_back({capPt(t0, 1), capPt(t1, 1), col});
+        // Two half-circles per vertical plane. Keeping the top and bottom arcs
+        // separate avoids connector segments jumping between hemisphere
+        // centres at the equator.
+        const int arcSegs = kCircleSegs / 2;
+        for (int plane = 0; plane < 2; ++plane) {
+            for (int cap = 0; cap < 2; ++cap) {
+                const float begin = cap == 0 ? 0.0f : 3.1415927f;
+                const float centreY = cap == 0 ? hh : -hh;
+                for (int i = 0; i < arcSegs; ++i) {
+                    const float t0 = begin + float(i) / arcSegs * 3.1415927f;
+                    const float t1 = begin + float(i + 1) / arcSegs * 3.1415927f;
+                    auto point = [&](float t) {
+                        const float horizontal = r * std::cos(t);
+                        const float y = centreY + r * std::sin(t);
+                        return plane == 0 ? xf(m, horizontal, y, 0.0f)
+                                          : xf(m, 0.0f, y, horizontal);
+                    };
+                    out.push_back({point(t0), point(t1), col});
+                }
+            }
         }
     }
 }
@@ -882,40 +964,161 @@ void pushShape(std::vector<Physics::DebugLine>& out, const JPH::Shape* shape,
     }
 }
 
+// Turn the lines in [first, out.size()) into dashes by shortening each one to
+// its first half. Applied after the fact, so it works uniformly for every
+// primitive -- box edges, circle segments, capsule cap arcs -- without any of
+// the shape emitters knowing that dashing exists.
+void dashRange(std::vector<Physics::DebugLine>& out, size_t first)
+{
+    for (size_t i = first; i < out.size(); ++i)
+        out[i].b = out[i].a + (out[i].b - out[i].a) * 0.5f;
+}
+
+// Scale the colour of the lines in [first, out.size()). Used for distance fade
+// and to sink secondary geometry (reference bounds, swept volumes) behind the
+// colliders that are the actual subject.
+void tintRange(std::vector<Physics::DebugLine>& out, size_t first, float scale)
+{
+    if (scale >= 0.999f) return;
+    for (size_t i = first; i < out.size(); ++i)
+        out[i].colour *= scale;
+}
+
+// 1 at or inside fadeStart, falling to 0 at range. Returns 0 when the subject
+// is beyond range, which callers use as "skip it entirely".
+float distanceFade(const Physics::DebugDrawOptions& o, const glm::vec3& at)
+{
+    if (o.range <= 0.0f) return 1.0f;
+    const float d = glm::length(at - o.viewer);
+    if (d >= o.range) return 0.0f;
+    const float start = o.fadeStart > 0.0f ? o.fadeStart : o.range * (2.0f / 3.0f);
+    if (d <= start || start >= o.range) return 1.0f;
+    return 1.0f - (d - start) / (o.range - start);
+}
+
 } // namespace
 
 void Physics::debugDraw(std::vector<DebugLine>& out, ColliderPalette palette,
                         CollisionMask include) const
 {
+    DebugDrawOptions o;
+    o.palette = palette;
+    o.include = include;
+    debugDraw(out, o);
+}
+
+void Physics::debugDraw(std::vector<DebugLine>& out,
+                        const DebugDrawOptions& o) const
+{
     if (!mImpl->inited) return;
-    const bool byShape = palette == ColliderPalette::ByShape;
+    const bool byShape = o.palette == ColliderPalette::ByShape;
 
     for (const auto& rec : mImpl->bodies) {
         if (!rec.alive) continue;
-        if (!any(include & layerMask(rec.layer))) continue;
+        if (!any(o.include & layerMask(rec.layer))) continue;
         JPH::BodyLockRead lock(mImpl->system.GetBodyLockInterface(), rec.id);
         if (!lock.Succeeded()) continue;
         const JPH::Body& body = lock.GetBody();
+        const JPH::RMat44 com = body.GetCenterOfMassTransform();
+        const JPH::RVec3 t = com.GetTranslation();
+        const glm::vec3 at{float(t.GetX()), float(t.GetY()), float(t.GetZ())};
+        const float fade = distanceFade(o, at);
+        if (fade <= 0.0f) continue;
+
         const JPH::Shape* shape = body.GetShape();
+        const bool sensor = body.IsSensor();
+        if (sensor && !o.drawSensors) continue;
+
         const glm::vec3 col = byShape ? shapeColour(shape->GetSubType())
                                       : layerColour(mImpl->setup, rec.layer);
         // Center-of-mass transform is where the shape lives; draw the shape in
         // that frame so rotation and true size show correctly.
-        pushShape(out, shape, body.GetCenterOfMassTransform(), col);
+        const size_t first = out.size();
+        pushShape(out, shape, com, col);
+        if (sensor) dashRange(out, first);
+        tintRange(out, first, fade);
     }
 
     // Kinematic characters expose radius/height, not a body shape: draw the
     // capsule they collide with, oriented upright at their world position.
-    const glm::vec3 charCol = byShape ? shapeColour(JPH::EShapeSubType::Capsule)
-                                      : layerColour(mImpl->setup,
-                                                    mImpl->setup.characterLayer);
-    for (const auto& rec : mImpl->characters) {
-        if (!rec.alive || !rec.ch) continue;
-        JPH::RVec3 p = rec.ch->GetPosition();
-        const JPH::RMat44 m = JPH::RMat44::sTranslation(
-            JPH::RVec3(p.GetX(), p.GetY() + rec.height * 0.5f, p.GetZ()));
-        pushCapsuleOrCylinder(out, m, rec.height * 0.5f, rec.radius, true,
-                              charCol);
+    if (o.drawCharacters &&
+        any(o.include & layerMask(mImpl->setup.characterLayer))) {
+        const glm::vec3 charCol =
+            byShape ? shapeColour(JPH::EShapeSubType::Capsule)
+                    : layerColour(mImpl->setup, mImpl->setup.characterLayer);
+        for (const auto& rec : mImpl->characters) {
+            if (!rec.alive || !rec.ch) continue;
+            const JPH::RVec3 p = rec.ch->GetPosition();
+            const glm::vec3 at{float(p.GetX()), float(p.GetY()), float(p.GetZ())};
+            const float fade = distanceFade(o, at);
+            if (fade <= 0.0f) continue;
+            const float centreY = rec.height * 0.5f;
+            const float cylinderHalfHeight =
+                std::max(0.0f, rec.height - 2.0f * rec.radius) * 0.5f;
+
+            size_t first = out.size();
+            pushCapsuleOrCylinder(
+                out,
+                JPH::RMat44::sTranslation(
+                    JPH::RVec3(p.GetX(), p.GetY() + centreY, p.GetZ())),
+                cylinderHalfHeight, rec.radius, true, charCol);
+            tintRange(out, first, fade);
+
+            // The volume this step is about to move through, at the position
+            // the current velocity reaches. Dashed and dimmed so it reads as a
+            // prediction rather than as a second character standing there.
+            const JPH::Vec3 v = rec.ch->GetLinearVelocity();
+            const glm::vec3 step{v.GetX() * o.sweepDt, v.GetY() * o.sweepDt,
+                                 v.GetZ() * o.sweepDt};
+            if (glm::length(step) > 1e-4f) {
+                first = out.size();
+                pushCapsuleOrCylinder(
+                    out,
+                    JPH::RMat44::sTranslation(JPH::RVec3(
+                        p.GetX() + step.x, p.GetY() + centreY + step.y,
+                        p.GetZ() + step.z)),
+                    cylinderHalfHeight, rec.radius, true, charCol);
+                dashRange(out, first);
+                tintRange(out, first, fade * 0.55f);
+            }
+        }
+    }
+
+    // Render-mesh bounds beside the collider that is meant to stand in for it.
+    // Two disagreeing boxes is what a wrong-sized collider looks like; one box
+    // on its own always looks fine.
+    if (o.references) {
+        // Alarm red, deliberately not in the shape or layer palettes, so a
+        // prop with no collision cannot be mistaken for one of the shape kinds.
+        const glm::vec3 kNoCollider{1.0f, 0.15f, 0.15f};
+        const glm::vec3 kBounds{0.85f, 0.85f, 0.85f};
+        for (const DebugReference& ref : *o.references) {
+            const float fade = distanceFade(o, ref.centre);
+            if (fade <= 0.0f) continue;
+            const bool missing =
+                !ref.body.valid() ||
+                ref.body.id >= uint32_t(mImpl->bodies.size()) ||
+                !mImpl->bodies[ref.body.id].alive;
+            if (!missing &&
+                !any(o.include & layerMask(mImpl->bodies[ref.body.id].layer)))
+                continue;
+            const size_t first = out.size();
+            pushOrientedBox(
+                out,
+                JPH::RMat44::sTranslation(
+                    JPH::RVec3(ref.centre.x, ref.centre.y, ref.centre.z)),
+                JPH::Vec3(ref.halfExtents.x, ref.halfExtents.y,
+                          ref.halfExtents.z),
+                missing ? kNoCollider : kBounds);
+            if (!missing) {
+                // Dim and dashed: the collider is the subject, the mesh bounds
+                // are the ruler held up next to it.
+                dashRange(out, first);
+                tintRange(out, first, fade * 0.5f);
+            } else {
+                tintRange(out, first, fade);
+            }
+        }
     }
 }
 

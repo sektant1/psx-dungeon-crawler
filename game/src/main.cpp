@@ -107,8 +107,16 @@ int main(int argc, char** argv)
     game::ColliderDebug colliderDbg;
     colliderDbg.enabled = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
 
+    game::layer::PhysicsTuning physicsTuning;
+    physicsTuning.gravity =
+        float(engine.config().getNumber("physics.gravity", -18.0));
+    physicsTuning.characterPushImpulse =
+        float(engine.config().getNumber("physics.character_push_impulse", 2.0));
+    physicsTuning.multithreaded =
+        engine.config().getBool("physics.multithreaded", false);
+
     eng::Physics physics;
-    physics.init(game::layer::physicsSetup());
+    physics.init(game::layer::physicsSetup(physicsTuning));
 
     // `game <file.map>`: play an authored editor scene instead of the
     // procedural dungeon. Handled here (engine + physics + assets ready, before
@@ -548,10 +556,18 @@ int main(int argc, char** argv)
                                                              : Pal::ByShape;
                 static std::vector<eng::Physics::DebugLine> pl;
                 pl.clear();
-                physics.debugDraw(pl, pal,
-                                  colliderDbg.includeStatic
-                                      ? eng::kAllLayers
-                                      : ~eng::layerMask(game::layer::Static));
+                eng::Physics::DebugDrawOptions drawOptions;
+                drawOptions.palette = pal;
+                drawOptions.include = colliderDbg.includeStatic
+                                          ? eng::kAllLayers
+                                          : ~eng::layerMask(game::layer::Static);
+                drawOptions.viewer = player.eyePosition();
+                drawOptions.range = colliderDbg.range;
+                drawOptions.fadeStart = colliderDbg.fadeStart;
+                drawOptions.drawCharacters = colliderDbg.drawCharacters;
+                drawOptions.drawSensors = colliderDbg.drawSensors;
+                drawOptions.sweepDt = kFixedDt;
+                physics.debugDraw(pl, drawOptions);
 
                 const glm::mat4 vp = r.cameraViewProj();
                 const ImVec2 ds = ImGui::GetIO().DisplaySize;

@@ -16,8 +16,25 @@ namespace game {
 // it off the centre path lets players deliberately enter it to kick/shoot
 // props instead of tripping over the showcase during every traversal.
 // Mesh origins are at the base; body centres are offset up by halfHeight.
-// Crate: 0.8 m cube -> halfExtents {0.4, 0.4, 0.4}, body centre y = 0.4.
-// Barrel: r=0.28, h=0.9 -> halfHeight 0.45, body centre y = 0.45.
+//
+// The sizes below are measured off the .obj vertex bounds, not assumed. The
+// numbers that used to be here were assumed, and both were wrong:
+//
+//   Crate: the comment said "0.8 m cube -> halfExtents {0.4, 0.4, 0.4}".
+//   prop_crate.obj is 0.468 x 0.244 x 0.735 m. The old box was a 0.8 m cube
+//   around a crate 24 cm tall -- more than three times too tall, so the player
+//   was stopped by an invisible wall at waist height by a knee-high crate, and
+//   the stacked pair sat 0.8 m apart with a visible gap between them.
+//
+//   Barrel: the comment said "r=0.28, h=0.9". prop_barrel_p0/p1 measure
+//   1.334 m across and 1.388 m tall, so the cylinder was less than half the
+//   barrel's width; you could walk into the staves up to the shoulder.
+//
+// Crate: 0.468 x 0.244 x 0.735 -> halfExtents {0.234, 0.122, 0.368}.
+//   Kept oblong here (unlike the dungeon catalog, whose placement rotates
+//   props by a grid hash) because these are placed at authored yaws and the
+//   body rotates with the mesh once it is dynamic.
+// Barrel: r = 0.667, full height 1.388 -> cylinder halfHeight 0.694.
 void PropSystem::spawnLobby(GameContext& ctx)
 {
     eng::Renderer& r = ctx.renderer;
@@ -28,10 +45,10 @@ void PropSystem::spawnLobby(GameContext& ctx)
     eng::MeshHandle mBarrel1 = r.loadObj(props + "prop_barrel_p1.obj");
 
     const auto spawnCrate = [&](glm::vec3 bodyPos, float yawDeg) {
-        constexpr float hh = 0.4f;
+        constexpr float hh = 0.122f;
         eng::BodyDesc bd;
         bd.kind = eng::ShapeKind::Box;
-        bd.halfExtents = {0.4f, hh, 0.4f};
+        bd.halfExtents = {0.234f, hh, 0.368f};
         bd.position = bodyPos + glm::vec3(0.0f, 0.02f, 0.0f);
         bd.layer = game::layer::Prop;
         bd.dynamic = true;
@@ -49,8 +66,8 @@ void PropSystem::spawnLobby(GameContext& ctx)
     };
 
     const auto spawnBarrel = [&](glm::vec3 bodyPos, float yawDeg) {
-        constexpr float halfH = 0.45f;
-        constexpr float radius = 0.28f;
+        constexpr float halfH = 0.694f;
+        constexpr float radius = 0.667f;
         eng::BodyDesc bd;
         bd.kind = eng::ShapeKind::Cylinder;
         bd.halfHeight = halfH;
@@ -85,16 +102,22 @@ void PropSystem::spawnLobby(GameContext& ctx)
         mGroundBody = physics.createBody(gd);
     }
 
+    // Spawn heights are body centres, so they follow the corrected half-
+    // extents: a crate rests at y = 0.122 and a barrel at y = 0.694. With the
+    // old oversized numbers these were 0.4 and 0.45, which now would have
+    // dropped every prop in from mid-air on the first step.
     // Two crates stacked near the entry hall (spawn side of the anchor room)
-    spawnCrate({9.0f, 0.4f, 18.0f},   10.0f);   // ground crate
-    spawnCrate({9.0f, 1.2f, 18.0f},  -15.0f);   // stacked on top
+    spawnCrate({9.0f, 0.122f, 18.0f},  10.0f);   // ground crate
+    spawnCrate({9.0f, 0.366f, 18.0f}, -15.0f);   // stacked on top
     // A third crate to the side
-    spawnCrate({7.5f, 0.4f, 17.0f},   30.0f);
-    // Two barrels next to them
-    spawnBarrel({10.5f, 0.45f, 17.5f},   0.0f);
-    spawnBarrel({11.2f, 0.45f, 18.5f},  20.0f);
+    spawnCrate({7.5f, 0.122f, 17.0f},  30.0f);
+    // Two barrels next to them. Spaced 1.72 m apart: the real barrel is 1.33 m
+    // across, so the old 1.22 m spacing (tuned against a 0.56 m collider) now
+    // starts them interpenetrating and they would shove each other on frame 1.
+    spawnBarrel({10.5f, 0.694f, 17.5f},  0.0f);
+    spawnBarrel({11.9f, 0.694f, 18.5f}, 20.0f);
     // One more loose crate for variety
-    spawnCrate({8.2f, 0.4f, 19.5f},  -20.0f);
+    spawnCrate({8.2f, 0.122f, 19.5f}, -20.0f);
 
     mAlive = true;
 }

@@ -14,8 +14,10 @@ class Renderer;
 class Physics;
 } // namespace eng
 
-// Data-driven modular dungeon built from the PSX_Modular_Medieval tile set
-// (game/assets/meshes/tiles, sliced by tools/slice_tiles.py).
+// Data-driven modular dungeon built from the modular dungeon kit
+// (game/assets/meshes/kit, catalogued in game/assets/kit.toml). Kit pieces are
+// authored on a 20-unit grid, centred on X/Z with their base at Y=0; they are
+// baked to this map's cell size at load, so a placement is just a cell centre.
 //
 // The layout lives in a TOML file as an ASCII grid; each character is one
 // cell_size x cell_size cell:
@@ -41,14 +43,14 @@ class DungeonMap
 public:
     bool load(eng::Renderer& r, eng::Physics& physics,
               const std::string& tomlPath,
-              const std::string& tileMeshDir, const std::string& propMeshDir,
+              const std::string& kitMeshDir, const std::string& propMeshDir,
               eng::NodeHandle sceneRoot = eng::kRootNode);
 
     // Build the dungeon from an in-memory grid (e.g. from gen::generate)
     // instead of a TOML file. Shares all geometry/segmentation/torch code.
     bool loadFromRows(eng::Renderer& r, eng::Physics& physics,
                       gen::Layout layout,
-                      const std::string& tileMeshDir,
+                      const std::string& kitMeshDir,
                       const std::string& propMeshDir,
                       eng::NodeHandle sceneRoot = eng::kRootNode);
 
@@ -97,7 +99,7 @@ private:
                        gen::Layout layout,
                        float cell, float wallH, glm::vec3 lightColour,
                        float lightEnergy, float lightRange, float lampY,
-                       const std::string& tileMeshDir,
+                       const std::string& kitMeshDir,
                        const std::string& propMeshDir,
                        eng::NodeHandle sceneRoot);
 

@@ -1,6 +1,5 @@
 #include "DungeonMap.h"
 #include "GameCollision.h"
-#include "ObjLoader.h"
 #include "ParticleEffects.h"
 
 #include <eng/Log.h>
@@ -20,10 +19,13 @@
 
 namespace {
 
-constexpr const char* kTileMaterial = "Game/DungeonTile";
-constexpr const char* kFloorMaterial = "Game/DungeonFloor";
-constexpr const char* kCeilingMaterial = "Game/DungeonCeiling";
-constexpr const char* kWallMaterial = "Game/DungeonWall";
+// The dungeon shell is built entirely from the modular kit (meshes/kit,
+// catalog in kit.toml), which is authored against the Dungeon_Map atlas, so
+// one material covers floors, walls, pillars and door frames. The ceiling is
+// the floor piece flipped over by the viewer rather than by the mesh, so it
+// needs the two-sided variant to be visible from below.
+constexpr const char* kKitMaterial = "Kit/Dungeon";
+constexpr const char* kKitTwoSided = "Kit/DungeonTwoSided";
 
 float lin(float srgb) { return std::pow(srgb, 2.2f); }
 
@@ -58,7 +60,7 @@ bool DungeonMap::debugArchNorthSouth(int col, int row) const
 
 bool DungeonMap::load(eng::Renderer& r, eng::Physics& physics,
                       const std::string& tomlPath,
-                      const std::string& tileMeshDir,
+                      const std::string& kitMeshDir,
                       const std::string& propMeshDir,
                       eng::NodeHandle sceneRoot)
 {
@@ -102,7 +104,7 @@ bool DungeonMap::load(eng::Renderer& r, eng::Physics& physics,
 
     return buildFromLayout(r, physics, gen::Layout::fromRows(std::move(rows)),
                            mCell, wallH, lightColour, lightEnergy, lightRange,
-                           lampY, tileMeshDir, propMeshDir, sceneRoot);
+                           lampY, kitMeshDir, propMeshDir, sceneRoot);
 }
 
 bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
@@ -110,7 +112,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                                  float cell, float wallH,
                                  glm::vec3 lightColour, float lightEnergy,
                                  float lightRange, float lampY,
-                                 const std::string& tileMeshDir,
+                                 const std::string& kitMeshDir,
                                  const std::string& propMeshDir,
                                  eng::NodeHandle sceneRoot)
 {
@@ -196,17 +198,43 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     }
 
     // ------------------------------------------------------------ meshes ---
-    const eng::MeshHandle floor = r.loadObj(tileMeshDir + "tile_floor.obj");
-    const eng::MeshHandle ceiling = r.loadObj(tileMeshDir + "tile_ceiling.obj");
-    const eng::MeshHandle wall = r.loadObj(tileMeshDir + "tile_wall.obj");
-    const eng::MeshHandle wallPlaster =
-        r.loadObj(tileMeshDir + "tile_wall_plaster.obj");
-    const eng::MeshHandle arch = r.loadObj(tileMeshDir + "tile_arch.obj");
-    // CPU-side arch geometry for mesh-accurate archway colliders (loaded once).
-    std::vector<glm::vec3> archVerts;
-    std::vector<uint32_t> archIndices;
-    ObjLoader::loadGeometry(tileMeshDir + "tile_arch.obj", archVerts, archIndices);
-    const eng::MeshHandle pillar = r.loadObj(tileMeshDir + "tile_pillar.obj");
+    // The kit is authored on a 20-unit grid: every architectural piece is
+    // centred on X and Z with its base at Y=0, and a wall is exactly as tall
+    // as a cell is wide. This dungeon uses a 4 m cell with 3 m walls, so each
+    // piece is baked to cell space at load with one non-uniform scale
+    // (cell/20, wallH/20, cell/20) and then placed at a cell centre.
+    const glm::mat4 kitToCell =
+        glm::scale(glm::mat4(1.0f), {mCell / 20.0f, wallH / 20.0f, mCell / 20.0f});
+    const eng::MeshHandle floor =
+        r.loadObj(kitMeshDir + "Floor_Tiles.obj", &kitToCell);
+    // The kit has no ceiling piece (kit.toml's only overhead piece, Arch_Roof,
+    // is a vault that tiles its UVs outside 0..1 and needs Kit/Stone). The
+    // floor slab is the right shape and the right atlas cell, so the ceiling
+    // is the same mesh at wall height drawn two-sided -- cheaper than a
+    // mirrored copy, and it shares the floor's mesh and batch.
+    const eng::MeshHandle ceiling = floor;
+    // Wall_01 is 20 x 20 x 5 kit units. Wall_02 has the same 20 x 20 x 5 body
+    // plus a 10-unit-wide pilaster standing 2 units proud on both faces; it
+    // replaces the old plaster tile as the "sprinkle for variety" piece and,
+    // sharing a body with Wall_01, it shares Wall_01's placement inset.
+    const eng::MeshHandle wall = r.loadObj(kitMeshDir + "Wall_01.obj", &kitToCell);
+    const eng::MeshHandle wallThick =
+        r.loadObj(kitMeshDir + "Wall_02.obj", &kitToCell);
+    // Archway: the kit's door frame. Its opening is 10 x 15 kit units, which
+    // lands at 2.0 m wide by 2.25 m tall -- a doorway the player walks
+    // through rather than the old asset's hole, whose curved jamb needed a
+    // full triangle-mesh collider to stop the player clipping into it.
+    const eng::MeshHandle arch =
+        r.loadObj(kitMeshDir + "Door_Frame_01.obj", &kitToCell);
+    // The pillar is the one piece that is not cell-sized: it is 5.65 wide by
+    // 30.2 tall, so kitToCell would push it 1.5 m through the ceiling. Scale
+    // it uniformly to stand exactly floor-to-ceiling (0.56 m across at
+    // wallH = 3), which also keeps its atlas UVs undistorted.
+    const float pillarScale = wallH / 30.2f;
+    const glm::mat4 kitToPillar =
+        glm::scale(glm::mat4(1.0f), glm::vec3(pillarScale));
+    const eng::MeshHandle pillar =
+        r.loadObj(kitMeshDir + "Pillar.obj", &kitToPillar);
     const eng::MeshHandle torch = r.loadObj(propMeshDir + "prop_torch.obj");
     struct PropPart {
         eng::MeshHandle mesh;
@@ -281,7 +309,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
 
     eng::StaticBatchHandle curBatch{}; // set per cell in the grid loop
     const auto put = [&](eng::MeshHandle m, glm::vec3 pos, float yawDeg,
-                         const char* material = kTileMaterial) {
+                         const char* material = kKitMaterial) {
         r.addToStaticBatch(curBatch, m, material, pos, yawDeg);
     };
     // Emit a static box collider and record its handle for clearPhysics().
@@ -294,14 +322,32 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
         d.dynamic = false;
         mColliders.push_back(mPhysics->createBody(d));
     };
-    // Mesh-accurate archway collider: a static Jolt MeshShape traced from the
-    // arch render mesh, placed to match the render put(arch, ...) call.
-    const auto addArchMesh = [&](glm::vec3 pos, float yawDeg) {
-        if (archVerts.empty() || archIndices.empty())
-            return; // geometry load failed; floor/ceiling slabs still protect
-        const glm::quat q = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0, 1, 0));
-        mColliders.push_back(mPhysics->createMeshBody(
-            archVerts, archIndices, pos, q, game::layer::Static));
+    // Archway collider: two jambs and a lintel, because the kit's door frame
+    // is a rectangular opening. The old arch needed a triangle-mesh collider
+    // traced from its render mesh to stop the player clipping a curved jamb;
+    // three boxes are cheaper, exact, and readable in the collider overlay.
+    //
+    // `pos` is the cell corner the render piece is placed at, and `yawDeg`
+    // matches it, so the two stay aligned by construction.
+    const auto addDoorFrame = [&](glm::vec3 pos, float yawDeg) {
+        const float half = mCell * 0.5f;
+        const float jamb = mCell * 0.25f;   // opening is the middle half
+        const float thick = mCell * 0.125f; // frame depth
+        const float openH = wallH * 0.75f;  // lintel starts at 15/20 of the wall
+        const bool alongX = std::fabs(yawDeg) < 45.0f;
+        const auto place = [&](float across, float y, float halfAcross,
+                               float halfY) {
+            const glm::vec3 centre =
+                alongX ? glm::vec3(pos.x + across, y, pos.z)
+                       : glm::vec3(pos.x, y, pos.z + across);
+            const glm::vec3 he = alongX
+                ? glm::vec3(halfAcross, halfY, thick)
+                : glm::vec3(thick, halfY, halfAcross);
+            addBox(centre, he);
+        };
+        place(-(half - jamb * 0.5f), wallH * 0.5f, jamb * 0.5f, wallH * 0.5f);
+        place(+(half - jamb * 0.5f), wallH * 0.5f, jamb * 0.5f, wallH * 0.5f);
+        place(0.0f, (openH + wallH) * 0.5f, half - jamb, (wallH - openH) * 0.5f);
     };
     const auto growRoomAabb = [&](int room, glm::vec3 cellMin, glm::vec3 cellMax) {
         Room& rm = mRooms[size_t(room)];
@@ -330,6 +376,9 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             // Cell rect: x in [x0, x0+cell], z in [z0, z0+cell].
             const float x0 = mOrigin.x + col * mCell;
             const float z0 = mOrigin.z + row * mCell;
+            // Kit pieces are centred on X/Z, so every placement below is a
+            // cell centre (plus, for walls, an outward inset -- see there).
+            const float half = mCell * 0.5f;
 
             // Route this cell's tiles into its room (or arch) batch.
             const int aIdx = mLayout.archAt(col, row);
@@ -342,44 +391,10 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                              {x0 + mCell, wallH, z0 + mCell});
             }
 
-            if (c == 'A') {
-                // The arch asset provides the side blocks and roof but its
-                // base has holes in the walkable opening. Supply the same
-                // floor slab as ordinary cells, raised a hair above any
-                // coincident asset faces to prevent z-fighting.
-                put(floor, {x0, 0.002f, z0 + mCell}, 0.0f,
-                    kFloorMaterial);
-                if (mLayout.arch(aIdx).northSouth)
-                    put(arch, {x0, 0.0f, z0 + mCell}, 0.0f);
-                else
-                    put(arch, {x0 + mCell, 0.0f, z0 + mCell}, 90.0f);
-
-                // Arch collider: a mesh-accurate static body traced from the
-                // arch render mesh, placed to match the render put(arch, ...)
-                // above so the neon collider overlay and the visual align. The
-                // player can no longer clip the curved jamb/lintel.
-                if (mLayout.arch(aIdx).northSouth)
-                    addArchMesh({x0, 0.0f, z0 + mCell}, 0.0f);
-                else
-                    addArchMesh({x0 + mCell, 0.0f, z0 + mCell}, 90.0f);
-
-                // Arch cells are walkable passages: they still need the floor
-                // and ceiling collision slabs (the arch asset's base has holes
-                // in the opening), otherwise the player falls through the
-                // archway/portal floor.
-                {
-                    const float hc = mCell * 0.5f;
-                    addBox({x0 + hc, -0.05f,        z0 + hc}, {hc, 0.05f, hc});
-                    addBox({x0 + hc, wallH + 0.05f, z0 + hc}, {hc, 0.05f, hc});
-                }
-                continue;
-            }
-
-            // Floor spans x[0,cell] z[-cell,0] from its node; ceiling is the
-            // same footprint mirrored downward, raised to wall height.
-            put(floor, {x0, 0.0f, z0 + mCell}, 0.0f, kFloorMaterial);
-            put(ceiling, {x0, wallH, z0 + mCell}, 0.0f,
-                kCeilingMaterial);
+            // Floor slab centred in the cell; the ceiling is the same slab at
+            // wall height, drawn two-sided so it is visible from underneath.
+            put(floor, {x0 + half, 0.0f, z0 + half}, 0.0f);
+            put(ceiling, {x0 + half, wallH, z0 + half}, 0.0f, kKitTwoSided);
 
             // Floor and ceiling collision slabs (thin boxes centred just
             // outside the walkable volume so the physics surface aligns).
@@ -387,6 +402,26 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                 const float hc = mCell * 0.5f;
                 addBox({x0 + hc, -0.05f,      z0 + hc}, {hc, 0.05f, hc});
                 addBox({x0 + hc, wallH + 0.05f, z0 + hc}, {hc, 0.05f, hc});
+            }
+
+            // An arch cell is an ordinary walkable cell that additionally has
+            // a door frame standing across the passage. It therefore takes the
+            // same floor, ceiling and boundary walls as every other cell (it
+            // used to short-circuit here, which left it with no ceiling tile
+            // and no walls on its two solid flanks -- the black band above the
+            // doorway and the black slots beside it). Only the frame itself is
+            // special, so only the frame is emitted here.
+            if (c == 'A') {
+                // A north-south passage is crossed by a frame whose 20-unit
+                // width runs along X (yaw 0), and vice versa. Door_Frame_01 is
+                // 20 wide, so it spans the cell exactly and meets the inset
+                // faces of the flanking walls with no step.
+                const float archYaw = mLayout.arch(aIdx).northSouth ? 0.0f : 90.0f;
+                put(arch, {x0 + half, 0.0f, z0 + half}, archYaw);
+                // Door-frame collider: jambs and lintel, placed from the same
+                // centre and yaw as the render call above so the collider
+                // overlay and the visual agree by construction.
+                addDoorFrame({x0 + half, 0.0f, z0 + half}, archYaw);
             }
 
             // Wall segments on solid/void boundaries, normals facing the
@@ -411,18 +446,32 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                 else if (mExitYawDegrees == 90.0f) wallW = false;
                 else if (mExitYawDegrees == -90.0f) wallE = false;
             }
+            // Kit walls are solid slabs, not the zero-thickness planes the old
+            // tiles were. Both wall pieces share the same 5-unit-thick body
+            // spanning the full 20 x 20 cell face (measured from the .obj:
+            // Wall_01 and Wall_02 are both x -10..10, y 0..20, z -2.5..2.5);
+            // Wall_02 only adds a 10-unit-wide pilaster that stands proud of
+            // that body to z +-4.5 on both sides. So the wall *body* is the
+            // same for both, and a single inset serves both pieces: pushed
+            // outward (into the solid rock the wall backs onto) by half the
+            // body thickness, 5/20*cell/2 = 0.50 m at cell 4, which lands the
+            // inner face exactly on the cell boundary where the old plane and
+            // the existing 0.05 m collider slab both sit. Insetting Wall_02 by
+            // half its *pilaster* depth instead would recess its face 0.40 m
+            // behind the boundary, opening a slot at every neighbour and an
+            // unfloored, unceilinged pocket that reads as a black void.
+            const float wallInset = 2.5f * mCell / 20.0f;
             const auto pick = [&](int salt) {
-                return (col * 7 + row * 13 + salt) % 4 == 0 ? wallPlaster
-                                                            : wall;
+                return (col * 7 + row * 13 + salt) % 4 == 0 ? wallThick : wall;
             };
             if (wallN)
-                put(pick(0), {x0, 0.0f, z0}, 0.0f, kWallMaterial);
+                put(pick(0), {x0 + half, 0.0f, z0 - wallInset}, 0.0f);
             if (wallS)
-                put(pick(1), {x0 + mCell, 0.0f, z0 + mCell}, 180.0f, kWallMaterial);
+                put(pick(1), {x0 + half, 0.0f, z0 + mCell + wallInset}, 180.0f);
             if (wallW)
-                put(pick(2), {x0, 0.0f, z0 + mCell}, 90.0f, kWallMaterial);
+                put(pick(2), {x0 - wallInset, 0.0f, z0 + half}, 90.0f);
             if (wallE)
-                put(pick(3), {x0 + mCell, 0.0f, z0}, -90.0f, kWallMaterial);
+                put(pick(3), {x0 + mCell + wallInset, 0.0f, z0 + half}, -90.0f);
 
             // Wall collision boxes (thin slabs at each solid boundary face).
             // wallN: -z face of cell (z = z0); wallS: +z face (z = z0+mCell).
@@ -592,11 +641,10 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     for (const auto& ar : mArches)
         r.buildStaticBatch(ar.batch);
 
-    // Deliberately low-poly tiles: pin per-pixel lighting on the tile materials
+    // Deliberately low-poly shell: pin per-pixel lighting on the kit materials
     // so torch pools stay smooth regardless of preset (vertex-lit presets would
     // sample the sparse grid too coarsely). Higher-poly props keep preset look.
-    for (const char* mat :
-         {kTileMaterial, kFloorMaterial, kCeilingMaterial, kWallMaterial})
+    for (const char* mat : {kKitMaterial, kKitTwoSided})
         r.setMaterialParam(mat, "perPixelLighting", 1.0f);
 
     eng::log::info("DungeonMap: %zu rows, %zu rooms, %zu arches, %zu torches, "
@@ -608,7 +656,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
 
 bool DungeonMap::loadFromRows(eng::Renderer& r, eng::Physics& physics,
                               gen::Layout layout,
-                              const std::string& tileMeshDir,
+                              const std::string& kitMeshDir,
                               const std::string& propMeshDir,
                               eng::NodeHandle sceneRoot)
 {
@@ -616,7 +664,7 @@ bool DungeonMap::loadFromRows(eng::Renderer& r, eng::Physics& physics,
     // TOML fallback (game/assets/dungeon.toml [dungeon.light]).
     return buildFromLayout(r, physics, std::move(layout), 4.0f, 3.0f,
                          {lin(1.0f), lin(0.68f), lin(0.34f)}, 4.4f, 6.5f, 1.9f,
-                         tileMeshDir, propMeshDir, sceneRoot);
+                         kitMeshDir, propMeshDir, sceneRoot);
 }
 
 void DungeonMap::clearPhysics()

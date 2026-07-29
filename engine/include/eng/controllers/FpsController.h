@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/Handles.h>
+#include <eng/Physics.h> // CollisionMask / kAllLayers used by value below
 
 #include <glm/glm.hpp>
 #include <limits>
@@ -79,6 +80,14 @@ public:
     // want this rather than re-deriving it from yaw.
     glm::vec2 inputDirection(const Command& command) const;
 
+    // Layers the character body sweeps against, narrowing the world collision
+    // matrix for this character only. Default is every layer, i.e. the matrix
+    // alone. Clear a bit to make that layer pass-through for the player --
+    // phasing through props during a dash, a gate that only enemies collide
+    // with -- without editing the matrix every other body shares.
+    void setCollisionMask(CollisionMask m) { mCollisionMask = m; }
+    CollisionMask collisionMask() const { return mCollisionMask; }
+
     float& speed() { return mSpeed; }
     float& sensitivity() { return mSens; }
     float sprintStamina() const { return mSprintStamina; } // normalized 0..1
@@ -155,6 +164,7 @@ private:
     bool mCharGrounded = false;
     glm::vec3 mGroundNormal{0,1,0};
     float mCeilingHeight = std::numeric_limits<float>::infinity();
+    CollisionMask mCollisionMask = kAllLayers;
     Physics* mPhysics = nullptr;
     CharacterHandle mCharacter{};
 };

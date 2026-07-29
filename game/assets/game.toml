@@ -49,6 +49,29 @@ cooldown = 0.45     # seconds after it ends before another is allowed
 iframes = 0.22      # seconds of invulnerability, from the start of the dash
 stamina = 25.0      # cost; an empty bar means no dodge
 
+# Simulation feel. These are game tuning, not engine internals: the engine
+# takes them from PhysicsSetup and has no opinion about the numbers.
+[physics]
+# World gravity in m/s^2, negative is down. Earth is -9.81; we run roughly
+# double that because a fast first-person game wants a short, snappy fall arc
+# -- a realistic value makes jumps feel floaty and drops feel slow. Raising the
+# magnitude shortens jumps and makes props settle harder; lowering it makes the
+# whole game feel moon-like.
+gravity = -18.0
+# How hard the player shoves a dynamic prop they walk into, as a multiple of
+# the player's speed along the contact normal (so a fast walk into a barrel
+# shoves it harder than a slow one). 0 makes props immovable walls; 2.0 lets
+# you clear a crate out of a doorway by walking through it without launching
+# it across the room.
+character_push_impulse = 2.0
+# Multi-threaded physics. Off on purpose. With more than one worker Jolt
+# resolves contacts in thread-race order, so a stack of barrels settles
+# differently every run and a boss retry is not the same fight. Single-worker
+# simulation is reproducible, which is what retries and replays need, and it
+# measures at roughly a tenth of a millisecond a frame in this scene. Turn on
+# only if a scene gets heavy enough for that to matter.
+multithreaded = false
+
 [player]
 speed = 3.0
 mouse_sensitivity = 0.002

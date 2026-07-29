@@ -26,7 +26,9 @@ int main()
     src.emplace<eng::ecs::MeshSource>(room, eng::ecs::MeshSource{"meshes/tiles/floor.obj"});
     eng::ecs::MeshRenderer mr; mr.material = "Game/DungeonTile"; mr.castShadows = true;
     src.emplace<eng::ecs::MeshRenderer>(room, mr);
-    src.emplace<game::Collider>(room, game::Collider{});
+    game::Collider collider;
+    collider.sensor = true;
+    src.emplace<game::Collider>(room, collider);
 
     entt::entity torch = src.create();
     src.emplace<eng::ecs::Name>(torch, eng::ecs::Name{"Torch"});
@@ -60,6 +62,8 @@ int main()
     require(dst.get<eng::ecs::MeshRenderer>(dRoom).material == "Game/DungeonTile",
             "material round-trips");
     require(dst.all_of<game::Collider>(dRoom), "collider round-trips");
+    require(dst.get<game::Collider>(dRoom).sensor,
+            "collider sensor policy round-trips");
     require(dst.get<eng::ecs::LightRef>(dTorch).desc.range == 6.5f,
             "light range round-trips");
     require(dst.get<eng::ecs::Parent>(dTorch).value == dRoom,

@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <algorithm>
 #include <vector>
 #include <glm/gtc/quaternion.hpp>
 
@@ -130,6 +131,116 @@ static void test_impulse_moves_prop() {
     std::puts("test_impulse_moves_prop OK");
 }
 
+static void test_set_body_transform_teleports_body_and_query_shape() {
+    eng::Physics phys; phys.init(game::layer::physicsSetup());
+    eng::BodyDesc box; box.halfExtents={0.5f,0.5f,0.5f};
+    box.layer=game::layer::Static; box.dynamic=false;
+    eng::BodyHandle h=phys.createBody(box);
+    const glm::quat rotation = glm::angleAxis(glm::radians(30.0f),
+                                              glm::vec3(0,1,0));
+    phys.setBodyTransform(h,{4,2,0},rotation);
+
+    glm::vec3 p; glm::quat q; phys.getRenderTransform(h,p,q);
+    CHECK(glm::length(p-glm::vec3(4,2,0))<1e-5f,
+          "teleport should update the render-facing position immediately");
+    CHECK(std::fabs(glm::dot(q,rotation))>0.9999f,
+          "teleport should update the render-facing orientation immediately");
+
+    eng::RayHit hit;
+    CHECK(phys.rayCast({0,2,0},{1,0,0},10.0f,hit,
+                       eng::layerMask(game::layer::Static)),
+          "queries should see the body at its teleported pose");
+    CHECK(hit.body==h, "teleported body should retain its handle");
+    phys.shutdown();
+    std::puts("test_set_body_transform_teleports_body_and_query_shape OK");
+}
+
+static void test_character_mask_can_exclude_world_layer() {
+    eng::Physics phys; phys.init(game::layer::physicsSetup());
+    eng::BodyDesc wall; wall.halfExtents={0.5f,2,2}; wall.position={2,1,0};
+    wall.layer=game::layer::Static; wall.dynamic=false; phys.createBody(wall);
+    eng::CharacterDesc cd; cd.position={0,0,0};
+    eng::CharacterHandle ch=phys.createCharacter(cd);
+    const eng::CollisionMask withoutStatic =
+        eng::kAllLayers & ~eng::layerMask(game::layer::Static);
+    for(int i=0;i<60;++i){
+        phys.characterSetVelocity(ch,{5,0,0});
+        phys.characterUpdate(ch,1.0f/60.0f,withoutStatic);
+        phys.update(1.0f/60.0f);
+    }
+    CHECK(phys.characterState(ch).position.x>3.0f,
+          "character-specific mask should make excluded walls pass-through");
+    phys.shutdown();
+    std::puts("test_character_mask_can_exclude_world_layer OK");
+}
+
+static void test_debug_draw_filters_and_matches_character_shape() {
+    eng::Physics phys; phys.init(game::layer::physicsSetup());
+    eng::BodyDesc solid; solid.halfExtents={1,1,1};
+    solid.layer=game::layer::Static; solid.dynamic=false;
+    eng::BodyHandle solidBody=phys.createBody(solid);
+    eng::BodyDesc sensor; sensor.halfExtents={1,1,1}; sensor.position={3,0,0};
+    sensor.layer=game::layer::Trigger; sensor.dynamic=false; sensor.sensor=true;
+    phys.createBody(sensor);
+    eng::CharacterDesc cd; cd.position={0,0,0};
+    phys.createCharacter(cd);
+
+    std::vector<eng::Physics::DebugLine> lines;
+    eng::Physics::DebugDrawOptions options;
+    options.include=eng::layerMask(game::layer::Static);
+    options.drawCharacters=false;
+    options.drawSensors=false;
+    phys.debugDraw(lines,options);
+    CHECK(lines.size()==12, "one solid box should emit its twelve edges");
+
+    lines.clear();
+    options.include=eng::layerMask(game::layer::Trigger);
+    phys.debugDraw(lines,options);
+    CHECK(lines.empty(), "disabled sensors should emit no debug lines");
+
+    lines.clear();
+    options.include=eng::layerMask(game::layer::Static);
+    options.drawSensors=true;
+    options.viewer={10,0,0}; options.range=2.0f;
+    phys.debugDraw(lines,options);
+    CHECK(lines.empty(), "range filtering should omit distant colliders");
+
+    lines.clear();
+    options={};
+    options.include=eng::layerMask(game::layer::Player);
+    options.drawSensors=false;
+    phys.debugDraw(lines,options);
+    CHECK(!lines.empty(), "included character should emit a debug capsule");
+    float minY=lines.front().a.y, maxY=minY;
+    for(const auto& line: lines){
+        minY=std::min({minY,line.a.y,line.b.y});
+        maxY=std::max({maxY,line.a.y,line.b.y});
+    }
+    CHECK(std::fabs(minY-cd.position.y)<0.01f,
+          "debug capsule should begin at the character feet");
+    CHECK(std::fabs(maxY-(cd.position.y+cd.height))<0.01f,
+          "debug capsule should match the configured character height");
+
+    lines.clear();
+    eng::Physics::DebugReference reference;
+    reference.body=solidBody; reference.halfExtents={1,1,1};
+    std::vector<eng::Physics::DebugReference> references{reference};
+    options={}; options.include=eng::layerMask(game::layer::Trigger);
+    options.drawCharacters=false; options.drawSensors=false;
+    options.references=&references;
+    phys.debugDraw(lines,options);
+    CHECK(lines.empty(),
+          "reference bounds should follow their associated body's layer filter");
+
+    lines.clear();
+    references[0].body={};
+    phys.debugDraw(lines,options);
+    CHECK(lines.size()==12,
+          "a missing collider reference should remain visible as an alarm box");
+    phys.shutdown();
+    std::puts("test_debug_draw_filters_and_matches_character_shape OK");
+}
+
 // Regression for the arch/portal fall-through bug: an arch cell emits two
 // side-block colliders flanking the opening PLUS a floor slab. Reproduce that
 // collider layout (mirroring DungeonMap::buildFromLayout's arch branch) and
@@ -225,6 +336,9 @@ int main() {
     test_character_settles_and_is_blocked_by_wall();
     test_character_steps_small_ledge();
     test_impulse_moves_prop();
+    test_set_body_transform_teleports_body_and_query_shape();
+    test_character_mask_can_exclude_world_layer();
+    test_debug_draw_filters_and_matches_character_shape();
     test_arch_cell_has_floor();
     test_fast_projectile_does_not_tunnel_thin_wall();
     test_shapecast_hits_prop_once();

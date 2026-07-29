@@ -26,7 +26,10 @@ struct ComponentType {
     bool (*has)(const entt::registry&, entt::entity) = nullptr;
     void (*remove)(entt::registry&, entt::entity) = nullptr;
     void (*serialize)(const entt::registry&, entt::entity, io::ByteWriter&) = nullptr;
-    void (*deserialize)(entt::registry&, entt::entity, io::ByteReader&) = nullptr;
+    // payloadBytes lets a component add optional trailing fields while still
+    // decoding older payloads with safe defaults.
+    void (*deserialize)(entt::registry&, entt::entity, io::ByteReader&,
+                        uint32_t payloadBytes) = nullptr;
 };
 
 inline constexpr uint16_t kFirstApplicationTypeId = 10;

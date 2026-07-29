@@ -43,6 +43,7 @@ SOURCE_RULES: list[tuple[str, str]] = [
     ("src/render/PrimitiveGeometry.cpp", "core"),
     ("src/ecs/", "framework"),
     ("src/controllers/", "framework"),
+    ("src/DebugTools.cpp", "framework"),  # imgui debug console, drives fps/ecs
     ("src/", "systems"),  # renderer, physics, audio, particles
 ]
 
@@ -70,6 +71,7 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("rhi/", "platform"),
     ("ecs/", "framework"),
     ("controllers/", "framework"),
+    ("DebugTools.h", "framework"),  # imgui debug console over the fps/ecs layer
     ("", "systems"),  # everything else: renderer/physics/audio/particles API
 ]
 

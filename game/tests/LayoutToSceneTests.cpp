@@ -27,24 +27,24 @@ int main()
     entt::registry reg;
     SceneGenOptions opts;
     opts.cell = 4.0f;
-    opts.tileDir = "/assets/meshes/tiles/";
+    opts.kitDir = "/assets/meshes/kit/";
     opts.propDir = "/assets/meshes/props/";
     layoutToScene(layout, opts, reg);
 
-    int floors = 0, spawns = 0, exits = 0, colliders = 0, meshes = 0;
+    int slabs = 0, spawns = 0, exits = 0, colliders = 0, meshes = 0;
     reg.view<eng::ecs::MeshSource>().each([&](entt::entity, const eng::ecs::MeshSource& s) {
         ++meshes;
-        if (s.path.find("tile_floor") != std::string::npos) ++floors;
+        if (s.path.find("Floor_Tiles") != std::string::npos) ++slabs;
     });
     reg.view<game::PlayerSpawn>().each([&](auto...) { ++spawns; });
     reg.view<game::Exit>().each([&](auto...) { ++exits; });
     reg.view<game::Collider>().each([&](auto...) { ++colliders; });
 
-    require(floors >= 4, "one floor tile per walkable cell (S . C . X)");
+    require(slabs >= 8, "kit floor slab + ceiling slab per walkable cell");
     require(spawns == 1, "exactly one PlayerSpawn");
     require(exits == 1, "exactly one Exit");
     require(colliders > 0, "colliders emitted (floor + walls)");
-    require(meshes >= floors, "mesh entities include floors + walls + ceilings");
+    require(meshes >= slabs, "mesh entities include floors + walls + ceilings");
 
     entt::entity sp = entt::null;
     reg.view<game::PlayerSpawn>().each([&](entt::entity e) {

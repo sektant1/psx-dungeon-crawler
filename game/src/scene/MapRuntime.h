@@ -1,7 +1,6 @@
 #pragma once
 
-#include "PhysicsSync.h"
-
+#include <eng/ecs/PhysicsSync.h>
 #include <eng/ecs/Scene.h>
 #include <eng/ecs/SceneSync.h>
 #include <eng/Handles.h>
@@ -32,7 +31,7 @@ public:
 private:
     eng::ecs::Scene mScene;
     eng::ecs::SceneSync mSceneSync;
-    PhysicsSync mPhysicsSync;
+    eng::ecs::PhysicsSync mPhysicsSync;
     eng::Physics& mPhysics;
 };
 

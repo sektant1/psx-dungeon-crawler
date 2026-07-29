@@ -300,14 +300,14 @@ void FpsController::simulate(const Command& command, float dt)
         // NOT also manually integrate mPos.y to avoid double-gravity.
         if (mCharGrounded && mVerticalVelocity < 0.0f)
             mVerticalVelocity = 0.0f;
-        mVerticalVelocity -= kGravity * dt;
+        mVerticalVelocity += mPhysics->gravityY() * dt;
         constexpr float kTerminalVelocity = -50.0f;
         if (mVerticalVelocity < kTerminalVelocity)
             mVerticalVelocity = kTerminalVelocity;
 
         const glm::vec3 vel(mVelocity.x, mVerticalVelocity, mVelocity.y);
         mPhysics->characterSetVelocity(mCharacter, vel);
-        mPhysics->characterUpdate(mCharacter, dt);
+        mPhysics->characterUpdate(mCharacter, dt, mCollisionMask);
         const eng::CharacterState st = mPhysics->characterState(mCharacter);
         mGroundNormal = st.groundNormal;
 

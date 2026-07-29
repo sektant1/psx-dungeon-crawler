@@ -1,38 +1,100 @@
 # Dungeon prop catalog. Multi-part assets pair meshes/materials by index.
 # `marker` exposes a prop as a layout/editor cell; `ambient` allows automatic
 # wall-edge dressing on ordinary floor cells.
+#
+# COLLIDERS. Every prop now says what it collides as, in data, instead of the
+# builder inventing one. A prop's collider is described by:
+#
+#   collider = "box" | "cylinder" | "none"
+#       "none" means decorative: the prop is drawn and nothing collides with
+#       it. It must be written out. A prop that simply forgot the field is not
+#       silently decorative -- it falls back to a box from the numbers below
+#       and the builder logs it, because "I have no collision" is a design
+#       decision and should look like one in the file.
+#   size   = [x, y, z]   full extents in metres, not half-extents
+#   offset = [x, y, z]   collider centre relative to the prop's placement
+#                        origin (cell centre, floor level). y is usually
+#                        size_y/2 because prop meshes have their base at y=0;
+#                        it is not when the art does something else, and the
+#                        chest below is exactly that case.
+#
+# Every size here was measured off the .obj vertex bounds rather than eyeballed
+# or inherited from a comment, the same way the kit piece sizes in kit.toml
+# were established. The measured mesh bounds are quoted per prop so this file
+# can be re-checked against the source art without loading anything.
+#
+# FOOTPRINTS ARE SQUARE ON PURPOSE. Placement picks one of four cardinal yaws
+# from a grid hash, so a prop can be dropped in rotated 90 degrees. A collider
+# sized to the mesh's X and Z separately would be wrong in half of those
+# rotations, so box footprints use the larger of the two horizontal extents.
+# Where that over-covers noticeably it is called out.
+#
+# `radius` and `height` are the legacy projection of the collider that the
+# current builder reads: it makes a box of half-extents {radius, height,
+# radius} centred at y = height. They are derived from `size` above, kept in
+# lockstep, and should be deleted once the builder reads the collider block.
 
 [[prop]]
 id = "loot_chest"
 marker = "H"
 meshes = ["prop_chest.obj"]
 materials = ["Game/PropChest"]
-radius = 0.72
-height = 0.55
+# Mesh bounds: x -0.101..0.101, y -0.080..0.080, z -0.080..0.080.
+# This asset is authored tiny -- 20 cm across -- and centred on its own origin
+# rather than standing on it, so half of it is below the floor. The collider
+# matches the art as it currently is; the art is what is wrong, not this.
+# Previously radius 0.72 / height 0.55, i.e. a 1.44 x 1.10 x 1.44 m box around
+# a 20 cm mesh: a seven-times-oversized invisible wall.
+collider = "box"
+size = [0.202, 0.160, 0.202]
+offset = [0.0, 0.0, 0.0]
+radius = 0.101
+height = 0.080
 
 [[prop]]
 id = "barrel"
 marker = "B"
 meshes = ["prop_barrel_p0.obj", "prop_barrel_p1.obj"]
 materials = ["Game/PropPlanks", "Game/PropBauerhaus"]
-radius = 0.52
-height = 0.55
+# Mesh bounds (union of both parts): x/z -0.667..0.667, y -0.002..1.386.
+# A barrel is a cylinder and now says so. Previously radius 0.52 / height 0.55,
+# a box 1.04 wide and 1.10 tall against a barrel 1.33 wide and 1.39 tall: you
+# could stand inside the top quarter of it.
+collider = "cylinder"
+size = [1.334, 1.388, 1.334]
+offset = [0.0, 0.694, 0.0]
+radius = 0.667
+height = 0.694
 
 [[prop]]
 id = "crate"
 marker = "R"
 meshes = ["prop_crate.obj"]
 materials = ["Game/PropMarket"]
-radius = 0.56
-height = 0.55
+# Mesh bounds: x -0.234..0.234, y 0..0.244, z -0.368..0.368.
+# Noticeably oblong (0.47 x 0.74), so the rotation-safe square footprint
+# over-covers X by about 13 cm per side. Previously radius 0.56 / height 0.55:
+# a 1.12 x 1.10 x 1.12 m box around a crate 24 cm tall -- four and a half times
+# too tall, and the single worst offender for invisible walls.
+collider = "box"
+size = [0.735, 0.244, 0.735]
+offset = [0.0, 0.122, 0.0]
+radius = 0.368
+height = 0.122
 
 [[prop]]
 id = "urn"
 marker = "V"
 meshes = ["prop_vase_p0.obj", "prop_vase_p1.obj"]
 materials = ["Game/PropTerracotta", "Game/PropPlanks"]
-radius = 0.34
-height = 0.42
+# Mesh bounds (union): x/z -0.420..0.420, y 0..1.039 (p1 is the lid, y 0.954+).
+# Previously radius 0.34 / height 0.42 -- 0.68 wide against a 0.84 m urn, so a
+# swing or a shoulder passed through the rim.
+collider = "cylinder"
+size = [0.840, 1.039, 0.840]
+offset = [0.0, 0.520, 0.0]
+radius = 0.420
+height = 0.520
 
 [[prop]]
 id = "jute_sack"
@@ -40,8 +102,14 @@ ambient = true
 roles = ["storage", "armory"]
 meshes = ["prop_jutesack.obj"]
 materials = ["Game/PropJute"]
-radius = 0.38
-height = 0.45
+# Mesh bounds: x -0.378..0.378, y 0..0.828, z -0.229..0.229.
+# The closest of the old numbers (radius 0.38 / height 0.45); only the height
+# moved, from 0.90 to the measured 0.83.
+collider = "box"
+size = [0.756, 0.828, 0.756]
+offset = [0.0, 0.414, 0.0]
+radius = 0.378
+height = 0.414
 
 [[prop]]
 id = "pumpkin"
@@ -50,8 +118,15 @@ roles = ["storage", "overgrown"]
 meshes = ["prop_pumpkin.obj"]
 materials = ["Game/PropMarketMisc"]
 y = [0.08]
-radius = 0.26
-height = 0.35
+# Mesh bounds: x -0.135..0.135, y -0.081..0.150, z -0.156..0.156, and the
+# y = 0.08 render lift above puts it at 0.00..0.23 in the world, which the
+# collider follows. Previously radius 0.26 / height 0.35: a 0.52 x 0.70 box
+# around a 0.31 x 0.23 pumpkin, about three times its actual height.
+collider = "box"
+size = [0.313, 0.231, 0.313]
+offset = [0.0, 0.115, 0.0]
+radius = 0.156
+height = 0.115
 
 [[prop]]
 id = "urn_cluster"
@@ -59,8 +134,14 @@ ambient = true
 roles = ["crypt", "ritual"]
 meshes = ["prop_vase_p0.obj", "prop_vase_p1.obj"]
 materials = ["Game/PropTerracotta", "Game/PropPlanks"]
-radius = 0.30
-height = 0.42
+# Same meshes as `urn`, so the same measured bounds; it differed only because
+# the two entries were tuned by hand at different times. Previously radius
+# 0.30 / height 0.42.
+collider = "cylinder"
+size = [0.840, 1.039, 0.840]
+offset = [0.0, 0.520, 0.0]
+radius = 0.420
+height = 0.520
 
 [[prop]]
 id = "hay_bale"
@@ -68,8 +149,17 @@ ambient = true
 roles = ["storage", "overgrown"]
 meshes = ["prop_haybale.obj"]
 materials = ["Game/PropHay"]
-radius = 0.48
-height = 0.42
+# Mesh bounds: x -0.676..0.676, y 0..0.794, z -0.900..0.900.
+# The largest prop in the catalog and it had the second-smallest collider:
+# previously radius 0.48 / height 0.42, a 0.96 x 0.84 x 0.96 box around a
+# 1.35 x 0.79 x 1.80 m bale. You walked knee-deep into the ends of it.
+# Strongly oblong, so the square footprint over-covers X by 0.22 m per side;
+# accepted because the placement can rotate it 90 degrees.
+collider = "box"
+size = [1.800, 0.794, 1.800]
+offset = [0.0, 0.397, 0.0]
+radius = 0.900
+height = 0.397
 
 [ambient]
 wall_edge_chance = 13

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <eng/Physics.h> // eng::ShapeKind, eng::CollisionLayer
+#include <eng/ecs/Components.h> // eng::ecs::Collider
 #include "GameCollision.h"
 
 #include <glm/glm.hpp>
@@ -12,12 +13,12 @@
 // engine/include/eng/ecs/Components.h and are registered alongside these.
 namespace game {
 
-// Static collision volume. Emitted as a Jolt body by PhysicsSync (Plan 3).
-struct Collider {
-    eng::ShapeKind shape = eng::ShapeKind::Box;
-    glm::vec3 size{0.5f}; // half-extents (box) / radius in x (sphere)
-    eng::CollisionLayer layer = game::layer::Static;
-};
+// Static collision volume. Emitted as a Jolt body by eng::ecs::PhysicsSync
+// (Plan 3). The component itself is engine-owned now -- a collision volume is
+// not gameplay -- and only the layer values it carries are ours.
+using Collider = eng::ecs::Collider;
+static_assert(layer::Static == 0, "eng::ecs::Collider defaults to layer 0, "
+                                  "which must stay the game's static layer");
 
 // Unique player start.
 struct PlayerSpawn {};
@@ -38,6 +39,9 @@ struct Pickup {
 };
 
 // Event volume (WC3-style region). event keys into the trigger dispatch.
+// Deciding that a trigger is a sensor body on the trigger layer is game
+// policy, so MapRuntime gives each one a sensor Collider; the engine only
+// knows how to turn a Collider into a body.
 struct Trigger {
     eng::ShapeKind shape = eng::ShapeKind::Box;
     glm::vec3 size{1.0f};

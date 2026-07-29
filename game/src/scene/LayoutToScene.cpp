@@ -72,6 +72,17 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
     const int cols = layout.columnCount();
     const int rows = layout.rowCount();
 
+    // Kit pieces are authored on a 20-unit grid (see game/assets/kit.toml),
+    // centred on X/Z with their base at Y=0. DungeonMap bakes that into the
+    // mesh at load; here there is no renderer, so the same conversion rides on
+    // the entity's Transform scale instead.
+    const glm::vec3 kitScale{cell / 20.f, wallH / 20.f, cell / 20.f};
+    // Walls are solid slabs 5 kit units thick, so a wall sits half its
+    // thickness *outside* the cell boundary it faces; otherwise it would
+    // straddle the boundary and eat into the room. 5/20 * cell / 2 = 0.5 m at
+    // cell 4. The collider stays a thin slab on the boundary itself.
+    const float wallInset = 2.5f * cell / 20.f;
+
     // Neighbour offsets: N, S, W, E (dx, dy, wallRotYdeg)
     struct Dir { int dx; int dy; float yawDeg; };
     const std::array<Dir, 4> dirs{{
@@ -88,44 +99,54 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             const char glyph = layout.cellAt(col, row);
             const glm::vec3 centre{col * cell, 0.f, row * cell};
 
-            // --- Floor tile --------------------------------------------------
-            // Kit tiles are already cell-sized .obj meshes (DungeonMap places
-            // them at scale 1); do not rescale.
+            // --- Floor slab --------------------------------------------------
             makeMesh(reg,
-                     opts.tileDir + "tile_floor.obj",
-                     "Game/DungeonFloor",
-                     centre);
+                     opts.kitDir + "Floor_Tiles.obj",
+                     "Kit/Dungeon",
+                     centre,
+                     glm::quat{1.f, 0.f, 0.f, 0.f},
+                     kitScale);
 
             // Floor collider (thin slab)
             makeCollider(reg,
                          centre + glm::vec3{0.f, -0.05f, 0.f},
                          glm::vec3{halfCell, 0.05f, halfCell});
 
-            // --- Ceiling tile ------------------------------------------------
+            // --- Ceiling ------------------------------------------------------
+            // The kit has no ceiling piece: reuse the floor slab at wall
+            // height with the two-sided material so it reads from below.
             makeMesh(reg,
-                     opts.tileDir + "tile_ceiling.obj",
-                     "Game/DungeonCeiling",
-                     centre + glm::vec3{0.f, wallH, 0.f});
+                     opts.kitDir + "Floor_Tiles.obj",
+                     "Kit/DungeonTwoSided",
+                     centre + glm::vec3{0.f, wallH, 0.f},
+                     glm::quat{1.f, 0.f, 0.f, 0.f},
+                     kitScale);
 
-            // --- Wall tiles per exposed edge ---------------------------------
+            // --- Walls per exposed edge ---------------------------------
             for (const Dir& d : dirs) {
                 const int nc = col + d.dx;
                 const int nr = row + d.dy;
                 if (layout.walkable(nc, nr)) continue; // open edge, no wall
 
-                // World position of the wall quad (centred at mid-height,
-                // offset to the cell boundary).
-                const glm::vec3 wallPos = centre
+                // Collider sits on the cell boundary at mid-height; the mesh
+                // stands on the floor (base at Y=0) and is pushed one half
+                // thickness further out so its inner face lands on that
+                // boundary.
+                const glm::vec3 colliderPos = centre
                     + glm::vec3{d.dx * halfCell, halfWallH, d.dy * halfCell};
+                const glm::vec3 wallPos = centre
+                    + glm::vec3{d.dx * (halfCell + wallInset), 0.f,
+                                d.dy * (halfCell + wallInset)};
 
                 const float yawRad = glm::radians(d.yawDeg);
                 const glm::quat wallRot = glm::angleAxis(yawRad, glm::vec3{0.f, 1.f, 0.f});
 
                 makeMesh(reg,
-                         opts.tileDir + "tile_wall.obj",
-                         "Game/DungeonWall",
+                         opts.kitDir + "Wall_01.obj",
+                         "Kit/Dungeon",
                          wallPos,
-                         wallRot);
+                         wallRot,
+                         kitScale);
 
                 // Wall collider (thin slab perpendicular to face)
                 const glm::vec3 wallHalf{
@@ -133,7 +154,7 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
                     halfWallH,
                     (d.dy != 0) ? 0.05f : halfCell
                 };
-                makeCollider(reg, wallPos, wallHalf, wallRot);
+                makeCollider(reg, colliderPos, wallHalf, wallRot);
             }
 
             // --- Special glyphs ----------------------------------------------

@@ -168,9 +168,11 @@ target_compile_definitions(
 
 add_library(
   eng_framework STATIC engine/src/ecs/Scene.cpp engine/src/ecs/SceneSync.cpp
+                       engine/src/ecs/PhysicsSync.cpp
                        engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
-                       engine/src/controllers/FpsController.cpp)
+                       engine/src/controllers/FpsController.cpp
+                       engine/src/DebugTools.cpp)
 target_include_directories(eng_framework PRIVATE third_party engine/src)
 target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_systems>"
                                            EnTT::EnTT)
@@ -249,8 +251,6 @@ add_executable(
   game/src/ViewModel.cpp
   game/src/MapPlay.cpp
   game/src/scene/MapRuntime.cpp
-  game/src/scene/PhysicsSync.cpp
- 
   game/src/scene/ComponentRegistry.cpp
   game/src/scene/MapSerializer.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
@@ -508,11 +508,11 @@ if(BUILD_TESTING)
     PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
   add_test(NAME showcase_visibility COMMAND showcase_visibility_tests)
 
-  add_executable(physics_sync_tests game/tests/PhysicsSyncTests.cpp
-                                    game/src/scene/PhysicsSync.cpp)
+  # PhysicsSync lives in eng_framework now, so the test links it rather than
+  # recompiling the source (whole-archive linking would double-define it).
+  add_executable(physics_sync_tests engine/tests/PhysicsSyncTests.cpp)
   target_include_directories(
-    physics_sync_tests PRIVATE game/src game/src/scene engine/include
-                               third_party)
+    physics_sync_tests PRIVATE engine/include third_party)
   target_link_libraries(physics_sync_tests PRIVATE eng EnTT::EnTT glm::glm)
   add_test(NAME physics_sync COMMAND physics_sync_tests)
 
@@ -653,7 +653,6 @@ if(BUILD_TESTING)
     map_runtime_tests
     game/tests/MapRuntimeTests.cpp
     game/src/scene/MapRuntime.cpp
-    game/src/scene/PhysicsSync.cpp
     game/src/scene/MapSerializer.cpp
     game/src/scene/ComponentRegistry.cpp
    )
