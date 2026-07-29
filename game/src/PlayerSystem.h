@@ -30,9 +30,16 @@ public:
     // one is destroyed by clearScene) and apply active-weapon visibility.
     void attachLoadout(GameContext& ctx);
 
-    // Locomotion (reads input, moves the character). Skip when driving a scripted
-    // preview camera.
-    void update(GameContext& ctx, float dt);
+    // Mouse look, once per rendered frame, at the render rate: quantising the
+    // view to the simulation rate reads as input lag.
+    void look(GameContext& ctx);
+    // Locomotion, inside the fixed-step loop. Running the character controller
+    // on the render delta made movement frame-rate dependent and unstable
+    // against the fixed-rate world around it.
+    void fixedStep(GameContext& ctx, float fixedDt);
+    // Push the interpolated pose to the renderer. `alpha` is the fraction
+    // between the last two fixed steps (Physics::interpolationAlpha).
+    void present(GameContext& ctx, float alpha);
     // Advance the viewmodels. attackTriggered = a melee click this frame;
     // didCast = a spell was cast this frame; aiming = parry/aim held.
     void updateViewmodels(GameContext& ctx, float dt, bool attackTriggered,

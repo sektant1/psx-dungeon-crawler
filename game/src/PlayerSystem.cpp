@@ -40,9 +40,24 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
     applyWeaponVis(ctx);
 }
 
-void PlayerSystem::update(GameContext& ctx, float dt)
+void PlayerSystem::look(GameContext& ctx)
 {
-    mPlayer.update(ctx.input, ctx.renderer, dt);
+    mPlayer.applyLook(eng::FpsController::readCommand(ctx.input));
+}
+
+void PlayerSystem::present(GameContext& ctx, float alpha)
+{
+    mPlayer.present(ctx.renderer, alpha);
+}
+
+void PlayerSystem::fixedStep(GameContext& ctx, float dt)
+{
+    // Look is applied per rendered frame; the command is re-read here for the
+    // movement bits, whose edges (jump, slide) are consumed by the step.
+    eng::FpsController::Command command =
+        eng::FpsController::readCommand(ctx.input);
+    command.mouseLook = false; // already applied this frame
+    mPlayer.simulate(command, dt);
     mFootstepFxCooldown = std::max(0.0f, mFootstepFxCooldown - dt);
     if (mPlayer.grounded() && mPlayer.horizontalSpeed() > 1.2f &&
         mFootstepFxCooldown <= 0.0f) {

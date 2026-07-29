@@ -362,12 +362,21 @@ int main(int argc, char** argv)
         auto tPhysics = clk::now();
         accumulator += dt;
         int guard = 0;
+        const bool playerDriven = !portalPreviewMode && !debugUi.visible();
+        // Look runs at the render rate; locomotion runs with the rest of the
+        // simulation. Splitting them is what keeps the view responsive without
+        // making movement depend on frame rate.
+        if (playerDriven)
+            playerSys.look(ctx);
         while (accumulator >= kFixedDt && guard++ < 5) {
+            if (playerDriven)
+                playerSys.fixedStep(ctx, kFixedDt);
             physics.update(kFixedDt);
             combat.fixedStep(ctx, player.eyePosition(), player.forward(), kFixedDt);
             accumulator -= kFixedDt;
         }
-        physics.setInterpolationAlpha(accumulator / kFixedDt);
+        const float stepAlpha = accumulator / kFixedDt;
+        physics.setInterpolationAlpha(stepAlpha);
 
         // Render-sync stepping. Each of these copies a physics transform onto a
         // render node, so skipping the copy on a hold frame *is* the stop-motion:
@@ -396,11 +405,10 @@ int main(int argc, char** argv)
         prof.ms[ProfHud::World] = phaseMs(tWorld);
 
         auto tPlayer = clk::now();
-        if (!portalPreviewMode && !debugUi.visible())
-            playerSys.update(ctx, dt); // simulate + present
-        else
-            player.present(r); // sim frozen, but still apply camera/FOV tweaks
-                               // so the debug-UI camera sliders take effect live
+        // Present only: the simulation for this frame already ran above. When
+        // the sim is frozen (portal preview, debug UI) this still applies the
+        // camera/FOV tweaks so the debug sliders take effect live.
+        playerSys.present(ctx, playerDriven ? stepAlpha : 1.0f);
         prof.ms[ProfHud::Player] = phaseMs(tPlayer);
 
         // Look-interaction + portal transitions. Descend appends the next

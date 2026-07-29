@@ -125,7 +125,7 @@ void FpsController::setBaseFov(float degrees)
     mLastAppliedFov = degrees;
 }
 
-void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
+FpsController::Command FpsController::readCommand(eng::Input& in)
 {
     Command command;
     command.mouseLook = in.mouseGrabbed();
@@ -137,17 +137,30 @@ void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
     command.crouch = in.isDown("crouch");
     command.jumpPressed = in.wasPressed("jump");
     command.slidePressed = in.wasPressed("slide");
+    return command;
+}
+
+void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
+{
+    const Command command = readCommand(in);
+    applyLook(command);
     simulate(command, dt);
     present(r);
 }
 
+void FpsController::applyLook(const Command& command)
+{
+    if (!command.mouseLook)
+        return;
+    mYaw -= command.lookDelta.x * mSens;
+    mPitch = glm::clamp(mPitch - command.lookDelta.y * mSens,
+                        -kMaxPitch, kMaxPitch);
+}
+
 void FpsController::simulate(const Command& command, float dt)
 {
-    if (command.mouseLook) {
-        mYaw -= command.lookDelta.x * mSens;
-        mPitch = glm::clamp(mPitch - command.lookDelta.y * mSens,
-                            -kMaxPitch, kMaxPitch);
-    }
+    mPrevPos = mPos;
+    mPrevHeadOffset = mHeadOffset;
 
     // Camera looks down -Z at yaw 0; forward/right on the ground plane.
     const glm::vec3 fwd(-std::sin(mYaw), 0.0f, -std::cos(mYaw));
@@ -316,7 +329,7 @@ void FpsController::simulate(const Command& command, float dt)
     mFovKick = mSprinting ? mSprintFovKick * speedRatio : 0.0f;
 }
 
-void FpsController::present(eng::Renderer& r)
+void FpsController::present(eng::Renderer& r, float alpha)
 {
     // The debug camera panel can revise the locomotion base FOV.
     const float rendererFov = r.envState().fovDeg;
@@ -327,8 +340,9 @@ void FpsController::present(eng::Renderer& r)
         r.setCameraFov(desiredFov);
     mLastAppliedFov = desiredFov;
 
-    r.setPosition(mHead, mHeadOffset);
-    r.setPosition(mBody, mPos);
+    const float t = glm::clamp(alpha, 0.0f, 1.0f);
+    r.setPosition(mHead, glm::mix(mPrevHeadOffset, mHeadOffset, t));
+    r.setPosition(mBody, glm::mix(mPrevPos, mPos, t));
     r.setOrientation(mBody, glm::angleAxis(mYaw, glm::vec3(0, 1, 0)));
     r.setOrientation(mHead, glm::angleAxis(mPitch, glm::vec3(1, 0, 0)));
 }

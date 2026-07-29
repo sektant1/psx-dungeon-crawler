@@ -32,9 +32,30 @@ public:
               glm::vec3 roomMax);
     void reset(glm::vec3 startPos, float speed, float sensitivity,
                glm::vec3 roomMin, glm::vec3 roomMax, float baseFov = 70.0f);
-    void simulate(const Command& command, float dt);
-    void present(eng::Renderer& r);
+    // Locomotion, at the simulation's fixed rate. Everything that touches the
+    // character controller lives here: running it on the render delta made the
+    // player's motion frame-rate dependent and, because the world around it
+    // steps at a fixed 60 Hz, visibly unstable at high frame rates -- worst
+    // while sprinting, where the per-frame displacement is largest.
+    void simulate(const Command& command, float fixedDt);
+
+    // Mouse look, at the render rate. Deliberately not part of simulate:
+    // quantising the view to the simulation rate reads as input lag in first
+    // person, and there is no physics riding on the camera's orientation.
+    void applyLook(const Command& command);
+
+    // `alpha` is the fraction of the way from the previous fixed step to the
+    // current one (Physics::interpolationAlpha). Position is interpolated
+    // between them; orientation is already current.
+    void present(eng::Renderer& r, float alpha = 1.0f);
+
+    // Reads input, looks, simulates one step and presents. For callers with no
+    // fixed-step loop of their own -- tests and tools. The game drives the
+    // three phases separately.
     void update(eng::Input& in, eng::Renderer& r, float dt);
+
+    // Fills a Command from the current input state.
+    static Command readCommand(eng::Input& in);
 
     float& speed() { return mSpeed; }
     float& sensitivity() { return mSens; }
@@ -73,6 +94,10 @@ private:
     NodeHandle mBody{};
     NodeHandle mHead{};
     glm::vec3 mPos{0.0f};
+    // Where the character was at the previous fixed step. present() renders
+    // between the two, so a 60 Hz simulation stays smooth on a 240 Hz display.
+    glm::vec3 mPrevPos{0.0f};
+    glm::vec3 mPrevHeadOffset{0.0f, 1.7f, 0.0f};
     glm::vec3 mMin{0.0f};
     glm::vec3 mMax{0.0f};
     float mYaw = 0.0f;
