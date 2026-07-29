@@ -52,14 +52,18 @@ struct StepRates {
 
     // Hz per channel. <= 0 means "this channel runs continuous (unstepped)".
     //
-    // Defaults: 12 Hz for the stylised channels because classic stop-motion is
-    // 24 fps shot on twos -- 12 distinct poses a second -- which is the rate the
-    // look is named after. Projectiles run 30 for the readability reason above.
+    // Classic stop-motion is 24 fps shot on twos -- 12 distinct poses a second
+    // -- and 12 Hz is the rate the look is named after. These sit above it:
+    // this is a fast game, and at 12 Hz a sprinting enemy or a swinging weapon
+    // reads as dropped frames rather than as a deliberate shutter. The
+    // viewmodel takes the highest rate because it sits centimetres from the
+    // eye, where the same interval is roughly twice as harsh; projectiles stay
+    // fastest so they remain trackable and dodgeable.
     float rate[kStepChannelCount] = {
-        12.0f, // Characters
-        12.0f, // Viewmodel
-        12.0f, // World
-        12.0f, // Particles
+        18.0f, // Characters
+        24.0f, // Viewmodel
+        15.0f, // World
+        18.0f, // Particles
         30.0f, // Projectiles
     };
 

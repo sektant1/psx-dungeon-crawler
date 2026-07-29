@@ -23,10 +23,15 @@ bool beginDeflect(ActionState& as);
 bool resolveIncoming(entt::registry& reg, entt::entity defender,
                      entt::entity attacker, float incomingPoise);
 
-// Start a dodge: pay kDodgeStamina, enter Dodging for `dur`, and grant `iframes`
-// seconds of Health.invulnTimer (honored by damage::apply). Returns false if not
-// idle or unaffordable. No-op on components that are absent.
-bool beginDodge(entt::registry& reg, entt::entity e, float dur, float iframes);
+// Start a dodge: pay `cost` stamina, enter Dodging for `dur`, and grant
+// `iframes` seconds of Health.invulnTimer (honored by damage::apply). Returns
+// false if not idle or unaffordable. No-op on components that are absent.
+//
+// This grants the invulnerability; it does not move anything. The dash itself
+// is FpsController::beginDash, and the caller drives both -- ask the dash
+// first, because it is the one that can refuse.
+bool beginDodge(entt::registry& reg, entt::entity e, float dur, float iframes,
+                float cost = kDodgeStamina);
 
 // Kick a target: chip `poiseDmg` off its poise (can stagger via poise::apply)
 // and return the world-space knockback impulse = normalize(dir)*force for the

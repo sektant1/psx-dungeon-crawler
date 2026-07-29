@@ -148,6 +148,36 @@ void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
     present(r);
 }
 
+glm::vec2 FpsController::inputDirection(const Command& command) const
+{
+    const glm::vec3 fwd(-std::sin(mYaw), 0.0f, -std::cos(mYaw));
+    const glm::vec3 right(std::cos(mYaw), 0.0f, -std::sin(mYaw));
+    const glm::vec3 move = fwd * command.move.y + right * command.move.x;
+    if (glm::length(move) <= 0.0f)
+        return {0.0f, 0.0f};
+    const glm::vec3 unit = glm::normalize(move);
+    return {unit.x, unit.z};
+}
+
+bool FpsController::beginDash(glm::vec2 direction)
+{
+    if (mDashTime > 0.0f || mDashCooldown > 0.0f)
+        return false;
+    if (glm::length(direction) <= 0.0001f) {
+        // Neutral input dashes backwards: the backstep. Doing nothing instead
+        // would eat the input and the stamina the caller is about to spend.
+        const glm::vec3 fwd(-std::sin(mYaw), 0.0f, -std::cos(mYaw));
+        direction = {-fwd.x, -fwd.z};
+    }
+    mDashDirection = glm::normalize(direction);
+    mDashTime = mDash.duration;
+    mDashCooldown = mDash.duration + mDash.cooldown;
+    // A dash cancels a slide; both own horizontal velocity and the dash wins.
+    mSliding = false;
+    mSlideTime = 0.0f;
+    return true;
+}
+
 void FpsController::applyLook(const Command& command)
 {
     if (!command.mouseLook)
@@ -198,6 +228,10 @@ void FpsController::simulate(const Command& command, float dt)
         mSprintStamina = std::min(1.0f, mSprintStamina + kStaminaRecover * dt);
     }
 
+    mDashCooldown = std::max(0.0f, mDashCooldown - dt);
+    if (mDashTime > 0.0f)
+        mDashTime = std::max(0.0f, mDashTime - dt);
+
     if (!mSliding && command.slidePressed && mSprinting && grounded()) {
         mSliding = true;
         mSlideTime = kSlideDuration;
@@ -231,13 +265,23 @@ void FpsController::simulate(const Command& command, float dt)
     else if (command.walk) speedFactor = kWalkMultiplier;
 
     const float slideProgress = mSlideTime / kSlideDuration;
-    const glm::vec2 target = mSliding
-        ? mSlideDirection * (mSpeed * speedFactor * (0.35f + 0.65f * slideProgress))
-        : (hasMove ? moveDirection * (mSpeed * speedFactor) : glm::vec2(0.0f));
-    const float rate = mSliding ? kSlideDeceleration
-                                : (!grounded() ? kAirAcceleration
-                                               : (hasMove ? kAcceleration
-                                                          : kDeceleration));
+    // A dash overrides steering entirely: fixed direction, fixed speed, for its
+    // whole duration. That is what makes it a commitment rather than a faster
+    // way to walk, and it is the half of the souls dodge that the i-frames are
+    // paying for.
+    const glm::vec2 target =
+        dashing() ? mDashDirection * mDash.speed
+        : mSliding
+            ? mSlideDirection * (mSpeed * speedFactor * (0.35f + 0.65f * slideProgress))
+            : (hasMove ? moveDirection * (mSpeed * speedFactor) : glm::vec2(0.0f));
+    // Reaching dash speed has to be instant; ramping it turns the escape into a
+    // lean.
+    constexpr float kDashAcceleration = 1000.0f;
+    const float rate = dashing() ? kDashAcceleration
+                     : mSliding  ? kSlideDeceleration
+                                 : (!grounded() ? kAirAcceleration
+                                                : (hasMove ? kAcceleration
+                                                           : kDeceleration));
     mVelocity.x = approach(mVelocity.x, target.x, rate * dt);
     mVelocity.y = approach(mVelocity.y, target.y, rate * dt);
 

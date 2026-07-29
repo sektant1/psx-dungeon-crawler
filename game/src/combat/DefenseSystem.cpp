@@ -23,12 +23,13 @@ bool resolveIncoming(entt::registry& reg, entt::entity defender,
     return true;
 }
 
-bool beginDodge(entt::registry& reg, entt::entity e, float dur, float iframes) {
+bool beginDodge(entt::registry& reg, entt::entity e, float dur, float iframes,
+                float cost) {
     auto* as = reg.try_get<ActionState>(e);
     auto* st = reg.try_get<Stamina>(e);
     if (!as || !st) return false;
     if (as->phase != ActionPhase::Idle) return false;
-    if (!stamina::spend(*st, kDodgeStamina)) return false;
+    if (!stamina::spend(*st, cost)) return false;
     as->phase = ActionPhase::Dodging;
     as->timer = dur;
     if (auto* h = reg.try_get<Health>(e)) {

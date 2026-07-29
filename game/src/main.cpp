@@ -93,6 +93,14 @@ int main(int argc, char** argv)
     std::vector<uint32_t> seeds{baseSeed};
     int depth = 0;
     const float speed = float(engine.config().getNumber("player.speed", 3.0));
+    eng::FpsController::DashTuning dashTuning;
+    dashTuning.speed = float(engine.config().getNumber("dodge.speed", 14.0));
+    dashTuning.duration = float(engine.config().getNumber("dodge.duration", 0.32));
+    dashTuning.cooldown = float(engine.config().getNumber("dodge.cooldown", 0.45));
+    const float dodgeIframes =
+        float(engine.config().getNumber("dodge.iframes", 0.22));
+    const float dodgeStamina =
+        float(engine.config().getNumber("dodge.stamina", 25.0));
     const float sens =
         float(engine.config().getNumber("player.mouse_sensitivity", 0.002));
 
@@ -152,6 +160,7 @@ int main(int argc, char** argv)
     // Torch->light+bash).
     game::PlayerSystem playerSys;
     playerSys.setTuning(speed, sens);
+    playerSys.controller().setDashTuning(dashTuning);
     eng::FpsController& player = playerSys.controller();
     const bool portalPreviewMode =
         std::getenv("PSX_SHOWCASE_PORTAL") != nullptr;
@@ -475,9 +484,16 @@ int main(int argc, char** argv)
                     creg.get<game::ActionState>(playerEntity);
                 if (in.wasPressed("deflect"))
                     game::feel::defense::beginDeflect(pas);
-                if (in.wasPressed("dodge"))
-                    game::feel::defense::beginDodge(creg, playerEntity, 0.4f,
-                                                    0.2f);
+                // Order matters: the dash is asked first because it is the
+                // one that can refuse (cooldown). Paying stamina and granting
+                // i-frames for a dodge that never moves is the bug that made
+                // this read as "there is no dash".
+                if (in.wasPressed("dodge") &&
+                    player.beginDash(player.inputDirection(
+                        eng::FpsController::readCommand(in))))
+                    game::feel::defense::beginDodge(creg, playerEntity,
+                                                    dashTuning.duration,
+                                                    dodgeIframes, dodgeStamina);
                 if (in.wasPressed("kick") && dummyAlive && dummy.alive()) {
                     // Only shove the dummy when it is roughly in front and close.
                     glm::vec3 dpos;

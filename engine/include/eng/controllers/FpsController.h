@@ -57,6 +57,28 @@ public:
     // Fills a Command from the current input state.
     static Command readCommand(eng::Input& in);
 
+    // Dodge/dash tuning, from data. Duration is short and speed high on
+    // purpose: the dash is a commitment, not a movement option -- you go where
+    // you pointed, at a fixed distance, and you cannot steer out of it.
+    struct DashTuning {
+        float speed = 14.0f;    // m/s during the dash
+        float duration = 0.32f; // seconds
+        float cooldown = 0.45f; // seconds before another dash is allowed
+    };
+    void setDashTuning(const DashTuning& t) { mDash = t; }
+    const DashTuning& dashTuning() const { return mDash; }
+
+    // Start a dash. `direction` is world-space XZ; a zero direction dashes
+    // backwards, which is the souls-style backstep you get from a neutral
+    // input. Returns false while another dash is running or cooling down, so
+    // the caller knows not to spend stamina or grant i-frames.
+    bool beginDash(glm::vec2 direction);
+    bool dashing() const { return mDashTime > 0.0f; }
+    // Movement direction the current input maps to, world-space XZ, normalised.
+    // Zero when there is no movement input. Callers building a dash direction
+    // want this rather than re-deriving it from yaw.
+    glm::vec2 inputDirection(const Command& command) const;
+
     float& speed() { return mSpeed; }
     float& sensitivity() { return mSens; }
     float sprintStamina() const { return mSprintStamina; } // normalized 0..1
@@ -97,6 +119,10 @@ private:
     // Where the character was at the previous fixed step. present() renders
     // between the two, so a 60 Hz simulation stays smooth on a 240 Hz display.
     glm::vec3 mPrevPos{0.0f};
+    DashTuning mDash;
+    glm::vec2 mDashDirection{0.0f};
+    float mDashTime = 0.0f;
+    float mDashCooldown = 0.0f;
     glm::vec3 mPrevHeadOffset{0.0f, 1.7f, 0.0f};
     glm::vec3 mMin{0.0f};
     glm::vec3 mMax{0.0f};
