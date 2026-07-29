@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.16)
+# 3.24 for $<LINK_LIBRARY:WHOLE_ARCHIVE,...>, used to link the engine layers.
+cmake_minimum_required(VERSION 3.24)
 project(dungeon_crawler CXX)
 
 include(CTest)
@@ -55,80 +56,120 @@ set(CPM_SOURCE_CACHE
     CACHE PATH "Directory CPM caches fetched dependency sources in")
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Dependencies.cmake)
 
+# --- Engine layers -----------------------------------------------------------
+# The engine is built as one static lib per architectural layer, and each layer
+# links only downward:
+#
+#   eng            facade + app lifetime (Engine)
+#   eng_framework  ECS scene, scene sync, controllers
+#   eng_systems    renderer, physics, audio, particles  (owns Ogre/Jolt/SDL)
+#   eng_platform   window, input, config
+#   eng_core       log, io, math/geometry, events, profiling
+#
+# The split exists to make a layering violation a *link* error rather than a
+# review comment: eng_core cannot call the renderer because it does not link it.
+# Header-level violations are caught separately by tools/check_layering.py,
+# which is what enforces the rule while all public headers still share one
+# include root (engine/include). `eng` stays the single target consumers link.
+
+find_package(OpenGL REQUIRED)
+
+# Vendored imgui (docking branch) + its SDL2/OpenGL3 backends and ImGuizmo.
+# Built once here so no engine layer compiles third-party sources; the docking
+# copy must win over OgreOverlay's bundled imgui, hence the BEFORE include.
 add_library(
-  eng STATIC
+  eng_imgui STATIC
   third_party/imgui/imgui.cpp
   third_party/imgui/imgui_draw.cpp
   third_party/imgui/imgui_tables.cpp
   third_party/imgui/imgui_widgets.cpp
-  # Own imgui rendering path (not Ogre's ImGuiOverlay): official SDL2 + OpenGL3
-  # backends + ImGuizmo, all built against the vendored imgui above.
   third_party/imgui/backends/imgui_impl_sdl2.cpp
   third_party/imgui/backends/imgui_impl_opengl3.cpp
-  ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
-  engine/src/RenderCore.cpp
-  engine/src/ObjLoader.cpp
-  engine/src/ProceduralMeshes.cpp
-  engine/src/Renderer.cpp
-  engine/src/render/FrameCapture.cpp
-  engine/src/render/Model.cpp
-  engine/src/render/Primitive.cpp
-  engine/src/render/PrimitiveGeometry.cpp
-  engine/src/render/PrototypeAssets.cpp
-  engine/src/particles/Particles.cpp
-  engine/src/particles/ParticlePresets.cpp
+  ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp)
+target_include_directories(
+  eng_imgui BEFORE
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui
+         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends)
+target_link_libraries(eng_imgui PUBLIC eng_imguizmo PRIVATE SDL2::SDL2
+                                                           OpenGL::GL)
+
+add_library(
+  eng_core STATIC
   engine/src/Log.cpp
-  engine/src/Config.cpp
-  engine/src/Input.cpp
-  engine/src/controllers/FpsController.cpp
-  engine/src/Platform.cpp
-  engine/src/Engine.cpp
-  engine/src/Physics.cpp
-  engine/src/RenderPresets.cpp
-  engine/src/StepClock.cpp
-  engine/src/SceneRegistry.cpp
-  engine/src/ecs/Scene.cpp
-  engine/src/ecs/SceneSync.cpp
-  engine/src/ecs/RendererSceneBackend.cpp
   engine/src/core/Object.cpp
+  engine/src/io/FileSystem.cpp
+  engine/src/io/DirectoryWatcher.cpp
+  engine/src/content/TextResource.cpp
   engine/src/diagnostics/Trace.cpp
   engine/src/diagnostics/Profiler.cpp
   engine/src/systems/Ease.cpp
   engine/src/systems/Actions.cpp
   engine/src/systems/Events.cpp
-  engine/src/io/FileSystem.cpp
-  engine/src/io/DirectoryWatcher.cpp
-  engine/src/content/TextResource.cpp
+  engine/src/StepClock.cpp
+  engine/src/render/PrimitiveGeometry.cpp)
+# One public include root for the whole engine, exported from the bottom layer
+# so every layer and every consumer inherits it.
+target_include_directories(eng_core PUBLIC engine/include PRIVATE third_party)
+target_link_libraries(eng_core PUBLIC glm::glm)
+
+add_library(eng_platform STATIC engine/src/Platform.cpp engine/src/Input.cpp
+                                engine/src/Config.cpp)
+target_include_directories(eng_platform PRIVATE third_party engine/src)
+target_link_libraries(eng_platform PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>"
+                      PRIVATE SDL2::SDL2)
+
+add_library(
+  eng_systems STATIC
+  engine/src/RenderCore.cpp
+  engine/src/Renderer.cpp
+  engine/src/RenderPresets.cpp
+  engine/src/SceneRegistry.cpp
+  engine/src/ObjLoader.cpp
+  engine/src/ProceduralMeshes.cpp
+  engine/src/render/FrameCapture.cpp
+  engine/src/render/Model.cpp
+  engine/src/render/Primitive.cpp
+  engine/src/render/PrototypeAssets.cpp
+  engine/src/particles/Particles.cpp
+  engine/src/particles/ParticlePresets.cpp
   engine/src/particles/ParticleLibrary.cpp
+  engine/src/Physics.cpp
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
   engine/src/audio/Audio.cpp)
-
-add_dependencies(eng RenderSystem_GL3Plus Plugin_ParticleFX Codec_STBI)
-
-target_include_directories(
-  eng
-  PUBLIC engine/include
-  PRIVATE third_party engine/src/audio)
-# Vendored imgui docking branch must win over OgreOverlay's bundled imgui so
-# <imgui.h> resolves to the docking copy everywhere in the engine + game.
-target_include_directories(eng BEFORE
-                           PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui)
-# imgui backend sources include "imgui_impl_opengl3_loader.h" etc. by name, and
-# consumers may include the gizmo header; expose both dirs.
-target_include_directories(
-  eng PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends)
-find_package(OpenGL REQUIRED)
+add_dependencies(eng_systems RenderSystem_GL3Plus Plugin_ParticleFX Codec_STBI)
+target_include_directories(eng_systems PRIVATE third_party engine/src
+                                               engine/src/audio)
 target_link_libraries(
-  eng
-  PUBLIC glm::glm OgreOverlay EnTT::EnTT eng_imguizmo
+  eng_systems
+  PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_platform>" OgreOverlay eng_imgui
   PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS})
 target_compile_definitions(
-  eng
+  eng_systems
   PRIVATE ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets"
           OGRE_PLUGIN_DIR="${ENG_OGRE_PLUGIN_DIR}"
           OGRE_MEDIA_DIR="${ENG_OGRE_MEDIA_DIR}")
-eng_target_hardening(eng)
+
+add_library(
+  eng_framework STATIC engine/src/ecs/Scene.cpp engine/src/ecs/SceneSync.cpp
+                       engine/src/ecs/RendererSceneBackend.cpp
+                       engine/src/controllers/FpsController.cpp)
+target_include_directories(eng_framework PRIVATE third_party engine/src)
+target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_systems>"
+                                           EnTT::EnTT)
+
+# Facade: owns application lifetime and is the only target consumers name.
+add_library(eng STATIC engine/src/Engine.cpp)
+target_include_directories(eng PRIVATE third_party engine/src)
+target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
+target_compile_definitions(
+  eng PRIVATE ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets")
+
+foreach(_layer eng_imgui eng_core eng_platform eng_systems eng_framework eng)
+  eng_target_hardening(${_layer})
+endforeach()
+# imgui is third-party: build it without our warning set.
+target_compile_options(eng_imgui PRIVATE -w)
 
 # Shared PSX demo scene, data-driven from samples/common/assets.
 add_library(demo_scene STATIC samples/common/DemoScene.cpp)
@@ -231,6 +272,21 @@ target_compile_definitions(
 eng_target_hardening(game_sim)
 
 if(BUILD_TESTING)
+  # Architecture + content checks. These are ctests rather than review rules:
+  # an upward include and a dangling asset reference both fail quietly at
+  # runtime (the second one as a prototype box), so they have to fail here.
+  find_package(Python3 COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME layering
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_layering.py)
+    add_test(NAME assetlint
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/assetlint.py)
+  else()
+    message(WARNING "Python3 not found: layering + assetlint tests disabled")
+  endif()
+
   add_executable(dungeon_layout_tests game/tests/DungeonLayoutTests.cpp
                                       game/src/DungeonGen.cpp)
   target_include_directories(dungeon_layout_tests PRIVATE game/src)
@@ -429,8 +485,10 @@ if(BUILD_TESTING)
     PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
   add_test(NAME level_resource COMMAND level_resource_tests)
 
-  add_executable(obj_geometry_tests engine/tests/ObjGeometryTests.cpp
-                                    engine/src/ObjLoader.cpp)
+  # ObjLoader comes from the linked engine, not a second compile of the same
+  # source: the engine layers link whole-archive, so recompiling it here would
+  # be a duplicate definition.
+  add_executable(obj_geometry_tests engine/tests/ObjGeometryTests.cpp)
   target_include_directories(obj_geometry_tests PRIVATE engine/src
                                                         engine/include)
   target_link_libraries(obj_geometry_tests PRIVATE eng glm::glm)
@@ -555,9 +613,7 @@ if(BUILD_TESTING)
     game/src/scene/PhysicsSync.cpp
     game/src/scene/MapSerializer.cpp
     game/src/scene/ComponentRegistry.cpp
-    game/src/scene/ByteStream.cpp
-    engine/src/ecs/Scene.cpp
-    engine/src/ecs/SceneSync.cpp)
+    game/src/scene/ByteStream.cpp)
   target_include_directories(
     map_runtime_tests PRIVATE game/src/scene engine/include engine/src
                               third_party third_party/imgui)
