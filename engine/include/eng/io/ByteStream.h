@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace mapio {
+namespace eng::io {
 
 // Little-endian primitive writer with an interned, order-preserving string
 // pool. Strings are written as a u32 pool index; the pool itself is emitted
@@ -67,4 +67,4 @@ private:
     std::string mEmpty;
 };
 
-} // namespace mapio
+} // namespace eng::io

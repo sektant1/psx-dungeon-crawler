@@ -97,6 +97,7 @@ add_library(
   eng_core STATIC
   engine/src/Log.cpp
   engine/src/core/Object.cpp
+  engine/src/io/ByteStream.cpp
   engine/src/io/FileSystem.cpp
   engine/src/io/DirectoryWatcher.cpp
   engine/src/content/TextResource.cpp
@@ -152,6 +153,7 @@ target_compile_definitions(
 
 add_library(
   eng_framework STATIC engine/src/ecs/Scene.cpp engine/src/ecs/SceneSync.cpp
+                       engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
                        engine/src/controllers/FpsController.cpp)
 target_include_directories(eng_framework PRIVATE third_party engine/src)
@@ -232,7 +234,7 @@ add_executable(
   game/src/MapPlay.cpp
   game/src/scene/MapRuntime.cpp
   game/src/scene/PhysicsSync.cpp
-  game/src/scene/ByteStream.cpp
+ 
   game/src/scene/ComponentRegistry.cpp
   game/src/scene/MapSerializer.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
@@ -250,7 +252,9 @@ add_executable(
   mapgen
   game/src/mapgen_main.cpp game/src/scene/LayoutToScene.cpp
   game/src/scene/MapSerializer.cpp game/src/scene/ComponentRegistry.cpp
-  game/src/scene/ByteStream.cpp game/src/DungeonGen.cpp)
+  game/src/DungeonGen.cpp
+    engine/src/ecs/ComponentRegistry.cpp
+    engine/src/io/ByteStream.cpp)
 target_include_directories(mapgen PRIVATE game/src game/src/scene
                                           engine/include third_party)
 target_link_libraries(mapgen PRIVATE glm::glm EnTT::EnTT)
@@ -343,15 +347,17 @@ if(BUILD_TESTING)
   add_test(NAME scene_sync_tests COMMAND scene_sync_tests)
 
   add_executable(byte_stream_tests game/tests/ByteStreamTests.cpp
-                                   game/src/scene/ByteStream.cpp)
-  target_include_directories(byte_stream_tests PRIVATE game/src/scene)
+                                   engine/src/io/ByteStream.cpp)
+  target_include_directories(byte_stream_tests PRIVATE engine/include)
   target_link_libraries(byte_stream_tests PRIVATE glm::glm)
   add_test(NAME byte_stream COMMAND byte_stream_tests)
 
   add_executable(
     component_registry_tests
-    game/tests/ComponentRegistryTests.cpp game/src/scene/ByteStream.cpp
-    game/src/scene/ComponentRegistry.cpp)
+    game/tests/ComponentRegistryTests.cpp
+    game/src/scene/ComponentRegistry.cpp
+    engine/src/ecs/ComponentRegistry.cpp
+    engine/src/io/ByteStream.cpp)
   target_include_directories(
     component_registry_tests PRIVATE game/src game/src/scene engine/include
                                      third_party)
@@ -448,8 +454,10 @@ if(BUILD_TESTING)
 
   add_executable(
     map_serializer_tests
-    game/tests/MapSerializerTests.cpp game/src/scene/ByteStream.cpp
-    game/src/scene/ComponentRegistry.cpp game/src/scene/MapSerializer.cpp)
+    game/tests/MapSerializerTests.cpp
+    game/src/scene/ComponentRegistry.cpp game/src/scene/MapSerializer.cpp
+    engine/src/ecs/ComponentRegistry.cpp
+    engine/src/io/ByteStream.cpp)
   target_include_directories(
     map_serializer_tests PRIVATE game/src game/src/scene engine/include
                                  third_party)
@@ -628,7 +636,7 @@ if(BUILD_TESTING)
     game/src/scene/PhysicsSync.cpp
     game/src/scene/MapSerializer.cpp
     game/src/scene/ComponentRegistry.cpp
-    game/src/scene/ByteStream.cpp)
+   )
   target_include_directories(
     map_runtime_tests PRIVATE game/src game/src/scene engine/include engine/src
                               third_party third_party/imgui)

@@ -1,9 +1,9 @@
-#include "ByteStream.h"
+#include <eng/io/ByteStream.h>
 
 #include <cstdlib>
 #include <iostream>
 
-using namespace mapio;
+using namespace eng::io;
 
 static void require(bool c, const char* m)
 {

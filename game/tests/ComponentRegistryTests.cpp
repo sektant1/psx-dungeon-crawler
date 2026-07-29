@@ -1,4 +1,4 @@
-#include "ByteStream.h"
+#include <eng/io/ByteStream.h>
 #include "ComponentRegistry.h"
 #include "GameComponents.h"
 
@@ -9,6 +9,8 @@
 #include <set>
 
 using namespace mapio;
+using namespace eng::ecs;
+using namespace eng::io;
 
 static void require(bool c, const char* m)
 {

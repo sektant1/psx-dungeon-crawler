@@ -1,6 +1,6 @@
 #include "GameComponents.h"
 #include "MapSerializer.h"
-#include "MeshSource.h"
+#include <eng/ecs/MeshSource.h>
 
 #include <eng/ecs/Components.h>
 
@@ -23,7 +23,7 @@ int main()
     src.emplace<eng::ecs::Name>(room, eng::ecs::Name{"Room"});
     src.emplace<eng::ecs::Transform>(room, glm::vec3(4, 0, 0),
                                      glm::quat(1, 0, 0, 0), glm::vec3(1));
-    src.emplace<mapio::MeshSource>(room, mapio::MeshSource{"meshes/tiles/floor.obj"});
+    src.emplace<eng::ecs::MeshSource>(room, eng::ecs::MeshSource{"meshes/tiles/floor.obj"});
     eng::ecs::MeshRenderer mr; mr.material = "Game/DungeonTile"; mr.castShadows = true;
     src.emplace<eng::ecs::MeshRenderer>(room, mr);
     src.emplace<game::Collider>(room, game::Collider{});
@@ -55,7 +55,7 @@ int main()
     require(dRoom != entt::null && dTorch != entt::null, "both entities present");
     require(dst.get<eng::ecs::Transform>(dRoom).position == glm::vec3(4, 0, 0),
             "room transform round-trips");
-    require(dst.get<mapio::MeshSource>(dRoom).path == "meshes/tiles/floor.obj",
+    require(dst.get<eng::ecs::MeshSource>(dRoom).path == "meshes/tiles/floor.obj",
             "mesh path round-trips");
     require(dst.get<eng::ecs::MeshRenderer>(dRoom).material == "Game/DungeonTile",
             "material round-trips");
@@ -65,8 +65,8 @@ int main()
     require(dst.get<eng::ecs::Parent>(dTorch).value == dRoom,
             "parent link is remapped correctly");
 
-    mapio::ComponentRegistry tiny;
-    for (const mapio::ComponentType& t : mapio::coreRegistry().types())
+    eng::ecs::ComponentRegistry tiny;
+    for (const eng::ecs::ComponentType& t : mapio::coreRegistry().types())
         if (t.stableTypeId == 2) tiny.add(t);
     entt::registry partial;
     require(mapio::readMap(path, partial, tiny), "read with tiny registry succeeds");

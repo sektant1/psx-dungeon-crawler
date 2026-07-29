@@ -1,6 +1,6 @@
 #include "MapSerializer.h"
 
-#include "ByteStream.h"
+#include <eng/io/ByteStream.h>
 #include "ComponentRegistry.h"
 
 #include <eng/ecs/Components.h> // eng::ecs::Parent
@@ -14,6 +14,12 @@
 
 namespace mapio {
 
+using eng::io::ByteReader;
+using eng::io::ByteWriter;
+
+using eng::io::ByteReader;
+using eng::io::ByteWriter;
+
 namespace {
 constexpr char kMagic[8] = {'P', 'S', 'X', 'M', 'A', 'P', '\0', 0};
 constexpr uint16_t kVersion = 1;
@@ -21,7 +27,7 @@ constexpr uint32_t kNoParent = 0xFFFFFFFFu;
 } // namespace
 
 bool writeMap(const std::string& path, const entt::registry& reg,
-              const ComponentRegistry& types)
+              const eng::ecs::ComponentRegistry& types)
 {
     std::unordered_map<entt::entity, uint32_t> localId;
     std::vector<entt::entity> order;
@@ -46,11 +52,11 @@ bool writeMap(const std::string& path, const entt::registry& reg,
             }
         w.u32(parent);
 
-        std::vector<const ComponentType*> present;
-        for (const ComponentType& t : types.types())
+        std::vector<const eng::ecs::ComponentType*> present;
+        for (const eng::ecs::ComponentType& t : types.types())
             if (t.has(reg, e)) present.push_back(&t);
         w.u16(uint16_t(present.size()));
-        for (const ComponentType* t : present) {
+        for (const eng::ecs::ComponentType* t : present) {
             w.u16(t->stableTypeId);
             const std::size_t lenAt = w.size();
             w.u32(0); // byteLen placeholder
@@ -89,7 +95,7 @@ bool writeMap(const std::string& path, const entt::registry& reg,
 }
 
 bool readMap(const std::string& path, entt::registry& outReg,
-             const ComponentRegistry& types)
+             const eng::ecs::ComponentRegistry& types)
 {
     std::ifstream in(path, std::ios::binary);
     if (!in) return false;
@@ -137,7 +143,7 @@ bool readMap(const std::string& path, entt::registry& outReg,
             const uint16_t typeId = r.u16();
             const uint32_t len = r.u32();
             const std::size_t before = r.remaining();
-            const ComponentType* t = types.find(typeId);
+            const eng::ecs::ComponentType* t = types.find(typeId);
             if (t) {
                 t->deserialize(outReg, e, r);
                 const std::size_t consumed = before - r.remaining();
@@ -159,7 +165,7 @@ bool readMap(const std::string& path, entt::registry& outReg,
     return true;
 }
 
-bool dumpMap(const std::string& path, const ComponentRegistry& types)
+bool dumpMap(const std::string& path, const eng::ecs::ComponentRegistry& types)
 {
     std::ifstream in(path, std::ios::binary);
     if (!in) return false;
@@ -200,7 +206,7 @@ bool dumpMap(const std::string& path, const ComponentRegistry& types)
         for (uint16_t c = 0; c < comps && r.ok(); ++c) {
             const uint16_t typeId = r.u16();
             const uint32_t len = r.u32();
-            const ComponentType* t = types.find(typeId);
+            const eng::ecs::ComponentType* t = types.find(typeId);
             std::printf("    - %s (id %u, %u bytes)\n",
                         t ? t->name : "<unknown>", unsigned(typeId), len);
             r.skip(len);

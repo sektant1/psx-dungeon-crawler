@@ -1,8 +1,8 @@
-#include "ByteStream.h"
+#include <eng/io/ByteStream.h>
 
 #include <cstring>
 
-namespace mapio {
+namespace eng::io {
 
 void ByteWriter::u8(uint8_t v) { mBuf.push_back(v); }
 
@@ -124,4 +124,4 @@ void ByteReader::skip(std::size_t n)
     if (take(n)) mCur += n;
 }
 
-} // namespace mapio
+} // namespace eng::io

@@ -62,6 +62,7 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("Profiler.h", "core"),
     ("StepClock.h", "core"),
     ("systems/", "core"),
+    ("io/", "core"),
     ("ecs/", "framework"),
     ("controllers/", "framework"),
     ("", "systems"),  # everything else: renderer/physics/audio/particles API

@@ -1,21 +1,16 @@
 #include "ComponentRegistry.h"
 
-#include "ByteStream.h"
 #include "GameComponents.h"
-#include "MeshSource.h"
 
-#include <eng/ecs/Components.h>
+#include <eng/io/ByteStream.h>
 
 namespace mapio {
 
-const ComponentType* ComponentRegistry::find(uint16_t id) const
-{
-    for (const ComponentType& t : mTypes)
-        if (t.stableTypeId == id) return &t;
-    return nullptr;
-}
-
 namespace {
+
+using eng::ecs::ComponentRegistry;
+using eng::io::ByteReader;
+using eng::io::ByteWriter;
 
 template <typename T>
 void addDefault(entt::registry& r, entt::entity e) { r.emplace_or_replace<T>(e); }
@@ -24,59 +19,8 @@ bool has(const entt::registry& r, entt::entity e) { return r.all_of<T>(e); }
 template <typename T>
 void remove(entt::registry& r, entt::entity e) { r.remove<T>(e); }
 
-void serName(const entt::registry& r, entt::entity e, ByteWriter& w)
-{ w.str(r.get<eng::ecs::Name>(e).value); }
-void deName(entt::registry& r, entt::entity e, ByteReader& b)
-{ r.emplace_or_replace<eng::ecs::Name>(e, eng::ecs::Name{b.str()}); }
 
-void serTransform(const entt::registry& r, entt::entity e, ByteWriter& w)
-{
-    const auto& t = r.get<eng::ecs::Transform>(e);
-    w.vec3(t.position); w.quat(t.rotation); w.vec3(t.scale);
-}
-void deTransform(entt::registry& r, entt::entity e, ByteReader& b)
-{
-    eng::ecs::Transform t;
-    t.position = b.vec3(); t.rotation = b.quat(); t.scale = b.vec3();
-    r.emplace_or_replace<eng::ecs::Transform>(e, t);
-}
 
-void serMesh(const entt::registry& r, entt::entity e, ByteWriter& w)
-{
-    const auto& m = r.get<eng::ecs::MeshRenderer>(e);
-    w.str(r.get<MeshSource>(e).path);
-    w.str(m.material);
-    w.u8(m.castShadows ? 1 : 0);
-}
-void deMesh(entt::registry& r, entt::entity e, ByteReader& b)
-{
-    const std::string path = b.str();
-    const std::string material = b.str();
-    const bool shadows = b.u8() != 0;
-    r.emplace_or_replace<MeshSource>(e, MeshSource{path});
-    eng::ecs::MeshRenderer m;
-    m.material = material;
-    m.castShadows = shadows;
-    r.emplace_or_replace<eng::ecs::MeshRenderer>(e, m);
-}
-
-void serLight(const entt::registry& r, entt::entity e, ByteWriter& w)
-{
-    const auto& l = r.get<eng::ecs::LightRef>(e).desc;
-    w.u8(uint8_t(l.type));
-    w.vec3(l.colour);
-    w.f32(l.range);
-    w.u8(l.castShadows ? 1 : 0);
-}
-void deLight(entt::registry& r, entt::entity e, ByteReader& b)
-{
-    eng::LightDesc d;
-    d.type = eng::LightDesc::Type(b.u8());
-    d.colour = b.vec3();
-    d.range = b.f32();
-    d.castShadows = b.u8() != 0;
-    r.emplace_or_replace<eng::ecs::LightRef>(e, eng::ecs::LightRef{d, {}});
-}
 
 void serCollider(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
@@ -125,16 +69,7 @@ void dePlayerSpawn(entt::registry& r, entt::entity e, ByteReader&)
 ComponentRegistry buildCore()
 {
     ComponentRegistry reg;
-    using eng::ecs::Name; using eng::ecs::Transform;
-    using eng::ecs::MeshRenderer; using eng::ecs::LightRef;
-
-    reg.add({"Name", 1, addDefault<Name>, has<Name>, remove<Name>, serName, deName});
-    reg.add({"Transform", 2, addDefault<Transform>, has<Transform>,
-             remove<Transform>, serTransform, deTransform});
-    reg.add({"MeshRenderer", 3, addDefault<MeshRenderer>, has<MeshRenderer>,
-             remove<MeshRenderer>, serMesh, deMesh});
-    reg.add({"LightRef", 4, addDefault<LightRef>, has<LightRef>,
-             remove<LightRef>, serLight, deLight});
+    eng::ecs::registerEngineComponents(reg);
 
     reg.add({"Collider", 10, addDefault<game::Collider>, has<game::Collider>,
              remove<game::Collider>, serCollider, deCollider});
@@ -154,9 +89,9 @@ ComponentRegistry buildCore()
 
 } // namespace
 
-const ComponentRegistry& coreRegistry()
+const eng::ecs::ComponentRegistry& coreRegistry()
 {
-    static const ComponentRegistry reg = buildCore();
+    static const eng::ecs::ComponentRegistry reg = buildCore();
     return reg;
 }
 

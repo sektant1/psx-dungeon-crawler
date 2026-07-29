@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "game-engines": {
+      "source": "pluginagentmarketplace/custom-plugin-game-developer",
+      "sourceType": "github",
+      "skillPath": "skills/game-engines/SKILL.md",
+      "computedHash": "3cdb5f3941eb4c8636e889a223e297c5d9f416a01fbea6a3035e07493aafa5cd"
+    }
+  }
+}

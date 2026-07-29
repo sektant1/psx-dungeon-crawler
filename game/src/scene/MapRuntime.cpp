@@ -1,7 +1,7 @@
 #include "MapRuntime.h"
 
 #include "MapSerializer.h"
-#include "MeshSource.h"
+#include <eng/ecs/MeshSource.h>
 #include "GameComponents.h"
 
 #include <eng/Physics.h>
@@ -29,7 +29,7 @@ void MapRuntime::resolveMeshes(const LoadMeshFn& loadFn)
     entt::registry& reg = mScene.registry();
     auto view = reg.view<eng::ecs::MeshRenderer>();
     for (auto e : view) {
-        if (const auto* src = reg.try_get<mapio::MeshSource>(e)) {
+        if (const auto* src = reg.try_get<eng::ecs::MeshSource>(e)) {
             reg.get<eng::ecs::MeshRenderer>(e).mesh = loadFn(src->path);
         }
     }

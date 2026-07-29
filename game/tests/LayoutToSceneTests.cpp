@@ -1,7 +1,7 @@
 #include "LayoutToScene.h"
 
 #include "GameComponents.h"
-#include "MeshSource.h"
+#include <eng/ecs/MeshSource.h>
 
 #include "../DungeonGen.h"
 
@@ -32,7 +32,7 @@ int main()
     layoutToScene(layout, opts, reg);
 
     int floors = 0, spawns = 0, exits = 0, colliders = 0, meshes = 0;
-    reg.view<mapio::MeshSource>().each([&](entt::entity, const mapio::MeshSource& s) {
+    reg.view<eng::ecs::MeshSource>().each([&](entt::entity, const eng::ecs::MeshSource& s) {
         ++meshes;
         if (s.path.find("tile_floor") != std::string::npos) ++floors;
     });

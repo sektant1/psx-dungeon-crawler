@@ -2,7 +2,7 @@
 #include "GameCollision.h"
 
 #include "GameComponents.h"
-#include "MeshSource.h"
+#include <eng/ecs/MeshSource.h>
 #include "MapSerializer.h"
 
 #include <eng/Physics.h>
@@ -42,7 +42,7 @@ int main()
         entt::registry reg;
         entt::entity floor = reg.create();
         reg.emplace<eng::ecs::Transform>(floor, eng::ecs::Transform{});
-        reg.emplace<mapio::MeshSource>(floor, mapio::MeshSource{"meshes/tiles/floor.obj"});
+        reg.emplace<eng::ecs::MeshSource>(floor, eng::ecs::MeshSource{"meshes/tiles/floor.obj"});
         reg.emplace<eng::ecs::MeshRenderer>(floor, eng::ecs::MeshRenderer{});
         reg.emplace<Collider>(floor, Collider{eng::ShapeKind::Box, glm::vec3(4, 0.5f, 4),
                                               game::layer::Static});

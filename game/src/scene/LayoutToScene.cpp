@@ -2,7 +2,7 @@
 #include "GameCollision.h"
 
 #include "GameComponents.h"
-#include "MeshSource.h"
+#include <eng/ecs/MeshSource.h>
 
 #include "../DungeonGen.h"
 
@@ -36,7 +36,7 @@ static entt::entity makeMesh(entt::registry& reg,
     if (const auto dot = name.find_last_of('.'); dot != std::string::npos)
         name = name.substr(0, dot);
     reg.emplace<eng::ecs::Name>(e, eng::ecs::Name{name});
-    reg.emplace<mapio::MeshSource>(e, path);
+    reg.emplace<eng::ecs::MeshSource>(e, path);
     reg.emplace<eng::ecs::MeshRenderer>(e, eng::MeshHandle{}, material, false);
     reg.emplace<eng::ecs::Transform>(e, pos, rot, scale);
     return e;
