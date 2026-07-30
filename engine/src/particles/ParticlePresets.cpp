@@ -43,7 +43,6 @@ void registerDefaults(Renderer& renderer)
 {
     {
         auto d = base(Fire, "Engine/Particles/Fire", 0.32f, 0.38f, 96);
-        d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.35f, 0};
         d.rotationJitterDeg = 70;
         d.scaleJitter = 0.16f;
@@ -56,7 +55,6 @@ void registerDefaults(Renderer& renderer)
     }
     {
         auto d = base(Smoke, "Engine/Particles/Smoke", 0.32f, 0.32f, 64);
-        d.visualRole = ParticleVisualRole::Ambient;
         d.acceleration = {0.03f, 0.12f, 0.01f};
         d.rotationJitterDeg = 30;
         d.scaleJitter = 0.25f;
@@ -68,7 +66,6 @@ void registerDefaults(Renderer& renderer)
     }
     {
         auto d = base(Poison, "Engine/Particles/Poison", 0.20f, 0.26f, 72);
-        d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.18f, 0};
         d.rotationJitterDeg = 80;
         d.scaleJitter = 0.20f;
@@ -81,7 +78,6 @@ void registerDefaults(Renderer& renderer)
     }
     {
         auto d = base(Rain, "Engine/Particles/Rain", 0.018f, 0.24f, 240);
-        d.visualRole = ParticleVisualRole::Ambient;
         auto e = emitter({0,-1,0}, 1.5f, 220, 0.25f, 0.38f, 10, 14);
         e.shape = ParticleEmitterShape::Box;
         e.boxSize = {10, 0.15f, 10};
@@ -93,7 +89,6 @@ void registerDefaults(Renderer& renderer)
     }
     {
         auto d = base(LavaAsh, "Engine/Particles/LavaAsh", 0.14f, 0.14f, 64);
-        d.visualRole = ParticleVisualRole::Ambient;
         d.acceleration = {0, -0.55f, 0};
         d.rotationJitterDeg = 150;
         d.scaleJitter = 0.30f;
@@ -116,7 +111,6 @@ void registerDefaults(Renderer& renderer)
     }
     {
         auto d = base(FootstepDust, "Engine/Particles/Smoke", 0.13f, 0.10f, 20);
-        d.visualRole = ParticleVisualRole::Ambient;
         d.loop = false; d.burstCount = 7;
         d.acceleration = {0, -0.3f, 0};
         d.rotationJitterDeg = 90; d.scaleJitter = 0.25f;
@@ -139,7 +133,6 @@ void registerDefaults(Renderer& renderer)
     {
         auto d = base(ArcaneMotes, "Engine/Particles/ArcaneMote",
                       0.13f, 0.13f, 72);
-        d.visualRole = ParticleVisualRole::Ambient;
         d.acceleration = {0.08f, 0.10f, -0.06f};
         d.rotationJitterDeg = 180;
         d.scaleJitter = 0.32f;
@@ -153,7 +146,6 @@ void registerDefaults(Renderer& renderer)
     {
         auto d = base(FrostShards, "Engine/Particles/FrostShard",
                       0.10f, 0.19f, 64);
-        d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, -1.4f, 0};
         d.rotationJitterDeg = 120;
         d.scaleJitter = 0.24f;
@@ -167,7 +159,6 @@ void registerDefaults(Renderer& renderer)
     {
         auto d = base(ToxicBubbles, "Engine/Particles/ToxicBubble",
                       0.16f, 0.16f, 72);
-        d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.32f, 0};
         d.rotationJitterDeg = 30;
         d.scaleJitter = 0.38f;
@@ -181,7 +172,6 @@ void registerDefaults(Renderer& renderer)
     {
         auto d = base(PortalWisps, "Engine/Particles/PortalWisp",
                       0.18f, 0.27f, 96);
-        d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.14f, 0};
         d.rotationJitterDeg = 55;
         d.scaleJitter = 0.30f;

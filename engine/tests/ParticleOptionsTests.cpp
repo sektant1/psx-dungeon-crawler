@@ -32,24 +32,6 @@ int main()
     using namespace eng;
 
     {
-        require(particleQualityScale(ParticleVisualRole::Critical, 1.0f,
-                                     0.25f) == 1.0f,
-                "critical particles were degraded by quality settings");
-        require(particleQualityScale(ParticleVisualRole::Gameplay, 1.0f,
-                                     0.25f) == 0.60f,
-                "gameplay particles fell below their readability floor");
-        require(particleQualityScale(ParticleVisualRole::Feedback, 1.0f,
-                                     0.25f) == 0.40f,
-                "feedback particles fell below their response floor");
-        require(particleQualityScale(ParticleVisualRole::Ambient, 1.0f,
-                                     0.25f) == 0.25f,
-                "ambient particles did not honor quality scaling");
-        require(particleQualityScale(ParticleVisualRole::Ambient, 0.0f,
-                                     0.25f) == 1.0f,
-                "zero quality weight was not an opt-out");
-    }
-
-    {
         require(!particleSystemLifetimeExpired(false, 100.0f, 1.0f),
                 "looping systems must not retire on a lifetime deadline");
         require(!particleSystemLifetimeExpired(true, 0.99f, 1.0f),

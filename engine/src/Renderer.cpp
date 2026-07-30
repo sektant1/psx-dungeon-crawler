@@ -529,8 +529,7 @@ std::vector<std::string> Renderer::materialNames() const
     auto& mm = Ogre::MaterialManager::getSingleton();
     auto it = mm.getResourceIterator();
     while (it.hasMoreElements()) {
-        const Ogre::ResourcePtr resource = it.getNext();
-        const std::string& n = resource->getName();
+        const std::string& n = it.getNext()->getName();
         if (n.empty()) continue;
         // Filter engine/Ogre internals + generated helper materials.
         if (n.rfind("Ogre/", 0) == 0) continue;
@@ -539,23 +538,6 @@ std::vector<std::string> Renderer::materialNames() const
         if (n.rfind("Sprite/", 0) == 0) continue;            // per-clip generated
         if (n.find("DebugWireframe") != std::string::npos) continue;
         if (mImpl->enchantments.containsGeneratedMaterial(n)) continue;
-        // Every pass must have a vertex program. This render system has no
-        // fixed-function pipeline, so binding a shaderless material (Ogre ships
-        // "DefaultSettings", and any hand-written material can forget one)
-        // throws InvalidStateException from _setPass and takes the process with
-        // it. A picker that lists a material the renderer cannot draw is a
-        // crash waiting for someone to click it.
-        const auto material = Ogre::static_pointer_cast<Ogre::Material>(resource);
-        bool renderable = false;
-        for (Ogre::Technique* technique : material->getTechniques()) {
-            const auto& passes = technique->getPasses();
-            renderable = !passes.empty();
-            for (Ogre::Pass* pass : passes)
-                renderable = renderable && pass->hasVertexProgram();
-            if (renderable)
-                break;
-        }
-        if (!renderable) continue;
         out.push_back(n);
     }
     std::sort(out.begin(), out.end());
@@ -1512,41 +1494,6 @@ void Renderer::setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient
 {
     mImpl->core.setEditorCameraPose(pos.x, pos.y, pos.z, orient.w, orient.x,
                                     orient.y, orient.z, fovDeg);
-}
-
-void Renderer::setEditorViewportBackground(const glm::vec3& colour)
-{
-    mImpl->core.setOffscreenBackground(colour.r, colour.g, colour.b);
-}
-
-void Renderer::enableMaterialThumbnail(int size)
-{
-    mImpl->core.enableThumbnailViewport(size);
-}
-
-void Renderer::setMaterialThumbnailCamera(const glm::vec3& position,
-                                          const glm::quat& orientation,
-                                          float fovDeg)
-{
-    mImpl->core.setThumbnailCameraPose(position.x, position.y, position.z,
-                                       orientation.w, orientation.x,
-                                       orientation.y, orientation.z, fovDeg);
-}
-
-uint64_t Renderer::materialThumbnailTextureId() const
-{
-    return mImpl->core.thumbnailTextureId();
-}
-
-void Renderer::setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly)
-{
-    Ogre::SceneNode* scene = mImpl->node(node, "setNodeThumbnailOnly");
-    // The flag rides on the attached movables, not the node: Ogre filters
-    // visibility per renderable, and a SceneNode has no flags of its own.
-    for (Ogre::MovableObject* object : scene->getAttachedObjects()) {
-        object->setVisibilityFlags(thumbnailOnly ? kThumbnailVisibilityFlag
-                                                 : kWorldVisibilityMask);
-    }
 }
 
 void Renderer::setDebugLines(const std::vector<DebugLine>& lines)

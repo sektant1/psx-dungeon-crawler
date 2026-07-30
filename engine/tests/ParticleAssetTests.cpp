@@ -127,7 +127,7 @@ int main()
                 "r.spawnParticles(style.particles, arch)",
                 "portal wisps are not centered on the portal membrane");
 
-    const std::string showcase = read("game/assets/showroom_exhibits.toml");
+    const std::string showcase = read("game/assets/lobby_showcase.toml");
     for (const char* id : {"fire_particles", "smoke_particles",
                            "rain_volume"}) {
         const std::string altar = exhibit(showcase, id);
