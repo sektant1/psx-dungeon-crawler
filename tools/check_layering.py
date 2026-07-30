@@ -27,24 +27,23 @@ LAYERS = ["core", "platform", "systems", "framework", "app"]
 
 # Layer of a source file, by path relative to engine/. First match wins, so
 # specific paths precede the directory defaults.
+# One rule per directory. This used to carry seven per-file exceptions
+# (Engine.cpp, Platform.cpp, Input.cpp, Config.cpp, Log.cpp, StepClock.cpp,
+# DebugTools.cpp) because those sources sat loose in src/; they now live in the
+# directory that names their layer, so the path states the layer.
 SOURCE_RULES: list[tuple[str, str]] = [
-    ("src/Engine.cpp", "app"),
     ("src/app/", "app"),
-    ("src/Platform.cpp", "platform"),
-    ("src/Input.cpp", "platform"),
-    ("src/Config.cpp", "platform"),
-    ("src/Log.cpp", "core"),
-    ("src/StepClock.cpp", "core"),
+    ("src/platform/", "platform"),
+    ("src/rhi/", "platform"),
     ("src/core/", "core"),
     ("src/io/", "core"),
-    ("src/rhi/", "platform"),
     ("src/content/", "core"),
     ("src/diagnostics/", "core"),
     ("src/systems/", "core"),  # Ease/Actions/Events are core utilities
-    ("src/render/PrimitiveGeometry.cpp", "core"),
+    ("src/render/PrimitiveGeometry.cpp", "core"),  # pure geometry, no renderer
     ("src/ecs/", "framework"),
     ("src/controllers/", "framework"),
-    ("src/DebugTools.cpp", "framework"),  # imgui debug console, drives fps/ecs
+    ("src/debug/", "framework"),  # imgui debug console, drives fps/ecs
     ("src/", "systems"),  # renderer, physics, audio, particles
 ]
 

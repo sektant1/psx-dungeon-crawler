@@ -76,6 +76,11 @@ int main() {
             "light handle written back");
     sync2.sync();
     require(b2.meshes == 1 && b2.lights == 1, "attachment not repeated");
+    sync2.clear();
+    require(b2.destroys == 1 && !s2.registry().all_of<NodeRef>(lit),
+            "clear tears down the materialised backend view");
+    sync2.clear();
+    require(b2.destroys == 1, "clear is idempotent");
 
     // --- reparent updates pushed world position on next sync ---
     Scene s3;

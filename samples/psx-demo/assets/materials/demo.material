@@ -119,3 +119,90 @@ material PSX/LightShaft
         fragment_program_ref PSX_FS_LightVolume { }
     } }
 }
+
+// --- showcase crystals -------------------------------------------------------
+// Pink variants of the crystal pair, for the showcase's crystal station. The
+// blue originals are the Godot port's palette and stay untouched; these exist
+// because the showcase's three stations are colour-coded (pink shrine, green
+// portal, gold treasure) and a blue crystal would read as a fourth idea.
+//
+// modulateColor tints the lit result, and the rim is pushed hot magenta so the
+// silhouette edge separates from the fog rather than dissolving into it.
+material PSX/CrystalSpirePink
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitNoTexRim
+        {
+            param_named modulateColor float4 1.0 0.34 0.72 1.0
+            param_named rimColour float4 1.0 0.55 0.95 0.95
+            param_named rimPower float 2.2
+        }
+    } }
+}
+
+material PSX/CrystalGroundPink
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitNoTexRim
+        {
+            param_named modulateColor float4 0.72 0.26 0.55 1.0
+            param_named rimColour float4 0.95 0.45 0.85 0.55
+            param_named rimPower float 3.2
+        }
+    } }
+}
+
+// --- showcase stonework ------------------------------------------------------
+// The showcase's own masonry, replacing the Godot-era placeholders it inherited
+// (PSX/BoxLit still points at a literal "Prototype_orange" texture, which is a
+// placeholder standing in a shop window).
+//
+// Both use the floor texture at a tighter uv scale rather than shipping new art:
+// the sample's job is to show the shader stack, and one more texture in the tree
+// would not make it show it better.
+
+// The plinth and the portal's backing slab: cold, desaturated stone that reads
+// as structure and stays out of the way of the coloured station lights.
+material PSX/ShowcaseStone
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 3.0 3.0
+        }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.46 0.49 0.58 1.0
+        }
+        texture_unit
+        {
+            texture floor.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Darker still, and it is the one thing in the scene that must NOT catch the
+// portal's green: it is the surface the portal is cut into.
+material PSX/PortalBacking
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit
+        {
+            param_named uvScale float2 2.0 2.0
+        }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.24 0.25 0.30 1.0
+        }
+        texture_unit
+        {
+            texture floor.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

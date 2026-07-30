@@ -11,6 +11,7 @@
 [![Jolt Physics](https://img.shields.io/badge/physics-Jolt-8a4fbe)](https://github.com/jrouwe/JoltPhysics)
 [![EnTT](https://img.shields.io/badge/ECS-EnTT-9a3f3f)](https://github.com/skypjack/entt)
 [![CMake](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
 <img src="assets/preview.gif" alt="Portal room, running live" width="720">
 

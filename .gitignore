@@ -15,7 +15,11 @@ ogre.log
 # committed (see the negation below).
 assets/*.mp4
 assets/*.gif
+# Source archives for imported art. These are inputs to the asset pipeline, not
+# build inputs: the meshes and textures the game loads are committed extracted.
+# 110 MB of them lived in history and made a fresh clone ~800 MB.
 assets/*.zip
+assets/**/*.zip
 assets/*.webm
 !assets/preview.mp4
 !assets/preview.gif

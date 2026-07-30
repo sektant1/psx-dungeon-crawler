@@ -21,6 +21,14 @@
 BUILD_DIR   ?= build
 BUILD_TYPE  ?= Release
 JOBS        ?= $(shell nproc)
+# Ninja schedules a parallel build far better than make and links sooner, so it
+# is the default for any build tree that does not exist yet. An existing tree
+# keeps whatever generator it was created with: switching generators in place is
+# not supported by CMake and would force a full rebuild, so CONFIGURED below
+# only passes -G for a fresh directory.
+GENERATOR   ?= $(if $(shell command -v ninja 2>/dev/null),Ninja,Unix Makefiles)
+# Extra cache entries, e.g. CMAKE_ARGS='-DENABLE_UNITY=ON -DENABLE_LTO=ON'.
+CMAKE_ARGS  ?=
 # Force X11 on Wayland (XWayland): the GL3Plus path is unreliable on native
 # Wayland. Override with SDL_VIDEODRIVER=... on the command line if needed.
 SDL_VIDEODRIVER ?= x11
@@ -93,10 +101,13 @@ all: build
 # still performs its own dependency check, so edits to CMake inputs regenerate
 # normally when cmake --build runs.
 configure:
-	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ] || \
-	    ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
+	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ]; then \
+		cmake -B "$(BUILD_DIR)" -G "$(GENERATOR)" \
+		      -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
+		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
+	elif ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
 		cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
-		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON; \
+		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	fi
 
 build-all: configure

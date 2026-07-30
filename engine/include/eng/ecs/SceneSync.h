@@ -18,10 +18,17 @@ class SceneBackend;
 class SceneSync {
 public:
     SceneSync(Scene& scene, SceneBackend& backend);
+    ~SceneSync();
+
+    SceneSync(const SceneSync&) = delete;
+    SceneSync& operator=(const SceneSync&) = delete;
 
     // Run once per frame, after gameplay mutated the registry: reconciles the
     // backend with the registry (also calls Scene::updateWorldTransforms).
     void sync();
+    // Destroy all materialised backend nodes. Used before replacing a whole
+    // scene document and called automatically on destruction.
+    void clear();
 
 private:
     Scene& mScene;

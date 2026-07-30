@@ -48,6 +48,12 @@
       "sourceType": "github",
       "skillPath": "skills/game-engines/SKILL.md",
       "computedHash": "3cdb5f3941eb4c8636e889a223e297c5d9f416a01fbea6a3035e07493aafa5cd"
+    },
+    "level-design": {
+      "source": "pluginagentmarketplace/custom-plugin-game-developer",
+      "sourceType": "github",
+      "skillPath": "skills/level-design/SKILL.md",
+      "computedHash": "38da1df6988ebff0cdf597e21be2b00124fa63cd45901b0d34aabe94ad697883"
     }
   }
 }

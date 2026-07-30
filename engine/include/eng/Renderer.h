@@ -268,6 +268,23 @@ public:
     uint64_t editorViewportTextureId() const;
     // Drive the editor viewport's dedicated free-fly camera (decoupled from the
     // game MainCamera). Call every frame from the editor's EditorCamera.
+    // The offscreen viewport clears to its own colour; setBackground() only
+    // reaches the window's viewport, so an editor backdrop has to be set here.
+    void setEditorViewportBackground(const glm::vec3& colour);
+
+    // --- material thumbnails ---------------------------------------------
+    // A small square offscreen target holding one object on its own, for the
+    // material-swatch grid every engine editor has. Separate from the main
+    // editor viewport: different size, different camera, different subject.
+    //
+    // Nodes marked setNodeThumbnailOnly() appear in this target and NOWHERE
+    // else, so the preview sphere can sit at the world origin of a loaded level
+    // without ever showing up in it.
+    void enableMaterialThumbnail(int size);
+    void setMaterialThumbnailCamera(const glm::vec3& position,
+                                    const glm::quat& orientation, float fovDeg);
+    uint64_t materialThumbnailTextureId() const;
+    void setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly);
     void setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient,
                              float fovDeg);
 
