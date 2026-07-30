@@ -249,7 +249,8 @@ add_library(
   game/content/SceneWriter.cpp
   game/content/SceneCook.cpp
   game/content/GridMath.cpp
-  game/content/SceneValidate.cpp)
+  game/content/SceneValidate.cpp
+  game/content/RoomBuilder.cpp)
 target_include_directories(game_content PUBLIC game/content game/src
                                                game/src/scene engine/include
                            PRIVATE third_party)
@@ -769,6 +770,13 @@ if(BUILD_TESTING)
     grid_math_tests
     PRIVATE KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml")
   add_test(NAME grid_math COMMAND grid_math_tests)
+
+  add_executable(room_builder_tests game/tests/RoomBuilderTests.cpp)
+  target_link_libraries(room_builder_tests PRIVATE game_content eng_ecs_headless)
+  target_compile_definitions(
+    room_builder_tests
+    PRIVATE KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml")
+  add_test(NAME room_builder COMMAND room_builder_tests)
 
   add_executable(scene_validate_tests game/tests/SceneValidateTests.cpp)
   target_link_libraries(scene_validate_tests PRIVATE game_content

@@ -174,6 +174,39 @@ void pointToCell(const GridConfig& grid, const glm::vec3& point, int& col,
     row = int(std::floor((point.z - grid.origin.z) / grid.cell));
 }
 
+void nearestWallSlot(const GridConfig& grid, const glm::vec3& point, int& col,
+                     int& row, CellPlacement::Edge& edge)
+{
+    const float cell = grid.cell;
+    const glm::vec3 local = point - grid.origin;
+    const float dx = local.x - std::round(local.x / cell) * cell;
+    const float dz = local.z - std::round(local.z / cell) * cell;
+
+    // ONE LINE, ONE WALL. The slot is a property of the grid line alone, never
+    // of which side the cursor happens to be on.
+    //
+    // The alternative -- give the cell you are pointing into its own outward
+    // wall -- is what the runtime does for two rooms sharing a boundary, and it
+    // is wrong for hand placement: crossing the line by a centimetre would then
+    // move the piece a whole wall thickness, so every wall needed nudging after
+    // it was dropped. Fixing the side makes pointing anywhere near a line give
+    // the identical wall, which is the entire point of snapping.
+    //
+    // R flips the piece for the cases where the other room's wall is what was
+    // actually wanted.
+    if (std::fabs(dx) <= std::fabs(dz)) {
+        // Vertical line: the west edge of the cell east of it.
+        col = int(std::lround(local.x / cell));
+        row = int(std::floor(local.z / cell));
+        edge = CellPlacement::Edge::West;
+    } else {
+        // Horizontal line: the north edge of the cell south of it.
+        col = int(std::floor(local.x / cell));
+        row = int(std::lround(local.z / cell));
+        edge = CellPlacement::Edge::North;
+    }
+}
+
 CellPlacement::Edge nearestEdge(const GridConfig& grid, const glm::vec3& point,
                                 int col, int row)
 {

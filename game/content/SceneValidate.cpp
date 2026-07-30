@@ -230,13 +230,23 @@ std::vector<Issue> validate(const SceneDocument& document,
     // kit's answer is a pillar, which is what pillars are for in a modular set.
     {
         std::vector<Footprint> walls;
+        // Anything solid that is not a wall: posts, blocks, props. A notch with
+        // one of these standing in it is filled, and reporting it anyway would
+        // make the room tool's own output look broken.
+        std::vector<glm::vec3> fillers;
         for (const Entity& entity : document.entities) {
             if (entity.prefab.empty())
                 continue;
             const KitPiece* piece = catalog.find(entity.prefab);
+            if (!piece)
+                continue;
             Footprint footprint;
-            if (piece && wallFootprint(entity, *piece, catalog.scale(), footprint))
+            if (wallFootprint(entity, *piece, catalog.scale(), footprint)) {
                 walls.push_back(footprint);
+            } else if (piece->socket == Socket::Prop ||
+                       piece->socket == Socket::Fill) {
+                fillers.push_back(entity.transform.position);
+            }
         }
         std::vector<std::pair<float, float>> reported;
         for (std::size_t i = 0; i < walls.size(); ++i) {
@@ -259,6 +269,15 @@ std::vector<Issue> validate(const SceneDocument& document,
                                     a.x0 < b.x1 - 0.05f && b.x0 < a.x1 - 0.05f &&
                                     a.z0 < b.z1 - 0.05f && b.z0 < a.z1 - 0.05f;
                                 if (overlaps)
+                                    continue;
+                                // Already plugged?
+                                bool filled = false;
+                                for (const glm::vec3& filler : fillers) {
+                                    filled = filled ||
+                                             (std::fabs(filler.x - ax) < 0.75f &&
+                                              std::fabs(filler.z - az) < 0.75f);
+                                }
+                                if (filled)
                                     continue;
                                 bool seen = false;
                                 for (const auto& [rx, rz] : reported)

@@ -54,6 +54,8 @@ Json writeEntity(const Entity& entity)
         out["name"] = entity.name;
     if (!entity.prefab.empty())
         out["prefab"] = entity.prefab;
+    if (!entity.material.empty())
+        out["material"] = entity.material;
     if (!entity.castShadows)
         out["cast_shadows"] = false;
 

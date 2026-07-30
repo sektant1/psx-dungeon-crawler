@@ -250,6 +250,55 @@ int main()
                 "a zero scale is reported");
     }
 
+    // --- corner gaps --------------------------------------------------------
+    // Two perpendicular walls meeting at a corner leave a hole the width of the
+    // wall, because each sits entirely outside the boundary it faces. This is
+    // the check that stops that shipping unnoticed.
+    {
+        const KitPiece* wall = catalog.find("kit.wall");
+        require(wall != nullptr, "kit.wall resolves");
+        SceneDocument document = healthy();
+        // A west run along Z at x=-12.5, and a north run along X at z=-12.5:
+        // they touch at exactly one point and leave a 1 m notch outside it.
+        Entity west;
+        west.id = "west";
+        west.prefab = "kit.wall";
+        west.transform.position = {-12.5f, 0.0f, -10.0f};
+        west.transform.rotationDegrees.y = 90.0f;
+        document.add(west);
+        Entity north;
+        north.id = "north";
+        north.prefab = "kit.wall";
+        north.transform.position = {-10.0f, 0.0f, -12.5f};
+        north.transform.rotationDegrees.y = 180.0f;
+        document.add(north);
+
+        std::vector<Issue> issues = validate(document, catalog);
+        const Issue* gap = get(issues, "cell.corner_gap");
+        require(gap != nullptr, "a corner gap is reported");
+        require(gap->severity == Severity::Warning,
+                "it warns rather than blocking the cook: the hole is invisible "
+                "from inside a sealed room");
+        require(applyQuickFix(document, catalog, *gap),
+                "the quick fix places something");
+        issues = validate(document, catalog);
+        require(!has(issues, "corner"), "which clears the gap");
+
+        // Two parallel walls in a run must NOT be reported: they share a face,
+        // which is a join, not a hole.
+        SceneDocument run = healthy();
+        for (int i = 0; i < 2; ++i) {
+            Entity piece;
+            piece.id = "run_" + std::to_string(i);
+            piece.prefab = "kit.wall";
+            piece.transform.position = {-12.5f, 0.0f, -10.0f + float(i) * 4.0f};
+            piece.transform.rotationDegrees.y = 90.0f;
+            run.add(piece);
+        }
+        require(!has(validate(run, catalog), "cell.corner_gap"),
+                "a straight run of walls has no corners");
+    }
+
     // --- the real shipped scene --------------------------------------------
     {
         SceneDocument shipped;

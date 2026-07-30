@@ -62,6 +62,7 @@ int main()
     entity.id = "everything";
     entity.name = "Every Field";
     entity.prefab = "kit.wall";
+    entity.material = "Kit/Stone";
     entity.castShadows = false;
     entity.transform.position = {1.0f, 2.0f, 3.0f};
     entity.transform.rotationDegrees = {0.0f, 90.0f, 0.0f};

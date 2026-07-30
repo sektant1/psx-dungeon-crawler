@@ -1,6 +1,7 @@
 #pragma once
 #include "EditorCamera.h"
 #include "GridMath.h"
+#include "RoomBuilder.h"
 #include "KitCatalog.h"
 #include "SceneDocument.h"
 
@@ -11,7 +12,7 @@ namespace ed {
 
 // Which tool the pointer is driving. TrenchBroom's model: one modal tool at a
 // time, switched with a single key, rather than a mode buried in a menu.
-enum class Tool { Select, Place };
+enum class Tool { Select, Place, Room };
 
 // The grid the editor snaps to. Kit pieces always land on a whole cell or a
 // cell edge; the subdivision below only applies to free objects (props, lights,
@@ -55,6 +56,9 @@ struct EditorState {
     std::vector<game::content::AuthorId> selection;
     // The prefab the Place tool will drop next.
     std::string brushPrefab;
+    // What the Room tool builds. Held here rather than passed around so the
+    // toolbar can offer a crypt-walled room as easily as a plain one.
+    game::content::RoomSpec roomSpec;
 
     bool isSelected(const game::content::AuthorId& id) const
     {
