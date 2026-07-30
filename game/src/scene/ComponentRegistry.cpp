@@ -1,21 +1,18 @@
 #include "ComponentRegistry.h"
 
-#include "ByteStream.h"
 #include "GameComponents.h"
-#include "MeshSource.h"
 
-#include <eng/ecs/Components.h>
+#include <eng/io/ByteStream.h>
+
+#include <cmath>
 
 namespace mapio {
 
-const ComponentType* ComponentRegistry::find(uint16_t id) const
-{
-    for (const ComponentType& t : mTypes)
-        if (t.stableTypeId == id) return &t;
-    return nullptr;
-}
-
 namespace {
+
+using eng::ecs::ComponentRegistry;
+using eng::io::ByteReader;
+using eng::io::ByteWriter;
 
 template <typename T>
 void addDefault(entt::registry& r, entt::entity e) { r.emplace_or_replace<T>(e); }
@@ -24,117 +21,114 @@ bool has(const entt::registry& r, entt::entity e) { return r.all_of<T>(e); }
 template <typename T>
 void remove(entt::registry& r, entt::entity e) { r.remove<T>(e); }
 
-void serName(const entt::registry& r, entt::entity e, ByteWriter& w)
-{ w.str(r.get<eng::ecs::Name>(e).value); }
-void deName(entt::registry& r, entt::entity e, ByteReader& b)
-{ r.emplace_or_replace<eng::ecs::Name>(e, eng::ecs::Name{b.str()}); }
-
-void serTransform(const entt::registry& r, entt::entity e, ByteWriter& w)
+bool finite(const glm::vec3& v)
 {
-    const auto& t = r.get<eng::ecs::Transform>(e);
-    w.vec3(t.position); w.quat(t.rotation); w.vec3(t.scale);
-}
-void deTransform(entt::registry& r, entt::entity e, ByteReader& b)
-{
-    eng::ecs::Transform t;
-    t.position = b.vec3(); t.rotation = b.quat(); t.scale = b.vec3();
-    r.emplace_or_replace<eng::ecs::Transform>(e, t);
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
 }
 
-void serMesh(const entt::registry& r, entt::entity e, ByteWriter& w)
+bool validShape(uint8_t shape)
 {
-    const auto& m = r.get<eng::ecs::MeshRenderer>(e);
-    w.str(r.get<MeshSource>(e).path);
-    w.str(m.material);
-    w.u8(m.castShadows ? 1 : 0);
+    return shape <= uint8_t(eng::ShapeKind::Cylinder);
 }
-void deMesh(entt::registry& r, entt::entity e, ByteReader& b)
-{
-    const std::string path = b.str();
-    const std::string material = b.str();
-    const bool shadows = b.u8() != 0;
-    r.emplace_or_replace<MeshSource>(e, MeshSource{path});
-    eng::ecs::MeshRenderer m;
-    m.material = material;
-    m.castShadows = shadows;
-    r.emplace_or_replace<eng::ecs::MeshRenderer>(e, m);
-}
-
-void serLight(const entt::registry& r, entt::entity e, ByteWriter& w)
-{
-    const auto& l = r.get<eng::ecs::LightRef>(e).desc;
-    w.u8(uint8_t(l.type));
-    w.vec3(l.colour);
-    w.f32(l.range);
-    w.u8(l.castShadows ? 1 : 0);
-}
-void deLight(entt::registry& r, entt::entity e, ByteReader& b)
-{
-    eng::LightDesc d;
-    d.type = eng::LightDesc::Type(b.u8());
-    d.colour = b.vec3();
-    d.range = b.f32();
-    d.castShadows = b.u8() != 0;
-    r.emplace_or_replace<eng::ecs::LightRef>(e, eng::ecs::LightRef{d, {}});
-}
-
 void serCollider(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
     const auto& c = r.get<game::Collider>(e);
     w.u8(uint8_t(c.shape)); w.vec3(c.size); w.u8(uint8_t(c.layer));
+    w.u8(c.sensor ? 1 : 0);
 }
-void deCollider(entt::registry& r, entt::entity e, ByteReader& b)
+void deCollider(entt::registry& r, entt::entity e, ByteReader& b,
+                uint32_t payloadBytes)
 {
+    if (payloadBytes < 14) { b.invalidate(); return; }
     game::Collider c;
-    c.shape = eng::ShapeKind(b.u8()); c.size = b.vec3();
-    c.layer = eng::BodyLayer(b.u8());
+    const uint8_t shape = b.u8();
+    c.shape = eng::ShapeKind(shape); c.size = b.vec3();
+    c.layer = eng::CollisionLayer(b.u8());
+    // Version-1 collider payloads ended after layer (14 bytes). The sensor bit
+    // is an optional trailing field so those maps remain readable as solids.
+    if (payloadBytes >= 15)
+        c.sensor = b.u8() != 0;
+    const bool validSize = finite(c.size) && c.size.x > 0.0f &&
+        (c.shape == eng::ShapeKind::Sphere ||
+         (c.shape == eng::ShapeKind::Box
+              ? c.size.y > 0.0f && c.size.z > 0.0f
+              : c.size.y >= 0.0f));
+    if (!validShape(shape) || !validSize ||
+        c.layer >= eng::kMaxCollisionLayers) {
+        b.invalidate();
+        return;
+    }
     r.emplace_or_replace<game::Collider>(e, c);
 }
 
 void serExit(const entt::registry& r, entt::entity e, ByteWriter& w)
 { w.f32(r.get<game::Exit>(e).yawDegrees); }
-void deExit(entt::registry& r, entt::entity e, ByteReader& b)
-{ r.emplace_or_replace<game::Exit>(e, game::Exit{b.f32()}); }
+void deExit(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    if (bytes < 4) { b.invalidate(); return; }
+    const float yaw = b.f32();
+    if (!std::isfinite(yaw)) { b.invalidate(); return; }
+    r.emplace_or_replace<game::Exit>(e, game::Exit{yaw});
+}
 
 void serEnemy(const entt::registry& r, entt::entity e, ByteWriter& w)
 { w.str(r.get<game::EnemySpawn>(e).type); }
-void deEnemy(entt::registry& r, entt::entity e, ByteReader& b)
-{ r.emplace_or_replace<game::EnemySpawn>(e, game::EnemySpawn{b.str()}); }
+void deEnemy(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    if (bytes < 4) { b.invalidate(); return; }
+    const std::string type = b.str();
+    if (type.empty()) { b.invalidate(); return; }
+    r.emplace_or_replace<game::EnemySpawn>(e, game::EnemySpawn{type});
+}
 
 void serPickup(const entt::registry& r, entt::entity e, ByteWriter& w)
 { w.str(r.get<game::Pickup>(e).type); }
-void dePickup(entt::registry& r, entt::entity e, ByteReader& b)
-{ r.emplace_or_replace<game::Pickup>(e, game::Pickup{b.str()}); }
+void dePickup(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    if (bytes < 4) { b.invalidate(); return; }
+    const std::string type = b.str();
+    if (type.empty()) { b.invalidate(); return; }
+    r.emplace_or_replace<game::Pickup>(e, game::Pickup{type});
+}
 
 void serTrigger(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
     const auto& t = r.get<game::Trigger>(e);
     w.u8(uint8_t(t.shape)); w.vec3(t.size); w.str(t.event);
 }
-void deTrigger(entt::registry& r, entt::entity e, ByteReader& b)
+void deTrigger(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
 {
+    if (bytes < 17) { b.invalidate(); return; }
     game::Trigger t;
-    t.shape = eng::ShapeKind(b.u8()); t.size = b.vec3(); t.event = b.str();
+    const uint8_t shape = b.u8();
+    t.shape = eng::ShapeKind(shape); t.size = b.vec3(); t.event = b.str();
+    if (!validShape(shape) || !finite(t.size) || t.size.x <= 0.0f ||
+        (t.shape == eng::ShapeKind::Box &&
+         (t.size.y <= 0.0f || t.size.z <= 0.0f)) || t.event.empty()) {
+        b.invalidate();
+        return;
+    }
     r.emplace_or_replace<game::Trigger>(e, t);
 }
 
+void serMarker(const entt::registry& r, entt::entity e, ByteWriter& w)
+{ w.str(r.get<game::SceneMarker>(e).type); }
+void deMarker(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    if (bytes < 4) { b.invalidate(); return; }
+    const std::string type = b.str();
+    if (type.empty()) { b.invalidate(); return; }
+    r.emplace_or_replace<game::SceneMarker>(e, game::SceneMarker{type});
+}
+
 void serEmpty(const entt::registry&, entt::entity, ByteWriter&) {}
-void dePlayerSpawn(entt::registry& r, entt::entity e, ByteReader&)
+void dePlayerSpawn(entt::registry& r, entt::entity e, ByteReader&, uint32_t)
 { r.emplace_or_replace<game::PlayerSpawn>(e); }
 
 ComponentRegistry buildCore()
 {
     ComponentRegistry reg;
-    using eng::ecs::Name; using eng::ecs::Transform;
-    using eng::ecs::MeshRenderer; using eng::ecs::LightRef;
-
-    reg.add({"Name", 1, addDefault<Name>, has<Name>, remove<Name>, serName, deName});
-    reg.add({"Transform", 2, addDefault<Transform>, has<Transform>,
-             remove<Transform>, serTransform, deTransform});
-    reg.add({"MeshRenderer", 3, addDefault<MeshRenderer>, has<MeshRenderer>,
-             remove<MeshRenderer>, serMesh, deMesh});
-    reg.add({"LightRef", 4, addDefault<LightRef>, has<LightRef>,
-             remove<LightRef>, serLight, deLight});
+    eng::ecs::registerEngineComponents(reg);
 
     reg.add({"Collider", 10, addDefault<game::Collider>, has<game::Collider>,
              remove<game::Collider>, serCollider, deCollider});
@@ -149,14 +143,17 @@ ComponentRegistry buildCore()
              remove<game::Pickup>, serPickup, dePickup});
     reg.add({"Trigger", 15, addDefault<game::Trigger>, has<game::Trigger>,
              remove<game::Trigger>, serTrigger, deTrigger});
+    reg.add({"SceneMarker", 16, addDefault<game::SceneMarker>,
+             has<game::SceneMarker>, remove<game::SceneMarker>,
+             serMarker, deMarker});
     return reg;
 }
 
 } // namespace
 
-const ComponentRegistry& coreRegistry()
+const eng::ecs::ComponentRegistry& coreRegistry()
 {
-    static const ComponentRegistry reg = buildCore();
+    static const eng::ecs::ComponentRegistry reg = buildCore();
     return reg;
 }
 

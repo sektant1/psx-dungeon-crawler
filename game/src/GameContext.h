@@ -1,4 +1,6 @@
 #pragma once
+#include "combat/CombatVocabulary.h"
+
 #include <string>
 
 namespace eng {
@@ -17,6 +19,9 @@ struct GameContext {
     eng::Physics& physics;
     eng::Input& input;
     const std::string& assets; // app asset root (APP_ASSET_DIR)
+    // Damage channels + schools of magic, from assets/magic.toml. Systems that
+    // turn an authored name into an id or a palette go through this.
+    const CombatVocabulary& vocabulary;
 };
 
 } // namespace game

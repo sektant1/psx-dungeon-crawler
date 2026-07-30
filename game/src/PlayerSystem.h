@@ -30,9 +30,16 @@ public:
     // one is destroyed by clearScene) and apply active-weapon visibility.
     void attachLoadout(GameContext& ctx);
 
-    // Locomotion (reads input, moves the character). Skip when driving a scripted
-    // preview camera.
-    void update(GameContext& ctx, float dt);
+    // Mouse look, once per rendered frame, at the render rate: quantising the
+    // view to the simulation rate reads as input lag.
+    void look(GameContext& ctx);
+    // Locomotion, inside the fixed-step loop. Running the character controller
+    // on the render delta made movement frame-rate dependent and unstable
+    // against the fixed-rate world around it.
+    void fixedStep(GameContext& ctx, float fixedDt);
+    // Push the interpolated pose to the renderer. `alpha` is the fraction
+    // between the last two fixed steps (Physics::interpolationAlpha).
+    void present(GameContext& ctx, float alpha);
     // Advance the viewmodels. attackTriggered = a melee click this frame;
     // didCast = a spell was cast this frame; aiming = parry/aim held.
     void updateViewmodels(GameContext& ctx, float dt, bool attackTriggered,
@@ -46,6 +53,13 @@ public:
     bool staffEquipped() const { return mWeapon == WStaff; }
     bool torchEquipped() const { return mWeapon == WTorch; }
 
+    // Weapon enchantment glow, across every viewmodel. Off by default: the glow
+    // is presentation, and a plain weapon is the honest baseline for tuning
+    // lighting and materials. The debug console drives this; it survives level
+    // transitions because attachLoadout re-applies it to the rebuilt viewmodels.
+    void setWeaponEnchant(eng::Renderer& r, bool on);
+    bool weaponEnchant() const { return mWeaponEnchant; }
+
     eng::FpsController& controller() { return mPlayer; }
     const eng::FpsController& controller() const { return mPlayer; }
 
@@ -57,6 +71,7 @@ private:
     ViewModel mStaffModel;
     ViewModel mTorchModel;
     int mWeapon = WSword;
+    bool mWeaponEnchant = false;
     float mSpeed = 3.0f;
     float mSens = 0.002f;
     float mFootstepFxCooldown = 0.0f;

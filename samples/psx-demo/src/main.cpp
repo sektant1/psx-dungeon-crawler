@@ -3,40 +3,34 @@
 // is shared with the game: samples/common/DemoScene + demo_scene.toml.
 
 #include "DemoScene.h"
-#include "RenderPresets.h"
 
-#include <eng/Engine.h>
 #include <eng/Math.h>
 #include <eng/Primitive.h>
+#include <eng/RenderPresetInfo.h>
+#include <eng/app/Application.h>
 
 #include <glm/gtc/quaternion.hpp>
 
-#include <array>
 #include <cmath>
 #include <cstdlib>
+#include <optional>
 #include <string>
 
 namespace {
 
 // world/orbit_camera.gd: rotation.y = base + t
 struct OrbitCamera {
-    eng::NodeHandle node;
-    float baseYaw = 0.0f;
-    void update(eng::Renderer& r, float t) const
-    {
-        r.setOrientation(node, glm::angleAxis(baseYaw + t, glm::vec3(0, 1, 0)));
-    }
+  eng::NodeHandle node;
+  float baseYaw = 0.0f;
+  void update(eng::Renderer &r, float t) const {
+    r.setOrientation(node, glm::angleAxis(baseYaw + t, glm::vec3(0, 1, 0)));
+  }
 };
 
-// The engine's flagship feature: live-swappable render profiles. All of these
-// mirror PSX_RENDER_PRESET names. "Dungeon" leads because it is the engine
-// default (eng::kDefaultRenderPreset) -- the game's own dark-fantasy look
-// rather than an era emulation; 1-6 are the console/pixel-art profiles.
-struct PresetEntry { int id; const char* name; };
-constexpr std::array<PresetEntry, 7> kPresets{{
-    {7, "Dungeon"}, {1, "PS1"}, {2, "PS2"}, {3, "GameCube"},
-    {4, "N64"}, {5, "Pixel-3D"}, {6, "Modern PS1"},
-}};
+// The engine's flagship feature: live-swappable render profiles. The list and
+// its numbering come from the engine (eng::renderPresets()) rather than a local
+// table -- a UI carrying its own array of names and trusting its index to match
+// the engine's ids is the exact bug that header exists to kill.
 
 // Floating placard (same diegetic label style as the game's showcase
 // exhibits) naming the demo and the live preset. Text sprites have no
@@ -44,46 +38,59 @@ constexpr std::array<PresetEntry, 7> kPresets{{
 // re-attaching the node.
 class PresetSign {
 public:
-    explicit PresetSign(eng::NodeHandle parent) : mParent(parent) {}
+  explicit PresetSign(eng::NodeHandle parent) : mParent(parent) {}
 
-    void show(eng::Renderer& r, const std::string& presetName)
-    {
-        if (mNode.valid())
-            r.destroyNode(mNode);
-        mNode = r.createNode(mParent, {0.0f, 1.15f, 0.0f});
-        eng::TextSpriteStyle style;
-        style.worldHeight = 0.30f;
-        style.accentColour = {0.90f, 0.70f, 0.30f, 1.0f};
-        style.colourRules.push_back({presetName, {0.95f, 0.82f, 0.38f, 1.0f}});
-        r.attachTextSprite(
-            mNode,
-            "PSX DUNGEON CRAWLER -- ENGINE DEMO\n"
-            "Preset: " + presetName + "\n"
-            "[Tab]/[Backspace] preset  [Space] pause  [R] restart  [Esc] quit",
-            style);
-    }
+  void show(eng::Renderer &r, const std::string &presetName) {
+    if (mNode.valid())
+      r.destroyNode(mNode);
+    mNode = r.createNode(mParent, {0.0f, 1.15f, 0.0f});
+    eng::TextSpriteStyle style;
+    style.worldHeight = 0.30f;
+    style.accentColour = {0.90f, 0.70f, 0.30f, 1.0f};
+    style.colourRules.push_back({presetName, {0.95f, 0.82f, 0.38f, 1.0f}});
+    r.attachTextSprite(mNode,
+                       "PSX ENGINE DEMO\n"
+                       "Preset: " +
+                           presetName + "\n" + "[Tab] change preset" + "\n" +
+                           "[Space] pause" + "\n" + "[R] restart" + "\n" +
+                           "[Esc] quit",
+                       style);
+  }
 
 private:
-    eng::NodeHandle mParent;
-    eng::NodeHandle mNode{};
+  eng::NodeHandle mParent;
+  eng::NodeHandle mNode{};
 };
 
-} // namespace
+// The demo as an eng::Application: scene build in onStart, the orbit/bob
+// animation in onUpdate. No fixed step -- nothing here is simulated.
+class DemoApp : public eng::Application {
+public:
+  eng::AppConfig configure(int, char **) override {
+    eng::AppConfig cfg;
+    cfg.assetDir = APP_ASSET_DIR;
+    cfg.configPath = cfg.assetDir + "/demo.toml";
+    cfg.fixedDt = 0.0f;
+    return cfg;
+  }
 
-int main(int, char**)
-{
-    eng::Engine engine;
+  bool onStart(eng::Engine &engine) override {
+    eng::Renderer &r = engine.renderer();
     const std::string assets = APP_ASSET_DIR;
-    if (!engine.init(assets + "/demo.toml", assets))
-        return 1;
-    eng::Renderer& r = engine.renderer();
+    // Aliases so the scene build below reads as straight-line setup code while
+    // the state it produces outlives the call.
+    OrbitCamera &orbit = mOrbit;
+    DemoScene &scene = mScene;
+    eng::NodeHandle &chestBase = mChestBase;
+    eng::NodeHandle &chestSpin = mChestSpin;
+    eng::LightHandle &chestGlow = mChestGlow;
+    size_t &presetIndex = mPresetIndex;
 
     // Camera3D: fov 68.1243 vertical, Godot default clips.
     r.setCameraFov(68.1243f);
     r.setCameraClip(0.05f, 4000.0f);
 
     // -------------------------------------------------- OrbitPoint branch ---
-    OrbitCamera orbit;
     orbit.node = r.createNode(eng::kRootNode);
     orbit.baseYaw = std::atan2(-0.556238f, 0.831023f);
 
@@ -104,12 +111,11 @@ int main(int, char**)
                  "PSX/Floor");
 
     // -------------------------------------------------------- shared scene ---
-    DemoScene scene;
     DemoScene::Options sceneOpts;
     sceneOpts.boxes = false; // replaced by the game's treasure-chest centre
     if (!scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", orbit.node,
                     sceneOpts))
-        return 1;
+      return false;
 
     // ---------------------------------------------- dusk grade overrides ---
     // demo_scene.toml ships the original daylight palette (white 1.5 sun,
@@ -119,8 +125,8 @@ int main(int, char**)
     // posts and the chest's gold glow carry the frame instead.
     const auto lin = [](float srgb) { return std::pow(srgb, 2.2f); };
     r.setAmbient({lin(0.55f) * 0.12f, lin(0.60f) * 0.12f, lin(0.80f) * 0.12f});
-    r.setLightColour(scene.sunLight(),
-                     {lin(0.50f) * 0.35f, lin(0.58f) * 0.35f, lin(0.85f) * 0.35f});
+    r.setLightColour(scene.sunLight(), {lin(0.50f) * 0.35f, lin(0.58f) * 0.35f,
+                                        lin(0.85f) * 0.35f});
     // Denser, darker fog: the 40 m interior box fades into night murk
     // instead of hanging as a bright blue backdrop behind the orbit.
     r.setFog({lin(0.06f), lin(0.07f), lin(0.12f)}, 0.08f);
@@ -133,37 +139,37 @@ int main(int, char**)
     // Same treasure shrine as the game's great hall: the low-poly chest
     // levitating over the origin, slowly turning inside the crystal ring
     // (glassy rim spires), sparkles and a pulsing gold omni riding the bob.
-    eng::NodeHandle chestBase;
-    eng::NodeHandle chestSpin;
-    eng::LightHandle chestGlow;
-    const glm::vec3 chestGlowColour = glm::vec3(1.0f, 0.62f, 0.22f) * 1.6f;
     {
-        chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
-        chestSpin = r.createNode(chestBase);
-        r.setScale(chestSpin, glm::vec3(6.0f));
-        // Real stencil shadow (engine-wide SHADOWTYPE_STENCIL_MODULATIVE)
-        // instead of the old hand-scaled blob planes.
-        r.attachMesh(chestSpin, r.loadObj(assets + "/meshes/props/prop_chest.obj"),
-                     "Game/PropChest", true);
-        r.spawnParticles("sparkles", chestBase);
-        eng::LightDesc glow;
-        glow.colour = chestGlowColour;
-        glow.range = 6.0f;
-        chestGlow = r.attachLight(chestBase, glow);
+      chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
+      chestSpin = r.createNode(chestBase);
+      r.setScale(chestSpin, glm::vec3(6.0f));
+      // Real stencil shadow (engine-wide SHADOWTYPE_STENCIL_MODULATIVE)
+      // instead of the old hand-scaled blob planes.
+      r.attachMesh(chestSpin, r.loadObj(assets + "/meshes/props/prop_chest.obj"),
+                   "Game/PropChest", true);
+      r.spawnParticles("sparkles", chestBase);
+      eng::LightDesc glow;
+      glow.colour = kChestGlowColour;
+      glow.range = 6.0f;
+      chestGlow = r.attachLight(chestBase, glow);
     }
 
     // ------------------------------------------------------ preset sign ---
-    // Seed from PSX_RENDER_PRESET (already applied once by Engine::init) so
-    // the label matches reality, then let Tab/Backspace cycle it live.
-    size_t presetIndex = 0;
-    if (const char* presetName = std::getenv("PSX_RENDER_PRESET")) {
-        const int id = eng::renderPresetFromName(presetName);
-        for (size_t i = 0; i < kPresets.size(); ++i)
-            if (kPresets[i].id == id)
-                presetIndex = i;
+    // Seed from PSX_RENDER_PRESET (already applied once by Engine::init) so the
+    // label matches reality, then let Tab/Backspace cycle it live. With no
+    // override the engine is on its default profile, so start the cursor there
+    // rather than on whatever happens to be first in the table.
+    {
+      const char *presetName = std::getenv("PSX_RENDER_PRESET");
+      const int id = presetName ? eng::renderPresetFromName(presetName)
+                                : eng::kDefaultRenderPreset;
+      const auto &presets = eng::renderPresets();
+      for (size_t i = 0; i < presets.size(); ++i)
+        if (presets[i].id == id)
+          presetIndex = i;
     }
-    PresetSign sign(chestBase);
-    sign.show(r, kPresets[presetIndex].name);
+    mSign.emplace(chestBase);
+    mSign->show(r, eng::renderPresets()[presetIndex].name);
 
     // ------------------------------------------------------ set dressing ---
     // Medieval props (meshes/props, materials/props.material — same
@@ -173,196 +179,210 @@ int main(int, char**)
     // lamps, the sword stabbed into the ground, the shield leaning on a
     // barrel.
     {
-        const std::string props = assets + "/meshes/props/";
-        const auto mesh = [&](const char* f) { return r.loadObj(props + f); };
-        // Ring placement: polar(angleDeg, radius) -> floor position.
-        const auto polar = [](float angleDeg, float radius) {
-            const float a = glm::radians(angleDeg);
-            return glm::vec3(radius * std::sin(a), 0.0f, radius * std::cos(a));
-        };
-        const auto place = [&](eng::MeshHandle m, const char* mat,
-                               glm::vec3 pos, float yawDeg,
-                               glm::vec3 scale = glm::vec3(1.0f)) {
-            eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
-            if (yawDeg != 0.0f)
-                r.setOrientation(n, glm::angleAxis(glm::radians(yawDeg),
-                                                   glm::vec3(0, 1, 0)));
-            if (scale != glm::vec3(1.0f))
-                r.setScale(n, scale);
-            r.attachMesh(n, m, mat);
-            return n;
-        };
-        // Two-primitive props share one node (per-primitive OBJ split).
-        const auto place2 = [&](eng::MeshHandle m0, const char* mat0,
-                                eng::MeshHandle m1, const char* mat1,
-                                glm::vec3 pos, float yawDeg) {
-            eng::NodeHandle n = place(m0, mat0, pos, yawDeg);
-            r.attachMesh(n, m1, mat1);
-            return n;
-        };
+      const std::string props = assets + "/meshes/props/";
+      const auto mesh = [&](const char *f) { return r.loadObj(props + f); };
+      // Ring placement: polar(angleDeg, radius) -> floor position.
+      const auto polar = [](float angleDeg, float radius) {
+        const float a = glm::radians(angleDeg);
+        return glm::vec3(radius * std::sin(a), 0.0f, radius * std::cos(a));
+      };
+      const auto place = [&](eng::MeshHandle m, const char *mat, glm::vec3 pos,
+                             float yawDeg, glm::vec3 scale = glm::vec3(1.0f)) {
+        eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
+        if (yawDeg != 0.0f)
+          r.setOrientation(
+              n, glm::angleAxis(glm::radians(yawDeg), glm::vec3(0, 1, 0)));
+        if (scale != glm::vec3(1.0f))
+          r.setScale(n, scale);
+        r.attachMesh(n, m, mat);
+        return n;
+      };
+      // Two-primitive props share one node (per-primitive OBJ split).
+      const auto place2 = [&](eng::MeshHandle m0, const char *mat0,
+                              eng::MeshHandle m1, const char *mat1, glm::vec3 pos,
+                              float yawDeg) {
+        eng::NodeHandle n = place(m0, mat0, pos, yawDeg);
+        r.attachMesh(n, m1, mat1);
+        return n;
+      };
 
-        eng::MeshHandle barrel0 = mesh("prop_barrel_p0.obj");
-        eng::MeshHandle barrel1 = mesh("prop_barrel_p1.obj");
-        eng::MeshHandle crate = mesh("prop_crate.obj");
-        eng::MeshHandle sack = mesh("prop_jutesack.obj");
-        eng::MeshHandle hay = mesh("prop_haybale.obj");
-        eng::MeshHandle pumpkin = mesh("prop_pumpkin.obj");
-        eng::MeshHandle vase0 = mesh("prop_vase_p0.obj");
-        eng::MeshHandle vase1 = mesh("prop_vase_p1.obj");
+      eng::MeshHandle barrel0 = mesh("prop_barrel_p0.obj");
+      eng::MeshHandle barrel1 = mesh("prop_barrel_p1.obj");
+      eng::MeshHandle crate = mesh("prop_crate.obj");
+      eng::MeshHandle sack = mesh("prop_jutesack.obj");
+      eng::MeshHandle hay = mesh("prop_haybale.obj");
+      eng::MeshHandle pumpkin = mesh("prop_pumpkin.obj");
+      eng::MeshHandle vase0 = mesh("prop_vase_p0.obj");
+      eng::MeshHandle vase1 = mesh("prop_vase_p1.obj");
 
-        // 0 deg: market table with bread + pumpkin (node rides at the leg
-        // tops, y=0.88; tabletop is ~0.51 above that).
-        eng::NodeHandle table = place2(
-            mesh("prop_table_p0.obj"), "Game/PropWood",
-            mesh("prop_table_p1.obj"), "Game/PropMarket",
-            polar(0.0f, 3.8f) + glm::vec3(0.0f, 0.88f, 0.0f), 180.0f);
-        r.attachMesh(r.createNode(table, {0.3f, 0.53f, -0.2f}),
-                     mesh("prop_bread.obj"), "Game/PropMarketMisc");
-        r.attachMesh(r.createNode(table, {-0.35f, 0.59f, 0.25f}), pumpkin,
-                     "Game/PropMarketMisc");
+      // 0 deg: market table with bread + pumpkin (node rides at the leg
+      // tops, y=0.88; tabletop is ~0.51 above that).
+      eng::NodeHandle table =
+          place2(mesh("prop_table_p0.obj"), "Game/PropWood",
+                 mesh("prop_table_p1.obj"), "Game/PropMarket",
+                 polar(0.0f, 3.8f) + glm::vec3(0.0f, 0.88f, 0.0f), 180.0f);
+      r.attachMesh(r.createNode(table, {0.3f, 0.53f, -0.2f}),
+                   mesh("prop_bread.obj"), "Game/PropMarketMisc");
+      r.attachMesh(r.createNode(table, {-0.35f, 0.59f, 0.25f}), pumpkin,
+                   "Game/PropMarketMisc");
 
-        // 40 deg: terracotta vases
-        place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
-               polar(40.0f, 3.4f), 0.0f);
-        place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
-               polar(48.0f, 4.0f), 30.0f);
+      // 40 deg: terracotta vases
+      place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
+             polar(40.0f, 3.4f), 0.0f);
+      place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
+             polar(48.0f, 4.0f), 30.0f);
 
-        // 80 deg: barrels + crate stack
-        place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
-               polar(80.0f, 3.6f), 15.0f);
-        place2(mesh("prop_barrel_open_p0.obj"), "Game/PropPlanks",
-               mesh("prop_barrel_open_p1.obj"), "Game/PropBauerhaus",
-               polar(90.0f, 4.1f), -30.0f);
-        {
-            const glm::vec3 c = polar(70.0f, 4.1f);
-            place(crate, "Game/PropMarket", c, 10.0f);
-            place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f);
-            place(crate, "Game/PropMarket", c + glm::vec3(0, 0.48f, 0), 40.0f);
-        }
+      // 80 deg: barrels + crate stack
+      place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
+             polar(80.0f, 3.6f), 15.0f);
+      place2(mesh("prop_barrel_open_p0.obj"), "Game/PropPlanks",
+             mesh("prop_barrel_open_p1.obj"), "Game/PropBauerhaus",
+             polar(90.0f, 4.1f), -30.0f);
+      {
+        const glm::vec3 c = polar(70.0f, 4.1f);
+        place(crate, "Game/PropMarket", c, 10.0f);
+        place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f);
+        place(crate, "Game/PropMarket", c + glm::vec3(0, 0.48f, 0), 40.0f);
+      }
 
-        // 130 deg: hay + pumpkins
-        place(hay, "Game/PropHay", polar(126.0f, 3.7f), 20.0f);
-        place(hay, "Game/PropHay", polar(140.0f, 4.2f), -60.0f);
-        // Pumpkins bulge 0.08 below their origin; lift onto the floor.
-        place(pumpkin, "Game/PropMarketMisc",
-              polar(118.0f, 4.3f) + glm::vec3(0.0f, 0.08f, 0.0f), 0.0f);
-        place(pumpkin, "Game/PropMarketMisc",
-              polar(148.0f, 3.5f) + glm::vec3(0.0f, 0.08f, 0.0f), 90.0f);
+      // 130 deg: hay + pumpkins
+      place(hay, "Game/PropHay", polar(126.0f, 3.7f), 20.0f);
+      place(hay, "Game/PropHay", polar(140.0f, 4.2f), -60.0f);
+      // Pumpkins bulge 0.08 below their origin; lift onto the floor.
+      place(pumpkin, "Game/PropMarketMisc",
+            polar(118.0f, 4.3f) + glm::vec3(0.0f, 0.08f, 0.0f), 0.0f);
+      place(pumpkin, "Game/PropMarketMisc",
+            polar(148.0f, 3.5f) + glm::vec3(0.0f, 0.08f, 0.0f), 90.0f);
 
-        // 170 deg: jute sacks
-        place(sack, "Game/PropJute", polar(168.0f, 3.5f), 100.0f);
-        place(sack, "Game/PropJute", polar(176.0f, 4.0f), -15.0f);
+      // 170 deg: jute sacks
+      place(sack, "Game/PropJute", polar(168.0f, 3.5f), 100.0f);
+      place(sack, "Game/PropJute", polar(176.0f, 4.0f), -15.0f);
 
-        // 210 deg: barrel + crates
-        place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
-               polar(206.0f, 3.7f), 45.0f);
-        {
-            const glm::vec3 c = polar(218.0f, 4.1f);
-            place(crate, "Game/PropMarket", c, -20.0f);
-            place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), 15.0f);
-        }
+      // 210 deg: barrel + crates
+      place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
+             polar(206.0f, 3.7f), 45.0f);
+      {
+        const glm::vec3 c = polar(218.0f, 4.1f);
+        place(crate, "Game/PropMarket", c, -20.0f);
+        place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), 15.0f);
+      }
 
-        // 250 deg: sword stabbed into the ground, shield against a barrel.
-        // The weapons-pack meshes are authored huge; scale to ~life size.
-        {
-            eng::NodeHandle sword =
-                r.createNode(eng::kRootNode,
-                             polar(246.0f, 3.3f) + glm::vec3(0.0f, 1.15f, 0.0f));
-            r.setScale(sword, glm::vec3(0.06f));
-            // Blade is modelled pointing +y; roll past 180 so it points
-            // down with a slight stuck-in-the-dirt lean.
-            r.setOrientation(sword,
-                             glm::angleAxis(glm::radians(168.0f),
-                                            glm::vec3(0, 0, 1)) *
-                                 glm::angleAxis(glm::radians(8.0f),
-                                                glm::vec3(1, 0, 0)));
-            r.attachMesh(sword, mesh("prop_sword.obj"), "Game/PropWeapon");
+      // 250 deg: sword stabbed into the ground, shield against a barrel.
+      // The weapons-pack meshes are authored huge; scale to ~life size.
+      {
+        eng::NodeHandle sword = r.createNode(
+            eng::kRootNode, polar(246.0f, 3.3f) + glm::vec3(0.0f, 1.15f, 0.0f));
+        r.setScale(sword, glm::vec3(0.06f));
+        // Blade is modelled pointing +y; roll past 180 so it points
+        // down with a slight stuck-in-the-dirt lean.
+        r.setOrientation(
+            sword, glm::angleAxis(glm::radians(168.0f), glm::vec3(0, 0, 1)) *
+                       glm::angleAxis(glm::radians(8.0f), glm::vec3(1, 0, 0)));
+        r.attachMesh(sword, mesh("prop_sword.obj"), "Game/PropWeapon");
 
-            const glm::vec3 b = polar(256.0f, 3.8f);
-            place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus",
-                   b, 0.0f);
-            eng::NodeHandle shield =
-                r.createNode(eng::kRootNode,
-                             b + glm::vec3(0.0f, 0.55f, 0.75f));
-            r.setScale(shield, glm::vec3(0.08f));
-            // Lean the shield back against the barrel side.
-            r.setOrientation(shield, glm::angleAxis(glm::radians(-20.0f),
-                                                    glm::vec3(1, 0, 0)));
-            r.attachMesh(shield, mesh("prop_shield.obj"), "Game/PropWeapon");
-        }
+        const glm::vec3 b = polar(256.0f, 3.8f);
+        place2(barrel0, "Game/PropPlanks", barrel1, "Game/PropBauerhaus", b,
+               0.0f);
+        eng::NodeHandle shield =
+            r.createNode(eng::kRootNode, b + glm::vec3(0.0f, 0.55f, 0.75f));
+        r.setScale(shield, glm::vec3(0.08f));
+        // Lean the shield back against the barrel side.
+        r.setOrientation(
+            shield, glm::angleAxis(glm::radians(-20.0f), glm::vec3(1, 0, 0)));
+        r.attachMesh(shield, mesh("prop_shield.obj"), "Game/PropWeapon");
+      }
 
-        // 290 deg: hay + vase
-        place(hay, "Game/PropHay", polar(290.0f, 3.8f), -35.0f);
-        place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
-               polar(300.0f, 3.4f), 60.0f);
+      // 290 deg: hay + vase
+      place(hay, "Game/PropHay", polar(290.0f, 3.8f), -35.0f);
+      place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
+             polar(300.0f, 3.4f), 60.0f);
 
-        // 330 deg: crate stack + sack
-        {
-            const glm::vec3 c = polar(330.0f, 3.6f);
-            place(crate, "Game/PropMarket", c, 25.0f);
-            place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -10.0f);
-        }
-        place(sack, "Game/PropJute", polar(322.0f, 4.2f), 45.0f);
+      // 330 deg: crate stack + sack
+      {
+        const glm::vec3 c = polar(330.0f, 3.6f);
+        place(crate, "Game/PropMarket", c, 25.0f);
+        place(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -10.0f);
+      }
+      place(sack, "Game/PropJute", polar(322.0f, 4.2f), 45.0f);
 
-        // Lamp posts between the clusters: 2 m beam post, hanging lamp on
-        // top, warm point light (torch-lit vibe against the cool ambient).
-        eng::MeshHandle beam = mesh("prop_beam.obj");
-        eng::MeshHandle lamp = mesh("prop_lamp.obj");
-        eng::LightDesc warmLight;
-        warmLight.colour = glm::vec3(std::pow(1.0f, 2.2f),
-                                     std::pow(0.62f, 2.2f),
-                                     std::pow(0.32f, 2.2f)) * 3.0f;
-        warmLight.range = 4.0f;
-        for (float a : {45.0f, 135.0f, 225.0f, 315.0f}) {
-            const glm::vec3 p = polar(a, 4.3f);
-            place(beam, "Game/PropBauerhaus", p, a);
-            eng::NodeHandle n =
-                r.createNode(eng::kRootNode, p + glm::vec3(0.0f, 2.1f, 0.0f));
-            r.attachMesh(n, lamp, "Game/PropLamp");
-            r.attachLight(n, warmLight);
-        }
+      // Lamp posts between the clusters: 2 m beam post, hanging lamp on
+      // top, warm point light (torch-lit vibe against the cool ambient).
+      eng::MeshHandle beam = mesh("prop_beam.obj");
+      eng::MeshHandle lamp = mesh("prop_lamp.obj");
+      eng::LightDesc warmLight;
+      warmLight.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.62f, 2.2f),
+                                   std::pow(0.32f, 2.2f)) *
+                         3.0f;
+      warmLight.range = 4.0f;
+      for (float a : {45.0f, 135.0f, 225.0f, 315.0f}) {
+        const glm::vec3 p = polar(a, 4.3f);
+        place(beam, "Game/PropBauerhaus", p, a);
+        eng::NodeHandle n =
+            r.createNode(eng::kRootNode, p + glm::vec3(0.0f, 2.1f, 0.0f));
+        r.attachMesh(n, lamp, "Game/PropLamp");
+        r.attachLight(n, warmLight);
+      }
     }
 
-    // ---------------------------------------------------------------- loop ---
-    bool paused = false;
-    float animTime = 0.0f;
     orbit.update(r, 0.0f);
+    return true;
+  }
 
-    while (!engine.shouldClose()) {
-        const float dt = engine.tick();
-        eng::Input& in = engine.input();
-        if (in.wasPressed("quit"))
-            engine.requestClose();
-        if (in.wasPressed("pause"))
-            paused = !paused;
-        if (in.wasPressed("restart"))
-            animTime = 0.0f;
-        if (in.wasPressed("preset_next") || in.wasPressed("preset_prev")) {
-            const size_t n = kPresets.size();
-            presetIndex = in.wasPressed("preset_next")
-                              ? (presetIndex + 1) % n
-                              : (presetIndex + n - 1) % n;
-            eng::applyRenderPreset(r, eng::renderPresetValues(kPresets[presetIndex].id));
-            sign.show(r, kPresets[presetIndex].name);
-        }
-
-        if (!paused)
-            animTime += dt;
-        orbit.update(r, animTime);
-        scene.update(r, animTime);
-
-        // Levitating loot, same motion as the game: slow bob + steady yaw
-        // turn; glow breathes on two sines (never below ~0.8x).
-        r.setPosition(chestBase,
-                      {0.0f, 1.35f + 0.25f * std::sin(animTime * 0.9f), 0.0f});
-        r.setOrientation(chestSpin,
-                         glm::angleAxis(animTime * 0.8f, glm::vec3(0, 1, 0)));
-        const float pulse = 0.9f + 0.1f * std::sin(animTime * 1.7f) +
-                            0.05f * std::sin(animTime * 4.3f);
-        r.setLightColour(chestGlow, chestGlowColour * pulse);
-
-        engine.renderFrame(dt);
+  void onFrameBegin(const eng::FrameContext &f) override {
+    eng::Renderer &r = f.engine.renderer();
+    eng::Input &in = f.engine.input();
+    if (in.wasPressed("quit"))
+      f.engine.requestClose();
+    if (in.wasPressed("pause"))
+      mPaused = !mPaused;
+    if (in.wasPressed("restart"))
+      mAnimTime = 0.0f;
+    if (in.wasPressed("preset_next") || in.wasPressed("preset_prev")) {
+      const auto &presets = eng::renderPresets();
+      const size_t n = presets.size();
+      mPresetIndex = in.wasPressed("preset_next") ? (mPresetIndex + 1) % n
+                                                  : (mPresetIndex + n - 1) % n;
+      eng::applyRenderPreset(r, presets[mPresetIndex].id);
+      mSign->show(r, presets[mPresetIndex].name);
     }
-    engine.shutdown();
-    return 0;
+  }
+
+  void onUpdate(const eng::FrameContext &f) override {
+    eng::Renderer &r = f.engine.renderer();
+    if (!mPaused)
+      mAnimTime += f.dt;
+    mOrbit.update(r, mAnimTime);
+    mScene.update(r, mAnimTime);
+
+    // Levitating loot, same motion as the game: slow bob + steady yaw
+    // turn; glow breathes on two sines (never below ~0.8x).
+    r.setPosition(mChestBase,
+                  {0.0f, 1.35f + 0.25f * std::sin(mAnimTime * 0.9f), 0.0f});
+    r.setOrientation(mChestSpin,
+                     glm::angleAxis(mAnimTime * 0.8f, glm::vec3(0, 1, 0)));
+    const float pulse = 0.9f + 0.1f * std::sin(mAnimTime * 1.7f) +
+                        0.05f * std::sin(mAnimTime * 4.3f);
+    r.setLightColour(mChestGlow, kChestGlowColour * pulse);
+  }
+
+private:
+  static inline const glm::vec3 kChestGlowColour =
+      glm::vec3(1.0f, 0.62f, 0.22f) * 1.6f;
+
+  OrbitCamera mOrbit;
+  DemoScene mScene;
+  eng::NodeHandle mChestBase{};
+  eng::NodeHandle mChestSpin{};
+  eng::LightHandle mChestGlow{};
+  size_t mPresetIndex = 0;
+  std::optional<PresetSign> mSign;
+  bool mPaused = false;
+  float mAnimTime = 0.0f;
+};
+
+} // namespace
+
+int main(int argc, char **argv) {
+  DemoApp app;
+  return eng::runApplication(app, argc, argv);
 }

@@ -1,0 +1,23 @@
+// Append after replacing @UPPER_ID@ and the two source filenames.
+vertex_program PixelVfx/@UPPER_ID@VS glsl
+{
+    source @VERT_SHADER_FILENAME@
+    default_params {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program PixelVfx/@UPPER_ID@FS glsl
+{
+    source @FRAG_SHADER_FILENAME@
+    default_params {
+        param_named membraneTexture int 0
+        param_named membraneDark float4 0.03 0.01 0.05 1.0
+        param_named membraneMid float4 0.34 0.04 0.48 1.0
+        param_named membraneBright float4 1.10 0.24 1.45 1.0
+        param_named membraneStepFps float 10.0
+        param_named membraneFlowSpeed float 1.0
+        param_named membranePixelGrid float 48.0
+        param_named_auto time time 1.0
+    }
+}

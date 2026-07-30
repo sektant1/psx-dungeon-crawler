@@ -1,0 +1,32 @@
+#version 330 core
+
+in vec2 membraneUV;
+uniform sampler2D membraneTexture;
+uniform vec4 membraneDark;
+uniform vec4 membraneMid;
+uniform vec4 membraneBright;
+uniform float membraneStepFps;
+uniform float membraneFlowSpeed;
+uniform float membranePixelGrid;
+uniform float time;
+layout(location = 0) out vec4 fragColour;
+
+vec3 membranePalette(float value)
+{
+    if (value < 0.35) return membraneDark.rgb;
+    if (value < 0.72) return membraneMid.rgb;
+    return membraneBright.rgb;
+}
+
+void main()
+{
+    float steppedTime = floor(time * membraneStepFps) /
+                        max(membraneStepFps, 1.0);
+    float grid = max(membranePixelGrid, 4.0);
+    vec2 pixelUV = (floor(membraneUV * grid) + 0.5) / grid;
+    vec2 flow = vec2(sin(pixelUV.y * 16.0 + steppedTime * 2.0),
+                     cos(pixelUV.x * 12.0 - steppedTime * 1.5));
+    float value = texture(membraneTexture,
+                          pixelUV + flow * membraneFlowSpeed * 0.04).r;
+    fragColour = vec4(membranePalette(value), 0.82);
+}

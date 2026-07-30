@@ -5,6 +5,21 @@ build-debug/
 build-asan/
 compile_commands.json
 ogre.log
+.agents/
+.codex/
+.claude/
+.opencode/
+.goose/
+
+# Capture scratch: local recordings stay out, the README's preview clip is
+# committed (see the negation below).
+assets/*.mp4
+assets/*.gif
+assets/*.zip
+assets/*.webm
+!assets/preview.mp4
+!assets/preview.gif
+docs/superpowers/
 
 # Vendored SDK
 vendor/ogre/

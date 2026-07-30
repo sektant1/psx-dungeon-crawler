@@ -4,6 +4,7 @@
 #include <eng/particles/ParticleEffectDesc.h>
 #include <eng/render/Enchantment.h>
 #include <eng/render/ModelImport.h>
+#include <eng/render/PrototypeAssets.h>
 #include <eng/Sprite.h>
 
 #include <glm/glm.hpp>
@@ -76,6 +77,18 @@ public:
     // Sole generic primitive entry point. The descriptor's dimensions are
     // baked into the mesh; node scale remains available for placement.
     MeshHandle createPrimitiveMesh(const PrimitiveMeshDesc&);
+    // Stand-in for a mesh that failed to load, mirroring the
+    // Engine/PrototypeSurface material fallback: a missing asset should read as
+    // an obviously untextured placeholder, not abort the frame. The primitive is
+    // chosen from the asset's filename (prototype::meshShapeFor) so a missing
+    // wall is wall-shaped; each distinct shape is built once and shared. Pass an
+    // empty path for a plain unit box.
+    MeshHandle prototypeMesh(const std::string& assetPath = {});
+    // Rules for what a missing mesh or material is replaced with. Empty by
+    // default: with no rules every miss is a unit box in the checkered
+    // prototype material, which is correct but unreadable in a dressed scene.
+    // See eng::prototype::PrototypeCatalog for why the application owns these.
+    void setPrototypeCatalog(prototype::PrototypeCatalog catalog);
     bool meshBounds(MeshHandle mesh, MeshBounds& out) const;
     // OBJ geometry captured during the render-mesh load, never reparsed or
     // read back from Ogre. Returns false for meshes without cached triangles.
@@ -101,7 +114,7 @@ public:
     // Adds/removes a scrolling Minecraft-like enchantment pass while
     // preserving each mesh's underlying material.
     void setNodeEnchantment(NodeHandle node, const EnchantmentDesc& desc);
-    void setNodeEnchantment(NodeHandle node, EnchantmentStyle style,
+    void setNodeEnchantment(NodeHandle node, const EnchantmentPalette& palette,
                             float strength = 1.0f);
     void clearNodeEnchantment(NodeHandle node);
     // All user-facing material names currently loaded (Ogre parsed every
@@ -255,6 +268,23 @@ public:
     uint64_t editorViewportTextureId() const;
     // Drive the editor viewport's dedicated free-fly camera (decoupled from the
     // game MainCamera). Call every frame from the editor's EditorCamera.
+    // The offscreen viewport clears to its own colour; setBackground() only
+    // reaches the window's viewport, so an editor backdrop has to be set here.
+    void setEditorViewportBackground(const glm::vec3& colour);
+
+    // --- material thumbnails ---------------------------------------------
+    // A small square offscreen target holding one object on its own, for the
+    // material-swatch grid every engine editor has. Separate from the main
+    // editor viewport: different size, different camera, different subject.
+    //
+    // Nodes marked setNodeThumbnailOnly() appear in this target and NOWHERE
+    // else, so the preview sphere can sit at the world origin of a loaded level
+    // without ever showing up in it.
+    void enableMaterialThumbnail(int size);
+    void setMaterialThumbnailCamera(const glm::vec3& position,
+                                    const glm::quat& orientation, float fovDeg);
+    uint64_t materialThumbnailTextureId() const;
+    void setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly);
     void setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient,
                              float fovDeg);
 

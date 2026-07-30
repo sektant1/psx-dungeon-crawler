@@ -9,9 +9,12 @@
 
 namespace game {
 
-void CombatDirector::init(const std::string& weaponsTomlPath)
+void CombatDirector::init(const std::string& weaponsTomlPath,
+                          const CombatVocabulary& vocabulary)
 {
+    mVocabulary = &vocabulary;
     mWeapons.load(weaponsTomlPath); // defaults remain if the file is absent
+    mWeapons.resolve(vocabulary);
 }
 
 entt::entity CombatDirector::addCombatant(eng::BodyHandle body, const Health& hp,
@@ -75,7 +78,12 @@ void CombatDirector::tick(float dt)
     }
     // Status effects (Burn DoT may kill).
     mKilledScratch.clear();
-    status::tick(mReg, dt, mKilledScratch);
+    status::BurnChannel burn;
+    if (mVocabulary) {
+        burn.type = mVocabulary->burnDamageType();
+        burn.ignoresResistances = mVocabulary->bypassesMitigation(burn.type);
+    }
+    status::tick(mReg, dt, mKilledScratch, burn);
     if (mOnDeath)
         for (entt::entity e : mKilledScratch)
             mOnDeath(e);

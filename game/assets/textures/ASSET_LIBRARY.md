@@ -1,26 +1,17 @@
-# Texture library
+# Prototype texture library
 
-Curated imports from the local `~/gamedev/` asset library. These folders are
-registered as OGRE resource locations, but no production material references
-them automatically.
+This directory intentionally contains only temporary blockout art. The engine
+also creates in-memory prototype surface, sprite, and particle textures, so a
+missing authored texture never prevents the demo from running.
 
 ## `prototype/`
 
-Seventy-eight Kenney-style grid/prototype textures: thirteen patterns in each
-of dark, light, orange, green, purple, and red. Names follow
-`proto_<colour>_<number>.png`. Intended for blockouts, encounter readability,
+Seventy-eight grid/prototype textures: thirteen patterns in each of dark,
+light, orange, green, purple, and red. Names follow
+`proto_<colour>_<number>.png`. Use them for blockouts, encounter readability,
 collision/debug surfaces, and editor previews.
 
-## `vfx/`
-
-- `flame_01..04.png` — flipbook candidates for stylized fire.
-- `smoke_soft.png`, `smoke_wisp.png`, `smoke_puff.png` — particle sprites.
-- `glow_radial.png` — additive light/glow sprite.
-
-## `surfaces/`
-
-Small fantasy tiling references for brick, cobble, tile, and wood. Intended
-for material experiments and room-theme prototypes.
-
-Imports are intentionally isolated from active materials. Promote an asset by
-adding a named material and documenting its gameplay/art-direction role.
+Do not put downloaded or commissioned art directly next to these files. Put
+source art under `assets-src/` and promote cooked runtime files through the
+content pipeline described in
+[`docs/design/2026-07-27-prototype-content-reset-and-pipeline.md`](../../../docs/design/2026-07-27-prototype-content-reset-and-pipeline.md).

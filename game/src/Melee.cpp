@@ -1,4 +1,5 @@
 #include "Melee.h"
+#include "GameCollision.h"
 #include "CombatConfig.h"
 #include <algorithm>
 #include <vector>
@@ -32,7 +33,7 @@ void MeleeSystem::fixedUpdate(eng::Physics& phys, glm::vec3 eye,
     glm::vec3 sweepTo   = eye + forward * reach;
 
     std::vector<eng::ShapeHit> hits;
-    phys.shapeCast(sweep, sweepFrom, sweepTo, hits, eng::BodyLayer::Prop);
+    phys.shapeCast(sweep, sweepFrom, sweepTo, hits, eng::layerMask(game::layer::Prop));
 
     for (const eng::ShapeHit& hit : hits) {
         uint32_t id = hit.body.id;

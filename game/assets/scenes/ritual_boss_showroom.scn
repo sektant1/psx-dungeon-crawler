@@ -1,0 +1,470 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "psx-dungeon-scene",
+  "version": 1,
+  "id": "scene.test.ritual_boss_showroom",
+  "entities": [
+    {
+      "id": "player_spawn",
+      "name": "Invocation Vestibule Spawn",
+      "player_spawn": true,
+      "transform": { "position": [0, 0, 26] }
+    },
+    {
+      "id": "descent_exit",
+      "name": "Reward Chamber Descent",
+      "exit": { "yaw_degrees": 0 },
+      "transform": { "position": [0, 0, -22] }
+    },
+    {
+      "id": "boss_spawn",
+      "name": "Ritual Adversary",
+      "marker": "boss.spawn",
+      "transform": { "position": [0, 0, -2] }
+    },
+    {
+      "id": "reward_shrine",
+      "name": "Crystal Victory Reliquary",
+      "marker": "shrine.treasure",
+      "transform": { "position": [0, 0, -19] }
+    },
+
+    {
+      "id": "cold_key",
+      "name": "Cold Vault Light",
+      "light": {
+        "type": "directional",
+        "colour": [0.18, 0.22, 0.42],
+        "cast_shadows": true
+      },
+      "transform": {
+        "position": [0, 8, 0],
+        "rotation_degrees": [-68, 32, 0]
+      }
+    },
+    {
+      "id": "entry_light",
+      "light": { "type": "point", "colour": [0.08, 0.28, 0.85], "range": 8 },
+      "transform": { "position": [0, 2.4, 23] }
+    },
+    {
+      "id": "arena_ember_light",
+      "light": { "type": "point", "colour": [1.35, 0.16, 0.02], "range": 9 },
+      "transform": { "position": [0, 2.6, 5] }
+    },
+    {
+      "id": "arena_astral_light",
+      "light": { "type": "point", "colour": [0.34, 0.08, 1.30], "range": 8 },
+      "transform": { "position": [0, 2.2, -6] }
+    },
+    {
+      "id": "reward_light",
+      "light": { "type": "point", "colour": [1.20, 0.56, 0.12], "range": 7 },
+      "transform": { "position": [0, 2.0, -19] }
+    },
+
+    {
+      "id": "entry_floor",
+      "prefab": "kit.floor",
+      "transform": { "position": [0, 0, 18], "scale": [1.5, 1, 3] },
+      "collider": { "half_extents": [3, 0.1, 6], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "vestibule_floor",
+      "prefab": "kit.floor",
+      "transform": { "position": [0, 0, 26], "scale": [2.5, 1, 1] },
+      "collider": { "half_extents": [5, 0.1, 2], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "reward_floor",
+      "prefab": "kit.floor",
+      "transform": { "position": [0, 0, -18], "scale": [2, 1, 3] },
+      "collider": { "half_extents": [4, 0.1, 6], "offset": [0, -0.1, 0] }
+    },
+
+    {
+      "id": "arena_floor_nw",
+      "prefab": "kit.floor",
+      "transform": { "position": [-8, 0, -8], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_n",
+      "prefab": "kit.floor",
+      "transform": { "position": [0, 0, -8], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_ne",
+      "prefab": "kit.floor",
+      "transform": { "position": [8, 0, -8], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_w",
+      "prefab": "kit.floor",
+      "transform": { "position": [-8, 0, 0], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_centre",
+      "prefab": "kit.floor",
+      "transform": { "position": [0, 0, 0], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_e",
+      "prefab": "kit.floor",
+      "transform": { "position": [8, 0, 0], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_sw",
+      "prefab": "kit.floor",
+      "transform": { "position": [-8, 0, 8], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_s",
+      "prefab": "kit.floor",
+      "transform": { "position": [0, 0, 8], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+    {
+      "id": "arena_floor_se",
+      "prefab": "kit.floor",
+      "transform": { "position": [8, 0, 8], "scale": [2, 1, 2] },
+      "collider": { "half_extents": [4, 0.1, 4], "offset": [0, -0.1, 0] }
+    },
+
+    {
+      "id": "entry_threshold",
+      "prefab": "kit.door_frame_wide",
+      "transform": { "position": [0, 0, 12] }
+    },
+    {
+      "id": "reward_threshold",
+      "prefab": "kit.door_frame_wide",
+      "transform": { "position": [0, 0, -12] }
+    },
+
+    {
+      "id": "arena_west_10",
+      "prefab": "kit.wall",
+      "transform": { "position": [-12.5, 0, -10], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_west_6",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [-12.5, 0, -6], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_west_2",
+      "prefab": "kit.wall",
+      "transform": { "position": [-12.5, 0, -2], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_west_p2",
+      "prefab": "kit.wall_window",
+      "transform": { "position": [-12.5, 0, 2], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_west_p6",
+      "prefab": "kit.wall",
+      "transform": { "position": [-12.5, 0, 6], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_west_p10",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [-12.5, 0, 10], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+
+    {
+      "id": "arena_east_10",
+      "prefab": "kit.wall",
+      "transform": { "position": [12.5, 0, -10], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_east_6",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [12.5, 0, -6], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_east_2",
+      "prefab": "kit.wall",
+      "transform": { "position": [12.5, 0, -2], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_east_p2",
+      "prefab": "kit.wall_window",
+      "transform": { "position": [12.5, 0, 2], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_east_p6",
+      "prefab": "kit.wall",
+      "transform": { "position": [12.5, 0, 6], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_east_p10",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [12.5, 0, 10], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+
+    {
+      "id": "arena_south_w10",
+      "prefab": "kit.wall",
+      "transform": { "position": [-10, 0, 12.5] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_south_w6",
+      "prefab": "kit.wall",
+      "transform": { "position": [-6, 0, 12.5] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_south_w3",
+      "prefab": "kit.wall_half",
+      "transform": { "position": [-2.99, 0, 12.5] },
+      "collider": { "half_extents": [1, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_south_e3",
+      "prefab": "kit.wall_half",
+      "transform": { "position": [2.99, 0, 12.5] },
+      "collider": { "half_extents": [1, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_south_e6",
+      "prefab": "kit.wall",
+      "transform": { "position": [6, 0, 12.5] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_south_e10",
+      "prefab": "kit.wall",
+      "transform": { "position": [10, 0, 12.5] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+
+    {
+      "id": "arena_north_w10",
+      "prefab": "kit.wall",
+      "transform": { "position": [-10, 0, -12.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_north_w6",
+      "prefab": "kit.wall",
+      "transform": { "position": [-6, 0, -12.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_north_w3",
+      "prefab": "kit.wall_half",
+      "transform": { "position": [-2.99, 0, -12.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [1, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_north_e3",
+      "prefab": "kit.wall_half",
+      "transform": { "position": [2.99, 0, -12.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [1, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_north_e6",
+      "prefab": "kit.wall",
+      "transform": { "position": [6, 0, -12.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "arena_north_e10",
+      "prefab": "kit.wall",
+      "transform": { "position": [10, 0, -12.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+
+    {
+      "id": "entry_west_14",
+      "prefab": "kit.wall",
+      "transform": { "position": [-3.25, 0, 14], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "entry_west_18",
+      "prefab": "kit.wall_window",
+      "transform": { "position": [-3.25, 0, 18], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "entry_west_22",
+      "prefab": "kit.wall",
+      "transform": { "position": [-3.25, 0, 22], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "entry_west_26",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [-5.25, 0, 26], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "entry_east_14",
+      "prefab": "kit.wall",
+      "transform": { "position": [3.25, 0, 14], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "entry_east_18",
+      "prefab": "kit.wall_window",
+      "transform": { "position": [3.25, 0, 18], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "entry_east_22",
+      "prefab": "kit.wall",
+      "transform": { "position": [3.25, 0, 22], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "entry_east_26",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [5.25, 0, 26], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "vestibule_back_w",
+      "prefab": "kit.wall",
+      "transform": { "position": [-2, 0, 28.5] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "vestibule_back_e",
+      "prefab": "kit.wall",
+      "transform": { "position": [2, 0, 28.5] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+
+    {
+      "id": "reward_west_14",
+      "prefab": "kit.wall",
+      "transform": { "position": [-4.25, 0, -14], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "reward_west_18",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [-4.25, 0, -18], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "reward_west_22",
+      "prefab": "kit.wall",
+      "transform": { "position": [-4.25, 0, -22], "rotation_degrees": [0, 90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "reward_east_14",
+      "prefab": "kit.wall",
+      "transform": { "position": [4.25, 0, -14], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "reward_east_18",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [4.25, 0, -18], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "reward_east_22",
+      "prefab": "kit.wall",
+      "transform": { "position": [4.25, 0, -22], "rotation_degrees": [0, -90, 0] },
+      "collider": { "half_extents": [0.25, 2, 2], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "reward_back_w",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [-2, 0, -24.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+    {
+      "id": "reward_back_e",
+      "prefab": "kit.wall_skull",
+      "transform": { "position": [2, 0, -24.5], "rotation_degrees": [0, 180, 0] },
+      "collider": { "half_extents": [2, 2, 0.25], "offset": [0, 2, 0] }
+    },
+
+    {
+      "id": "pillar_nw",
+      "prefab": "kit.pillar",
+      "transform": { "position": [-10, 0, -10] },
+      "collider": { "half_extents": [0.58, 3.0, 0.58], "offset": [0, 3, 0] }
+    },
+    {
+      "id": "pillar_ne",
+      "prefab": "kit.pillar",
+      "transform": { "position": [10, 0, -10] },
+      "collider": { "half_extents": [0.58, 3.0, 0.58], "offset": [0, 3, 0] }
+    },
+    {
+      "id": "pillar_sw",
+      "prefab": "kit.pillar",
+      "transform": { "position": [-10, 0, 10] },
+      "collider": { "half_extents": [0.58, 3.0, 0.58], "offset": [0, 3, 0] }
+    },
+    {
+      "id": "pillar_se",
+      "prefab": "kit.pillar",
+      "transform": { "position": [10, 0, 10] },
+      "collider": { "half_extents": [0.58, 3.0, 0.58], "offset": [0, 3, 0] }
+    },
+    {
+      "id": "fallen_cover_west",
+      "prefab": "kit.pillar_fallen",
+      "transform": { "position": [-4.5, 0, 4.5], "rotation_degrees": [0, 28, 0] },
+      "collider": { "half_extents": [1.45, 0.38, 0.48], "offset": [0, 0.38, 0] }
+    },
+    {
+      "id": "fallen_cover_east",
+      "prefab": "kit.pillar_fallen",
+      "transform": { "position": [5, 0, -5], "rotation_degrees": [0, -38, 0] },
+      "collider": { "half_extents": [1.45, 0.38, 0.48], "offset": [0, 0.38, 0] }
+    },
+    {
+      "id": "ritual_chandelier",
+      "prefab": "kit.chandelier",
+      "transform": { "position": [0, 4.2, 0] }
+    },
+
+    { "id": "feature_fire", "marker": "feature.fire_particles", "transform": { "position": [-9, 0, 8] } },
+    { "id": "feature_poison", "marker": "feature.poison_particles", "transform": { "position": [-9, 0, 4] } },
+    { "id": "feature_water", "marker": "feature.water_pool", "transform": { "position": [-9, 0, 0] } },
+    { "id": "feature_arcane", "marker": "feature.arcane_enchantment", "transform": { "position": [-9, 0.25, -4] } },
+    { "id": "feature_rain", "marker": "feature.rain_volume", "transform": { "position": [-9, 4, -8] } },
+    { "id": "feature_carved", "marker": "feature.carved_column", "transform": { "position": [-6, 0, -9] } },
+
+    { "id": "feature_smoke", "marker": "feature.smoke_particles", "transform": { "position": [9, 0, 8] } },
+    { "id": "feature_lava_ash", "marker": "feature.lava_ash_particles", "transform": { "position": [9, 0, 4] } },
+    { "id": "feature_lava", "marker": "feature.lava_pool", "transform": { "position": [9, 0, 0] } },
+    { "id": "feature_fire_enchant", "marker": "feature.fire_enchantment", "transform": { "position": [9, 0.25, -4] } },
+    { "id": "feature_frost", "marker": "feature.frost_enchantment", "transform": { "position": [9, 0.25, -8] } },
+    { "id": "feature_iron", "marker": "feature.iron_obelisk", "transform": { "position": [6, 3, -9] } },
+
+    { "id": "physics_crate_left", "marker": "physics.crate", "transform": { "position": [-3.5, 0, 26], "rotation_degrees": [0, 18, 0] } },
+    { "id": "physics_crate_right", "marker": "physics.crate", "transform": { "position": [3.2, 0, 25], "rotation_degrees": [0, -25, 0] } },
+    { "id": "physics_barrel_left", "marker": "physics.barrel", "transform": { "position": [-2.5, 0, 23.5] } },
+    { "id": "physics_barrel_right", "marker": "physics.barrel", "transform": { "position": [2.5, 0, 23.5], "rotation_degrees": [0, 12, 0] } }
+  ]
+}

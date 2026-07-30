@@ -1,4 +1,5 @@
 #pragma once
+#include "CombatVocabulary.h"
 #include "WeaponDef.h"
 
 #include <string>
@@ -20,6 +21,10 @@ public:
     // Overlay definitions from an in-memory TOML string (same format as the
     // file variant). Useful for tests that don't want a real file on disk.
     bool loadFromString(const char* tomlSrc);
+
+    // Turn every definition's authored damage-channel name into an id. Call
+    // after the last load; until then WeaponDef::damageType is meaningless.
+    void resolve(const CombatVocabulary& vocabulary);
 
     // Look up by id ("sword", "arrow", "fireball", ...). Never null: unknown ids
     // resolve to a neutral unarmed def.

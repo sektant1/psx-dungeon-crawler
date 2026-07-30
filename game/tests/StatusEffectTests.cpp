@@ -15,20 +15,23 @@ static void check(bool c, const char* m) {
 }
 static bool nearly(float a, float b) { return std::fabs(a - b) < 1e-2f; }
 
+// The burn channel is content; the system takes whichever id it is handed.
+constexpr DamageTypeId kBurnChannel = 1;
+
 int main() {
     // --- Burn deals damage over time, mitigated by Fire resist ---
     {
         entt::registry reg;
         auto e = reg.create();
         reg.emplace<Health>(e, Health{100, 100, 0});
-        Resistances r{}; r[DamageType::Fire] = 0.5f; // half burn
+        Resistances r{}; r[kBurnChannel] = 0.5f; // half burn
         reg.emplace<Resistances>(e, r);
         auto& fx = reg.emplace<StatusEffects>(e);
         fx.active.push_back({CrowdControl::Burn, 10.0f, 2.0f, 0.0f, entt::null}); // 10 dps, 2s
 
         std::vector<entt::entity> killed;
         // Advance 2s in one step: 10 dps * 2s = 20 raw, halved by resist = 10.
-        status::tick(reg, 2.0f, killed);
+        status::tick(reg, 2.0f, killed, {kBurnChannel});
         check(nearly(reg.get<Health>(e).current, 90.0f), "burn dot resisted");
         check(reg.get<StatusEffects>(e).active.empty(), "burn expired after duration");
     }

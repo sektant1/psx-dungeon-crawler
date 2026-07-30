@@ -1,13 +1,29 @@
 #include "MapRuntime.h"
 
 #include "MapSerializer.h"
-#include "MeshSource.h"
+#include <eng/ecs/MeshSource.h>
 #include "GameComponents.h"
 
 #include <eng/Physics.h>
 #include <eng/ecs/Components.h>
 
 namespace game {
+
+namespace {
+// A Trigger is a game concept -- an event region -- and what it means
+// physically is this game's decision: a non-blocking sensor body on the
+// trigger layer, so props and projectiles cannot fire it (see GameCollision.h).
+// Expressing that here rather than inside the engine's PhysicsSync is what
+// lets the engine stay ignorant of the layer taxonomy.
+void materialiseTriggers(entt::registry& reg)
+{
+    for (auto e : reg.view<Trigger>(entt::exclude<Collider>)) {
+        const Trigger& t = reg.get<Trigger>(e);
+        reg.emplace<Collider>(e, Collider{t.shape, t.size, layer::Trigger,
+                                          /*sensor=*/true});
+    }
+}
+} // namespace
 
 MapRuntime::MapRuntime(eng::ecs::SceneBackend& backend, eng::Physics& physics)
     : mSceneSync(mScene, backend), mPhysicsSync(mScene.registry(), physics),
@@ -16,9 +32,14 @@ MapRuntime::MapRuntime(eng::ecs::SceneBackend& backend, eng::Physics& physics)
 
 bool MapRuntime::load(const std::string& path)
 {
+    entt::registry replacement;
+    if (!mapio::readMap(path, replacement, mapio::coreRegistry()))
+        return false;
+
     entt::registry& reg = mScene.registry();
-    reg.clear();
-    if (!mapio::readMap(path, reg, mapio::coreRegistry())) return false;
+    mPhysicsSync.clear();
+    mSceneSync.clear();
+    reg = std::move(replacement);
     for (auto e : reg.view<eng::ecs::Transform>())
         reg.emplace_or_replace<eng::ecs::Dirty>(e);
     return true;
@@ -29,7 +50,7 @@ void MapRuntime::resolveMeshes(const LoadMeshFn& loadFn)
     entt::registry& reg = mScene.registry();
     auto view = reg.view<eng::ecs::MeshRenderer>();
     for (auto e : view) {
-        if (const auto* src = reg.try_get<mapio::MeshSource>(e)) {
+        if (const auto* src = reg.try_get<eng::ecs::MeshSource>(e)) {
             reg.get<eng::ecs::MeshRenderer>(e).mesh = loadFn(src->path);
         }
     }
@@ -38,6 +59,7 @@ void MapRuntime::resolveMeshes(const LoadMeshFn& loadFn)
 void MapRuntime::buildAll()
 {
     mSceneSync.sync();
+    materialiseTriggers(mScene.registry());
     mPhysicsSync.sync();
 }
 
@@ -45,6 +67,7 @@ void MapRuntime::step(float dt)
 {
     mPhysics.update(dt);
     mSceneSync.sync();
+    materialiseTriggers(mScene.registry());
     mPhysicsSync.sync();
 }
 
@@ -53,10 +76,46 @@ glm::vec3 MapRuntime::playerSpawn() const
     const entt::registry& reg = mScene.registry();
     auto view = reg.view<const PlayerSpawn>();
     for (auto e : view) {
+        if (const auto* world = reg.try_get<eng::ecs::WorldTransform>(e))
+            return glm::vec3(world->matrix[3]);
         if (const auto* t = reg.try_get<eng::ecs::Transform>(e))
             return t->position;
     }
     return glm::vec3(0.0f, 1.0f, 0.0f);
+}
+
+glm::vec3 MapRuntime::levelExit() const
+{
+    const entt::registry& reg = mScene.registry();
+    for (const auto entity : reg.view<const Exit>()) {
+        if (const auto* transform = reg.try_get<eng::ecs::Transform>(entity))
+            return transform->position;
+    }
+    return glm::vec3(0.0f);
+}
+
+float MapRuntime::exitYawDegrees() const
+{
+    const entt::registry& reg = mScene.registry();
+    for (const auto entity : reg.view<const Exit>())
+        return reg.get<const Exit>(entity).yawDegrees;
+    return 0.0f;
+}
+
+std::vector<ScenePlacement> MapRuntime::placements(
+    const std::string& prefix) const
+{
+    std::vector<ScenePlacement> result;
+    const entt::registry& reg = mScene.registry();
+    for (const auto entity : reg.view<const SceneMarker,
+                                      const eng::ecs::Transform>()) {
+        const auto& marker = reg.get<const SceneMarker>(entity);
+        if (!prefix.empty() && marker.type.rfind(prefix, 0) != 0)
+            continue;
+        const auto& transform = reg.get<const eng::ecs::Transform>(entity);
+        result.push_back({marker.type, transform.position, transform.rotation});
+    }
+    return result;
 }
 
 } // namespace game

@@ -2,6 +2,7 @@
 
 #include <eng/Log.h>
 #include <eng/render/FrameCapture.h>
+#include <eng/render/GifRecorder.h>
 
 #include "InputImpl.h"
 #include "Platform.h"
@@ -31,6 +32,7 @@ struct Engine::Impl {
     int benchmarkFrames = 0;
     std::vector<float> frameSamples;
     FrameCapture frameCapture;
+    GifRecorder recorder;
     // Frame limiter: minimum seconds per frame (0 = uncapped). Paces the loop
     // when vsync is off so the GPU isn't driven flat out.
     float minFrameSec = 0.0f;
@@ -54,7 +56,8 @@ void Engine::updateSystems(float dt) {
     for (auto& s : mSystems) s->update(dt);
 }
 
-bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
+bool Engine::init(const std::string& configPath, const std::string& appAssetDir,
+                  int renderPreset)
 {
     if (!mConfig.load(configPath))
         return false;
@@ -81,6 +84,8 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
     // like any other, so something is always applied here. The game's per-level
     // render palette still runs later and overrides the art-direction fields it
     // owns -- the profile sets the pipeline and the baseline look under it.
+    // Command line first (it is the explicit, per-run choice), then the
+    // environment, then the engine default.
     int presetId = kDefaultRenderPreset;
     if (const char* presetName = std::getenv("PSX_RENDER_PRESET")) {
         const int id = renderPresetFromName(presetName);
@@ -90,6 +95,9 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
             log::warn("Unknown PSX_RENDER_PRESET '%s'; using the default "
                       "profile instead", presetName);
     }
+    if (renderPreset > 0)
+        presetId = renderPreset;
+    mRenderPreset = presetId;
     applyRenderPreset(mRenderer, renderPresetValues(presetId));
 
     { // Step clock (stop-motion timing) from the [animation] config table.
@@ -157,6 +165,12 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir)
 
     mImpl->hasPrev = false;
     return true;
+}
+
+void Engine::setRenderPreset(int id)
+{
+    mRenderPreset = id;
+    applyRenderPreset(mRenderer, id);
 }
 
 float Engine::tick()
@@ -249,16 +263,6 @@ void Engine::renderFrame(float dt, float animDt)
     const float adt = (animDt < 0.0f)
                           ? mStepClock.delta(StepChannel::Particles)
                           : animDt;
-    { // TEMP-VERIFY
-        static int frames = 0, partSteps = 0, charSteps = 0, projSteps = 0;
-        ++frames;
-        partSteps += (adt > 0.0f) ? 1 : 0;
-        charSteps += mStepClock.stepped(StepChannel::Characters) ? 1 : 0;
-        projSteps += mStepClock.stepped(StepChannel::Projectiles) ? 1 : 0;
-        if (frames == 120)
-            log::warn("TEMP-VERIFY %d frames: particleAdvance=%d chars=%d proj=%d",
-                      frames, partSteps, charSteps, projSteps);
-    }
     mRenderer.updateParticles(adt); // recycle finished one-shot particle systems
     const int renderedFrame = mImpl->frameCount + 1;
     mImpl->frameCapture.beforeFrame(renderedFrame);
@@ -296,6 +300,42 @@ void Engine::renderFrame(float dt, float animDt)
         detail::coreOf(mRenderer).writeScreenshot(mImpl->screenshotPath);
         mClose = true;
     }
+    if (mImpl->recorder.active()) {
+        mImpl->recorder.afterFrame(mImpl->frameCount);
+        if (mImpl->recorder.complete()) {
+            mImpl->recorder.encode();
+            mClose = true;
+        }
+    }
+}
+
+void Engine::startRecording(const RecordingOptions& options)
+{
+    GifRecorder::Hooks hooks;
+    hooks.writeFrame = [this](const std::string& path) {
+        detail::coreOf(mRenderer).writeScreenshot(path);
+    };
+    hooks.run = [](const std::string& command) {
+        return std::system(command.c_str());
+    };
+    mImpl->recorder = GifRecorder(options, std::move(hooks));
+    if (!mImpl->recorder.active()) {
+        log::error("Engine: recording requested with no frames to capture");
+        return;
+    }
+    // Same determinism contract as the screenshot hook, and it doubles as the
+    // clip's timebase: one rendered frame is one GIF frame at 1/fps.
+    mImpl->fixedTickDt = 1.0f / float(options.fps);
+    mImpl->hasPrev = false;
+    std::srand(1234u);
+    log::info("Engine: recording %d frames at %d fps from frame %d to %s",
+              options.frames, options.fps, options.startFrame,
+              options.path.c_str());
+}
+
+bool Engine::recording() const
+{
+    return mImpl->recorder.active() && !mImpl->recorder.complete();
 }
 
 void Engine::shutdown()

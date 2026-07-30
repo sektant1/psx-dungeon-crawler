@@ -1,0 +1,49 @@
+# The Reliquary Showroom: the editable depth-zero game/engine test map.
+#
+# This file owns the walkable shell and marker placements. Companion files:
+#   showroom_exhibits.toml - materials, particles, liquids and enchantments
+#   showroom_props.toml    - static prop dressing
+#   ../samples/common/assets/demo_scene.toml - crystal-ring definitions
+# The spinning treasure chest and crystal ring are assembled by LiveLevel at
+# the C anchor (world origin), while the combat dummy stands in the portal hall.
+#
+# Three connected rooms create a readable test tour:
+# arrival/material gallery -> crystal reliquary -> combat/portal proving ground.
+# Each transition has a ceremonial centre arch and two wider side routes, so
+# combat/movement testing never bottlenecks at a single tile.
+# Edit rows directly until the .scn placement editor lands. Keep every row the
+# same width and preserve exactly one S (spawn), C (origin), and X (exit).
+# Legend: # solid, . floor, A arch, L torch, H chest, B barrel, R crate, V urn.
+
+[dungeon]
+cell_size = 4.0
+wall_height = 3.0
+rows = [
+    "###################",
+    "#V...L.......L...V#",
+    "#........X........#",
+    "#B...............R#",
+    "#.................#",
+    "#H...............H#",
+    "######..#A#..######",
+    "#L...............L#",
+    "#.................#",
+    "#.................#",
+    "#........C........#",
+    "#.................#",
+    "#.................#",
+    "#L...............L#",
+    "######..#A#..######",
+    "#V...............V#",
+    "#.................#",
+    "#B...............R#",
+    "#L.......S.......L#",
+    "#.................#",
+    "###################",
+]
+
+[dungeon.light]
+colour_srgb = [1.0, 0.68, 0.34]
+energy = 4.4
+range = 6.5
+y = 1.9

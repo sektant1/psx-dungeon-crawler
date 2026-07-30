@@ -50,7 +50,7 @@ glm::quat poseOrientation(const WeaponViewmodelPose& pose)
 // init
 // ---------------------------------------------------------------------------
 void ViewModel::init(eng::Renderer& r, eng::NodeHandle headNode,
-                     const std::string& propsDir,
+                     const std::string& propsDir, ViewmodelGlow glow,
                      const WeaponViewmodelPose& pose)
 {
     WeaponViewmodelPose swordPose = pose;
@@ -59,12 +59,28 @@ void ViewModel::init(eng::Renderer& r, eng::NodeHandle headNode,
     if (glm::dot(swordPose.gripPivot, swordPose.gripPivot) < 0.000001f)
         swordPose.gripPivot = {0.0f, -0.65f, 0.0f};
     initWeapon(r, headNode, propsDir + "/prop_sword.obj",
-               "Game/ViewModelWeapon", swordPose);
+               "Game/ViewModelWeapon", glow, swordPose);
+}
+
+void ViewModel::applyEnchant(eng::Renderer& r)
+{
+    if (!mGlowNode.valid() || mGlow.strength <= 0.0f)
+        return; // this weapon was built without a glow
+    if (mEnchantEnabled)
+        r.setNodeEnchantment(mGlowNode, mGlow.palette, mGlow.strength);
+    else
+        r.clearNodeEnchantment(mGlowNode);
+}
+
+void ViewModel::setEnchantEnabled(eng::Renderer& r, bool on)
+{
+    mEnchantEnabled = on;
+    applyEnchant(r);
 }
 
 void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
                            const std::string& meshPath,
-                           const std::string& materialName,
+                           const std::string& materialName, ViewmodelGlow glow,
                            const WeaponViewmodelPose& pose)
 {
     mPose = pose;
@@ -78,7 +94,9 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
         glm::translate(glm::mat4(1.0f), -mPose.gripPivot);
     const eng::MeshHandle weapon = r.loadObj(meshPath, &pivotBake);
     r.attachMesh(mNode, weapon, materialName, false, true);
-    r.setNodeEnchantment(mNode, eng::EnchantmentStyle::Arcane, 0.55f);
+    mGlow = glow;
+    mGlowNode = mNode;
+    applyEnchant(r);
 
     // The prop_sword.obj is authored at world scale (used in scene dressing at
     // 0.06x).  As a viewmodel it needs to be much smaller, but readable.
@@ -102,6 +120,7 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
 // ---------------------------------------------------------------------------
 void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
                           const std::string& crystalMeshPath,
+                          ViewmodelGlow tipGlow,
                           const WeaponViewmodelPose& pose)
 {
     // Staff-specific framing: held upright in the right hand, shaft already
@@ -139,7 +158,9 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
 
     r.setScale(mNode, glm::vec3(mPose.scale));
     r.setOrientation(mNode, poseOrientation(mPose));
-    r.setNodeEnchantment(tipNode, eng::EnchantmentStyle::Frost, 0.85f);
+    mGlow = tipGlow;
+    mGlowNode = tipNode;
+    applyEnchant(r);
 
     // Reset animation state on every re-init (level transition).
     mAttackTime = -1.0f;
@@ -151,6 +172,7 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
 // initTorch — handheld torch (wood handle + live flame + warm light)
 // ---------------------------------------------------------------------------
 void ViewModel::initTorch(eng::Renderer& r, eng::NodeHandle headNode,
+                          ViewmodelGlow handleGlow,
                           const WeaponViewmodelPose& pose)
 {
     WeaponViewmodelPose torchPose = pose;
@@ -185,7 +207,9 @@ void ViewModel::initTorch(eng::Renderer& r, eng::NodeHandle headNode,
 
     r.setScale(mNode, glm::vec3(mPose.scale));
     r.setOrientation(mNode, poseOrientation(mPose));
-    r.setNodeEnchantment(handleNode, eng::EnchantmentStyle::Fire, 0.35f);
+    mGlow = handleGlow;
+    mGlowNode = handleNode;
+    applyEnchant(r);
 
     mAttackTime = -1.0f;
     mParry      = 0.0f;

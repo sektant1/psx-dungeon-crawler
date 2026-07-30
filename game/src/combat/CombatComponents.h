@@ -25,11 +25,14 @@ struct Health {
 // Per-type damage mitigation. value[t] in [-1, 0.9]: 0 = neutral, positive =
 // resist (0.5 halves that type), negative = vulnerable (-0.5 = +50% taken).
 // True damage ignores this table entirely. Absent component = all-neutral.
+// Indexed by DamageTypeId, so a row is only as meaningful as the vocabulary
+// that produced the ids. Reordering assets/magic.toml therefore reinterprets
+// every stored row -- append, don't reorder.
 struct Resistances {
-    float value[kDamageTypeCount] = {0.0f};
+    float value[kMaxDamageTypes] = {0.0f};
 
-    float& operator[](DamageType t) { return value[static_cast<int>(t)]; }
-    float operator[](DamageType t) const { return value[static_cast<int>(t)]; }
+    float& operator[](DamageTypeId t) { return value[t]; }
+    float operator[](DamageTypeId t) const { return value[t]; }
 };
 
 // Team, for friendly-fire gating. Same non-Neutral faction does not damage.

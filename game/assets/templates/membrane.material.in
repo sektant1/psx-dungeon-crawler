@@ -1,0 +1,25 @@
+// Replace every token and register the matching programs first.
+material @MATERIAL_ID@
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref PixelVfx/@UPPER_ID@VS { }
+        fragment_program_ref PixelVfx/@UPPER_ID@FS
+        {
+            param_named membraneDark float4 0.03 0.01 0.05 1.0
+            param_named membraneMid float4 0.34 0.04 0.48 1.0
+            param_named membraneBright float4 1.10 0.24 1.45 1.0
+            param_named membraneStepFps float 10.0
+            param_named membraneFlowSpeed float 1.0
+            param_named membranePixelGrid float 48.0
+        }
+        texture_unit
+        {
+            texture @ALBEDO_TEXTURE@
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

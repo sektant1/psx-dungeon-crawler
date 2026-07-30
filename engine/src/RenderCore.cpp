@@ -24,40 +24,6 @@
 namespace eng {
 namespace {
 
-void createPrototypeTexture(const char* name, int category)
-{
-    constexpr uint32_t size = 32;
-    std::vector<uint8_t> pixels(size * size * 4, 255);
-    for (uint32_t y = 0; y < size; ++y)
-        for (uint32_t x = 0; x < size; ++x) {
-            const size_t p = (y * size + x) * 4;
-            const bool checker = ((x / 4) ^ (y / 4)) & 1;
-            if (category == 0) { // surface: magenta/black checker
-                pixels[p+0] = checker ? 255 : 35;
-                pixels[p+1] = 0;
-                pixels[p+2] = checker ? 210 : 35;
-            } else if (category == 1) { // sprite: cyan frame/cross
-                const bool mark = x < 3 || y < 3 || x >= size-3 || y >= size-3 ||
-                                  x == y || x + y == size-1;
-                pixels[p+0] = mark ? 20 : 5;
-                pixels[p+1] = mark ? 240 : 45;
-                pixels[p+2] = mark ? 255 : 70;
-            } else { // particle: orange diamond with transparent corners
-                const int distance = std::abs(int(x) - 15) + std::abs(int(y) - 15);
-                pixels[p+0] = 255;
-                pixels[p+1] = distance < 8 ? 245 : 80;
-                pixels[p+2] = distance < 8 ? 80 : 15;
-                pixels[p+3] = distance < 15 ? 255 : 0;
-            }
-        }
-    Ogre::TexturePtr texture = Ogre::TextureManager::getSingleton().createManual(
-        name, Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
-        Ogre::TEX_TYPE_2D, size, size, 0, Ogre::PF_BYTE_RGBA,
-        Ogre::TU_STATIC_WRITE_ONLY);
-    const Ogre::PixelBox source(size, size, 1, Ogre::PF_BYTE_RGBA, pixels.data());
-    texture->getBuffer()->blitFromMemory(source);
-}
-
 } // namespace
 
 RenderCore::~RenderCore() { shutdown(); }
@@ -90,21 +56,39 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     // a shadow technique is set.
     rgm.addResourceLocation(std::string(OGRE_MEDIA_DIR) + "/Main",
                             "FileSystem", "General");
-    const std::string engBase = ENG_ASSET_DIR;
-    for (const char* sub : {"/shaders", "/programs", "/materials",
-                            "/compositors", "/textures"})
-        rgm.addResourceLocation(engBase + sub, "FileSystem", "General");
-    for (const char* sub : {"/materials", "/textures", "/textures/props",
-                            "/textures/dungeon",
-                            "/textures/prototype", "/textures/vfx",
-                            "/textures/surfaces", "/particles"}) {
-        const std::string dir = appAssetDir + sub;
-        if (std::filesystem::is_directory(dir))
-            rgm.addResourceLocation(dir, "FileSystem", "General");
-    }
-    createPrototypeTexture(prototype::kSurfaceTexture, 0);
-    createPrototypeTexture(prototype::kSpriteTexture, 1);
-    createPrototypeTexture(prototype::kParticleTexture, 2);
+    // Every directory under both asset roots, discovered rather than listed.
+    // Ogre's FileSystem locations are not recursive, so each subdirectory has
+    // to be registered on its own; enumerating them means adding a texture
+    // folder is a matter of creating it, not of editing and rebuilding the
+    // engine. Meshes are loaded by path and are deliberately not part of this.
+    const auto addTree = [&rgm](const std::string& root) {
+        if (!std::filesystem::is_directory(root))
+            return;
+        rgm.addResourceLocation(root, "FileSystem", "General");
+        std::error_code ec;
+        for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+             it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            if (ec) {
+                log::error("RenderCore: walking '%s': %s", root.c_str(),
+                           ec.message().c_str());
+                break;
+            }
+            if (it->is_directory())
+                rgm.addResourceLocation(it->path().string(), "FileSystem",
+                                        "General");
+        }
+    };
+    addTree(ENG_ASSET_DIR);
+    addTree(appAssetDir);
+    // The prototype textures ship as real files in engine/assets/textures, so
+    // the material scripts' texture units resolve like any other texture. They
+    // used to be createManual'd here before this call, which made the script
+    // compiler compare its own declaration against the manual texture and
+    // reject the mismatch on every run ("overriding previous declarations of
+    // texture ... with different parameters"). Generating them after this call
+    // is not an option either: the declarations would find no file and group
+    // initialisation would fail, taking the rest of the group's resources with
+    // it. A file on disk is what both halves of that bind actually want.
     rgm.initialiseAllResourceGroups();
 
     // The PSX shaders bind 16 light slots (psx_lighting.glsl); Ogre's
@@ -339,6 +323,8 @@ void RenderCore::enableOffscreenViewport(int w, int h)
     mOffscreenVp->setOverlaysEnabled(false); // keep imgui OUT of the RTT
     mOffscreenVp->setClearEveryFrame(true);
     mOffscreenVp->setBackgroundColour(Ogre::ColourValue(0.10f, 0.11f, 0.13f, 1.0f));
+    // The preview sphere belongs to the thumbnail target alone.
+    mOffscreenVp->setVisibilityMask(kWorldVisibilityMask);
 
     // NOTE: the editor RTT runs NO PSX compositor. The chain uses fixed-name MRT
     // textures, so a second live "PSX/Stylized" instance would collide with the
@@ -373,14 +359,82 @@ void RenderCore::resizeOffscreenViewport(int w, int h)
     enableOffscreenViewport(w, h); // recreate at the new size
 }
 
+void RenderCore::enableThumbnailViewport(int size)
+{
+    if (mThumbTex)
+        return;
+    size = std::max(32, size);
+
+    mThumbCam = mSceneMgr->createCamera("MaterialThumbnailCamera");
+    mThumbCam->setNearClipDistance(0.05f);
+    mThumbCam->setFarClipDistance(100.0f);
+    mThumbCam->setAutoAspectRatio(false);
+    mThumbCam->setAspectRatio(1.0f); // square, like the thumbnail
+    mThumbCamNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
+    mThumbCamNode->attachObject(mThumbCam);
+
+    mThumbTex = Ogre::TextureManager::getSingleton().createManual(
+        "MaterialThumbnailRTT", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+        Ogre::TEX_TYPE_2D, uint32_t(size), uint32_t(size), 0, Ogre::PF_R8G8B8A8,
+        Ogre::TU_RENDERTARGET);
+    Ogre::RenderTexture* rt = mThumbTex->getBuffer()->getRenderTarget();
+    rt->setAutoUpdated(true);
+    mThumbVp = rt->addViewport(mThumbCam);
+    mThumbVp->setOverlaysEnabled(false);
+    mThumbVp->setClearEveryFrame(true);
+    mThumbVp->setBackgroundColour(Ogre::ColourValue(0.13f, 0.14f, 0.16f, 1.0f));
+    // ONLY the preview subject. Without this the thumbnail would show whatever
+    // level happens to be loaded behind it.
+    mThumbVp->setVisibilityMask(kThumbnailVisibilityFlag);
+
+    // ...and conversely, keep the preview sphere out of every other view.
+    if (mViewport)
+        mViewport->setVisibilityMask(mViewport->getVisibilityMask() &
+                                     ~kThumbnailVisibilityFlag);
+    if (mOffscreenVp)
+        mOffscreenVp->setVisibilityMask(mOffscreenVp->getVisibilityMask() &
+                                        ~kThumbnailVisibilityFlag);
+}
+
+void RenderCore::setThumbnailCameraPose(float px, float py, float pz, float qw,
+                                        float qx, float qy, float qz,
+                                        float fovDeg)
+{
+    if (!mThumbCam || !mThumbCamNode)
+        return;
+    mThumbCamNode->setPosition(px, py, pz);
+    mThumbCamNode->setOrientation(Ogre::Quaternion(qw, qx, qy, qz));
+    mThumbCam->setFOVy(Ogre::Degree(fovDeg));
+}
+
+uint64_t RenderCore::thumbnailTextureId() const
+{
+    if (!mThumbTex)
+        return 0;
+    unsigned int glId = 0;
+    mThumbTex->getCustomAttribute("GLID", &glId);
+    return uint64_t(glId);
+}
+
+void RenderCore::setOffscreenBackground(float r, float g, float b)
+{
+    if (mOffscreenVp)
+        mOffscreenVp->setBackgroundColour(Ogre::ColourValue(r, g, b, 1.0f));
+}
+
 uint64_t RenderCore::viewportTextureId() const
 {
     if (!mOffscreenTex)
         return 0;
-    // OGRE's ImGuiOverlay treats ImTextureID as an Ogre ResourceHandle
-    // (TextureManager::getByHandle), NOT a raw GL id -- so hand back the
-    // texture's resource handle, not its GLID.
-    return uint64_t(mOffscreenTex->getHandle());
+    // The raw GL texture name, because our ImGui runs on the vendored
+    // SDL2/OpenGL3 backend (see beginImGuiFrame), where ImTextureID *is* the GL
+    // id. It used to return the Ogre ResourceHandle, which is what OGRE's own
+    // ImGuiOverlay wants -- but nothing here uses that overlay, so the handle
+    // was silently interpreted as a GL name and the editor viewport drew
+    // whatever texture happened to own that id (in practice, the font atlas).
+    unsigned int glId = 0;
+    mOffscreenTex->getCustomAttribute("GLID", &glId);
+    return uint64_t(glId);
 }
 
 void RenderCore::markPostChainDirty()
@@ -459,12 +513,22 @@ void RenderCore::shutdown()
 {
     if (!mRoot)
         return;
-    // Tear down the editor offscreen RTT before the scene manager / root go.
+    // Tear down the offscreen RTTs before the scene manager / root go. Both of
+    // them: a render target outliving its SceneManager crashes on the way out,
+    // and the crash lands in plugin teardown where nothing points at the cause.
     if (mOffscreenTex) {
         mOffscreenTex->getBuffer()->getRenderTarget()->removeAllViewports();
         Ogre::TextureManager::getSingleton().remove(mOffscreenTex);
         mOffscreenTex.reset();
         mOffscreenVp = nullptr;
+    }
+    if (mThumbTex) {
+        mThumbTex->getBuffer()->getRenderTarget()->removeAllViewports();
+        Ogre::TextureManager::getSingleton().remove(mThumbTex);
+        mThumbTex.reset();
+        mThumbVp = nullptr;
+        mThumbCam = nullptr;
+        mThumbCamNode = nullptr;
     }
     if (mViewport && mWindow)
         Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);

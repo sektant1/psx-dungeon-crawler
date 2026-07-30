@@ -11,7 +11,7 @@ namespace eng { class Renderer; }
 // linearises the ones the renderer expects in linear space (pow 2.2),
 // matching the old hand-written applyPalette() conventions in main.cpp.
 // These defaults ARE the dungeon look, and palettes.toml relies on that: a
-// table like [palette.lobby] lists only its deltas and inherits the rest from
+// table like [palette.showroom] lists only its deltas and inherits the rest from
 // here. So these must stay in step with [palette.dungeon] in palettes.toml and
 // with the engine's "dungeon" render profile (RenderPresets.cpp case 7).
 // Rationale for the values lives in the palettes.toml header.

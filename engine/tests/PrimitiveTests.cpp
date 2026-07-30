@@ -177,7 +177,7 @@ eng::PrimitiveDesc collidable(eng::PrimitiveKind kind)
     desc.orientation =
         glm::angleAxis(glm::radians(30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     desc.scale = {-2.0f, 3.0f, -0.5f};
-    desc.bodyLayer = eng::BodyLayer::Projectile;
+    desc.bodyLayer = eng::CollisionLayer{3};
     desc.dynamic = true;
     desc.sensor = true;
     desc.mass = 7.0f;
@@ -431,7 +431,7 @@ void test_collider_copies_transform_and_physics_properties()
                 near(resolved->body.orientation.y, desc.orientation.y) &&
                 near(resolved->body.orientation.z, desc.orientation.z),
             "collider orientation was not copied");
-    require(resolved->body.layer == eng::BodyLayer::Projectile,
+    require(resolved->body.layer == eng::CollisionLayer{3},
             "body layer was not copied");
     require(resolved->body.dynamic && resolved->body.sensor,
             "dynamic or sensor flag was not copied");

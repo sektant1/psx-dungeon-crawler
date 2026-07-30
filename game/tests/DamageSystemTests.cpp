@@ -21,25 +21,33 @@ static entt::entity makeTarget(entt::registry& reg, float hp, Faction f) {
     return e;
 }
 
+// Channel ids for the mechanism under test. mitigate() cares that ids index a
+// resistance row, not what any of them mean, so these are deliberately local
+// rather than read out of assets/magic.toml.
+constexpr DamageTypeId kNeutral = 0;
+constexpr DamageTypeId kFire = 1;
+constexpr DamageTypeId kFrost = 2;
+
 int main() {
     // --- mitigate() math ---
     Resistances r{};
-    r[DamageType::Fire] = 0.5f;    // half fire
-    r[DamageType::Frost] = -0.5f;  // +50% frost
-    check(nearly(damage::mitigate(100, DamageType::Physical, &r), 100), "neutral passes full");
-    check(nearly(damage::mitigate(100, DamageType::Fire, &r), 50), "50% resist halves");
-    check(nearly(damage::mitigate(100, DamageType::Frost, &r), 150), "negative resist amplifies");
-    check(nearly(damage::mitigate(100, DamageType::True, &r), 100), "True ignores resist");
-    r[DamageType::Fire] = 5.0f; // clamps to 0.9
-    check(nearly(damage::mitigate(100, DamageType::Fire, &r), 10), "resist clamps at 0.9");
-    check(nearly(damage::mitigate(100, DamageType::Physical, nullptr), 100), "null resist = full");
+    r[kFire] = 0.5f;    // half fire
+    r[kFrost] = -0.5f;  // +50% frost
+    check(nearly(damage::mitigate(100, kNeutral, &r), 100), "neutral passes full");
+    check(nearly(damage::mitigate(100, kFire, &r), 50), "50% resist halves");
+    check(nearly(damage::mitigate(100, kFrost, &r), 150), "negative resist amplifies");
+    check(nearly(damage::mitigate(100, kFire, &r, /*ignoresResistances=*/true), 100),
+          "a bypassing channel ignores resist");
+    r[kFire] = 5.0f; // clamps to 0.9
+    check(nearly(damage::mitigate(100, kFire, &r), 10), "resist clamps at 0.9");
+    check(nearly(damage::mitigate(100, kNeutral, nullptr), 100), "null resist = full");
 
     // --- apply(): basic damage + resist ---
     {
         entt::registry reg;
         auto t = makeTarget(reg, 100, Faction::Enemy);
         reg.emplace<Resistances>(t, Resistances{}); // neutral
-        DamagePacket p; p.amount = 30; p.type = DamageType::Physical;
+        DamagePacket p; p.amount = 30; p.type = kNeutral;
         auto res = damage::apply(reg, t, p);
         check(res.hitLanded, "hit lands");
         check(nearly(res.dealt, 30), "full damage dealt");
@@ -51,7 +59,7 @@ int main() {
     {
         entt::registry reg;
         auto t = makeTarget(reg, 25, Faction::Enemy);
-        DamagePacket p; p.amount = 30; p.type = DamageType::Physical; p.crit = true;
+        DamagePacket p; p.amount = 30; p.type = kNeutral; p.crit = true;
         auto res = damage::apply(reg, t, p);
         check(res.crit, "crit reported");
         check(res.killed, "lethal hit kills");

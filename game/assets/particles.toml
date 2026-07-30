@@ -1,6 +1,7 @@
 # Spell VFX ---------------------------------------------------------------
 [[effect]]
 name = "spell_muzzle"
+visual_role = "feedback"
 material = "Engine/Particles/Fire"
 base_width = 0.18
 base_height = 0.18
@@ -27,6 +28,7 @@ scale = 0.15
 
 [[effect]]
 name = "fireball_trail"
+visual_role = "gameplay"
 material = "Engine/Particles/Fire"
 base_width = 0.16
 base_height = 0.16
@@ -57,6 +59,7 @@ scale = 0.30
 
 [[effect]]
 name = "fireball_impact"
+visual_role = "feedback"
 material = "Engine/Particles/Fire"
 base_width = 0.16
 base_height = 0.16
@@ -88,6 +91,7 @@ scale = 0.20
 
 [[effect]]
 name = "beam_core"
+visual_role = "critical"
 material = "Game/BeamCore"
 base_width = 0.12
 base_height = 0.12
@@ -105,6 +109,7 @@ start_colour = [0.85, 1.0, 1.0, 1.0]
 
 [[effect]]
 name = "beam_impact"
+visual_role = "feedback"
 material = "Game/BeamImpact"
 base_width = 0.10
 base_height = 0.10
@@ -136,6 +141,7 @@ scale = 0.12
 # Torch / flame -----------------------------------------------------------
 [[effect]]
 name = "torch_fire"
+visual_role = "ambient"
 material = "Engine/Particles/Fire"
 base_width = 0.14
 base_height = 0.16
@@ -170,6 +176,7 @@ scale = 0.28
 
 [[effect]]
 name = "torch_glow"
+visual_role = "ambient"
 material = "Engine/Particles/Fire"
 base_width = 0.20
 base_height = 0.22
@@ -202,6 +209,7 @@ scale = 0.45
 
 [[effect]]
 name = "torch_ash"
+visual_role = "ambient"
 material = "Game/AshParticle"
 base_width = 0.09
 base_height = 0.09
@@ -230,6 +238,7 @@ start_colour = [0.30, 0.34, 0.28, 0.8]
 
 [[effect]]
 name = "fire_smoke"
+visual_role = "ambient"
 material = "Engine/Particles/Smoke"
 base_width = 0.13
 base_height = 0.13
@@ -262,6 +271,7 @@ scale = 2.15
 # Scene sparkles ----------------------------------------------------------
 [[effect]]
 name = "sparkles"
+visual_role = "ambient"
 material = "PSX/Sparkle"
 base_width = 0.3
 base_height = 0.3

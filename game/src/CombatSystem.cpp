@@ -25,7 +25,8 @@ void CombatSystem::init(GameContext& ctx, const std::string& configTomlPath)
         ctx.renderer.spawnParticles("engine.hit_sparks", point);
     });
     // Damage model: weapon table (weapons.toml overlays built-in defaults).
-    mDirector.init(ctx.assets + "/weapons.toml");
+    // The channel names it uses are resolved against the world's vocabulary.
+    mDirector.init(ctx.assets + "/weapons.toml", ctx.vocabulary);
 }
 
 void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,

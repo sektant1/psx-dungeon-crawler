@@ -1,0 +1,59 @@
+# Valgrind suppressions for `make valgrind`.
+#
+# Everything here is third-party: Mesa, the GL driver and SDL allocate through
+# paths valgrind cannot see the other side of, and dlopen'd driver code is never
+# fully unloaded. Suppressing them is what makes the report readable enough that
+# a real leak in our own code stands out.
+#
+# Never add a suppression for engine/ or game/ code. If something of ours shows
+# up here, that is the tool working.
+
+{
+   mesa_dri_driver_init
+   Memcheck:Leak
+   ...
+   obj:*/dri/*.so
+}
+{
+   mesa_gl_dispatch
+   Memcheck:Leak
+   ...
+   obj:*/libGLX_mesa.so*
+}
+{
+   mesa_libgl
+   Memcheck:Leak
+   ...
+   obj:*/libGL.so*
+}
+{
+   sdl_video_init
+   Memcheck:Leak
+   ...
+   fun:SDL_VideoInit*
+}
+{
+   sdl_dynapi
+   Memcheck:Leak
+   ...
+   obj:*/libSDL2*.so*
+}
+{
+   dlopen_never_unloaded
+   Memcheck:Leak
+   ...
+   fun:dl_open_worker
+}
+{
+   x11_xcb_init
+   Memcheck:Leak
+   ...
+   obj:*/libX11.so*
+}
+{
+   ogre_plugin_statics
+   Memcheck:Leak
+   ...
+   fun:_dl_init
+   obj:*/libOgre*.so*
+}

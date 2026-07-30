@@ -346,53 +346,6 @@ material Game/PortalStone
     } }
 }
 
-// Descent portal: opaque emissive sprite material with a continuously
-// scrolling texture. Values above 1 intentionally feed the bloom pass.
-material Game/PortalDown
-{
-    technique { pass {
-        cull_hardware none
-        depth_write on
-        vertex_program_ref PixelVfx/PortalVS { }
-        fragment_program_ref PixelVfx/PortalFS
-        {
-            param_named portalDark float4 0.025 0.075 0.015 1.0
-            param_named portalMid float4 0.12 0.92 0.055 1.0
-            param_named portalBright float4 0.80 1.65 0.18 1.0
-            param_named portalFlowSpeed float 0.28
-        }
-        texture_unit
-        {
-            texture slime_stylized.png
-            filtering none
-            tex_address_mode wrap
-        }
-    } }
-}
-
-// Ascent portal: the same continuous flow reversed and recoloured arcane-blue.
-material Game/PortalUp
-{
-    technique { pass {
-        cull_hardware none
-        depth_write on
-        vertex_program_ref PixelVfx/PortalVS { }
-        fragment_program_ref PixelVfx/PortalFS
-        {
-            param_named portalDark float4 0.015 0.04 0.15 1.0
-            param_named portalMid float4 0.08 0.58 1.10 1.0
-            param_named portalBright float4 0.32 1.15 1.80 1.0
-            param_named portalFlowSpeed float -0.22
-        }
-        texture_unit
-        {
-            texture water_stylized.png
-            filtering none
-            tex_address_mode wrap
-        }
-    } }
-}
-
 // Wall torch (low-poly-torches pack): flat material colours baked into
 // vertex colours, so the texture is a plain white 8x8.
 material Game/Torch

@@ -21,6 +21,7 @@
 #include <cmath>
 #include <functional>
 #include <regex>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -58,6 +59,10 @@ struct Renderer::Impl {
     std::vector<Ogre::BillboardSet*> sprites; // sprites[id-1]
     std::vector<std::string> spriteMaterials;
     std::vector<std::string> generatedTextures;
+    // Prototype meshes keyed by prototype::MeshShape::role -- one shared mesh
+    // per distinct shape, built on first miss. See prototypeMesh().
+    std::unordered_map<std::string, MeshHandle> prototypeMeshes;
+    prototype::PrototypeCatalog prototypes;
     int nameCounter = 0;
     EnvState env;
     // Original sub-entity materials, saved while the wireframe debug view
@@ -190,14 +195,15 @@ MeshHandle Renderer::loadObj(const std::string& path, const glm::mat4* bake)
                         &geometry.vertices, &geometry.indices);
     } catch (const std::exception& e) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s", path.c_str(),
-                   e.what());
-        return {};
+        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+                   path.c_str(), e.what());
+        return prototypeMesh(path);
     } catch (...) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error",
+        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+                   "using prototype mesh",
                    path.c_str());
-        return {};
+        return prototypeMesh(path);
     }
     return mImpl->registerMesh(name, std::move(geometry));
 }
@@ -221,14 +227,15 @@ MeshHandle Renderer::loadObj(const std::string& path,
                         &geometry.indices);
     } catch (const std::exception& e) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s", path.c_str(),
-                   e.what());
-        return {};
+        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+                   path.c_str(), e.what());
+        return prototypeMesh(path);
     } catch (...) {
         removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error",
+        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+                   "using prototype mesh",
                    path.c_str());
-        return {};
+        return prototypeMesh(path);
     }
     // Identity metadata is retained, but every load still owns a distinct Ogre
     // resource/handle so destroying one ModelInstance cannot unload another.
@@ -251,6 +258,22 @@ MeshHandle Renderer::createPrimitiveMesh(const PrimitiveMeshDesc& desc)
         cached.vertices.push_back(vertex.position);
     cached.indices = primitive->indices;
     return mImpl->registerMesh(name, std::move(cached));
+}
+
+void Renderer::setPrototypeCatalog(prototype::PrototypeCatalog catalog)
+{
+    mImpl->prototypes = std::move(catalog);
+    // Cached meshes were built from the old rules; the next miss rebuilds.
+    mImpl->prototypeMeshes.clear();
+}
+
+MeshHandle Renderer::prototypeMesh(const std::string& assetPath)
+{
+    const prototype::MeshShape shape = mImpl->prototypes.meshFor(assetPath);
+    MeshHandle& cached = mImpl->prototypeMeshes[shape.role];
+    if (!cached.valid())
+        cached = createPrimitiveMesh(shape.desc);
+    return cached;
 }
 
 bool Renderer::meshBounds(MeshHandle mesh, MeshBounds& out) const
@@ -358,9 +381,11 @@ void Renderer::setNodeMaterial(NodeHandle node, const std::string& materialName)
 {
     std::string resolved = materialName;
     if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
+        const std::string fallback =
+            mImpl->prototypes.materialFor(materialName);
         log::error("Renderer: material '%s' is missing; using '%s'",
-                   materialName.c_str(), prototype::kSurfaceMaterial);
-        resolved = prototype::kSurfaceMaterial;
+                   materialName.c_str(), fallback.c_str());
+        resolved = fallback;
     }
     Ogre::SceneNode* n = mImpl->node(node, "setNodeMaterial");
     for (size_t i = 0; i < n->numAttachedObjects(); ++i)
@@ -410,8 +435,7 @@ void Renderer::setNodeEnchantment(NodeHandle node,
     if (clean.strength <= 0.0f)
         return;
 
-    const EnchantmentPalette palette = enchantmentPalette(clean.style);
-    const glm::vec3 scroll = clean.scroll * palette.scrollDirection;
+    const glm::vec3 scroll = clean.scroll * clean.palette.scrollDirection;
     Ogre::SceneNode* root = mImpl->node(node, "setNodeEnchantment");
     const auto children = [](Ogre::SceneNode* current) {
         std::vector<Ogre::SceneNode*> result;
@@ -455,8 +479,10 @@ void Renderer::setNodeEnchantment(NodeHandle node,
                         pass->getFragmentProgramParameters();
                     params->setNamedConstant(
                         "enchantColour",
-                        Ogre::Vector4(palette.colour.r, palette.colour.g,
-                                      palette.colour.b, palette.colour.a));
+                        Ogre::Vector4(clean.palette.colour.r,
+                                      clean.palette.colour.g,
+                                      clean.palette.colour.b,
+                                      clean.palette.colour.a));
                     params->setNamedConstant("enchantStrength",
                                              clean.strength);
                     params->setNamedConstant("enchantRuneScale",
@@ -487,11 +513,12 @@ void Renderer::setNodeEnchantment(NodeHandle node,
             }
 }
 
-void Renderer::setNodeEnchantment(NodeHandle node, EnchantmentStyle style,
+void Renderer::setNodeEnchantment(NodeHandle node,
+                                  const EnchantmentPalette& palette,
                                   float strength)
 {
     EnchantmentDesc desc;
-    desc.style = style;
+    desc.palette = palette;
     desc.strength = strength;
     setNodeEnchantment(node, desc);
 }
@@ -502,7 +529,8 @@ std::vector<std::string> Renderer::materialNames() const
     auto& mm = Ogre::MaterialManager::getSingleton();
     auto it = mm.getResourceIterator();
     while (it.hasMoreElements()) {
-        const std::string& n = it.getNext()->getName();
+        const Ogre::ResourcePtr resource = it.getNext();
+        const std::string& n = resource->getName();
         if (n.empty()) continue;
         // Filter engine/Ogre internals + generated helper materials.
         if (n.rfind("Ogre/", 0) == 0) continue;
@@ -511,6 +539,23 @@ std::vector<std::string> Renderer::materialNames() const
         if (n.rfind("Sprite/", 0) == 0) continue;            // per-clip generated
         if (n.find("DebugWireframe") != std::string::npos) continue;
         if (mImpl->enchantments.containsGeneratedMaterial(n)) continue;
+        // Every pass must have a vertex program. This render system has no
+        // fixed-function pipeline, so binding a shaderless material (Ogre ships
+        // "DefaultSettings", and any hand-written material can forget one)
+        // throws InvalidStateException from _setPass and takes the process with
+        // it. A picker that lists a material the renderer cannot draw is a
+        // crash waiting for someone to click it.
+        const auto material = Ogre::static_pointer_cast<Ogre::Material>(resource);
+        bool renderable = false;
+        for (Ogre::Technique* technique : material->getTechniques()) {
+            const auto& passes = technique->getPasses();
+            renderable = !passes.empty();
+            for (Ogre::Pass* pass : passes)
+                renderable = renderable && pass->hasVertexProgram();
+            if (renderable)
+                break;
+        }
+        if (!renderable) continue;
         out.push_back(n);
     }
     std::sort(out.begin(), out.end());
@@ -604,8 +649,9 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
                           const std::string& materialName, bool castShadows,
                           bool renderOnTop)
 {
-    attachMesh(node, mesh, materialName, prototype::kSurfaceMaterial,
-               castShadows, renderOnTop);
+    attachMesh(node, mesh, materialName,
+               mImpl->prototypes.materialFor(materialName), castShadows,
+               renderOnTop);
 }
 
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
@@ -653,8 +699,11 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
         mImpl->missingMaterialWarnings.shouldLog(material.requested, true))
         log::error("Renderer: material '%s' is missing; using '%s'",
                    material.requested.c_str(), material.material.c_str());
+    // Resolve against what was originally asked for, not the already-substituted
+    // name, so a missing portal still lands on the portal prototype.
     attachMesh(node, mesh, material.material,
-               prototype::kSurfaceMaterial, castShadows, renderOnTop);
+               mImpl->prototypes.materialFor(material.requested), castShadows,
+               renderOnTop);
 }
 
 std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
@@ -931,9 +980,11 @@ void Renderer::addToStaticBatch(StaticBatchHandle batch, MeshHandle mesh,
                    batch.id);
     std::string resolved = materialName;
     if (!Ogre::MaterialManager::getSingleton().getByName(resolved)) {
+        const std::string fallback =
+            mImpl->prototypes.materialFor(materialName);
         log::error("Renderer: material '%s' is missing; using '%s'",
-                   materialName.c_str(), prototype::kSurfaceMaterial);
-        resolved = prototype::kSurfaceMaterial;
+                   materialName.c_str(), fallback.c_str());
+        resolved = fallback;
     }
     mImpl->staticBatches[batch.id - 1].recs.push_back(
         {mesh, resolved, pos, yawDeg});
@@ -1176,8 +1227,19 @@ void applyMaterialParam(const std::string& materialName,
 {
     Ogre::MaterialPtr mat =
         Ogre::MaterialManager::getSingleton().getByName(materialName);
-    if (!mat)
-        log::fatal("Renderer: unknown material '%s'", materialName.c_str());
+    if (!mat) {
+        // The mesh using this material already drew with the prototype
+        // fallback; there is simply nothing here to parameterise. Tuning a
+        // missing material is not worth killing the frame over, and we must not
+        // write the params onto the shared prototype -- every other missing
+        // material would inherit them. Warn once per name and move on.
+        static std::set<std::string> warned;
+        if (warned.insert(materialName).second)
+            log::error("Renderer: cannot set '%s' on missing material '%s'; "
+                       "it is drawing with the prototype fallback",
+                       paramName.c_str(), materialName.c_str());
+        return;
+    }
     bool found = false;
     for (Ogre::Technique* tech : mat->getTechniques()) {
         for (Ogre::Pass* pass : tech->getPasses()) {
@@ -1450,6 +1512,41 @@ void Renderer::setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient
 {
     mImpl->core.setEditorCameraPose(pos.x, pos.y, pos.z, orient.w, orient.x,
                                     orient.y, orient.z, fovDeg);
+}
+
+void Renderer::setEditorViewportBackground(const glm::vec3& colour)
+{
+    mImpl->core.setOffscreenBackground(colour.r, colour.g, colour.b);
+}
+
+void Renderer::enableMaterialThumbnail(int size)
+{
+    mImpl->core.enableThumbnailViewport(size);
+}
+
+void Renderer::setMaterialThumbnailCamera(const glm::vec3& position,
+                                          const glm::quat& orientation,
+                                          float fovDeg)
+{
+    mImpl->core.setThumbnailCameraPose(position.x, position.y, position.z,
+                                       orientation.w, orientation.x,
+                                       orientation.y, orientation.z, fovDeg);
+}
+
+uint64_t Renderer::materialThumbnailTextureId() const
+{
+    return mImpl->core.thumbnailTextureId();
+}
+
+void Renderer::setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly)
+{
+    Ogre::SceneNode* scene = mImpl->node(node, "setNodeThumbnailOnly");
+    // The flag rides on the attached movables, not the node: Ogre filters
+    // visibility per renderable, and a SceneNode has no flags of its own.
+    for (Ogre::MovableObject* object : scene->getAttachedObjects()) {
+        object->setVisibilityFlags(thumbnailOnly ? kThumbnailVisibilityFlag
+                                                 : kWorldVisibilityMask);
+    }
 }
 
 void Renderer::setDebugLines(const std::vector<DebugLine>& lines)

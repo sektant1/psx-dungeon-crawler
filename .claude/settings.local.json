@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkg-config --modversion OGRE)",
+      "Bash(git -C /home/gfe/Repos/psx-dungeon-crawler check-ignore vendor)",
+      "Bash(git push *)",
+      "Bash(xargs -I{} du -h {})",
+      "Bash(git ls-tree *)",
+      "Bash(make)",
+      "Bash(python3 -)",
+      "Bash(cmake -S . -B build)",
+      "Bash(cmake --build build --target scene_validate_tests -j8)"
+    ]
+  }
+}

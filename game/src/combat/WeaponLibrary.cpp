@@ -1,5 +1,7 @@
 #include "WeaponLibrary.h"
 
+#include <eng/Log.h>
+
 #define TOML_EXCEPTIONS 0
 #include <tomlplusplus/toml.hpp>
 
@@ -12,24 +14,6 @@ namespace {
 
 float num(const toml::table& t, const char* key, float fb) {
     return float(t[key].value_or(double(fb)));
-}
-
-DamageType parseType(const std::string& s, DamageType fb) {
-    static const std::array<std::pair<const char*, DamageType>, kDamageTypeCount>
-        kMap{{{"physical", DamageType::Physical},
-              {"slash", DamageType::Slash},
-              {"pierce", DamageType::Pierce},
-              {"blunt", DamageType::Blunt},
-              {"fire", DamageType::Fire},
-              {"frost", DamageType::Frost},
-              {"lightning", DamageType::Lightning},
-              {"poison", DamageType::Poison},
-              {"arcane", DamageType::Arcane},
-              {"true", DamageType::True}}};
-    for (auto& [name, t] : kMap)
-        if (s == name)
-            return t;
-    return fb;
 }
 
 CrowdControl parseCC(const std::string& s, bool& ok) {
@@ -60,7 +44,7 @@ void parseWeapons(const toml::table& root,
         def.name = t->at_path("name").value_or(def.name);
         def.baseDamage = num(*t, "base_damage", def.baseDamage);
         if (auto s = (*t)["damage_type"].value<std::string>())
-            def.damageType = parseType(*s, def.damageType);
+            def.damageTypeName = *s;
         def.critChance = num(*t, "crit_chance", def.critChance);
         def.critMultiplier = num(*t, "crit_multiplier", def.critMultiplier);
         def.knockback = num(*t, "knockback", def.knockback);
@@ -103,7 +87,7 @@ WeaponLibrary::WeaponLibrary() {
     WeaponDef sword;
     sword.name = "Iron Sword";
     sword.baseDamage = 22.0f;
-    sword.damageType = DamageType::Physical;
+    sword.damageTypeName = "physical";
     sword.critChance = 0.15f;
     sword.critMultiplier = 2.0f;
     sword.knockback = 6.0f;
@@ -112,7 +96,7 @@ WeaponLibrary::WeaponLibrary() {
     WeaponDef arrow;
     arrow.name = "Arrow";
     arrow.baseDamage = 18.0f;
-    arrow.damageType = DamageType::Physical;
+    arrow.damageTypeName = "physical";
     arrow.critChance = 0.20f;
     arrow.critMultiplier = 2.5f;
     arrow.knockback = 4.0f;
@@ -121,7 +105,7 @@ WeaponLibrary::WeaponLibrary() {
     WeaponDef fireball;
     fireball.name = "Fireball";
     fireball.baseDamage = 30.0f;
-    fireball.damageType = DamageType::Fire;
+    fireball.damageTypeName = "fire";
     fireball.critChance = 0.10f;
     fireball.critMultiplier = 2.0f;
     fireball.knockback = 5.0f;
@@ -131,7 +115,7 @@ WeaponLibrary::WeaponLibrary() {
     WeaponDef beam;
     beam.name = "Frost Beam";
     beam.baseDamage = 12.0f;
-    beam.damageType = DamageType::Frost;
+    beam.damageTypeName = "frost";
     beam.knockback = 1.0f;
     beam.ccOnHit.push_back({CrowdControl::Chill, 0.4f, 2.0f}); // 40% slow, 2 s
     mDefs["beam"] = beam;
@@ -139,7 +123,7 @@ WeaponLibrary::WeaponLibrary() {
     WeaponDef torch;
     torch.name = "Torch";
     torch.baseDamage = 8.0f;
-    torch.damageType = DamageType::Fire;
+    torch.damageTypeName = "fire";
     torch.knockback = 3.0f;
     torch.ccOnHit.push_back({CrowdControl::Burn, 3.0f, 2.0f});
     mDefs["torch"] = torch;
@@ -151,6 +135,23 @@ bool WeaponLibrary::load(const std::string& tomlPath) {
         return false;
     parseWeapons(parsed.table(), mDefs);
     return true;
+}
+
+void WeaponLibrary::resolve(const CombatVocabulary& vocabulary) {
+    for (auto& [id, def] : mDefs) {
+        const DamageTypeId resolved = vocabulary.damageType(def.damageTypeName);
+        if (resolved == kInvalidDamageType) {
+            eng::log::error(
+                "WeaponLibrary: weapon '%s' uses damage type '%s', which "
+                "magic.toml does not define; falling back to the first channel",
+                id.c_str(), def.damageTypeName.c_str());
+            def.damageType = 0;
+            def.damageIgnoresResistances = vocabulary.bypassesMitigation(0);
+            continue;
+        }
+        def.damageType = resolved;
+        def.damageIgnoresResistances = vocabulary.bypassesMitigation(resolved);
+    }
 }
 
 bool WeaponLibrary::loadFromString(const char* tomlSrc) {

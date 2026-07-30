@@ -1,21 +1,44 @@
 #include "RenderPresets.h"
+#include "eng/RenderPresetInfo.h"
+#include "eng/Log.h"
 #include "eng/Renderer.h"
 #include <cstring>
 
 namespace eng {
 
+// The single place the name -> id mapping is written down. Both the lookup
+// below and every UI that lists presets read this, so neither can drift.
+const std::vector<RenderPresetInfo>& renderPresets()
+{
+    static const std::vector<RenderPresetInfo> kPresets = {
+        {"ps1", 1},      {"ps2", 2},        {"gamecube", 3}, {"n64", 4},
+        {"pixel-3d", 5}, {"modern-ps1", 6}, {"dungeon", 7},
+    };
+    return kPresets;
+}
+
 int renderPresetFromName(const char* name)
 {
     if (!name) return -1;
-    if (!std::strcmp(name, "ps1")) return 1;
-    if (!std::strcmp(name, "ps2")) return 2;
-    if (!std::strcmp(name, "gamecube")) return 3;
-    if (!std::strcmp(name, "n64")) return 4;
-    if (!std::strcmp(name, "pixel-3d")) return 5;
-    if (!std::strcmp(name, "modern-ps1")) return 6;
-    if (!std::strcmp(name, "dungeon")) return 7;
     if (!std::strcmp(name, "default")) return kDefaultRenderPreset;
+    for (const RenderPresetInfo& p : renderPresets())
+        if (!std::strcmp(name, p.name)) return p.id;
     return -1;
+}
+
+int renderPresetFromArgs(int argc, const char* const* argv)
+{
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (!argv[i] || std::strcmp(argv[i], "--render-preset"))
+            continue;
+        const int id = renderPresetFromName(argv[i + 1]);
+        if (id > 0)
+            return id;
+        log::warn("Unknown --render-preset '%s'; using the default profile "
+                  "instead", argv[i + 1] ? argv[i + 1] : "");
+        return 0;
+    }
+    return 0;
 }
 
 RenderPresetValues renderPresetValues(int preset)
@@ -304,6 +327,13 @@ void applyRenderPreset(Renderer& r, const RenderPresetValues& v)
 
     r.setMaterialParam("PSX/HardwareResolve", "resolveMode", v.hardwareResolveMode);
     r.setMaterialParam("PSX/HardwareResolve", "resolveStrength", v.hardwareResolveStrength);
+}
+
+// Public by-id entry point: this is all a game needs, and it keeps
+// RenderPresetValues (and its ~40 fields) an engine-private detail.
+void applyRenderPreset(Renderer& r, int id)
+{
+    applyRenderPreset(r, renderPresetValues(id));
 }
 
 } // namespace eng

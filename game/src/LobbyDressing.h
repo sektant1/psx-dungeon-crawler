@@ -22,7 +22,7 @@ struct LobbyProp {
 bool parseLobbyDressing(const std::string& tomlPath,
                         std::vector<LobbyProp>& out, std::string& err);
 
-// Loads authored static prop placements and attaches them under kRootNode.
+// Loads authored static showroom prop placements under kRootNode.
 // Returns false + logs on a malformed file; missing meshes are skipped.
 // meshDir is the props mesh directory (assets + "/meshes/props/").
 bool loadLobbyDressing(eng::Renderer& r, const std::string& tomlPath,

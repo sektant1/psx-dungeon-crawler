@@ -59,20 +59,18 @@ Faction parseFaction(const std::string& s)
     return Faction::Neutral;
 }
 
-// "type=value" -> writes into resist; returns false if the type is unknown.
-bool parseResist(const std::string& kv, Resistances& r)
+// "channel=value" -> writes into resist; returns false when magic.toml does
+// not define that channel. Scripts therefore reach every authored channel and
+// no others, without this parser knowing any of their names.
+bool parseResist(const std::string& kv, Resistances& r,
+                 const CombatVocabulary& vocabulary)
 {
     const auto eq = kv.find('=');
     if (eq == std::string::npos) return false;
-    const std::string k = kv.substr(0, eq);
-    const float v = std::stof(kv.substr(eq + 1));
-    if (k == "physical") r[DamageType::Physical] = v;
-    else if (k == "fire") r[DamageType::Fire] = v;
-    else if (k == "frost") r[DamageType::Frost] = v;
-    else if (k == "lightning") r[DamageType::Lightning] = v;
-    else if (k == "poison") r[DamageType::Poison] = v;
-    else if (k == "arcane") r[DamageType::Arcane] = v;
-    else return false;
+    const DamageTypeId type = vocabulary.damageType(kv.substr(0, eq));
+    if (type == kInvalidDamageType)
+        return false;
+    r[type] = std::stof(kv.substr(eq + 1));
     return true;
 }
 
@@ -141,7 +139,7 @@ struct Runner {
             for (size_t i = 2; i < t.size(); ++i) {
                 if (t[i].rfind("hp=", 0) == 0) hp = std::stof(t[i].substr(3));
                 else if (t[i].rfind("faction=", 0) == 0) fac = parseFaction(t[i].substr(8));
-                else parseResist(t[i], resist);
+                else parseResist(t[i], resist, world.vocabulary());
             }
             if (!world.addCombatant(t[1], hp, fac, resist))
                 fail("duplicate combatant " + t[1]);

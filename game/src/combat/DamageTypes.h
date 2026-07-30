@@ -1,4 +1,6 @@
 #pragma once
+#include "CombatVocabulary.h"
+
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
@@ -6,22 +8,8 @@
 
 namespace game {
 
-// Elemental damage channels. Resistances are keyed by this; True bypasses all
-// mitigation. Keep Count last.
-enum class DamageType {
-    Physical,   // generic / environmental / unarmed fallback
-    Slash,      // blades: sword
-    Pierce,     // points: arrow, spear
-    Blunt,      // impact: mace, hammer, kick
-    Fire,
-    Frost,
-    Lightning,
-    Poison,
-    Arcane,
-    True,
-    Count
-};
-inline constexpr int kDamageTypeCount = static_cast<int>(DamageType::Count);
+// Damage channels live in assets/magic.toml, not here: a packet carries the
+// channel's id (see CombatVocabulary) rather than a compiled-in enum value.
 
 // Crowd-control / status kinds. Stun/Root/Silence are boolean gates (magnitude
 // ignored); Slow/Chill carry a 0..1 movement-speed reduction; Burn carries a
@@ -49,7 +37,11 @@ struct CCApplication {
 // applies to the target's physics body (the resolver stays physics-free).
 struct DamagePacket {
     float amount = 0.0f;
-    DamageType type = DamageType::Physical;
+    DamageTypeId type = 0;
+    // Copied from the channel's definition when the packet is built. The
+    // resolver reads this instead of consulting the vocabulary, which keeps
+    // mitigation a pure function of the packet and the target.
+    bool ignoresResistances = false;
     entt::entity source = entt::null;
     bool crit = false; // informational, for floating-text / VFX
     glm::vec3 knockback{0.0f};

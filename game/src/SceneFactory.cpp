@@ -1,42 +1,44 @@
 #include "SceneFactory.h"
 #include "ParticleEffects.h"
-#include "PortalGeometry.h"
 
 #include <eng/Log.h>
 #include <eng/Primitive.h>
 #include <eng/Renderer.h>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #define TOML_EXCEPTIONS 0
 #include <tomlplusplus/toml.hpp>
 
 #include <cmath>
+#include <filesystem>
+#include <iterator>
 #include <unordered_map>
 
 PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
                             const PortalPropStyle& style)
 {
     PortalProp out;
+    const float openingHalfWidth = style.fieldSize.x * 0.5f;
+    const float openingHalfHeight = style.fieldSize.y * 0.5f;
+    // A quad, not a disc: the membrane fills a rectangular doorway, and an
+    // inscribed ellipse leaves the four corners showing the solid rock behind.
+    // planeGeometry lies in XZ and is two-sided, so it takes the same 90-degree
+    // tilt the disc did and reads from both sides of the threshold.
+    //
+    // It runs the full height of the surround, not just the opening: the kit
+    // Arch's soffit is a curve, so a membrane stopping at the opening's top
+    // edge leaves a dark crescent under the arch stones.
+    const float membraneHeight = style.fieldSize.y + style.frameHeadHeight;
     eng::PrimitiveMeshDesc membraneDesc;
-    membraneDesc.kind = eng::PrimitiveKind::Disc;
-    membraneDesc.radius = style.innerRadius;
-    membraneDesc.segments = style.segments;
+    membraneDesc.kind = eng::PrimitiveKind::Plane;
+    membraneDesc.size = {style.fieldSize.x, 1.0f, membraneHeight};
     const eng::MeshHandle membrane =
         r.createPrimitiveMesh(membraneDesc);
 
-    eng::PrimitiveMeshDesc frameDesc;
-    frameDesc.kind = eng::PrimitiveKind::BeveledBox;
-    frameDesc.bevel = style.frameBevel;
-    const eng::MeshHandle framePrimitive =
-        r.createPrimitiveMesh(frameDesc);
-    if (!membrane.valid() || !framePrimitive.valid()) {
-        eng::log::error(
-            "PortalProp: failed to create membrane or frame primitive");
-        if (membrane.valid())
-            r.releaseMesh(membrane);
-        if (framePrimitive.valid())
-            r.releaseMesh(framePrimitive);
+    if (!membrane.valid()) {
+        eng::log::error("PortalProp: failed to create the membrane mesh");
         return {};
     }
 
@@ -45,30 +47,68 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
                      glm::angleAxis(glm::radians(style.yawDegrees),
                                     glm::vec3(0, 1, 0)));
 
+    // The opening's centre height, so both the membrane and the frame stand on
+    // the floor by construction instead of by two tuned numbers.
     const eng::NodeHandle arch = r.createNode(
-        out.root, {0.0f, style.height, 0.0f});
-    const eng::NodeHandle frame = r.createNode(arch);
-    const float openingHalfWidth =
-        style.innerRadius * style.fieldScale.x;
-    const float openingHalfHeight =
-        style.innerRadius * style.fieldScale.y;
-    const auto framePart = [&](const PortalBlock& block) {
-        const eng::NodeHandle part = r.createNode(frame, block.position);
-        r.setScale(part, block.scale * style.frameScale);
-        r.attachMesh(part, framePrimitive, style.frameMaterial, false);
-    };
-    for (const PortalBlock& block : buildSteppedPortalBlocks({
-             openingHalfWidth, openingHalfHeight, style.frameWidth,
-             style.frameDepth}))
-        framePart(block);
+        out.root, {0.0f, openingHalfHeight, 0.0f});
 
-    out.field = r.createNode(arch, {0.0f, 0.0f, style.membraneInset});
-    r.setScale(out.field,
-               {style.fieldScale.x, 1.0f, style.fieldScale.y});
+    // Surround: the kit's own Pillar flanking the opening and its Arch as the
+    // head, baked to metres at load. Kit pieces are authored on a 20-unit grid,
+    // centred on X/Z with the base at Y=0 -- except Arch, the head of an
+    // opening, which spans Y 4.81..16.81 and so is translated down onto the
+    // opening's top edge. This replaces a set of generated beveled boxes that
+    // shared neither the kit's silhouette nor its atlas.
+    if (!style.kitMeshDir.empty()) {
+        const eng::NodeHandle frame = r.createNode(out.root);
+        const float pillarWidth = style.framePillarWidth;
+        const float pillarSide = pillarWidth / 5.65f; // Pillar is 5.65 across
+        // Pillars run the membrane's full height, not just the opening's: the
+        // arch's soffit only reaches over the membrane's edge some way above the
+        // spring line, leaving a thin band at each shoulder where the membrane
+        // showed past the frame. The overshoot hides behind the arch head, which
+        // is wider than the pillars and drawn in front of them.
+        const glm::mat4 kitToPillar = glm::scale(
+            glm::mat4(1.0f),
+            {pillarSide, membraneHeight / 30.2f, pillarSide});
+        const eng::MeshHandle pillar =
+            r.loadObj(style.kitMeshDir + "Pillar.obj", &kitToPillar);
+        const float jambX = openingHalfWidth + pillarWidth * 0.5f;
+        for (const float x : {-jambX, jambX}) {
+            const eng::NodeHandle post = r.createNode(frame, {x, 0.0f, 0.0f});
+            r.attachMesh(post, pillar, style.frameMaterial, false);
+        }
+        // Arch spans the two posts, so it is as wide as the whole surround.
+        const float headScaleX = (style.fieldSize.x + pillarWidth * 2.0f) / 20.02f;
+        const float headScaleY = style.frameHeadHeight / 12.0f;
+        const glm::mat4 kitToHead =
+            glm::translate(glm::mat4(1.0f), {0.0f, -4.81f * headScaleY, 0.0f}) *
+            glm::scale(glm::mat4(1.0f),
+                       {headScaleX, headScaleY, style.frameDepth / 4.0f});
+        const eng::MeshHandle head =
+            r.loadObj(style.kitMeshDir + "Arch.obj", &kitToHead);
+        // The head straddles the membrane in depth instead of sitting behind it:
+        // the membrane stands proud of the frame plane, so a head level with
+        // that plane cannot occlude it and the membrane's square top corners
+        // spill past the arch's curve. Offset forward by a quarter of the head's
+        // depth and the stone covers the corners while its opening still shows
+        // the membrane through. The pillars are deep enough to straddle it
+        // already, which is why only the top edge spilled.
+        const eng::NodeHandle lintel = r.createNode(
+            frame, {0.0f, style.fieldSize.y,
+                    style.membraneInset + style.frameDepth * 0.25f});
+        r.attachMesh(lintel, head, style.frameMaterial, false);
+    }
+
+    // Offset so the membrane's *base* stays on the floor while its extra height
+    // goes up behind the arch head.
+    out.field = r.createNode(
+        arch, {0.0f, membraneHeight * 0.5f - openingHalfHeight,
+               style.membraneInset});
     r.setOrientation(out.field,
                      glm::angleAxis(glm::radians(90.0f),
                                     glm::vec3(1, 0, 0)));
     r.attachMesh(out.field, membrane, style.material);
+    out.opening = style.fieldSize;
     if (!style.particles.empty())
         r.spawnParticles(style.particles, arch);
     eng::LightDesc glow;
@@ -86,7 +126,10 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
 }
 
 bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
-                           std::vector<ShowcaseExhibit>& loadedExhibits)
+                           std::vector<ShowcaseExhibit>& loadedExhibits,
+                           const game::CombatVocabulary& vocabulary,
+                           const std::unordered_map<std::string, glm::vec3>&
+                               placements)
 {
     const toml::parse_result parsed = toml::parse_file(path);
     if (!parsed) {
@@ -151,18 +194,35 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         const std::string shape = (*e)["shape"].value_or(std::string());
         const std::string material = (*e)["material"].value_or(std::string());
         const std::string id = (*e)["id"].value_or(shape);
+        const std::string placement =
+            (*e)["placement"].value_or(id);
         const bool isSword = shape == "sword";
         const bool isStaff = shape == "staff";
         const bool isParticleAltar = shape == "particle_altar";
+        const bool isAssetMesh = shape == "asset_mesh";
         const bool isComposite = isSword || isStaff || isParticleAltar;
-        const eng::MeshHandle mesh = isComposite ? eng::MeshHandle{}
-                                                  : meshFor(shape);
+        eng::MeshHandle mesh = isComposite ? eng::MeshHandle{}
+                                            : meshFor(shape);
+        if (isAssetMesh) {
+            const std::string meshPath =
+                (*e)["mesh"].value_or(std::string());
+            if (!meshPath.empty())
+                mesh = r.loadObj(
+                    (std::filesystem::path(path).parent_path() / meshPath)
+                        .string());
+        }
         if ((!isComposite && !mesh.valid()) || material.empty()) {
             eng::log::error("Showcase: skipping invalid '%s' exhibit",
                             shape.c_str());
             continue;
         }
-        const glm::vec3 position = vec3(*e, "position", {});
+        const auto authoredPlacement = placements.find(placement);
+        if (authoredPlacement == placements.end()) {
+            eng::log::error("Showcase: no scene marker for '%s'",
+                            placement.c_str());
+            continue;
+        }
+        const glm::vec3 position = authoredPlacement->second;
         const glm::vec3 scale = vec3(*e, "scale", glm::vec3(1.0f));
         eng::NodeHandle placed = r.createNode(eng::kRootNode, position);
         r.setScale(placed, scale);
@@ -174,16 +234,15 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             glm::angleAxis(glm::radians(degrees.x), glm::vec3(1,0,0)) *
             glm::angleAxis(glm::radians(degrees.z), glm::vec3(0,0,1)));
 
-        eng::EnchantmentStyle enchantStyle = eng::EnchantmentStyle::Arcane;
+        // A school name, resolved through magic.toml. An unknown name lands
+        // on the default school rather than dropping the enchantment.
         const std::string enchantment =
             (*e)["enchantment"].value_or(std::string());
-        if (enchantment == "fire") enchantStyle = eng::EnchantmentStyle::Fire;
-        else if (enchantment == "poison")
-            enchantStyle = eng::EnchantmentStyle::Poison;
-        else if (enchantment == "frost")
-            enchantStyle = eng::EnchantmentStyle::Frost;
+        const eng::EnchantmentPalette enchantPalette =
+            vocabulary.palette(enchantment);
         const float enchantStrength =
-            float((*e)["enchantment_strength"].value_or(0.75));
+            float((*e)["enchantment_strength"].value_or(
+                double(vocabulary.defaultEnchantStrength())));
         const auto part = [&](eng::NodeHandle parent, glm::vec3 offset,
                               glm::vec3 partScale, eng::MeshHandle partMesh,
                               const std::string& partMaterial,
@@ -192,7 +251,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             r.setScale(child, partScale);
             r.attachMesh(child, partMesh, partMaterial, false);
             if (enchanted && !enchantment.empty())
-                r.setNodeEnchantment(child, enchantStyle, enchantStrength);
+                r.setNodeEnchantment(child, enchantPalette, enchantStrength);
             return child;
         };
 
@@ -238,7 +297,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         if (const std::string enchantment =
                 (*e)["enchantment"].value_or(std::string());
             !enchantment.empty() && !isComposite)
-            r.setNodeEnchantment(display, enchantStyle, enchantStrength);
+            r.setNodeEnchantment(display, enchantPalette, enchantStrength);
         if (const std::string particles =
                 (*e)["particles"].value_or(std::string()); !particles.empty()) {
             eng::ParticleSpawnOptions particleOptions;
@@ -310,7 +369,8 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
     return loaded > 0;
 }
 
-TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& props) {
+TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& props,
+                                   glm::vec3 origin) {
     TreasureShrine sh;
     sh.chestGlowColour = glm::vec3(1.0f, 0.62f, 0.22f) * 1.6f;
     eng::MeshHandle vase0 = r.loadObj(props + "prop_vase_p0.obj");
@@ -319,7 +379,7 @@ TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& props) {
     for (int i = 0; i < 5; ++i) {
         const float a = glm::radians(72.0f * float(i) + 56.0f);
         const glm::vec3 pos{3.2f * std::sin(a), 0.0f, 3.2f * std::cos(a)};
-        eng::NodeHandle n = r.createNode(eng::kRootNode, pos);
+        eng::NodeHandle n = r.createNode(eng::kRootNode, origin + pos);
         r.setOrientation(n, glm::angleAxis(a, glm::vec3(0, 1, 0)));
         if (i % 2 == 0) {
             r.attachMesh(n, vase0, "Game/PropTerracotta", true);
@@ -329,7 +389,8 @@ TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& props) {
         }
     }
 
-    sh.chestBase = r.createNode(eng::kRootNode, {0.0f, 1.35f, 0.0f});
+    sh.chestBase = r.createNode(
+        eng::kRootNode, origin + glm::vec3(0.0f, 1.35f, 0.0f));
     sh.chestSpin = r.createNode(sh.chestBase);
     r.setScale(sh.chestSpin, glm::vec3(6.0f));
     r.attachMesh(sh.chestSpin, r.loadObj(props + "prop_chest.obj"),
@@ -338,6 +399,33 @@ TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& props) {
     // The glow light is spawned by the caller as an ECS actor (see buildLevel);
     // sh.chestGlowColour / sh.glowRange carry the authored values.
     return sh;
+}
+
+void buildCrystalRing(eng::Renderer& r, const std::string& meshDir,
+                      glm::vec3 origin)
+{
+    const eng::MeshHandle ground = r.loadObj(meshDir + "crystal_ground.obj");
+    const eng::MeshHandle spires[] = {
+        r.loadObj(meshDir + "crystal_spire1.obj"),
+        r.loadObj(meshDir + "crystal_spire2.obj"),
+        r.loadObj(meshDir + "crystal_spire3.obj"),
+        r.loadObj(meshDir + "crystal_spire4.obj")};
+    constexpr float angles[] = {18.0f, 78.0f, 145.0f, 214.0f, 286.0f};
+    for (std::size_t i = 0; i < std::size(angles); ++i) {
+        const float angle = glm::radians(angles[i]);
+        const glm::vec3 position = origin + glm::vec3(
+            2.35f * std::sin(angle), 0.0f, 2.35f * std::cos(angle));
+        const eng::NodeHandle root = r.createNode(eng::kRootNode, position);
+        r.setOrientation(root, glm::angleAxis(-angle, glm::vec3(0, 1, 0)));
+        const eng::NodeHandle base = r.createNode(root);
+        r.setScale(base, glm::vec3(0.31f));
+        r.attachMesh(base, ground, "PSX/CrystalGround", true);
+        const eng::NodeHandle crystal = r.createNode(root);
+        const float height = 0.72f + 0.10f * float(i % 3);
+        r.setScale(crystal, {0.48f, height, 0.48f});
+        r.attachMesh(crystal, spires[i % std::size(spires)],
+                     "PSX/CrystalSpire", true);
+    }
 }
 
 void buildBraziers(eng::Renderer& r, const std::string& props,

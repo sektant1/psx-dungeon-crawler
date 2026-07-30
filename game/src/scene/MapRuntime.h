@@ -1,7 +1,6 @@
 #pragma once
 
-#include "PhysicsSync.h"
-
+#include <eng/ecs/PhysicsSync.h>
 #include <eng/ecs/Scene.h>
 #include <eng/ecs/SceneSync.h>
 #include <eng/Handles.h>
@@ -9,12 +8,20 @@
 #include <entt/entt.hpp>
 #include <functional>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <string>
+#include <vector>
 
 namespace eng { class Physics; }
 namespace eng::ecs { class SceneBackend; }
 
 namespace game {
+
+struct ScenePlacement {
+    std::string type;
+    glm::vec3 position{0.0f};
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+};
 
 class MapRuntime {
 public:
@@ -26,13 +33,16 @@ public:
     void buildAll();
     void step(float dt);
     glm::vec3 playerSpawn() const;
+    glm::vec3 levelExit() const;
+    float exitYawDegrees() const;
+    std::vector<ScenePlacement> placements(const std::string& prefix = {}) const;
 
     entt::registry& registry() { return mScene.registry(); }
 
 private:
     eng::ecs::Scene mScene;
     eng::ecs::SceneSync mSceneSync;
-    PhysicsSync mPhysicsSync;
+    eng::ecs::PhysicsSync mPhysicsSync;
     eng::Physics& mPhysics;
 };
 

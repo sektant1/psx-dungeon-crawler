@@ -1,4 +1,4 @@
-#include "ByteStream.h"
+#include <eng/io/ByteStream.h>
 #include "ComponentRegistry.h"
 #include "GameComponents.h"
 
@@ -9,6 +9,8 @@
 #include <set>
 
 using namespace mapio;
+using namespace eng::ecs;
+using namespace eng::io;
 
 static void require(bool c, const char* m)
 {
@@ -42,7 +44,7 @@ int main()
     entt::registry dst;
     entt::entity d = dst.create();
     ByteReader r(w.bytes().data(), w.bytes().size(), w.pool());
-    transform->deserialize(dst, d, r);
+    transform->deserialize(dst, d, r, uint32_t(w.bytes().size()));
     require(r.ok(), "deserialize stayed in bounds");
 
     const auto& t = dst.get<eng::ecs::Transform>(d);
@@ -51,6 +53,22 @@ int main()
 
     transform->remove(dst, d);
     require(!transform->has(dst, d), "remove() drops the component");
+
+    const ComponentType* collider = reg.find(10 /* Collider */);
+    require(collider != nullptr, "Collider is registered under id 10");
+    ByteWriter legacyCollider;
+    legacyCollider.u8(uint8_t(eng::ShapeKind::Box));
+    legacyCollider.vec3(glm::vec3(1.0f));
+    legacyCollider.u8(0); // legacy payload ended at layer; no sensor byte
+    entt::entity legacyEntity = dst.create();
+    ByteReader legacyReader(legacyCollider.bytes().data(),
+                            legacyCollider.bytes().size(),
+                            legacyCollider.pool());
+    collider->deserialize(dst, legacyEntity, legacyReader,
+                          uint32_t(legacyCollider.bytes().size()));
+    require(legacyReader.ok(), "legacy collider payload stays in bounds");
+    require(!dst.get<game::Collider>(legacyEntity).sensor,
+            "legacy collider defaults to a solid body");
 
     std::cout << "ComponentRegistryTests OK\n";
     return 0;

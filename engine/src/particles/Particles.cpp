@@ -43,7 +43,8 @@ bool validSpawnOptions(const ParticleSpawnOptions& o)
 void Particles::init(Ogre::SceneManager* sm){ mSm = sm; }
 
 void Particles::applyQuota(Ogre::ParticleSystem* ps, const ParticleEffectDesc& d){
-    const float qscale = 1.0f - d.qualityWeight * (1.0f - mQuality);
+    const float qscale =
+        particleQualityScale(d.visualRole, d.qualityWeight, mQuality);
     const int quota = std::max(1, int(std::lround(d.quota * qscale)));
     ps->setParameter("quota", std::to_string(quota));
 }
@@ -225,8 +226,8 @@ ParticlesHandle Particles::spawn(ParticleEffectId fx, Ogre::SceneNode* parent,
     if (!validSpawnOptions(rawOptions))
         log::warn("Particles: invalid spawn options sanitized for effect '%s'",
                   e.desc.name.c_str());
-    const float qscale =
-        1.0f - e.desc.qualityWeight * (1.0f - mQuality);
+    const float qscale = particleQualityScale(
+        e.desc.visualRole, e.desc.qualityWeight, mQuality);
     const ResolvedParticleSpawn resolved =
         resolveParticleSpawn(e.desc, rawOptions, localPos, qscale);
     configure(ps, e.desc, resolved);

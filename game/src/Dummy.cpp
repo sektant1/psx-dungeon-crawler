@@ -1,4 +1,5 @@
 #include "Dummy.h"
+#include "GameCollision.h"
 
 #include <eng/Physics.h>
 #include <eng/Renderer.h>
@@ -23,7 +24,7 @@ void Dummy::init(eng::Physics& phys, eng::Renderer& r, glm::vec3 feetPos)
     bd.radius     = kRadius;
     bd.halfHeight = kHalfHeight;
     bd.position   = feetPos + glm::vec3(0.0f, kCentreY, 0.0f);
-    bd.layer      = eng::BodyLayer::Prop;
+    bd.layer      = game::layer::Prop;
     bd.dynamic    = true;
     bd.mass       = 40.0f;
     bd.friction   = 0.6f;
@@ -34,16 +35,27 @@ void Dummy::init(eng::Physics& phys, eng::Renderer& r, glm::vec3 feetPos)
     mRenderOffset = glm::vec3(0.0f, kCentreY, 0.0f);
 
     // Mesh: prop_haybale.obj with the Game/PropHay material.
-    // Scale to roughly 1.8 m tall (haybale is roughly cube-shaped ~0.65 m;
-    // scale Y by ~2.8 to fill the capsule height, XZ slightly for silhouette).
+    //
+    // Measured off the .obj: prop_haybale.obj is 1.353 x 0.794 x 1.800 m. It
+    // is not "roughly cube-shaped ~0.65 m" as the previous comment claimed --
+    // it is a flat, strongly oblong bale, twice as deep as it is tall. Scaling
+    // it by (1.1, 2.77, 1.1) off that wrong assumption produced a 1.49 x 2.20
+    // x 1.98 m object standing in for a 0.60 m wide, 1.80 m tall capsule: the
+    // dummy was three times wider than what your swings actually had to hit,
+    // and 40 cm of it stuck out above its own head.
+    //
+    // Scale is now derived from the measurement so the silhouette is the
+    // hitbox: Y 1.800/0.794, X 0.600/1.353, Z 0.600/1.800.
     const std::string propsDir =
         std::string(APP_ASSET_DIR) + "/meshes/props/";
     eng::MeshHandle mesh = r.loadObj(propsDir + "prop_haybale.obj");
 
     mNode = r.createNode(eng::kRootNode, feetPos);
-    // Scale: the haybale is ~0.65 m; we want ~1.8 m tall -> ~2.77 scale Y.
-    // Widen slightly (1.1) so it reads as a human-ish silhouette.
-    r.setScale(mNode, glm::vec3(1.1f, 2.77f, 1.1f));
+    constexpr float kMeshX = 1.353f, kMeshY = 0.794f, kMeshZ = 1.800f;
+    constexpr float kTargetH = kCentreY * 2.0f;         // 1.80 m capsule height
+    constexpr float kTargetW = kRadius * 2.0f;          // 0.60 m capsule width
+    r.setScale(mNode, glm::vec3(kTargetW / kMeshX, kTargetH / kMeshY,
+                                kTargetW / kMeshZ));
     r.attachMesh(mNode, mesh, "Game/PropHay", true);
 
     mAlive        = true;

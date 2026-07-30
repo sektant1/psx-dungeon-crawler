@@ -29,16 +29,63 @@ max_fps = 144
 [animation]
 enabled = true
 scale = 1.0            # multiplies every rate below
-characters_fps = 12    # enemies/NPCs: the channel that carries the look
-viewmodel_fps = 14     # hands/weapon: a touch faster, it sits next to the eye
-world_fps = 12         # props, torch flicker, animated dressing
-particles_fps = 12     # VFX; smooth particles beside stepped chars look broken
+characters_fps = 18    # enemies/NPCs: the channel that carries the look
+viewmodel_fps = 24     # hands/weapon: fastest stepped channel, it sits next to
+                       # the eye where a coarse rate reads as a dropped frame
+world_fps = 15         # props, torch flicker, animated dressing
+particles_fps = 18     # VFX; smooth particles beside stepped chars look broken
 projectiles_fps = 30   # arrows/spells must stay trackable, so: fast
 phase_jitter = 0.35    # spread per-object step phase so crowds aren't one puppet
+
+# Dodge: the defensive verb the fight is built around. A dash is a commitment
+# -- fixed direction, fixed distance, no steering -- and the i-frames are what
+# you are paying stamina for. iframes shorter than duration on purpose: the
+# tail of the dash is vulnerable, so a mistimed dodge still gets punished.
+# Neutral movement input dashes backwards (the backstep).
+[dodge]
+speed = 14.0        # m/s during the dash
+duration = 0.32     # seconds of movement
+cooldown = 0.45     # seconds after it ends before another is allowed
+iframes = 0.22      # seconds of invulnerability, from the start of the dash
+stamina = 25.0      # cost; an empty bar means no dodge
+
+# Simulation feel. These are game tuning, not engine internals: the engine
+# takes them from PhysicsSetup and has no opinion about the numbers.
+[physics]
+# World gravity in m/s^2, negative is down. Earth is -9.81; we run roughly
+# double that because a fast first-person game wants a short, snappy fall arc
+# -- a realistic value makes jumps feel floaty and drops feel slow. Raising the
+# magnitude shortens jumps and makes props settle harder; lowering it makes the
+# whole game feel moon-like.
+gravity = -18.0
+# How hard the player shoves a dynamic prop they walk into, as a multiple of
+# the player's speed along the contact normal (so a fast walk into a barrel
+# shoves it harder than a slow one). 0 makes props immovable walls; 2.0 lets
+# you clear a crate out of a doorway by walking through it without launching
+# it across the room.
+character_push_impulse = 2.0
+# Multi-threaded physics. Off on purpose. With more than one worker Jolt
+# resolves contacts in thread-race order, so a stack of barrels settles
+# differently every run and a boss retry is not the same fight. Single-worker
+# simulation is reproducible, which is what retries and replays need, and it
+# measures at roughly a tenth of a millisecond a frame in this scene. Turn on
+# only if a scene gets heavy enough for that to matter.
+multithreaded = false
 
 [player]
 speed = 3.0
 mouse_sensitivity = 0.002
+
+# Player-facing HUD is rendered at native output resolution after the PSX post
+# chain. Scale and contrast are accessibility controls; reduced_motion removes
+# fades/flashes without changing combat timing or information.
+[hud]
+scale = 1.0
+opacity = 0.92
+high_contrast = false
+reduced_motion = false
+crosshair = true
+numeric_values = true
 
 [bindings]
 move_forward = "W"

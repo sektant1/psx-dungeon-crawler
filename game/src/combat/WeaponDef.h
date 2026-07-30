@@ -16,7 +16,12 @@ namespace game {
 struct WeaponDef {
     std::string name = "unarmed";
     float baseDamage = 10.0f;
-    DamageType damageType = DamageType::Physical;
+    // Authored name of the damage channel, and the id it resolves to. The
+    // name is what weapons.toml carries; the id is only valid once the library
+    // has been resolved against a CombatVocabulary.
+    std::string damageTypeName = "physical";
+    DamageTypeId damageType = 0;
+    bool damageIgnoresResistances = false; // from the channel's definition
     float critChance = 0.0f;      // 0..1
     float critMultiplier = 2.0f;  // damage x this on a crit
     float knockback = 0.0f;       // world impulse magnitude along the hit dir
@@ -33,6 +38,7 @@ struct WeaponDef {
                             float roll01) const {
         DamagePacket p;
         p.type = damageType;
+        p.ignoresResistances = damageIgnoresResistances;
         p.source = source;
         p.crit = roll01 < critChance;
         p.amount = baseDamage * (p.crit ? critMultiplier : 1.0f);

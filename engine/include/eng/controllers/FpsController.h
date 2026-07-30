@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/Handles.h>
+#include <eng/Physics.h> // CollisionMask / kAllLayers used by value below
 
 #include <glm/glm.hpp>
 #include <limits>
@@ -32,9 +33,60 @@ public:
               glm::vec3 roomMax);
     void reset(glm::vec3 startPos, float speed, float sensitivity,
                glm::vec3 roomMin, glm::vec3 roomMax, float baseFov = 70.0f);
-    void simulate(const Command& command, float dt);
-    void present(eng::Renderer& r);
+    // Locomotion, at the simulation's fixed rate. Everything that touches the
+    // character controller lives here: running it on the render delta made the
+    // player's motion frame-rate dependent and, because the world around it
+    // steps at a fixed 60 Hz, visibly unstable at high frame rates -- worst
+    // while sprinting, where the per-frame displacement is largest.
+    void simulate(const Command& command, float fixedDt);
+
+    // Mouse look, at the render rate. Deliberately not part of simulate:
+    // quantising the view to the simulation rate reads as input lag in first
+    // person, and there is no physics riding on the camera's orientation.
+    void applyLook(const Command& command);
+
+    // `alpha` is the fraction of the way from the previous fixed step to the
+    // current one (Physics::interpolationAlpha). Position is interpolated
+    // between them; orientation is already current.
+    void present(eng::Renderer& r, float alpha = 1.0f);
+
+    // Reads input, looks, simulates one step and presents. For callers with no
+    // fixed-step loop of their own -- tests and tools. The game drives the
+    // three phases separately.
     void update(eng::Input& in, eng::Renderer& r, float dt);
+
+    // Fills a Command from the current input state.
+    static Command readCommand(eng::Input& in);
+
+    // Dodge/dash tuning, from data. Duration is short and speed high on
+    // purpose: the dash is a commitment, not a movement option -- you go where
+    // you pointed, at a fixed distance, and you cannot steer out of it.
+    struct DashTuning {
+        float speed = 14.0f;    // m/s during the dash
+        float duration = 0.32f; // seconds
+        float cooldown = 0.45f; // seconds before another dash is allowed
+    };
+    void setDashTuning(const DashTuning& t) { mDash = t; }
+    const DashTuning& dashTuning() const { return mDash; }
+
+    // Start a dash. `direction` is world-space XZ; a zero direction dashes
+    // backwards, which is the souls-style backstep you get from a neutral
+    // input. Returns false while another dash is running or cooling down, so
+    // the caller knows not to spend stamina or grant i-frames.
+    bool beginDash(glm::vec2 direction);
+    bool dashing() const { return mDashTime > 0.0f; }
+    // Movement direction the current input maps to, world-space XZ, normalised.
+    // Zero when there is no movement input. Callers building a dash direction
+    // want this rather than re-deriving it from yaw.
+    glm::vec2 inputDirection(const Command& command) const;
+
+    // Layers the character body sweeps against, narrowing the world collision
+    // matrix for this character only. Default is every layer, i.e. the matrix
+    // alone. Clear a bit to make that layer pass-through for the player --
+    // phasing through props during a dash, a gate that only enemies collide
+    // with -- without editing the matrix every other body shares.
+    void setCollisionMask(CollisionMask m) { mCollisionMask = m; }
+    CollisionMask collisionMask() const { return mCollisionMask; }
 
     float& speed() { return mSpeed; }
     float& sensitivity() { return mSens; }
@@ -73,6 +125,14 @@ private:
     NodeHandle mBody{};
     NodeHandle mHead{};
     glm::vec3 mPos{0.0f};
+    // Where the character was at the previous fixed step. present() renders
+    // between the two, so a 60 Hz simulation stays smooth on a 240 Hz display.
+    glm::vec3 mPrevPos{0.0f};
+    DashTuning mDash;
+    glm::vec2 mDashDirection{0.0f};
+    float mDashTime = 0.0f;
+    float mDashCooldown = 0.0f;
+    glm::vec3 mPrevHeadOffset{0.0f, 1.7f, 0.0f};
     glm::vec3 mMin{0.0f};
     glm::vec3 mMax{0.0f};
     float mYaw = 0.0f;
@@ -104,6 +164,7 @@ private:
     bool mCharGrounded = false;
     glm::vec3 mGroundNormal{0,1,0};
     float mCeilingHeight = std::numeric_limits<float>::infinity();
+    CollisionMask mCollisionMask = kAllLayers;
     Physics* mPhysics = nullptr;
     CharacterHandle mCharacter{};
 };
