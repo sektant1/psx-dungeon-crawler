@@ -529,7 +529,8 @@ std::vector<std::string> Renderer::materialNames() const
     auto& mm = Ogre::MaterialManager::getSingleton();
     auto it = mm.getResourceIterator();
     while (it.hasMoreElements()) {
-        const std::string& n = it.getNext()->getName();
+        const Ogre::ResourcePtr resource = it.getNext();
+        const std::string& n = resource->getName();
         if (n.empty()) continue;
         // Filter engine/Ogre internals + generated helper materials.
         if (n.rfind("Ogre/", 0) == 0) continue;
@@ -538,6 +539,23 @@ std::vector<std::string> Renderer::materialNames() const
         if (n.rfind("Sprite/", 0) == 0) continue;            // per-clip generated
         if (n.find("DebugWireframe") != std::string::npos) continue;
         if (mImpl->enchantments.containsGeneratedMaterial(n)) continue;
+        // Every pass must have a vertex program. This render system has no
+        // fixed-function pipeline, so binding a shaderless material (Ogre ships
+        // "DefaultSettings", and any hand-written material can forget one)
+        // throws InvalidStateException from _setPass and takes the process with
+        // it. A picker that lists a material the renderer cannot draw is a
+        // crash waiting for someone to click it.
+        const auto material = Ogre::static_pointer_cast<Ogre::Material>(resource);
+        bool renderable = false;
+        for (Ogre::Technique* technique : material->getTechniques()) {
+            const auto& passes = technique->getPasses();
+            renderable = !passes.empty();
+            for (Ogre::Pass* pass : passes)
+                renderable = renderable && pass->hasVertexProgram();
+            if (renderable)
+                break;
+        }
+        if (!renderable) continue;
         out.push_back(n);
     }
     std::sort(out.begin(), out.end());

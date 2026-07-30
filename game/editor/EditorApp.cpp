@@ -105,6 +105,17 @@ bool EditorApp::onStart(eng::Engine& engine)
     // capture it without driving the UI.
     if (std::getenv("PSX_EDITOR_MATERIAL"))
         setMode(true);
+    // Verification hooks: drive the two interactions a screenshot run cannot
+    // click on its own.
+    if (const char* select = std::getenv("PSX_EDITOR_SELECT")) {
+        if (!mState.document.entities.empty()) {
+            const std::size_t index =
+                std::size_t(std::atoi(select)) % mState.document.entities.size();
+            mState.select(mState.document.entities[index].id);
+        }
+    }
+    if (std::getenv("PSX_EDITOR_CYCLE_MATERIALS"))
+        mCycleMaterials = true;
     return true;
 }
 
@@ -309,13 +320,16 @@ void EditorApp::duplicateSelection()
 void EditorApp::onFrameBegin(const eng::FrameContext& f)
 {
     eng::Input& input = f.engine.input();
-    ImGuiIO& io = ImGui::GetIO();
 
-    // Right button held over the viewport = fly. While flying the pointer
-    // belongs to the camera, so ImGui must not also react to it.
-    const bool wantsFly =
-        input.isMouseDown(eng::MouseButton::Right) &&
-        (mFlying || (mViewportHovered && !io.WantCaptureMouse));
+    // Right button held over the viewport = fly.
+    //
+    // Deliberately NOT gated on io.WantCaptureMouse: the viewport IS an ImGui
+    // window, so ImGui always wants the mouse while the cursor is over it, and
+    // testing that flag meant the fly camera could never engage anywhere it was
+    // useful. mViewportHovered (ImGui::IsWindowHovered on the viewport panel) is
+    // the question actually being asked -- is the cursor over the 3D view.
+    const bool wantsFly = input.isMouseDown(eng::MouseButton::Right) &&
+                          (mFlying || mViewportHovered);
     if (wantsFly != mFlying) {
         mFlying = wantsFly;
         input.setMouseGrab(mFlying);
@@ -402,6 +416,16 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
 void EditorApp::onUpdate(const eng::FrameContext& f)
 {
     eng::Renderer& renderer = f.engine.renderer();
+    // Repro hook: walk the material list the way a user scrubbing it would.
+    if (mCycleMaterials && !mMaterialNames.empty() && mStage.thumbnailBuilt()) {
+        mCycleIndex = (mCycleIndex + 1) % mMaterialNames.size();
+        const std::string& name = mMaterialNames[mCycleIndex];
+        mSelectedMaterial = name;
+        mStage.setThumbnailMaterial(renderer, name);
+        if (mMaterialMode)
+            mStage.setMaterial(renderer, name);
+    }
+
     // The swatch turns whether or not the staging mode is open: it is a live
     // preview in the corner of the material list, not a mode.
     if (mThumbAutoSpin && mStage.thumbnailBuilt())

@@ -14,10 +14,11 @@ bool finite(const glm::vec3& v)
 }
 
 void add(std::vector<Issue>& issues, Severity severity, std::string code,
-         std::string message, AuthorId entity, QuickFix fix = QuickFix::None)
+         std::string message, AuthorId entity, QuickFix fix = QuickFix::None,
+         glm::vec3 position = glm::vec3(0.0f))
 {
     issues.push_back({severity, std::move(code), std::move(message),
-                      std::move(entity), fix});
+                      std::move(entity), fix, position});
 }
 
 // Key for "two pieces claiming the same slot": a cell for floor/fill, a cell
@@ -35,6 +36,37 @@ std::string slotKey(const CellPlacement& cell, Socket socket)
     }
     return key;
 }
+
+// World-space footprint of a wall piece on the XZ plane. Only the two
+// orientations a grid-placed wall can have (along X or along Z), which is all
+// the corner check needs.
+struct Footprint {
+    AuthorId id;
+    float x0, z0, x1, z1;
+    bool alongX; // true: width runs along X (yaw 0/180)
+};
+
+bool wallFootprint(const Entity& entity, const KitPiece& piece, float scale,
+                   Footprint& out)
+{
+    if (piece.socket != Socket::Wall && piece.socket != Socket::Opening)
+        return false;
+    const glm::vec3 size = piece.sizeMeters(scale);
+    const float yaw = entity.transform.rotationDegrees.y;
+    const int quarter = ((int(std::lround(yaw / 90.0f)) % 4) + 4) % 4;
+    out.alongX = (quarter % 2) == 0;
+    const float sx = out.alongX ? size.x : size.z;
+    const float sz = out.alongX ? size.z : size.x;
+    const glm::vec3& p = entity.transform.position;
+    out.id = entity.id;
+    out.x0 = p.x - sx * 0.5f;
+    out.x1 = p.x + sx * 0.5f;
+    out.z0 = p.z - sz * 0.5f;
+    out.z1 = p.z + sz * 0.5f;
+    return true;
+}
+
+bool nearly(float a, float b) { return std::fabs(a - b) < 0.05f; }
 
 } // namespace
 
@@ -188,6 +220,66 @@ std::vector<Issue> validate(const SceneDocument& document,
         }
     }
 
+    // Convex corner gaps. A wall is one cell wide and sits entirely OUTSIDE the
+    // boundary it faces (the inset, so its inner face lands on the boundary),
+    // which means two perpendicular runs stop against each other's outer line
+    // and leave a thickness-by-thickness notch at the corner between them.
+    //
+    // Invisible from inside a sealed room, and glaring anywhere the outside of
+    // a corner is visible: an opening, a balcony, or the editor's own view. The
+    // kit's answer is a pillar, which is what pillars are for in a modular set.
+    {
+        std::vector<Footprint> walls;
+        for (const Entity& entity : document.entities) {
+            if (entity.prefab.empty())
+                continue;
+            const KitPiece* piece = catalog.find(entity.prefab);
+            Footprint footprint;
+            if (piece && wallFootprint(entity, *piece, catalog.scale(), footprint))
+                walls.push_back(footprint);
+        }
+        std::vector<std::pair<float, float>> reported;
+        for (std::size_t i = 0; i < walls.size(); ++i) {
+            for (std::size_t j = i + 1; j < walls.size(); ++j) {
+                const Footprint& a = walls[i];
+                const Footprint& b = walls[j];
+                if (a.alongX == b.alongX)
+                    continue; // parallel runs cannot make a corner
+                // Diagonally adjacent: they share exactly one corner point and
+                // no area, which is the notch.
+                for (const float ax : {a.x0, a.x1}) {
+                    for (const float az : {a.z0, a.z1}) {
+                        for (const float bx : {b.x0, b.x1}) {
+                            for (const float bz : {b.z0, b.z1}) {
+                                if (!nearly(ax, bx) || !nearly(az, bz))
+                                    continue;
+                                // Overlapping (a real join) rather than
+                                // touching at a point? Then there is no hole.
+                                const bool overlaps =
+                                    a.x0 < b.x1 - 0.05f && b.x0 < a.x1 - 0.05f &&
+                                    a.z0 < b.z1 - 0.05f && b.z0 < a.z1 - 0.05f;
+                                if (overlaps)
+                                    continue;
+                                bool seen = false;
+                                for (const auto& [rx, rz] : reported)
+                                    seen = seen || (nearly(rx, ax) && nearly(rz, az));
+                                if (seen)
+                                    continue;
+                                reported.emplace_back(ax, az);
+                                add(issues, Severity::Warning, "cell.corner_gap",
+                                    "walls '" + a.id + "' and '" + b.id +
+                                        "' meet at a corner with a " +
+                                        "hole between them; a pillar fills it",
+                                    a.id, QuickFix::FillCornerGap,
+                                    glm::vec3(ax, 0.0f, az));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (playerSpawns == 0) {
         add(issues, Severity::Error, "spawn.missing",
             "the scene has no player spawn", {}, QuickFix::AddPlayerSpawn);
@@ -217,6 +309,24 @@ bool applyQuickFix(SceneDocument& document, const KitCatalog& catalog,
     switch (issue.fix) {
     case QuickFix::None:
         return false;
+    case QuickFix::FillCornerGap: {
+        // Placed where the two runs meet, at the wall's own base height. The
+        // pillar is 1.13 m across against a 1 m notch, so it covers the hole
+        // with a little to spare rather than fitting it exactly -- a flush fit
+        // would z-fight with both walls.
+        const Entity* wall = document.find(issue.entity);
+        const KitPiece* pillar = catalog.find("kit.pillar");
+        if (!wall || !pillar)
+            return false;
+        Entity post;
+        post.id = document.allocateId("corner_pillar");
+        post.name = "Corner Pillar";
+        post.prefab = "kit.pillar";
+        post.transform.position = issue.position;
+        post.transform.position.y = wall->transform.position.y;
+        document.add(post);
+        return true;
+    }
     case QuickFix::AddPlayerSpawn: {
         Entity spawn;
         spawn.id = document.allocateId("player_spawn");

@@ -141,6 +141,8 @@ private:
     int mFloorVariant = 0; // 0 default grey, 1 dark
     std::string mSelectedMaterial;
     bool mThumbAutoSpin = true;
+    bool mCycleMaterials = false;
+    std::size_t mCycleIndex = 0;
     EditorCamera mCameraBeforeMode;
 };
 

@@ -1,14 +1,37 @@
+<div align="center">
+
+<img src="assets/logo.png" alt="PSX Retro Game Engine" width="360">
+
 # psx-dungeon-crawler
 
-Hand-built C++20 engine. First-person PSX-style dungeon crawler on top. Not
-Unity, not Unreal, not Godot. OGRE 14 rasterises, nothing more. Everything above
-it (scene model, physics, content pipeline, editor) written for this one game.
+**A first-person PSX-style dungeon crawler, and the C++20 engine written to run it.**
 
-<video src="assets/psx_portal_2x.mp4" width="720" controls loop muted></video>
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
+[![OGRE 14](https://img.shields.io/badge/OGRE-14-2f6f4f)](https://www.ogre3d.org/)
+[![Jolt Physics](https://img.shields.io/badge/physics-Jolt-8a4fbe)](https://github.com/jrouwe/JoltPhysics)
+[![EnTT](https://img.shields.io/badge/ECS-EnTT-9a3f3f)](https://github.com/skypjack/entt)
+[![CMake](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 
-*No-input loop of portal room. Dithering, banded vertex lighting, affine texture
-warp, stylize pass. All live. Player not rendering in your viewer? Clip sits at
-[`assets/psx_portal_2x.mp4`](assets/psx_portal_2x.mp4).*
+</div>
+
+---
+
+OGRE 14 is the rasteriser and nothing else. The scene model, physics integration,
+content pipeline, level editor and render profiles are written for this project
+rather than borrowed from a general-purpose engine, which is what makes the
+presentation reproducible: a fixed-step simulation and a pinnable RNG mean the
+same seed and the same frame number produce the same pixels on any machine.
+
+The visual target is a PlayStation-era renderer rebuilt honestly instead of
+faked in post: a low internal resolution the game actually renders at, vertex
+lighting with banded falloff, affine texture warping, ordered dithering and a
+stylize/outline pass. Seven presets ship, from strict console emulation to the
+game's own dark-fantasy grade.
+
+<img src="assets/preview.gif" alt="Portal room, running live" width="720">
+
+*No-input loop of the portal room, running live. Same clip as video, without the
+GIF's colour quantisation, at [`assets/preview.mp4`](assets/preview.mp4).*
 
 ---
 
@@ -20,19 +43,19 @@ make run       # build and play
 make help      # full target and option reference
 ```
 
-First build compiles OGRE from source. Slow. Every build after: incremental.
-**Never delete `build/`.** Never interrupt a build mid-link. Both cost you that
-first-build time again.
+The first build compiles OGRE from source and takes a while. Every build after
+that is incremental. **Never delete `build/`**, and never interrupt a build
+mid-link. Either one costs you that first-build time again.
 
 ## What is here
 
 | Target | What it is |
 |---|---|
 | `make run` | the game |
-| `make editor` | placement editor. Build levels, `F5` to playtest |
+| `make editor` | placement editor: build levels, `F5` to playtest |
 | `make material` | editor material staging scene |
 | `make demo` | shader sample, for looking at render presets |
-| `make cook SCENE=…` | `.scn` to `.map`. Same cooker editor and CI use |
+| `make cook SCENE=…` | `.scn` to `.map`, the same cooker the editor and CI use |
 | `make sim` | headless combat/physics harness, no window |
 | `make test` | ctest suite |
 
@@ -49,27 +72,30 @@ first-build time again.
    game <level>.map
 ```
 
-`.scn` is truth. `.map` is build artifact. Editor never saves one, and a
-`cook_parity` test asserts CLI and editor emit identical bytes. So "worked in
-editor" and "worked in CI" cannot drift apart.
+`.scn` is the source of truth. `.map` is a build artifact: the editor never
+saves one, and a `cook_parity` test asserts that the CLI and the editor emit
+identical bytes, so "it worked in the editor" and "it worked in CI" cannot drift
+apart.
 
-Levels assemble from modular kit (`game/assets/kit.toml`). 4 m cells, pieces snap
-to cell or cell edge, all data. New piece = TOML entry, not code change.
+Levels are assembled from a modular kit (`game/assets/kit.toml`): 4 m cells,
+pieces that snap to a cell or a cell edge, all of it data. Adding a piece is a
+TOML entry, not a code change.
 
 ## The look
 
-PSX presentation is **frozen**. Dither, vertex lighting with banded falloff,
-affine UV warp, stylize/outline pass, render presets: shipped result, not work in
-progress. Refactor must keep rendered image pixel-identical. `make visual-test`
-proves it.
+The PSX presentation is **frozen**. Dither, vertex lighting with banded
+falloff, affine UV warp, the stylize/outline pass and the render presets are a
+shipped result, not a work in progress. A refactor has to keep the rendered image
+pixel-identical, and `make visual-test` is how that is proven.
 
 Seven presets ship (`PRESET=ps1|ps2|gamecube|n64|pixel-3d|modern-ps1|dungeon`).
-Default is `dungeon`: game own dark-fantasy grade, not era emulation.
+The default is `dungeon`, the game's own dark-fantasy grade rather than an era
+emulation.
 
 ## Command line
 
-Args below live on `game` executable. Rest is environment variables. `make`
-exposes both as plain make variables.
+The arguments below live on the `game` executable. Everything else is an
+environment variable, and `make` exposes both as plain make variables.
 
 | Argument | What it does | Example |
 |---|---|---|
@@ -87,8 +113,8 @@ exposes both as plain make variables.
 
 Preset precedence: `--render-preset` > `PSX_RENDER_PRESET` > `dungeon`.
 
-Piping game output into `grep ... | head` kills process with SIGPIPE mid-run.
-Truncates recordings. Redirect to file instead.
+Piping the game's output into `grep ... | head` kills the process with SIGPIPE
+partway through, which truncates a recording. Redirect to a file instead.
 
 Other executables:
 
@@ -102,7 +128,7 @@ Other executables:
 
 ### Environment variables
 
-Presence-only flags care that variable is set, not what it is set to.
+Presence-only flags care that the variable is set, not what it is set to.
 
 | Variable | What it does | `make` variable |
 |---|---|---|
@@ -141,10 +167,11 @@ cd build && ./game --scene portal \
     --record-frames 60 --record-fps 20 --record-start 120 --record-width 480
 ```
 
-60 frames at 20 fps = 3 second loop. `--record-start 120` throws away 6 seconds
-of warm-up, so no load hitch in clip. Frames land in `portal.gif.frames/`,
-deleted once ffmpeg succeeds. Want them? `--record-keep-frames`. Also how you
-inspect a failed encode.
+Sixty frames at 20 fps is a three-second loop. `--record-start 120` throws away
+six seconds of warm-up so no load hitch lands in the clip. Frames go to
+`portal.gif.frames/` and are deleted once ffmpeg succeeds; pass
+`--record-keep-frames` to keep them, which is also how you inspect a failed
+encode.
 
 ### Deterministic screenshot
 
@@ -152,9 +179,10 @@ inspect a failed encode.
 make screenshot SHOT=/tmp/shot.png FRAME=200
 ```
 
-Pins fixed timestep and fixed particle seed, so same frame number gives same
-pixels run to run. That is what makes it a regression oracle. Some frames come
-out black on headless/software GL. Step frame number before blaming your change.
+The capture pins a fixed timestep and a fixed particle seed, so the same frame
+number yields the same pixels run to run, which is what makes it usable as a
+regression oracle. A black frame is usually the window being unfocused or
+offscreen rather than a regression; step the frame number before chasing it.
 
 ### Compare render presets
 
@@ -163,9 +191,10 @@ out black on headless/software GL. Step frame number before blaming your change.
 ./game --render-preset gamecube
 ```
 
-Live switch: `F1` then Render tab then Render Profile. Console seeds its editable
-copy from preset actually applied at startup, so sliders start from running look.
-Edits apply immediately. "Copy profile as TOML" in Shaders tab dumps result.
+To switch live: `F1`, Render tab, Render Profile. The console seeds its editable
+copy from the preset actually applied at startup, so the sliders start from the
+running look. Edits apply immediately, and "Copy profile as TOML" in the Shaders
+tab dumps the result.
 
 ### Iterate dungeon layout, no rebuild
 
@@ -175,9 +204,9 @@ $EDITOR /tmp/showroom.toml
 make run SHOWROOM=/tmp/showroom.toml
 ```
 
-Showroom is ASCII grid: `#` solid, `.` floor, `A` arch, `L` torch, `S` spawn,
-`C` world-origin anchor, `X` exit portal, `H`/`B`/`R`/`V` dressing. Every row
-same width. Exactly one `S`, one `C`, one `X`.
+The showroom is an ASCII grid: `#` solid, `.` floor, `A` arch, `L` torch,
+`S` spawn, `C` world-origin anchor, `X` exit portal, `H`/`B`/`R`/`V` dressing.
+Keep every row the same width and exactly one `S`, one `C` and one `X`.
 
 ### Reproduce a generated dungeon
 
@@ -193,8 +222,8 @@ make mapgen SEED=42 OUT=42.map && cd build && ./game 42.map
 make bench BENCH=300
 ```
 
-Drops first 60 frames so shader and texture warm-up cannot masquerade as
-steady-state spikes. Then logs p50/p95/p99/max.
+Discards the first 60 frames so shader and texture warm-up cannot masquerade as
+steady-state spikes, then logs p50/p95/p99/max.
 
 ### Geometry looks wrong
 
@@ -202,13 +231,14 @@ steady-state spikes. Then logs p50/p95/p99/max.
 make run COLLIDERS=1 WIREFRAME=1
 ```
 
-`F3` and `F2` toggle same overlays live. Collider overlay draws what physics
-actually sees. Fastest way to tell bad mesh from bad collider.
+`F3` and `F2` toggle the same overlays live. The collider overlay draws what
+physics actually sees, which is the fastest way to tell a bad mesh from a bad
+collider.
 
 ## Debugging
 
-Every app is an `eng::Application` driving same renderer. Debug targets take
-`APP=`, work against whichever is quickest to reproduce in:
+Every app is an `eng::Application` driving the same renderer, so the debug
+targets take `APP=` and work against whichever is quickest to reproduce in:
 
 ```sh
 make renderdoc APP=scene_editor      # launch under RenderDoc, capture with F12
@@ -219,21 +249,22 @@ make perf APP=game BENCH=600         # CPU profile + hot paths
 make screenshot SHOT=/tmp/x.png      # deterministic capture at fixed timestep
 ```
 
-See [`docs/debugging-renderdoc.md`](docs/debugging-renderdoc.md) for reading a
-capture of this renderer: which pass is which, what each render target holds.
+See [`docs/debugging-renderdoc.md`](docs/debugging-renderdoc.md) for how to read
+a capture of this renderer: which pass is which, and what each render target
+holds.
 
 ## Layout
 
 ```
 engine/         the engine. eng_core -> eng_platform -> eng_systems
-                -> eng_framework -> eng. Layering violation is a link error,
-                and tools/check_layering.py catches header-only ones.
+                -> eng_framework -> eng. A layering violation is a link error,
+                and tools/check_layering.py catches the header-only ones.
 game/
   src/          the game
-  content/      .scn/.map/kit, shared by game, cooker and editor
-  editor/       placement editor (ImGui + ImGuizmo)
+  content/      .scn/.map/kit, shared by the game, the cooker and the editor
+  editor/       the placement editor (ImGui + ImGuizmo)
   tools/        scene_cook
-samples/        PSX shader demo
+samples/        the PSX shader demo
 docs/design/    GEDD.md is the architecture document
 ```
 
@@ -241,8 +272,8 @@ docs/design/    GEDD.md is the architecture document
 
 1. **Third-party libraries never leak.** Game code includes `eng/*.h` and GLM,
    never an Ogre or SDL header.
-2. **One scene model.** EnTT registry is truth. Renderer is a view.
-3. **Data-driven content.** Weapons, particles, levels, palettes, kit: TOML and
-   components, not hardcoded.
+2. **One scene model.** The EnTT registry is the truth; the renderer is a view.
+3. **Data-driven content.** Weapons, particles, levels, palettes and the kit are
+   TOML and components, not hardcoded.
 4. **Determinism.** Fixed-step simulation, pinnable RNG, reproducible captures.
 5. **The image is frozen.** See above.

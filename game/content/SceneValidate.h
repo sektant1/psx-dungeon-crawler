@@ -3,6 +3,8 @@
 #include "KitCatalog.h"
 #include "SceneDocument.h"
 
+#include <glm/glm.hpp>
+
 #include <string>
 #include <vector>
 
@@ -20,6 +22,7 @@ enum class QuickFix {
     SetDefaultHalfExtents,
     SnapToCell,
     ResetTransform,
+    FillCornerGap,
 };
 
 struct Issue {
@@ -30,6 +33,9 @@ struct Issue {
     std::string message;
     AuthorId entity; // empty when the issue is the document's, not an entity's
     QuickFix fix = QuickFix::None;
+    // Where the problem is in the world, for fixes that need a location: a
+    // corner gap is *between* two entities, not on either of them.
+    glm::vec3 position{0.0f};
 };
 
 // Everything wrong with a scene that needs the kit or the rest of the document

@@ -513,12 +513,22 @@ void RenderCore::shutdown()
 {
     if (!mRoot)
         return;
-    // Tear down the editor offscreen RTT before the scene manager / root go.
+    // Tear down the offscreen RTTs before the scene manager / root go. Both of
+    // them: a render target outliving its SceneManager crashes on the way out,
+    // and the crash lands in plugin teardown where nothing points at the cause.
     if (mOffscreenTex) {
         mOffscreenTex->getBuffer()->getRenderTarget()->removeAllViewports();
         Ogre::TextureManager::getSingleton().remove(mOffscreenTex);
         mOffscreenTex.reset();
         mOffscreenVp = nullptr;
+    }
+    if (mThumbTex) {
+        mThumbTex->getBuffer()->getRenderTarget()->removeAllViewports();
+        Ogre::TextureManager::getSingleton().remove(mThumbTex);
+        mThumbTex.reset();
+        mThumbVp = nullptr;
+        mThumbCam = nullptr;
+        mThumbCamNode = nullptr;
     }
     if (mViewport && mWindow)
         Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);
