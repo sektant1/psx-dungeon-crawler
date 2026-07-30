@@ -70,7 +70,9 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             built.emplace<eng::ecs::MeshSource>(
                 entity, eng::ecs::MeshSource{piece->meshPath});
             eng::ecs::MeshRenderer renderer;
-            renderer.material = piece->material;
+            // The entity's own material wins over the kit piece's.
+            renderer.material = authored.material.empty() ? piece->material
+                                                          : authored.material;
             renderer.castShadows = authored.castShadows;
             built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
         }

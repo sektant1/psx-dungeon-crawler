@@ -21,6 +21,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -79,6 +80,33 @@ bool EditorApp::onStart(eng::Engine& engine)
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+    // Gizmo styling. The defaults are tuned for a bright viewport and a small
+    // window; against this dark scene at working distances they read as thin
+    // grey scratches, and the handles are hard to hit.
+    ImGuizmo::Style& gizmo = ImGuizmo::GetStyle();
+    gizmo.TranslationLineThickness = 4.0f;
+    gizmo.TranslationLineArrowSize = 8.0f;
+    gizmo.RotationLineThickness = 3.0f;
+    gizmo.RotationOuterLineThickness = 4.0f;
+    gizmo.ScaleLineThickness = 4.0f;
+    gizmo.ScaleLineCircleSize = 7.0f;
+    gizmo.CenterCircleSize = 7.0f;
+    // Axis colours brightened and pushed toward the conventional red/green/blue
+    // for X/Y/Z, so which handle is which is readable at a glance rather than
+    // something to work out from the direction it points.
+    gizmo.Colors[ImGuizmo::DIRECTION_X] = ImVec4(0.95f, 0.28f, 0.32f, 1.0f);
+    gizmo.Colors[ImGuizmo::DIRECTION_Y] = ImVec4(0.42f, 0.90f, 0.36f, 1.0f);
+    gizmo.Colors[ImGuizmo::DIRECTION_Z] = ImVec4(0.30f, 0.55f, 1.00f, 1.0f);
+    gizmo.Colors[ImGuizmo::PLANE_X] = ImVec4(0.95f, 0.28f, 0.32f, 0.45f);
+    gizmo.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.42f, 0.90f, 0.36f, 0.45f);
+    gizmo.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.30f, 0.55f, 1.00f, 0.45f);
+    gizmo.Colors[ImGuizmo::SELECTION] = ImVec4(1.00f, 0.80f, 0.25f, 0.85f);
+    gizmo.Colors[ImGuizmo::TEXT] = ImVec4(0.96f, 0.97f, 1.00f, 1.0f);
+    gizmo.Colors[ImGuizmo::TEXT_SHADOW] = ImVec4(0.0f, 0.0f, 0.0f, 0.9f);
+    // A constant slice of the viewport, so the handles stay the same size to
+    // grab whether the selection is at arm's length or across the level.
+    ImGuizmo::SetGizmoSizeClipSpace(0.14f);
+
     // The scene is rendered into a texture and shown inside a panel, so the
     // main window's own camera never draws anything the user sees.
     renderer.enableEditorViewport(1280, 720);
@@ -107,6 +135,29 @@ bool EditorApp::onStart(eng::Engine& engine)
         setMode(true);
     // Verification hooks: drive the two interactions a screenshot run cannot
     // click on its own.
+    if (std::getenv("PSX_EDITOR_CYCLE_MATERIALS"))
+        mCycleMaterials = true;
+    // Verification hook: build a room without a mouse, so a screenshot run can
+    // show what the tool produces.
+    if (const char* room = std::getenv("PSX_EDITOR_DEMO_ROOM")) {
+        mState.document = SceneDocument{};
+        mState.document.id = "scene.demo_room";
+        int w = 4, d = 3;
+        std::sscanf(room, "%dx%d", &w, &d);
+        RoomSpec spec = mState.roomSpec;
+        spec.col0 = 0; spec.row0 = 0;
+        spec.col1 = w - 1; spec.row1 = d - 1;
+        std::string error;
+        for (const Entity& piece : buildRoom(mState.grid, mState.catalog, spec,
+                                             mState.document, error))
+            mState.document.add(piece);
+        mState.document.touch();
+        mPreview->invalidate();
+        glm::vec3 min, max;
+        if (boundsOf({}, min, max))
+            frameCamera(min, max);
+        mStatus = error.empty() ? "demo room built" : error;
+    }
     if (const char* select = std::getenv("PSX_EDITOR_SELECT")) {
         if (!mState.document.entities.empty()) {
             const std::size_t index =
@@ -114,8 +165,7 @@ bool EditorApp::onStart(eng::Engine& engine)
             mState.select(mState.document.entities[index].id);
         }
     }
-    if (std::getenv("PSX_EDITOR_CYCLE_MATERIALS"))
-        mCycleMaterials = true;
+
     return true;
 }
 
@@ -364,6 +414,8 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
             mState.tool = Tool::Select;
         if (input.wasPressed("tool_place") && !mFlying)
             mState.tool = Tool::Place;
+        if (input.wasPressed("tool_room") && !mFlying)
+            mState.tool = Tool::Room;
         if (input.wasPressed("grid_coarser"))
             mState.gridState.coarser();
         if (input.wasPressed("grid_finer"))
@@ -642,6 +694,9 @@ void EditorApp::drawToolbar()
         ImGui::SameLine();
         if (ImGui::RadioButton("Place (W)", mState.tool == Tool::Place))
             mState.tool = Tool::Place;
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Room (E)", mState.tool == Tool::Room))
+            mState.tool = Tool::Room;
 
         ImGui::SameLine();
         ImGui::TextUnformatted("|");
@@ -721,6 +776,18 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             // floor and lights can be dragged out of alignment has stopped
             // being a reference.
             drawStageGizmo(f);
+        } else if (mState.tool == Tool::Room) {
+            drawRoomPreview(f);
+            if (mViewportHovered && !mFlying) {
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    if (hoveredCell(mRoomStartCol, mRoomStartRow))
+                        mRoomDragging = true;
+                }
+            }
+            if (mRoomDragging && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                mRoomDragging = false;
+                commitRoom();
+            }
         } else if (mState.tool == Tool::Place) {
             drawPlacementGhost(f);
             if (mViewportHovered && !mFlying) {
@@ -848,10 +915,21 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
     glm::mat4 view, projection;
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
 
+    // The gizmo sits at the VISUAL CENTRE of the selection, not at the entity's
+    // transform origin. Kit pieces are authored with their origin on the floor,
+    // so anchoring to it puts the handles at the foot of a wall -- or, with
+    // several things selected, at whichever one happens to be primary. The
+    // centre of the combined bounds is where every DCC puts it, and it is the
+    // point a person means when they say "this selection".
+    glm::vec3 boundsMin, boundsMax;
+    const bool haveBounds = boundsOf(mState.selection, boundsMin, boundsMax);
+    const glm::vec3 anchor = haveBounds ? (boundsMin + boundsMax) * 0.5f
+                                        : primary->transform.position;
+
     glm::mat4 matrix(1.0f);
     const XformAuthor& xform = primary->transform;
     ImGuizmo::RecomposeMatrixFromComponents(
-        glm::value_ptr(xform.position), glm::value_ptr(xform.rotationDegrees),
+        glm::value_ptr(anchor), glm::value_ptr(xform.rotationDegrees),
         glm::value_ptr(xform.scale), glm::value_ptr(matrix));
 
     const ImGuizmo::OPERATION operation =
@@ -887,19 +965,18 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
         ImGuizmo::DecomposeMatrixToComponents(
             glm::value_ptr(matrix), glm::value_ptr(position),
             glm::value_ptr(rotation), glm::value_ptr(scale));
-        const glm::vec3 delta = position - primary->transform.position;
-        // Mutated directly during the drag so the preview follows the mouse;
-        // the command is only recorded on release.
+        // The gizmo reports where the ANCHOR moved to; the entities move by the
+        // same delta. Assigning the gizmo's position straight onto the primary
+        // would teleport it to the bounds centre on the first frame of a drag.
+        const glm::vec3 delta = position - anchor;
         for (const AuthorId& id : mState.selection) {
             Entity* entity = mState.document.find(id);
             if (!entity)
                 continue;
+            entity->transform.position += delta;
             if (id == primary->id) {
-                entity->transform.position = position;
                 entity->transform.rotationDegrees = rotation;
                 entity->transform.scale = scale;
-            } else {
-                entity->transform.position += delta;
             }
         }
         mState.document.touch();
@@ -922,8 +999,42 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
             runCommand(makeComposite("move selection", std::move(parts)));
         }
     }
-}
 
+    // Selection outline: a box around what the gizmo is acting on, so the
+    // handles are never ambiguous about their subject.
+    if (haveBounds) {
+        const glm::mat4 viewProjection = projection * view;
+        const auto project = [&](const glm::vec3& world, ImVec2& out) {
+            const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
+            if (clip.w <= 1e-4f)
+                return false;
+            out = ImVec2(mViewportX + (clip.x / clip.w * 0.5f + 0.5f) * mViewportW,
+                         mViewportY + (1.0f - (clip.y / clip.w * 0.5f + 0.5f)) *
+                                          mViewportH);
+            return true;
+        };
+        const glm::vec3 corners[8] = {
+            {boundsMin.x, boundsMin.y, boundsMin.z},
+            {boundsMax.x, boundsMin.y, boundsMin.z},
+            {boundsMax.x, boundsMin.y, boundsMax.z},
+            {boundsMin.x, boundsMin.y, boundsMax.z},
+            {boundsMin.x, boundsMax.y, boundsMin.z},
+            {boundsMax.x, boundsMax.y, boundsMin.z},
+            {boundsMax.x, boundsMax.y, boundsMax.z},
+            {boundsMin.x, boundsMax.y, boundsMax.z},
+        };
+        static constexpr int kBoxEdges[12][2] = {
+            {0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
+            {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        const ImU32 colour = IM_COL32(255, 190, 60, 200);
+        for (const auto& edge : kBoxEdges) {
+            ImVec2 a, b;
+            if (project(corners[edge[0]], a) && project(corners[edge[1]], b))
+                draw->AddLine(a, b, colour, 1.5f);
+        }
+    }
+}
 
 // --- placement ---------------------------------------------------------------
 
@@ -955,9 +1066,13 @@ bool EditorApp::hoveredPlacement(const eng::FrameContext& f, CellPlacement& cell
     cell.yawQuarters = mBrushYawQuarters;
 
     if (socketUsesGrid(piece->socket)) {
-        pointToCell(mState.grid, hit, cell.col, cell.row);
-        if (piece->socket == Socket::Wall || piece->socket == Socket::Opening)
-            cell.edge = nearestEdge(mState.grid, hit, cell.col, cell.row);
+        if (piece->socket == Socket::Wall || piece->socket == Socket::Opening) {
+            // Snapped to the nearest grid LINE, so the ghost stays put along
+            // the length of a wall instead of flipping edges mid-stroke.
+            nearestWallSlot(mState.grid, hit, cell.col, cell.row, cell.edge);
+        } else {
+            pointToCell(mState.grid, hit, cell.col, cell.row);
+        }
         transform = placementToTransform(mState.grid, mState.catalog, *piece,
                                          cell);
     } else {
@@ -1103,6 +1218,153 @@ void EditorApp::drawStageGizmo(const eng::FrameContext& f)
         mStageAutoSpin = false; // dragging takes over from the turntable
         mStage.setSpin(f.engine.renderer(), glm::radians(outRotation.y));
     }
+}
+
+
+// --- room tool ---------------------------------------------------------------
+
+bool EditorApp::hoveredCell(int& col, int& row) const
+{
+    if (mViewportW < 8.0f)
+        return false;
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const glm::vec2 ndc{(mouse.x - mViewportX) / mViewportW * 2.0f - 1.0f,
+                        1.0f - (mouse.y - mViewportY) / mViewportH * 2.0f};
+    const Ray ray = screenRay(ndc, mState.camera.flyEye(),
+                              mState.camera.flyOrientation(),
+                              glm::radians(65.0f), mViewportW / mViewportH);
+    glm::vec3 hit;
+    if (!rayPlaneY(ray, mState.gridState.level, hit))
+        return false;
+    pointToCell(mState.grid, hit, col, row);
+    return true;
+}
+
+void EditorApp::drawRoomPreview(const eng::FrameContext& f)
+{
+    int col = 0, row = 0;
+    if (!hoveredCell(col, row))
+        return;
+
+    // While dragging, the rectangle runs from where the drag began; before it,
+    // a single cell under the cursor shows where the room would start.
+    const int c0 = mRoomDragging ? mRoomStartCol : col;
+    const int r0 = mRoomDragging ? mRoomStartRow : row;
+    RoomSpec spec = mState.roomSpec;
+    spec.col0 = c0;
+    spec.row0 = r0;
+    spec.col1 = col;
+    spec.row1 = row;
+    spec.level = mState.gridState.level;
+
+    glm::mat4 view, projection;
+    cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
+    const glm::mat4 viewProjection = projection * view;
+    const auto project = [&](const glm::vec3& world, ImVec2& out) {
+        const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
+        if (clip.w <= 1e-4f)
+            return false;
+        out = ImVec2(mViewportX + (clip.x / clip.w * 0.5f + 0.5f) * mViewportW,
+                     mViewportY + (1.0f - (clip.y / clip.w * 0.5f + 0.5f)) *
+                                      mViewportH);
+        return true;
+    };
+
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float cell = mState.grid.cell;
+    const float level = spec.level;
+    const glm::vec3 min = cellCentre(mState.grid, spec.minCol(), spec.minRow(),
+                                     level) - glm::vec3(cell * 0.5f, 0.0f,
+                                                        cell * 0.5f);
+    const glm::vec3 max = cellCentre(mState.grid, spec.maxCol(), spec.maxRow(),
+                                     level) + glm::vec3(cell * 0.5f, 0.0f,
+                                                        cell * 0.5f);
+
+    // Filled footprint, so the room reads as an area rather than an outline.
+    ImVec2 quad[4];
+    const glm::vec3 floorCorners[4] = {{min.x, level, min.z},
+                                       {max.x, level, min.z},
+                                       {max.x, level, max.z},
+                                       {min.x, level, max.z}};
+    bool visible = true;
+    for (int i = 0; i < 4; ++i)
+        visible = visible && project(floorCorners[i], quad[i]);
+    if (visible) {
+        draw->AddConvexPolyFilled(quad, 4, IM_COL32(120, 200, 255, 40));
+        draw->AddPolyline(quad, 4, IM_COL32(140, 220, 255, 220),
+                          ImDrawFlags_Closed, 2.0f);
+        // Cell divisions inside the footprint: the author can count cells and
+        // know the room's size before committing to it.
+        for (int col2 = spec.minCol() + 1; col2 <= spec.maxCol(); ++col2) {
+            const float x = min.x + float(col2 - spec.minCol()) * cell;
+            ImVec2 a, b;
+            if (project({x, level, min.z}, a) && project({x, level, max.z}, b))
+                draw->AddLine(a, b, IM_COL32(140, 220, 255, 70));
+        }
+        for (int row2 = spec.minRow() + 1; row2 <= spec.maxRow(); ++row2) {
+            const float z = min.z + float(row2 - spec.minRow()) * cell;
+            ImVec2 a, b;
+            if (project({min.x, level, z}, a) && project({max.x, level, z}, b))
+                draw->AddLine(a, b, IM_COL32(140, 220, 255, 70));
+        }
+        // Wall height, drawn at the corners, so a room is not mistaken for a
+        // floor patch.
+        if (const KitPiece* wall = mState.catalog.find(mState.roomSpec.wallPrefab)) {
+            const float height = wall->sizeMeters(mState.catalog.scale()).y;
+            for (int i = 0; i < 4; ++i) {
+                ImVec2 top;
+                glm::vec3 up = floorCorners[i];
+                up.y += height;
+                if (project(up, top))
+                    draw->AddLine(quad[i], top, IM_COL32(140, 220, 255, 140), 1.5f);
+            }
+        }
+    }
+
+    // Size readout at the cursor: cells and metres, because a level is authored
+    // in cells and played in metres.
+    const std::string label =
+        std::to_string(spec.width()) + " x " + std::to_string(spec.depth()) +
+        " cells  (" + std::to_string(int(float(spec.width()) * cell)) + " x " +
+        std::to_string(int(float(spec.depth()) * cell)) + " m)";
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    draw->AddText(ImVec2(mouse.x + 16.0f, mouse.y + 8.0f),
+                  IM_COL32(230, 240, 255, 255), label.c_str());
+}
+
+void EditorApp::commitRoom()
+{
+    int col = 0, row = 0;
+    if (!hoveredCell(col, row))
+        return;
+    RoomSpec spec = mState.roomSpec;
+    spec.col0 = mRoomStartCol;
+    spec.row0 = mRoomStartRow;
+    spec.col1 = col;
+    spec.row1 = row;
+    spec.level = mState.gridState.level;
+
+    std::string error;
+    const std::vector<Entity> pieces =
+        buildRoom(mState.grid, mState.catalog, spec, mState.document, error);
+    if (!error.empty()) {
+        mStatus = error;
+        return;
+    }
+    if (pieces.empty())
+        return;
+
+    std::vector<Command> parts;
+    parts.reserve(pieces.size());
+    for (const Entity& piece : pieces)
+        parts.push_back(makeCreateEntity(piece));
+    runCommand(makeComposite("build " + std::to_string(spec.width()) + "x" +
+                                 std::to_string(spec.depth()) + " room",
+                             std::move(parts)));
+    mPreview->invalidate();
+    mStatus = "built a " + std::to_string(spec.width()) + " x " +
+              std::to_string(spec.depth()) + " room (" +
+              std::to_string(pieces.size()) + " pieces)";
 }
 
 void EditorApp::drawOutliner()

@@ -55,4 +55,19 @@ void pointToCell(const GridConfig& grid, const glm::vec3& point, int& col,
 CellPlacement::Edge nearestEdge(const GridConfig& grid, const glm::vec3& point,
                                 int col, int row);
 
+// Which wall slot a point is closest to, snapped to the nearest GRID LINE
+// rather than to a quadrant of the cell under the cursor.
+//
+// The difference matters for hand placement. Choosing the edge by quadrant
+// means the answer flips as the cursor wanders across the middle of a cell, so
+// running along a wall makes the ghost jump between edges and the author ends
+// up nudging pieces after the fact. Snapping to the line the cursor is nearest
+// keeps the ghost on that line for the whole length of it: point roughly at a
+// wall, get that wall, every time.
+//
+// The wall always lands on the far side of the line from the cursor -- you are
+// standing in the room, the wall goes on the outside of it.
+void nearestWallSlot(const GridConfig& grid, const glm::vec3& point, int& col,
+                     int& row, CellPlacement::Edge& edge);
+
 } // namespace game::content

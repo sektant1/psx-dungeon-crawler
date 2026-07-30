@@ -65,6 +65,10 @@ struct Entity {
     AuthorId id;
     std::string name;   // display name; defaults to id
     std::string prefab; // "kit.wall", or empty for a marker/light/trigger
+    // Overrides the kit piece's own material. Empty means "use the kit's",
+    // which is what almost every piece should do -- an override is for the
+    // one-off, not for a look a whole level shares (change kit.toml for that).
+    std::string material;
     XformAuthor transform;
     bool castShadows = true;
 

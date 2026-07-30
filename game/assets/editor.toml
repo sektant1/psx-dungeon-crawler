@@ -21,6 +21,7 @@ fly_fast = "Left Shift"
 # text field has keyboard focus.
 tool_select = "Q"
 tool_place = "W"
+tool_room = "E"
 grid_coarser = "["
 grid_finer = "]"
 toggle_snap = "G"

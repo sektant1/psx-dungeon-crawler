@@ -199,6 +199,64 @@ int main()
                 "east too");
     }
 
+    // --- wall slots snap to grid lines --------------------------------------
+    // The property hand placement depends on: pointing anywhere along a wall
+    // line gives the SAME wall. Choosing the edge by cell quadrant instead made
+    // the answer flip as the cursor moved, which is what forced an author to
+    // nudge every piece into place after dropping it.
+    {
+        // Walk along the line x=0 from z=1 to z=3: every sample must land on
+        // the same slot, because it is all one wall.
+        int col = 0, row = 0;
+        CellPlacement::Edge edge = CellPlacement::Edge::None;
+        nearestWallSlot(grid, {0.4f, 0.0f, 1.0f}, col, row, edge);
+        const int firstCol = col, firstRow = row;
+        const CellPlacement::Edge firstEdge = edge;
+        for (float z = 1.0f; z <= 3.0f; z += 0.5f) {
+            nearestWallSlot(grid, {0.4f, 0.0f, z}, col, row, edge);
+            require(col == firstCol && row == firstRow && edge == firstEdge,
+                    "the slot is stable along the length of one wall");
+        }
+        // And it really is a wall on a vertical line.
+        require(edge == CellPlacement::Edge::West ||
+                    edge == CellPlacement::Edge::East,
+                "a vertical line gives a west/east wall");
+
+        // ONE LINE, ONE WALL: approaching the same line from either side gives
+        // the identical piece in the identical place. Without this a cursor a
+        // centimetre across the line moved the wall a whole thickness, which is
+        // what made hand placement need constant correction.
+        const KitPiece* wallPiece = catalog.find("kit.wall");
+        int colA = 0, rowA = 0, colB = 0, rowB = 0;
+        CellPlacement::Edge edgeA{}, edgeB{};
+        nearestWallSlot(grid, {0.6f, 0.0f, 6.0f}, colA, rowA, edgeA);  // east of x=0
+        nearestWallSlot(grid, {-0.6f, 0.0f, 6.0f}, colB, rowB, edgeB); // west of it
+        require(colA == colB && rowA == rowB && edgeA == edgeB,
+                "both sides of a line resolve to the same slot");
+        CellPlacement a{colA, rowA, edgeA, 1, 0, 0.0f};
+        CellPlacement b{colB, rowB, edgeB, 1, 0, 0.0f};
+        const XformAuthor ta = placementToTransform(grid, catalog, *wallPiece, a);
+        const XformAuthor tb = placementToTransform(grid, catalog, *wallPiece, b);
+        require(nearly(ta.position.x, tb.position.x) &&
+                    nearly(ta.position.z, tb.position.z),
+                "a wall lands in the same place from either side of its line");
+
+        // Adjacent lines are exactly one cell apart -- walls tile without gaps.
+        int colC = 0, rowC = 0;
+        CellPlacement::Edge edgeC{};
+        nearestWallSlot(grid, {grid.cell + 0.3f, 0.0f, 6.0f}, colC, rowC, edgeC);
+        CellPlacement c{colC, rowC, edgeC, 1, 0, 0.0f};
+        const XformAuthor tc = placementToTransform(grid, catalog, *wallPiece, c);
+        require(nearly(std::fabs(tc.position.x - ta.position.x), grid.cell),
+                "the next line over is one cell away, so runs tile flush");
+
+        // Near a horizontal line instead, the answer switches axis.
+        nearestWallSlot(grid, {6.0f, 0.0f, 0.3f}, col, row, edge);
+        require(edge == CellPlacement::Edge::North ||
+                    edge == CellPlacement::Edge::South,
+                "a horizontal line gives a north/south wall");
+    }
+
     std::cout << "GridMathTests: ok\n";
     return 0;
 }

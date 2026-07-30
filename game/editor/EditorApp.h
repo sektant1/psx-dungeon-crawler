@@ -68,6 +68,10 @@ private:
     void placeAt(const game::content::CellPlacement& cell,
                  const game::content::XformAuthor& transform);
     void drawPlacementGhost(const eng::FrameContext& f);
+    // Room tool: drag a rectangle of cells, get a finished room.
+    bool hoveredCell(int& col, int& row) const;
+    void drawRoomPreview(const eng::FrameContext& f);
+    void commitRoom();
     // Non-kit entities: markers, spawns, encounters, lights, volumes. They have
     // no prefab and no mesh, so they are created straight in front of the
     // camera rather than placed with the kit brush.
@@ -121,6 +125,9 @@ private:
     std::vector<Command> mPaintParts;
     std::vector<game::content::AuthorId> mPaintedIds;
     int mBrushYawQuarters = 0;
+    // Room drag: the cell the drag started on, and whether one is in progress.
+    bool mRoomDragging = false;
+    int mRoomStartCol = 0, mRoomStartRow = 0;
     char mCatalogFilter[64] = {};
 
     // Issues, recomputed when the document changes rather than every frame.

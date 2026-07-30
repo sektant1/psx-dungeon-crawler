@@ -86,6 +86,11 @@
         "id": { "type": "string", "minLength": 1 },
         "name": { "type": "string" },
         "prefab": { "type": "string", "pattern": "^kit\\." },
+        "material": {
+          "description": "Overrides the material the prefab's kit piece would otherwise use. For one-off dressing (a scorched wall, a mossy floor) without adding a kit entry.",
+          "type": "string",
+          "minLength": 1
+        },
         "cast_shadows": { "type": "boolean" },
         "transform": { "$ref": "#/$defs/transform" },
         "cell": { "$ref": "#/$defs/cell" },

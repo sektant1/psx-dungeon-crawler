@@ -187,6 +187,14 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         }
         out.prefab = source["prefab"].get<std::string>();
     }
+    if (source.contains("material")) {
+        if (!source["material"].is_string() ||
+            source["material"].get<std::string>().empty()) {
+            error = location + "/material must be a non-empty string";
+            return false;
+        }
+        out.material = source["material"].get<std::string>();
+    }
     if (!parseTransform(source, out.transform, location, error))
         return false;
     if (source.contains("cell")) {
