@@ -323,8 +323,6 @@ void RenderCore::enableOffscreenViewport(int w, int h)
     mOffscreenVp->setOverlaysEnabled(false); // keep imgui OUT of the RTT
     mOffscreenVp->setClearEveryFrame(true);
     mOffscreenVp->setBackgroundColour(Ogre::ColourValue(0.10f, 0.11f, 0.13f, 1.0f));
-    // The preview sphere belongs to the thumbnail target alone.
-    mOffscreenVp->setVisibilityMask(kWorldVisibilityMask);
 
     // NOTE: the editor RTT runs NO PSX compositor. The chain uses fixed-name MRT
     // textures, so a second live "PSX/Stylized" instance would collide with the
@@ -359,82 +357,14 @@ void RenderCore::resizeOffscreenViewport(int w, int h)
     enableOffscreenViewport(w, h); // recreate at the new size
 }
 
-void RenderCore::enableThumbnailViewport(int size)
-{
-    if (mThumbTex)
-        return;
-    size = std::max(32, size);
-
-    mThumbCam = mSceneMgr->createCamera("MaterialThumbnailCamera");
-    mThumbCam->setNearClipDistance(0.05f);
-    mThumbCam->setFarClipDistance(100.0f);
-    mThumbCam->setAutoAspectRatio(false);
-    mThumbCam->setAspectRatio(1.0f); // square, like the thumbnail
-    mThumbCamNode = mSceneMgr->getRootSceneNode()->createChildSceneNode();
-    mThumbCamNode->attachObject(mThumbCam);
-
-    mThumbTex = Ogre::TextureManager::getSingleton().createManual(
-        "MaterialThumbnailRTT", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
-        Ogre::TEX_TYPE_2D, uint32_t(size), uint32_t(size), 0, Ogre::PF_R8G8B8A8,
-        Ogre::TU_RENDERTARGET);
-    Ogre::RenderTexture* rt = mThumbTex->getBuffer()->getRenderTarget();
-    rt->setAutoUpdated(true);
-    mThumbVp = rt->addViewport(mThumbCam);
-    mThumbVp->setOverlaysEnabled(false);
-    mThumbVp->setClearEveryFrame(true);
-    mThumbVp->setBackgroundColour(Ogre::ColourValue(0.13f, 0.14f, 0.16f, 1.0f));
-    // ONLY the preview subject. Without this the thumbnail would show whatever
-    // level happens to be loaded behind it.
-    mThumbVp->setVisibilityMask(kThumbnailVisibilityFlag);
-
-    // ...and conversely, keep the preview sphere out of every other view.
-    if (mViewport)
-        mViewport->setVisibilityMask(mViewport->getVisibilityMask() &
-                                     ~kThumbnailVisibilityFlag);
-    if (mOffscreenVp)
-        mOffscreenVp->setVisibilityMask(mOffscreenVp->getVisibilityMask() &
-                                        ~kThumbnailVisibilityFlag);
-}
-
-void RenderCore::setThumbnailCameraPose(float px, float py, float pz, float qw,
-                                        float qx, float qy, float qz,
-                                        float fovDeg)
-{
-    if (!mThumbCam || !mThumbCamNode)
-        return;
-    mThumbCamNode->setPosition(px, py, pz);
-    mThumbCamNode->setOrientation(Ogre::Quaternion(qw, qx, qy, qz));
-    mThumbCam->setFOVy(Ogre::Degree(fovDeg));
-}
-
-uint64_t RenderCore::thumbnailTextureId() const
-{
-    if (!mThumbTex)
-        return 0;
-    unsigned int glId = 0;
-    mThumbTex->getCustomAttribute("GLID", &glId);
-    return uint64_t(glId);
-}
-
-void RenderCore::setOffscreenBackground(float r, float g, float b)
-{
-    if (mOffscreenVp)
-        mOffscreenVp->setBackgroundColour(Ogre::ColourValue(r, g, b, 1.0f));
-}
-
 uint64_t RenderCore::viewportTextureId() const
 {
     if (!mOffscreenTex)
         return 0;
-    // The raw GL texture name, because our ImGui runs on the vendored
-    // SDL2/OpenGL3 backend (see beginImGuiFrame), where ImTextureID *is* the GL
-    // id. It used to return the Ogre ResourceHandle, which is what OGRE's own
-    // ImGuiOverlay wants -- but nothing here uses that overlay, so the handle
-    // was silently interpreted as a GL name and the editor viewport drew
-    // whatever texture happened to own that id (in practice, the font atlas).
-    unsigned int glId = 0;
-    mOffscreenTex->getCustomAttribute("GLID", &glId);
-    return uint64_t(glId);
+    // OGRE's ImGuiOverlay treats ImTextureID as an Ogre ResourceHandle
+    // (TextureManager::getByHandle), NOT a raw GL id -- so hand back the
+    // texture's resource handle, not its GLID.
+    return uint64_t(mOffscreenTex->getHandle());
 }
 
 void RenderCore::markPostChainDirty()
@@ -513,22 +443,12 @@ void RenderCore::shutdown()
 {
     if (!mRoot)
         return;
-    // Tear down the offscreen RTTs before the scene manager / root go. Both of
-    // them: a render target outliving its SceneManager crashes on the way out,
-    // and the crash lands in plugin teardown where nothing points at the cause.
+    // Tear down the editor offscreen RTT before the scene manager / root go.
     if (mOffscreenTex) {
         mOffscreenTex->getBuffer()->getRenderTarget()->removeAllViewports();
         Ogre::TextureManager::getSingleton().remove(mOffscreenTex);
         mOffscreenTex.reset();
         mOffscreenVp = nullptr;
-    }
-    if (mThumbTex) {
-        mThumbTex->getBuffer()->getRenderTarget()->removeAllViewports();
-        Ogre::TextureManager::getSingleton().remove(mThumbTex);
-        mThumbTex.reset();
-        mThumbVp = nullptr;
-        mThumbCam = nullptr;
-        mThumbCamNode = nullptr;
     }
     if (mViewport && mWindow)
         Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);

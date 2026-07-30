@@ -1,6 +1,4 @@
 #pragma once
-#include <eng/FrameStats.h>       // eng::FrameStatsView, plotted by the HUD
-#include <eng/Physics.h>          // eng::CollisionMask, source of the collider lines
 #include <eng/RenderPresetInfo.h> // eng::renderPresets(), listed by the Render tab
 #include <eng/StepClock.h>        // eng::StepClock, edited by the Animation tab
 
@@ -32,29 +30,18 @@ struct ColliderDebug {
     bool drawSensors = true;
 };
 
-// The half of the collider view the engine cannot know: which layers count as
-// "the static level" for the includeStatic toggle, and where the viewer is for
-// the range fade. Everything else comes from ColliderDebug.
-struct ColliderOverlayOptions {
-    // Hidden when ColliderDebug::includeStatic is false. Left empty, the toggle
-    // does nothing -- a game that has no static layer loses nothing.
-    CollisionMask staticLayers = kNoLayers;
-    glm::vec3 viewer{0.0f};    // usually the eye position
-    float sweepDt = 1.0f / 60.0f; // matches the sim step, for swept shapes
+// A read-only window onto whatever the application measures per frame. The
+// engine plots and labels these without knowing what a phase *is* -- one game's
+// "Weapons" is another's "AI" -- so the HUD stays engine tooling while the
+// taxonomy stays with the application. Pointers must outlive the draw call.
+struct FrameStatsView {
+    const float* frameHist = nullptr; // ring of frame times, milliseconds
+    int histCount = 0;
+    int histHead = 0;                 // next write index into frameHist
+    const char* const* phaseNames = nullptr;
+    const float* phaseMs = nullptr;
+    int phaseCount = 0;
 };
-
-// Draws every collider as a SCREEN-SPACE imgui overlay: project each 3D line to
-// the window at full resolution, so the wireframe stays crisp and identical no
-// matter what the render profile does to the framebuffer (pixelation, dither,
-// downscale). Call inside the app's imgui frame; no-op when view.enabled is
-// false.
-//
-// This lives in the engine because none of it is a game decision -- it is
-// Physics::debugDraw plus a view-projection and a near-plane cull, and every
-// game that reimplements it reimplements the same near-plane bug.
-void drawColliderOverlay(Physics& physics, Renderer& renderer,
-                         const ColliderDebug& view,
-                         const ColliderOverlayOptions& options);
 
 // On-screen Dear ImGui debug/tuning console: a single panel docked to the
 // right edge of the window, split into one tab per tweakable subsystem. Every
@@ -84,12 +71,6 @@ public:
         const FrameStatsView* frame = nullptr;
         ColliderDebug* colliders = nullptr; // collider-view settings
         StepClock* steps = nullptr;         // stop-motion animation rates
-        // The render profile the engine actually applied at startup. The panel
-        // seeds its editable copy from this: seeded from the *default* instead,
-        // every slider pushed a value from a profile that was not running, so
-        // the first touch of any control snapped the look somewhere else and
-        // the panel read as broken.
-        int renderPresetId = 0;
     };
 
     DebugTools();

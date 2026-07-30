@@ -4,7 +4,6 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -55,12 +54,7 @@ public:
     glm::quat quat();
     const std::string& str(); // reads u32 index into the pool
 
-    // Returns a reader bounded to exactly the next n bytes and advances this
-    // reader past that slice. A component decoder therefore cannot consume the
-    // following component when its declared payload is truncated.
-    std::optional<ByteReader> slice(std::size_t n);
     void skip(std::size_t n);
-    void invalidate() { mOk = false; }
     std::size_t remaining() const { return mOk ? std::size_t(mEnd - mCur) : 0; }
     bool ok() const { return mOk; }
 
