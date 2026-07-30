@@ -1,10 +1,13 @@
 #include "EditorApp.h"
 
 #include "Picker.h"
+
+#include <optional>
 #include "SceneCook.h"
 
 #include <algorithm>
 #include "SceneSource.h"
+#include "SceneTemplates.h"
 #include "SceneValidate.h"
 #include "SceneWriter.h"
 
@@ -54,7 +57,7 @@ eng::AppConfig EditorApp::configure(int argc, char** argv)
             mPendingScene = arg;
     }
     if (mPendingScene.empty())
-        mPendingScene = assets + "/scenes/ritual_boss_showroom.scn";
+        mPendingScene = assets + "/scenes/tech_demo.scn";
 
     eng::AppConfig config;
     config.assetDir = assets;
@@ -259,6 +262,36 @@ void EditorApp::runCommand(Command command)
     // Any edit invalidates the cooked map; saying so beats letting someone
     // playtest a map that predates the change they are looking at.
     mCookStatus = "stale";
+}
+
+// A fresh document from a template. Templates always include a spawn and an
+// exit, so a new scene cooks and plays from the first frame -- handing someone a
+// document that refuses to run is a bad first thirty seconds.
+void EditorApp::newScene(SceneTemplate which)
+{
+    std::string error;
+    SceneDocument document;
+    if (!buildTemplate(which, mState.grid, mState.catalog,
+                       std::string("scene.") + (which == SceneTemplate::TechDemo
+                                                    ? "tech_demo"
+                                                    : "untitled"),
+                       document, error)) {
+        mStatus = error;
+        return;
+    }
+    mState.document = std::move(document);
+    mState.document.touch();
+    mState.scenePath.clear(); // Save As, not Save: this has no file yet
+    mState.selection.clear();
+    mCommands.clear();
+    mState.dirty = true;
+    mCookStatus = "not cooked";
+    mPreview->invalidate();
+    glm::vec3 min, max;
+    if (boundsOf({}, min, max))
+        frameCamera(min, max);
+    mStatus = std::string("new scene from the '") + sceneTemplateName(which) +
+              "' template -- Save as... to give it a file";
 }
 
 bool EditorApp::saveScene()
@@ -628,6 +661,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
     drawIssues();
     drawMaterialPanel();
     drawStatusBar();
+    drawSaveAsPopup();
 }
 
 void EditorApp::drawMenuBar(const eng::FrameContext& f)
@@ -635,8 +669,27 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
     if (!ImGui::BeginMenuBar())
         return;
     if (ImGui::BeginMenu("Scene")) {
+        if (ImGui::BeginMenu("New")) {
+            // The same templates scene_cook --template generates, so what the
+            // menu builds and what ships in assets/scenes cannot diverge.
+            for (const SceneTemplate which :
+                 {SceneTemplate::Empty, SceneTemplate::Room,
+                  SceneTemplate::TechDemo}) {
+                if (ImGui::MenuItem(sceneTemplateName(which)))
+                    newScene(which);
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem("Save", "Ctrl+S", false, !mState.scenePath.empty()))
             saveScene();
+        if (ImGui::MenuItem("Save as...")) {
+            mSaveAsOpen = true;
+            std::snprintf(mSaveAsPath, sizeof(mSaveAsPath), "%s",
+                          mState.scenePath.empty()
+                              ? (mState.assetRoot + "/scenes/untitled.scn").c_str()
+                              : mState.scenePath.c_str());
+        }
         if (ImGui::MenuItem("Reload", "Ctrl+R", false, !mState.scenePath.empty()))
             loadScene(mState.scenePath);
         ImGui::Separator();
@@ -1367,154 +1420,116 @@ void EditorApp::commitRoom()
               std::to_string(pieces.size()) + " pieces)";
 }
 
+// A one-word tag for what an entity IS, so a list of a hundred pieces can be
+// scanned rather than read. Kit prefabs get their socket, everything else gets
+// the gameplay role that made it exist.
+static const char* entityKind(const Entity& entity, const KitCatalog& catalog)
+{
+    if (entity.playerSpawn) return "spawn";
+    if (entity.exitYawDegrees) return "exit";
+    if (entity.enemySpawn) return "enemy";
+    if (entity.pickup) return "pickup";
+    if (entity.trigger) return "trigger";
+    if (entity.light)
+        return entity.light->type == LightAuthor::Type::Directional ? "sun"
+                                                                    : "light";
+    if (entity.marker) return "marker";
+    if (!entity.prefab.empty()) {
+        if (const KitPiece* piece = catalog.find(entity.prefab))
+            return socketName(piece->socket);
+        return "MISSING";
+    }
+    if (entity.collider) return "volume";
+    return "node";
+}
+
+static ImVec4 kindColour(const char* kind)
+{
+    const std::string k = kind;
+    if (k == "MISSING") return ImVec4(1.00f, 0.42f, 0.36f, 1.0f);
+    if (k == "spawn" || k == "exit") return ImVec4(0.55f, 0.92f, 0.62f, 1.0f);
+    if (k == "enemy" || k == "trigger") return ImVec4(1.00f, 0.68f, 0.45f, 1.0f);
+    if (k == "light" || k == "sun") return ImVec4(0.98f, 0.88f, 0.45f, 1.0f);
+    if (k == "marker" || k == "pickup") return ImVec4(0.68f, 0.78f, 1.00f, 1.0f);
+    return ImVec4(0.60f, 0.63f, 0.70f, 1.0f); // kit geometry: the quiet majority
+}
+
 void EditorApp::drawOutliner()
 {
-    if (ImGui::Begin("Outliner", nullptr, kPanelFlags)) {
-        ImGui::Text("%zu entities", mState.document.entities.size());
-        ImGui::Separator();
-        if (ImGui::BeginChild("##entities")) {
-            for (const Entity& entity : mState.document.entities) {
-                const bool selected = mState.isSelected(entity.id);
-                const std::string label =
-                    (entity.name.empty() ? entity.id : entity.name) +
-                    "##" + entity.id;
-                if (ImGui::Selectable(label.c_str(), selected)) {
-                    if (ImGui::GetIO().KeyShift)
-                        mState.toggleSelected(entity.id);
-                    else
-                        mState.select(entity.id);
-                }
-            }
-        }
-        ImGui::EndChild();
+    if (!ImGui::Begin("Outliner", nullptr, kPanelFlags)) {
+        ImGui::End();
+        return;
     }
+
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##outlinerfilter", "filter by name, id or kind",
+                             mOutlinerFilter, sizeof(mOutlinerFilter));
+    const std::string filter = mOutlinerFilter;
+
+    // Geometry is most of a level by count and the least interesting to click,
+    // so it can be folded away to leave the gameplay entities visible.
+    ImGui::Checkbox("show geometry", &mOutlinerShowGeometry);
+    ImGui::SameLine();
+    ImGui::TextDisabled("%zu entities", mState.document.entities.size());
+
+    ImGui::Separator();
+    if (ImGui::BeginChild("##entities")) {
+        int shown = 0;
+        for (const Entity& entity : mState.document.entities) {
+            const char* kind = entityKind(entity, mState.catalog);
+            const bool geometry = !entity.prefab.empty() && !entity.light &&
+                                  !entity.marker && !entity.playerSpawn &&
+                                  !entity.exitYawDegrees && !entity.enemySpawn &&
+                                  !entity.pickup && !entity.trigger;
+            if (geometry && !mOutlinerShowGeometry)
+                continue;
+            const std::string label =
+                entity.name.empty() ? entity.id : entity.name;
+            if (!filter.empty() &&
+                label.find(filter) == std::string::npos &&
+                entity.id.find(filter) == std::string::npos &&
+                std::string(kind).find(filter) == std::string::npos)
+                continue;
+            ++shown;
+
+            ImGui::PushID(entity.id.c_str());
+            const bool selected = mState.isSelected(entity.id);
+            if (ImGui::Selectable("##row", selected,
+                                  ImGuiSelectableFlags_AllowDoubleClick)) {
+                if (ImGui::GetIO().KeyShift)
+                    mState.toggleSelected(entity.id);
+                else
+                    mState.select(entity.id);
+                // Double-click frames it, the way it does in every outliner.
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    frameSelectionOrAll();
+            }
+            // Right-click acts on the row under the cursor, selecting it first
+            // so the menu can never act on something else.
+            if (ImGui::BeginPopupContextItem("##ctx")) {
+                if (!mState.isSelected(entity.id))
+                    mState.select(entity.id);
+                if (ImGui::MenuItem("Focus", "F"))
+                    frameSelectionOrAll();
+                if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
+                    duplicateSelection();
+                ImGui::Separator();
+                if (ImGui::MenuItem("Delete", "Del"))
+                    deleteSelection();
+                ImGui::EndPopup();
+            }
+            ImGui::SameLine(0.0f, 0.0f);
+            ImGui::TextColored(kindColour(kind), "%-7s", kind);
+            ImGui::SameLine();
+            ImGui::TextUnformatted(label.c_str());
+            ImGui::PopID();
+        }
+        if (shown == 0)
+            ImGui::TextDisabled("nothing matches");
+    }
+    ImGui::EndChild();
     ImGui::End();
 }
-
-void EditorApp::drawInspector()
-{
-    if (ImGui::Begin("Inspector", nullptr, kPanelFlags)) {
-        const AuthorId* primary = mState.primary();
-        Entity* entity = primary ? mState.document.find(*primary) : nullptr;
-        if (!entity) {
-            ImGui::TextUnformatted("nothing selected");
-            ImGui::End();
-            return;
-        }
-
-        // Fields are mutated live so the viewport follows the drag, and the
-        // command is recorded when the widget is released -- one undo entry per
-        // edit, not one per frame.
-        const Entity before = *entity;
-        bool edited = false;
-        bool closed = false;
-        const auto track = [&] {
-            edited = edited || ImGui::IsItemEdited();
-            closed = closed || ImGui::IsItemDeactivatedAfterEdit();
-        };
-
-        ImGui::Text("id      %s", entity->id.c_str());
-        char name[128];
-        std::snprintf(name, sizeof(name), "%s", entity->name.c_str());
-        if (ImGui::InputText("name", name, sizeof(name)))
-            entity->name = name;
-        track();
-
-        if (!entity->prefab.empty()) {
-            const KitPiece* piece = mState.catalog.find(entity->prefab);
-            ImGui::Text("prefab  %s", entity->prefab.c_str());
-            // Resolver state, visible: a fallback is an authoring signal, not a
-            // silent convenience.
-            if (piece)
-                ImGui::TextDisabled("mesh    %s", piece->meshPath.c_str());
-            else
-                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                                   "mesh    UNRESOLVED");
-        }
-
-        ImGui::SeparatorText("transform");
-        ImGui::DragFloat3("position", &entity->transform.position.x, 0.05f);
-        track();
-        ImGui::DragFloat3("rotation", &entity->transform.rotationDegrees.x,
-                          1.0f);
-        track();
-        ImGui::DragFloat3("scale", &entity->transform.scale.x, 0.01f, 0.001f,
-                          100.0f);
-        track();
-
-        if (entity->cell) {
-            ImGui::SeparatorText("grid");
-            ImGui::Text("cell %d,%d  edge %d  span %d", entity->cell->col,
-                        entity->cell->row, int(entity->cell->edge),
-                        entity->cell->span);
-            if (ImGui::Button("snap to cell")) {
-                if (const KitPiece* piece = mState.catalog.find(entity->prefab)) {
-                    entity->transform = placementToTransform(
-                        mState.grid, mState.catalog, *piece, *entity->cell);
-                    edited = closed = true;
-                }
-            }
-        }
-
-        if (entity->light) {
-            ImGui::SeparatorText("light");
-            int type = entity->light->type == LightAuthor::Type::Directional ? 0
-                                                                             : 1;
-            if (ImGui::Combo("type", &type, "directional\0point\0"))
-                entity->light->type = type == 0 ? LightAuthor::Type::Directional
-                                                : LightAuthor::Type::Point;
-            track();
-            ImGui::ColorEdit3("colour", &entity->light->colour.x,
-                              ImGuiColorEditFlags_Float |
-                                  ImGuiColorEditFlags_HDR);
-            track();
-            if (entity->light->type == LightAuthor::Type::Point) {
-                ImGui::DragFloat("range", &entity->light->range, 0.25f, 0.0f,
-                                 200.0f);
-                track();
-            }
-            ImGui::Checkbox("cast shadows", &entity->light->castShadows);
-            track();
-        }
-
-        if (entity->collider) {
-            ImGui::SeparatorText("collider");
-            ImGui::DragFloat3("half extents", &entity->collider->halfExtents.x,
-                              0.05f, 0.0f, 100.0f);
-            track();
-            ImGui::DragFloat3("offset", &entity->collider->offset.x, 0.05f);
-            track();
-        }
-
-        ImGui::SeparatorText("gameplay");
-        if (ImGui::Checkbox("player spawn", &entity->playerSpawn))
-            edited = closed = true;
-        if (entity->marker) {
-            char marker[96];
-            std::snprintf(marker, sizeof(marker), "%s",
-                          entity->marker->c_str());
-            if (ImGui::InputText("marker", marker, sizeof(marker)))
-                *entity->marker = marker;
-            track();
-        }
-        if (entity->exitYawDegrees) {
-            ImGui::DragFloat("exit yaw", &*entity->exitYawDegrees, 1.0f);
-            track();
-        }
-
-        if (closed) {
-            // The command captures the whole entity before and after -- small
-            // enough to copy, and it means one code path per widget instead of
-            // one command type per field.
-            runCommand(makeEditEntity("edit " + entity->id, entity->id, before,
-                                      *entity));
-        }
-        if (edited)
-            mState.document.touch();
-    }
-    ImGui::End();
-}
-
 
 // A point in front of the camera on the work plane: where a new gameplay
 // entity should appear. Dropping them at the origin instead means the author
@@ -1672,6 +1687,178 @@ void EditorApp::drawCatalog()
         }
         ImGui::EndChild();
     }
+    ImGui::End();
+}
+
+void EditorApp::drawInspector()
+{
+    if (!ImGui::Begin("Inspector", nullptr, kPanelFlags)) {
+        ImGui::End();
+        return;
+    }
+    const AuthorId* primary = mState.primary();
+    Entity* entity = primary ? mState.document.find(*primary) : nullptr;
+    if (!entity) {
+        ImGui::TextUnformatted("nothing selected");
+        ImGui::TextDisabled("click something in the viewport or the outliner");
+        ImGui::End();
+        return;
+    }
+    if (mState.selection.size() > 1) {
+        ImGui::TextDisabled("%zu selected -- editing '%s'",
+                            mState.selection.size(), entity->id.c_str());
+        ImGui::Separator();
+    }
+
+    // Fields are mutated live so the viewport follows the drag, and the command
+    // is recorded when the widget is released -- one undo entry per edit, not
+    // one per frame.
+    const Entity before = *entity;
+    bool edited = false;
+    bool closed = false;
+    const auto track = [&] {
+        edited = edited || ImGui::IsItemEdited();
+        closed = closed || ImGui::IsItemDeactivatedAfterEdit();
+    };
+
+    ImGui::Text("id      %s", entity->id.c_str());
+    char name[128];
+    std::snprintf(name, sizeof(name), "%s", entity->name.c_str());
+    if (ImGui::InputText("name", name, sizeof(name)))
+        entity->name = name;
+    track();
+
+    if (!entity->prefab.empty()) {
+        const KitPiece* piece = mState.catalog.find(entity->prefab);
+        ImGui::Text("prefab  %s", entity->prefab.c_str());
+        // Resolver state, visible: a fallback is an authoring signal, not a
+        // silent convenience.
+        if (piece) {
+            ImGui::TextDisabled("mesh    %s", piece->meshPath.c_str());
+            ImGui::TextDisabled("socket  %s  span %d", socketName(piece->socket),
+                                piece->span);
+            // Material override. Empty means the kit piece's own, which is what
+            // nearly everything should use; the override is for the one-off.
+            const std::string current = entity->material.empty()
+                                            ? piece->material + "  (from kit)"
+                                            : entity->material;
+            if (ImGui::BeginCombo("material", current.c_str())) {
+                if (ImGui::Selectable("(from kit)", entity->material.empty())) {
+                    entity->material.clear();
+                    edited = closed = true;
+                }
+                for (const std::string& option : mMaterialNames) {
+                    if (ImGui::Selectable(option.c_str(),
+                                          option == entity->material)) {
+                        entity->material = option;
+                        edited = closed = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                               "mesh    UNRESOLVED");
+        }
+    }
+
+    ImGui::SeparatorText("transform");
+    ImGui::DragFloat3("position", &entity->transform.position.x, 0.05f);
+    track();
+    ImGui::DragFloat3("rotation", &entity->transform.rotationDegrees.x, 1.0f);
+    track();
+    ImGui::DragFloat3("scale", &entity->transform.scale.x, 0.01f, 0.001f, 100.0f);
+    track();
+
+    if (entity->cell) {
+        ImGui::SeparatorText("grid");
+        ImGui::Text("cell %d,%d  edge %d  span %d", entity->cell->col,
+                    entity->cell->row, int(entity->cell->edge),
+                    entity->cell->span);
+        if (ImGui::Button("snap to cell")) {
+            if (const KitPiece* piece = mState.catalog.find(entity->prefab)) {
+                entity->transform = placementToTransform(
+                    mState.grid, mState.catalog, *piece, *entity->cell);
+                edited = closed = true;
+            }
+        }
+    }
+
+    if (entity->light) {
+        ImGui::SeparatorText("light");
+        int type = entity->light->type == LightAuthor::Type::Directional ? 0 : 1;
+        if (ImGui::Combo("type", &type, "directional\0point\0"))
+            entity->light->type = type == 0 ? LightAuthor::Type::Directional
+                                            : LightAuthor::Type::Point;
+        track();
+        ImGui::ColorEdit3("colour", &entity->light->colour.x,
+                          ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+        track();
+        if (entity->light->type == LightAuthor::Type::Point) {
+            ImGui::DragFloat("range", &entity->light->range, 0.25f, 0.0f, 200.0f);
+            track();
+        }
+        ImGui::Checkbox("cast shadows", &entity->light->castShadows);
+        track();
+    }
+
+    if (entity->collider) {
+        ImGui::SeparatorText("collider");
+        ImGui::DragFloat3("half extents", &entity->collider->halfExtents.x, 0.05f,
+                          0.0f, 100.0f);
+        track();
+        ImGui::DragFloat3("offset", &entity->collider->offset.x, 0.05f);
+        track();
+        if (ImGui::SmallButton("remove collider")) {
+            entity->collider.reset();
+            edited = closed = true;
+        }
+    }
+
+    ImGui::SeparatorText("gameplay");
+    if (ImGui::Checkbox("player spawn", &entity->playerSpawn))
+        edited = closed = true;
+    const auto stringField = [&](const char* label,
+                                 std::optional<std::string>& field) {
+        if (!field)
+            return;
+        char buffer[96];
+        std::snprintf(buffer, sizeof(buffer), "%s", field->c_str());
+        if (ImGui::InputText(label, buffer, sizeof(buffer)))
+            *field = buffer;
+        track();
+    };
+    stringField("marker", entity->marker);
+    stringField("enemy", entity->enemySpawn);
+    stringField("pickup", entity->pickup);
+    if (entity->exitYawDegrees) {
+        ImGui::DragFloat("exit yaw", &*entity->exitYawDegrees, 1.0f);
+        track();
+    }
+    if (entity->trigger) {
+        ImGui::DragFloat3("trigger size", &entity->trigger->size.x, 0.05f, 0.0f,
+                          50.0f);
+        track();
+        char event[96];
+        std::snprintf(event, sizeof(event), "%s", entity->trigger->event.c_str());
+        if (ImGui::InputText("event", event, sizeof(event)))
+            entity->trigger->event = event;
+        track();
+    }
+    if (!entity->castShadows || !entity->prefab.empty()) {
+        if (ImGui::Checkbox("cast shadows", &entity->castShadows))
+            edited = closed = true;
+    }
+
+    if (closed) {
+        // The command captures the whole entity before and after -- small enough
+        // to copy, and it means one code path per widget instead of one command
+        // type per field.
+        runCommand(makeEditEntity("edit " + entity->id, entity->id, before,
+                                  *entity));
+    }
+    if (edited)
+        mState.document.touch();
     ImGui::End();
 }
 
@@ -1901,17 +2088,59 @@ void EditorApp::drawMaterialPanel()
     ImGui::End();
 }
 
-// Materials belong to the kit piece, not to the placement, so this cannot be a
-// per-entity override without a schema field to put it in. Until that exists,
-// the button reports rather than silently doing nothing -- a control that
-// pretends to work is worse than one that explains why it does not.
+// Sets a per-entity material override on everything selected. The kit piece's
+// own material stays the default for every OTHER instance -- this is the
+// one-off, not a way to restyle a whole level (kit.toml is that).
 void EditorApp::applyMaterialToSelection(const std::string& material)
 {
     if (material.empty() || mState.selection.empty())
         return;
-    mStatus = "material overrides are not authored yet: '" + material +
-              "' belongs to the kit piece (game/assets/kit.toml), so change it "
-              "there and every instance follows";
+    std::vector<Command> parts;
+    for (const AuthorId& id : mState.selection) {
+        const Entity* entity = mState.document.find(id);
+        if (!entity || entity->prefab.empty() || entity->material == material)
+            continue;
+        Entity updated = *entity;
+        updated.material = material;
+        parts.push_back(makeEditEntity("set material", id, *entity, updated));
+    }
+    if (parts.empty()) {
+        mStatus = "nothing in the selection takes a material override";
+        return;
+    }
+    const std::size_t count = parts.size();
+    runCommand(makeComposite("set material on " + std::to_string(count),
+                             std::move(parts)));
+    mPreview->invalidate();
+    mStatus = "applied " + material + " to " + std::to_string(count) +
+              (count == 1 ? " entity" : " entities");
+}
+
+// Save As. A plain path field rather than a file browser: the scenes all live
+// in one directory, and a browser is a lot of UI for choosing between six files.
+void EditorApp::drawSaveAsPopup()
+{
+    if (mSaveAsOpen) {
+        ImGui::OpenPopup("Save scene as");
+        mSaveAsOpen = false;
+    }
+    if (!ImGui::BeginPopupModal("Save scene as", nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+    ImGui::TextUnformatted("Path (.scn)");
+    ImGui::SetNextItemWidth(520.0f);
+    const bool entered =
+        ImGui::InputText("##saveaspath", mSaveAsPath, sizeof(mSaveAsPath),
+                         ImGuiInputTextFlags_EnterReturnsTrue);
+    if (entered || ImGui::Button("Save", ImVec2(120.0f, 0.0f))) {
+        mState.scenePath = mSaveAsPath;
+        if (saveScene())
+            ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)))
+        ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
 }
 
 void EditorApp::drawStatusBar()

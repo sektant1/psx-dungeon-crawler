@@ -13,6 +13,10 @@ struct SizeStop   { float t = 0.0f; float scale = 1.0f; };
 
 enum class ParticleEmitterShape { Point, Box };
 
+// Presentation priority, not gameplay authority. It keeps quality scaling from
+// erasing information the player needs while allowing ambience to shed cost.
+enum class ParticleVisualRole { Critical, Gameplay, Feedback, Ambient };
+
 struct ParticleSpawnOptions {
     float sizeScale = 1.0f;
     float amountScale = 1.0f;
@@ -86,10 +90,27 @@ struct ParticleEffectDesc {
     bool  loop = true;               // true: emit until stopped
     float burstCount = 0.0f;         // one-shot: emit ~this many, then stop
     float qualityWeight = 1.0f;      // 0 = ignore quality, 1 = full scale
+    ParticleVisualRole visualRole = ParticleVisualRole::Feedback;
     bool  softDepthFade = false;     // Task 8: use the soft-fade material variant
     bool  localSpace = false;        // true: particles follow the parent node
     glm::vec3 acceleration{0.0f};    // constant world/local force (gravity, wind)
 };
+
+inline float particleQualityScale(ParticleVisualRole role,
+                                  float qualityWeight, float quality)
+{
+    qualityWeight = std::clamp(
+        std::isfinite(qualityWeight) ? qualityWeight : 1.0f, 0.0f, 1.0f);
+    quality = std::clamp(std::isfinite(quality) ? quality : 1.0f, 0.0f, 1.0f);
+    const float scaled = 1.0f - qualityWeight * (1.0f - quality);
+    switch (role) {
+        case ParticleVisualRole::Critical: return 1.0f;
+        case ParticleVisualRole::Gameplay: return std::max(0.60f, scaled);
+        case ParticleVisualRole::Feedback: return std::max(0.40f, scaled);
+        case ParticleVisualRole::Ambient: return scaled;
+    }
+    return scaled;
+}
 
 // One-shot retirement is governed by the independently resolved emission
 // window + maximum particle TTL. It must not depend on Ogre's live count:

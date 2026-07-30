@@ -24,6 +24,17 @@ glm::vec4 vec4(const toml::array* a, glm::vec4 d) {
              float((*a)[2].value_or(double(d.z))),
              float((*a)[3].value_or(double(d.w))) };
 }
+eng::ParticleVisualRole visualRole(const std::string& role,
+                                   const std::string& effectName) {
+    if (role == "critical") return eng::ParticleVisualRole::Critical;
+    if (role == "gameplay") return eng::ParticleVisualRole::Gameplay;
+    if (role == "feedback") return eng::ParticleVisualRole::Feedback;
+    if (role == "ambient") return eng::ParticleVisualRole::Ambient;
+    eng::log::warn("ParticleLibrary: effect '%s' has unknown role '%s'; "
+                   "using feedback",
+                   effectName.c_str(), role.c_str());
+    return eng::ParticleVisualRole::Feedback;
+}
 } // namespace
 
 namespace eng {
@@ -49,6 +60,8 @@ bool ParticleLibrary::load(Renderer& r, const std::string& path) {
         d.loop        = (*e)["loop"].value_or(true);
         d.burstCount  = num(*e, "burst_count", 0.0f);
         d.qualityWeight     = num(*e, "quality_weight", 1.0f);
+        d.visualRole = visualRole(
+            (*e)["visual_role"].value_or(std::string("feedback")), d.name);
         d.rotationJitterDeg = num(*e, "rotation_jitter_deg", 0.0f);
         d.hueJitter   = num(*e, "hue_jitter", 0.0f);
         d.scaleJitter = num(*e, "scale_jitter", 0.0f);

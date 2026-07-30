@@ -38,39 +38,43 @@ echo "==> package manager: $PM"
 
 # ------------------------------------------------- base deps (per distro)
 # Includes the X11/GL/freetype dev headers an OGRE source build needs, so
-# the fallback path below works everywhere.
+# the fallback path below works everywhere. ninja/ccache/mold are build-speed
+# tools the CMake configure step picks up automatically when present: ninja for
+# scheduling, ccache for repeat compiles, mold for link time.
 case "$PM" in
 pacman)
     $SUDO pacman -S --needed --noconfirm \
-        gcc make cmake git pkgconf sdl2 glm mesa freetype2 \
+        gcc make cmake ninja ccache mold git pkgconf sdl2 glm mesa freetype2 \
         libx11 libxrandr zlib
     ;;
 apt)
     $SUDO apt-get update
     $SUDO apt-get install -y \
-        build-essential cmake git pkg-config libsdl2-dev libglm-dev \
+        build-essential cmake ninja-build ccache mold git pkg-config \
+        libsdl2-dev libglm-dev \
         libgl1-mesa-dev libfreetype-dev libx11-dev libxrandr-dev \
         zlib1g-dev libpugixml-dev
     ;;
 dnf)
     $SUDO dnf install -y \
-        gcc-c++ make cmake git pkgconf-pkg-config SDL2-devel glm-devel \
+        gcc-c++ make cmake ninja-build ccache mold git pkgconf-pkg-config \
+        SDL2-devel glm-devel \
         mesa-libGL-devel freetype-devel libX11-devel libXrandr-devel \
         zlib-devel pugixml-devel
     ;;
 zypper)
     $SUDO zypper --non-interactive install \
-        gcc-c++ make cmake git pkg-config SDL2-devel glm-devel \
+        gcc-c++ make cmake ninja ccache mold git pkg-config SDL2-devel glm-devel \
         Mesa-libGL-devel freetype2-devel libX11-devel libXrandr-devel \
         zlib-devel pugixml-devel
     ;;
 apk)
     $SUDO apk add --no-cache \
-        build-base cmake git pkgconf sdl2-dev glm-dev mesa-dev \
+        build-base cmake samurai ccache mold git pkgconf sdl2-dev glm-dev mesa-dev \
         freetype-dev libx11-dev libxrandr-dev zlib-dev pugixml-dev
     ;;
 brew)
-    brew install cmake git pkg-config sdl2 glm freetype
+    brew install cmake ninja ccache git pkg-config sdl2 glm freetype
     ;;
 esac
 

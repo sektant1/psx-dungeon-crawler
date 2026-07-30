@@ -18,11 +18,59 @@ find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
   set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
   message(STATUS "ccache: ${CCACHE_PROGRAM}")
+else()
+  message(STATUS "ccache: not found (install it; it makes rebuilds near-free)")
 endif()
 
-# --- Build speed: LTO/IPO for Release (our targets only; Jolt opts out) -----
-include(CheckIPOSupported)
-check_ipo_supported(RESULT ENG_IPO_SUPPORTED OUTPUT _ipo_err)
+# --- Build speed: linker ----------------------------------------------------
+# GNU ld is the slowest part of an incremental build here: every executable
+# links the whole-archive engine layers plus Ogre. mold and lld do the same work
+# several times faster, so use whichever is installed.
+option(ENG_LINKER "Linker to use: auto, mold, lld, bfd" "auto")
+if(NOT ENG_LINKER OR ENG_LINKER STREQUAL "auto")
+  find_program(ENG_MOLD mold)
+  find_program(ENG_LLD ld.lld)
+  if(ENG_MOLD)
+    set(ENG_LINKER_FLAG "-fuse-ld=mold")
+  elseif(ENG_LLD)
+    set(ENG_LINKER_FLAG "-fuse-ld=lld")
+  endif()
+elseif(NOT ENG_LINKER STREQUAL "bfd")
+  set(ENG_LINKER_FLAG "-fuse-ld=${ENG_LINKER}")
+endif()
+if(ENG_LINKER_FLAG)
+  add_link_options(${ENG_LINKER_FLAG})
+  message(STATUS "linker: ${ENG_LINKER_FLAG}")
+endif()
+
+# --- Build speed: LTO/IPO ---------------------------------------------------
+# Off by default. LTO defers most of the optimiser to link time, which is paid
+# on every incremental relink, and mixing LTO objects across build types has
+# produced "lto1: internal compiler error: resolution sub id ... not in object
+# file" in this tree. Turn it on for release artifacts, not for development.
+option(ENABLE_LTO "Link-time optimisation for release builds" OFF)
+set(ENG_IPO_SUPPORTED OFF)
+if(ENABLE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT ENG_IPO_SUPPORTED OUTPUT _ipo_err)
+endif()
+
+# --- Build speed: precompiled headers ---------------------------------------
+# Ogre, imgui, EnTT, toml++ and the standard library headers dominate the
+# per-file cost of the engine layers: they are large, templated, and included by
+# nearly every translation unit. Precompiling them once per target removes that
+# from every file in it.
+option(ENABLE_PCH "Precompile the heavy third-party headers" ON)
+
+# --- Build speed: unity builds ----------------------------------------------
+# Off by default: batching translation units is a large fresh-build win but it
+# merges anonymous namespaces, so a name collision between two files in a batch
+# becomes a compile error. Turn it on for CI and clean builds.
+option(ENABLE_UNITY "Batch translation units per target" OFF)
+if(ENABLE_UNITY)
+  set(CMAKE_UNITY_BUILD ON)
+  set(CMAKE_UNITY_BUILD_BATCH_SIZE 12)
+endif()
 
 # --- Sanitizers: -DENABLE_ASAN=ON for an ASan+UBSan+LeakSan build -----------
 option(ENABLE_ASAN "Build our targets with Address/UB/Leak sanitizers" OFF)
@@ -95,7 +143,7 @@ target_link_libraries(eng_imgui PUBLIC eng_imguizmo PRIVATE SDL2::SDL2
 
 add_library(
   eng_core STATIC
-  engine/src/Log.cpp
+  engine/src/core/Log.cpp
   engine/src/core/Object.cpp
   engine/src/io/ByteStream.cpp
   engine/src/io/FileSystem.cpp
@@ -107,7 +155,7 @@ add_library(
   engine/src/systems/Ease.cpp
   engine/src/systems/Actions.cpp
   engine/src/systems/Events.cpp
-  engine/src/StepClock.cpp
+  engine/src/core/StepClock.cpp
   engine/src/render/PrimitiveGeometry.cpp)
 # One public include root for the whole engine, exported from the bottom layer
 # so every layer and every consumer inherits it.
@@ -128,20 +176,20 @@ add_library(
 target_include_directories(eng_rhi PRIVATE engine/src/rhi)
 target_link_libraries(eng_rhi PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>")
 
-add_library(eng_platform STATIC engine/src/Platform.cpp engine/src/Input.cpp
-                                engine/src/Config.cpp)
+add_library(eng_platform STATIC engine/src/platform/Platform.cpp engine/src/platform/Input.cpp
+                                engine/src/platform/Config.cpp)
 target_include_directories(eng_platform PRIVATE third_party engine/src)
 target_link_libraries(eng_platform PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>"
                       PRIVATE SDL2::SDL2)
 
 add_library(
   eng_systems STATIC
-  engine/src/RenderCore.cpp
-  engine/src/Renderer.cpp
-  engine/src/RenderPresets.cpp
-  engine/src/SceneRegistry.cpp
-  engine/src/ObjLoader.cpp
-  engine/src/ProceduralMeshes.cpp
+  engine/src/render/RenderCore.cpp
+  engine/src/render/Renderer.cpp
+  engine/src/render/RenderPresets.cpp
+  engine/src/render/SceneRegistry.cpp
+  engine/src/render/ObjLoader.cpp
+  engine/src/render/ProceduralMeshes.cpp
   engine/src/render/FrameCapture.cpp
   engine/src/render/GifRecorder.cpp
   engine/src/render/Model.cpp
@@ -150,7 +198,7 @@ add_library(
   engine/src/particles/Particles.cpp
   engine/src/particles/ParticlePresets.cpp
   engine/src/particles/ParticleLibrary.cpp
-  engine/src/Physics.cpp
+  engine/src/physics/Physics.cpp
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
   engine/src/audio/Audio.cpp)
@@ -174,13 +222,13 @@ add_library(
                        engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
                        engine/src/controllers/FpsController.cpp
-                       engine/src/DebugTools.cpp)
+                       engine/src/debug/DebugTools.cpp)
 target_include_directories(eng_framework PRIVATE third_party engine/src)
 target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_systems>"
                                            EnTT::EnTT)
 
 # Facade: owns application lifetime and is the only target consumers name.
-add_library(eng STATIC engine/src/Engine.cpp engine/src/app/Application.cpp
+add_library(eng STATIC engine/src/app/Engine.cpp engine/src/app/Application.cpp
                        engine/src/app/FpsGameApp.cpp)
 target_include_directories(eng PRIVATE third_party engine/src)
 target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
@@ -193,6 +241,37 @@ foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_systems
 endforeach()
 # imgui is third-party: build it without our warning set.
 target_compile_options(eng_imgui PRIVATE -w)
+
+# --- Precompiled headers -----------------------------------------------------
+# Only third-party and standard headers go in a PCH. First-party headers are
+# edited constantly, and each edit invalidates the PCH and every object built
+# against it, which costs more than it saves.
+if(ENABLE_PCH)
+  target_precompile_headers(
+    eng_core
+    PRIVATE
+    <algorithm>
+    <cmath>
+    <cstdint>
+    <memory>
+    <string>
+    <unordered_map>
+    <vector>
+    <glm/glm.hpp>)
+  # eng_systems is the expensive one: OgreMain's headers are enormous and every
+  # renderer/physics/audio source pulls them in.
+  target_precompile_headers(
+    eng_systems
+    PRIVATE
+    <Ogre.h>
+    <OgreMaterialManager.h>
+    <OgreTechnique.h>
+    <glm/glm.hpp>
+    <glm/gtc/quaternion.hpp>)
+  target_precompile_headers(eng_framework PRIVATE <entt/entt.hpp>
+                            <glm/glm.hpp>)
+  target_precompile_headers(eng PRIVATE <imgui.h> <glm/glm.hpp>)
+endif()
 
 # Shared PSX demo scene, data-driven from samples/common/assets.
 add_library(demo_scene STATIC samples/common/DemoScene.cpp)
@@ -208,7 +287,8 @@ target_compile_definitions(
 )
 eng_target_hardening(demo_scene)
 
-add_executable(psx_demo samples/psx-demo/src/main.cpp)
+add_executable(psx_demo samples/psx-demo/src/main.cpp
+                        samples/psx-demo/src/ShowcaseScene.cpp)
 target_link_libraries(psx_demo PRIVATE demo_scene)
 # No engine/src here on purpose: a sample that reaches into the engine's private
 # headers is a sample that stops proving the public API is enough.
@@ -250,7 +330,8 @@ add_library(
   game/content/SceneCook.cpp
   game/content/GridMath.cpp
   game/content/SceneValidate.cpp
-  game/content/RoomBuilder.cpp)
+  game/content/RoomBuilder.cpp
+  game/content/SceneTemplates.cpp)
 target_include_directories(game_content PUBLIC game/content game/src
                                                game/src/scene engine/include
                            PRIVATE third_party)
@@ -333,6 +414,10 @@ target_compile_definitions(
     DEMO_SCENE_TOML="${CMAKE_CURRENT_SOURCE_DIR}/samples/common/assets/demo_scene.toml"
 )
 eng_target_hardening(game)
+if(ENABLE_PCH)
+  target_precompile_headers(game PRIVATE <entt/entt.hpp> <glm/glm.hpp>
+                            <string> <vector> <unordered_map>)
+endif()
 
 add_executable(mapgen game/src/mapgen_main.cpp game/src/DungeonGen.cpp)
 target_include_directories(mapgen PRIVATE game/src game/src/scene
@@ -412,7 +497,7 @@ if(BUILD_TESTING)
   add_test(NAME physics_tests COMMAND physics_tests)
 
   add_executable(scene_registry_tests engine/tests/SceneRegistryTests.cpp
-                                      engine/src/SceneRegistry.cpp)
+                                      engine/src/render/SceneRegistry.cpp)
   target_include_directories(
     scene_registry_tests PRIVATE engine/include engine/src third_party/imgui)
   target_link_libraries(scene_registry_tests PRIVATE glm::glm)
@@ -606,7 +691,7 @@ if(BUILD_TESTING)
   add_test(NAME obj_geometry COMMAND obj_geometry_tests)
 
   add_executable(step_clock_tests engine/tests/StepClockTests.cpp
-                                  engine/src/StepClock.cpp)
+                                  engine/src/core/StepClock.cpp)
   target_include_directories(step_clock_tests PRIVATE engine/include)
   add_test(NAME step_clock COMMAND step_clock_tests)
 
@@ -633,7 +718,7 @@ if(BUILD_TESTING)
 
   add_executable(gif_recorder_tests engine/tests/GifRecorderTests.cpp
                                     engine/src/render/GifRecorder.cpp
-                                    engine/src/Log.cpp)
+                                    engine/src/core/Log.cpp)
   target_include_directories(gif_recorder_tests PRIVATE engine/include)
   add_test(NAME gif_recorder COMMAND gif_recorder_tests)
 
@@ -770,6 +855,14 @@ if(BUILD_TESTING)
     grid_math_tests
     PRIVATE KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml")
   add_test(NAME grid_math COMMAND grid_math_tests)
+
+  add_executable(scene_template_tests game/tests/SceneTemplateTests.cpp)
+  target_link_libraries(scene_template_tests PRIVATE game_content
+                                                     eng_ecs_headless)
+  target_compile_definitions(
+    scene_template_tests
+    PRIVATE KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml")
+  add_test(NAME scene_template COMMAND scene_template_tests)
 
   add_executable(room_builder_tests game/tests/RoomBuilderTests.cpp)
   target_link_libraries(room_builder_tests PRIVATE game_content eng_ecs_headless)

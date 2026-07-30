@@ -1,0 +1,12 @@
+# Matches the tree as written: 4-space indent, 80 columns, attached braces for
+# control flow and detached for functions/types.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 80
+BreakBeforeBraces: Stroustrup
+AccessModifierOffset: -4
+AlwaysBreakTemplateDeclarations: Yes
+PointerAlignment: Left
+SortIncludes: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never

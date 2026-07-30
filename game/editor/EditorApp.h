@@ -4,6 +4,7 @@
 #include "EditorState.h"
 #include "MaterialStage.h"
 #include "PreviewBridge.h"
+#include "SceneTemplates.h"
 #include "RunGame.h"
 
 #include <eng/app/Application.h>
@@ -56,6 +57,8 @@ private:
     void drawStageGizmo(const eng::FrameContext& f);
     void runCommand(Command command);
     bool saveScene();
+    void newScene(game::content::SceneTemplate which);
+    void drawSaveAsPopup();
     // F6 / F5: cook the authored scene to a runtime map, and play it.
     bool cookScene(std::string& mapPath);
     void runPlaytest();
@@ -147,6 +150,10 @@ private:
     char mMaterialFilter[64] = {};
     int mFloorVariant = 0; // 0 default grey, 1 dark
     std::string mSelectedMaterial;
+    bool mSaveAsOpen = false;
+    char mSaveAsPath[512] = {};
+    char mOutlinerFilter[64] = {};
+    bool mOutlinerShowGeometry = true;
     bool mThumbAutoSpin = true;
     bool mCycleMaterials = false;
     std::size_t mCycleIndex = 0;

@@ -119,6 +119,14 @@ const std::string& ByteReader::str()
     return mPool[idx];
 }
 
+std::optional<ByteReader> ByteReader::slice(std::size_t n)
+{
+    if (!take(n)) return std::nullopt;
+    ByteReader result(mCur, n, mPool);
+    mCur += n;
+    return result;
+}
+
 void ByteReader::skip(std::size_t n)
 {
     if (take(n)) mCur += n;

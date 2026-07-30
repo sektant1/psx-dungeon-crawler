@@ -1,0 +1,70 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# A queued run of an older commit on the same branch is wasted CI time.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build ccache mold \
+            git pkg-config libsdl2-dev libglm-dev libgl1-mesa-dev \
+            libfreetype-dev libx11-dev libxrandr-dev zlib1g-dev libpugixml-dev \
+            xvfb
+
+      # OGRE is fetched and built from source. Caching CPM's source cache turns
+      # the fetch into a no-op; ccache turns the rebuild into a partial one.
+      - name: Cache dependency sources
+        uses: actions/cache@v4
+        with:
+          path: .cache/cpm
+          key: cpm-${{ hashFiles('cmake/Dependencies.cmake') }}
+
+      - name: Cache compiler output
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ github.sha }}
+          restore-keys: ccache-
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_UNITY=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      # ctest covers the headless suites. The windowed capture below is what
+      # catches the failures a compiler cannot see.
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+
+      - name: Layering check
+        run: python3 tools/check_layering.py
+
+      - name: Deterministic screenshot
+        run: |
+          xvfb-run -a env PSX_SCREENSHOT=/tmp/frame.png PSX_SCREENSHOT_FRAME=120 \
+            ./build/game
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshot
+          path: /tmp/frame.png
+          if-no-files-found: warn

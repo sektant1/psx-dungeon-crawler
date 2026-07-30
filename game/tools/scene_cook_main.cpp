@@ -6,6 +6,7 @@
 
 #include "SceneCook.h"
 #include "SceneSource.h"
+#include "SceneTemplates.h"
 #include "SceneValidate.h"
 #include "SceneWriter.h"
 
@@ -33,7 +34,12 @@ int usage()
                  "         [--rewrite <out.scn>]    re-emit canonical .scn "
                  "(formatting, v1 -> v2)\n"
                  "         [--assets <dir>]         asset root for the "
-                 "mesh-on-disk check (default: the kit's directory)\n");
+                 "mesh-on-disk check (default: the kit's directory)\n"
+                 "\n"
+                 "  scene_cook --template <empty|room|techdemo> --kit <kit.toml>\n"
+                 "             --rewrite <out.scn> [--id <scene.id>]\n"
+                 "         generate a starting scene (the editor's New menu, "
+                 "from the shell)\n");
     return 2;
 }
 
@@ -41,7 +47,7 @@ int usage()
 
 int main(int argc, char** argv)
 {
-    std::string source, kit, out, rewrite, assets;
+    std::string source, kit, out, rewrite, assets, templateName, sceneId;
     bool validateOnly = false;
     for (int i = 1; i < argc; ++i) {
         const char* arg = argv[i];
@@ -54,6 +60,10 @@ int main(int argc, char** argv)
             if (!value(kit)) return usage();
         } else if (std::strcmp(arg, "--out") == 0) {
             if (!value(out)) return usage();
+        } else if (std::strcmp(arg, "--template") == 0) {
+            if (!value(templateName)) return usage();
+        } else if (std::strcmp(arg, "--id") == 0) {
+            if (!value(sceneId)) return usage();
         } else if (std::strcmp(arg, "--assets") == 0) {
             if (!value(assets)) return usage();
         } else if (std::strcmp(arg, "--rewrite") == 0) {
@@ -68,18 +78,40 @@ int main(int argc, char** argv)
             return usage();
         }
     }
-    if (source.empty() || kit.empty() ||
+    if (kit.empty() || (source.empty() && templateName.empty()) ||
         (out.empty() && rewrite.empty() && !validateOnly))
         return usage();
 
     std::string error;
-    game::content::SceneDocument document;
-    if (!game::content::loadSceneSource(source, document, error)) {
+    game::content::KitCatalog catalog;
+    if (!game::content::KitCatalog::load(kit, catalog, error)) {
         std::fprintf(stderr, "scene_cook: %s\n", error.c_str());
         return 1;
     }
-    game::content::KitCatalog catalog;
-    if (!game::content::KitCatalog::load(kit, catalog, error)) {
+
+    game::content::SceneDocument document;
+    if (!templateName.empty()) {
+        // Generating rather than loading: this is how the shipped starter
+        // scenes are produced, so they cannot drift from what the editor's own
+        // New menu builds.
+        game::content::SceneTemplate which = game::content::SceneTemplate::Empty;
+        if (templateName == "room")
+            which = game::content::SceneTemplate::Room;
+        else if (templateName == "techdemo")
+            which = game::content::SceneTemplate::TechDemo;
+        else if (templateName != "empty")
+            return usage();
+        const game::content::GridConfig grid =
+            game::content::GridConfig::fromCatalog(catalog);
+        if (!game::content::buildTemplate(which, grid, catalog,
+                                          sceneId.empty() ? "scene.untitled"
+                                                          : sceneId,
+                                          document, error)) {
+            std::fprintf(stderr, "scene_cook: %s\n", error.c_str());
+            return 1;
+        }
+        source = templateName;
+    } else if (!game::content::loadSceneSource(source, document, error)) {
         std::fprintf(stderr, "scene_cook: %s\n", error.c_str());
         return 1;
     }
