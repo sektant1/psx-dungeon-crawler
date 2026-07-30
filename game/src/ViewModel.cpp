@@ -62,6 +62,22 @@ void ViewModel::init(eng::Renderer& r, eng::NodeHandle headNode,
                "Game/ViewModelWeapon", glow, swordPose);
 }
 
+void ViewModel::applyEnchant(eng::Renderer& r)
+{
+    if (!mGlowNode.valid() || mGlow.strength <= 0.0f)
+        return; // this weapon was built without a glow
+    if (mEnchantEnabled)
+        r.setNodeEnchantment(mGlowNode, mGlow.palette, mGlow.strength);
+    else
+        r.clearNodeEnchantment(mGlowNode);
+}
+
+void ViewModel::setEnchantEnabled(eng::Renderer& r, bool on)
+{
+    mEnchantEnabled = on;
+    applyEnchant(r);
+}
+
 void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
                            const std::string& meshPath,
                            const std::string& materialName, ViewmodelGlow glow,
@@ -78,8 +94,9 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
         glm::translate(glm::mat4(1.0f), -mPose.gripPivot);
     const eng::MeshHandle weapon = r.loadObj(meshPath, &pivotBake);
     r.attachMesh(mNode, weapon, materialName, false, true);
-    if (glow.strength > 0.0f)
-        r.setNodeEnchantment(mNode, glow.palette, glow.strength);
+    mGlow = glow;
+    mGlowNode = mNode;
+    applyEnchant(r);
 
     // The prop_sword.obj is authored at world scale (used in scene dressing at
     // 0.06x).  As a viewmodel it needs to be much smaller, but readable.
@@ -141,8 +158,9 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
 
     r.setScale(mNode, glm::vec3(mPose.scale));
     r.setOrientation(mNode, poseOrientation(mPose));
-    if (tipGlow.strength > 0.0f)
-        r.setNodeEnchantment(tipNode, tipGlow.palette, tipGlow.strength);
+    mGlow = tipGlow;
+    mGlowNode = tipNode;
+    applyEnchant(r);
 
     // Reset animation state on every re-init (level transition).
     mAttackTime = -1.0f;
@@ -189,9 +207,9 @@ void ViewModel::initTorch(eng::Renderer& r, eng::NodeHandle headNode,
 
     r.setScale(mNode, glm::vec3(mPose.scale));
     r.setOrientation(mNode, poseOrientation(mPose));
-    if (handleGlow.strength > 0.0f)
-        r.setNodeEnchantment(handleNode, handleGlow.palette,
-                             handleGlow.strength);
+    mGlow = handleGlow;
+    mGlowNode = handleNode;
+    applyEnchant(r);
 
     mAttackTime = -1.0f;
     mParry      = 0.0f;

@@ -29,6 +29,7 @@ LAYERS = ["core", "platform", "systems", "framework", "app"]
 # specific paths precede the directory defaults.
 SOURCE_RULES: list[tuple[str, str]] = [
     ("src/Engine.cpp", "app"),
+    ("src/app/", "app"),
     ("src/Platform.cpp", "platform"),
     ("src/Input.cpp", "platform"),
     ("src/Config.cpp", "platform"),
@@ -50,9 +51,11 @@ SOURCE_RULES: list[tuple[str, str]] = [
 # Layer of a public header, by path relative to engine/include/eng/.
 HEADER_RULES: list[tuple[str, str]] = [
     ("Engine.h", "app"),
+    ("app/", "app"),
     ("Platform.h", "platform"),
     ("Input.h", "platform"),
     ("Config.h", "platform"),
+    ("FrameStats.h", "core"),
     ("Log.h", "core"),
     ("Math.h", "core"),
     ("Handles.h", "core"),

@@ -37,7 +37,16 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
                           {vocab.palette("frost"), 0.85f});
     mTorchModel.initTorch(r, mPlayer.headNode(),
                           {vocab.palette("fire"), 0.35f});
+    setWeaponEnchant(r, mWeaponEnchant); // fresh viewmodels start from the flag
     applyWeaponVis(ctx);
+}
+
+void PlayerSystem::setWeaponEnchant(eng::Renderer& r, bool on)
+{
+    mWeaponEnchant = on;
+    mSwordModel.setEnchantEnabled(r, on);
+    mStaffModel.setEnchantEnabled(r, on);
+    mTorchModel.setEnchantEnabled(r, on);
 }
 
 void PlayerSystem::look(GameContext& ctx)

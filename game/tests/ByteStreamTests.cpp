@@ -45,6 +45,19 @@ int main()
     over.u32();
     require(!over.ok(), "reading past the end flags an error");
 
+    ByteWriter slicedBytes;
+    slicedBytes.u32(7);
+    slicedBytes.u32(9);
+    ByteReader sliced(slicedBytes.bytes().data(), slicedBytes.bytes().size(),
+                      slicedBytes.pool());
+    auto payload = sliced.slice(4);
+    require(payload.has_value() && payload->u32() == 7,
+            "bounded payload reader sees only its slice");
+    require(payload->remaining() == 0 && sliced.u32() == 9,
+            "outer reader advances exactly past the payload");
+    require(!sliced.slice(1).has_value() && !sliced.ok(),
+            "oversized slice marks the outer reader invalid");
+
     std::cout << "ByteStreamTests OK\n";
     return 0;
 }

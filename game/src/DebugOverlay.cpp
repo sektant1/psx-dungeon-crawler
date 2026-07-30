@@ -1,10 +1,8 @@
 #include "DebugOverlay.h"
 
 #include "CombatConfig.h"
-#include "GameDiagnostics.h"
+#include "PlayerSystem.h"
 #include "combat/FeelComponents.h"
-
-#include <eng/Renderer.h>
 
 #include <imgui.h>
 
@@ -19,45 +17,30 @@ bool section(const char* label)
     return ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
 }
 
-eng::FrameStatsView frameStats(const ProfHud& prof)
-{
-    eng::FrameStatsView view;
-    view.frameHist = prof.frameHist;
-    view.histCount = ProfHud::kHist;
-    view.histHead = prof.histHead;
-    view.phaseNames = ProfHud::kNames;
-    view.phaseMs = prof.ms;
-    view.phaseCount = ProfHud::kCount;
-    return view;
-}
-
 } // namespace
 
-DebugOverlay::DebugOverlay()
+void DebugPanels::install(eng::DebugTools& console)
 {
-    mTools.addPanel("Combat", [this] { drawCombatTab(); });
-    mTools.addPanel("Feel", [this] { drawFeelTab(); });
+    console.addPanel("Combat", [this] { drawCombatTab(); });
+    console.addPanel("Feel", [this] { drawFeelTab(); });
 }
 
-void DebugOverlay::draw(const Deps& deps)
+void DebugPanels::drawCombatTab()
 {
-    mCur = deps;
+    if (section("Weapon presentation")) {
+        ImGui::PushID("wp");
+        if (mCur.playerSystem && mCur.renderer) {
+            bool enchant = mCur.playerSystem->weaponEnchant();
+            if (ImGui::Checkbox("Enchantment glow", &enchant))
+                mCur.playerSystem->setWeaponEnchant(*mCur.renderer, enchant);
+            ImGui::SameLine();
+            ImGui::TextDisabled("(off by default)");
+        } else {
+            ImGui::TextDisabled("Player system unavailable.");
+        }
+        ImGui::PopID();
+    }
 
-    eng::FrameStatsView frame;
-    if (deps.prof)
-        frame = frameStats(*deps.prof);
-
-    eng::DebugTools::Deps engineDeps;
-    engineDeps.renderer = deps.renderer;
-    engineDeps.fps = deps.fps;
-    engineDeps.frame = deps.prof ? &frame : nullptr;
-    engineDeps.colliders = deps.colliders;
-    engineDeps.steps = deps.steps;
-    mTools.draw(engineDeps);
-}
-
-void DebugOverlay::drawCombatTab()
-{
     CombatConfig* c = mCur.combat;
     if (!c) {
         ImGui::TextDisabled("Combat config unavailable.");
@@ -106,7 +89,7 @@ void DebugOverlay::drawCombatTab()
     }
 }
 
-void DebugOverlay::drawFeelTab()
+void DebugPanels::drawFeelTab()
 {
     entt::registry* reg = mCur.registry;
     if (!reg || mCur.player == entt::null || !reg->valid(mCur.player)) {
@@ -170,15 +153,5 @@ void DebugOverlay::drawFeelTab()
     }
 }
 
-void PerfOverlay::draw(const ProfHud* prof, eng::Renderer* renderer)
-{
-    if (!prof) {
-        mImpl.draw(nullptr, renderer);
-        return;
-    }
-
-    const eng::FrameStatsView frame = frameStats(*prof);
-    mImpl.draw(&frame, renderer);
-}
 
 } // namespace game

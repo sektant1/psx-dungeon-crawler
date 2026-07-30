@@ -1496,6 +1496,41 @@ void Renderer::setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient
                                     orient.y, orient.z, fovDeg);
 }
 
+void Renderer::setEditorViewportBackground(const glm::vec3& colour)
+{
+    mImpl->core.setOffscreenBackground(colour.r, colour.g, colour.b);
+}
+
+void Renderer::enableMaterialThumbnail(int size)
+{
+    mImpl->core.enableThumbnailViewport(size);
+}
+
+void Renderer::setMaterialThumbnailCamera(const glm::vec3& position,
+                                          const glm::quat& orientation,
+                                          float fovDeg)
+{
+    mImpl->core.setThumbnailCameraPose(position.x, position.y, position.z,
+                                       orientation.w, orientation.x,
+                                       orientation.y, orientation.z, fovDeg);
+}
+
+uint64_t Renderer::materialThumbnailTextureId() const
+{
+    return mImpl->core.thumbnailTextureId();
+}
+
+void Renderer::setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly)
+{
+    Ogre::SceneNode* scene = mImpl->node(node, "setNodeThumbnailOnly");
+    // The flag rides on the attached movables, not the node: Ogre filters
+    // visibility per renderable, and a SceneNode has no flags of its own.
+    for (Ogre::MovableObject* object : scene->getAttachedObjects()) {
+        object->setVisibilityFlags(thumbnailOnly ? kThumbnailVisibilityFlag
+                                                 : kWorldVisibilityMask);
+    }
+}
+
 void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
 {
     Ogre::SceneManager* sm = mImpl->core.sceneMgr();

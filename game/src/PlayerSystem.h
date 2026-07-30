@@ -53,6 +53,13 @@ public:
     bool staffEquipped() const { return mWeapon == WStaff; }
     bool torchEquipped() const { return mWeapon == WTorch; }
 
+    // Weapon enchantment glow, across every viewmodel. Off by default: the glow
+    // is presentation, and a plain weapon is the honest baseline for tuning
+    // lighting and materials. The debug console drives this; it survives level
+    // transitions because attachLoadout re-applies it to the rebuilt viewmodels.
+    void setWeaponEnchant(eng::Renderer& r, bool on);
+    bool weaponEnchant() const { return mWeaponEnchant; }
+
     eng::FpsController& controller() { return mPlayer; }
     const eng::FpsController& controller() const { return mPlayer; }
 
@@ -64,6 +71,7 @@ private:
     ViewModel mStaffModel;
     ViewModel mTorchModel;
     int mWeapon = WSword;
+    bool mWeaponEnchant = false;
     float mSpeed = 3.0f;
     float mSens = 0.002f;
     float mFootstepFxCooldown = 0.0f;

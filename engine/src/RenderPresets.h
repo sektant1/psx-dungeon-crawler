@@ -1,4 +1,6 @@
 #pragma once
+#include <eng/RenderPresetInfo.h> // public by-id API; this header is the tuning detail
+
 #include <glm/glm.hpp>
 
 namespace eng {
@@ -86,12 +88,6 @@ struct RenderPresetValues {
     float fogDesatBoost = -1.0f;
 };
 
-// The look applied when nothing asks for anything else. "default" is a real
-// profile like any other, not an unprofiled fallback path.
-inline constexpr int kDefaultRenderPreset = 7; // dungeon
-
-// "ps1".."modern-ps1" -> 1..6, "dungeon" -> 7, unknown -> -1.
-int renderPresetFromName(const char* name);
 
 // Returns the tuned values for preset id 1..7. Any other id returns defaults.
 RenderPresetValues renderPresetValues(int preset);

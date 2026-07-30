@@ -1,5 +1,5 @@
-// mapgen <seed> <out.map> [assetDir]
-// Generates a BSP dungeon and writes it as an editable .map.
+// mapgen <seed> <out.map>
+// Generates a BSP dungeon and writes a cooked runtime .map.
 
 #include "scene/LayoutToScene.h"
 #include "scene/MapSerializer.h"
@@ -14,12 +14,11 @@
 int main(int argc, char** argv)
 {
     if (argc < 3) {
-        std::printf("usage: mapgen <seed> <out.map> [assetDir]\n");
+        std::printf("usage: mapgen <seed> <out.map>\n");
         return 2;
     }
     const uint32_t seed = uint32_t(std::strtoul(argv[1], nullptr, 10));
     const std::string out = argv[2];
-    const std::string assetDir = argc > 3 ? argv[3] : APP_ASSET_DIR;
 
     gen::Layout layout = gen::generate(seed);
     if (!layout.valid()) {
@@ -29,9 +28,10 @@ int main(int argc, char** argv)
 
     entt::registry reg;
     game::SceneGenOptions opts;
-    opts.kitDir = assetDir + "/meshes/kit/";
-    opts.propDir = assetDir + "/meshes/props/";
-    game::layoutToScene(layout, opts, reg);
+    if (!game::layoutToScene(layout, opts, reg)) {
+        std::printf("mapgen: layout-to-scene conversion failed\n");
+        return 1;
+    }
 
     if (!mapio::writeMap(out, reg, mapio::coreRegistry())) {
         std::printf("mapgen: failed to write %s\n", out.c_str());

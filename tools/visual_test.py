@@ -200,6 +200,7 @@ def probe_capabilities(build_dir: Path) -> dict[str, Any]:
         "game": {
             "available": (build_dir / "game").is_file(),
             "path": str((build_dir / "game").resolve()),
+            "scene_editor": (build_dir / "scene_editor").is_file(),
         },
         "display": {"available": display, "name": env.get("DISPLAY")},
         "xvfb": _capability("Xvfb"),
@@ -275,10 +276,18 @@ def _common_env(args: argparse.Namespace) -> dict[str, str]:
 
 def run_visual(args: argparse.Namespace, result: VisualResult) -> None:
     build_dir = Path(args.build_dir).resolve()
-    game = build_dir / "game"
+    # Any engine consumer, not just the game: the editor and the demo run the
+    # same renderer, so a shader regression or a GPU capture is just as valid
+    # from either -- and the editor is often the easier one to reproduce in.
+    app_name = getattr(args, "app", None) or "game"
+    game = build_dir / app_name
     if not game.is_file():
         result.fail(
-            VisualError("missing_game", f"Game executable not found: {game}", "Run make build-game")
+            VisualError(
+                "missing_app",
+                f"Executable not found: {game}",
+                f"Run make build-{'editor' if app_name == 'scene_editor' else app_name}",
+            )
         )
         return
 
@@ -287,6 +296,8 @@ def run_visual(args: argparse.Namespace, result: VisualResult) -> None:
     env = _common_env(args)
     env["ALSOFT_DRIVERS"] = "null"
     game_args = [str(Path(args.map).resolve())] if args.map else []
+    if getattr(args, "scene", None):
+        game_args = [str(Path(args.scene).resolve())]
     try:
         prefix = _display_prefix(env, args.display_mode)
     except RuntimeError as exc:
@@ -391,6 +402,12 @@ def build_parser() -> argparse.ArgumentParser:
         child.add_argument("--seed", type=int, default=1)
         child.add_argument("--preset")
         child.add_argument("--map")
+        child.add_argument(
+            "--app",
+            default="game",
+            help="which built executable to drive (game, scene_editor, psx_demo)",
+        )
+        child.add_argument("--scene", help=".scn to open (scene_editor only)")
         child.add_argument("--frames", type=int, default=120)
         child.add_argument("--timeout", type=int, default=180)
         child.add_argument(

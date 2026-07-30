@@ -1,4 +1,5 @@
 #include "LayoutToScene.h"
+#include "../DungeonAssemblyGeometry.h"
 #include "GameCollision.h"
 
 #include "GameComponents.h"
@@ -14,6 +15,8 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <array>
+#include <cmath>
+#include <filesystem>
 
 namespace game {
 
@@ -61,9 +64,16 @@ static entt::entity makeCollider(entt::registry& reg,
 // layoutToScene
 // ---------------------------------------------------------------------------
 
-void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
+bool layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
                    entt::registry& reg)
 {
+    if (!layout.valid() || !std::isfinite(opts.cell) || opts.cell <= 0.0f ||
+        !std::isfinite(opts.wallHeight) || opts.wallHeight <= 0.0f ||
+        opts.kitDir.empty() || opts.propDir.empty() ||
+        std::filesystem::path(opts.kitDir).is_absolute() ||
+        std::filesystem::path(opts.propDir).is_absolute())
+        return false;
+
     const float cell = opts.cell;
     const float halfCell = cell * 0.5f;
     const float wallH = opts.wallHeight;
@@ -71,6 +81,13 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
 
     const int cols = layout.columnCount();
     const int rows = layout.rowCount();
+    for (int row = 0; row < rows; ++row)
+        for (int col = 0; col < cols; ++col)
+            if (layout.cellAt(col, row) == 'A' && layout.archAt(col, row) < 0)
+                return false;
+    const gen::Cell anchor = layout.anchor();
+    const glm::vec3 origin{-(anchor.col + 0.5f) * cell, 0.0f,
+                           -(anchor.row + 0.5f) * cell};
 
     // Kit pieces are authored on a 20-unit grid (see game/assets/kit.toml),
     // centred on X/Z with their base at Y=0. DungeonMap bakes that into the
@@ -97,7 +114,13 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             if (!layout.walkable(col, row)) continue;
 
             const char glyph = layout.cellAt(col, row);
-            const glm::vec3 centre{col * cell, 0.f, row * cell};
+            const int archIndex = layout.archAt(col, row);
+            const bool opening = glyph == 'A' && archIndex >= 0;
+            const bool openingNorthSouth =
+                opening && layout.arch(archIndex).northSouth;
+            const glm::vec3 centre =
+                origin + glm::vec3{(col + 0.5f) * cell, 0.f,
+                                   (row + 0.5f) * cell};
 
             // --- Floor slab --------------------------------------------------
             makeMesh(reg,
@@ -106,6 +129,9 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
                      centre,
                      glm::quat{1.f, 0.f, 0.f, 0.f},
                      kitScale);
+            makeCollider(reg,
+                         centre + glm::vec3{0.f, wallH + 0.05f, 0.f},
+                         glm::vec3{halfCell, 0.05f, halfCell});
 
             // Floor collider (thin slab)
             makeCollider(reg,
@@ -134,9 +160,11 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
                 // boundary.
                 const glm::vec3 colliderPos = centre
                     + glm::vec3{d.dx * halfCell, halfWallH, d.dy * halfCell};
+                const float visualInset = assembly::wallVisualInset(
+                    wallInset, opening, openingNorthSouth, d.dx, d.dy);
                 const glm::vec3 wallPos = centre
-                    + glm::vec3{d.dx * (halfCell + wallInset), 0.f,
-                                d.dy * (halfCell + wallInset)};
+                    + glm::vec3{d.dx * (halfCell + visualInset), 0.f,
+                                d.dy * (halfCell + visualInset)};
 
                 const float yawRad = glm::radians(d.yawDeg);
                 const glm::quat wallRot = glm::angleAxis(yawRad, glm::vec3{0.f, 1.f, 0.f});
@@ -159,6 +187,36 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
 
             // --- Special glyphs ----------------------------------------------
             switch (glyph) {
+            case 'A': {
+                const bool northSouth = layout.arch(archIndex).northSouth;
+                const float yaw = northSouth ? 0.0f : 90.0f;
+                const glm::quat rotation = glm::angleAxis(
+                    glm::radians(yaw), glm::vec3{0.f, 1.f, 0.f});
+                makeMesh(reg, opts.kitDir + "Door_Frame_01.obj",
+                         "Kit/Dungeon", centre, rotation, kitScale);
+
+                const float jamb = cell * 0.25f;
+                const float thickness = cell * 0.125f;
+                const float openHeight = wallH * 0.75f;
+                const bool alongX = northSouth;
+                const auto frameBox = [&](float across, float y,
+                                          float halfAcross, float halfY) {
+                    const glm::vec3 position = alongX
+                        ? centre + glm::vec3{across, y, 0.0f}
+                        : centre + glm::vec3{0.0f, y, across};
+                    const glm::vec3 halfExtents = alongX
+                        ? glm::vec3{halfAcross, halfY, thickness}
+                        : glm::vec3{thickness, halfY, halfAcross};
+                    makeCollider(reg, position, halfExtents);
+                };
+                frameBox(-(halfCell - jamb * 0.5f), wallH * 0.5f,
+                         jamb * 0.5f, wallH * 0.5f);
+                frameBox(+(halfCell - jamb * 0.5f), wallH * 0.5f,
+                         jamb * 0.5f, wallH * 0.5f);
+                frameBox(0.0f, (openHeight + wallH) * 0.5f,
+                         halfCell - jamb, (wallH - openHeight) * 0.5f);
+                break;
+            }
             case 'S': {
                 // Player spawn marker
                 entt::entity e = reg.create();
@@ -224,6 +282,7 @@ void layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             }
         }
     }
+    return true;
 }
 
 } // namespace game

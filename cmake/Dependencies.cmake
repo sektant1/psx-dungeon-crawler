@@ -102,6 +102,17 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(miniaudio INTERFACE m dl pthread)
 endif()
 
+# --- nlohmann/json (authoring format) ----------------------------------------
+# JSON is the source-of-truth format for authored scenes (.scn): human-diffable
+# and reviewable, unlike the cooked .map. Header-only, so the build cost is a
+# fetch. Tests/install off — we only consume the header.
+CPMAddPackage(
+    NAME nlohmann_json
+    GITHUB_REPOSITORY nlohmann/json
+    GIT_TAG v3.11.3
+    OPTIONS "JSON_BuildTests OFF" "JSON_Install OFF"
+)
+
 # --- ImGuizmo (ImGui gizmo widget) -------------------------------------------
 # DOWNLOAD_ONLY: fetch the source + expose its include dir. eng compiles
 # ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp (see CMakeLists) so it draws through

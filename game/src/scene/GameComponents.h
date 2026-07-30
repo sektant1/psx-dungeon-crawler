@@ -48,4 +48,12 @@ struct Trigger {
     std::string event;
 };
 
+// Typed authored placement consumed by game-side scene assembly after the
+// static .map has loaded. Examples are the boss target, reward shrine, dynamic
+// physics props, and named feature-test stations. The engine only sees a
+// serializable string; interpretation remains game policy.
+struct SceneMarker {
+    std::string type;
+};
+
 } // namespace game

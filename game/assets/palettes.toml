@@ -58,7 +58,7 @@ vignette_colour     = [0.090, 0.090, 0.150]
 bloom_threshold     = 0.62    # low: the flame is the only reason you can see
 bloom_intensity     = 0.55
 
-# The lobby is a teaching/showcase vista: same look as the dungeon but with a
+# The showroom is a teaching/test vista: same look as the dungeon but with a
 # longer fog reach so the far portal landmark stays readable on arrival.
-[palette.lobby]
+[palette.showroom]
 fog_density = 0.026

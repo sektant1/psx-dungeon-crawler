@@ -1,8 +1,38 @@
 [window]
-title = "Dungeon Level Editor"
-width = 1100
-height = 760
+title = "PSX Placement Editor"
+width = 1600
+height = 950
 vsync = true
 
+# Viewport navigation, TrenchBroom-style: hold the right mouse button to fly,
+# and the usual WASD + Q/E while it is held. These names are what
+# game/editor/EditorApp.cpp asks Input for.
 [bindings]
 quit = "Escape"
+fly_forward = "W"
+fly_back = "S"
+fly_left = "A"
+fly_right = "D"
+fly_up = "E"
+fly_down = "Q"
+fly_fast = "Left Shift"
+
+# Tools and grid. Single letters, deliberately: the editor mutes them while a
+# text field has keyboard focus.
+tool_select = "Q"
+tool_place = "W"
+grid_coarser = "["
+grid_finer = "]"
+toggle_snap = "G"
+level_up = "PageUp"
+level_down = "PageDown"
+level_reset = "Home"
+rotate = "R"
+focus = "F"
+delete = "Delete"
+duplicate = "D"
+save = "S"
+undo = "Z"
+redo = "Y"
+run = "F5"
+cook = "F6"

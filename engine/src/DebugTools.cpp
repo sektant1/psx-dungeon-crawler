@@ -48,8 +48,9 @@ int presetIndexOf(int id)
 // ----------------------------------------------------------------- state ----
 
 struct DebugTools::State {
-    // Combo selection into renderPresets(). Starts on the engine default so
-    // the panel opens showing the look that is actually live.
+    // Combo selection into renderPresets(). Seeded on the first draw from the
+    // profile the engine actually applied (Deps::renderPresetId), so the panel
+    // opens showing the look that is really live.
     int presetIdx = presetIndexOf(kDefaultRenderPreset);
     bool profileInit = false; // rp seeded from the initial profile yet?
     // Editable copy of the active render profile. Every Render/Shaders slider
@@ -80,8 +81,15 @@ void DebugTools::draw(const Deps& d)
         return;
 
     State& s = *mState;
-    if (!s.profileInit) { // seed the editable profile cache from the combo default
-        s.rp = renderPresetValues(renderPresets()[size_t(s.presetIdx)].id);
+    if (!s.profileInit) {
+        // Seed the editable cache from the live profile, not from the default:
+        // every control edits one field of this struct and pushes just that
+        // field, so a cache that does not match what is on screen makes each
+        // slider jump the look to a value nobody asked for.
+        const int live = d.renderPresetId > 0 ? d.renderPresetId
+                                              : kDefaultRenderPreset;
+        s.presetIdx = presetIndexOf(live);
+        s.rp = renderPresetValues(live);
         s.profileInit = true;
     }
 
@@ -603,6 +611,55 @@ void DebugTools::drawMaterialsTab(const Deps& d)
 }
 
 // -------------------------------------------------------------- PerfOverlay -
+
+void drawColliderOverlay(Physics& physics, Renderer& renderer,
+                         const ColliderDebug& view,
+                         const ColliderOverlayOptions& options)
+{
+    if (!view.enabled)
+        return;
+
+    // Line buffer is static: this runs every frame while the overlay is on, and
+    // the shape count is stable, so the allocation should happen once.
+    static std::vector<Physics::DebugLine> lines;
+    lines.clear();
+    Physics::DebugDrawOptions draw;
+    draw.palette = (view.colorMode == 1) ? Physics::ColliderPalette::ByLayer
+                                         : Physics::ColliderPalette::ByShape;
+    draw.include = view.includeStatic ? kAllLayers : ~options.staticLayers;
+    draw.viewer = options.viewer;
+    draw.range = view.range;
+    draw.fadeStart = view.fadeStart;
+    draw.drawCharacters = view.drawCharacters;
+    draw.drawSensors = view.drawSensors;
+    draw.sweepDt = options.sweepDt;
+    physics.debugDraw(lines, draw);
+
+    const glm::mat4 vp = renderer.cameraViewProj();
+    const ImVec2 ds = ImGui::GetIO().DisplaySize;
+    ImDrawList* out = ImGui::GetBackgroundDrawList();
+    const bool uniform = view.colorMode == 2;
+    const auto project = [&](const glm::vec3& world, ImVec2& screen) {
+        const glm::vec4 c = vp * glm::vec4(world, 1.0f);
+        if (c.w <= 1e-4f)
+            return false; // behind the camera
+        screen = ImVec2((c.x / c.w * 0.5f + 0.5f) * ds.x,
+                        (1.0f - (c.y / c.w * 0.5f + 0.5f)) * ds.y);
+        return true;
+    };
+    for (const Physics::DebugLine& l : lines) {
+        ImVec2 a, b;
+        if (!project(l.a, a) || !project(l.b, b))
+            continue; // skip segments crossing the near plane
+        glm::vec3 col = uniform ? view.uniformColor : l.colour;
+        col = glm::clamp(col * view.brightness, 0.0f, 1.0f);
+        // 70% opacity so colliders read as an overlay, not solid geometry; the
+        // rest of the frame stays fully opaque.
+        const ImU32 packed = IM_COL32(int(col.r * 255), int(col.g * 255),
+                                      int(col.b * 255), 179);
+        out->AddLine(a, b, packed, view.thickness);
+    }
+}
 
 void PerfOverlay::draw(const FrameStatsView* frame, Renderer* renderer)
 {

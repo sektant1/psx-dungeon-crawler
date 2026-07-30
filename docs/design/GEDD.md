@@ -138,8 +138,9 @@ The engine previously had **three parallel entity/scene models** — the
 - **Static level geometry is a separate path.** The batched dungeon shell
   (`DungeonMap` → `StaticGeometry`) stays batched — static geometry and
   per-entity actors are different paths, as in shipping engines.
-- **One serialization format.** `.map` (binary) round-trips the registry; both
-  game and editor load the same registry.
+- **One authoring path.** JSON `.scn` is the planned canonical source and binary
+  `.map` is its derived runtime container. The future editor edits `.scn` and
+  invokes the same cooker as CI; it does not save runtime registries as source.
 
 Deleted: the SPEngine OOP layer (`Object/Entity/GameObject/Space/GameSession/
 Factory`). Kept from that port: `Object`, `System`, `Content`, `ResourceCache`,
@@ -242,25 +243,26 @@ The first data-driven content slice. EnTT components: `Health`, `Resistances`,
 - **`CombatDirector`** — owns the combat registry + body↔entity map, routes hits,
   applies Jolt knockback, fires death events.
 
-### 7.4 Level pipeline (dungeon)
+### 7.4 Level pipeline (dungeon, current)
 ```
-gen::generate (BSP)  →  gen::Layout (ASCII tile grid)  →  layoutToScene
-   (or authored)         # solid . floor A arch L torch    (extrude to entities)
-                         S spawn X exit …
-                              │
-                              ▼
-                    DungeonMap (batched StaticGeometry shell)  +  actors (ECS)
-                              │
-                        seed-stack descend/ascend via portals
+gen::generate / LevelDocument  →  gen::Layout (ASCII adapter)
+                                           │
+                                           ▼
+                              DungeonMap direct materialisation
+                         (batched shell + physics) + selected ECS actors
 ```
+`layoutToScene` currently belongs to the separate `mapgen`/`.map` path; it is
+not yet the normal game's materialisation path. Converging both producers on a
+shared scene IR is required before editor preview can claim runtime parity.
 `PSX_GEN_SEED` / `PSX_GEN_DUMP` control generation. Static shell is batched;
 actors are per-entity in the registry.
 
 ### 7.5 Serialization (`.map`)
-Binary level format: `MapSerializer` + `ComponentRegistry` + `ByteStream`.
-Round-trips the EnTT registry. Both game and editor consume it. `GameComponents.h`
-+ `MeshSource.h` define the serializable component set; `MapRuntime`/`MapPlay`
-play a `.map` back.
+Binary runtime format: `MapSerializer` + `ComponentRegistry` + `ByteStream`.
+`mapgen` can cook a generated layout and `MapRuntime`/`MapPlay` can inspect it,
+but this path is not integrated with the normal combat/game loop. No `.scn`
+loader, stable author identity, prefab expansion, shared cooker or editor target
+exists yet.
 
 ---
 
@@ -273,7 +275,7 @@ verification stack instead:
 1. **Behaviour-preserving-by-construction** refactors.
 2. **The test suite** (30+ unit/integration targets: scene, scene-sync,
    damage-system, status-effect, map-serializer, physics-sync, level-resource,
-   render-palette, gizmo-tool, editor-document, …).
+   render-palette, …).
 3. **Determinism** — fixed-`dt` capture, pinned RNG, single-threaded Jolt: run-to-
    run noise dropped 100% → ~0.2–1% (residual = Ogre's own particle wall-clock).
 4. **Gross-regression screenshot** via `docs/baselines/verify.py <ref> <new>`.
@@ -299,24 +301,22 @@ A 3D WYSIWYG level editor existed (viewport / TRS gizmo / docked panels / grid
 snap / materials) with binary `.map` serialization and a full author→save→play
 loop. **It was deleted 2026-07-24** (commit `4cfff04`) along with all ImGui
 consumers — the ImGui overlay flicker under the Ogre vsync buffer-swap was
-unfixable in that setup. **Kept:** `.map` playback, mapgen, `LevelDocument`,
-`EditorDocument`, the `game/src/editor/` and `game/src/scene/` seams.
+unfixable in that setup. **Kept:** `.map` playback, `mapgen`, `LevelDocument`,
+`layoutToScene`, and the `game/src/scene/` runtime seams. `EditorDocument`,
+`GizmoTool`, `Palette`, and the editor application were deleted.
 
 ### 9.2 Editor direction — Warcraft-III-style (planned)
-Two-layer authoring adapted to the 3D FPS crawler:
+The replacement is a separate engine-consumer application whose source
+authority is JSON `.scn`:
 
-- **terrain layer** — paintable tile grid (`LevelDocument`), the dungeon shell.
-- **doodad layer** — hand-placed entities (meshes/lights/markers) via the gizmo.
-- **`EditorDocument`** — the deep module owning both layers; `paintTile`
-  re-extrudes terrain through `layoutToScene`, doodads (untagged) survive.
-- **`FromLayout` tag** — marks extruded-terrain entities so re-extrude rebuilds
-  only terrain.
-- **`GizmoTool`** — extracted deep begin/drag/release manipulation module,
-  headless-tested.
-
-Foundations (`LevelDocument`, `layoutToScene`, `EditorDocument`, `GizmoTool`,
-`Palette`, `launchGame`) exist and are tested — WC3-style is mostly wiring. Open:
-persist the terrain grid inside `.map` so saved levels stay re-paintable.
+- `SceneDocument`/IR owns stable author IDs, hierarchy, prefab instances and
+  typed logical asset references.
+- Reversible author commands modify only that IR; ImGuizmo never stores runtime
+  handles in history.
+- A preview bridge mirrors author IDs to transient ECS/render/physics handles.
+- The editor and CLI invoke one deterministic `.scn` → `.map` cooker.
+- `LevelDocument` and procedural generation remain importers/producers, not a
+  second scene authority.
 
 ### 9.3 CLI tools
 `mapgen` (generator → `.map`), `game_sim` (headless sim), `make` targets for

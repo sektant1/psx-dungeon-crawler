@@ -24,6 +24,14 @@ namespace eng {
 inline constexpr uint32_t kFullResUiVisibilityFlag = 0x40000000u;
 inline constexpr uint32_t kLowResSceneVisibilityMask = ~kFullResUiVisibilityFlag;
 
+// Objects that exist ONLY inside the material-thumbnail render target. The
+// thumbnail camera renders exactly this bit and the world cameras mask it off,
+// so a preview sphere can sit at the origin of a live level without ever
+// appearing in it.
+inline constexpr uint32_t kThumbnailVisibilityFlag = 0x20000000u;
+inline constexpr uint32_t kWorldVisibilityMask =
+    ~(kFullResUiVisibilityFlag | kThumbnailVisibilityFlag);
+
 // Internal: owns Ogre::Root and hides Ogre lifetime rules. Root is the first
 // Ogre object created and the last destroyed. Also a RenderTargetListener: it
 // paints the engine's own Dear ImGui frame onto the window after the scene (and
@@ -58,6 +66,21 @@ public:
     void resizeOffscreenViewport(int w, int h);
     uint64_t viewportTextureId() const;   // GL id for ImGui::Image, 0 if none
     bool offscreenActive() const { return mOffscreenTex.get() != nullptr; }
+    // The offscreen viewport paints its own background; the main viewport's
+    // clear colour never reaches it, so an editor that wants a different
+    // backdrop has to say so here.
+    void setOffscreenBackground(float r, float g, float b);
+
+    // --- material thumbnail target ---------------------------------------
+    // A small square RTT with its own camera, for rendering one object (a
+    // preview sphere) on its own. Separate from the editor viewport because it
+    // has a different size, a different camera and a different subject; sharing
+    // one target would mean re-rendering the whole scene per thumbnail.
+    void enableThumbnailViewport(int size);
+    void setThumbnailCameraPose(float px, float py, float pz, float qw, float qx,
+                                float qy, float qz, float fovDeg);
+    uint64_t thumbnailTextureId() const;
+    bool thumbnailActive() const { return mThumbTex.get() != nullptr; }
     // Drive the editor RTT's dedicated camera (a free-fly editor eye, decoupled
     // from the game/window MainCamera). Quaternion is (w,x,y,z).
     void setEditorCameraPose(float px, float py, float pz,
@@ -115,6 +138,10 @@ private:
 
     // Editor offscreen RTT (scene + post baked into a texture for ImGui::Image).
     Ogre::TexturePtr mOffscreenTex;
+    Ogre::TexturePtr mThumbTex;
+    Ogre::Viewport* mThumbVp = nullptr;
+    Ogre::Camera* mThumbCam = nullptr;
+    Ogre::SceneNode* mThumbCamNode = nullptr;
     Ogre::Viewport* mOffscreenVp = nullptr;
     Ogre::Camera* mEditorCam = nullptr;    // dedicated free-fly eye for the RTT
     Ogre::SceneNode* mEditorCamNode = nullptr; // carries mEditorCam's transform

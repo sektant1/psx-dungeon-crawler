@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace eng { class Renderer; }
@@ -16,21 +17,33 @@ namespace eng { class Renderer; }
 // remain in Renderer; factories assemble them into game-facing prefabs.
 struct PortalPropStyle {
     std::string material = "Game/PortalDown";
-    std::string frameMaterial = "Game/DungeonTileTwoSided";
+    // The surround is built from kit meshes, so it wears the kit's atlas. This
+    // used to be beveled-box primitives under an atlas material, whose 0..1
+    // per-face UVs stretched the *whole* dungeon sheet over every block.
+    std::string frameMaterial = "Kit/Dungeon";
+    // Directory holding the kit .obj files, trailing slash included. Empty
+    // leaves the membrane bare (a caller that supplies its own surround).
+    std::string kitMeshDir;
     std::string particles = "engine.portal_wisps";
     glm::vec3 lightColour{1.05f, 0.20f, 1.45f};
     float yawDegrees = 0.0f;
     float lightRange = 5.5f;
-    float innerRadius = 1.0f;
-    float frameWidth = 0.34f;
-    float frameDepth = 0.30f;
-    float frameBevel = 0.08f;
-    glm::vec2 fieldScale{1.90f, 1.55f};
-    float height = 1.42f;
-    float membraneInset = -0.035f;
-    glm::vec3 frameScale{1.0f};
+    // The membrane is a rectangle, in metres, standing on the floor -- a quad,
+    // not an ellipse, which would leave the corners of its surround open.
+    // Deliberately larger than the kit's 2.0 x 2.25 doorways: the portal is the
+    // room's landmark, not another door. Sized with the surround to fit one 4 m
+    // cell under a 3 m ceiling: fieldSize.x + 2*pillar <= 4, fieldSize.y +
+    // head <= 3.
+    glm::vec2 fieldSize{2.8f, 2.5f};
+    // Offset along the portal's local +Z, which faces into the room. Positive
+    // keeps the membrane clear of the wall face it overhangs.
+    float membraneInset = 0.06f;
+    // Surround: a kit Pillar either side of the opening and a kit Arch across
+    // the top. Sized so pillars + opening stay inside one 4 m cell.
+    float framePillarWidth = 0.50f;
+    float frameHeadHeight = 0.45f;
+    float frameDepth = 0.42f;
     glm::vec3 labelOffset{0.0f, 2.82f, 0.10f};
-    int segments = 18;
 };
 
 struct PortalProp {
@@ -39,6 +52,9 @@ struct PortalProp {
     eng::NodeHandle labelAnchor{};
     eng::LightHandle light{};
     glm::vec3 labelWorldPosition{0.0f};
+    // The membrane's size as built, so the interaction target is derived from
+    // the thing the player is looking at rather than tuned alongside it.
+    glm::vec2 opening{0.0f};
 
     bool valid() const
     {
@@ -73,7 +89,9 @@ PortalProp createPortalProp(eng::Renderer& renderer, glm::vec3 floorPosition,
 // document -- into the palette the renderer takes.
 bool loadPrimitiveShowcase(eng::Renderer& renderer, const std::string& path,
                            std::vector<ShowcaseExhibit>& loaded,
-                           const game::CombatVocabulary& vocabulary);
+                           const game::CombatVocabulary& vocabulary,
+                           const std::unordered_map<std::string, glm::vec3>&
+                               placements);
 
 // Levitating treasure chest + offerings + warm glow. The chest/glow are
 // animated by the caller, so their handles come back in the result.
@@ -85,7 +103,14 @@ struct TreasureShrine {
     glm::vec3 chestGlowColour{0.0f};
     float glowRange = 6.0f;
 };
-TreasureShrine buildTreasureShrine(eng::Renderer& r, const std::string& propMeshDir);
+TreasureShrine buildTreasureShrine(eng::Renderer& r,
+                                   const std::string& propMeshDir,
+                                   glm::vec3 origin);
+
+// Fresh reward-ring assembly for authored scenes. Unlike DemoScene's imported
+// composition, this is placed explicitly by a scene marker.
+void buildCrystalRing(eng::Renderer& r, const std::string& meshDir,
+                      glm::vec3 origin);
 
 // Grounds the DemoScene's two omni lamps in open barrels with a flame on the
 // rim, and lifts the light just above the flames. Moves the passed omni nodes.

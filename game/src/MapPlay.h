@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
-namespace eng { class Engine; class Physics; }
 namespace game {
-int playMap(eng::Engine& engine, eng::Physics& physics,
-            const std::string& assetDir, const std::string& mapPath);
+// Play an authored .map as a standalone eng::Application (own Engine + Physics).
+// Reached from `game <file.map>`; returns the process exit code.
+int runMap(const std::string& assetDir, const std::string& mapPath);
 }

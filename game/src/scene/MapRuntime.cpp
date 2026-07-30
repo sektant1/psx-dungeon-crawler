@@ -32,10 +32,14 @@ MapRuntime::MapRuntime(eng::ecs::SceneBackend& backend, eng::Physics& physics)
 
 bool MapRuntime::load(const std::string& path)
 {
+    entt::registry replacement;
+    if (!mapio::readMap(path, replacement, mapio::coreRegistry()))
+        return false;
+
     entt::registry& reg = mScene.registry();
     mPhysicsSync.clear();
-    reg.clear();
-    if (!mapio::readMap(path, reg, mapio::coreRegistry())) return false;
+    mSceneSync.clear();
+    reg = std::move(replacement);
     for (auto e : reg.view<eng::ecs::Transform>())
         reg.emplace_or_replace<eng::ecs::Dirty>(e);
     return true;
@@ -72,10 +76,46 @@ glm::vec3 MapRuntime::playerSpawn() const
     const entt::registry& reg = mScene.registry();
     auto view = reg.view<const PlayerSpawn>();
     for (auto e : view) {
+        if (const auto* world = reg.try_get<eng::ecs::WorldTransform>(e))
+            return glm::vec3(world->matrix[3]);
         if (const auto* t = reg.try_get<eng::ecs::Transform>(e))
             return t->position;
     }
     return glm::vec3(0.0f, 1.0f, 0.0f);
+}
+
+glm::vec3 MapRuntime::levelExit() const
+{
+    const entt::registry& reg = mScene.registry();
+    for (const auto entity : reg.view<const Exit>()) {
+        if (const auto* transform = reg.try_get<eng::ecs::Transform>(entity))
+            return transform->position;
+    }
+    return glm::vec3(0.0f);
+}
+
+float MapRuntime::exitYawDegrees() const
+{
+    const entt::registry& reg = mScene.registry();
+    for (const auto entity : reg.view<const Exit>())
+        return reg.get<const Exit>(entity).yawDegrees;
+    return 0.0f;
+}
+
+std::vector<ScenePlacement> MapRuntime::placements(
+    const std::string& prefix) const
+{
+    std::vector<ScenePlacement> result;
+    const entt::registry& reg = mScene.registry();
+    for (const auto entity : reg.view<const SceneMarker,
+                                      const eng::ecs::Transform>()) {
+        const auto& marker = reg.get<const SceneMarker>(entity);
+        if (!prefix.empty() && marker.type.rfind(prefix, 0) != 0)
+            continue;
+        const auto& transform = reg.get<const eng::ecs::Transform>(entity);
+        result.push_back({marker.type, transform.position, transform.rotation});
+    }
+    return result;
 }
 
 } // namespace game

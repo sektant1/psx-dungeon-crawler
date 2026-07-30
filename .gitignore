@@ -5,6 +5,17 @@ build-debug/
 build-asan/
 compile_commands.json
 ogre.log
+.agents/
+.codex/
+.claude/
+.opencode/
+.goose/
+
+assets/*.mp4
+assets/*.gif
+assets/*.zip
+assets/*.webm
+docs/superpowers/
 
 # Vendored SDK
 vendor/ogre/

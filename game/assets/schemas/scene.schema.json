@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://psx-dungeon-crawler.invalid/schemas/scene.schema.json",
+  "title": "PSX Dungeon Scene",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "id", "entities"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "format": { "const": "psx-dungeon-scene" },
+    "version": {
+      "description": "1 shipped before the placement editor; 2 adds cell, encounters and triggers. Readers accept both, the writer emits 2.",
+      "enum": [1, 2]
+    },
+    "id": { "type": "string", "minLength": 1 },
+    "entities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entity" }
+    }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation_degrees": { "$ref": "#/$defs/vec3" },
+        "scale": { "$ref": "#/$defs/vec3" }
+      }
+    },
+    "collider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["half_extents"],
+      "properties": {
+        "shape": { "const": "box" },
+        "half_extents": { "$ref": "#/$defs/vec3" },
+        "offset": { "$ref": "#/$defs/vec3" }
+      }
+    },
+    "cell": {
+      "description": "Authored grid placement for kit pieces that occupy a cell or a cell edge. The transform is derived from this; both are stored so re-editing never has to guess a cell back out of a world position.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["col", "row"],
+      "properties": {
+        "col": { "type": "integer" },
+        "row": { "type": "integer" },
+        "edge": { "enum": ["north", "east", "south", "west"] },
+        "span": { "type": "integer", "minimum": 1 },
+        "yaw_quarters": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "level": { "type": "number" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size", "event"],
+      "properties": {
+        "size": { "$ref": "#/$defs/vec3" },
+        "event": { "type": "string", "minLength": 1 }
+      }
+    },
+    "light": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "colour"],
+      "properties": {
+        "type": { "enum": ["directional", "point"] },
+        "colour": { "$ref": "#/$defs/vec3" },
+        "range": { "type": "number", "minimum": 0 },
+        "cast_shadows": { "type": "boolean" }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "prefab": { "type": "string", "pattern": "^kit\\." },
+        "cast_shadows": { "type": "boolean" },
+        "transform": { "$ref": "#/$defs/transform" },
+        "cell": { "$ref": "#/$defs/cell" },
+        "collider": { "$ref": "#/$defs/collider" },
+        "cell": {
+      "description": "Authored grid placement for kit pieces that occupy a cell or a cell edge. The transform is derived from this; both are stored so re-editing never has to guess a cell back out of a world position.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["col", "row"],
+      "properties": {
+        "col": { "type": "integer" },
+        "row": { "type": "integer" },
+        "edge": { "enum": ["north", "east", "south", "west"] },
+        "span": { "type": "integer", "minimum": 1 },
+        "yaw_quarters": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "level": { "type": "number" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size", "event"],
+      "properties": {
+        "size": { "$ref": "#/$defs/vec3" },
+        "event": { "type": "string", "minLength": 1 }
+      }
+    },
+    "light": { "$ref": "#/$defs/light" },
+        "player_spawn": { "type": "boolean" },
+        "exit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["yaw_degrees"],
+          "properties": {
+            "yaw_degrees": { "type": "number" }
+          }
+        },
+        "enemy_spawn": { "type": "string", "minLength": 1 },
+        "pickup": { "type": "string", "minLength": 1 },
+        "trigger": { "$ref": "#/$defs/trigger" },
+        "marker": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

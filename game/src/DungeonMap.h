@@ -155,6 +155,7 @@ private:
     glm::vec3 mSpawn{0.0f};
     glm::vec3 mExit{0.0f}; // world pos of the 'X' down-portal cell
     float mExitYawDegrees = 0.0f;
+    bool mExitInDoorway = false;
 
     // Physics: raw pointer to the long-lived Physics instance (owned by main).
     // Null until the first build that passes a Physics reference.

@@ -103,6 +103,7 @@ add_library(
   engine/src/content/TextResource.cpp
   engine/src/diagnostics/Trace.cpp
   engine/src/diagnostics/Profiler.cpp
+  engine/src/diagnostics/FrameStats.cpp
   engine/src/systems/Ease.cpp
   engine/src/systems/Actions.cpp
   engine/src/systems/Events.cpp
@@ -142,6 +143,7 @@ add_library(
   engine/src/ObjLoader.cpp
   engine/src/ProceduralMeshes.cpp
   engine/src/render/FrameCapture.cpp
+  engine/src/render/GifRecorder.cpp
   engine/src/render/Model.cpp
   engine/src/render/Primitive.cpp
   engine/src/render/PrototypeAssets.cpp
@@ -178,7 +180,8 @@ target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_sys
                                            EnTT::EnTT)
 
 # Facade: owns application lifetime and is the only target consumers name.
-add_library(eng STATIC engine/src/Engine.cpp)
+add_library(eng STATIC engine/src/Engine.cpp engine/src/app/Application.cpp
+                       engine/src/app/FpsGameApp.cpp)
 target_include_directories(eng PRIVATE third_party engine/src)
 target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
 target_compile_definitions(
@@ -207,11 +210,78 @@ eng_target_hardening(demo_scene)
 
 add_executable(psx_demo samples/psx-demo/src/main.cpp)
 target_link_libraries(psx_demo PRIVATE demo_scene)
-target_include_directories(psx_demo PRIVATE engine/src)
+# No engine/src here on purpose: a sample that reaches into the engine's private
+# headers is a sample that stops proving the public API is enough.
 target_compile_definitions(
   psx_demo
   PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/psx-demo/assets")
 eng_target_hardening(psx_demo)
+
+# --- Shared content libraries ------------------------------------------------
+# The scene/authoring code is compiled once here instead of being listed again
+# in every consumer (it was in five source lists: game, mapgen, and three test
+# targets). Two libraries, because the consumers split cleanly in two:
+#
+#   eng_ecs_headless  the two engine sources a headless tool needs (component
+#                     registry + byte stream), for CLI/test targets that must
+#                     NOT drag in Ogre/SDL/Jolt just to read a .map.
+#   game_content      the game's own scene layer: stable component ids, .map
+#                     serializer, layout->scene. Renderer-free by construction.
+#
+# NEVER link eng_ecs_headless together with eng: eng already contains those
+# objects (whole-archive), so linking both is a duplicate-symbol error. Windowed
+# targets link eng; headless ones link eng_ecs_headless.
+add_library(eng_ecs_headless STATIC engine/src/ecs/ComponentRegistry.cpp
+                                    engine/src/io/ByteStream.cpp)
+target_include_directories(eng_ecs_headless PUBLIC engine/include
+                           PRIVATE third_party)
+target_link_libraries(eng_ecs_headless PUBLIC glm::glm EnTT::EnTT)
+eng_target_hardening(eng_ecs_headless)
+
+add_library(
+  game_content STATIC
+  game/src/scene/ComponentRegistry.cpp
+  game/src/scene/MapSerializer.cpp
+  game/src/scene/LayoutToScene.cpp
+  game/content/KitCatalog.cpp
+  game/content/SceneDocument.cpp
+  game/content/SceneSource.cpp
+  game/content/SceneWriter.cpp
+  game/content/SceneCook.cpp
+  game/content/GridMath.cpp
+  game/content/SceneValidate.cpp)
+target_include_directories(game_content PUBLIC game/content game/src
+                                               game/src/scene engine/include
+                           PRIVATE third_party)
+target_link_libraries(game_content PUBLIC glm::glm EnTT::EnTT
+                      PRIVATE eng_toml nlohmann_json::nlohmann_json)
+eng_target_hardening(game_content)
+
+# The placement editor: ImGui + ImGuizmo over the engine's offscreen viewport.
+# Owns UI and commands only -- the scene format, the catalogue and the cooker
+# all live in game_content, so there is no second serializer.
+add_executable(
+  scene_editor
+  game/editor/main.cpp
+  game/editor/EditorApp.cpp
+  game/editor/EditorCamera.cpp
+  game/editor/Commands.cpp
+  game/editor/Picker.cpp
+  game/editor/PreviewBridge.cpp
+  game/editor/MaterialStage.cpp
+  game/editor/RunGame.cpp)
+target_include_directories(scene_editor PRIVATE game/editor engine/src
+                                                third_party)
+target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui)
+target_compile_definitions(
+  scene_editor PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+eng_target_hardening(scene_editor)
+
+# The single .scn -> .map cooker, as a CLI. Headless: CI cooks content without a
+# GPU, and the editor calls the same function in-process.
+add_executable(scene_cook game/tools/scene_cook_main.cpp)
+target_link_libraries(scene_cook PRIVATE game_content eng_ecs_headless)
+eng_target_hardening(scene_cook)
 
 add_executable(
   game
@@ -222,6 +292,8 @@ add_executable(
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
   game/src/DebugOverlay.cpp
+  game/src/GameHud.cpp
+  game/src/HudModel.cpp
   game/src/combat/DamageSystem.cpp
   game/src/combat/StatusEffectSystem.cpp
   game/src/combat/WeaponLibrary.cpp
@@ -244,18 +316,15 @@ add_executable(
   game/src/ParticleEffects.cpp
   game/src/SceneFactory.cpp
   game/src/PrototypeCatalogLoader.cpp
-  game/src/PortalGeometry.cpp
   game/src/RenderPalette.cpp
   game/src/Targeting.cpp
   game/src/Dummy.cpp
   game/src/ViewModel.cpp
   game/src/MapPlay.cpp
-  game/src/scene/MapRuntime.cpp
-  game/src/scene/ComponentRegistry.cpp
-  game/src/scene/MapSerializer.cpp)
+  game/src/scene/MapRuntime.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
                                         game/src game/src/scene)
-target_link_libraries(game PRIVATE demo_scene)
+target_link_libraries(game PRIVATE demo_scene game_content)
 target_compile_definitions(
   game
   PRIVATE
@@ -264,16 +333,10 @@ target_compile_definitions(
 )
 eng_target_hardening(game)
 
-add_executable(
-  mapgen
-  game/src/mapgen_main.cpp game/src/scene/LayoutToScene.cpp
-  game/src/scene/MapSerializer.cpp game/src/scene/ComponentRegistry.cpp
-  game/src/DungeonGen.cpp
-    engine/src/ecs/ComponentRegistry.cpp
-    engine/src/io/ByteStream.cpp)
+add_executable(mapgen game/src/mapgen_main.cpp game/src/DungeonGen.cpp)
 target_include_directories(mapgen PRIVATE game/src game/src/scene
                                           engine/include third_party)
-target_link_libraries(mapgen PRIVATE glm::glm EnTT::EnTT)
+target_link_libraries(mapgen PRIVATE game_content eng_ecs_headless)
 target_compile_definitions(
   mapgen PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
 eng_target_hardening(mapgen)
@@ -326,10 +389,17 @@ if(BUILD_TESTING)
   add_test(NAME level_document COMMAND level_document_tests)
 
   add_executable(targeting_tests game/tests/TargetingTests.cpp
-                                 game/src/Targeting.cpp)
+                                  game/src/Targeting.cpp)
   target_include_directories(targeting_tests PRIVATE game/src)
   target_link_libraries(targeting_tests PRIVATE glm::glm)
   add_test(NAME targeting COMMAND targeting_tests)
+
+  add_executable(hud_model_tests game/tests/HudModelTests.cpp
+                                 game/src/HudModel.cpp)
+  target_include_directories(hud_model_tests PRIVATE game/src engine/include
+                                                     third_party)
+  target_link_libraries(hud_model_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME hud_model COMMAND hud_model_tests)
 
   add_executable(fps_controller_tests game/tests/FpsControllerTests.cpp)
   target_link_libraries(fps_controller_tests PRIVATE eng)
@@ -374,14 +444,12 @@ if(BUILD_TESTING)
 
   add_executable(
     component_registry_tests
-    game/tests/ComponentRegistryTests.cpp
-    game/src/scene/ComponentRegistry.cpp
-    engine/src/ecs/ComponentRegistry.cpp
-    engine/src/io/ByteStream.cpp)
+    game/tests/ComponentRegistryTests.cpp)
   target_include_directories(
     component_registry_tests PRIVATE game/src game/src/scene engine/include
                                      third_party)
-  target_link_libraries(component_registry_tests PRIVATE glm::glm EnTT::EnTT)
+  target_link_libraries(component_registry_tests PRIVATE game_content
+                                                        eng_ecs_headless)
   add_test(NAME component_registry COMMAND component_registry_tests)
 
   add_executable(damage_system_tests game/tests/DamageSystemTests.cpp
@@ -474,14 +542,12 @@ if(BUILD_TESTING)
 
   add_executable(
     map_serializer_tests
-    game/tests/MapSerializerTests.cpp
-    game/src/scene/ComponentRegistry.cpp game/src/scene/MapSerializer.cpp
-    engine/src/ecs/ComponentRegistry.cpp
-    engine/src/io/ByteStream.cpp)
+    game/tests/MapSerializerTests.cpp)
   target_include_directories(
     map_serializer_tests PRIVATE game/src game/src/scene engine/include
                                  third_party)
-  target_link_libraries(map_serializer_tests PRIVATE glm::glm EnTT::EnTT)
+  target_link_libraries(map_serializer_tests PRIVATE game_content
+                                                  eng_ecs_headless)
   add_test(NAME map_serializer COMMAND map_serializer_tests)
 
   add_executable(render_palette_tests game/tests/RenderPaletteTests.cpp
@@ -499,13 +565,14 @@ if(BUILD_TESTING)
   add_test(NAME lobby_dressing COMMAND lobby_dressing_tests)
 
   add_executable(showcase_visibility_tests
-                 game/tests/ShowcaseVisibilityTests.cpp)
+                 game/tests/ShowcaseVisibilityTests.cpp game/src/DungeonGen.cpp)
   target_include_directories(showcase_visibility_tests PRIVATE game/src
                                                                third_party)
   target_link_libraries(showcase_visibility_tests PRIVATE eng_toml)
   target_compile_definitions(
     showcase_visibility_tests
-    PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+    PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
+            DEMO_SCENE_TOML="${CMAKE_CURRENT_SOURCE_DIR}/samples/common/assets/demo_scene.toml")
   add_test(NAME showcase_visibility COMMAND showcase_visibility_tests)
 
   # PhysicsSync lives in eng_framework now, so the test links it rather than
@@ -563,6 +630,12 @@ if(BUILD_TESTING)
   target_link_libraries(frame_capture_tests PRIVATE ${CMAKE_DL_LIBS})
   add_test(NAME frame_capture COMMAND frame_capture_tests)
 
+  add_executable(gif_recorder_tests engine/tests/GifRecorderTests.cpp
+                                    engine/src/render/GifRecorder.cpp
+                                    engine/src/Log.cpp)
+  target_include_directories(gif_recorder_tests PRIVATE engine/include)
+  add_test(NAME gif_recorder COMMAND gif_recorder_tests)
+
   add_executable(
     actions_tests engine/tests/ActionsTests.cpp engine/src/systems/Ease.cpp
                   engine/src/systems/Actions.cpp engine/src/core/Object.cpp)
@@ -616,12 +689,6 @@ if(BUILD_TESTING)
                              PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME vfx_shader_assets COMMAND vfx_shader_asset_tests)
 
-  add_executable(portal_geometry_tests game/tests/PortalGeometryTests.cpp
-                                       game/src/PortalGeometry.cpp)
-  target_include_directories(portal_geometry_tests PRIVATE game/src)
-  target_link_libraries(portal_geometry_tests PRIVATE glm::glm)
-  add_test(NAME portal_geometry COMMAND portal_geometry_tests)
-
   add_executable(model_tests engine/tests/ModelTests.cpp)
   target_include_directories(model_tests PRIVATE engine/include engine/src)
   target_link_libraries(model_tests PRIVATE eng glm::glm)
@@ -652,24 +719,111 @@ if(BUILD_TESTING)
   add_executable(
     map_runtime_tests
     game/tests/MapRuntimeTests.cpp
-    game/src/scene/MapRuntime.cpp
-    game/src/scene/MapSerializer.cpp
-    game/src/scene/ComponentRegistry.cpp
-   )
+    game/src/scene/MapRuntime.cpp)
   target_include_directories(
     map_runtime_tests PRIVATE game/src game/src/scene engine/include engine/src
                               third_party third_party/imgui)
-  target_link_libraries(map_runtime_tests PRIVATE eng EnTT::EnTT glm::glm)
+  target_link_libraries(map_runtime_tests PRIVATE eng game_content EnTT::EnTT
+                                               glm::glm)
   add_test(NAME map_runtime COMMAND map_runtime_tests)
+
+  # --- authoring pipeline (.scn -> IR -> .map) --------------------------------
+  # These run against the REAL game/assets/kit.toml and the real shipped scene:
+  # the point is to catch content drift, not to test a fixture.
+  add_executable(kit_catalog_tests game/tests/KitCatalogTests.cpp)
+  target_link_libraries(kit_catalog_tests PRIVATE game_content eng_ecs_headless)
+  target_compile_definitions(
+    kit_catalog_tests
+    PRIVATE KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml")
+  add_test(NAME kit_catalog COMMAND kit_catalog_tests)
+
+  add_executable(editor_command_tests game/tests/EditorCommandTests.cpp
+                                      game/editor/Commands.cpp
+                                      game/content/SceneDocument.cpp)
+  target_include_directories(editor_command_tests PRIVATE game/editor
+                                                          game/content)
+  target_link_libraries(editor_command_tests PRIVATE glm::glm)
+  add_test(NAME editor_command COMMAND editor_command_tests)
+
+  add_executable(editor_picker_tests game/tests/EditorPickerTests.cpp
+                                     game/editor/Picker.cpp)
+  target_include_directories(editor_picker_tests PRIVATE game/editor)
+  target_link_libraries(editor_picker_tests PRIVATE glm::glm)
+  add_test(NAME editor_picker COMMAND editor_picker_tests)
+
+  add_executable(editor_camera_tests game/tests/EditorCameraTests.cpp
+                                     game/editor/EditorCamera.cpp)
+  target_include_directories(editor_camera_tests PRIVATE game/editor)
+  target_link_libraries(editor_camera_tests PRIVATE glm::glm)
+  add_test(NAME editor_camera COMMAND editor_camera_tests)
+
+  add_executable(editor_camera_fly_tests game/tests/EditorCameraFlyTests.cpp
+                                         game/editor/EditorCamera.cpp)
+  target_include_directories(editor_camera_fly_tests PRIVATE game/editor)
+  target_link_libraries(editor_camera_fly_tests PRIVATE glm::glm)
+  add_test(NAME editor_camera_fly COMMAND editor_camera_fly_tests)
+
+  add_executable(grid_math_tests game/tests/GridMathTests.cpp)
+  target_link_libraries(grid_math_tests PRIVATE game_content eng_ecs_headless)
+  target_compile_definitions(
+    grid_math_tests
+    PRIVATE KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml")
+  add_test(NAME grid_math COMMAND grid_math_tests)
+
+  add_executable(scene_validate_tests game/tests/SceneValidateTests.cpp)
+  target_link_libraries(scene_validate_tests PRIVATE game_content
+                                                     eng_ecs_headless)
+  target_compile_definitions(
+    scene_validate_tests
+    PRIVATE
+      KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml"
+      ASSET_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
+      RITUAL_SCN="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/scenes/ritual_boss_showroom.scn"
+  )
+  add_test(NAME scene_validate COMMAND scene_validate_tests)
+
+  add_executable(scene_roundtrip_tests game/tests/SceneRoundTripTests.cpp)
+  target_link_libraries(scene_roundtrip_tests PRIVATE game_content
+                                                      eng_ecs_headless)
+  target_compile_definitions(
+    scene_roundtrip_tests
+    PRIVATE
+      RITUAL_SCN="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/scenes/ritual_boss_showroom.scn"
+  )
+  add_test(NAME scene_roundtrip COMMAND scene_roundtrip_tests)
+
+  add_executable(schema_sync_tests game/tests/SchemaSyncTests.cpp)
+  target_link_libraries(schema_sync_tests PRIVATE game_content eng_ecs_headless
+                                                  nlohmann_json::nlohmann_json)
+  target_compile_definitions(
+    schema_sync_tests
+    PRIVATE
+      SCENE_SCHEMA="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/schemas/scene.schema.json"
+  )
+  add_test(NAME schema_sync COMMAND schema_sync_tests)
+
+  # Runs the scene_cook binary and compares it against the in-process cook, so
+  # "the editor and CI cook identical bytes" is a build failure when it breaks.
+  add_executable(cook_parity_tests game/tests/CookParityTests.cpp)
+  add_dependencies(cook_parity_tests scene_cook)
+  target_link_libraries(cook_parity_tests PRIVATE game_content eng_ecs_headless)
+  target_compile_definitions(
+    cook_parity_tests
+    PRIVATE
+      RITUAL_SCN="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/scenes/ritual_boss_showroom.scn"
+      KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml"
+      SCENE_COOK_EXE="$<TARGET_FILE:scene_cook>"
+      COOK_PARITY_OUT_DIR="${CMAKE_CURRENT_BINARY_DIR}")
+  add_test(NAME cook_parity COMMAND cook_parity_tests)
 
   add_executable(
     layout_to_scene_tests
-    game/tests/LayoutToSceneTests.cpp game/src/scene/LayoutToScene.cpp
-    game/src/DungeonGen.cpp)
+    game/tests/LayoutToSceneTests.cpp game/src/DungeonGen.cpp)
   target_include_directories(
     layout_to_scene_tests PRIVATE game/src/scene game/src engine/include
                                   third_party)
-  target_link_libraries(layout_to_scene_tests PRIVATE glm::glm EnTT::EnTT)
+  target_link_libraries(layout_to_scene_tests PRIVATE game_content
+                                                   eng_ecs_headless)
   add_test(NAME layout_to_scene COMMAND layout_to_scene_tests)
 endif()
 

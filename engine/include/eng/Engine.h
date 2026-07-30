@@ -1,8 +1,10 @@
 #pragma once
 #include <eng/Config.h>
 #include <eng/Input.h>
+#include <eng/RenderPresetInfo.h>
 #include <eng/Renderer.h>
 #include <eng/StepClock.h>
+#include <eng/render/GifRecorder.h>
 #include <eng/systems/System.h>
 
 #include <memory>
@@ -23,7 +25,17 @@ public:
 
     // Loads TOML config (window.title/width/height + [bindings]), creates
     // the window, brings up the renderer with engine + app asset roots.
-    bool init(const std::string& configPath, const std::string& appAssetDir);
+    // `renderPreset` is the starting render profile (0 = let PSX_RENDER_PRESET
+    // decide, then the engine default). The applied id is readable afterwards
+    // so the debug console can open on the look that is actually live instead
+    // of assuming the default.
+    bool init(const std::string& configPath, const std::string& appAssetDir,
+              int renderPreset = 0);
+
+    // The render profile currently applied. Set by init and by
+    // setRenderPreset; the console's own switcher reports through the latter.
+    int renderPreset() const { return mRenderPreset; }
+    void setRenderPreset(int id);
 
     float tick(); // pump events, update input; returns dt clamped to 0.1 s
     bool shouldClose() const { return mClose; }
@@ -37,6 +49,14 @@ public:
     // or 0 to freeze Ogre-side animation for a frame.
     void renderFrame(float dt, float animDt = -1.0f);
     void shutdown();
+
+    // Record a fixed-length clip and encode it to a GIF, then close. Call
+    // before the first renderFrame (onStart is the natural place). Recording
+    // pins the frame delta to 1/fps, so the clip plays back at the speed it was
+    // simulated at and is reproducible run to run -- the same guarantee the
+    // screenshot hook relies on.
+    void startRecording(const RecordingOptions& options);
+    bool recording() const;
 
     // --- Dear ImGui debug overlay ----------------------------------------
     // Call beginImGuiFrame(dt) once per frame BEFORE building any ImGui/ImGuizmo
@@ -84,6 +104,7 @@ private:
     Input mInput;
     Renderer mRenderer;
     StepClock mStepClock;
+    int mRenderPreset = kDefaultRenderPreset;
     bool mClose = false;
     std::vector<System::StrongPtr> mSystems;
 };

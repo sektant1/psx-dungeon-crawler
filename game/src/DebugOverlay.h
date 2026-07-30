@@ -1,80 +1,50 @@
 #pragma once
 #include <entt/entt.hpp>
 
-#include <eng/DebugTools.h> // eng::DebugTools, eng::PerfOverlay, eng::ColliderDebug
-#include <eng/StepClock.h>  // eng::StepClock, edited by DebugTools' Animation tab
+#include <eng/DebugTools.h> // eng::DebugTools, the console these panels join
 
 namespace eng { class Renderer; }
 
 struct CombatConfig;
-namespace eng { class FpsController; }
 
 namespace game {
 
-struct ProfHud;
+class PlayerSystem;
 
-// Collider-view settings are engine tooling now; the game just keeps naming the
-// type `game::ColliderDebug` (F3 toggles `enabled`, read by the loop's
-// collider-draw block).
+// Collider-view settings are engine tooling; the game just keeps naming the
+// type `game::ColliderDebug` (eng::FpsGameApp owns the instance and the F3
+// toggle).
 using ColliderDebug = eng::ColliderDebug;
 
-// The game's debug console. Everything tab-shaped that tunes the *engine*
-// (render profile, stylize shaders, step clock, colliders, player controller,
-// materials, frame stats) lives in eng::DebugTools now. This class owns that,
-// and adds the two tabs that are game policy -- Combat and Feel -- through
-// DebugTools' panel-registration seam, so the engine never learns what a
-// "weapon" or a "poise bar" is.
+// The two debug tabs that are game policy: Combat (weapon/projectile tuning)
+// and Feel (stamina, poise, action state). Everything that tunes the *engine*
+// -- render profile, stylize shaders, step clock, colliders, player controller,
+// materials, frame stats -- is eng::DebugTools' own, so this class is only the
+// part the engine must not know about.
 //
-// Build once, toggle with F1, and call draw() every frame the overlay is
-// visible (between Engine::beginImGuiFrame and Engine::renderFrame). Ownership
-// of referenced systems stays with main.cpp; draw() receives them per-frame via
-// Deps so nothing dangles across level rebuilds (the combat registry/player
-// entity are recreated on descent).
-class DebugOverlay {
+// install() once at startup, then update() every frame with live pointers: the
+// combat registry and player entity are recreated on level transitions, so the
+// panels read them indirectly rather than capturing them.
+class DebugPanels {
 public:
-    // Per-frame wiring. Any pointer may be null; the matching tab then shows a
-    // "not available" note instead of dereferencing it.
     struct Deps {
-        eng::Renderer* renderer = nullptr;
         CombatConfig* combat = nullptr;
-        eng::FpsController* fps = nullptr;
         entt::registry* registry = nullptr; // combat director registry
-        entt::entity player = entt::null;    // player entity in `registry`
-        const ProfHud* prof = nullptr;
-        ColliderDebug* colliders = nullptr;  // F3 collider-view settings
-        eng::StepClock* steps = nullptr;     // stop-motion animation rates
+        entt::entity player = entt::null;   // player entity in `registry`
+        // Weapon presentation toggles live on the player system; the panel needs
+        // the renderer to push a change through to the live viewmodels.
+        PlayerSystem* playerSystem = nullptr;
+        eng::Renderer* renderer = nullptr;
     };
 
-    DebugOverlay();
-
-    bool visible() const { return mTools.visible(); }
-    void setVisible(bool v) { mTools.setVisible(v); }
-    void toggle() { mTools.toggle(); }
-
-    // Builds the docked panel. No-op when hidden. Safe to call every frame.
-    void draw(const Deps& deps);
+    void install(eng::DebugTools& console);
+    void update(const Deps& deps) { mCur = deps; }
 
 private:
     void drawCombatTab();
     void drawFeelTab();
 
-    eng::DebugTools mTools;
-    // The Combat/Feel panels are registered once but read live gameplay state,
-    // so draw() refreshes this each frame and the panel callbacks read from it.
     Deps mCur;
-};
-
-// Always-on performance HUD (F4). Thin adapter over eng::PerfOverlay that feeds
-// it the game's ProfHud through the engine's phase-agnostic FrameStatsView.
-class PerfOverlay {
-public:
-    bool visible() const { return mImpl.visible(); }
-    void setVisible(bool v) { mImpl.setVisible(v); }
-    void toggle() { mImpl.toggle(); }
-    void draw(const ProfHud* prof, eng::Renderer* renderer);
-
-private:
-    eng::PerfOverlay mImpl;
 };
 
 } // namespace game

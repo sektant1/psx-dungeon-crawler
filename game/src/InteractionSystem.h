@@ -28,8 +28,11 @@ public:
                 glm::vec3 eye, glm::vec3 forward,
                 const TransitionFn& onDescend, const TransitionFn& onAscend);
 
+    const InteractionFocus& focus() const { return mFocus; }
+
 private:
     std::vector<GameplayTarget> mTargets;
+    InteractionFocus mFocus;
 };
 
 } // namespace game

@@ -76,6 +76,17 @@ multithreaded = false
 speed = 3.0
 mouse_sensitivity = 0.002
 
+# Player-facing HUD is rendered at native output resolution after the PSX post
+# chain. Scale and contrast are accessibility controls; reduced_motion removes
+# fades/flashes without changing combat timing or information.
+[hud]
+scale = 1.0
+opacity = 0.92
+high_contrast = false
+reduced_motion = false
+crosshair = true
+numeric_values = true
+
 [bindings]
 move_forward = "W"
 move_back = "S"

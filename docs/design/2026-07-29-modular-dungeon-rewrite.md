@@ -1,6 +1,9 @@
-# Phase 4 — rewrite the dungeon on the modular kit, and drop the .map format
+# Phase 4 — rewrite the dungeon on the modular kit
 
-Status: planned. Kit conversion landed; nothing else started.
+Status: partially superseded. Kit conversion landed; the proposal to drop
+`.map` is superseded by `2026-07-27-prototype-content-reset-and-pipeline.md`:
+JSON `.scn` is canonical authoring data and binary `.map` remains its derived,
+versioned runtime container.
 Date: 2026-07-29
 
 ## What this replaces
@@ -58,9 +61,10 @@ What the engine gains is the mechanism the generator drives:
 So: `eng::render::KitCatalog` + `eng::scene::ModularAssembler` in the engine,
 and the game keeps a much smaller generator that decides *what* to build.
 
-## Levels as JSON
+## Levels as JSON source
 
-`.map` goes. Two things worth being precise about, because "the universal JSON
+`.scn` becomes the editable source; `.map` does not become editor authority.
+Two things worth being precise about, because "the universal JSON
 game engines use" is not one thing:
 
 - **glTF is the interchange format** and it is JSON, but it describes meshes,
@@ -69,10 +73,10 @@ game engines use" is not one thing:
 - So levels get **our own JSON schema**, which is what Unity, Unreal and Godot
   each do too (they just use YAML/binary/tscn instead of JSON).
 
-The component registry already makes this cheap: each `ComponentType` gains a
-JSON serialiser next to its `ByteWriter` pair, and `MapSerializer` becomes
-`SceneDocument`. Text levels diff, merge and hand-edit, which the binary format
-made impossible.
+The component registry remains the cooked wire table. A renderer-independent
+content library owns `SceneDocument`, JSON load/save, stable author IDs,
+validation and deterministic cooking into `MapSerializer`. Text source levels
+diff, merge and hand-edit; runtime maps stay compact and disposable.
 
 Needs a JSON library -- nlohmann/json via CPM, consistent with how every other
 dependency arrives.
@@ -89,8 +93,8 @@ dependency arrives.
    is one storey).
 5. **Cut over.** Game and demo scenes build from the new path; delete
    `DungeonGen`/`DungeonMap` and the six old tiles.
-6. **JSON levels.** Schema, serialisers, editor and `mapgen` write JSON,
-   `.map` deleted.
+6. **JSON scene sources.** Schema, scene IR, cooker and editor write `.scn`;
+   `mapgen` and the cooker emit derived `.map` files.
 
 Steps 3 and 4 are the bulk. Step 5 is where the game changes visually, and
 should be one commit that can be reverted whole.

@@ -72,8 +72,25 @@ public:
     // Show/hide the whole viewmodel (used to swap the active weapon).
     void setVisible(eng::Renderer& r, bool show);
 
+    // Toggle the enchantment glow at runtime. The authored glow and the node
+    // that wears it are captured at init, so switching it back on restores this
+    // weapon's own school instead of some generic default. Off until asked for:
+    // the glow is presentation, and a plain weapon is the honest baseline to
+    // tune lighting and materials against.
+    void setEnchantEnabled(eng::Renderer& r, bool on);
+    bool enchantEnabled() const { return mEnchantEnabled; }
+
 private:
+    // Applies mEnchantEnabled to mGlowNode. No-op when the weapon was built
+    // without a glow.
+    void applyEnchant(eng::Renderer& r);
+
     eng::NodeHandle mNode{};
+    // The node carrying the glow: the weapon mesh for an imported weapon, the
+    // crystal for the staff, the handle for the torch.
+    eng::NodeHandle mGlowNode{};
+    ViewmodelGlow mGlow{};
+    bool mEnchantEnabled = false;
 
     WeaponViewmodelPose mPose{};
 

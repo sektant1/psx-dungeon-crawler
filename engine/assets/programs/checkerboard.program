@@ -1,0 +1,26 @@
+// Editor staging floor. Editor-only by intent: no game material references
+// these, so the frozen PSX look is untouched by their existence.
+
+vertex_program Editor_VS_Checkerboard glsl
+{
+    source checkerboard.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto world world_matrix
+        param_named_auto worldView worldview_matrix
+        param_named_auto invTransWorldView inverse_transpose_worldview_matrix
+    }
+}
+
+fragment_program Editor_FS_Checkerboard glsl
+{
+    source checkerboard.frag
+    default_params
+    {
+        param_named checkerColourA float4 0.52 0.53 0.55 1.0
+        param_named checkerColourB float4 0.30 0.31 0.33 1.0
+        param_named checkerScale float 0.5
+        param_named_auto farClip far_clip_distance
+    }
+}

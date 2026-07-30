@@ -1,8 +1,8 @@
 #include "LiveLevel.h"
 
-#include "LobbyDressing.h"
 #include "RenderPalette.h"
 #include "ShowcaseVisibility.h"
+#include "ShowroomMotion.h"
 
 #include <eng/Log.h>
 #include <eng/Renderer.h>
@@ -13,7 +13,9 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -29,161 +31,120 @@ static eng::TextSpriteStyle showcaseLabelStyle(float worldHeight,
 // Build a complete level (dungeon + demo scene + props + chest + portals)
 // into the (already-clear) scene. depth>0 adds an up-portal at the entry.
 LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
-                     const std::string& assets,
-                     const game::CombatVocabulary& vocabulary, uint32_t seed,
-                     int depth, const gen::Layout* authored)
+                      const std::string& assets,
+                      const game::CombatVocabulary& vocabulary, uint32_t seed,
+                      int depth, const gen::Layout* authored,
+                      const std::string* authoredMapPath)
 {
     LiveLevel lv;
     lv.gameScene = std::make_unique<game::GameScene>(r);
     const eng::NodeHandle levelRoot =
         r.createNode(eng::kRootNode, glm::vec3(0.0f),
                      "Level Scene depth " + std::to_string(depth));
-    const eng::NodeHandle dungeonRoot =
-        r.createNode(levelRoot, glm::vec3(0.0f), "Procedural Dungeon");
-    const eng::NodeHandle showcaseRoot =
-        r.createNode(levelRoot, glm::vec3(0.0f), "Shared Showcase");
-
-    // --------------------------------------------------------- dungeon ---
-    // Procedurally generated level; the anchor 'C' room lands at the world
-    // origin so the shared DemoScene sits centred inside it.
-    gen::Layout layout = authored ? *authored : gen::generate(seed);
-    if (!lv.map.loadFromRows(r, physics, std::move(layout),
-                             assets + "/meshes/kit/",
-                             assets + "/meshes/props/", dungeonRoot)) {
-        eng::log::error("buildLevel: map load failed");
-        return lv;
+    const bool sourceAuthored = authoredMapPath != nullptr;
+    if (sourceAuthored) {
+        lv.authoredBackend =
+            std::make_unique<eng::ecs::RendererSceneBackend>(r);
+        lv.authoredMap = std::make_unique<game::MapRuntime>(
+            *lv.authoredBackend, physics);
+        if (!lv.authoredMap->load(*authoredMapPath)) {
+            eng::log::error("buildLevel: authored map load failed: %s",
+                            authoredMapPath->c_str());
+            return lv;
+        }
+        lv.authoredMap->resolveMeshes(
+            [&](const std::string& path) -> eng::MeshHandle {
+                std::error_code error;
+                if (std::filesystem::exists(path, error))
+                    return r.loadObj(path);
+                const std::string resolved = assets + "/" + path;
+                if (std::filesystem::exists(resolved, error))
+                    return r.loadObj(resolved);
+                eng::log::error("Authored scene mesh not found: %s",
+                                path.c_str());
+                return r.prototypeMesh(path);
+            });
+        lv.authoredMap->buildAll();
+        lv.spawn = lv.authoredMap->playerSpawn();
+        lv.exit = lv.authoredMap->levelExit();
+        lv.exitYaw = lv.authoredMap->exitYawDegrees();
+    } else {
+        const eng::NodeHandle dungeonRoot =
+            r.createNode(levelRoot, glm::vec3(0.0f), "Procedural Dungeon");
+        gen::Layout layout = authored ? *authored : gen::generate(seed);
+        if (!lv.map.loadFromRows(r, physics, std::move(layout),
+                                 assets + "/meshes/kit/",
+                                 assets + "/meshes/props/", dungeonRoot)) {
+            eng::log::error("buildLevel: map load failed");
+            return lv;
+        }
+        lv.spawn = lv.map.spawn();
+        lv.exit = lv.map.exitPos();
+        lv.exitYaw = lv.map.exitYawDegrees();
     }
-    lv.spawn = lv.map.spawn();
-    lv.exit = lv.map.exitPos();
-
-    // ------------------------------------------------------ shared scene ---
-    DemoScene::Options sceneOpts;
-    sceneOpts.crystals = depth == 0; // lobby-only crystal feature gallery
-    sceneOpts.boxes = false;       // movers replaced by the treasure chest
-    lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", showcaseRoot,
-                  sceneOpts);
 
     RenderPalette palette;
-    loadRenderPalette(assets + "/palettes.toml", depth == 0 ? "lobby" : "dungeon",
-                      palette);
-    applyRenderPalette(r, palette, lv.scene.sunNode(), lv.scene.sunLight());
-
-    // ------------------------------------------------- lobby showcase ---
-    // Depth zero is a deliberately authored, non-combat exhibition hall.
-    // Keep this dense staging out of procedural dungeon floors: those are
-    // dressed by DungeonMap's data-driven marker and ambient prop catalogs.
-    if (depth == 0) {
-    loadPrimitiveShowcase(r, assets + "/lobby_showcase.toml", lv.exhibits,
-                          vocabulary);
-    // ------------------------------------------------- set dressing ---
-    // Medieval props placed around the anchor room (positions authored for
-    // the shared centrepiece layout at the world origin).
-    {
-        loadLobbyDressing(r, assets + "/lobby_dressing.toml",
-                          assets + "/meshes/props/");
-
-        const std::string props = assets + "/meshes/props/";
-        const auto mesh = [&](const char* f) { return r.loadObj(props + f); };
-        const glm::vec3 noScale{1.0f};
-
-        // ECS path (R1): spawn a static prop as a registry actor; SceneSync
-        // allocates the renderer node and attaches the mesh. yawDeg rotates
-        // about Y (the only rotation the migrated crates need).
-        const auto placeEcs = [&](eng::MeshHandle m, const char* mat,
-                                  glm::vec3 pos, float yawDeg,
-                                  glm::vec3 scale = glm::vec3(1.0f),
-                                  bool cast = true) {
-            const glm::quat q =
-                yawDeg != 0.0f
-                    ? glm::angleAxis(glm::radians(yawDeg), glm::vec3(0, 1, 0))
-                    : glm::quat(1, 0, 0, 0);
-            return lv.gameScene->spawnStatic(m, mat, pos, q, scale, cast);
-        };
-
-        eng::MeshHandle crate = mesh("prop_crate.obj");
-        eng::MeshHandle pumpkin = mesh("prop_pumpkin.obj");
-
-        // --- entry hall (z ~ +24): child props on the market table. The table
-        // body itself is authored in lobby_dressing.toml; here we mirror its
-        // transform on a bare node so the bread/pumpkin ride along.
-        eng::NodeHandle table = r.createNode(eng::kRootNode, {7.0f, 0.88f, 24.5f});
-        r.setOrientation(table, glm::angleAxis(glm::radians(-120.0f),
-                                               glm::vec3(0, 1, 0)));
-        r.attachMesh(r.createNode(table, {0.3f, 0.53f, -0.2f}),
-                     mesh("prop_bread.obj"), "Game/PropMarketMisc");
-        r.attachMesh(r.createNode(table, {-0.35f, 0.59f, 0.25f}), pumpkin,
-                     "Game/PropMarketMisc");
-
-        // --- great hall corner crate stack (per-crate Y offsets, kept in code)
-        if (depth == 0 && lv.downPortal.valid()) {
-            const glm::vec3 c{-9.0f, 0.0f, -4.5f};
-            placeEcs(crate, "Game/PropMarket", c, 10.0f, noScale, false);
-            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), -25.0f,
-                     noScale, false);
-            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.48f, 0), 40.0f,
-                     noScale, false);
+    if (sourceAuthored) {
+        loadRenderPalette(assets + "/palettes.toml", "boss_arena", palette);
+        eng::NodeHandle sunNode{};
+        eng::LightHandle sunLight{};
+        auto& registry = lv.authoredMap->registry();
+        for (const auto entity :
+             registry.view<eng::ecs::LightRef, eng::ecs::NodeRef>()) {
+            const auto& light = registry.get<eng::ecs::LightRef>(entity);
+            if (light.desc.type == eng::LightDesc::Type::Directional) {
+                sunNode = registry.get<eng::ecs::NodeRef>(entity).handle;
+                sunLight = light.handle;
+                break;
+            }
         }
+        applyRenderPalette(r, palette, sunNode, sunLight);
 
-        // --- vault (z ~ -18..-26): sword stabbed into the floor, shield on a
-        // barrel. The weapons-pack meshes are authored huge; scale down.
-        {
-            const glm::quat swordRot =
-                glm::angleAxis(glm::radians(168.0f), glm::vec3(0, 0, 1)) *
-                glm::angleAxis(glm::radians(8.0f), glm::vec3(1, 0, 0));
-            lv.gameScene->spawnStatic(mesh("prop_sword.obj"), "Game/PropWeapon",
-                                      {0.0f, 1.15f, -24.0f}, swordRot,
-                                      glm::vec3(0.06f), false);
+        std::unordered_map<std::string, glm::vec3> featurePlacements;
+        for (const game::ScenePlacement& placement :
+             lv.authoredMap->placements("feature."))
+            featurePlacements.emplace(placement.type.substr(8),
+                                      placement.position);
+        loadPrimitiveShowcase(r, assets + "/boss_arena_features.toml",
+                              lv.exhibits, vocabulary, featurePlacements);
 
-            // The barrel the shield rests on is authored in lobby_dressing.toml.
-            const glm::vec3 b{-4.0f, 0.0f, -24.2f};
-            const glm::quat shieldRot =
-                glm::angleAxis(glm::radians(180.0f), glm::vec3(0, 1, 0)) *
-                glm::angleAxis(glm::radians(-20.0f), glm::vec3(1, 0, 0));
-            lv.gameScene->spawnStatic(mesh("prop_shield.obj"), "Game/PropWeapon",
-                                      b + glm::vec3(0.0f, 0.55f, -0.75f),
-                                      shieldRot, glm::vec3(0.08f), false);
-        }
-
-        // --- braziers: ground the demo's two omni lamps in open barrels with
-        // a fire on the rim and lift the light just above the flames.
-        const auto& omnis = lv.scene.omniNodes();
-        if (omnis.size() >= 2)
-            buildBraziers(r, assets + "/meshes/props/", omnis[0], omnis[1]);
-        {
-            const glm::vec3 c{-4.5f, 0.0f, -20.0f};
-            placeEcs(crate, "Game/PropMarket", c, -20.0f, noScale, false);
-            placeEcs(crate, "Game/PropMarket", c + glm::vec3(0, 0.24f, 0), 15.0f,
-                     noScale, false);
-        }
+        lv.chestOrigin = lv.markerPosition("shrine.treasure");
+        buildCrystalRing(r, assets + "/meshes/", lv.chestOrigin);
+        const TreasureShrine shrine = buildTreasureShrine(
+            r, assets + "/meshes/props/", lv.chestOrigin);
+        lv.chestBase = shrine.chestBase;
+        lv.chestSpin = shrine.chestSpin;
+        lv.chestGlowColour = shrine.chestGlowColour;
+        eng::LightDesc glow;
+        glow.colour = shrine.chestGlowColour;
+        glow.range = shrine.glowRange;
+        lv.chestGlowEntity = lv.gameScene->spawnLight(
+            glow, lv.chestOrigin + glm::vec3(0.0f, 1.35f, 0.0f),
+            "Victory Shrine Glow");
+    } else {
+        const eng::NodeHandle sharedRoot =
+            r.createNode(levelRoot, glm::vec3(0.0f), "Dungeon Lighting");
+        DemoScene::Options sceneOptions;
+        sceneOptions.crystals = false;
+        sceneOptions.boxes = false;
+        lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", sharedRoot,
+                      sceneOptions);
+        loadRenderPalette(assets + "/palettes.toml", "dungeon", palette);
+        applyRenderPalette(r, palette, lv.scene.sunNode(), lv.scene.sunLight());
     }
 
-    // ------------------------------------------- hall centrepiece ---
-    // Treasure shrine: a low-poly chest levitating over the origin (anchor
-    // room centre), ringed by the demo's crystal spires + offering clutter,
-    // with a warm gold spill that pulses like banked coals.
-    TreasureShrine shrine = buildTreasureShrine(r, assets + "/meshes/props/");
-    lv.chestBase = shrine.chestBase;
-    lv.chestSpin = shrine.chestSpin;
-    lv.chestGlowColour = shrine.chestGlowColour;
-    // Glow light as an ECS actor at the chest's rest height; LiveLevel::update
-    // animates its position (to ride the hovering chest) and colour (pulse).
-    eng::LightDesc glow;
-    glow.colour = shrine.chestGlowColour;
-    glow.range = shrine.glowRange;
-    lv.chestGlowEntity =
-        lv.gameScene->spawnLight(glow, {0.0f, 1.35f, 0.0f}, "Chest Glow");
-
-    }
-
-    // Portals: generated low-poly arch + opaque scrolling sprite membrane. The
-    // threshold remains on the cell centre so interaction/navigation stays
-    // deterministic while the tall silhouette reads across a whole room.
+    // Portals: an opaque scrolling membrane inside a surround built from kit
+    // pieces, deliberately larger than the kit's doorways so the threshold reads
+    // as the room's landmark. It stays on the cell boundary, keeping
+    // interaction/navigation deterministic.
+    const std::string kitMeshDir = assets + "/meshes/kit/";
     {
         PortalPropStyle down;
         down.lightColour = {0.06f, 0.42f, 0.025f};
-        down.yawDegrees = lv.map.exitYawDegrees();
+        down.yawDegrees = lv.exitYaw;
+        down.kitMeshDir = kitMeshDir;
         lv.downPortal = createPortalProp(r, lv.exit, down);
-        if (depth == 0) {
+        if (sourceAuthored) {
             eng::TextSpriteStyle style = showcaseLabelStyle(
                 0.48f, {0.22f, 0.82f, 0.18f, 1.0f});
             // Deliberately force a two-line plaque: it remains readable at
@@ -191,10 +152,10 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             // full arch width.
             style.maxWidthPixels = 72;
             style.colourRules.push_back(
-                {"PORTAL", {0.48f, 0.92f, 0.30f, 1.0f}});
+                {"INTERIOR", {0.48f, 0.92f, 0.30f, 1.0f}});
             const eng::SpriteHandle sprite =
                 r.attachTextSprite(lv.downPortal.labelAnchor,
-                                   "DUNGEON PORTAL", style);
+                                   "THE INTERIOR", style);
             r.setSpriteVisible(sprite, false);
             lv.worldLabels.push_back({lv.downPortal.labelAnchor, sprite,
                                       lv.downPortal.labelWorldPosition});
@@ -203,10 +164,11 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             PortalPropStyle up;
             up.material = "Game/PortalUp";
             up.lightColour = {0.18f, 0.90f, 1.35f};
+            up.kitMeshDir = kitMeshDir;
             lv.upPortal = createPortalProp(r, lv.spawn, up);
         }
     }
-    if (depth == 0 && !std::getenv("PSX_NO_SHOWCASE_LABELS")) {
+    if (sourceAuthored && !std::getenv("PSX_NO_SHOWCASE_LABELS")) {
         std::unordered_set<std::string> labelled;
         for (const ShowcaseExhibit& exhibit : lv.exhibits) {
             if (exhibit.label.empty() || !labelled.insert(exhibit.id).second)
@@ -261,24 +223,20 @@ void LiveLevel::update(eng::Renderer& r, float animationTime)
     scene.update(r, animationTime);
     map.update(r, animationTime);
     if (chestBase.valid()) {
-        const glm::vec3 hover{
-            0.0f, 1.35f + 0.25f * std::sin(animationTime * 0.9f), 0.0f};
-        r.setPosition(chestBase, hover);
-        r.setOrientation(
-            chestSpin,
-            glm::angleAxis(animationTime * 0.8f, glm::vec3(0, 1, 0)));
-        const float pulse = 0.9f + 0.1f * std::sin(animationTime * 1.7f) +
-                            0.05f * std::sin(animationTime * 4.3f);
+        const game::showroom::TreasureMotion motion =
+            game::showroom::treasureMotion(animationTime);
+        r.setPosition(chestBase, motion.position);
+        r.setOrientation(chestSpin, motion.orientation);
         // Drive the glow light actor through its ECS components; SceneSync
         // (below) pushes them to the renderer this same frame.
         if (chestGlowEntity != entt::null && gameScene) {
             eng::ecs::Transform t;
-            t.position = hover;
+            t.position = motion.position;
             gameScene->scene().setLocalTransform(chestGlowEntity, t);
             gameScene->scene()
                 .registry()
                 .get<eng::ecs::LightColour>(chestGlowEntity)
-                .value = chestGlowColour * pulse;
+                .value = chestGlowColour * motion.lightPulse;
         }
     }
     // Reconcile the renderer view with the ECS registry AFTER all actor
@@ -329,11 +287,63 @@ void LiveLevel::appendTargets(std::vector<GameplayTarget>& targets,
                               int depth) const
 {
     map.appendTorchTargets(targets);
-    targets.push_back({TargetKind::PortalDown, 0,
-                       exit + glm::vec3(0.0f, 0.4f, 0.0f), 3.0f});
-    if (depth > 0)
-        targets.push_back({TargetKind::PortalUp, 0,
-                           spawn + glm::vec3(0.0f, 0.4f, 0.0f), 3.0f});
+    // Aim at the membrane, not at the floor in front of it: the target used to
+    // sit 0.4 m up, so from a metre away the player was looking a metre over the
+    // top of it and "use" simply never armed. Centre and radius come from the
+    // membrane as built, so the two cannot drift apart.
+    const auto membraneTarget = [](TargetKind kind, glm::vec3 floorPosition,
+                                   glm::vec2 opening) {
+        return GameplayTarget{kind, 0,
+                              floorPosition +
+                                  glm::vec3(0.0f, opening.y * 0.5f, 0.0f),
+                              3.0f, glm::max(opening.x, opening.y) * 0.5f};
+    };
+    if (downPortal.valid())
+        targets.push_back(membraneTarget(TargetKind::PortalDown, exit,
+                                         downPortal.opening));
+    if (depth > 0 && upPortal.valid())
+        targets.push_back(membraneTarget(TargetKind::PortalUp, spawn,
+                                         upPortal.opening));
+}
+
+bool LiveLevel::rebuildAuthored(eng::Renderer& r, eng::Physics& physics,
+                                const game::CombatVocabulary& vocabulary,
+                                const std::string& assets,
+                                const std::string& cookedMap, int depth)
+{
+    map.clearPhysics();
+    r.clearScene();
+    *this =
+        buildLevel(r, physics, assets, vocabulary, 0, depth, nullptr, &cookedMap);
+    return authoredMap != nullptr;
+}
+
+// Authored placements live in the MapRuntime registry; the procedural path has
+// no scene markers, so both marker queries fall back gracefully when there is
+// no authored map.
+glm::vec3 LiveLevel::markerPosition(const std::string& type,
+                                    glm::vec3 fallback) const
+{
+    if (!authoredMap)
+        return fallback;
+    for (const game::ScenePlacement& placement : authoredMap->placements()) {
+        if (placement.type == type)
+            return placement.position;
+    }
+    return fallback;
+}
+
+std::vector<game::ScenePlacement>
+LiveLevel::markerPlacements(const std::string& prefix) const
+{
+    if (!authoredMap)
+        return {};
+    return authoredMap->placements(prefix);
+}
+
+void LiveLevel::clearPhysics()
+{
+    map.clearPhysics();
 }
 
 // Dynamic physics prop: a render node driven by a Jolt rigid body each frame.

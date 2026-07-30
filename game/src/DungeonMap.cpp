@@ -1,4 +1,5 @@
 #include "DungeonMap.h"
+#include "DungeonAssemblyGeometry.h"
 #include "GameCollision.h"
 #include "ParticleEffects.h"
 
@@ -157,12 +158,14 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
         {0,  1, {0.0f, 0.0f,  0.5f}, 180.0f},
         {-1, 0, {-0.5f,0.0f,  0.0f},  90.0f},
     };
+    mExitInDoorway = false;
     for (const WallSide& side : sides) {
         if (mLayout.walkable(exitCell.col + side.dc,
                              exitCell.row + side.dr))
             continue;
         mExit += side.offset * mCell;
         mExitYawDegrees = side.yaw;
+        mExitInDoorway = true;
         break;
     }
 
@@ -227,12 +230,15 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     const eng::MeshHandle arch =
         r.loadObj(kitMeshDir + "Door_Frame_01.obj", &kitToCell);
     // The pillar is the one piece that is not cell-sized: it is 5.65 wide by
-    // 30.2 tall, so kitToCell would push it 1.5 m through the ceiling. Scale
-    // it uniformly to stand exactly floor-to-ceiling (0.56 m across at
-    // wallH = 3), which also keeps its atlas UVs undistorted.
-    const float pillarScale = wallH / 30.2f;
-    const glm::mat4 kitToPillar =
-        glm::scale(glm::mat4(1.0f), glm::vec3(pillarScale));
+    // 30.2 tall -- a column authored to span one and a half cells, so kitToCell
+    // would push it 1.5 m through the ceiling. Take the height from the pillar
+    // (wallH/30.2, floor-to-ceiling) but the cross-section from the cell
+    // (cell/20, the same factor every other piece gets, 1.13 m at cell 4). A
+    // uniform wallH/30.2 would be correct arithmetic and a wrong result: 0.56 m
+    // across is *narrower than the 1 m wall body it stands against*, so the
+    // corner posts read as toothpicks half-swallowed by the masonry.
+    const glm::mat4 kitToPillar = glm::scale(
+        glm::mat4(1.0f), {mCell / 20.0f, wallH / 30.2f, mCell / 20.0f});
     const eng::MeshHandle pillar =
         r.loadObj(kitMeshDir + "Pillar.obj", &kitToPillar);
     const eng::MeshHandle torch = r.loadObj(propMeshDir + "prop_torch.obj");
@@ -430,22 +436,25 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             bool wallS = !walkableCell(col, row + 1);
             bool wallW = !walkableCell(col - 1, row);
             bool wallE = !walkableCell(col + 1, row);
-            // Preserve physical boundaries before suppressing the visual wall
-            // behind a portal. The opaque membrane is a solid threshold: the
-            // player must interact with it rather than walking through it.
+            // The portal face keeps its collider: the membrane is an opaque
+            // threshold the player interacts with, not a hole to walk through.
             const bool collideN = wallN;
             const bool collideS = wallS;
             const bool collideW = wallW;
             const bool collideE = wallE;
-            // The portal factory supplies its own masonry surround. Cut the
-            // matching tile wall out of the X cell so the energy membrane
-            // replaces the brickwork while retaining the boundary collider.
-            if (c == 'X') {
-                if (mExitYawDegrees == 0.0f) wallN = false;
-                else if (mExitYawDegrees == 180.0f) wallS = false;
-                else if (mExitYawDegrees == 90.0f) wallW = false;
-                else if (mExitYawDegrees == -90.0f) wallE = false;
-            }
+            // The portal stands *in* a doorway, so the X cell's portal face is
+            // built from the kit's door frame rather than a plain wall. Deleting
+            // the wall outright (what this used to do, on the assumption that
+            // the portal prop carried its own masonry) left a 4 x 3 m hole with
+            // a 2.9 m generated surround inside it: a black void ring around
+            // the frame, since the cell behind it is solid rock with no floor
+            // or ceiling. Door_Frame_01 shares Wall_01's 20 x 20 x 5 body, so
+            // it takes the same inset and the same atlas UVs as its neighbours.
+            const bool portalCell = c == 'X' && mExitInDoorway;
+            const bool portalN = portalCell && mExitYawDegrees == 0.0f;
+            const bool portalS = portalCell && mExitYawDegrees == 180.0f;
+            const bool portalW = portalCell && mExitYawDegrees == 90.0f;
+            const bool portalE = portalCell && mExitYawDegrees == -90.0f;
             // Kit walls are solid slabs, not the zero-thickness planes the old
             // tiles were. Both wall pieces share the same 5-unit-thick body
             // spanning the full 20 x 20 cell face (measured from the .obj:
@@ -461,17 +470,31 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             // behind the boundary, opening a slot at every neighbour and an
             // unfloored, unceilinged pocket that reads as a black void.
             const float wallInset = 2.5f * mCell / 20.0f;
-            const auto pick = [&](int salt) {
+            const bool opening = c == 'A' && aIdx >= 0;
+            const bool openingNorthSouth =
+                opening && mLayout.arch(aIdx).northSouth;
+            const auto visualInset = [&](int dc, int dr) {
+                return game::assembly::wallVisualInset(
+                    wallInset, opening, openingNorthSouth, dc, dr);
+            };
+            const auto pick = [&](int salt, bool portalFace) {
+                if (portalFace) return arch;
                 return (col * 7 + row * 13 + salt) % 4 == 0 ? wallThick : wall;
             };
             if (wallN)
-                put(pick(0), {x0 + half, 0.0f, z0 - wallInset}, 0.0f);
+                put(pick(0, portalN), {x0 + half, 0.0f, z0 - visualInset(0, -1)},
+                    0.0f);
             if (wallS)
-                put(pick(1), {x0 + half, 0.0f, z0 + mCell + wallInset}, 180.0f);
+                put(pick(1, portalS),
+                    {x0 + half, 0.0f, z0 + mCell + visualInset(0, 1)},
+                    180.0f);
             if (wallW)
-                put(pick(2), {x0 - wallInset, 0.0f, z0 + half}, 90.0f);
+                put(pick(2, portalW), {x0 - visualInset(-1, 0), 0.0f, z0 + half},
+                    90.0f);
             if (wallE)
-                put(pick(3), {x0 + mCell + wallInset, 0.0f, z0 + half}, -90.0f);
+                put(pick(3, portalE),
+                    {x0 + mCell + visualInset(1, 0), 0.0f, z0 + half},
+                    -90.0f);
 
             // Wall collision boxes (thin slabs at each solid boundary face).
             // wallN: -z face of cell (z = z0); wallS: +z face (z = z0+mCell).

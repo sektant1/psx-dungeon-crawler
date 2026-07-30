@@ -68,7 +68,7 @@ bool loadLobbyDressing(eng::Renderer& r, const std::string& tomlPath,
     std::vector<LobbyProp> props;
     std::string err;
     if (!parseLobbyDressing(tomlPath, props, err)) {
-        eng::log::error("lobby dressing: %s", err.c_str());
+        eng::log::error("showroom dressing: %s", err.c_str());
         return false;
     }
 
