@@ -70,7 +70,11 @@ int main()
         InteractionFocus focus;
         focus.available = true;
         focus.kind = TargetKind::PortalUp;
-        const HudSnapshot snapshot = buildHudSnapshot(registry, player, 1, focus);
+        PlayerWeaponDef equipped;
+        equipped.displayName = "EIDOLON ARBALEST";
+        equipped.discipline = "TRIUNE / HEAVY";
+        const HudSnapshot snapshot =
+            buildHudSnapshot(registry, player, &equipped, focus);
         require(snapshot.valid, "valid player did not produce a HUD snapshot");
         require(snapshot.health.current == 72.0f &&
                     snapshot.stamina.maximum == 80.0f &&
@@ -78,8 +82,9 @@ int main()
                 "combat resources were not copied");
         require(snapshot.action == ActionPhase::Deflecting,
                 "action phase was not copied");
-        require(snapshot.weapon == HudWeapon::Staff,
-                "weapon index was not translated");
+        require(snapshot.weapon.name == "EIDOLON ARBALEST" &&
+                    snapshot.weapon.discipline == "TRIUNE / HEAVY",
+                "data-authored weapon identity was not copied");
         require(snapshot.statusCount == 1 &&
                     snapshot.statuses[0].kind == CrowdControl::Burn,
                 "expired status was not filtered");
@@ -89,7 +94,7 @@ int main()
 
     {
         entt::registry registry;
-        require(!buildHudSnapshot(registry, entt::null, 0, {}).valid,
+        require(!buildHudSnapshot(registry, entt::null, nullptr, {}).valid,
                 "missing player produced a valid HUD snapshot");
     }
 

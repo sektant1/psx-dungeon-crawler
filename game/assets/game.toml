@@ -99,19 +99,20 @@ jump = "Space"
 slide = "C"
 quit = "Escape"
 interact = "E"
-fire_arrow = "F"
-cast_spell = "Q"
-cast_beam = "R"
 swap_weapon = "X"
+weapon_1 = "1"
+weapon_2 = "2"
+weapon_3 = "3"
 deflect = "V"
 dodge = "B"
 kick = "G"
 debug_ui = "F1"
+dev_console = "`"
 show_colliders = "F3"
 show_perf = "F4"
 
-# Attack tunables. Every value is also live-editable in the "Attacks" debug
-# panel; edits there apply immediately but are not written back here.
+# Archived sword/staff/torch prototype tuning. Source systems and values remain
+# available for later reactivation but are disconnected from the live loadout.
 [combat.fireball]
 speed = 18.0
 radius = 0.14

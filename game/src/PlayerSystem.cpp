@@ -3,6 +3,7 @@
 #include "GameContext.h"
 
 #include <eng/LightDesc.h>
+#include <eng/Input.h>
 #include <eng/Renderer.h>
 
 #include <algorithm>
@@ -18,25 +19,33 @@ void PlayerSystem::spawnAt(GameContext& ctx, glm::vec3 pos)
     mPlayer.setCeilingHeight(3.0f);
 }
 
+bool PlayerSystem::loadWeapons(const std::string& definitionsPath)
+{
+    const bool loaded = mWeaponLibrary.load(definitionsPath);
+    mWeapons.bind(&mWeaponLibrary.defs());
+    return loaded;
+}
+
 void PlayerSystem::attachLoadout(GameContext& ctx)
 {
     eng::Renderer& r = ctx.renderer;
-    const std::string& assets = ctx.assets;
-    // Warm carried light (sRGB-linearised, energy pre-multiplied).
     eng::LightDesc carry;
-    carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.80f, 2.2f),
-                             std::pow(0.58f, 2.2f)) * 0.95f;
-    carry.range = 7.0f;
+    carry.colour = glm::vec3(std::pow(1.0f, 2.2f), std::pow(0.76f, 2.2f),
+                             std::pow(0.54f, 2.2f)) * 0.72f;
+    carry.range = 6.0f;
     r.attachLight(mPlayer.headNode(), carry);
-    // Weapon glows name schools; magic.toml decides what they look like.
+    mViewmodels.clear();
+    mViewmodels.resize(mWeaponLibrary.defs().size());
+    mPendingFireAnimation.assign(mViewmodels.size(), false);
     const CombatVocabulary& vocab = ctx.vocabulary;
-    mSwordModel.init(r, mPlayer.headNode(), assets + "/meshes/props",
-                     {vocab.palette("arcane"), 0.55f});
-    mStaffModel.initStaff(r, mPlayer.headNode(),
-                          assets + "/meshes/crystal_spire1.obj",
-                          {vocab.palette("frost"), 0.85f});
-    mTorchModel.initTorch(r, mPlayer.headNode(),
-                          {vocab.palette("fire"), 0.35f});
+    for (std::size_t i = 0; i < mViewmodels.size(); ++i) {
+        const PlayerWeaponDef& weapon = mWeaponLibrary.defs()[i];
+        mViewmodels[i].initPlayerWeapon(
+            r, mPlayer.headNode(), weapon.viewmodel,
+            {vocab.palette(weapon.viewmodel.glowSchool),
+             weapon.viewmodel.glowStrength});
+    }
+    mWeapons.resetRuntime();
     setWeaponEnchant(r, mWeaponEnchant); // fresh viewmodels start from the flag
     applyWeaponVis(ctx);
 }
@@ -44,13 +53,13 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
 void PlayerSystem::setWeaponEnchant(eng::Renderer& r, bool on)
 {
     mWeaponEnchant = on;
-    mSwordModel.setEnchantEnabled(r, on);
-    mStaffModel.setEnchantEnabled(r, on);
-    mTorchModel.setEnchantEnabled(r, on);
+    for (ViewModel& model : mViewmodels)
+        model.setEnchantEnabled(r, on);
 }
 
 void PlayerSystem::look(GameContext& ctx)
 {
+    mLastLookDelta = ctx.input.mouseDelta();
     mPlayer.applyLook(eng::FpsController::readCommand(ctx.input));
 }
 
@@ -77,28 +86,60 @@ void PlayerSystem::fixedStep(GameContext& ctx, float dt)
     }
 }
 
-void PlayerSystem::updateViewmodels(GameContext& ctx, float dt,
-                                    bool attackTriggered, bool didCast,
-                                    bool aiming)
+void PlayerSystem::sampleWeaponInput(GameContext& ctx, bool enabled)
 {
-    eng::Renderer& r = ctx.renderer;
-    mSwordModel.update(r, dt, mWeapon == WSword && attackTriggered, aiming);
-    mStaffModel.update(r, dt, didCast, false);
-    mTorchModel.update(r, dt, mWeapon == WTorch && attackTriggered, false);
+    const bool recapturedThisFrame = enabled && !mWeaponInputWasEnabled;
+    mWeaponInputWasEnabled = enabled;
+    WeaponCommand command;
+    command.enabled = enabled;
+    command.fireHeld = enabled && !recapturedThisFrame &&
+                       ctx.input.isMouseDown(eng::MouseButton::Left);
+    command.firePressed = enabled && !recapturedThisFrame &&
+                          ctx.input.wasMouseClicked();
+    command.swapPressed = enabled && ctx.input.wasPressed("swap_weapon");
+    if (enabled && ctx.input.wasPressed("weapon_1")) command.selectSlot = 0;
+    if (enabled && ctx.input.wasPressed("weapon_2")) command.selectSlot = 1;
+    if (enabled && ctx.input.wasPressed("weapon_3")) command.selectSlot = 2;
+    mWeapons.sample(command);
 }
 
-void PlayerSystem::swapWeapon(GameContext& ctx)
+std::optional<std::size_t> PlayerSystem::fixedStepWeapons(
+    GameContext& ctx, Mana& arc, bool canFire, float fixedDt)
 {
-    mWeapon = (mWeapon + 1) % WeaponCount;
-    applyWeaponVis(ctx);
+    const std::optional<std::size_t> fired =
+        mWeapons.fixedUpdate(fixedDt, arc, canFire);
+    if (mWeapons.consumeSelectionChanged()) {
+        applyWeaponVis(ctx);
+        if (mWeapons.selectedIndex() < mViewmodels.size())
+            mViewmodels[mWeapons.selectedIndex()].beginEquip();
+    }
+    if (fired && *fired < mPendingFireAnimation.size())
+        mPendingFireAnimation[*fired] = true;
+    return fired;
+}
+
+void PlayerSystem::updateViewmodels(GameContext& ctx, float dt)
+{
+    for (std::size_t i = 0; i < mViewmodels.size(); ++i) {
+        mViewmodels[i].configure(mWeaponLibrary.defs()[i].viewmodel);
+        mViewmodels[i].update(ctx.renderer, dt, mPendingFireAnimation[i],
+                              mPlayer.horizontalSpeed(), mLastLookDelta,
+                              mPlayer.grounded());
+        mPendingFireAnimation[i] = false;
+    }
+}
+
+const PlayerWeaponDef* PlayerSystem::weaponDefinition(std::size_t index) const
+{
+    const auto& definitions = mWeaponLibrary.defs();
+    return index < definitions.size() ? &definitions[index] : nullptr;
 }
 
 void PlayerSystem::applyWeaponVis(GameContext& ctx)
 {
     eng::Renderer& r = ctx.renderer;
-    mSwordModel.setVisible(r, mWeapon == WSword);
-    mStaffModel.setVisible(r, mWeapon == WStaff);
-    mTorchModel.setVisible(r, mWeapon == WTorch);
+    for (std::size_t i = 0; i < mViewmodels.size(); ++i)
+        mViewmodels[i].setVisible(r, i == mWeapons.selectedIndex());
 }
 
 } // namespace game

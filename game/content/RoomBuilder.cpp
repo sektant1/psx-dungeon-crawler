@@ -76,6 +76,39 @@ std::vector<Entity> buildRoom(const GridConfig& grid, const KitCatalog& catalog,
         }
     }
 
+    // Wall height drives the ceiling even when the room has no walls of its
+    // own, so an open room still gets a lid at the same height as its
+    // neighbours instead of one derived from whatever piece it does have.
+    const float wallHeight =
+        wallPiece ? wallPiece->sizeMeters(catalog.scale()).y : 0.0f;
+
+    if (spec.ceiling && floorPiece && wallHeight > 0.0f) {
+        for (int row = r0; row <= r1; ++row) {
+            for (int col = c0; col <= c1; ++col) {
+                Entity tile;
+                tile.prefab = spec.floorPrefab;
+                tile.material = spec.ceilingMaterial;
+                // Placed on a work plane one wall-height up rather than by
+                // lifting a floor-level transform: the cell and the position
+                // have to agree or every ceiling tile reads as drifted
+                // geometry to the validator and to the editor's grid snap.
+                tile.cell = CellPlacement{col, row, CellPlacement::Edge::None,
+                                          1, 0, spec.level + wallHeight};
+                tile.transform = placementToTransform(grid, catalog, *floorPiece,
+                                                      *tile.cell);
+                // Explicit, because the collision a floor piece carries by
+                // default hangs just *below* its surface -- right for something
+                // you stand on, and a slab across the room at head height for
+                // something you stand under. The lid goes on the side nothing
+                // occupies.
+                const float half = grid.cell * 0.5f;
+                tile.collider = ColliderAuthor{{half, 0.05f, half},
+                                               {0.0f, 0.05f, 0.0f}};
+                emit(std::move(tile));
+            }
+        }
+    }
+
     if (spec.walls) {
         // Only the perimeter edges: an interior edge would put a wall through
         // the middle of the room.
@@ -101,7 +134,6 @@ std::vector<Entity> buildRoom(const GridConfig& grid, const KitCatalog& catalog,
             // size: the kit's pillar is half again as tall as a wall, and a
             // post standing proud of the wall line reads as a mistake in a
             // plain room even though it is fine as deliberate architecture.
-            const float wallHeight = wallPiece->sizeMeters(catalog.scale()).y;
             const float postScale =
                 scaleToHeight(*cornerPiece, catalog.scale(), wallHeight);
             const struct { int col, row; bool east, south; } corners[4] = {

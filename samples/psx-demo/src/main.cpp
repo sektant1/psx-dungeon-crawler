@@ -10,6 +10,8 @@
 #include <eng/RenderPresetInfo.h>
 #include <eng/particles/ParticleLibrary.h>
 #include <eng/app/Application.h>
+#include <eng/render/Warmup.h>
+#include <eng/debug/Console.h>
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -73,7 +75,16 @@ public:
     cfg.assetDir = APP_ASSET_DIR;
     cfg.configPath = cfg.assetDir + "/demo.toml";
     cfg.fixedDt = 0.0f;
+    cfg.loadingTitle = "PSX SHOWCASE";
     return cfg;
+  }
+
+  // The demo builds its scene in onStart, but the shader compiles behind it are
+  // the same first-frame hitch every app pays; warming them here moves the cost
+  // under the loading screen.
+  void onLoad(eng::Engine &engine, eng::LoadPlan &plan) override {
+    (void)engine;
+    eng::addRenderWarmup(plan);
   }
 
   bool onStart(eng::Engine &engine) override {
@@ -130,6 +141,45 @@ public:
         if (presets[i].id == id)
           presetIndex = i;
     }
+    // Shared engine console: the demo's own switches, reachable by name. Same
+    // window the game and the editor open, so nothing here is demo-specific
+    // beyond the command list.
+    mConsole.captureEngineLog();
+    mConsole.registerCommand("quit", "close the demo",
+                             [&engine](const eng::DebugConsole::Args &) {
+                               engine.requestClose();
+                             });
+    mConsole.registerCommand("pause", "freeze/unfreeze the turntable",
+                             [this](const eng::DebugConsole::Args &) {
+                               mPaused = !mPaused;
+                             });
+    mConsole.registerCommand("restart", "rewind the animation clock",
+                             [this](const eng::DebugConsole::Args &) {
+                               mAnimTime = 0.0f;
+                             });
+    mConsole.registerCommand(
+        "r.preset", "list render profiles, or switch to one by name",
+        [this, &r](const eng::DebugConsole::Args &a) {
+          const auto &presets = eng::renderPresets();
+          if (a.size() > 1) {
+            const int id = eng::renderPresetFromName(a[1].c_str());
+            for (size_t i = 0; i < presets.size(); ++i)
+              if (presets[i].id == id)
+                mPresetIndex = i;
+            eng::applyRenderPreset(r, id);
+            mSign->show(r, presets[mPresetIndex].name);
+            return;
+          }
+          for (const auto &p : presets)
+            mConsole.print(eng::log::Level::Info, "render", p.name);
+        },
+        [](const eng::DebugConsole::Args &) {
+          std::vector<std::string> out;
+          for (const auto &p : eng::renderPresets())
+            out.emplace_back(p.name);
+          return out;
+        });
+
     mSign.emplace(mScene.root());
     mSign->show(r, eng::renderPresets()[presetIndex].name);
 
@@ -148,6 +198,8 @@ public:
     eng::Input &in = f.engine.input();
     if (in.wasPressed("quit"))
       f.engine.requestClose();
+    if (in.wasPressed("dev_console"))
+      mConsole.toggle();
     if (in.wasPressed("pause"))
       mPaused = !mPaused;
     if (in.wasPressed("restart"))
@@ -161,6 +213,8 @@ public:
       mSign->show(r, presets[mPresetIndex].name);
     }
   }
+
+  void onGui(const eng::FrameContext &) override { mConsole.draw(); }
 
   void onUpdate(const eng::FrameContext &f) override {
     if (!mPaused)
@@ -177,6 +231,7 @@ private:
   OrbitCamera mOrbit;
   ShowcaseScene mScene;
   eng::ParticleLibrary mParticles;
+  eng::DebugConsole mConsole;
   size_t mPresetIndex = 0;
   std::optional<PresetSign> mSign;
   bool mPaused = false;

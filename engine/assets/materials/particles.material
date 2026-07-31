@@ -1,0 +1,135 @@
+// Instanced particle batches (engine/src/particles/ParticleBatch.cpp).
+//
+// The programs are declared here rather than in engine/assets/programs so the
+// whole batch renderer is one file to add to or delete. Every fragment program
+// writes both MRT attachments, because these draw into the compositor's `mrt`
+// target and attachment 1 feeds the stylize pass.
+//
+// Materials are named Particles/<Mode>/<Blend>. ParticleBatchDesc::material
+// takes any of them, and a hand-authored material may substitute freely as
+// long as it consumes the same uv1/uv2/uv3 instance stream.
+
+// ---------------------------------------------------------------- sprite ---
+
+vertex_program Particles/SpriteVS glsl
+{
+    source particle_sprite.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto view view_matrix
+        // Columns, rows. A batch whose texture is a flipbook overrides this on
+        // its own material; the default is a single full-frame sprite.
+        param_named flipbookGrid float2 1.0 1.0
+    }
+}
+
+fragment_program Particles/SpriteFS glsl
+{
+    source particle_sprite.frag
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named alphaScissor float 0.004
+    }
+}
+
+// Depth fade against a copy of the scene depth. Unused so far: the compositor
+// writes depth into the same target these particles draw into, so a separate
+// copy has to exist before any material can reference this variant.
+fragment_program Particles/SpriteSoftFS glsl
+{
+    source particle_sprite.frag
+    preprocessor_defines SOFT_FADE=1
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named sceneDepthTex int 1
+        param_named alphaScissor float 0.004
+        param_named_auto targetSize texture_size 0
+        param_named_auto farClip far_clip_distance
+        param_named softFadeDistance float 0.35
+    }
+}
+
+// ----------------------------------------------------------------- voxel ---
+
+vertex_program Particles/VoxelVS glsl
+{
+    source particle_voxel.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto view view_matrix
+    }
+}
+
+fragment_program Particles/VoxelFS glsl
+{
+    source particle_voxel.frag
+    default_params
+    {
+        param_named_auto farClip far_clip_distance
+        param_named alphaScissor float 0.004
+    }
+}
+
+// ------------------------------------------------------------- materials ---
+
+// Depth-tested but never depth-writing: the batch sorts its own instances
+// back-to-front, and writing depth would make particles occlude each other.
+material Particles/Sprite/Alpha
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particles/SpriteVS { }
+        fragment_program_ref Particles/SpriteFS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Additive output is order-independent, so the batch skips sorting entirely.
+material Particles/Sprite/Additive
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend add
+        depth_write off
+        vertex_program_ref Particles/SpriteVS { }
+        fragment_program_ref Particles/SpriteFS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Voxels are opaque solids: they write depth and cull backfaces like level
+// geometry, which is what lets them sit correctly among the world's blocks.
+material Particles/Voxel/Solid
+{
+    technique { pass {
+        cull_hardware clockwise
+        depth_write on
+        vertex_program_ref Particles/VoxelVS { }
+        fragment_program_ref Particles/VoxelFS { }
+    } }
+}
+
+material Particles/Voxel/Additive
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend add
+        depth_write off
+        vertex_program_ref Particles/VoxelVS { }
+        fragment_program_ref Particles/VoxelFS { }
+    } }
+}

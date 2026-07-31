@@ -23,6 +23,17 @@
 # were established. The measured mesh bounds are quoted per prop so this file
 # can be re-checked against the source art without loading anything.
 #
+# TOOLTIPS. Marker props are look-targets: the crosshair resolves them and the
+# HUD shows the panel described by these fields. A prop with no `display_name`
+# is scenery and never becomes a target, which is how ambient dressing stays
+# out of the way.
+#
+#   display_name  title line, shown as written
+#   category      small line under the title
+#   description   body text, wrapped by the tooltip
+#   rarity        common | uncommon | rare | arcane -- picks the accent colour
+#   interact      verb for the key prompt; omit when the prop does nothing
+
 # FOOTPRINTS ARE SQUARE ON PURPOSE. Placement picks one of four cardinal yaws
 # from a grid hash, so a prop can be dropped in rotated 90 degrees. A collider
 # sized to the mesh's X and Z separately would be wrong in half of those
@@ -36,6 +47,11 @@
 
 [[prop]]
 id = "loot_chest"
+display_name = "Iron-Bound Chest"
+category = "Container"
+description = "Banded oak, the lock long since rusted through. Whatever it held is still inside."
+rarity = "rare"
+interact = "PRISE OPEN"
 marker = "H"
 meshes = ["prop_chest.obj"]
 materials = ["Game/PropChest"]
@@ -53,6 +69,11 @@ height = 0.080
 
 [[prop]]
 id = "barrel"
+display_name = "Salt Barrel"
+category = "Container"
+description = "Coopered staves swollen with damp. It smells of brine and older things."
+rarity = "common"
+interact = "SEARCH"
 marker = "B"
 meshes = ["prop_barrel_p0.obj", "prop_barrel_p1.obj"]
 materials = ["Game/PropPlanks", "Game/PropBauerhaus"]
@@ -68,6 +89,11 @@ height = 0.694
 
 [[prop]]
 id = "crate"
+display_name = "Supply Crate"
+category = "Container"
+description = "Stamped with a quartermaster mark nobody down here answers to."
+rarity = "common"
+interact = "SEARCH"
 marker = "R"
 meshes = ["prop_crate.obj"]
 materials = ["Game/PropMarket"]
@@ -84,6 +110,11 @@ height = 0.122
 
 [[prop]]
 id = "urn"
+display_name = "Sealed Urn"
+category = "Vessel"
+description = "Terracotta, lidded and waxed. The clay is warm to the touch."
+rarity = "uncommon"
+interact = "BREAK"
 marker = "V"
 meshes = ["prop_vase_p0.obj", "prop_vase_p1.obj"]
 materials = ["Game/PropTerracotta", "Game/PropPlanks"]

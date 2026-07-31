@@ -505,7 +505,12 @@ std::string readProjectFile(const std::string& relativePath)
 {
     std::ifstream file(
         std::string(PROJECT_SOURCE_DIR) + "/" + relativePath);
-    require(file.good(), "repository contract file could not be read");
+    // Name the file. This guard scans source paths that a refactor can move
+    // out from under it, and "a contract file could not be read" without
+    // saying which one turns a one-line path fix into a hunt.
+    require(file.good(),
+            ("repository contract file could not be read: " + relativePath)
+                .c_str());
     std::ostringstream contents;
     contents << file.rdbuf();
     return contents.str();
@@ -525,9 +530,9 @@ void test_repository_has_no_obsolete_round_frame_or_authored_arch()
         std::string("shape == ") + '"' + "ring" + '"';
     const char* files[] = {
         "engine/include/eng/Renderer.h",
-        "engine/src/Renderer.cpp",
-        "engine/src/ProceduralMeshes.h",
-        "engine/src/ProceduralMeshes.cpp",
+        "engine/src/render/Renderer.cpp",
+        "engine/src/render/ProceduralMeshes.h",
+        "engine/src/render/ProceduralMeshes.cpp",
         "game/src/SceneFactory.h",
         "game/src/SceneFactory.cpp",
         "game/src/LiveLevel.cpp",

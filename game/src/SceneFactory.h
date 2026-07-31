@@ -7,6 +7,8 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -38,6 +40,29 @@ struct PortalPropStyle {
     // Offset along the portal's local +Z, which faces into the room. Positive
     // keeps the membrane clear of the wall face it overhangs.
     float membraneInset = 0.06f;
+    // The membrane is a slab, not a sheet: edge on, a zero-thickness field
+    // vanished, and its rim now catches light against the arch.
+    float membraneThickness = 0.14f;
+    // A stone panel closing the surround from behind. Without it the portal is
+    // a picture frame: walk around it and the arch is a hole with the room on
+    // the other side of it, and the membrane's lit face floats in the gap.
+    //
+    // It also decides how tall the membrane is. The kit Arch's soffit is a
+    // curve, so a membrane that stops at the opening's top edge leaves a dark
+    // crescent under the stones -- with a panel behind, that crescent is filled
+    // by the panel and the membrane can stop just inside the springline, where
+    // the soffit is still wider than it is. Without one the membrane has to run
+    // the full height of the surround to fill the crescent itself, and pays for
+    // it with the square top corners that spill past the curve.
+    bool backing = true;
+    // Plain tiling stone, NOT the kit atlas: a generated quad carries 0..1 UVs
+    // over its whole face, so an atlas material stretches the entire sheet
+    // across it and the panel reads as a collage of unrelated wall bits.
+    std::string backingMaterial = "Kit/Stone";
+    // How far the membrane's top edge tucks past the springline, so the two
+    // meet with no seam. Small on purpose: the soffit narrows fast, and past
+    // roughly a tenth of a metre the corners are outside the curve again.
+    float membraneHeadOverlap = 0.06f;
     // Surround: a kit Pillar either side of the opening and a kit Arch across
     // the top. Sized so pillars + opening stay inside one 4 m cell.
     float framePillarWidth = 0.50f;
@@ -45,6 +70,41 @@ struct PortalPropStyle {
     float frameDepth = 0.42f;
     glm::vec3 labelOffset{0.0f, 2.82f, 0.10f};
 };
+
+// Where the portal's surfaces sit along its local +Z, which faces into the
+// room. Pulled out of createPortalProp as a pure function because the one thing
+// that has repeatedly gone wrong here is depth ordering -- the membrane showing
+// past the stone meant to hide it -- and that is arithmetic, testable without a
+// renderer, rather than something to re-check by eye in a screenshot.
+struct PortalDepths {
+    float panelBack = 0.0f;     // backing slab, rear face
+    float panelFront = 0.0f;    // backing slab, front face
+    float membraneBack = 0.0f;  // membrane slab, rear face
+    float membraneFront = 0.0f; // membrane slab, front face
+    float pillarBack = 0.0f;    // pillar bounding box, rear face
+
+    float backingGap() const { return membraneBack - panelFront; }
+};
+
+inline PortalDepths portalDepths(const PortalPropStyle& style)
+{
+    PortalDepths d;
+    const float half = style.membraneThickness * 0.5f;
+    d.membraneBack = style.membraneInset - half;
+    d.membraneFront = style.membraneInset + half;
+    d.pillarBack = -style.framePillarWidth * 0.5f;
+    // Clear of the pillars' back faces, so the slab reads as a wall closing the
+    // surround rather than as a panel jammed between the posts.
+    d.panelBack = d.pillarBack - 0.02f;
+    // Forward to just short of the membrane. The gap it leaves is deliberate
+    // and small: coplanar faces would z-fight, but anything wider is an open
+    // slot, and the kit Pillar is a round shaft whose radius is about 0.71 of
+    // its bounding box -- it plugs neither the corners of its own footprint nor
+    // the space behind it, so an oblique view looks straight through into the
+    // membrane's lit edge.
+    d.panelFront = std::max(d.membraneBack - 0.02f, d.panelBack + 0.05f);
+    return d;
+}
 
 struct PortalProp {
     eng::NodeHandle root{};

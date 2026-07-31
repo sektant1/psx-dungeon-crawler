@@ -8,6 +8,12 @@
 
 namespace eng {
 
+// primitiveMeshGenerator and validPrimitiveMeshDesc used to live here. They
+// moved into PrimitiveGeometry.cpp (eng_core) because the geometry builder
+// calls both, and the geometry builder is a bottom-layer file while this one
+// is not: eng_core linked on its own could not resolve them, which is what
+// broke rhi_contract_tests. Nothing about them needs a renderer.
+
 namespace {
 
 bool finiteVec3(glm::vec3 value)
@@ -41,73 +47,6 @@ PrimitiveDesc composePrimitiveDesc(const NodeTransform& parent,
 
 } // namespace
 
-namespace detail {
-
-std::optional<PrimitiveMeshGenerator>
-primitiveMeshGenerator(PrimitiveKind kind)
-{
-    switch (kind) {
-    case PrimitiveKind::Box:
-        return PrimitiveMeshGenerator::Box;
-    case PrimitiveKind::BeveledBox:
-        return PrimitiveMeshGenerator::BeveledBox;
-    case PrimitiveKind::Sphere:
-        return PrimitiveMeshGenerator::Sphere;
-    case PrimitiveKind::Capsule:
-        return PrimitiveMeshGenerator::Capsule;
-    case PrimitiveKind::Cylinder:
-        return PrimitiveMeshGenerator::Cylinder;
-    case PrimitiveKind::Cone:
-        return PrimitiveMeshGenerator::Cone;
-    case PrimitiveKind::Plane:
-        return PrimitiveMeshGenerator::Plane;
-    case PrimitiveKind::Disc:
-        return PrimitiveMeshGenerator::Disc;
-    }
-    return std::nullopt;
-}
-
-} // namespace detail
-
-bool validPrimitiveMeshDesc(const PrimitiveMeshDesc& desc)
-{
-    const bool finiteSize =
-        std::isfinite(desc.size.x) && std::isfinite(desc.size.y) &&
-        std::isfinite(desc.size.z);
-    if (!finiteSize ||
-        glm::any(glm::lessThanEqual(desc.size, glm::vec3(0.0f))) ||
-        !std::isfinite(desc.radius) || desc.radius <= 0.0f ||
-        !std::isfinite(desc.height) || desc.height <= 0.0f ||
-        !std::isfinite(desc.bevel) || desc.bevel <= 0.0f ||
-        !std::isfinite(desc.thickness) || desc.thickness <= 0.0f ||
-        desc.rings < 3 || desc.segments < 3 ||
-        desc.subdivisions < 0)
-        return false;
-
-    if ((desc.inwardFacing || desc.subdivisions != 0) &&
-        desc.kind != PrimitiveKind::Box)
-        return false;
-
-    if (desc.kind == PrimitiveKind::BeveledBox) {
-        const float halfSmallest =
-            0.5f * std::min({desc.size.x, desc.size.y, desc.size.z});
-        if (desc.bevel >= halfSmallest)
-            return false;
-    }
-
-    switch (desc.kind) {
-    case PrimitiveKind::Box:
-    case PrimitiveKind::BeveledBox:
-    case PrimitiveKind::Sphere:
-    case PrimitiveKind::Capsule:
-    case PrimitiveKind::Cylinder:
-    case PrimitiveKind::Cone:
-    case PrimitiveKind::Plane:
-    case PrimitiveKind::Disc:
-        return true;
-    }
-    return false;
-}
 
 bool validPrimitiveDesc(const PrimitiveDesc& desc)
 {

@@ -156,6 +156,7 @@ add_library(
   engine/src/systems/Actions.cpp
   engine/src/systems/Events.cpp
   engine/src/core/StepClock.cpp
+  engine/src/core/Loading.cpp
   engine/src/render/PrimitiveGeometry.cpp)
 # One public include root for the whole engine, exported from the bottom layer
 # so every layer and every consumer inherits it.
@@ -185,6 +186,16 @@ target_link_libraries(eng_platform PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core
 add_library(
   eng_systems STATIC
   engine/src/render/RenderCore.cpp
+  engine/src/render/ImGuiTheme.cpp
+  engine/src/render/ImGuiHint.cpp
+  engine/src/ui/BitmapFont.cpp
+  engine/src/ui/UiCanvas.cpp
+  engine/src/ui/UiLayout.cpp
+  engine/src/ui/TooltipDraw.cpp
+  engine/src/ui/UiFade.cpp
+  engine/src/ui/TargetBanner.cpp
+  engine/src/ui/LoadingScreen.cpp
+  engine/src/render/Warmup.cpp
   engine/src/render/Renderer.cpp
   engine/src/render/RenderPresets.cpp
   engine/src/render/SceneRegistry.cpp
@@ -198,6 +209,11 @@ add_library(
   engine/src/particles/Particles.cpp
   engine/src/particles/ParticlePresets.cpp
   engine/src/particles/ParticleLibrary.cpp
+  engine/src/particles/ParticleSim.cpp
+  engine/src/particles/ParticleEmitters.cpp
+  engine/src/particles/ParticleBatch.cpp
+  engine/src/particles/ParticleMaterials.cpp
+  engine/src/particles/DecalSystem.cpp
   engine/src/physics/Physics.cpp
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
@@ -222,7 +238,8 @@ add_library(
                        engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
                        engine/src/controllers/FpsController.cpp
-                       engine/src/debug/DebugTools.cpp)
+                       engine/src/debug/DebugTools.cpp
+                       engine/src/debug/Console.cpp)
 target_include_directories(eng_framework PRIVATE third_party engine/src)
 target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_systems>"
                                            EnTT::EnTT)
@@ -356,7 +373,12 @@ target_include_directories(scene_editor PRIVATE game/editor engine/src
                                                 third_party)
 target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui)
 target_compile_definitions(
-  scene_editor PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+  scene_editor
+  PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets"
+          # The material-preview catalog is an engine asset, and deriving its
+          # path by walking up from the game's asset dir breaks the moment the
+          # editor runs against a copied tree.
+          ENG_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/engine/assets")
 eng_target_hardening(scene_editor)
 
 # The single .scn -> .map cooker, as a CLI. Headless: CI cooks content without a
@@ -373,10 +395,15 @@ add_executable(
   game/src/GameScene.cpp
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
+  game/src/BloodSystem.cpp
+  game/src/ParticleCollider.cpp
   game/src/DebugOverlay.cpp
-  game/src/GameHud.cpp
+  game/src/ui/GameHud.cpp
+  game/src/ui/GameHudStyle.cpp
+  game/src/ui/TooltipBuilder.cpp
   game/src/HudModel.cpp
   game/src/combat/DamageSystem.cpp
+  game/src/combat/BulletPattern.cpp
   game/src/combat/StatusEffectSystem.cpp
   game/src/combat/WeaponLibrary.cpp
   game/src/combat/CombatVocabulary.cpp
@@ -385,15 +412,20 @@ add_executable(
   game/src/combat/PoiseSystem.cpp
   game/src/combat/ActionStateSystem.cpp
   game/src/combat/DefenseSystem.cpp
+  game/src/enemy/EnemyLibrary.cpp
+  game/src/enemy/EnemyAI.cpp
+  game/src/enemy/EnemySystem.cpp
+  game/src/enemy/EnemySpawner.cpp
+  game/src/enemy/EnemySpawnerRuntime.cpp
+  game/src/enemy/EnemySave.cpp
+  game/src/enemy/EnemySaveRuntime.cpp
+  game/src/PlayerWeapons.cpp
   game/src/PlayerSystem.cpp
   game/src/InteractionSystem.cpp
   game/src/LiveLevel.cpp
   game/src/LevelDocument.cpp
   game/src/LevelResource.cpp
-  game/src/Melee.cpp
   game/src/Projectiles.cpp
-  game/src/Spells.cpp
-  game/src/CombatConfig.cpp
   game/src/LobbyDressing.cpp
   game/src/ParticleEffects.cpp
   game/src/SceneFactory.cpp
@@ -486,6 +518,40 @@ if(BUILD_TESTING)
                                                      third_party)
   target_link_libraries(hud_model_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME hud_model COMMAND hud_model_tests)
+
+  # The tooltip builder is a pure function of focus + catalog values, so it
+  # tests without a renderer, a font atlas or an imgui context.
+  add_executable(tooltip_builder_tests game/tests/TooltipBuilderTests.cpp
+                                       game/src/ui/TooltipBuilder.cpp)
+  target_include_directories(tooltip_builder_tests PRIVATE game/src)
+  target_link_libraries(tooltip_builder_tests PRIVATE eng_core)
+  add_test(NAME tooltip_builder COMMAND tooltip_builder_tests)
+
+  # The tooltip's pacing is pure logic over its own fields, so it tests with
+  # no canvas, no font and no window.
+  add_executable(tooltip_pace_tests engine/tests/TooltipPaceTests.cpp
+                                    engine/src/ui/UiFade.cpp)
+  target_include_directories(tooltip_pace_tests PRIVATE engine/include)
+  target_link_libraries(tooltip_pace_tests PRIVATE glm::glm)
+  add_test(NAME tooltip_pace COMMAND tooltip_pace_tests)
+
+  add_executable(ui_layout_tests engine/tests/UiLayoutTests.cpp
+                                 engine/src/ui/UiLayout.cpp)
+  target_include_directories(ui_layout_tests PRIVATE engine/include)
+  target_link_libraries(ui_layout_tests PRIVATE glm::glm)
+  add_test(NAME ui_layout COMMAND ui_layout_tests)
+
+  add_executable(game_hud_style_tests game/tests/GameHudStyleTests.cpp
+                                      game/src/ui/GameHudStyle.cpp
+                                      engine/src/ui/UiLayout.cpp)
+  target_include_directories(game_hud_style_tests
+                             PRIVATE game/src engine/include)
+  target_link_libraries(game_hud_style_tests PRIVATE glm::glm)
+  add_test(NAME game_hud_style COMMAND game_hud_style_tests)
+
+  add_executable(debug_console_tests game/tests/DebugConsoleTests.cpp)
+  target_link_libraries(debug_console_tests PRIVATE eng)
+  add_test(NAME debug_console COMMAND debug_console_tests)
 
   add_executable(fps_controller_tests game/tests/FpsControllerTests.cpp)
   target_link_libraries(fps_controller_tests PRIVATE eng)
@@ -596,6 +662,44 @@ if(BUILD_TESTING)
     PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
   add_test(NAME damage_types COMMAND damage_types_tests)
 
+  # Enemies. The three pure layers each test without a world: the table and
+  # its archetype inheritance, the brain, and the spawner's pacing.
+  add_executable(
+    enemy_library_tests game/tests/EnemyLibraryTests.cpp
+                        game/src/enemy/EnemyLibrary.cpp
+                        game/src/combat/BulletPattern.cpp
+                        game/src/combat/CombatVocabulary.cpp)
+  target_include_directories(enemy_library_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(enemy_library_tests PRIVATE eng_toml eng_core glm::glm
+                                                    EnTT::EnTT)
+  target_compile_definitions(
+    enemy_library_tests
+    PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+  add_test(NAME enemy_library COMMAND enemy_library_tests)
+
+  add_executable(enemy_ai_tests game/tests/EnemyAITests.cpp
+                                game/src/enemy/EnemyAI.cpp)
+  target_include_directories(enemy_ai_tests PRIVATE game/src engine/include
+                                                    third_party)
+  target_link_libraries(enemy_ai_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME enemy_ai COMMAND enemy_ai_tests)
+
+  add_executable(enemy_save_tests game/tests/EnemySaveTests.cpp
+                                  game/src/enemy/EnemySave.cpp
+                                  engine/src/io/ByteStream.cpp)
+  target_include_directories(enemy_save_tests PRIVATE game/src engine/include
+                                                      third_party)
+  target_link_libraries(enemy_save_tests PRIVATE eng_core glm::glm EnTT::EnTT)
+  add_test(NAME enemy_save COMMAND enemy_save_tests)
+
+  add_executable(enemy_spawner_tests game/tests/EnemySpawnerTests.cpp
+                                     game/src/enemy/EnemySpawner.cpp)
+  target_include_directories(enemy_spawner_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(enemy_spawner_tests PRIVATE eng_toml eng_core glm::glm)
+  add_test(NAME enemy_spawner COMMAND enemy_spawner_tests)
+
   add_executable(
     weapon_timing_tests game/tests/WeaponTimingTests.cpp
                         game/src/combat/WeaponLibrary.cpp
@@ -605,6 +709,23 @@ if(BUILD_TESTING)
   target_link_libraries(weapon_timing_tests PRIVATE eng_toml eng_core glm::glm
                                                     EnTT::EnTT)
   add_test(NAME weapon_timing COMMAND weapon_timing_tests)
+
+  add_executable(player_weapon_tests game/tests/PlayerWeaponTests.cpp
+                                     game/src/PlayerWeapons.cpp)
+  target_include_directories(player_weapon_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(player_weapon_tests PRIVATE eng_toml eng_core glm::glm
+                                                    EnTT::EnTT)
+  target_compile_definitions(
+    player_weapon_tests
+    PRIVATE APP_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/game/assets")
+  add_test(NAME player_weapon COMMAND player_weapon_tests)
+
+  add_executable(bullet_pattern_tests game/tests/BulletPatternTests.cpp
+                                      game/src/combat/BulletPattern.cpp)
+  target_include_directories(bullet_pattern_tests PRIVATE game/src)
+  target_link_libraries(bullet_pattern_tests PRIVATE glm::glm)
+  add_test(NAME bullet_pattern COMMAND bullet_pattern_tests)
 
   add_executable(
     combat_scenario_tests
@@ -690,6 +811,12 @@ if(BUILD_TESTING)
   target_link_libraries(obj_geometry_tests PRIVATE eng glm::glm)
   add_test(NAME obj_geometry COMMAND obj_geometry_tests)
 
+  add_executable(loading_tests engine/tests/LoadingTests.cpp
+                               engine/src/core/Loading.cpp)
+  target_include_directories(loading_tests PRIVATE engine/include)
+  target_link_libraries(loading_tests PRIVATE glm::glm)
+  add_test(NAME loading COMMAND loading_tests)
+
   add_executable(step_clock_tests engine/tests/StepClockTests.cpp
                                   engine/src/core/StepClock.cpp)
   target_include_directories(step_clock_tests PRIVATE engine/include)
@@ -762,6 +889,60 @@ if(BUILD_TESTING)
   target_include_directories(particle_options_tests PRIVATE engine/include)
   target_link_libraries(particle_options_tests PRIVATE glm::glm)
   add_test(NAME particle_options COMMAND particle_options_tests)
+
+  # The simulation is deliberately Ogre-free, so it links only glm and its own
+  # two translation units -- no renderer, no physics, no window.
+  add_executable(particle_sim_tests engine/tests/ParticleSimTests.cpp
+                                    engine/src/particles/ParticleSim.cpp
+                                    engine/src/particles/ParticleEmitters.cpp)
+  target_include_directories(particle_sim_tests PRIVATE engine/include
+                                                        engine/src)
+  target_link_libraries(particle_sim_tests PRIVATE glm::glm)
+  add_test(NAME particle_sim COMMAND particle_sim_tests)
+
+  # The walk preview is pure camera maths, so eye height, pitch clamping and
+  # the enter/leave round trip are all assertable without a window.
+  add_executable(editor_camera_eye_tests game/tests/EditorCameraEyeTests.cpp
+                                         game/editor/EditorCamera.cpp)
+  target_include_directories(editor_camera_eye_tests PRIVATE game/editor)
+  target_link_libraries(editor_camera_eye_tests PRIVATE eng)
+  add_test(NAME editor_camera_eye COMMAND editor_camera_eye_tests)
+
+  # Whether the player can actually walk from the spawn to the exit. Every other
+  # rule in SceneValidate checks that the data is well formed; this one checks
+  # that the level is playable, which is the failure that survives a clean cook.
+  add_executable(scene_reachability_tests game/tests/SceneReachabilityTests.cpp)
+  target_link_libraries(scene_reachability_tests PRIVATE game_content
+                                                         eng_ecs_headless)
+  target_compile_definitions(
+    scene_reachability_tests
+    PRIVATE KIT_TOML="${CMAKE_CURRENT_SOURCE_DIR}/game/assets/kit.toml")
+  add_test(NAME scene_reachability COMMAND scene_reachability_tests)
+
+  # Portal depth ordering is pure arithmetic, so it is checked here rather than
+  # by eye: every failure of this prop so far has been a surface at the wrong Z.
+  add_executable(portal_geometry_tests game/tests/PortalGeometryTests.cpp)
+  target_include_directories(portal_geometry_tests PRIVATE game/src)
+  target_link_libraries(portal_geometry_tests PRIVATE eng)
+  add_test(NAME portal_geometry COMMAND portal_geometry_tests)
+
+  # DecalSystem runs headlessly: attach() is optional and the rebuild path
+  # returns early with no scene manager, so ageing, merging and eviction are all
+  # testable. The .cpp still includes Ogre headers, hence the link against eng.
+  add_executable(decal_system_tests engine/tests/DecalSystemTests.cpp)
+  target_include_directories(decal_system_tests PRIVATE engine/src third_party)
+  target_link_libraries(decal_system_tests PRIVATE eng)
+  add_test(NAME decal_system COMMAND decal_system_tests)
+
+  # Parsing blood.toml needs no renderer; the translation unit still references
+  # Renderer symbols for the register/spawn half, so it links eng.
+  add_executable(blood_system_tests game/tests/BloodSystemTests.cpp
+                                    game/src/BloodSystem.cpp)
+  target_include_directories(blood_system_tests PRIVATE game/src third_party)
+  target_link_libraries(blood_system_tests PRIVATE eng)
+  target_compile_definitions(blood_system_tests
+                             PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME blood_system COMMAND blood_system_tests)
 
   add_executable(enchantment_tests engine/tests/EnchantmentTests.cpp)
   target_include_directories(enchantment_tests PRIVATE engine/include)

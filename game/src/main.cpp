@@ -18,16 +18,23 @@
 #include <eng/particles/ParticleLibrary.h>
 #include <eng/controllers/FpsController.h>
 #include "CombatSystem.h"
+#include "ParticleCollider.h"
 #include "DebugOverlay.h"
 #include "Dummy.h"
 #include "GameContext.h"
-#include "GameHud.h"
+#include "ui/GameHud.h"
+#include "ui/TooltipBuilder.h"
 #include "GameScene.h"
 #include "HudModel.h"
 #include "InteractionSystem.h"
 #include "PlayerSystem.h"
 #include "PropSystem.h"
 #include "combat/CombatComponents.h"
+#include "combat/DamageSystem.h"
+#include "enemy/EnemyLibrary.h"
+#include "enemy/EnemySave.h"
+#include "enemy/EnemySpawner.h"
+#include "enemy/EnemySystem.h"
 #include "combat/ActionStateSystem.h"
 #include "combat/DefenseSystem.h"
 #include "combat/FeelComponents.h"
@@ -85,11 +92,14 @@ public:
         cfg.fixedDt = kFixedDt;
         cfg.maxFixedSteps = 5;
         cfg.imgui = true;
+        cfg.loadingTitle = "ENTERING THE DUNGEON";
+        cfg.loadingHint = "the torches are still being lit";
         return cfg;
     }
 
 protected:
     eng::FpsGameConfig setup(eng::Engine& engine) override;
+    void onLoadGame(eng::Engine& engine, eng::LoadPlan& plan) override;
     bool onStartGame(eng::Engine& engine) override;
     void onInput(const eng::FrameContext& f) override;
     void onPreSimulate(const eng::FrameContext& f, float fixedDt) override;
@@ -110,12 +120,30 @@ protected:
 
 private:
     void teardownDummy();
+    // Enemy table + spawners + the callbacks that let an enemy hurt the player.
+    void wireEnemies();
+    // The player's feet, which is what enemy perception and spawner activation
+    // are measured from (the eye is 1.7 m up and would skew both).
+    glm::vec3 playerFeet() const;
+    // Resolves whatever the crosshair is on into tooltip content. It lives on
+    // the app because only the app can see both the level's prop catalog and
+    // the combat registry; the builder itself stays a pure function.
+    eng::ui::TooltipContent lookTooltip();
     // Wipe the scene, build the level at `mDepth`, and (re)spawn the player.
     // atExit spawns at the down-portal (arrived by ascending); else at entry.
     void enterLevel(eng::Engine& engine, bool atExit);
     void wireCombatModel();
+    // The player landed a projectile hit. One path for every authored weapon
+    // payload and every registered victim: damage, poise, and feedback.
+    // A no-op on bodies that are not registered combatants.
+    void playerHit(eng::BodyHandle body, const char* weaponId, glm::vec3 dir,
+                   glm::vec3 point);
 
     static constexpr float kFixedDt = 1.0f / 60.0f;
+    // Matches eng::CharacterDesc::height as the player is created with it.
+    // Enemy perception and spawner activation measure from the feet, and the
+    // controller only reports the eye.
+    static constexpr float kPlayerEyeHeight = 1.7f;
 
     std::string mAssets;
     eng::Engine* mEngine = nullptr; // set in onStart; used by enterLevel
@@ -136,12 +164,21 @@ private:
     game::CombatVocabulary mVocabulary;
     std::optional<game::GameContext> mCtx;
     game::CombatSystem mCombat;
+    bool mCombatReady = false;
     eng::ParticleLibrary mParticles;
+    // Owned here so it outlives the renderer that holds a pointer to it.
+    std::optional<game::JoltParticleCollider> mParticleCollider;
     game::PropSystem mProps;
     Dummy mDummy;
     bool mDummyAlive = false;
     entt::entity mPlayerEntity = entt::null;
     entt::entity mDummyEntity = entt::null;
+
+    // Enemies. The library is the authored table, the system owns the live
+    // ones (on the combat registry), and the spawner owns pacing.
+    game::EnemyLibrary mEnemyLibrary;
+    game::EnemySystem mEnemies;
+    game::EnemySpawner mSpawner;
 
     LiveLevel mLevel;
     game::PlayerSystem mPlayerSys;
@@ -155,9 +192,7 @@ private:
     game::DebugPanels mPanels;
     game::InteractionSystem mInteraction;
 
-    // Per-frame scratch shared between callbacks.
-    bool mSwordAttack = false;
-    bool mDidCast = false;
+    glm::vec3 mLastPlayerHitDirection{0.0f, 0.0f, -1.0f};
 };
 
 // Everything the genre base needs before physics exists. Note what is NOT here
@@ -187,18 +222,40 @@ eng::FpsGameConfig DungeonApp::setup(eng::Engine& engine)
     return game;
 }
 
-bool DungeonApp::onStartGame(eng::Engine& engine)
+// The asset libraries the level build reads from, as named load steps: each
+// one is a file parse the player now watches tick past instead of waiting out
+// behind a frozen window. Everything here runs before onStartGame.
+void DungeonApp::onLoadGame(eng::Engine& engine, eng::LoadPlan& plan)
 {
-    mEngine = &engine;
     eng::Renderer& r = engine.renderer();
 
     // What a failed load is replaced with. Registered before any level builds,
     // so the very first missing asset already reads as what it was meant to be.
-    {
+    plan.add("Reading prototypes", [this, &r] {
         eng::prototype::PrototypeCatalog prototypes;
         game::loadPrototypeCatalog(mAssets + "/prototypes.toml", prototypes);
         r.setPrototypeCatalog(std::move(prototypes));
-    }
+    });
+
+    // Damage channels and schools of magic. Loaded before anything that names
+    // one, and owned here because the level builder, the viewmodels and the
+    // combat model all resolve names through the same table.
+    plan.add("Binding the schools of magic", [this] {
+        if (!mVocabulary.load(mAssets + "/magic.toml"))
+            eng::log::error("magic.toml failed to load; combat names resolve "
+                            "to nothing and weapons fall back to the first "
+                            "channel");
+    });
+
+    plan.add("Kindling particle effects",
+             [this, &r] { mParticles.load(r, mAssets + "/particles.toml"); },
+             2.0f);
+}
+
+bool DungeonApp::onStartGame(eng::Engine& engine)
+{
+    mEngine = &engine;
+    eng::Renderer& r = engine.renderer();
 
     if (const char* s = std::getenv("PSX_GEN_SEED"))
         mBaseSeed = uint32_t(std::strtoul(s, nullptr, 10));
@@ -215,23 +272,13 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
 
     colliderView().enabled = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
 
-    // Damage channels and schools of magic. Loaded before anything that names
-    // one, and owned here because the level builder, the viewmodels and the
-    // combat model all resolve names through the same table.
-    if (!mVocabulary.load(mAssets + "/magic.toml"))
-        eng::log::error("magic.toml failed to load; combat names resolve to "
-                        "nothing and weapons fall back to the first channel");
-
     mCtx.emplace(r, physics(), engine.input(), mAssets, mVocabulary);
 
-    mParticles.load(r, mAssets + "/particles.toml");
-
-    // Player controller + first-person viewmodels + active weapon selection.
-    // Weapon cycles on the swap_weapon bind and drives which viewmodel shows and
-    // which attack input CombatSystem accepts (Sword->melee, Staff->spells,
-    // Torch->light+bash).
+    // Player controller + three data-authored magical ranged weapons.
     mPlayerSys.setTuning(mSpeed, mSens);
     mPlayerSys.controller().setDashTuning(mDashTuning);
+    mPlayerSys.loadWeapons(mAssets + "/weapons.toml");
+    mHud.initialise();
     mHud.configure(cfg);
     mPortalPreviewMode = std::getenv("PSX_SHOWCASE_PORTAL") != nullptr ||
                          mScene == "portal";
@@ -245,20 +292,36 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
 
     enterLevel(engine, false); // depth 0, spawn at entry
 
-    // Initialise combat (loads [combat.*], builds procedural projectile/spell
-    // meshes) and register the contact seam so arrows stick and bolts despawn.
-    mCombat.init(*mCtx, mAssets + "/game.toml");
-    physics().setContactCallback([this](const eng::HitEvent& e) {
-        mCombat.onContact(*mCtx, e);
-        if (mDummyAlive && mDummy.alive() &&
-            (e.self == mDummy.body() || e.other == mDummy.body())) {
-            // Projectile hit the dummy: route arrow damage through the combat
-            // model (resistances, crit, death). Knockback pushes it forward/up.
-            mCombat.director().hitBody(physics(), mDummy.body(), "arrow",
-                                       mPlayerEntity,
-                                       glm::vec3(0.0f, 0.4f, 1.0f), e.point);
+    mCombat.init(*mCtx);
+    mCombatReady = true;
+    for (const game::PlayerWeaponDef& weapon : mPlayerSys.weaponDefinitions()) {
+        if (!mCombat.director().weapons().contains(weapon.payloadId)) {
+            eng::log::error("Player weapon '%s' names missing payload '%s'",
+                            weapon.id.c_str(), weapon.payloadId.c_str());
+            return false;
         }
-    });
+        const std::string effects[] = {
+            weapon.muzzleEffect, weapon.projectile.trailEffect,
+            weapon.projectile.impactEffect};
+        for (const std::string& effect : effects) {
+            if (!effect.empty() && !mParticles.id(effect).valid()) {
+                eng::log::error("Player weapon '%s' names missing effect '%s'",
+                                weapon.id.c_str(), effect.c_str());
+                return false;
+            }
+        }
+    }
+    // Let colliding particles see the world. Until this is installed, effects
+    // that ask to bounce or to leave a decal fall straight through the level.
+    mParticleCollider.emplace(physics(), eng::kAllLayers);
+    mCtx->renderer.setParticleCollider(&*mParticleCollider);
+    physics().setContactCallback(
+        [this](const eng::HitEvent& e) { mCombat.onContact(*mCtx, e); });
+    mCombat.projectiles().setImpactCallback(
+        [this](eng::BodyHandle victim, const std::string& payload,
+               glm::vec3 direction, glm::vec3 point) {
+            playerHit(victim, payload.c_str(), direction, point);
+        });
 
     mProps.spawnShowroom(*mCtx, mLevel.markerPlacements("physics."));
 
@@ -269,6 +332,9 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mDummyAlive = true;
 
     wireCombatModel();
+    // After wireCombatModel: it registers the player entity, which the enemy
+    // hit callback needs, and wireEnemies installs the death callback both use.
+    wireEnemies();
 
     // The engine's console owns every engine-tuning tab; the game adds the two
     // that are its own policy.
@@ -295,8 +361,15 @@ void DungeonApp::teardownDummy()
 void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
 {
     eng::Renderer& r = engine.renderer();
-    // Destroy dynamic prop + dummy bodies before clearScene wipes their nodes.
+    // Destroy dynamic prop + enemy + dummy bodies before clearScene wipes their
+    // nodes. Enemies go first: their bodies and nodes are both ours, and a node
+    // destroyed by clearScene underneath a live enemy is a dangling handle.
     mProps.teardown(physics());
+    if (mCtx)
+        mEnemies.clear(*mCtx);
+    if (mCtx)
+        mCombat.clear(*mCtx);
+    mSpawner.clear();
     teardownDummy();
     bool loaded = false;
     if (mDepth == 0) {
@@ -314,6 +387,9 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
         eng::log::error("Level %d failed to load", mDepth);
         return;
     }
+    mParticles.reregisterAll(r);
+    if (mCombatReady)
+        mCombat.reloadPresentation(*mCtx);
     eng::FpsController& player = mPlayerSys.controller();
     const bool portalPreview = mDepth == 0 && mPortalPreviewMode;
     const float portalYaw = glm::radians(mLevel.dungeon().exitYawDegrees());
@@ -327,6 +403,23 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
         player.present(r);
     }
     mPlayerSys.attachLoadout(*mCtx);
+
+    // Encounters. Markers named "enemy.<id>[.<preset>]" in the level are the
+    // authored placements; spawners.toml carries the presets and the standalone
+    // spawn points. Both feed one spawner, so a level author can use either.
+    mSpawner.loadFromToml(mAssets + "/spawners.toml");
+    {
+        std::vector<game::EnemySpawner::Marker> markers;
+        for (const game::ScenePlacement& p : mLevel.markerPlacements("enemy.")) {
+            game::EnemySpawner::Marker m;
+            m.type = p.type;
+            m.position = p.position;
+            m.yaw = glm::yaw(p.rotation);
+            markers.push_back(std::move(m));
+        }
+        mSpawner.addFromMarkers(markers);
+    }
+
     engine.input().setMouseGrab(!portalPreview);
     mHud.notifyRegion(mDepth == 0 ? game::HudRegion::Threshold
                                   : game::HudRegion::Interior);
@@ -368,57 +461,192 @@ void DungeonApp::wireCombatModel()
         dp.current = dp.max = 20.0f;
     }
 
-    mCombat.director().setDeathCallback([this](entt::entity e) {
-        if (e != mDummyEntity || !mDummyAlive || !mDummy.alive())
-            return;
-        glm::vec3 pos;
-        glm::quat rot;
-        physics().getRenderTransform(mDummy.body(), pos, rot);
-        mDummy.kill(physics(), glm::vec3(0.0f, 3.0f, 6.0f), pos);
-    });
+    // The death callback is installed by wireEnemies(), which routes the dummy
+    // and enemies from one place: the combat model fires one callback for every
+    // death, so two callers would mean the second silently replacing the first.
 
-    // Melee lands the equipped weapon's payload on the dummy.
-    mCombat.melee().setHitCallback(
-        [this](eng::BodyHandle body, glm::vec3 point, glm::vec3 normal) {
-            if (!mDummyAlive || !mDummy.alive() || body != mDummy.body())
+}
+
+void DungeonApp::playerHit(eng::BodyHandle body, const char* weaponId,
+                           glm::vec3 dir, glm::vec3 point)
+{
+    if (!body.valid())
+        return;
+    const entt::entity victim = mCombat.director().entityForBody(body);
+    if (victim == entt::null)
+        return; // level geometry, a prop, another arrow
+
+    mLastPlayerHitDirection = dir;
+    const game::DamageResult result = mCombat.director().hitBody(
+        physics(), body, weaponId, mPlayerEntity, dir, point);
+    if (!result.hitLanded)
+        return;
+    mCtx->renderer.spawnParticles("weapon_hit_confirm", point);
+    // Feel layer: chip the victim's poise by the weapon's payload so heavy or
+    // blunt hits can stagger it, opening the punish window.
+    const float poiseDamage =
+        mCombat.director().weapons().get(weaponId).timing.poiseDamage;
+    if (poiseDamage > 0.0f)
+        game::feel::poise::apply(mCombat.director().registry(), victim,
+                                 poiseDamage);
+    // Hit reaction. A no-op on anything that is not an enemy, which is how the
+    // training dummy keeps working without a branch here.
+    mEnemies.notifyHit(victim);
+}
+
+glm::vec3 DungeonApp::playerFeet() const
+{
+    // FpsController reports the eye; the feet are the standing height below it.
+    return mPlayerSys.controller().eyePosition() -
+           glm::vec3(0.0f, kPlayerEyeHeight, 0.0f);
+}
+
+// Enemies are combatants with a brain, so the wiring is only three seams: the
+// combat model tells us what died, we tell the combat model what an enemy hit,
+// and hit reactions go back to the enemy that took the hit.
+void DungeonApp::wireEnemies()
+{
+    if (!mEnemyLibrary.load(mAssets + "/enemies.toml")) {
+        eng::log::error("enemies.toml failed to load; no enemy can spawn");
+        return;
+    }
+    for (const std::string& id : mEnemyLibrary.ids()) {
+        const auto enemy = mEnemyLibrary.find(id);
+        if (!enemy)
+            continue;
+        for (const game::EnemyAttack& attack : enemy->attacks) {
+            if (!mCombat.director().weapons().contains(attack.weapon)) {
+                eng::log::error("Enemy '%s' attack '%s' names missing payload '%s'",
+                                id.c_str(), attack.id.c_str(),
+                                attack.weapon.c_str());
                 return;
-            const char* w = mPlayerSys.torchEquipped() ? "torch" : "sword";
-            mCombat.director().hitBody(physics(), body, w, mPlayerEntity, -normal,
-                                       point);
-            // Feel layer: chip the victim's poise by the weapon's payload so
-            // heavy/blunt hits can stagger it (opening a crit window).
-            entt::entity victim = mCombat.director().entityForBody(body);
-            if (victim != entt::null) {
-                const float pd =
-                    mCombat.director().weapons().get(w).timing.poiseDamage;
-                game::feel::poise::apply(mCombat.director().registry(), victim,
-                                         pd);
             }
+            if (attack.telegraphEffect.empty() ||
+                !mParticles.id(attack.telegraphEffect).valid()) {
+                eng::log::error(
+                    "Enemy '%s' attack '%s' names missing telegraph '%s'",
+                    id.c_str(), attack.id.c_str(),
+                    attack.telegraphEffect.c_str());
+                return;
+            }
+            if (!attack.pattern)
+                continue;
+            for (const game::BulletPatternTrack& track :
+                 attack.pattern->tracks) {
+                if (!mCombat.director().weapons().contains(
+                        track.volley.projectileId)) {
+                    eng::log::error(
+                        "Enemy '%s' pattern '%s' names missing payload '%s'",
+                        id.c_str(), attack.pattern->id.c_str(),
+                        track.volley.projectileId.c_str());
+                    return;
+                }
+            }
+        }
+    }
+    mEnemyLibrary.resolve(mVocabulary);
+    mEnemies.init(mEnemyLibrary, mCombat.director());
+
+    // An enemy landed a hit on the player. It resolves through the same damage
+    // pipeline a player hit does -- one weapon table, one resistance model, one
+    // set of i-frames -- which is why a dodge's invulnerability works against
+    // enemies without anything here knowing what a dodge is.
+    mEnemies.setHitPlayerCallback([this](entt::entity enemy,
+                                         const std::string& weapon,
+                                         float poiseDamage, glm::vec3 dir,
+                                         glm::vec3 point) {
+        entt::registry& reg = mCombat.director().registry();
+        if (mPlayerEntity == entt::null || !reg.valid(mPlayerEntity))
+            return;
+        // Deflect first: a clean parry negates the hit and punishes the
+        // attacker's poise, and that has to happen before damage is applied.
+        if (game::feel::defense::resolveIncoming(reg, mPlayerEntity, enemy,
+                                                 poiseDamage))
+            return;
+        const game::WeaponDef& wd = mCombat.director().weapons().get(weapon);
+        const game::DamagePacket packet =
+            wd.makePacket(enemy, dir, 0.5f); // no crits against the player
+        game::damage::apply(reg, mPlayerEntity, packet);
+        if (poiseDamage > 0.0f)
+            game::feel::poise::apply(reg, mPlayerEntity, poiseDamage);
+        mCtx->renderer.spawnParticles("engine.hit_sparks", point);
+    });
+    mEnemies.setTelegraphCallback(
+        [this](entt::entity, const game::EnemyAttack& attack, glm::vec3 at) {
+            eng::ParticleSpawnOptions options;
+            options.lifetimeScale =
+                std::max(0.5f, attack.timing.windup / 0.33f);
+            mCtx->renderer.spawnParticles(
+                attack.telegraphEffect, at + glm::vec3(0.0f, 1.2f, 0.0f),
+                options);
         });
+
+    // Death: the combat model decides when something is dead; the enemy system
+    // turns that into a corpse. Non-enemy entities fall through untouched, so
+    // the training dummy's own callback still runs.
+    mCombat.director().setDeathCallback([this](entt::entity e) {
+        if (e == mDummyEntity) {
+            if (!mDummyAlive || !mDummy.alive())
+                return;
+            glm::vec3 pos;
+            glm::quat rot;
+            physics().getRenderTransform(mDummy.body(), pos, rot);
+            mCtx->renderer.spawnParticles("enemy_death_burst", pos);
+            mDummy.kill(physics(), mLastPlayerHitDirection * 8.0f +
+                                      glm::vec3(0.0f, 4.0f, 0.0f),
+                        pos);
+            return;
+        }
+        mEnemies.onKilled(*mCtx, e, mLastPlayerHitDirection);
+    });
 }
 
 void DungeonApp::onInput(const eng::FrameContext& f)
 {
-    mSwordAttack = false;
-    mDidCast = false;
-
-
     // Look runs at the render rate; locomotion runs in onPreSimulate. The base
     // class documents that split; this is the game's half of it.
     if (playerDriven())
         mPlayerSys.look(*mCtx);
+    mPlayerSys.sampleWeaponInput(
+        *mCtx, playerDriven() && mCtx->input.mouseGrabbed());
 }
 
 void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
 {
-    if (playerDriven())
+    if (playerDriven()) {
         mPlayerSys.fixedStep(*mCtx, fixedDt);
+        entt::registry& registry = mCombat.director().registry();
+        if (game::Mana* arc = registry.try_get<game::Mana>(mPlayerEntity)) {
+            const game::ActionState* action =
+                registry.try_get<game::ActionState>(mPlayerEntity);
+            const std::optional<std::size_t> fired =
+                mPlayerSys.fixedStepWeapons(
+                    *mCtx, *arc,
+                    action && action->phase == game::ActionPhase::Idle,
+                    fixedDt);
+            if (fired) {
+                if (const game::PlayerWeaponDef* weapon =
+                        mPlayerSys.weaponDefinition(*fired)) {
+                    const eng::FpsController& player = mPlayerSys.controller();
+                    mCombat.fireWeapon(*mCtx, *weapon, player.eyePosition(),
+                                       player.forward());
+                }
+            }
+        }
+    }
 }
 
 void DungeonApp::onPostSimulate(const eng::FrameContext&, float fixedDt)
 {
     eng::FpsController& player = mPlayerSys.controller();
     mCombat.fixedStep(*mCtx, player.eyePosition(), player.forward(), fixedDt);
+    // Strictly after combat: actionstate::advance sets activeFiredThisStep, and
+    // the enemy step is what reads it to deliver the swing. Reversing these two
+    // lines costs every enemy attack one frame of latency and, worse, lets an
+    // attack that started this step deliver on the same step.
+    const glm::vec3 feet = playerFeet();
+    mSpawner.update(*mCtx, mEnemies, feet, fixedDt);
+    mEnemies.fixedStep(*mCtx, feet, playerDriven(), fixedDt);
 }
 
 void DungeonApp::onPresent(const eng::FrameContext& f)
@@ -439,11 +667,19 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         mProps.sync(*mCtx);
     if (steps.stepped(eng::StepChannel::Projectiles))
         mCombat.syncRender(*mCtx);
+    if (steps.stepped(eng::StepChannel::Projectiles))
+        mEnemies.syncProjectileRender(*mCtx);
     // Per-creature phase seed: with several enemies on screen and phase_jitter
     // above 0 they stop snapping in unison like one puppet.
     if (mDummyAlive && steps.stepped(eng::StepChannel::Characters,
                                      mDummy.body().id))
         mDummy.syncRender(physics(), r);
+    // Enemies ride the Characters channel too, so the stop-motion rate that
+    // applies to creatures applies to them. Unlike the dummy they are synced as
+    // a group: per-enemy phase jitter lives in their own animation, not in
+    // whether their transform is copied this frame.
+    if (steps.stepped(eng::StepChannel::Characters))
+        mEnemies.syncRender(*mCtx);
 
     // World anim (torch flicker, animated dressing) is pose-from-time, so it
     // takes the quantised clock directly rather than accumulating a delta -- no
@@ -465,6 +701,30 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // Look-interaction + portal transitions. Descend appends the next depth's
     // seed on first visit (so revisits reuse the same layout) and rebuilds;
     // ascend rebuilds the level below.
+    // Publish the training dummy as a look target so the crosshair can name
+    // it. It is not owned by the level, so it goes in through the external
+    // seam rather than through LiveLevel::appendTargets.
+    if (mDummyAlive && mDummy.alive()) {
+        glm::vec3 feet{0.0f};
+        glm::quat unused{1.0f, 0.0f, 0.0f, 0.0f};
+        physics().getRenderTransform(mDummy.body(), feet, unused);
+        mInteraction.pushTarget({TargetKind::Actor, 0,
+                                 feet + glm::vec3(0.0f, 0.9f, 0.0f), 6.0f,
+                                 0.55f});
+    }
+    // Enemies are look targets too, so the crosshair names them and the banner
+    // shows their health. The entity id rides in `catalogIndex` -- the field
+    // that exists for exactly this, "which record describes me" -- so
+    // lookTooltip() gets back to the enemy without a second lookup table.
+    for (const game::EnemySystem::Snapshot& s :
+         mEnemies.snapshot(player.eyePosition())) {
+        if (s.health <= 0.0f)
+            continue;
+        mInteraction.pushTarget(
+            {TargetKind::Actor, int(entt::to_integral(s.entity)),
+             s.position + glm::vec3(0.0f, 1.0f, 0.0f), 12.0f, 0.6f,
+             int(entt::to_integral(s.entity))});
+    }
     mInteraction.update(
         *mCtx, mLevel, mDepth, player.eyePosition(), player.forward(),
         /*onDescend=*/[&] {
@@ -478,39 +738,8 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
             enterLevel(engine, true);
         });
 
-    // Attack input — only when mouse is grabbed (not in debug UI). Weapon
-    // selection lives with the player; casts/swings are gated on the equipped
-    // weapon and dispatched to combat.
+    // Defensive actions remain independent from selected ranged weapon.
     if (in.mouseGrabbed()) {
-        if (in.wasPressed("swap_weapon"))
-            mPlayerSys.swapWeapon(*mCtx);
-        if (in.wasPressed("fire_arrow"))
-            mCombat.fireArrow(*mCtx, player.eyePosition(), player.forward());
-        // Staff casts only when the staff is equipped.
-        if (mPlayerSys.staffEquipped() && in.wasPressed("cast_spell")) {
-            mCombat.castFireball(*mCtx, player.eyePosition(), player.forward());
-            mDidCast = true;
-        }
-        if (mPlayerSys.staffEquipped() && in.wasPressed("cast_beam")) {
-            mCombat.castBeam(*mCtx, player.eyePosition(), player.forward());
-            mDidCast = true;
-        }
-        // Melee swing for the sword and the torch (a light club). Gated on the
-        // feel layer: the swing costs stamina and only starts from Idle (so it
-        // can't interrupt a dodge/deflect/stagger).
-        if ((mPlayerSys.swordEquipped() || mPlayerSys.torchEquipped()) &&
-            in.wasMouseClicked()) {
-            entt::registry& creg = mCombat.director().registry();
-            const char* w = mPlayerSys.torchEquipped() ? "torch" : "sword";
-            game::ActionState& pas = creg.get<game::ActionState>(mPlayerEntity);
-            game::Stamina& pst = creg.get<game::Stamina>(mPlayerEntity);
-            const game::WeaponDef& wd = mCombat.director().weapons().get(w);
-            if (game::feel::actionstate::beginAttack(pas, pst, wd.timing)) {
-                mCombat.startSwing();
-                mSwordAttack = true;
-            }
-        }
-
         // Feel-layer defense. Deflect opens a brief negate window; dodge grants
         // i-frames (reuses Health.invulnTimer) and costs stamina; kick shoves a
         // target in front and chips its poise (env-kills / make-room). Bound to
@@ -546,8 +775,6 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         }
     }
 
-    const bool aiming =
-        in.mouseGrabbed() && in.isMouseDown(eng::MouseButton::Right);
     // Player viewmodel (hands/weapon) — the player's half of the look. Its own
     // channel because it sits centimetres from the eye, where the rate that
     // suits a distant creature reads about twice as harsh. Camera and movement
@@ -555,12 +782,59 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     {
         const auto timed = stats().time(PhaseWeapons);
         mPlayerSys.updateViewmodels(
-            *mCtx, steps.delta(eng::StepChannel::Viewmodel), mSwordAttack,
-            mDidCast, aiming);
+            *mCtx, steps.delta(eng::StepChannel::Viewmodel));
     }
 
     if (std::getenv("PSX_PROFILE"))
         stats().logSummaryEvery(120);
+}
+
+eng::ui::TooltipContent DungeonApp::lookTooltip()
+{
+    const game::InteractionFocus& focus = mInteraction.focus();
+    if (!focus.available)
+        return {};
+
+    const game::PropInfo* prop =
+        focus.kind == TargetKind::Prop
+            ? mLevel.dungeon().propInfo(focus.catalogIndex)
+            : nullptr;
+
+    game::ActorLook actor;
+    // Enemy targets carry their entity id in catalogIndex (see onPresent); a
+    // zero index is the training dummy, which predates enemies and has none.
+    // An enemy carries its entity in catalogIndex; the training dummy predates
+    // that and carries -1, so the EnemyTag check below is what tells them
+    // apart rather than a sentinel id.
+    if (focus.kind == TargetKind::Actor && focus.catalogIndex >= 0) {
+        const entt::entity e = entt::entity(uint32_t(focus.catalogIndex));
+        const entt::registry& reg = mCombat.director().registry();
+        if (reg.valid(e) && reg.all_of<game::EnemyTag>(e)) {
+            const game::EnemyTag& tag = reg.get<game::EnemyTag>(e);
+            actor.valid = true;
+            actor.name = tag.def->name;
+            actor.category = tag.def->category;
+            if (const auto* hp = reg.try_get<game::Health>(e)) {
+                actor.health = hp->current;
+                actor.healthMax = hp->max;
+            }
+        }
+        return game::buildTooltip(focus, prop, actor, mHud.interactKey());
+    }
+    if (focus.kind == TargetKind::Actor && mDummyAlive && mDummy.alive()) {
+        actor.valid = true;
+        actor.name = "Training Effigy";
+        actor.category = "Construct - armoured, flammable";
+        const entt::registry& registry = mCombat.director().registry();
+        if (mDummyEntity != entt::null &&
+            registry.all_of<game::Health>(mDummyEntity)) {
+            const game::Health& hp = registry.get<game::Health>(mDummyEntity);
+            actor.health = hp.current;
+            actor.healthMax = hp.max;
+        }
+    }
+
+    return game::buildTooltip(focus, prop, actor, mHud.interactKey());
 }
 
 void DungeonApp::onGameGui(const eng::FrameContext& f)
@@ -569,16 +843,23 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
     // transition, so the panels get fresh pointers each frame rather than
     // capturing them at install time.
     game::DebugPanels::Deps deps;
-    deps.combat = &mCombat.config();
     deps.registry = &mCombat.director().registry();
     deps.player = mPlayerEntity;
     deps.playerSystem = &mPlayerSys;
     deps.renderer = &f.engine.renderer();
+    deps.enemies = &mEnemies;
+    deps.enemyLibrary = &mEnemyLibrary;
+    deps.spawner = &mSpawner;
+    deps.context = mCtx ? &*mCtx : nullptr;
+    deps.playerFeet = playerFeet();
+    deps.playerForward = mPlayerSys.controller().forward();
     mPanels.update(deps);
     const game::HudSnapshot hudFrame =
         game::buildHudSnapshot(mCombat.director().registry(), mPlayerEntity,
-                               mPlayerSys.weapon(), mInteraction.focus());
-    mHud.draw(hudFrame, f.dt, !uiOpen() && !mPortalPreviewMode);
+                               mPlayerSys.selectedWeapon(),
+                               mInteraction.focus());
+    mHud.draw(hudFrame, lookTooltip(), f.dt,
+              !uiOpen() && !mPortalPreviewMode);
 
 
     // renderFrame() (owned by the runner) paints all of the above; it is
@@ -589,6 +870,8 @@ void DungeonApp::onStopGame(eng::Engine&)
 {
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
     mProps.teardown(physics());
+    if (mCtx)
+        mEnemies.clear(*mCtx);
     teardownDummy();
     mLevel.clearPhysics();
     if (mCtx)

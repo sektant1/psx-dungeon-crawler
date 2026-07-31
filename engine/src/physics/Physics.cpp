@@ -383,6 +383,7 @@ BodyHandle Physics::createBody(const BodyDesc& desc) {
     bcs.mFriction    = desc.friction;
     bcs.mRestitution = desc.restitution;
     bcs.mIsSensor    = desc.sensor;
+    bcs.mGravityFactor = std::max(0.0f, desc.gravityFactor);
     if (desc.continuousCast)
         bcs.mMotionQuality = EMotionQuality::LinearCast;
     if (desc.dynamic) {

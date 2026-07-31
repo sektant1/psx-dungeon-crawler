@@ -64,16 +64,20 @@ make test                # ctest suite
 | `PSX_SHOW_COLLIDERS` / `PSX_WIREFRAME` | debug overlays | `COLLIDERS=` / `WIREFRAME=` |
 | `PSX_PROFILE` | per-phase frame timings | `PROFILE=` |
 | `PSX_GEN_DUMP=<seed>` | print that seed's grid, exit | |
-| `PSX_DEBUG_UI` / `PSX_FULLSCREEN` | console open / fullscreen | |
+| `PSX_DEBUG_UI` / `PSX_FULLSCREEN` | tuning panel open / fullscreen | |
+| `PSX_CONSOLE` | dev console open on frame 1 | |
+| `PSX_IMGUI_THEME` | imgui theme id (`one_dark`, `dark`, `light`, `classic`) | |
 
 ## Keys
 
 | Key | Action |
 |---|---|
-| `F1` `F2` `F3` `F4` `F5` | console, wireframe, colliders, frame times, playtest |
+| `F1` `F2` `F3` `F4` `F5` | tuning panel, wireframe, colliders, frame times, playtest |
+| `` ` `` | dev console (log + commands) |
 | `WASD` `Space` `Shift` `Ctrl` `C` | move, jump, sprint, crouch, slide |
-| `E` `X` | interact, swap weapon |
-| `F` `Q` `R` | arrow, spell, beam |
+| `E` | interact |
+| `Mouse 1` | fire selected magical weapon |
+| `1` `2` `3` `X` | select weapon, or cycle weapon |
 | `B` `V` `G` | dodge, deflect, kick |
 | | rebind in `game/assets/game.toml` |
 

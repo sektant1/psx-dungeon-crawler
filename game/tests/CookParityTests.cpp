@@ -8,6 +8,11 @@
 
 #include "SceneCook.h"
 #include "SceneSource.h"
+#include "GameComponents.h"
+
+#include <eng/ecs/Components.h>
+
+#include <entt/entt.hpp>
 
 #include <cstdio>
 #include <cstdlib>
@@ -70,6 +75,48 @@ int main()
             "an unresolved prefab blocks the cook");
     require(error.find("unresolved") != std::string::npos,
             "and the error names the problem");
+
+    // Architecture collides by virtue of being architecture. A .scn authors a
+    // `collider` only as an exception, so without this the cooked map is a
+    // room the player falls straight through -- which is exactly what every
+    // cooked scene was before floors and walls got their implicit slabs.
+    {
+        SceneDocument slab;
+        Entity tile;
+        tile.id = "floor_a";
+        tile.prefab = "kit.floor";
+        slab.add(tile);
+
+        entt::registry registry;
+        require(buildRegistry(slab, catalog, registry, error), error.c_str());
+        int colliders = 0;
+        glm::vec3 half{0.0f};
+        float y = 0.0f;
+        for (const entt::entity e : registry.view<game::Collider>()) {
+            ++colliders;
+            half = registry.get<game::Collider>(e).size;
+            y = registry.get<eng::ecs::Transform>(e).position.y;
+        }
+        require(colliders == 1, "a floor tile cooks to exactly one collider");
+        require(half.x >= 1.9f && half.z >= 1.9f,
+                "wide enough to carry the whole cell");
+        require(y < 0.0f, "and hung under the surface it draws");
+
+        // An authored collider replaces the implicit one rather than adding to
+        // it, so a scene can still make one piece passable.
+        SceneDocument overridden = slab;
+        overridden.entities.front().collider =
+            ColliderAuthor{{0.25f, 0.25f, 0.25f}, {0.0f, 1.0f, 0.0f}};
+        entt::registry second;
+        require(buildRegistry(overridden, catalog, second, error), error.c_str());
+        int overrides = 0;
+        for (const entt::entity e : second.view<game::Collider>()) {
+            ++overrides;
+            require(second.get<game::Collider>(e).size.x < 0.5f,
+                    "the authored size wins");
+        }
+        require(overrides == 1, "and it does not stack with the implicit one");
+    }
 
     std::cout << "CookParityTests: ok\n";
     return 0;

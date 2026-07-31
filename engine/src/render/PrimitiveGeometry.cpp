@@ -157,22 +157,34 @@ PrimitiveGeometry beveledBoxGeometry(const PrimitiveMeshDesc& desc)
     return geometry;
 }
 
+// A slab, not a mathematical plane: two full-size faces separated by
+// desc.thickness, with four rims closing the gap.
+//
+// Zero-thickness quads are what every "paper wall" in this game was made of --
+// portal membranes, backing panels, water and lava pools, path strips. Edge on
+// they vanish, they z-fight whatever they lie on, and nothing about them reads
+// as an object with a side. Giving the primitive a real thickness fixes all of
+// those at once, and the faces keep their own 0..1 UVs (a box's atlas-style
+// per-face UVs would break the scrolling water/lava and the tiled floor
+// materials), so the top surface renders exactly as it did.
 PrimitiveGeometry planeGeometry(const PrimitiveMeshDesc& desc)
 {
     PrimitiveGeometry geometry;
     const float halfX = desc.size.x * 0.5f;
     const float halfZ = desc.size.z * 0.5f;
+    const float halfY = std::max(desc.thickness, 0.0f) * 0.5f;
     const float xs[2] = {-halfX, halfX};
     const float zs[2] = {-halfZ, halfZ};
     for (int face = 0; face < 2; ++face) {
         const uint32_t base =
             static_cast<uint32_t>(geometry.vertices.size());
+        const float y = face == 0 ? halfY : -halfY;
         const glm::vec3 normal =
             face == 0 ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
-        for (int y = 0; y < 2; ++y)
-            for (int x = 0; x < 2; ++x)
-                vertex(geometry, {xs[x], 0.0f, zs[y]}, normal,
-                       {float(x), float(y)});
+        for (int v = 0; v < 2; ++v)
+            for (int u = 0; u < 2; ++u)
+                vertex(geometry, {xs[u], y, zs[v]}, normal,
+                       {float(u), float(v)});
         if (face == 0) {
             triangle(geometry, base, base + 2, base + 1);
             triangle(geometry, base + 1, base + 2, base + 3);
@@ -180,6 +192,31 @@ PrimitiveGeometry planeGeometry(const PrimitiveMeshDesc& desc)
             triangle(geometry, base, base + 1, base + 2);
             triangle(geometry, base + 1, base + 3, base + 2);
         }
+    }
+    if (halfY <= 0.0f)
+        return geometry;
+
+    // Rims. Each is a quad spanning the slab's height, wound outward, with its
+    // U running along the edge so a tiling material does not smear across it.
+    struct Rim { glm::vec3 a, b, normal; };
+    const Rim rims[4] = {
+        {{-halfX, 0.0f, halfZ}, {halfX, 0.0f, halfZ}, {0, 0, 1}},
+        {{halfX, 0.0f, -halfZ}, {-halfX, 0.0f, -halfZ}, {0, 0, -1}},
+        {{halfX, 0.0f, halfZ}, {halfX, 0.0f, -halfZ}, {1, 0, 0}},
+        {{-halfX, 0.0f, -halfZ}, {-halfX, 0.0f, halfZ}, {-1, 0, 0}},
+    };
+    for (const Rim& rim : rims) {
+        const uint32_t base =
+            static_cast<uint32_t>(geometry.vertices.size());
+        vertex(geometry, {rim.a.x, halfY, rim.a.z}, rim.normal, {0.0f, 0.0f});
+        vertex(geometry, {rim.b.x, halfY, rim.b.z}, rim.normal, {1.0f, 0.0f});
+        vertex(geometry, {rim.a.x, -halfY, rim.a.z}, rim.normal, {0.0f, 1.0f});
+        vertex(geometry, {rim.b.x, -halfY, rim.b.z}, rim.normal, {1.0f, 1.0f});
+        // Wound so that cross(b - a, c - a) points along the rim normal, which
+        // is the convention the rest of these generators (and the winding test)
+        // hold to.
+        triangle(geometry, base, base + 2, base + 1);
+        triangle(geometry, base + 1, base + 2, base + 3);
     }
     return geometry;
 }
@@ -491,3 +528,75 @@ buildPrimitiveGeometry(const PrimitiveMeshDesc& desc)
 }
 
 } // namespace eng::detail
+
+namespace eng {
+
+bool validPrimitiveMeshDesc(const PrimitiveMeshDesc& desc)
+{
+    const bool finiteSize =
+        std::isfinite(desc.size.x) && std::isfinite(desc.size.y) &&
+        std::isfinite(desc.size.z);
+    if (!finiteSize ||
+        glm::any(glm::lessThanEqual(desc.size, glm::vec3(0.0f))) ||
+        !std::isfinite(desc.radius) || desc.radius <= 0.0f ||
+        !std::isfinite(desc.height) || desc.height <= 0.0f ||
+        !std::isfinite(desc.bevel) || desc.bevel <= 0.0f ||
+        !std::isfinite(desc.thickness) || desc.thickness <= 0.0f ||
+        desc.rings < 3 || desc.segments < 3 ||
+        desc.subdivisions < 0)
+        return false;
+
+    if ((desc.inwardFacing || desc.subdivisions != 0) &&
+        desc.kind != PrimitiveKind::Box)
+        return false;
+
+    if (desc.kind == PrimitiveKind::BeveledBox) {
+        const float halfSmallest =
+            0.5f * std::min({desc.size.x, desc.size.y, desc.size.z});
+        if (desc.bevel >= halfSmallest)
+            return false;
+    }
+
+    switch (desc.kind) {
+    case PrimitiveKind::Box:
+    case PrimitiveKind::BeveledBox:
+    case PrimitiveKind::Sphere:
+    case PrimitiveKind::Capsule:
+    case PrimitiveKind::Cylinder:
+    case PrimitiveKind::Cone:
+    case PrimitiveKind::Plane:
+    case PrimitiveKind::Disc:
+        return true;
+    }
+    return false;
+}
+
+namespace detail {
+
+std::optional<PrimitiveMeshGenerator>
+primitiveMeshGenerator(PrimitiveKind kind)
+{
+    switch (kind) {
+    case PrimitiveKind::Box:
+        return PrimitiveMeshGenerator::Box;
+    case PrimitiveKind::BeveledBox:
+        return PrimitiveMeshGenerator::BeveledBox;
+    case PrimitiveKind::Sphere:
+        return PrimitiveMeshGenerator::Sphere;
+    case PrimitiveKind::Capsule:
+        return PrimitiveMeshGenerator::Capsule;
+    case PrimitiveKind::Cylinder:
+        return PrimitiveMeshGenerator::Cylinder;
+    case PrimitiveKind::Cone:
+        return PrimitiveMeshGenerator::Cone;
+    case PrimitiveKind::Plane:
+        return PrimitiveMeshGenerator::Plane;
+    case PrimitiveKind::Disc:
+        return PrimitiveMeshGenerator::Disc;
+    }
+    return std::nullopt;
+}
+
+} // namespace detail
+
+} // namespace eng

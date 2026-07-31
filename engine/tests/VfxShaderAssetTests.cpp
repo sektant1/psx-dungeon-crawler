@@ -56,6 +56,10 @@ int main()
     const std::string gameMaterials =
         read("game/assets/materials/vfx.material");
     const std::string& fantasyMaterials = gameMaterials;
+    const std::string editorMaterials =
+        read("engine/assets/materials/editor.material");
+    const std::string placementGhost =
+        read("engine/assets/shaders/placement_ghost.frag");
 
     requireText(program, "vertex_program PixelVfx/PortalVS glsl",
                 "dedicated portal vertex program is missing");
@@ -116,7 +120,19 @@ int main()
     requireText(lava, "depth_write on",
                 "lava material does not write depth");
     requireText(lava, "filtering none",
-                "lava texture is not nearest filtered");
+                 "lava texture is not nearest filtered");
+
+    const std::string ghost =
+        material(editorMaterials, "__Editor/PlacementGhost");
+    require(!ghost.empty(), "placement ghost material is missing");
+    requireText(ghost, "scene_blend alpha_blend",
+                "placement ghost is not transparent");
+    requireText(ghost, "depth_write off",
+                "placement ghost incorrectly occludes committed geometry");
+    requireText(ghost, "fragment_program_ref Editor_FS_PlacementGhost",
+                "placement ghost does not use its editor shader");
+    requireText(placementGhost, "ghostColour",
+                "placement ghost shader lacks tint and opacity control");
 
     std::cout << "VfxShaderAssetTests OK\n";
 }

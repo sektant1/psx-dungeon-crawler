@@ -1,4 +1,5 @@
 #include <eng/DebugTools.h>
+#include <eng/render/ImGuiHint.h>
 
 #include "render/RenderPresets.h" // eng::RenderPresetValues, the editable profile cache
 
@@ -57,6 +58,13 @@ struct DebugTools::State {
     // edits a field here and pushes just that field to the renderer, so a full
     // profile can be tuned live and dumped back out (Copy as TOML) reproducibly.
     RenderPresetValues rp;
+
+    // Frame-stats readout, resampled slowly: at frame rate the digits churn
+    // too fast to read. The plot underneath stays live.
+    float statsSince = 1e9f;
+    float statsInterval = 0.25f;
+    float statsAvg = 0.0f;
+    std::vector<float> statsPhaseMs;
 
     int materialIdx = 0;                    // materials tab: selected material row
     char paramName[64] = "outlineOpacity";  // materials tab: global-param entry
@@ -343,8 +351,9 @@ void DebugTools::drawAnimationTab(const Deps& d)
                 sr.rate[int(StepChannel::Particles)] = r.pa;
                 sr.rate[int(StepChannel::Projectiles)] = r.pr;
             }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", r.hint);
+            // The row's own hint stays the fallback, so the table keeps
+            // working with no hints.toml present.
+            imguihint::hover("debug.step_rate", r.hint);
         }
     }
 
@@ -539,18 +548,27 @@ void DebugTools::drawPlayerTab(const Deps& d)
 {
     if (section("Frame Stats") && d.frame && d.frame->frameHist) {
         const FrameStatsView& pr = *d.frame;
-        float sum = 0.0f, peak = 0.0f;
-        for (int i = 0; i < pr.histCount; ++i) {
-            sum += pr.frameHist[i];
+        float peak = 0.0f;
+        for (int i = 0; i < pr.histCount; ++i)
             peak = std::max(peak, pr.frameHist[i]);
+        State& st = *mState;
+        st.statsSince += ImGui::GetIO().DeltaTime;
+        if (st.statsSince >= st.statsInterval) {
+            st.statsSince = 0.0f;
+            float sum = 0.0f;
+            for (int i = 0; i < pr.histCount; ++i)
+                sum += pr.frameHist[i];
+            st.statsAvg = pr.histCount > 0 ? sum / float(pr.histCount) : 0.0f;
+            st.statsPhaseMs.assign(pr.phaseMs, pr.phaseMs + pr.phaseCount);
         }
-        const float avg = pr.histCount > 0 ? sum / float(pr.histCount) : 0.0f;
+        const float avg = st.statsAvg;
         ImGui::Text("Frame %.2f ms  (%.0f fps)", avg, avg > 0.0f ? 1000.0f / avg : 0.0f);
         ImGui::PlotLines("##ft", pr.frameHist, pr.histCount, pr.histHead, nullptr,
                          0.0f, std::max(16.7f, peak * 1.1f), ImVec2(-FLT_MIN, 60));
         ImGui::Separator();
-        for (int i = 0; i < pr.phaseCount; ++i)
-            ImGui::Text("%-9s %6.2f ms", pr.phaseNames[i], pr.phaseMs[i]);
+        for (int i = 0; i < int(st.statsPhaseMs.size()) && i < pr.phaseCount; ++i)
+            ImGui::Text("%-9s %6.2f ms", pr.phaseNames[i], st.statsPhaseMs[size_t(i)]);
+        ImGui::SliderFloat("refresh (s)", &st.statsInterval, 0.05f, 2.0f, "%.2f");
     }
 
     FpsController* f = d.fps;
@@ -666,16 +684,31 @@ void PerfOverlay::draw(const FrameStatsView* frame, Renderer* renderer)
     if (!mVisible || !frame || !frame->frameHist)
         return;
 
-    // Frame-time stats over the rolling history ring.
-    float sum = 0.0f, peak = 0.0f, low = 1e9f;
-    for (int i = 0; i < frame->histCount; ++i) {
-        const float m = frame->frameHist[i];
-        sum += m;
-        peak = std::max(peak, m);
-        if (m > 0.0f) low = std::min(low, m);
+    // Frame-time stats over the rolling history ring, resampled on a slow
+    // cadence so the digits are readable (see setRefreshInterval).
+    mSince += ImGui::GetIO().DeltaTime;
+    if (mSince >= mInterval) {
+        mSince = 0.0f;
+        float sum = 0.0f, peak = 0.0f, low = 1e9f;
+        for (int i = 0; i < frame->histCount; ++i) {
+            const float m = frame->frameHist[i];
+            sum += m;
+            peak = std::max(peak, m);
+            if (m > 0.0f) low = std::min(low, m);
+        }
+        mAvg = frame->histCount > 0 ? sum / float(frame->histCount) : 0.0f;
+        mFps = mAvg > 0.0f ? 1000.0f / mAvg : 0.0f;
+        mPeak = peak;
+        mLow = low >= 1e8f ? 0.0f : low;
+        mPhaseMs.assign(frame->phaseMs, frame->phaseMs + frame->phaseCount);
+        if (renderer) {
+            size_t b = 0, t = 0;
+            renderer->frameStats(b, t);
+            mBatches = b;
+            mTris = t;
+        }
     }
-    const float avg = frame->histCount > 0 ? sum / float(frame->histCount) : 0.0f;
-    const float fps = avg > 0.0f ? 1000.0f / avg : 0.0f;
+    const float avg = mAvg, fps = mFps, peak = mPeak, low = mLow;
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + 8, vp->WorkPos.y + 8),
@@ -697,8 +730,7 @@ void PerfOverlay::draw(const FrameStatsView* frame, Renderer* renderer)
                                     : ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
     ImGui::TextColored(col, "%.0f FPS", fps);
     ImGui::SameLine();
-    ImGui::Text("  %.2f ms  (min %.2f / max %.2f)", avg, low >= 1e8f ? 0.0f : low,
-                peak);
+    ImGui::Text("  %.2f ms  (min %.2f / max %.2f)", avg, low, peak);
 
     ImGui::PlotLines("##perfft", frame->frameHist, frame->histCount,
                      frame->histHead, nullptr, 0.0f, std::max(33.3f, peak * 1.1f),
@@ -707,21 +739,20 @@ void PerfOverlay::draw(const FrameStatsView* frame, Renderer* renderer)
     ImGui::Separator();
     // CPU phase breakdown as labelled bars (fraction of the largest phase).
     float phaseMax = 1e-3f;
-    for (int i = 0; i < frame->phaseCount; ++i)
-        phaseMax = std::max(phaseMax, frame->phaseMs[i]);
-    for (int i = 0; i < frame->phaseCount; ++i) {
+    for (float ms : mPhaseMs)
+        phaseMax = std::max(phaseMax, ms);
+    for (int i = 0; i < int(mPhaseMs.size()) && i < frame->phaseCount; ++i) {
         char lbl[32];
-        std::snprintf(lbl, sizeof(lbl), "%.2f ms", frame->phaseMs[i]);
+        std::snprintf(lbl, sizeof(lbl), "%.2f ms", mPhaseMs[size_t(i)]);
         ImGui::Text("%-8s", frame->phaseNames[i]);
         ImGui::SameLine(72);
-        ImGui::ProgressBar(frame->phaseMs[i] / phaseMax, ImVec2(120, 12), lbl);
+        ImGui::ProgressBar(mPhaseMs[size_t(i)] / phaseMax, ImVec2(120, 12), lbl);
     }
 
     if (renderer) {
         ImGui::Separator();
-        size_t batches = 0, tris = 0;
-        renderer->frameStats(batches, tris);
-        ImGui::Text("Draw calls: %zu", batches);
+        const unsigned long long batches = mBatches, tris = mTris;
+        ImGui::Text("Draw calls: %llu", batches);
         ImGui::Text("Triangles : %s",
                     [&] {
                         static char b[32];
@@ -730,7 +761,7 @@ void PerfOverlay::draw(const FrameStatsView* frame, Renderer* renderer)
                         else if (tris >= 1000)
                             std::snprintf(b, sizeof(b), "%.1fk", double(tris) / 1e3);
                         else
-                            std::snprintf(b, sizeof(b), "%zu", tris);
+                            std::snprintf(b, sizeof(b), "%llu", tris);
                         return b;
                     }());
     }

@@ -11,6 +11,7 @@
 #define TOML_EXCEPTIONS 0
 #include <tomlplusplus/toml.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iterator>
@@ -27,13 +28,26 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
     // planeGeometry lies in XZ and is two-sided, so it takes the same 90-degree
     // tilt the disc did and reads from both sides of the threshold.
     //
-    // It runs the full height of the surround, not just the opening: the kit
-    // Arch's soffit is a curve, so a membrane stopping at the opening's top
-    // edge leaves a dark crescent under the arch stones.
-    const float membraneHeight = style.fieldSize.y + style.frameHeadHeight;
+    // How tall it is depends on what is behind it -- see PortalPropStyle
+    // ::backing. With a panel there it stops just inside the springline, where
+    // the Arch's soffit is still wider than the membrane; without one it has to
+    // run the surround's full height to fill the crescent under the soffit, and
+    // its square top corners spill past the curve as the price.
+    const float membraneHeight =
+        style.fieldSize.y +
+        (style.backing ? style.membraneHeadOverlap : style.frameHeadHeight);
+    // The whole surround, opening plus head: what the pillars run to and what
+    // the backing panel has to cover.
+    const float surroundHeight = style.fieldSize.y + style.frameHeadHeight;
+    const float surroundWidth =
+        style.fieldSize.x + style.framePillarWidth * 2.0f;
     eng::PrimitiveMeshDesc membraneDesc;
     membraneDesc.kind = eng::PrimitiveKind::Plane;
     membraneDesc.size = {style.fieldSize.x, 1.0f, membraneHeight};
+    membraneDesc.thickness = style.membraneThickness;
+    // Every surface's depth along local +Z comes from one pure function, so the
+    // backing cannot drift away from the membrane it is there to sit behind.
+    const PortalDepths depths = portalDepths(style);
     const eng::MeshHandle membrane =
         r.createPrimitiveMesh(membraneDesc);
 
@@ -62,14 +76,14 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
         const eng::NodeHandle frame = r.createNode(out.root);
         const float pillarWidth = style.framePillarWidth;
         const float pillarSide = pillarWidth / 5.65f; // Pillar is 5.65 across
-        // Pillars run the membrane's full height, not just the opening's: the
+        // Pillars run the surround's full height, not just the opening's: the
         // arch's soffit only reaches over the membrane's edge some way above the
         // spring line, leaving a thin band at each shoulder where the membrane
         // showed past the frame. The overshoot hides behind the arch head, which
         // is wider than the pillars and drawn in front of them.
         const glm::mat4 kitToPillar = glm::scale(
             glm::mat4(1.0f),
-            {pillarSide, membraneHeight / 30.2f, pillarSide});
+            {pillarSide, surroundHeight / 30.2f, pillarSide});
         const eng::MeshHandle pillar =
             r.loadObj(style.kitMeshDir + "Pillar.obj", &kitToPillar);
         const float jambX = openingHalfWidth + pillarWidth * 0.5f;
@@ -78,7 +92,7 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
             r.attachMesh(post, pillar, style.frameMaterial, false);
         }
         // Arch spans the two posts, so it is as wide as the whole surround.
-        const float headScaleX = (style.fieldSize.x + pillarWidth * 2.0f) / 20.02f;
+        const float headScaleX = surroundWidth / 20.02f;
         const float headScaleY = style.frameHeadHeight / 12.0f;
         const glm::mat4 kitToHead =
             glm::translate(glm::mat4(1.0f), {0.0f, -4.81f * headScaleY, 0.0f}) *
@@ -97,6 +111,41 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
             frame, {0.0f, style.fieldSize.y,
                     style.membraneInset + style.frameDepth * 0.25f});
         r.attachMesh(lintel, head, style.frameMaterial, false);
+
+        if (style.backing) {
+            // A solid block, not a sheet. A zero-thickness panel parked behind
+            // the pillars leaves an open slot between itself and the membrane
+            // standing proud in front, and the kit Pillar is a *round* shaft --
+            // its radius is about 0.71 of its bounding box, so it plugs neither
+            // the corners of its own footprint nor the slot behind it. Seen
+            // from an oblique angle you looked straight past the column into
+            // that slot and caught the membrane's lit edge as a green sliver
+            // down the joint.
+            //
+            // Giving the backing real depth closes the volume instead of
+            // screening it: it runs from clear of the pillars' back faces
+            // forward to just short of the membrane, so there is no longer a
+            // gap for anything to show through, from any angle.
+            eng::PrimitiveMeshDesc panelDesc;
+            // Plane, not Box, even though this is now a solid slab: a box
+            // carries atlas-style per-face UVs (a 3x2 grid), which would map a
+            // sixth of the sheet onto the panel and break the plain tiling
+            // stone it is deliberately textured with. A thick plane keeps the
+            // full 0..1 across its face.
+            panelDesc.kind = eng::PrimitiveKind::Plane;
+            panelDesc.size = {surroundWidth, 1.0f, surroundHeight};
+            panelDesc.thickness = depths.panelFront - depths.panelBack;
+            const eng::NodeHandle panel = r.createNode(
+                frame, {0.0f, surroundHeight * 0.5f,
+                        (depths.panelFront + depths.panelBack) * 0.5f});
+            // The 90-degree tilt turns the plane's thickness axis into depth,
+            // so the slab closes the volume from the pillars' back faces
+            // forward to the membrane.
+            r.setOrientation(panel, glm::angleAxis(glm::radians(90.0f),
+                                                   glm::vec3(1, 0, 0)));
+            r.attachMesh(panel, r.createPrimitiveMesh(panelDesc),
+                         style.backingMaterial, false);
+        }
     }
 
     // Offset so the membrane's *base* stays on the floor while its extra height
@@ -161,6 +210,10 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             desc.segments = 12;
         } else if (shape == "plane") {
             desc.kind = eng::PrimitiveKind::Plane;
+            // Pools and path strips: thick enough to read as a slab set into
+            // the floor and to stop z-fighting whatever they lie on, thin
+            // enough that they are still a surface rather than a plinth.
+            desc.thickness = 0.08f;
         } else if (shape == "disc") {
             desc.kind = eng::PrimitiveKind::Disc;
         } else {
@@ -347,9 +400,11 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
         info.visibilityRange =
             float((*e)["visibility_range"].value_or(0.0));
         // Visual bounds drive label placement even when an exhibit does not
-        // participate in collision. Plane height is intentionally zero.
+        // participate in collision. A plane's height is its slab thickness,
+        // not its Y scale -- the mesh ignores that axis.
         info.halfExtents = glm::abs(scale) * 0.5f;
-        if (shape == "plane") info.halfExtents.y = 0.0f;
+        if (shape == "plane")
+            info.halfExtents.y = 0.04f * std::abs(scale.y);
         if (isSword || isStaff)
             info.halfExtents = glm::abs(scale) * glm::vec3(1.2f, 3.7f, 1.2f);
         else if (isParticleAltar)

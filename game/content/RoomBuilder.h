@@ -25,12 +25,20 @@ struct RoomSpec {
     bool floor = true;
     bool walls = true;
     bool corners = true; // the posts that close the wall joins
+    // The kit has no ceiling piece, so a ceiling is the floor slab again at
+    // wall height in a two-sided material -- the same trick the procedural
+    // generator uses (see LayoutToScene). On by default: a room without one is
+    // open to a black sky, which is what every cooked scene looked like.
+    bool ceiling = true;
 
     // Which pieces to use. Defaults are the plain kit; an author who wants a
     // skull-walled crypt changes these rather than editing every wall after.
     std::string floorPrefab = "kit.floor";
     std::string wallPrefab = "kit.wall";
     std::string cornerPrefab = "kit.pillar";
+    // The ceiling is the floor mesh seen from below, so it needs the two-sided
+    // variant of the atlas or it renders as nothing at all.
+    std::string ceilingMaterial = "Kit/DungeonTwoSided";
 
     // Cell range, normalised so col0 <= col1 regardless of drag direction.
     int minCol() const { return col0 < col1 ? col0 : col1; }
@@ -41,8 +49,8 @@ struct RoomSpec {
     int depth() const { return maxRow() - minRow() + 1; }
 };
 
-// The entities a RoomSpec expands to, in a stable order (floors, then walls,
-// then corners). Ids are allocated against `document` but nothing is added to
+// The entities a RoomSpec expands to, in a stable order (floors, ceilings,
+// walls, then corners). Ids are allocated against `document` but nothing is added to
 // it: the caller wraps them in one undoable command.
 std::vector<Entity> buildRoom(const GridConfig& grid, const KitCatalog& catalog,
                               const RoomSpec& spec, const SceneDocument& document,

@@ -13,6 +13,8 @@
 
 #include <eng/Input.h>
 #include <eng/Log.h>
+#include <eng/render/Warmup.h>
+#include <eng/render/ImGuiHint.h>
 #include <eng/Renderer.h>
 
 #include <imgui.h>
@@ -40,6 +42,46 @@ constexpr int kGridRadius = 16; // cells drawn either side of the camera
 
 constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoCollapse;
 
+// The one place the editor decides how wide its view is. Walk mode deliberately
+// uses the game's field of view rather than the editor's, because framing the
+// same amount of world the player will see is the entire point of that mode --
+// and every consumer has to agree on it, or the picker builds rays for a
+// frustum the viewport is not drawing.
+float viewportFovDeg(const EditorCamera& camera)
+{
+    return camera.activeFovDeg();
+}
+
+void transformedBounds(const XformAuthor& transform, const glm::vec3& localMin,
+                       const glm::vec3& localMax, glm::vec3& worldMin,
+                       glm::vec3& worldMax)
+{
+    const glm::mat4 matrix = authorTransformMatrix(transform);
+    worldMin = glm::vec3(1e9f);
+    worldMax = glm::vec3(-1e9f);
+    for (int corner = 0; corner < 8; ++corner) {
+        const glm::vec3 local{
+            (corner & 1) ? localMax.x : localMin.x,
+            (corner & 2) ? localMax.y : localMin.y,
+            (corner & 4) ? localMax.z : localMin.z,
+        };
+        const glm::vec3 world = glm::vec3(matrix * glm::vec4(local, 1.0f));
+        worldMin = glm::min(worldMin, world);
+        worldMax = glm::max(worldMax, world);
+    }
+}
+
+glm::quat orientationFromMatrix(const glm::mat4& matrix,
+                                const glm::vec3& scale)
+{
+    glm::mat3 rotation(matrix);
+    for (int axis = 0; axis < 3; ++axis) {
+        const float divisor = std::abs(scale[axis]) > 1e-6f ? scale[axis] : 1.0f;
+        rotation[axis] /= divisor;
+    }
+    return glm::normalize(glm::quat_cast(rotation));
+}
+
 } // namespace
 
 EditorApp::EditorApp() = default;
@@ -64,21 +106,50 @@ eng::AppConfig EditorApp::configure(int argc, char** argv)
     config.configPath = assets + "/editor.toml";
     config.fixedDt = 0.0f; // nothing here is simulated
     config.imgui = true;
+    config.loadingTitle = "SCENE EDITOR";
+    // Basename only: the full path is wider than the loading screen and the
+    // part that identifies the scene is the tail.
+    config.loadingHint =
+        mPendingScene.substr(mPendingScene.find_last_of('/') + 1);
     return config;
+}
+
+// The editor's slow startup is asset loading, not UI wiring: the kit catalog,
+// the shared particle library and then every material the preview will ever
+// show. All of it runs as load steps so the window shows the progress ring
+// instead of a frozen grey rectangle.
+void EditorApp::onLoad(eng::Engine& engine, eng::LoadPlan& plan)
+{
+    plan.add("Reading the kit catalog", [this] {
+        std::string error;
+        if (!KitCatalog::load(mState.kitPath, mState.catalog, error)) {
+            eng::log::error("editor: %s", error.c_str());
+            exitCode = 1;
+            mCatalogFailed = true;
+            return;
+        }
+        mState.grid = GridConfig::fromCatalog(mState.catalog);
+    });
+    // The editor tunes the same effects the game ships, so it loads the game's
+    // own particles.toml rather than a copy that could drift out of sync.
+    plan.add("Loading particle effects", [this, &engine] {
+        mParticles.load(engine.renderer(),
+                        std::string(APP_ASSET_DIR) + "/particles.toml");
+    });
+    // The material panel renders a thumbnail per material on demand; compiling
+    // them up front is what stops the first hover from stalling the editor.
+    eng::addRenderWarmup(plan);
 }
 
 bool EditorApp::onStart(eng::Engine& engine)
 {
+    if (mCatalogFailed)
+        return false;
+
     mEngine = &engine;
     eng::Renderer& renderer = engine.renderer();
 
-    std::string error;
-    if (!KitCatalog::load(mState.kitPath, mState.catalog, error)) {
-        eng::log::error("editor: %s", error.c_str());
-        exitCode = 1;
-        return false;
-    }
-    mState.grid = GridConfig::fromCatalog(mState.catalog);
+    installConsoleCommands();
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -211,10 +282,11 @@ bool EditorApp::boundsOf(const std::vector<AuthorId>& ids, glm::vec3& min,
         glm::vec3 localMin(-0.5f), localMax(0.5f); // a marker is a small cube
         if (const KitPiece* piece = mState.catalog.find(entity.prefab))
             piece->localBoundsMeters(mState.catalog.scale(), localMin, localMax);
-        // Axis-aligned approximation: good enough to frame a camera, and it
-        // does not need the mesh to be loaded.
-        min = glm::min(min, entity.transform.position + localMin);
-        max = glm::max(max, entity.transform.position + localMax);
+        glm::vec3 entityMin, entityMax;
+        transformedBounds(entity.transform, localMin, localMax,
+                          entityMin, entityMax);
+        min = glm::min(min, entityMin);
+        max = glm::max(max, entityMax);
         any = true;
     };
     if (ids.empty()) {
@@ -243,7 +315,9 @@ void EditorApp::frameCamera(const glm::vec3& min, const glm::vec3& max)
     const float radius = glm::max(glm::length(max - min) * 0.5f, 2.0f);
     // Pull back far enough that the whole extent fits the vertical fov, then a
     // little more so it does not touch the panel edges.
-    const float distance = radius / std::tan(glm::radians(65.0f * 0.5f)) * 1.25f;
+    const float distance =
+        radius / std::tan(glm::radians(EditorCamera::kEditorFovDeg * 0.5f)) *
+        1.25f;
     // Steep, because a dungeon is a closed box: framed from a shallow angle the
     // camera just stares at the outside of the nearest wall. Looking down into
     // it (the levels have no ceilings authored) is what actually shows the
@@ -292,6 +366,85 @@ void EditorApp::newScene(SceneTemplate which)
         frameCamera(min, max);
     mStatus = std::string("new scene from the '") + sceneTemplateName(which) +
               "' template -- Save as... to give it a file";
+}
+
+// --- discarding the open document --------------------------------------------
+
+void EditorApp::requestDiscard(Discard what, SceneTemplate which)
+{
+    mDiscardWhat = what;
+    mDiscardTemplate = which;
+    // A clean document has nothing to lose, so the prompt would be pure
+    // ceremony. Only unsaved work earns an interruption.
+    if (!mState.dirty) {
+        performDiscard();
+        return;
+    }
+    mDiscardOpen = true;
+}
+
+void EditorApp::performDiscard()
+{
+    mDiscardOpen = false;
+    switch (mDiscardWhat) {
+        case Discard::Quit:
+            if (mEngine)
+                mEngine->requestClose();
+            break;
+        case Discard::Reload:
+            if (!mState.scenePath.empty())
+                loadScene(mState.scenePath);
+            break;
+        case Discard::NewScene:
+            newScene(mDiscardTemplate);
+            break;
+    }
+}
+
+void EditorApp::drawDiscardPopup()
+{
+    static constexpr const char* kTitle = "Unsaved changes";
+    if (mDiscardOpen && !ImGui::IsPopupOpen(kTitle))
+        ImGui::OpenPopup(kTitle);
+    if (!ImGui::BeginPopupModal(kTitle, nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    const char* verb = mDiscardWhat == Discard::Quit      ? "Quitting"
+                       : mDiscardWhat == Discard::Reload  ? "Reloading"
+                                                          : "Starting a new scene";
+    ImGui::Text("%s will discard unsaved changes to", verb);
+    ImGui::TextUnformatted(mState.scenePath.empty()
+                               ? "this untitled scene."
+                               : mState.scenePath.c_str());
+    ImGui::Separator();
+
+    // Save is the default: it is the only choice here that cannot lose work, so
+    // it takes Enter and the leftmost position.
+    if (ImGui::Button("Save and continue") ||
+        ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+        // An untitled scene has nowhere to save to, so the discard waits while
+        // Save As collects a path rather than silently failing.
+        if (mState.scenePath.empty()) {
+            mDiscardOpen = false;
+            mSaveAsOpen = true;
+            ImGui::CloseCurrentPopup();
+        } else if (saveScene()) {
+            ImGui::CloseCurrentPopup();
+            performDiscard();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Discard")) {
+        ImGui::CloseCurrentPopup();
+        performDiscard();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        mDiscardOpen = false;
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
 }
 
 bool EditorApp::saveScene()
@@ -345,6 +498,16 @@ void EditorApp::runPlaytest()
         mStatus = "playtest stopped";
         return;
     }
+    // An untitled scene has nowhere to save to, and saveScene() reports that by
+    // returning false with nothing said -- so F5 on a fresh scene used to do
+    // absolutely nothing, with no message explaining why. Ask for a path.
+    if (mState.dirty && mState.scenePath.empty()) {
+        mSaveAsOpen = true;
+        std::snprintf(mSaveAsPath, sizeof(mSaveAsPath), "%s",
+                      (mState.assetRoot + "/scenes/untitled.scn").c_str());
+        mStatus = "name the scene before playtesting it";
+        return;
+    }
     if (mState.dirty && !saveScene())
         return;
     std::string mapPath;
@@ -359,6 +522,35 @@ void EditorApp::runPlaytest()
         return;
     }
     mStatus = "playtest running (pid " + std::to_string(mPlaytest.pid) + ")";
+}
+
+void EditorApp::toggleWalk()
+{
+    if (mState.camera.walking()) {
+        mState.camera.leaveWalk();
+        mStatus = "back to the editor camera";
+        return;
+    }
+
+    // Start where the player will: the spawn, or failing that whatever is
+    // selected, so a room with no spawn yet can still be eyeballed.
+    const Entity* from = nullptr;
+    for (const Entity& entity : mState.document.entities) {
+        if (entity.playerSpawn) {
+            from = &entity;
+            break;
+        }
+    }
+    if (!from && !mState.selection.empty())
+        from = mState.document.find(*mState.primary());
+    if (!from) {
+        mStatus = "walk needs a player spawn or a selection to stand at";
+        return;
+    }
+
+    mState.camera.enterWalk(from->transform.position,
+                            from->transform.rotationDegrees.y);
+    mStatus = "walk preview -- hold right mouse to look, WASD to move";
 }
 
 void EditorApp::deleteSelection()
@@ -421,7 +613,16 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
     if (mFlying) {
         const glm::vec2 delta = input.mouseDelta();
         constexpr float kLookSpeed = 0.0032f;
-        mState.camera.addYawPitch(-delta.x * kLookSpeed, -delta.y * kLookSpeed);
+        // Walk mode borrows the same right-drag-to-look gesture, but drives the
+        // walk camera: it has its own yaw/pitch so that peeking at eye level
+        // cannot disturb the framing the author will come back to.
+        if (mState.camera.walking()) {
+            mState.camera.walkLook(-delta.x * kLookSpeed,
+                                   -delta.y * kLookSpeed);
+        } else {
+            mState.camera.addYawPitch(-delta.x * kLookSpeed,
+                                      -delta.y * kLookSpeed);
+        }
 
         // WASD + QE, the movement every 3D editor since Quake has used.
         glm::vec3 move{0.0f};
@@ -432,22 +633,40 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
         if (input.isDown("fly_down")) move.y -= 1.0f;
         if (input.isDown("fly_up")) move.y += 1.0f;
         if (move != glm::vec3(0.0f)) {
-            const float speed =
-                (input.isDown("fly_fast") ? 36.0f : 12.0f) * f.dt;
-            mState.camera.moveLocal(glm::normalize(move) * speed);
+            if (mState.camera.walking()) {
+                // A walking pace, not a flying one, and Q/E do nothing: the
+                // whole point is to see the level from where a player's head
+                // will be, and a preview that drifts upward is not that.
+                mState.camera.walkMove(glm::normalize(move) *
+                                       (EditorCamera::kWalkSpeed *
+                                        (input.isDown("fly_fast") ? 2.5f : 1.0f) *
+                                        f.dt));
+            } else {
+                const float speed =
+                    (input.isDown("fly_fast") ? 36.0f : 12.0f) * f.dt;
+                mState.camera.moveLocal(glm::normalize(move) * speed);
+            }
         }
     }
 
     // Letter shortcuts stay mute while a text field owns the keyboard, so
     // typing a name into the inspector cannot fly the camera or delete a thing.
-    if (!ImGui::GetIO().WantCaptureKeyboard) {
+    // Nothing here fires while flying. editor.toml deliberately binds the tool
+    // keys to the same letters as the fly controls (Q/W/E are both tools and
+    // down/forward/up), so the whole block is modal, not just the three that
+    // collide by name: WASD held down during a flight would otherwise trip
+    // focus, rotate, grid steps -- and delete.
+    if (!ImGui::GetIO().WantCaptureKeyboard && !mFlying) {
         if (input.wasPressed("focus"))
             frameSelectionOrAll();
-        if (input.wasPressed("tool_select") && !mFlying)
+        const bool interactionActive = mGizmoDragging || mPainting ||
+                                       mRoomDragging ||
+                                       ImGui::IsMouseDown(ImGuiMouseButton_Left);
+        if (!interactionActive && input.wasPressed("tool_select"))
             mState.tool = Tool::Select;
-        if (input.wasPressed("tool_place") && !mFlying)
+        if (!interactionActive && input.wasPressed("tool_place"))
             mState.tool = Tool::Place;
-        if (input.wasPressed("tool_room") && !mFlying)
+        if (!interactionActive && input.wasPressed("tool_room"))
             mState.tool = Tool::Room;
         if (input.wasPressed("grid_coarser"))
             mState.gridState.coarser();
@@ -461,9 +680,13 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
             mState.gridState.level -= mState.grid.cell;
         if (input.wasPressed("level_reset"))
             mState.gridState.level = 0.0f;
-        if (input.wasPressed("rotate"))
+        if (!interactionActive && input.wasPressed("gizmo_cycle"))
             mGizmoOperation = (mGizmoOperation + 1) % 3;
-        if (input.wasPressed("delete"))
+        if (!interactionActive && input.wasPressed("gizmo_space"))
+            mGizmoLocal = !mGizmoLocal;
+        if (input.wasPressed("walk"))
+            toggleWalk();
+        if (!interactionActive && input.wasPressed("delete"))
             deleteSelection();
 
         const ImGuiIO& io = ImGui::GetIO();
@@ -492,15 +715,76 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
                 mState.dirty = !mCommands.savedStateReached();
             }
         }
+        if (input.wasPressed("dev_console"))
+            mConsole.toggle();
     }
 
-    if (input.wasPressed("quit"))
-        f.engine.requestClose();
+    // Escape cancels, and only quits when there is nothing left to cancel. It is
+    // the key people press to back out of a mode, so making it close the editor
+    // outright is how an afternoon of blockout gets thrown away by reflex.
+    if (input.wasPressed("quit")) {
+        if (mGizmoDragging || mPainting || mRoomDragging) {
+            mStatus = "finish or release the active edit before leaving the tool";
+        } else if (mDiscardOpen || mSaveAsOpen) {
+            mDiscardOpen = false;
+            mSaveAsOpen = false;
+        } else if (mMaterialMode) {
+            setMode(false);
+        } else if (!mState.selection.empty()) {
+            mState.selection.clear();
+        } else if (mState.tool != Tool::Select) {
+            mState.tool = Tool::Select;
+        } else {
+            requestDiscard(Discard::Quit);
+        }
+    }
+}
+
+// Editor verbs the console can reach. Every one of them is a call the menus
+// already make: the console is a second way in, not a second implementation.
+void EditorApp::installConsoleCommands()
+{
+    mConsole.captureEngineLog();
+    mConsole.registerCommand("quit", "close the editor",
+                             [this](const eng::DebugConsole::Args&) {
+                                 requestDiscard(Discard::Quit);
+                             });
+    mConsole.registerCommand("cook", "cook the open scene to a runtime map",
+                             [this](const eng::DebugConsole::Args&) {
+                                 std::string mapPath;
+                                 if (cookScene(mapPath))
+                                     mConsole.print(eng::log::Level::Info, "editor",
+                                                    "cooked -> " + mapPath);
+                             });
+    mConsole.registerCommand("play", "cook and launch a playtest",
+                             [this](const eng::DebugConsole::Args&) { runPlaytest(); });
+    mConsole.registerCommand("frame", "frame the selection, or the whole scene",
+                             [this](const eng::DebugConsole::Args&) {
+                                 frameSelectionOrAll();
+                             });
+    mConsole.registerCommand("scene", "report the open scene",
+                             [this](const eng::DebugConsole::Args&) {
+                                 mConsole.print(eng::log::Level::Info, "editor",
+                                                mState.scenePath.empty()
+                                                    ? std::string("<unsaved>")
+                                                    : mState.scenePath);
+                                 mConsole.print(
+                                     eng::log::Level::Info, "editor",
+                                     std::to_string(mState.document.entities.size()) +
+                                         " entities, " +
+                                         (mState.dirty ? "unsaved changes" : "clean"));
+                             });
+    mConsole.registerCommand("save", "write the open scene to disk",
+                             [this](const eng::DebugConsole::Args&) { saveScene(); });
 }
 
 void EditorApp::onUpdate(const eng::FrameContext& f)
 {
     eng::Renderer& renderer = f.engine.renderer();
+    // Editing particles.toml in a text editor should land without a restart,
+    // the same as editing it through the panel. Re-registration keeps effect
+    // ids stable, so live instances survive the reload.
+    mParticles.reloadIfChanged(renderer);
     // Repro hook: walk the material list the way a user scrubbing it would.
     if (mCycleMaterials && !mMaterialNames.empty() && mStage.thumbnailBuilt()) {
         mCycleIndex = (mCycleIndex + 1) % mMaterialNames.size();
@@ -521,9 +805,17 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
             mStage.setSpin(renderer, mStage.spin() + mStageSpinSpeed * f.dt);
     } else {
         mPreview->sync(mState.document, mState.catalog);
+        // Everything above the storey being edited is cut away, so a ceiling
+        // does not become a lid over the top-down view. The work plane picks
+        // the storey; raising it one cell reveals the level above.
+        mPreview->setCeilingCut(renderer,
+                                mState.gridState.level + mState.grid.cell * 0.5f);
     }
-    renderer.setEditorCameraPose(mState.camera.flyEye(),
-                                 mState.camera.flyOrientation(), 65.0f);
+    // Walk mode hands the renderer the player's eye and the game's field of
+    // view, so the viewport shows exactly the frame the player will get.
+    renderer.setEditorCameraPose(mState.camera.activeEye(),
+                                 mState.camera.activeOrientation(),
+                                 mState.camera.activeFovDeg());
     if (mMaterialMode)
         renderer.setDebugLines({}); // the checkerboard is the reference here
     else
@@ -544,6 +836,17 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
 // replaces this with something much darker.
 void EditorApp::applySceneEnvironment(eng::Renderer& renderer)
 {
+    if (mGameLighting) {
+        // The scene's own light. Flat work light answers "where is this thing";
+        // it cannot answer "does the eye go where I want it to", because that
+        // question is entirely about contrast -- and a level whose critical
+        // path only reads under the editor's floodlight does not read at all.
+        renderer.setBackground({0.02f, 0.02f, 0.03f});
+        renderer.setAmbient({0.10f, 0.10f, 0.13f});
+        renderer.setFog({0.02f, 0.02f, 0.03f}, 0.035f);
+        renderer.setEditorViewportBackground({0.02f, 0.02f, 0.03f});
+        return;
+    }
     renderer.setBackground({0.05f, 0.055f, 0.07f});
     renderer.setAmbient({0.45f, 0.46f, 0.5f});
     renderer.setFog({0.05f, 0.055f, 0.07f}, 0.0f);
@@ -558,7 +861,7 @@ void EditorApp::updateGridLines(eng::Renderer& renderer)
     const float cell = mState.grid.cell;
     const float level = mState.gridState.level;
     // Centred on the camera so the grid never runs out from under the view.
-    const glm::vec3 eye = mState.camera.flyEye();
+    const glm::vec3 eye = mState.camera.activeEye();
     const int centreCol = int(std::floor(eye.x / cell));
     const int centreRow = int(std::floor(eye.z / cell));
 
@@ -643,10 +946,17 @@ void EditorApp::onGui(const eng::FrameContext& f)
             const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(
                 rightTop, ImGuiDir_Down, 0.45f, nullptr, &rightTop);
             ImGui::DockBuilderDockWindow("Inspector", rightTop);
+            // Material and Particles share that lower slot as tabs: both are
+            // the same job -- pick an asset from a list and tune it against the
+            // viewport -- and only one of them is ever the thing being worked
+            // on. A window left out of the builder floats loose over the
+            // dockspace, which is what this one did.
             ImGui::DockBuilderDockWindow("Material", rightBottom);
+            ImGui::DockBuilderDockWindow("Particles", rightBottom);
             ImGui::DockBuilderDockWindow("Outliner", left);
             ImGui::DockBuilderDockWindow("Catalog", left);
             ImGui::DockBuilderDockWindow("Issues", bottom);
+            ImGui::DockBuilderDockWindow("Console", bottom);
             ImGui::DockBuilderDockWindow("Viewport", centre);
             ImGui::DockBuilderFinish(dock);
         }
@@ -659,9 +969,12 @@ void EditorApp::onGui(const eng::FrameContext& f)
     drawCatalog();
     drawInspector();
     drawIssues();
+    mConsole.draw();
     drawMaterialPanel();
+    drawParticlePanel();
     drawStatusBar();
     drawSaveAsPopup();
+    drawDiscardPopup();
 }
 
 void EditorApp::drawMenuBar(const eng::FrameContext& f)
@@ -676,7 +989,7 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
                  {SceneTemplate::Empty, SceneTemplate::Room,
                   SceneTemplate::TechDemo}) {
                 if (ImGui::MenuItem(sceneTemplateName(which)))
-                    newScene(which);
+                    requestDiscard(Discard::NewScene, which);
             }
             ImGui::EndMenu();
         }
@@ -691,10 +1004,10 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
                               : mState.scenePath.c_str());
         }
         if (ImGui::MenuItem("Reload", "Ctrl+R", false, !mState.scenePath.empty()))
-            loadScene(mState.scenePath);
+            requestDiscard(Discard::Reload);
         ImGui::Separator();
         if (ImGui::MenuItem("Quit", "Esc"))
-            f.engine.requestClose();
+            requestDiscard(Discard::Quit);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Edit")) {
@@ -707,6 +1020,9 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             mPreview->invalidate();
             mState.dirty = !mCommands.savedStateReached();
         }
+        // Commands::label has documented itself as "shown in the Edit menu and
+        // the undo tooltip" since it was written; this is the tooltip.
+        eng::imguihint::hover("editor.undo");
         if (ImGui::MenuItem(redo.c_str(), "Ctrl+Shift+Z", false,
                             mCommands.canRedo())) {
             mCommands.redo(mState.document);
@@ -714,6 +1030,7 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             mPreview->invalidate();
             mState.dirty = !mCommands.savedStateReached();
         }
+        eng::imguihint::hover("editor.redo");
         ImGui::Separator();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false,
                             !mState.selection.empty()))
@@ -734,6 +1051,9 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
     }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Snap to grid", "G", &mState.gridState.snap);
+        bool console = mConsole.visible();
+        if (ImGui::MenuItem("Console", "`", &console))
+            mConsole.setVisible(console);
         ImGui::EndMenu();
     }
     ImGui::EndMenuBar();
@@ -771,8 +1091,59 @@ void EditorApp::drawToolbar()
         ImGui::SameLine();
         ImGui::TextUnformatted("|");
         ImGui::SameLine();
+        if (mMaterialMode) {
+            ImGui::TextDisabled("stage Y rotate");
+        } else {
+            // Gizmo state stays visible and explicit. Controls lock during a
+            // drag so one pointer transaction cannot change interpretation
+            // halfway through.
+            static const char* kOps[3] = {"Move", "Rotate", "Scale"};
+            ImGui::BeginDisabled(mGizmoDragging);
+            ImGui::SetNextItemWidth(90.0f);
+            ImGui::Combo("##gizmoop", &mGizmoOperation, kOps, 3);
+            ImGui::SameLine();
+            const bool worldForced = mState.selection.size() > 1;
+            const bool localForced = mGizmoOperation == 2 && !worldForced;
+            const char* spaceLabel = worldForced
+                                         ? "world (multi)"
+                                         : localForced
+                                               ? "local (scale)"
+                                               : mGizmoLocal ? "local (X)"
+                                                             : "world (X)";
+            ImGui::BeginDisabled(worldForced || localForced);
+            if (ImGui::SmallButton(spaceLabel))
+                mGizmoLocal = !mGizmoLocal;
+            ImGui::EndDisabled();
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(worldForced
+                                      ? "Multiple objects use world axes."
+                                      : "Axes the gizmo acts along.");
+        }
+
+        ImGui::SameLine();
+        ImGui::TextUnformatted("|");
+        ImGui::SameLine();
         if (ImGui::SmallButton("Frame (F)"))
             frameSelectionOrAll();
+        ImGui::SameLine();
+        const bool walking = mState.camera.walking();
+        if (ImGui::SmallButton(walking ? "Exit walk (V)" : "Walk (V)"))
+            toggleWalk();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Stand at the spawn, at eye height, with the\n"
+                              "game's field of view. Readability is judged\n"
+                              "from where the player's head will be.");
+        ImGui::SameLine();
+        // The editor lights flat and bright so you can see where things ARE.
+        // That is the wrong light for judging whether the level guides the eye,
+        // which is a question about contrast -- so it has to be switchable.
+        if (ImGui::Checkbox("game light", &mGameLighting))
+            applySceneEnvironment(mEngine->renderer());
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Swap the editor's flat work light for the\n"
+                              "level's own. Flat light hides whether the\n"
+                              "critical path actually reads brighter.");
 
         ImGui::SameLine();
         ImGui::TextUnformatted("|");
@@ -822,6 +1193,9 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
         }
         mViewportHovered = ImGui::IsWindowHovered(
             ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        if (mMaterialMode || mState.tool != Tool::Place || !mViewportHovered ||
+            mFlying)
+            mPreview->hidePlacementGhost();
         // Gizmo first, then picking: a click that lands on a gizmo handle is a
         // drag, not a selection change.
         if (mMaterialMode) {
@@ -842,7 +1216,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
                 commitRoom();
             }
         } else if (mState.tool == Tool::Place) {
-            drawPlacementGhost(f);
+            drawPlacementGhost();
             if (mViewportHovered && !mFlying) {
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                     mPainting = true;
@@ -852,7 +1226,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
                 if (mPainting && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                     CellPlacement cell;
                     XformAuthor transform;
-                    if (hoveredPlacement(f, cell, transform))
+                    if (hoveredPlacement(cell, transform))
                         placeAt(cell, transform);
                 }
             }
@@ -881,6 +1255,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
         }
     } else {
         mViewportHovered = false;
+        mPreview->hidePlacementGhost();
     }
     ImGui::End();
     ImGui::PopStyleVar();
@@ -891,27 +1266,24 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
 static void cameraMatrices(const EditorCamera& camera, float aspect,
                            glm::mat4& view, glm::mat4& projection)
 {
-    const glm::vec3 eye = camera.flyEye();
-    const glm::quat orientation = camera.flyOrientation();
+    const glm::vec3 eye = camera.activeEye();
+    const glm::quat orientation = camera.activeOrientation();
     const glm::vec3 forward = orientation * glm::vec3(0.0f, 0.0f, -1.0f);
     const glm::vec3 up = orientation * glm::vec3(0.0f, 1.0f, 0.0f);
     view = glm::lookAt(eye, eye + forward, up);
-    projection = glm::perspective(glm::radians(65.0f), aspect, 0.05f, 4000.0f);
+    projection = glm::perspective(glm::radians(viewportFovDeg(camera)), aspect,
+                                  0.05f, 4000.0f);
 }
 
 void EditorApp::handleViewportPicking(const eng::FrameContext& f)
 {
-    if (!mViewportHovered || mFlying || ImGuizmo::IsOver() || ImGuizmo::IsUsing())
+    if (!mViewportHovered || mFlying || ImGuizmo::IsUsingAny() ||
+        mGizmoHovered)
         return;
     if (!ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         return;
 
-    const ImVec2 mouse = ImGui::GetIO().MousePos;
-    const glm::vec2 ndc{(mouse.x - mViewportX) / mViewportW * 2.0f - 1.0f,
-                        1.0f - (mouse.y - mViewportY) / mViewportH * 2.0f};
-    const Ray ray = screenRay(ndc, mState.camera.flyEye(),
-                              mState.camera.flyOrientation(),
-                              glm::radians(65.0f), mViewportW / mViewportH);
+    const Ray ray = mouseRay();
 
     // Tested against catalogue bounds rather than the loaded meshes: an entity
     // has to be selectable even before its mesh is on disk, which is exactly
@@ -920,11 +1292,13 @@ void EditorApp::handleViewportPicking(const eng::FrameContext& f)
     float bestT = 1e30f;
     float bestVolume = 1e30f;
     for (const Entity& entity : mState.document.entities) {
-        glm::vec3 min(-0.5f), max(0.5f);
+        if (!mPreview->entityVisible(entity.id))
+            continue;
+        glm::vec3 localMin(-0.5f), localMax(0.5f);
         if (const KitPiece* piece = mState.catalog.find(entity.prefab))
-            piece->localBoundsMeters(mState.catalog.scale(), min, max);
-        min += entity.transform.position;
-        max += entity.transform.position;
+            piece->localBoundsMeters(mState.catalog.scale(), localMin, localMax);
+        glm::vec3 min, max;
+        transformedBounds(entity.transform, localMin, localMax, min, max);
         float t = 0.0f;
         if (!rayAabb(ray, min, max, t))
             continue;
@@ -953,6 +1327,7 @@ void EditorApp::handleViewportPicking(const eng::FrameContext& f)
 
 void EditorApp::drawGizmo(const eng::FrameContext& f)
 {
+    mGizmoHovered = false;
     if (mState.selection.empty() || mViewportW < 8.0f)
         return;
     const Entity* primary = mState.document.find(*mState.primary());
@@ -976,64 +1351,131 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
     // point a person means when they say "this selection".
     glm::vec3 boundsMin, boundsMax;
     const bool haveBounds = boundsOf(mState.selection, boundsMin, boundsMax);
-    const glm::vec3 anchor = haveBounds ? (boundsMin + boundsMax) * 0.5f
-                                        : primary->transform.position;
+    const glm::vec3 liveAnchor = haveBounds ? (boundsMin + boundsMax) * 0.5f
+                                            : primary->transform.position;
+    // Once a drag is under way the pivot is whatever it was when the drag
+    // started; recomputing it from bounds that the drag itself is changing
+    // would make the handles wander out from under the cursor.
+    const glm::vec3 anchor = mGizmoDragging ? mDragAnchor : liveAnchor;
 
-    glm::mat4 matrix(1.0f);
+    // With one thing selected the gizmo carries that thing's own rotation and
+    // scale, which is what makes the handles line up with it. With several, it
+    // starts from identity instead: the numbers ImGuizmo then reports ARE the
+    // delta to apply to every member, so a rotation turns the whole selection
+    // about the anchor rather than spinning one entity in place while the rest
+    // sit still -- which is what used to happen.
+    const bool multi = mState.selection.size() > 1;
+    const glm::vec3 identityScale(1.0f);
     const XformAuthor& xform = primary->transform;
-    ImGuizmo::RecomposeMatrixFromComponents(
-        glm::value_ptr(anchor), glm::value_ptr(xform.rotationDegrees),
-        glm::value_ptr(xform.scale), glm::value_ptr(matrix));
+    glm::mat4 matrix(1.0f);
+    if (mGizmoDragging) {
+        matrix = mDragGizmoMatrix;
+    } else {
+        const glm::quat orientation =
+            multi ? glm::quat(1.0f, 0.0f, 0.0f, 0.0f)
+                  : authorOrientation(xform.rotationDegrees);
+        matrix = glm::translate(glm::mat4(1.0f), anchor) *
+                 glm::mat4_cast(orientation) *
+                 glm::scale(glm::mat4(1.0f),
+                            multi ? identityScale : xform.scale);
+    }
 
+    const bool rotating = mGizmoOperation == 1;
+    const bool scaling = mGizmoOperation == 2;
     const ImGuizmo::OPERATION operation =
-        mGizmoOperation == 1 ? ImGuizmo::ROTATE
-                             : (mGizmoOperation == 2 ? ImGuizmo::SCALE
-                                                     : ImGuizmo::TRANSLATE);
-    // Snap applies to free objects; a kit piece with a cell is re-snapped to it
-    // when the drag closes, so its own step is the one that matters.
+        rotating ? ImGuizmo::ROTATE
+                 : scaling ? (multi ? ImGuizmo::SCALEU : ImGuizmo::SCALE)
+                           : ImGuizmo::TRANSLATE;
     const float step = mState.gridState.step();
-    const glm::vec3 snap{step, step, step};
-    const glm::vec3 rotateSnap{15.0f, 15.0f, 15.0f};
-    const float* snapPtr =
-        mState.gridState.snap
-            ? (operation == ImGuizmo::ROTATE ? glm::value_ptr(rotateSnap)
-                                             : glm::value_ptr(snap))
-            : nullptr;
+    const glm::vec3 translateSnap{step, step, step};
+    const float angleStep = (!multi && primary->cell) ? 90.0f : 15.0f;
+    const glm::vec3 rotateSnap{angleStep, angleStep, angleStep};
+    const glm::vec3 scaleSnap{0.1f, 0.1f, 0.1f};
+    const float* snapPtr = nullptr;
+    if (mState.gridState.snap) {
+        snapPtr = rotating ? glm::value_ptr(rotateSnap)
+                           : scaling ? glm::value_ptr(scaleSnap)
+                                     : glm::value_ptr(translateSnap);
+    }
 
-    ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection),
-                         operation, ImGuizmo::WORLD, glm::value_ptr(matrix),
-                         nullptr, snapPtr);
+    // Local mode matters here because the kit is authored on quarter turns: a
+    // wall placed at 90 degrees scales and nudges along ITS axes, not the
+    // world's, and world-only handles made that piece awkward to adjust. World
+    // stays the default because the grid is the usual frame of reference, and a
+    // multi-selection has no single local frame to speak of.
+    const ImGuizmo::MODE mode =
+        (mGizmoLocal && !multi) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+    ImGuizmo::PushID("scene-selection");
+    const bool manipulated = ImGuizmo::Manipulate(
+        glm::value_ptr(view), glm::value_ptr(projection), operation, mode,
+        glm::value_ptr(matrix), nullptr, snapPtr);
+    const bool gizmoUsing = ImGuizmo::IsUsing();
+    mGizmoHovered = ImGuizmo::GetHoveredHandleType() != ImGuizmo::MT_NONE;
+    ImGuizmo::PopID();
 
-    if (ImGuizmo::IsUsing()) {
-        if (!mGizmoDragging) {
-            // One capture at the start of the drag: the whole drag becomes a
-            // single undo entry, not one per frame.
-            mGizmoDragging = true;
-            mDragStart.clear();
-            for (const AuthorId& id : mState.selection)
-                if (const Entity* entity = mState.document.find(id))
-                    mDragStart.emplace_back(id, entity->transform);
-        }
-        glm::vec3 position, rotation, scale;
+    if (gizmoUsing && !mGizmoDragging) {
+        // One capture at the start of the drag: the whole drag becomes a single
+        // undo entry, not one per frame.
+        mGizmoDragging = true;
+        mDragAnchor = liveAnchor;
+        mDragStart.clear();
+        for (const AuthorId& id : mState.selection)
+            if (const Entity* entity = mState.document.find(id))
+                mDragStart.emplace_back(id, entity->transform);
+    }
+    if (gizmoUsing || manipulated)
+        mDragGizmoMatrix = matrix;
+
+    // Manipulate may report a final changed matrix on the same frame it clears
+    // IsUsing after mouse release. Apply that matrix before closing undo state.
+    if (manipulated && mGizmoDragging) {
+        glm::vec3 position, ignoredRotation, scale;
         ImGuizmo::DecomposeMatrixToComponents(
             glm::value_ptr(matrix), glm::value_ptr(position),
-            glm::value_ptr(rotation), glm::value_ptr(scale));
-        // The gizmo reports where the ANCHOR moved to; the entities move by the
-        // same delta. Assigning the gizmo's position straight onto the primary
-        // would teleport it to the bounds centre on the first frame of a drag.
+            glm::value_ptr(ignoredRotation), glm::value_ptr(scale));
+        const glm::vec3 rotation = authorRotationDegrees(
+            orientationFromMatrix(matrix, scale));
+        // The gizmo reports where the ANCHOR moved to; entities move by the
+        // same delta rather than teleporting their origin to that anchor.
         const glm::vec3 delta = position - anchor;
-        for (const AuthorId& id : mState.selection) {
-            Entity* entity = mState.document.find(id);
-            if (!entity)
-                continue;
-            entity->transform.position += delta;
-            if (id == primary->id) {
-                entity->transform.rotationDegrees = rotation;
-                entity->transform.scale = scale;
+
+        if (!multi) {
+            Entity* entity = mState.document.find(primary->id);
+            if (entity && !mDragStart.empty()) {
+                const XformAuthor& before = mDragStart.front().second;
+                entity->transform.position = before.position + delta;
+                entity->transform.rotationDegrees =
+                    rotating ? rotation : before.rotationDegrees;
+                entity->transform.scale = scaling ? scale : before.scale;
+            }
+        } else {
+            // Rebuild from drag-start state. Group scale is uniform because
+            // non-uniform world scale cannot be represented faithfully as each
+            // rotated member's local XformAuthor scale.
+            const glm::quat spin =
+                rotating ? authorOrientation(rotation)
+                         : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            const glm::vec3 groupScale = scaling ? scale : glm::vec3(1.0f);
+            for (const auto& [id, before] : mDragStart) {
+                Entity* entity = mState.document.find(id);
+                if (!entity)
+                    continue;
+                const glm::vec3 offset = before.position - anchor;
+                const glm::vec3 turned = spin * (offset * groupScale);
+                entity->transform.position = anchor + turned + delta;
+                entity->transform.rotationDegrees =
+                    rotating ? authorRotationDegrees(
+                                   spin * authorOrientation(
+                                              before.rotationDegrees))
+                             : before.rotationDegrees;
+                entity->transform.scale =
+                    scaling ? before.scale * groupScale : before.scale;
             }
         }
         mState.document.touch();
-    } else if (mGizmoDragging) {
+    }
+
+    if (!gizmoUsing && mGizmoDragging) {
         mGizmoDragging = false;
         std::vector<Command> parts;
         for (const auto& [id, before] : mDragStart) {
@@ -1051,6 +1493,7 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
             // applied to a state it is idempotent on.
             runCommand(makeComposite("move selection", std::move(parts)));
         }
+        mDragStart.clear();
     }
 
     // Selection outline: a box around what the gizmo is acting on, so the
@@ -1058,12 +1501,12 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
     if (haveBounds) {
         const glm::mat4 viewProjection = projection * view;
         const auto project = [&](const glm::vec3& world, ImVec2& out) {
-            const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
-            if (clip.w <= 1e-4f)
+            glm::vec2 screen;
+            if (!projectToViewport(world, viewProjection,
+                                   {mViewportX, mViewportY},
+                                   {mViewportW, mViewportH}, screen))
                 return false;
-            out = ImVec2(mViewportX + (clip.x / clip.w * 0.5f + 0.5f) * mViewportW,
-                         mViewportY + (1.0f - (clip.y / clip.w * 0.5f + 0.5f)) *
-                                          mViewportH);
+            out = ImVec2(screen.x, screen.y);
             return true;
         };
         const glm::vec3 corners[8] = {
@@ -1094,8 +1537,17 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
 // Where the cursor is pointing, expressed as a grid placement. Kit pieces with
 // a socket snap to a cell (floor/fill) or a cell edge (wall/opening); anything
 // else lands freely on the work plane, snapped to the current subdivision.
-bool EditorApp::hoveredPlacement(const eng::FrameContext& f, CellPlacement& cell,
-                                 XformAuthor& transform) const
+Ray EditorApp::mouseRay() const
+{
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    return viewportRay({mouse.x, mouse.y}, {mViewportX, mViewportY},
+                       {mViewportW, mViewportH}, mState.camera.activeEye(),
+                       mState.camera.activeOrientation(),
+                       glm::radians(mState.camera.activeFovDeg()));
+}
+
+bool EditorApp::hoveredPlacement(CellPlacement& cell,
+                                  XformAuthor& transform) const
 {
     if (mState.brushPrefab.empty() || mViewportW < 8.0f)
         return false;
@@ -1103,12 +1555,7 @@ bool EditorApp::hoveredPlacement(const eng::FrameContext& f, CellPlacement& cell
     if (!piece)
         return false;
 
-    const ImVec2 mouse = ImGui::GetIO().MousePos;
-    const glm::vec2 ndc{(mouse.x - mViewportX) / mViewportW * 2.0f - 1.0f,
-                        1.0f - (mouse.y - mViewportY) / mViewportH * 2.0f};
-    const Ray ray = screenRay(ndc, mState.camera.flyEye(),
-                              mState.camera.flyOrientation(),
-                              glm::radians(65.0f), mViewportW / mViewportH);
+    const Ray ray = mouseRay();
     glm::vec3 hit;
     if (!rayPlaneY(ray, mState.gridState.level, hit))
         return false;
@@ -1177,39 +1624,46 @@ void EditorApp::placeAt(const CellPlacement& cell, const XformAuthor& transform)
     mPaintParts.push_back(makeCreateEntity(entity));
 }
 
-void EditorApp::drawPlacementGhost(const eng::FrameContext& f)
+void EditorApp::drawPlacementGhost()
 {
-    if (mState.tool != Tool::Place || !mViewportHovered || mFlying)
+    if (mState.tool != Tool::Place || !mViewportHovered || mFlying) {
+        mPreview->hidePlacementGhost();
         return;
+    }
 
     CellPlacement cell;
     XformAuthor transform;
-    if (!hoveredPlacement(f, cell, transform))
+    if (!hoveredPlacement(cell, transform)) {
+        mPreview->hidePlacementGhost();
         return;
+    }
     const KitPiece* piece = mState.catalog.find(mState.brushPrefab);
-    if (!piece)
+    if (!piece) {
+        mPreview->hidePlacementGhost();
         return;
+    }
+
+    mPreview->showPlacementGhost(*piece, transform, mState.catalog.scale());
 
     // The ghost is a wire box in screen space rather than a translucent mesh:
     // it needs no material, cannot be picked, and reads clearly against any
     // geometry behind it.
     glm::vec3 localMin, localMax;
     piece->localBoundsMeters(mState.catalog.scale(), localMin, localMax);
-    const float yaw = glm::radians(transform.rotationDegrees.y);
-    const glm::quat rotation = glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 worldMatrix = authorTransformMatrix(transform);
 
     glm::mat4 view, projection;
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
     const glm::mat4 viewProjection = projection * view;
 
     const auto project = [&](const glm::vec3& local, ImVec2& out) {
-        const glm::vec3 world = transform.position + rotation * local;
-        const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
-        if (clip.w <= 1e-4f)
+        const glm::vec3 world = glm::vec3(worldMatrix * glm::vec4(local, 1.0f));
+        glm::vec2 screen;
+        if (!projectToViewport(world, viewProjection,
+                               {mViewportX, mViewportY},
+                               {mViewportW, mViewportH}, screen))
             return false;
-        out = ImVec2(mViewportX + (clip.x / clip.w * 0.5f + 0.5f) * mViewportW,
-                     mViewportY + (1.0f - (clip.y / clip.w * 0.5f + 0.5f)) *
-                                      mViewportH);
+        out = ImVec2(screen.x, screen.y);
         return true;
     };
 
@@ -1236,7 +1690,8 @@ void EditorApp::drawPlacementGhost(const eng::FrameContext& f)
 // nothing here belongs in an undo history.
 void EditorApp::drawStageGizmo(const eng::FrameContext& f)
 {
-    if (!mStage.built() || mViewportW < 8.0f)
+    if (!mStage.built() || mStage.previewMode() != StagePreview::Sphere ||
+        mViewportW < 8.0f)
         return;
 
     ImGuizmo::SetOrthographic(false);
@@ -1260,16 +1715,17 @@ void EditorApp::drawStageGizmo(const eng::FrameContext& f)
 
     // Rotate only: translating or scaling the subject would break the framing
     // the reference floor and the three-point rig were set up for.
-    ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection),
-                         ImGuizmo::ROTATE, ImGuizmo::WORLD,
-                         glm::value_ptr(matrix));
-    if (ImGuizmo::IsUsing()) {
-        glm::vec3 outPosition, outRotation, outScale;
-        ImGuizmo::DecomposeMatrixToComponents(
-            glm::value_ptr(matrix), glm::value_ptr(outPosition),
-            glm::value_ptr(outRotation), glm::value_ptr(outScale));
+    ImGuizmo::PushID("material-stage");
+    const bool manipulated = ImGuizmo::Manipulate(
+        glm::value_ptr(view), glm::value_ptr(projection), ImGuizmo::ROTATE_Y,
+        ImGuizmo::WORLD, glm::value_ptr(matrix));
+    const bool gizmoUsing = ImGuizmo::IsUsing();
+    ImGuizmo::PopID();
+    if (gizmoUsing || manipulated)
         mStageAutoSpin = false; // dragging takes over from the turntable
-        mStage.setSpin(f.engine.renderer(), glm::radians(outRotation.y));
+    if (manipulated) {
+        const float yaw = std::atan2(-matrix[0][2], matrix[0][0]);
+        mStage.setSpin(f.engine.renderer(), yaw);
     }
 }
 
@@ -1280,12 +1736,7 @@ bool EditorApp::hoveredCell(int& col, int& row) const
 {
     if (mViewportW < 8.0f)
         return false;
-    const ImVec2 mouse = ImGui::GetIO().MousePos;
-    const glm::vec2 ndc{(mouse.x - mViewportX) / mViewportW * 2.0f - 1.0f,
-                        1.0f - (mouse.y - mViewportY) / mViewportH * 2.0f};
-    const Ray ray = screenRay(ndc, mState.camera.flyEye(),
-                              mState.camera.flyOrientation(),
-                              glm::radians(65.0f), mViewportW / mViewportH);
+    const Ray ray = mouseRay();
     glm::vec3 hit;
     if (!rayPlaneY(ray, mState.gridState.level, hit))
         return false;
@@ -1314,12 +1765,12 @@ void EditorApp::drawRoomPreview(const eng::FrameContext& f)
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
     const glm::mat4 viewProjection = projection * view;
     const auto project = [&](const glm::vec3& world, ImVec2& out) {
-        const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
-        if (clip.w <= 1e-4f)
+        glm::vec2 screen;
+        if (!projectToViewport(world, viewProjection,
+                               {mViewportX, mViewportY},
+                               {mViewportW, mViewportH}, screen))
             return false;
-        out = ImVec2(mViewportX + (clip.x / clip.w * 0.5f + 0.5f) * mViewportW,
-                     mViewportY + (1.0f - (clip.y / clip.w * 0.5f + 0.5f)) *
-                                      mViewportH);
+        out = ImVec2(screen.x, screen.y);
         return true;
     };
 
@@ -1537,8 +1988,8 @@ void EditorApp::drawOutliner()
 glm::vec3 EditorApp::viewFocusPoint() const
 {
     Ray ray;
-    ray.origin = mState.camera.flyEye();
-    ray.dir = mState.camera.flyOrientation() * glm::vec3(0.0f, 0.0f, -1.0f);
+    ray.origin = mState.camera.activeEye();
+    ray.dir = mState.camera.activeOrientation() * glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 hit;
     if (rayPlaneY(ray, mState.gridState.level, hit))
         return hit;
@@ -1676,12 +2127,15 @@ void EditorApp::drawCatalog()
                         mState.brushPrefab = piece->id;
                         mState.tool = Tool::Place;
                     }
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("%s\nsocket %s  span %d\n%s",
-                                          piece->id.c_str(),
-                                          socketName(piece->socket), piece->span,
-                                          piece->meshPath.c_str());
-                    }
+                    // Per-piece detail is inherently dynamic, so it goes
+                    // through the ad-hoc path with the shared styling rather
+                    // than through the hint table.
+                    char detail[512];
+                    std::snprintf(detail, sizeof(detail),
+                                  "socket %s  span %d\n%s",
+                                  socketName(piece->socket), piece->span,
+                                  piece->meshPath.c_str());
+                    eng::imguihint::showText(piece->id.c_str(), detail);
                 }
             }
         }
@@ -1953,12 +2407,15 @@ void EditorApp::setMode(bool material)
             std::sort(mMaterialNames.begin(), mMaterialNames.end());
             mStage.setMaterial(renderer, mStage.material());
         }
+        if (!mSelectedMaterial.empty())
+            mStage.setMaterial(renderer, mSelectedMaterial);
         mStage.setVisible(renderer, true);
         mStage.applyEnvironment(renderer);
         // The level is hidden rather than unloaded: switching modes must not
         // cost a rebuild, and must never touch the document.
         mPreview->setVisible(renderer, false);
         mCameraBeforeMode = mState.camera;
+        mState.camera.leaveWalk();
         mState.camera.setFlyPosition(mStage.cameraPosition());
         mState.camera.setYawPitch(mStage.cameraYaw(), mStage.cameraPitch());
         mState.camera.frame(mStage.focusPoint(), 4.0f);
@@ -2026,13 +2483,11 @@ void EditorApp::drawMaterialPanel()
     if (ImGui::Checkbox("staging mode", &material))
         setMode(material);
     ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Shows one material on a sphere over a reference floor, lit by the\n"
-            "game's own shaders -- not a PBR preview, because the game does not\n"
-            "render PBR. What you see here is what the dungeon will show.");
-    }
+    eng::imguihint::marker(
+        "editor.staging_mode",
+        "Shows one material on a sphere over a reference floor, lit by the "
+        "game's own shaders -- not a PBR preview, because the game does not "
+        "render PBR. What you see here is what the dungeon will show.");
 
     if (mMaterialMode) {
         ImGui::SetNextItemWidth(110.0f);
@@ -2085,6 +2540,216 @@ void EditorApp::drawMaterialPanel()
         }
     }
     ImGui::EndChild();
+    ImGui::End();
+}
+
+// Live tuning for particle effects.
+//
+// Everything here edits eng::ParticleLibrary's descs in place and re-registers
+// the changed effect, which is why a tweak shows up in the viewport on the next
+// frame instead of at the next launch. Gameplay never sees any of this: the
+// panel exists only in the editor, and the runtime it drives is the same one
+// the game uses.
+void EditorApp::drawParticlePanel()
+{
+    if (!ImGui::Begin("Particles", nullptr, kPanelFlags)) {
+        ImGui::End();
+        return;
+    }
+    eng::Renderer& renderer = mEngine->renderer();
+    std::vector<eng::ParticleEffectDesc>& descs = mParticles.descs();
+
+    if (descs.empty()) {
+        ImGui::TextDisabled("no particles.toml loaded");
+        ImGui::End();
+        return;
+    }
+
+    // --- list --------------------------------------------------------------
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##fxfilter", "filter effects", mParticleFilter,
+                             sizeof(mParticleFilter));
+    const std::string filter = mParticleFilter;
+
+    ImGui::BeginChild("##fxlist", ImVec2(0.0f, 160.0f), true);
+    for (int i = 0; i < int(descs.size()); ++i) {
+        if (!filter.empty() &&
+            descs[size_t(i)].name.find(filter) == std::string::npos)
+            continue;
+        if (ImGui::Selectable(descs[size_t(i)].name.c_str(),
+                              mParticleSelected == i))
+            mParticleSelected = i;
+    }
+    ImGui::EndChild();
+
+    ImGui::TextDisabled("%zu effects | %s", descs.size(),
+                        mParticles.path().c_str());
+
+    if (mParticleSelected < 0 || mParticleSelected >= int(descs.size())) {
+        ImGui::End();
+        return;
+    }
+
+    eng::ParticleEffectDesc& d = descs[size_t(mParticleSelected)];
+    bool dirty = false;
+
+    ImGui::Separator();
+
+    // --- actions -----------------------------------------------------------
+    // Spawning at the camera focus rather than at the origin: an effect is
+    // judged where you are looking, and flying back to the origin to see each
+    // tweak is what makes tuning tedious.
+    const glm::vec3 spawnAt = mState.camera.target();
+    if (ImGui::Button("Spawn")) {
+        const eng::ParticlesHandle h = renderer.spawnParticles(d.name, spawnAt);
+        if (h.valid()) mParticlePreviews.push_back(h);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Stop all")) {
+        for (eng::ParticlesHandle h : mParticlePreviews)
+            renderer.despawnParticles(h);
+        mParticlePreviews.clear();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save TOML")) {
+        if (mParticles.save(mParticles.path()))
+            mStatus = "saved " + mParticles.path();
+        else
+            mStatus = "could not write " + mParticles.path();
+    }
+    ImGui::TextDisabled("%zu live preview(s)", mParticlePreviews.size());
+
+    ImGui::Separator();
+
+    // --- presentation ------------------------------------------------------
+    dirty |= ImGui::DragFloat("width", &d.baseWidth, 0.005f, 0.001f, 4.0f);
+    dirty |= ImGui::DragFloat("height", &d.baseHeight, 0.005f, 0.001f, 4.0f);
+    dirty |= ImGui::DragInt("quota", &d.quota, 1.0f, 1, 4096);
+
+    int mode = int(d.renderMode);
+    if (ImGui::Combo("render mode", &mode, "sprite\0voxel\0")) {
+        d.renderMode = eng::ParticleRenderMode(mode);
+        dirty = true;
+    }
+    int role = int(d.visualRole);
+    if (ImGui::Combo("visual role", &role,
+                     "critical\0gameplay\0feedback\0ambient\0")) {
+        d.visualRole = eng::ParticleVisualRole(role);
+        dirty = true;
+    }
+    dirty |= ImGui::SliderFloat("quality weight", &d.qualityWeight, 0.0f, 1.0f);
+
+    // --- motion ------------------------------------------------------------
+    dirty |= ImGui::DragFloat3("acceleration", &d.acceleration.x, 0.05f);
+    dirty |= ImGui::DragFloat("drag", &d.drag, 0.01f, 0.0f, 20.0f);
+    dirty |= ImGui::Checkbox("loop", &d.loop);
+    if (!d.loop)
+        dirty |= ImGui::DragFloat("burst count", &d.burstCount, 1.0f, 0.0f,
+                                  4096.0f);
+    dirty |= ImGui::Checkbox("local space", &d.localSpace);
+
+    // --- variety -----------------------------------------------------------
+    dirty |= ImGui::DragFloat("rotation jitter", &d.rotationJitterDeg, 1.0f,
+                              0.0f, 360.0f);
+    dirty |= ImGui::SliderFloat("hue jitter", &d.hueJitter, 0.0f, 1.0f);
+    dirty |= ImGui::SliderFloat("scale jitter", &d.scaleJitter, 0.0f, 0.95f);
+
+    // --- collision ---------------------------------------------------------
+    int collide = int(d.collideResponse);
+    if (ImGui::Combo("collide", &collide, "none\0die\0bounce\0decal\0")) {
+        d.collideResponse = eng::ParticleCollideResponse(collide);
+        dirty = true;
+    }
+    if (d.collideResponse == eng::ParticleCollideResponse::Bounce) {
+        dirty |= ImGui::SliderFloat("restitution", &d.restitution, 0.0f, 1.0f);
+        dirty |= ImGui::SliderFloat("friction", &d.friction, 0.0f, 1.0f);
+    }
+    if (d.collideResponse == eng::ParticleCollideResponse::Decal) {
+        char profile[64] = {};
+        std::snprintf(profile, sizeof(profile), "%s", d.decalProfile.c_str());
+        if (ImGui::InputText("decal profile", profile, sizeof(profile))) {
+            d.decalProfile = profile;
+            dirty = true;
+        }
+    }
+
+    // --- emitters ----------------------------------------------------------
+    if (ImGui::CollapsingHeader("emitters")) {
+        for (size_t e = 0; e < d.emitters.size(); ++e) {
+            ImGui::PushID(int(e));
+            eng::ParticleEmitterDesc& em = d.emitters[e];
+            ImGui::SeparatorText(("emitter " + std::to_string(e)).c_str());
+            int shape = int(em.shape);
+            if (ImGui::Combo("shape", &shape, "point\0box\0")) {
+                em.shape = eng::ParticleEmitterShape(shape);
+                dirty = true;
+            }
+            if (em.shape == eng::ParticleEmitterShape::Box)
+                dirty |= ImGui::DragFloat3("box size", &em.boxSize.x, 0.02f,
+                                           0.001f, 32.0f);
+            dirty |= ImGui::DragFloat3("position", &em.position.x, 0.02f);
+            dirty |= ImGui::DragFloat3("direction", &em.direction.x, 0.02f);
+            dirty |= ImGui::SliderFloat("angle", &em.angleDegrees, 0.0f, 180.0f);
+            if (d.loop)
+                dirty |= ImGui::DragFloat("rate", &em.emissionRate, 1.0f, 0.0f,
+                                          4096.0f);
+            dirty |= ImGui::DragFloatRange2("ttl", &em.ttlMin, &em.ttlMax,
+                                            0.01f, 0.001f, 60.0f);
+            dirty |= ImGui::DragFloatRange2("velocity", &em.velocityMin,
+                                            &em.velocityMax, 0.02f, 0.0f,
+                                            200.0f);
+            dirty |= ImGui::ColorEdit4("start colour", &em.startColour.x);
+            ImGui::PopID();
+        }
+    }
+
+    // --- ramps -------------------------------------------------------------
+    // Colour and size are evaluated directly from these stops, so what the
+    // panel shows is what the simulation runs -- there is no affector
+    // approximation in between any more.
+    if (ImGui::CollapsingHeader("colour ramp")) {
+        for (size_t s = 0; s < d.colourRamp.size(); ++s) {
+            ImGui::PushID(int(1000 + s));
+            dirty |= ImGui::SliderFloat("t", &d.colourRamp[s].t, 0.0f, 1.0f);
+            dirty |= ImGui::ColorEdit4("rgba", &d.colourRamp[s].rgba.x);
+            if (ImGui::SmallButton("remove")) {
+                d.colourRamp.erase(d.colourRamp.begin() + long(s));
+                dirty = true;
+                ImGui::PopID();
+                break;
+            }
+            ImGui::PopID();
+        }
+        if (ImGui::SmallButton("add colour stop")) {
+            d.colourRamp.push_back({1.0f, glm::vec4(1.0f)});
+            dirty = true;
+        }
+    }
+    if (ImGui::CollapsingHeader("size ramp")) {
+        for (size_t s = 0; s < d.sizeRamp.size(); ++s) {
+            ImGui::PushID(int(2000 + s));
+            dirty |= ImGui::SliderFloat("t", &d.sizeRamp[s].t, 0.0f, 1.0f);
+            dirty |= ImGui::DragFloat("scale", &d.sizeRamp[s].scale, 0.01f,
+                                      0.0f, 16.0f);
+            if (ImGui::SmallButton("remove")) {
+                d.sizeRamp.erase(d.sizeRamp.begin() + long(s));
+                dirty = true;
+                ImGui::PopID();
+                break;
+            }
+            ImGui::PopID();
+        }
+        if (ImGui::SmallButton("add size stop")) {
+            d.sizeRamp.push_back({1.0f, 1.0f});
+            dirty = true;
+        }
+    }
+
+    // Re-registration keeps the effect id and the simulation slot, so live
+    // instances survive the edit and simply pick up the new description.
+    if (dirty)
+        mParticles.reregister(renderer, size_t(mParticleSelected));
+
     ImGui::End();
 }
 
@@ -2162,9 +2827,9 @@ void EditorApp::drawStatusBar()
                     mCommands.canUndo() ? mCommands.undoLabel().c_str()
                                         : "(empty)");
         ImGui::Text("camera %.1f %.1f %.1f | %zu batches, %zu tris",
-                    double(mState.camera.flyEye().x),
-                    double(mState.camera.flyEye().y),
-                    double(mState.camera.flyEye().z), mBatches, mTriangles);
+                     double(mState.camera.activeEye().x),
+                     double(mState.camera.activeEye().y),
+                     double(mState.camera.activeEye().z), mBatches, mTriangles);
     }
     ImGui::End();
 }

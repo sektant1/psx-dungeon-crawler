@@ -1,0 +1,28 @@
+# Hover help for the editor and debug tools, resolved by eng::imguihint.
+# Ids are dotted and namespaced by panel. A site with no entry here falls back
+# to the literal passed at the call site, so this file is additive.
+
+[[hint]]
+id = "debug.step_rate"
+title = "Fixed step rate"
+body = "Ticks per second for the fixed simulation step. Lower rates make integration error visible; higher rates cost CPU without changing the rendered image."
+
+[[hint]]
+id = "editor.kit_piece"
+title = "Kit piece"
+body = "A placeable dungeon module. The socket decides which neighbours it can snap to; the span is its footprint in grid cells."
+
+[[hint]]
+id = "editor.staging_mode"
+title = "Staging mode"
+body = "Isolates one material on one object so shader work can be judged without the level around it. Nothing in the game references staging materials."
+
+[[hint]]
+id = "editor.undo"
+title = "Undo"
+body = "Reverts the last edit. The label names the command that will be undone."
+
+[[hint]]
+id = "editor.redo"
+title = "Redo"
+body = "Reapplies the last undone edit."

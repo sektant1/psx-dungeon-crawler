@@ -1,5 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <optional>
 #include <string>
@@ -28,6 +29,13 @@ struct XformAuthor {
     glm::vec3 rotationDegrees{0.0f};
     glm::vec3 scale{1.0f};
 };
+
+// Canonical authored rotation convention: yaw (Y), then pitch (X), then roll
+// (Z). Cooker and editor must use these helpers together or compound rotations
+// visibly change when switching between gizmo, preview and runtime.
+glm::quat authorOrientation(const glm::vec3& rotationDegrees);
+glm::vec3 authorRotationDegrees(const glm::quat& orientation);
+glm::mat4 authorTransformMatrix(const XformAuthor& transform);
 
 // Where a grid-constrained piece sits. Derived quantities (the world transform)
 // come from GridMath; this is the authored intent, and it is what makes a wall

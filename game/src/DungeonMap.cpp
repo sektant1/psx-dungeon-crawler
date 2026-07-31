@@ -126,6 +126,8 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     mArches.clear();
     mTorches.clear();
     mPropBlockers.clear();
+    mPlacedProps.clear();
+    mPropCatalog.clear();
     mLastCurrentRooms.clear();
     mCurrentScratch.clear();
     mQueueScratch.clear();
@@ -252,6 +254,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
         std::vector<std::string> roles;
         float radius = 0.4f;
         float height = 0.5f;
+        int catalogIndex = -1; // -1 when the prop has no tooltip metadata
     };
     std::unordered_map<char, PropDef> markerProps;
     std::vector<PropDef> ambientCatalog;
@@ -287,6 +290,20 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
             PropDef def;
             def.radius = float((*table)["radius"].value_or(0.4));
             def.height = float((*table)["height"].value_or(0.5));
+            if (const std::string displayName =
+                    (*table)["display_name"].value_or(std::string());
+                !displayName.empty()) {
+                game::PropInfo info;
+                info.id = (*table)["id"].value_or(std::string());
+                info.displayName = displayName;
+                info.category = (*table)["category"].value_or(std::string());
+                info.description =
+                    (*table)["description"].value_or(std::string());
+                info.rarity = (*table)["rarity"].value_or(std::string("common"));
+                info.interact = (*table)["interact"].value_or(std::string());
+                def.catalogIndex = int(mPropCatalog.size());
+                mPropCatalog.push_back(std::move(info));
+            }
             if (const toml::array* roles = (*table)["roles"].as_array())
                 for (const toml::node& role : *roles)
                     if (auto name = role.value<std::string>())
@@ -535,6 +552,10 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
                                          centre.z + def.radius});
                 addBox({centre.x, def.height, centre.z},
                        {def.radius, def.height, def.radius});
+                if (def.catalogIndex >= 0)
+                    mPlacedProps.push_back(
+                        {{centre.x, def.height * 1.2f, centre.z},
+                         std::max(def.radius, 0.35f), def.catalogIndex});
             }
 
             // Ambient dressing is deliberately not encoded in the layout.
@@ -807,6 +828,23 @@ void DungeonMap::appendTorchTargets(std::vector<GameplayTarget>& targets) const
     targets.reserve(targets.size() + mTorches.size());
     for (size_t i = 0; i < mTorches.size(); ++i)
         targets.push_back({TargetKind::Torch, int(i), mTorches[i].tipPos, 2.5f});
+}
+
+void DungeonMap::appendPropTargets(std::vector<GameplayTarget>& targets) const
+{
+    targets.reserve(targets.size() + mPlacedProps.size());
+    for (size_t i = 0; i < mPlacedProps.size(); ++i) {
+        const PlacedProp& prop = mPlacedProps[i];
+        targets.push_back({TargetKind::Prop, int(i), prop.aimPos, 2.6f,
+                           prop.radius, prop.catalogIndex});
+    }
+}
+
+const game::PropInfo* DungeonMap::propInfo(int catalogIndex) const
+{
+    if (catalogIndex < 0 || catalogIndex >= int(mPropCatalog.size()))
+        return nullptr;
+    return &mPropCatalog[size_t(catalogIndex)];
 }
 
 void DungeonMap::toggleTorch(eng::Renderer& r, int index)

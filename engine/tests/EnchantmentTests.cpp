@@ -32,7 +32,11 @@ bool equal(glm::vec4 a, glm::vec4 b)
 std::string read(const std::string& relativePath)
 {
     std::ifstream file(std::string(PROJECT_SOURCE_DIR) + "/" + relativePath);
-    require(bool(file), "required enchantment asset could not be opened");
+    // Named, so a moved asset reports its own path instead of leaving the
+    // reader to guess which of the four this was.
+    require(bool(file),
+            ("required enchantment asset could not be opened: " + relativePath)
+                .c_str());
     return {std::istreambuf_iterator<char>(file),
             std::istreambuf_iterator<char>()};
 }
@@ -215,7 +219,7 @@ int main()
         read("engine/assets/shaders/enchantment.frag");
     const std::string program =
         read("engine/assets/programs/enchantment.program");
-    const std::string renderer = read("engine/src/Renderer.cpp");
+    const std::string renderer = read("engine/src/render/Renderer.cpp");
 
     requireText(vertex, "in vec3 normal",
                 "vertex shader does not consume object-space normals");

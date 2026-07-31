@@ -50,6 +50,14 @@ public:
     void renderFrame(float dt, float animDt = -1.0f);
     void shutdown();
 
+    // Loading phase: renderFrame still paints (that is how the loading screen
+    // is seen), but the frame does not count. Screenshot, benchmark, RenderDoc
+    // and GIF hooks all index frames from the first *gameplay* frame, so a
+    // level that takes 40 frames to load cannot shift a deterministic capture
+    // or eat its trigger frame. Set around the load loop, not per frame.
+    void setLoadingPhase(bool loading);
+    bool loadingPhase() const;
+
     // Record a fixed-length clip and encode it to a GIF, then close. Call
     // before the first renderFrame (onStart is the natural place). Recording
     // pins the frame delta to 1/fps, so the clip plays back at the speed it was

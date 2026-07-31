@@ -249,6 +249,89 @@ material Game/ViewModelWeapon
     } }
 }
 
+// Procedural first-person placeholders. All use viewmodel depth policy: weapon
+// cannot be cut apart by a nearby wall, while world projectiles still depth-test.
+material Game/ViewModelVesper
+{
+    receive_shadows off
+    technique { pass {
+        depth_check off
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit { texture proto_dark_09.png filtering none }
+    } }
+}
+
+material Game/ViewModelVesperGlow
+{
+    receive_shadows off
+    technique { pass {
+        depth_check off
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.75 0.36 1.30 1.0
+        }
+        texture_unit { texture proto_purple_10.png filtering none }
+    } }
+}
+
+material Game/ViewModelEidolon
+{
+    receive_shadows off
+    technique { pass {
+        depth_check off
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit { texture proto_dark_05.png filtering none }
+    } }
+}
+
+material Game/ViewModelEidolonGlow
+{
+    receive_shadows off
+    technique { pass {
+        depth_check off
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.42 0.95 1.25 1.0
+        }
+        texture_unit { texture proto_light_03.png filtering none }
+    } }
+}
+
+material Game/ViewModelTalon
+{
+    receive_shadows off
+    technique { pass {
+        depth_check off
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit { texture proto_dark_12.png filtering none }
+    } }
+}
+
+material Game/ViewModelTalonGlow
+{
+    receive_shadows off
+    technique { pass {
+        depth_check off
+        depth_write off
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 1.30 0.28 0.08 1.0
+        }
+        texture_unit { texture proto_orange_07.png filtering none }
+    } }
+}
+
 material Game/PropHay
 {
     technique { pass {

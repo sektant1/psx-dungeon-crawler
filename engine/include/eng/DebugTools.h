@@ -144,8 +144,20 @@ public:
     void toggle() { mVisible = !mVisible; }
     void draw(const FrameStatsView* frame, Renderer* renderer);
 
+    // How often the printed numbers are recomputed, in seconds. The readout is
+    // held between refreshes: at frame rate every digit flickers and none of
+    // them can be read, which is the opposite of what the HUD is for. The
+    // frame-time plot always stays live -- a graph is meant to move.
+    void setRefreshInterval(float seconds) { mInterval = seconds; }
+
 private:
     bool mVisible = true;
+    float mInterval = 0.25f;
+    float mSince = 1e9f; // forces a refresh on the first drawn frame
+    // Snapshot shown between refreshes.
+    float mFps = 0.0f, mAvg = 0.0f, mLow = 0.0f, mPeak = 0.0f;
+    std::vector<float> mPhaseMs;
+    unsigned long long mBatches = 0, mTris = 0;
 };
 
 } // namespace eng

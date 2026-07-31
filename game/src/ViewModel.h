@@ -1,8 +1,11 @@
 #pragma once
+#include "PlayerWeapons.h"
+
 #include <eng/render/Enchantment.h>
 #include <eng/Handles.h>
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
 
 namespace eng { class Renderer; }
 
@@ -64,10 +67,20 @@ public:
                    ViewmodelGlow handleGlow = {},
                    const WeaponViewmodelPose& pose = {});
 
+    // Data-authored procedural placeholder. Presentation type stays behind this
+    // boundary so a later sprite/model implementation does not change weapon
+    // simulation or inventory code.
+    void initPlayerWeapon(eng::Renderer& r, eng::NodeHandle headNode,
+                          const game::WeaponViewmodelDef& definition,
+                          ViewmodelGlow glow = {});
+
     // Call once per frame (variable dt is fine — this is cosmetic only).
     //   triggerAttack : rising edge that starts the slash animation.
     //   parryHeld     : true while the guard key is down.
-    void update(eng::Renderer& r, float dt, bool triggerAttack, bool parryHeld);
+    void update(eng::Renderer& r, float dt, bool triggerFire, float moveSpeed,
+                glm::vec2 lookDelta, bool grounded);
+    void beginEquip();
+    void configure(const game::WeaponViewmodelDef& definition);
 
     // Show/hide the whole viewmodel (used to swap the active weapon).
     void setVisible(eng::Renderer& r, bool show);
@@ -81,26 +94,26 @@ public:
     bool enchantEnabled() const { return mEnchantEnabled; }
 
 private:
-    // Applies mEnchantEnabled to mGlowNode. No-op when the weapon was built
-    // without a glow.
+    // Applies mEnchantEnabled to every authored glow part.
     void applyEnchant(eng::Renderer& r);
 
     eng::NodeHandle mNode{};
     // The node carrying the glow: the weapon mesh for an imported weapon, the
     // crystal for the staff, the handle for the torch.
-    eng::NodeHandle mGlowNode{};
+    std::vector<eng::NodeHandle> mGlowNodes;
     ViewmodelGlow mGlow{};
     bool mEnchantEnabled = false;
 
     WeaponViewmodelPose mPose{};
+    game::WeaponViewmodelDef mPresentation{};
 
     // Attack animation state.  -1 = idle, 0..kAttackDur = active.
-    static constexpr float kAttackDur = 0.35f;
     float mAttackTime = -1.0f;
-
-    // Guard blend 0 (low) -> 1 (raised).
-    float mParry = 0.0f;
+    float mRecoil = 0.0f;
+    float mEquipTime = 0.0f;
+    glm::vec2 mLookOffset{0.0f};
 
     // Idle breathing sway accumulator.
     float mSwayPhase = 0.0f;
+    float mMovePhase = 0.0f;
 };

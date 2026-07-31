@@ -1,6 +1,8 @@
 #pragma once
 #include <eng/Handles.h>
 #include <eng/LightDesc.h>
+#include <eng/particles/DecalSystem.h>
+#include <eng/particles/ParticleCollider.h>
 #include <eng/particles/ParticleEffectDesc.h>
 #include <eng/render/Enchantment.h>
 #include <eng/render/ModelImport.h>
@@ -198,6 +200,24 @@ public:
     void stopParticles(ParticlesHandle h);
     void despawnParticles(ParticlesHandle h);
     void setParticleQuality(float q);
+    // Install the world the particle simulation traces against. The renderer
+    // never links physics, so the application owns the adapter and its
+    // lifetime: it must outlive the renderer or be cleared with nullptr.
+    // Without one, effects that ask to collide simply pass through everything.
+    // Drop every particle batch and decal while Ogre is still alive. Engine
+    // calls this immediately before tearing the render core down; the
+    // destructor cannot do it, because by then the SceneManager is gone.
+    void shutdownParticles();
+    void setParticleCollider(IParticleCollider* collider);
+    void setParticleRayBudget(uint32_t raysPerFrame);
+    // Decal profiles are authored per game, so the runtime holds them but does
+    // not parse them. Registering the same id twice replaces the profile.
+    void registerDecalProfile(const std::string& id, const DecalProfileDesc&);
+    // Marks a surface directly, for the caller that already has a hit and does
+    // not want a particle to carry it there -- a bullet hole under a hitscan,
+    // say. Returns false when the profile is unknown.
+    bool spawnDecal(const std::string& profile, glm::vec3 position,
+                    glm::vec3 normal);
     void updateParticles(float dt);
     void attachCamera(NodeHandle node); // moves the single camera to this node
     LightHandle attachLight(NodeHandle node, const LightDesc& desc);

@@ -287,6 +287,7 @@ void LiveLevel::appendTargets(std::vector<GameplayTarget>& targets,
                               int depth) const
 {
     map.appendTorchTargets(targets);
+    map.appendPropTargets(targets);
     // Aim at the membrane, not at the floor in front of it: the target used to
     // sit 0.4 m up, so from a metre away the player was looking a metre over the
     // top of it and "use" simply never armed. Centre and radius come from the

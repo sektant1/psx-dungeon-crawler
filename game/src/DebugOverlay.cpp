@@ -1,12 +1,18 @@
 #include "DebugOverlay.h"
 
-#include "CombatConfig.h"
+#include "GameContext.h"
 #include "PlayerSystem.h"
+#include "combat/CombatComponents.h"
 #include "combat/FeelComponents.h"
+#include "enemy/EnemyLibrary.h"
+#include "enemy/EnemySave.h"
+#include "enemy/EnemySpawner.h"
+#include "enemy/EnemySystem.h"
 
 #include <imgui.h>
 
 #include <cfloat>
+#include <cmath>
 
 namespace game {
 
@@ -23,6 +29,7 @@ void DebugPanels::install(eng::DebugTools& console)
 {
     console.addPanel("Combat", [this] { drawCombatTab(); });
     console.addPanel("Feel", [this] { drawFeelTab(); });
+    console.addPanel("Enemies", [this] { drawEnemiesTab(); });
 }
 
 void DebugPanels::drawCombatTab()
@@ -41,50 +48,30 @@ void DebugPanels::drawCombatTab()
         ImGui::PopID();
     }
 
-    CombatConfig* c = mCur.combat;
-    if (!c) {
-        ImGui::TextDisabled("Combat config unavailable.");
+    if (!mCur.playerSystem) {
+        ImGui::TextDisabled("Weapon definitions unavailable.");
         return;
     }
-
-    if (section("Fireball")) {
-        ImGui::PushID("fb");
-        ImGui::SliderFloat("Speed", &c->fireball.speed, 1.0f, 60.0f);
-        ImGui::SliderFloat("Radius", &c->fireball.radius, 0.02f, 1.0f);
-        ImGui::SliderFloat("Mass", &c->fireball.mass, 0.05f, 5.0f);
-        ImGui::SliderFloat("TTL", &c->fireball.ttl, 0.5f, 15.0f);
-        ImGui::SliderFloat("Impact impulse", &c->fireball.impactImpulse, 0.0f,
-                           20.0f);
-        ImGui::ColorEdit3("Light colour", &c->fireball.lightColour.x);
-        ImGui::SliderFloat("Light range", &c->fireball.lightRange, 0.5f, 12.0f);
-        ImGui::PopID();
-    }
-    if (section("Beam")) {
-        ImGui::PushID("bm");
-        ImGui::SliderFloat("Range", &c->beam.range, 1.0f, 80.0f);
-        ImGui::SliderFloat("Width", &c->beam.width, 0.01f, 0.5f);
-        ImGui::SliderFloat("Impulse", &c->beam.impulse, 0.0f, 20.0f);
-        ImGui::SliderFloat("Segment TTL", &c->beam.segmentTtl, 0.02f, 0.5f);
-        ImGui::ColorEdit3("Light colour", &c->beam.lightColour.x);
-        ImGui::SliderFloat("Light range", &c->beam.lightRange, 0.5f, 12.0f);
-        ImGui::PopID();
-    }
-    if (section("Arrow")) {
-        ImGui::PushID("ar");
-        ImGui::SliderFloat("Speed", &c->arrow.speed, 5.0f, 120.0f);
-        ImGui::SliderFloat("Radius", &c->arrow.radius, 0.01f, 0.2f);
-        ImGui::SliderFloat("Half height", &c->arrow.halfHeight, 0.05f, 0.6f);
-        ImGui::SliderFloat("Mass", &c->arrow.mass, 0.02f, 2.0f);
-        ImGui::SliderFloat("TTL", &c->arrow.ttl, 1.0f, 20.0f);
-        ImGui::PopID();
-    }
-    if (section("Melee")) {
-        ImGui::PushID("ml");
-        ImGui::SliderFloat("Reach", &c->melee.reach, 0.5f, 4.0f);
-        ImGui::SliderFloat("Radius", &c->melee.radius, 0.1f, 1.5f);
-        ImGui::SliderFloat("Impulse", &c->melee.impulse, 0.0f, 20.0f);
-        ImGui::SliderFloat("Windup", &c->melee.windup, 0.0f, 0.5f);
-        ImGui::SliderFloat("Active", &c->melee.active, 0.0f, 0.5f);
+    for (PlayerWeaponDef& weapon : mCur.playerSystem->weaponDefinitions()) {
+        ImGui::PushID(weapon.id.c_str());
+        if (section(weapon.displayName.c_str())) {
+            ImGui::SliderFloat("Fire interval", &weapon.fireInterval, 0.04f,
+                               1.5f);
+            ImGui::SliderFloat("ARC cost", &weapon.arcCost, 0.0f, 40.0f);
+            ImGui::SliderInt("Projectile count", &weapon.projectileCount, 1,
+                             8);
+            ImGui::SliderFloat("Spread degrees", &weapon.spreadDegrees, 0.0f,
+                               90.0f);
+            ImGui::SliderFloat("Projectile speed", &weapon.projectile.speed,
+                               5.0f, 140.0f);
+            ImGui::SliderFloat("Projectile radius", &weapon.projectile.radius,
+                               0.01f, 0.3f);
+            ImGui::SliderFloat("Recoil distance",
+                               &weapon.viewmodel.recoilDistance, 0.0f, 0.25f);
+            ImGui::SliderFloat("Recoil pitch",
+                               &weapon.viewmodel.recoilPitchDegrees, 0.0f,
+                               25.0f);
+        }
         ImGui::PopID();
     }
 }
@@ -150,6 +137,223 @@ void DebugPanels::drawFeelTab()
                            60.0f);
         ImGui::SliderFloat("Poise damage", &action->attack.poiseDamage, 0.0f,
                            80.0f);
+    }
+}
+
+// Live enemy tuning. Three things a designer does constantly and should never
+// need a rebuild for: put one in front of me, watch what it is thinking, and
+// change a number until it feels right. Reloading the table is the fourth.
+void DebugPanels::drawEnemiesTab()
+{
+    EnemySystem* enemies = mCur.enemies;
+    EnemyLibrary* library = mCur.enemyLibrary;
+    if (!enemies || !library || !mCur.context) {
+        ImGui::TextDisabled("Enemy system unavailable.");
+        return;
+    }
+
+    const std::vector<std::string> ids = library->ids();
+    if (ids.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.4f, 1.0f),
+                           "enemies.toml defined no enemies.");
+    }
+    if (mSpawnId.empty() && !ids.empty())
+        mSpawnId = ids.front();
+    if (mTuneId.empty() && !ids.empty())
+        mTuneId = ids.front();
+
+    if (section("Spawn")) {
+        ImGui::PushID("sp");
+        if (ImGui::BeginCombo("Definition", mSpawnId.c_str())) {
+            for (const std::string& id : ids)
+                if (ImGui::Selectable(id.c_str(), id == mSpawnId))
+                    mSpawnId = id;
+            ImGui::EndCombo();
+        }
+        // Six metres ahead: far enough to watch the alert beat play out, close
+        // enough that it engages immediately.
+        const glm::vec3 at = mCur.playerFeet + mCur.playerForward * 6.0f;
+        if (ImGui::Button("Spawn ahead") && !mSpawnId.empty())
+            enemies->spawn(*mCur.context, mSpawnId, at,
+                           std::atan2(-mCur.playerForward.x,
+                                      -mCur.playerForward.z));
+        ImGui::SameLine();
+        if (ImGui::Button("Spawn x5") && !mSpawnId.empty())
+            for (int i = 0; i < 5; ++i)
+                enemies->spawn(*mCur.context, mSpawnId,
+                               at + glm::vec3(float(i - 2) * 1.5f, 0.0f, 0.0f),
+                               std::atan2(-mCur.playerForward.x,
+                                          -mCur.playerForward.z));
+        ImGui::SameLine();
+        if (ImGui::Button("Clear all"))
+            enemies->clear(*mCur.context);
+        ImGui::Text("Alive: %d  (incl. corpses: %d)", enemies->aliveCount(),
+                    enemies->liveCount());
+        ImGui::PopID();
+    }
+
+    if (section("Live")) {
+        ImGui::PushID("lv");
+        const std::vector<EnemySystem::Snapshot> live =
+            enemies->snapshot(mCur.playerFeet);
+        if (live.empty()) {
+            ImGui::TextDisabled("Nothing spawned.");
+        } else if (ImGui::BeginTable("enemies", 5,
+                                     ImGuiTableFlags_RowBg |
+                                         ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("Name");
+            ImGui::TableSetupColumn("State");
+            ImGui::TableSetupColumn("HP");
+            ImGui::TableSetupColumn("Dist");
+            ImGui::TableSetupColumn("");
+            ImGui::TableHeadersRow();
+            for (const EnemySystem::Snapshot& s : live) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(s.name.c_str());
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(enemyStateName(s.state));
+                ImGui::TableNextColumn();
+                ImGui::Text("%.0f/%.0f", s.health, s.healthMax);
+                ImGui::TableNextColumn();
+                ImGui::Text("%.1fm", s.distance);
+                ImGui::TableNextColumn();
+                ImGui::PushID(int(entt::to_integral(s.entity)));
+                if (ImGui::SmallButton("Kill"))
+                    // Through the damage model, not by zeroing health: the
+                    // corpse, the callbacks and the spawner bookkeeping all
+                    // hang off the real death path.
+                    enemies->onKilled(*mCur.context, s.entity,
+                                      glm::vec3(0.0f, 0.0f, 1.0f));
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Del"))
+                    enemies->despawn(*mCur.context, s.entity);
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+        ImGui::PopID();
+    }
+
+    if (section("Tune definition")) {
+        ImGui::PushID("tn");
+        if (ImGui::BeginCombo("Definition##tune", mTuneId.c_str())) {
+            for (const std::string& id : ids)
+                if (ImGui::Selectable(id.c_str(), id == mTuneId))
+                    mTuneId = id;
+            ImGui::EndCombo();
+        }
+        if (EnemyDef* def = library->mutableDef(mTuneId)) {
+            ImGui::TextDisabled(
+                "Locomotion/perception/behaviour apply live. Stats apply to "
+                "the next spawn (they are copied into components).");
+            ImGui::SeparatorText("Locomotion");
+            ImGui::SliderFloat("Walk", &def->locomotion.walkSpeed, 0.0f, 8.0f);
+            ImGui::SliderFloat("Chase", &def->locomotion.chaseSpeed, 0.0f, 12.0f);
+            ImGui::SliderFloat("Strafe", &def->locomotion.strafeSpeed, 0.0f, 10.0f);
+            ImGui::SliderFloat("Accel", &def->locomotion.acceleration, 1.0f, 60.0f);
+            ImGui::SliderFloat("Turn deg/s", &def->locomotion.turnRateDeg, 30.0f, 900.0f);
+            ImGui::SliderFloat("Lunge", &def->locomotion.lungeSpeed, 0.0f, 12.0f);
+
+            ImGui::SeparatorText("Perception");
+            ImGui::SliderFloat("Sight", &def->perception.sightRange, 1.0f, 60.0f);
+            ImGui::SliderFloat("FOV deg", &def->perception.sightFovDeg, 20.0f, 360.0f);
+            ImGui::SliderFloat("Hearing", &def->perception.hearingRange, 0.0f, 20.0f);
+            ImGui::SliderFloat("Lose sight", &def->perception.loseSightTime, 0.0f, 15.0f);
+            ImGui::SliderFloat("Alert time", &def->perception.alertTime, 0.0f, 2.0f);
+            ImGui::SliderFloat("Leash", &def->perception.leashRange, 0.0f, 80.0f);
+
+            ImGui::SeparatorText("Behaviour");
+            ImGui::SliderFloat("Aggression", &def->behaviour.aggression, 0.0f, 1.0f);
+            ImGui::SliderFloat("Preferred range", &def->behaviour.preferredRange, 0.0f, 25.0f);
+            ImGui::SliderFloat("Backoff range", &def->behaviour.backoffRange, 0.0f, 20.0f);
+            ImGui::SliderFloat("Circle chance", &def->behaviour.circleChance, 0.0f, 1.0f);
+            ImGui::SliderFloat("Reposition time", &def->behaviour.repositionTime, 0.1f, 5.0f);
+            ImGui::SliderFloat("Flee below HP%", &def->behaviour.fleeHealthPct, 0.0f, 1.0f);
+            ImGui::Checkbox("Stationary", &def->behaviour.stationary);
+            ImGui::SameLine();
+            ImGui::Checkbox("Starts dormant", &def->behaviour.startsDormant);
+
+            ImGui::SeparatorText("Stats (next spawn)");
+            ImGui::SliderFloat("Health", &def->stats.health, 1.0f, 1500.0f);
+            ImGui::SliderFloat("Poise", &def->stats.poise, 1.0f, 400.0f);
+            ImGui::SliderFloat("Corpse time", &def->stats.corpseTime, 0.0f, 60.0f);
+
+            ImGui::SeparatorText("Attacks");
+            for (size_t i = 0; i < def->attacks.size(); ++i) {
+                EnemyAttack& a = def->attacks[i];
+                ImGui::PushID(int(i));
+                if (ImGui::TreeNode(a.id.c_str())) {
+                    ImGui::Text("weapon: %s%s", a.weapon.c_str(),
+                                a.ranged ? "  (ranged)" : "");
+                    ImGui::SliderFloat("Min range", &a.minRange, 0.0f, 20.0f);
+                    ImGui::SliderFloat("Max range", &a.maxRange, 0.5f, 40.0f);
+                    ImGui::SliderFloat("Cooldown", &a.cooldown, 0.1f, 12.0f);
+                    ImGui::SliderFloat("Aim cone", &a.aimConeDeg, 1.0f, 180.0f);
+                    ImGui::SliderFloat("Weight", &a.weight, 0.0f, 4.0f);
+                    ImGui::SliderFloat("Windup", &a.timing.windup, 0.0f, 2.0f);
+                    ImGui::SliderFloat("Active", &a.timing.active, 0.01f, 0.5f);
+                    ImGui::SliderFloat("Recovery", &a.timing.recovery, 0.0f, 2.0f);
+                    ImGui::SliderFloat("Poise dmg", &a.timing.poiseDamage, 0.0f, 120.0f);
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Reload enemies.toml") &&
+                !library->sourcePath().empty()) {
+                // Live enemies hold a share of their definition, so they are
+                // safe across this: they keep fighting with the row they were
+                // spawned from and the next spawn picks up the edited file.
+                library->load(library->sourcePath());
+                library->resolve(mCur.context->vocabulary);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(live enemies keep their current stats)");
+        }
+        ImGui::PopID();
+    }
+
+    if (mCur.spawner && section("Save / load")) {
+        ImGui::PushID("sv");
+        // Deliberately a whole round trip through the file, not an in-memory
+        // snapshot: the thing worth exercising by hand is the format, and a
+        // path that skips encode/decode would never catch a codec bug.
+        const std::string path = "/tmp/psx_enemies.sav";
+        if (ImGui::Button("Save encounter")) {
+            enemysave::writeFile(
+                path, enemysave::capture(*enemies, *mCur.spawner));
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load encounter")) {
+            if (const auto data = enemysave::readFile(path))
+                enemysave::restore(*mCur.context, *enemies, *mCur.spawner,
+                                   *data);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", path.c_str());
+        ImGui::PopID();
+    }
+
+    if (mCur.spawner && section("Spawn points")) {
+        ImGui::PushID("sw");
+        EnemySpawner& spawner = *mCur.spawner;
+        for (int i = 0; i < spawner.size(); ++i) {
+            const EnemySpawnPoint& p = spawner.point(i);
+            const EnemySpawnState& s = spawner.state(i);
+            ImGui::PushID(i);
+            ImGui::Text("%s [%s] %s%s  waves %d  alive %d",
+                        p.id.empty() ? p.enemy.c_str() : p.id.c_str(),
+                        p.enemy.c_str(), s.armed ? "armed" : "idle",
+                        s.exhausted ? "/spent" : "", s.wavesSpawned,
+                        s.aliveFromHere);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Trigger"))
+                spawner.trigger(*mCur.context, *enemies, i);
+            ImGui::PopID();
+        }
+        ImGui::PopID();
     }
 }
 

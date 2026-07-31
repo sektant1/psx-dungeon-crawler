@@ -4,6 +4,8 @@
 
 #include "Picker.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -48,6 +50,38 @@ int main()
         const Ray wide = screenRay({1.0f, 0.0f}, {}, identity, fov, 2.0f);
         require(wide.dir.x > right.dir.x,
                 "a wider viewport spreads the horizontal fov");
+    }
+
+    // --- viewport conversion ------------------------------------------------
+    {
+        const glm::vec2 origin{120.0f, 80.0f};
+        const glm::vec2 size{800.0f, 600.0f};
+        const Ray centre = viewportRay(origin + size * 0.5f, origin, size,
+                                       {0.0f, 0.0f, 10.0f}, identity, fov);
+        require(nearly(centre.dir.x, 0.0f) && nearly(centre.dir.y, 0.0f) &&
+                    centre.dir.z < 0.0f,
+                "viewport centre uses its offset and points straight ahead");
+
+        const Ray topRight = viewportRay(origin + glm::vec2(size.x, 0.0f),
+                                         origin, size, {}, identity, fov);
+        require(topRight.dir.x > 0.0f && topRight.dir.y > 0.0f,
+                "viewport pixels map right and invert screen Y");
+
+        const glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 10.0f),
+                                           glm::vec3(0.0f),
+                                           glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::mat4 projection =
+            glm::perspective(fov, size.x / size.y, 0.05f, 100.0f);
+        glm::vec2 projected;
+        require(projectToViewport(glm::vec3(0.0f), projection * view,
+                                  origin, size, projected),
+                "point in front of camera projects into viewport");
+        require(nearly(projected.x, origin.x + size.x * 0.5f) &&
+                    nearly(projected.y, origin.y + size.y * 0.5f),
+                "world centre projects to offset viewport centre");
+        require(!projectToViewport(glm::vec3(0.0f, 0.0f, 20.0f),
+                                   projection * view, origin, size, projected),
+                "point behind camera is rejected");
     }
 
     // --- ray vs box ---------------------------------------------------------

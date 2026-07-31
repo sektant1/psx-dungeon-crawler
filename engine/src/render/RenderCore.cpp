@@ -1,6 +1,8 @@
 #include <cstdlib>
 #include "RenderCore.h"
 #include "eng/Log.h"
+#include <eng/render/ImGuiHint.h>
+#include <eng/render/ImGuiTheme.h>
 #include <eng/render/PrototypeAssets.h>
 
 #include <Ogre.h>
@@ -164,7 +166,31 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr; // no imgui.ini persistence
     io.DisplaySize = ImVec2(float(width), float(height));
-    ImGui::StyleColorsDark();
+    // Two fonts, in this order on purpose.
+    //
+    // Fonts[0] stays the imgui built-in: Renderer::attachTextSprite blits
+    // glyphs out of Fonts[0] for world-space labels, and swapping the face
+    // under it would change the rendered world image, which is frozen.
+    //
+    // Fonts[1] is the vendored DejaVu Sans Mono, and it is the *default* for
+    // every tool window. ProggyClean is a 13px bitmap face: it aliases badly
+    // and cannot be scaled, which is what made the editor look ragged.
+    io.Fonts->AddFontDefault();
+    ImFontConfig toolFont;
+    toolFont.OversampleH = 2;
+    toolFont.OversampleV = 2;
+    toolFont.PixelSnapH = false;
+    if (ImFont* mono = io.Fonts->AddFontFromFileTTF(
+            ENG_ASSET_DIR "/fonts/DejaVuSansMono.ttf", 15.0f, &toolFont))
+        io.FontDefault = mono;
+    else
+        eng::log::warn("RenderCore: DejaVuSansMono.ttf missing; "
+                       "tool UI falls back to the imgui built-in font");
+    // PSX_IMGUI_THEME picks a registered theme by id; unknown ids fall back to
+    // the engine default instead of failing the render init.
+    const char* themeEnv = std::getenv("PSX_IMGUI_THEME");
+    if (!themeEnv || !imguitheme::apply(themeEnv))
+        imguitheme::apply("one_dark");
     if (mSdlWindow)
         ImGui_ImplSDL2_InitForOpenGL(static_cast<SDL_Window*>(mSdlWindow),
                                      nullptr);
@@ -172,6 +198,8 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     // Force the font atlas to build now (text sprites read it immediately, and
     // ImGui_ImplOpenGL3 uploads it lazily on first render otherwise).
     ImGui_ImplOpenGL3_CreateFontsTexture();
+    // Hover help for every tool app, loaded once against the same context.
+    imguihint::load(ENG_ASSET_DIR "/ui/hints.toml");
     // Paint imgui after the window RT finishes its scene + post chain.
     mWindow->addListener(this);
     mImGuiInit = true;

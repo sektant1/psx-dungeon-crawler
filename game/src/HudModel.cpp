@@ -15,36 +15,6 @@ float hudResourceRatio(const HudResource& resource)
     return std::clamp(resource.current / resource.maximum, 0.0f, 1.0f);
 }
 
-HudWeapon hudWeaponFromIndex(int weaponIndex)
-{
-    switch (weaponIndex) {
-        case 0: return HudWeapon::Blade;
-        case 1: return HudWeapon::Staff;
-        case 2: return HudWeapon::Torch;
-        default: return HudWeapon::Unknown;
-    }
-}
-
-const char* hudWeaponName(HudWeapon weapon)
-{
-    switch (weapon) {
-        case HudWeapon::Blade: return "IRON SWORD";
-        case HudWeapon::Staff: return "CRYSTAL STAFF";
-        case HudWeapon::Torch: return "PILGRIM TORCH";
-        default: return "EMPTY HAND";
-    }
-}
-
-const char* hudWeaponDiscipline(HudWeapon weapon)
-{
-    switch (weapon) {
-        case HudWeapon::Blade: return "CLOSE / DEFLECT";
-        case HudWeapon::Staff: return "FIRE RITE / BEAM";
-        case HudWeapon::Torch: return "LIGHT / STRIKE";
-        default: return "NO DISCIPLINE";
-    }
-}
-
 const char* hudInteractionAction(const InteractionFocus& focus)
 {
     if (!focus.available)
@@ -87,8 +57,9 @@ HudResource resourceFrom(const entt::registry& registry, entt::entity entity)
 } // namespace
 
 HudSnapshot buildHudSnapshot(const entt::registry& registry,
-                             entt::entity player, int weaponIndex,
-                             const InteractionFocus& interaction)
+                              entt::entity player,
+                              const PlayerWeaponDef* weapon,
+                              const InteractionFocus& interaction)
 {
     HudSnapshot snapshot;
     if (player == entt::null || !registry.valid(player))
@@ -99,7 +70,8 @@ HudSnapshot buildHudSnapshot(const entt::registry& registry,
     snapshot.stamina = resourceFrom<Stamina>(registry, player);
     snapshot.mana = resourceFrom<Mana>(registry, player);
     snapshot.poise = resourceFrom<Poise>(registry, player);
-    snapshot.weapon = hudWeaponFromIndex(weaponIndex);
+    if (weapon)
+        snapshot.weapon = {weapon->displayName, weapon->discipline};
     snapshot.interaction = interaction;
 
     if (const ActionState* action = registry.try_get<ActionState>(player))

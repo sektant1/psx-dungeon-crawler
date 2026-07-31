@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/Engine.h>
+#include <eng/Loading.h>
 
 #include <chrono>
 #include <string>
@@ -30,6 +31,17 @@ struct AppConfig
     // Off by default because a frame that opens an imgui frame must also close
     // it, and an app with no debug UI should not pay for that.
     bool imgui = false;
+
+    // --- startup loading -------------------------------------------------
+    // Draw the animated loading screen while the app's LoadPlan runs. Off means
+    // the plan still runs (the window just stays blank), which is what a
+    // headless capture or a tool wants.
+    bool loadingScreen = true;
+    // Milliseconds of loading work per frame. Small enough that the ring keeps
+    // spinning; a single step heavier than this still runs to completion.
+    float loadBudgetMs = 8.0f;
+    std::string loadingTitle; // empty falls back to window.title
+    std::string loadingHint;  // optional flavour line
 };
 
 // Per-frame state handed to every frame callback. Constructed by the runner;
@@ -59,7 +71,19 @@ public:
     // Runs before Engine::init. No renderer, no window, no input yet.
     virtual AppConfig configure(int argc, char** argv) = 0;
 
-    // Scene build. Return false to abort the run with exitCode.
+    // Startup work, as named steps. The runner pumps the plan a few
+    // milliseconds per frame with the loading screen up, so anything slow --
+    // level cook, asset libraries, physics build, shader warmup -- belongs
+    // here rather than in onStart, where it would freeze a blank window.
+    // Steps run in order, on the main thread, before onStart.
+    virtual void onLoad(Engine& engine, LoadPlan& plan)
+    {
+        (void)engine;
+        (void)plan;
+    }
+
+    // Scene build. Return false to abort the run with exitCode. Runs after the
+    // load plan has finished; keep it to whatever must happen last.
     virtual bool onStart(Engine& engine) = 0;
 
     // Input and mode toggles, once per rendered frame at full rate.
