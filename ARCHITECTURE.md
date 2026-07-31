@@ -45,7 +45,7 @@ each application's asset tree and fails on a dangling one, a duplicate material
 name, or two textures sharing a basename (Ogre's lookup is flat).
 
 Uniqueness is checked per application: `game` and `psx-demo` never have their
-asset roots registered at the same time, so both may define `PSX/Floor`.
+asset roots registered at the same time, so both may define `Game/Demo/Floor`.
 
 ## Running the checks
 

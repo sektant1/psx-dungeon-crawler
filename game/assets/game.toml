@@ -75,6 +75,8 @@ multithreaded = false
 [player]
 speed = 3.0
 mouse_sensitivity = 0.002
+# Profile in blood.toml the player bleeds when something lands a hit.
+blood = "human"
 
 # Player-facing HUD is rendered at native output resolution after the PSX post
 # chain. Scale and contrast are accessibility controls; reduced_motion removes
@@ -132,7 +134,7 @@ impulse = 4.0
 segment_ttl = 0.10
 light_colour = [0.40, 0.70, 1.0]
 light_range = 3.0
-core_particle = "Game/BeamCore"
+core_particle = "Game/Spells/BeamCore"
 impact_particle = "beam_impact"
 
 [combat.arrow]

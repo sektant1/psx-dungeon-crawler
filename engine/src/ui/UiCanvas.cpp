@@ -162,6 +162,42 @@ void UiCanvas::text(glm::ivec2 at, std::string_view value, unsigned int colour,
                shadow ? mStyle.palette.shadow : 0u);
 }
 
+int UiCanvas::keyCapWidth(std::string_view label) const {
+    if (label.empty())
+        return 0;
+    // Padding either side of the glyphs, plus a floor so a one-character cap
+    // (`W`, `.`) is still a cap and not a tight box around a comma.
+    return std::max(mFont.measure(label).x + 8, 13);
+}
+
+int UiCanvas::keyCap(glm::ivec2 textAt, std::string_view label,
+                     float alpha) const {
+    if (label.empty())
+        return 0;
+    const int width = keyCapWidth(label);
+    const int height = keyCapHeight();
+    // The plate is placed from the text, not the other way round: the glyph
+    // cell carries blank rows above the ink (cellHeight - ascent - 1), so a box
+    // drawn at the text origin sits a couple of pixels too high and cuts
+    // through the baseline -- which is how the first version of this looked.
+    const int inkTop = mFont.cellHeight() - mFont.ascent() - 1;
+    const glm::ivec2 at{textAt.x, textAt.y + inkTop - 2};
+    const auto tint = [alpha](unsigned int colour) {
+        const unsigned int a = (colour >> 24) & 0xFFu;
+        const unsigned int scaled = (unsigned int)std::lround(
+            float(a) * std::clamp(alpha, 0.0f, 1.0f));
+        return (colour & 0x00FFFFFFu) | (scaled << 24);
+    };
+    rect(at, {width, height}, tint(mStyle.palette.inkSoft));
+    border(at, {width, height}, tint(mStyle.palette.edge));
+    // The label is centred in the plate rather than left-padded by a constant:
+    // caps hold anything from "." to "WHEEL", and a fixed inset leaves the
+    // short ones visibly off-centre in a column of wider ones.
+    text({textAt.x + width / 2, textAt.y}, label, tint(mStyle.palette.text),
+         Align::Centre, false);
+    return width;
+}
+
 void UiCanvas::bar(glm::ivec2 at, glm::ivec2 size, float ratio,
                    unsigned int fill, unsigned int track) const {
     rect(at, size, track);

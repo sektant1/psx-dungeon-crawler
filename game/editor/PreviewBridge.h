@@ -27,7 +27,7 @@ namespace ed {
 class PreviewBridge
 {
 public:
-    PreviewBridge(eng::Renderer& renderer, const std::string& assetRoot);
+    explicit PreviewBridge(eng::Renderer& renderer);
     ~PreviewBridge();
 
     PreviewBridge(const PreviewBridge&) = delete;

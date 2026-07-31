@@ -5,7 +5,7 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 bin="${1:-$repo/build/game}"
-icon_src="$repo/assets/logo1.png"
+icon_src="$repo/docs/media/misc/logo1.png"
 
 apps_dir="$HOME/.local/share/applications"
 icon_dir="$HOME/.local/share/icons/hicolor/256x256/apps"

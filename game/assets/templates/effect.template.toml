@@ -1,7 +1,7 @@
 # Copy this whole block into game/assets/particles.toml and rename the ID.
 [[effect]]
 name = "@EFFECT_ID@"
-material = "Engine/PrototypeParticle"
+material = "Engine/Psx/PrototypeParticle"
 base_width = 0.14
 base_height = 0.14
 quota = 24

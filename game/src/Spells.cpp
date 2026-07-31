@@ -105,7 +105,7 @@ void SpellSystem::castFireball(eng::Physics& phys, eng::Renderer& r,
     // Core mesh uses the emissive fireball material (fixed art); the trail is a
     // looping pooled particle effect whose handle we keep so it can be stopped
     // when the fireball despawns.
-    r.attachMesh(node, mFireballMesh, "Game/FireballTrail", false);
+    r.attachMesh(node, mFireballMesh, "Game/Spells/FireballTrail", false);
     eng::ParticlesHandle trailFx = r.spawnParticles(fb.trailParticle, node);
     if (fb.lightRange > 0.0f) {
         eng::LightDesc l;

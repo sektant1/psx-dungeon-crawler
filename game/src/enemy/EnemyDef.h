@@ -74,7 +74,7 @@ private:
 // render-side concern the AI never reads, so swapping to authored meshes later
 // touches EnemySystem's spawn path and nothing else.
 struct EnemyVisual {
-    std::string material = "Game/EnemyRed";
+    std::string material = "Game/Enemy/Red";
     // Optional mesh (OBJ) instead of the primitive cylinder. Empty = cylinder.
     std::string mesh;
     glm::vec3 scale{1.0f};
@@ -82,6 +82,11 @@ struct EnemyVisual {
     float hitFlash = 0.16f;
     float hitFlashTime = 0.12f;
     bool castShadows = true;
+    // Which profile in blood.toml this creature bleeds. A name, not a colour:
+    // the profile decides spray, gibs, decal and pool together, so an undead
+    // that sheds ichor is a one-word change here rather than four effects.
+    // Empty means it does not bleed at all (constructs, ghosts).
+    std::string blood = "human";
 };
 
 // Everything that decides how long it survives and how hard it is to interrupt.

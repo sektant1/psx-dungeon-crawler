@@ -30,7 +30,7 @@ struct KitPiece {
     std::string id;       // "kit.wall" -- with the prefix scenes reference
     std::string role;     // "wall", "floor_feature", "prop_light", ...
     std::string meshPath; // RELATIVE to the asset root: "meshes/kit/Wall_01.obj"
-    std::string material; // "Kit/Dungeon"
+    std::string material; // "Game/Kit/Dungeon"
     Socket socket = Socket::Prop;
 
     glm::vec3 sizeKit{0.0f}; // straight off the mesh, kit units

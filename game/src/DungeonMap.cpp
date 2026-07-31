@@ -25,8 +25,8 @@ namespace {
 // one material covers floors, walls, pillars and door frames. The ceiling is
 // the floor piece flipped over by the viewer rather than by the mesh, so it
 // needs the two-sided variant to be visible from below.
-constexpr const char* kKitMaterial = "Kit/Dungeon";
-constexpr const char* kKitTwoSided = "Kit/DungeonTwoSided";
+constexpr const char* kKitMaterial = "Game/Kit/Dungeon";
+constexpr const char* kKitTwoSided = "Game/Kit/DungeonTwoSided";
 
 float lin(float srgb) { return std::pow(srgb, 2.2f); }
 
@@ -213,7 +213,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     const eng::MeshHandle floor =
         r.loadObj(kitMeshDir + "Floor_Tiles.obj", &kitToCell);
     // The kit has no ceiling piece (kit.toml's only overhead piece, Arch_Roof,
-    // is a vault that tiles its UVs outside 0..1 and needs Kit/Stone). The
+    // is a vault that tiles its UVs outside 0..1 and needs Game/Kit/Stone). The
     // floor slab is the right shape and the right atlas cell, so the ceiling
     // is the same mesh at wall height drawn two-sided -- cheaper than a
     // mirrored copy, and it shares the floor's mesh and batch.

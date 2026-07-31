@@ -95,7 +95,7 @@ fragment_program Editor_FS_PlacementGhost glsl
     }
 }
 
-material __Editor/PlacementGhost
+material Editor/PlacementGhost
 {
     technique { pass {
         lighting off

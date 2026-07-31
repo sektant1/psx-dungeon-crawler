@@ -3,7 +3,7 @@
 // vfx.material. Names describe visual intent, not a single mesh, so generated
 // primitives and imported assets can reuse them.
 
-material Fantasy/CarvedStone
+material Game/FantasySurfaces/CarvedStone
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { param_named uvScale float2 2.0 2.0 }
@@ -17,7 +17,7 @@ material Fantasy/CarvedStone
     } }
 }
 
-material Fantasy/WarmDungeonStone
+material Game/FantasySurfaces/WarmDungeonStone
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { param_named uvScale float2 2.5 2.5 }
@@ -31,7 +31,7 @@ material Fantasy/WarmDungeonStone
     } }
 }
 
-material Fantasy/DarkIron
+material Game/FantasySurfaces/DarkIron
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -45,7 +45,7 @@ material Fantasy/DarkIron
     } }
 }
 
-material Fantasy/AgedWood
+material Game/FantasySurfaces/AgedWood
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { param_named uvScale float2 1.5 1.5 }

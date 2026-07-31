@@ -263,7 +263,7 @@ private:
 // TOML profile and never a material edit.
 const char* baseMaterialFor(ParticleBlend blend)
 {
-    return blend == ParticleBlend::Additive ? "Decals/Additive" : "Decals/Alpha";
+    return blend == ParticleBlend::Additive ? "Engine/Decals/Additive" : "Engine/Decals/Alpha";
 }
 
 std::string autoMaterialName(const std::string& stem, ParticleBlend blend)

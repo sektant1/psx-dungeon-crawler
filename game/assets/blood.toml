@@ -14,10 +14,11 @@
 
 [[decal]]
 id = "blood_splat"
-# No texture: the generated material falls back to a flat quad tinted by
-# `colour`. Drop a PNG into engine/assets/particles/textures/ and name its stem
-# here to replace it without touching a .material file.
-texture = ""
+# Texture stem under engine/assets/particles/textures/. Naming one is what gets
+# the mark its own material clone; leaving it empty falls back to the base
+# decal material, whose texture unit binds nothing at all -- which reads as
+# black blocks, not as the flat tinted quad it sounds like.
+texture = "blood_splat"
 size_min = 0.18
 size_max = 0.34
 colour = [0.40, 0.03, 0.025, 0.92]
@@ -32,7 +33,7 @@ normal_offset = 0.012
 
 [[decal]]
 id = "blood_splat_small"
-texture = ""
+texture = "blood_drop"
 size_min = 0.07
 size_max = 0.13
 colour = [0.38, 0.03, 0.025, 0.85]
@@ -44,7 +45,7 @@ normal_offset = 0.010
 
 [[decal]]
 id = "blood_pool"
-texture = ""
+texture = "blood_splat"
 size_min = 0.30
 size_max = 0.42
 colour = [0.30, 0.02, 0.018, 0.95]
@@ -62,7 +63,7 @@ normal_offset = 0.008
 
 [[decal]]
 id = "ichor_splat"
-texture = ""
+texture = "blood_splat"
 size_min = 0.16
 size_max = 0.30
 colour = [0.10, 0.45, 0.22, 0.88]

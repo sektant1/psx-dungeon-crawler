@@ -18,9 +18,12 @@ vertex_program Particles/SpriteVS glsl
     {
         param_named_auto worldViewProj worldviewproj_matrix
         param_named_auto view view_matrix
-        // Columns, rows. A batch whose texture is a flipbook overrides this on
-        // its own material; the default is a single full-frame sprite.
-        param_named flipbookGrid float2 1.0 1.0
+        // Flipbook window, overridden per generated material by
+        // ParticleMaterials. The default is one full-frame sprite, which is
+        // what a hand-authored material that ignores flipbooks wants.
+        param_named flipbookCell float2 1.0 1.0
+        param_named flipbookOrigin float2 0.0 0.0
+        param_named flipbookPerRow float 1.0
     }
 }
 
@@ -78,7 +81,7 @@ fragment_program Particles/VoxelFS glsl
 
 // Depth-tested but never depth-writing: the batch sorts its own instances
 // back-to-front, and writing depth would make particles occlude each other.
-material Particles/Sprite/Alpha
+material Engine/Particles/SpriteAlpha
 {
     technique { pass {
         cull_hardware none
@@ -95,7 +98,7 @@ material Particles/Sprite/Alpha
 }
 
 // Additive output is order-independent, so the batch skips sorting entirely.
-material Particles/Sprite/Additive
+material Engine/Particles/SpriteAdditive
 {
     technique { pass {
         cull_hardware none
@@ -113,7 +116,7 @@ material Particles/Sprite/Additive
 
 // Voxels are opaque solids: they write depth and cull backfaces like level
 // geometry, which is what lets them sit correctly among the world's blocks.
-material Particles/Voxel/Solid
+material Engine/Particles/VoxelSolid
 {
     technique { pass {
         cull_hardware clockwise
@@ -123,7 +126,7 @@ material Particles/Voxel/Solid
     } }
 }
 
-material Particles/Voxel/Additive
+material Engine/Particles/VoxelAdditive
 {
     technique { pass {
         cull_hardware none

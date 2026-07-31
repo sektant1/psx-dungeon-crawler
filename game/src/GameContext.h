@@ -18,8 +18,11 @@ struct GameContext {
     eng::Renderer& renderer;
     eng::Physics& physics;
     eng::Input& input;
-    const std::string& assets; // app asset root (APP_ASSET_DIR)
-    // Damage channels + schools of magic, from assets/magic.toml. Systems that
+    // No asset root here any more: a system that needs content asks
+    // game::assetPath("weapons.toml") (GameAssets.h) and lets the resolver
+    // walk the mount list. Threading a root through the context made every
+    // system that touches a file also a system that knows where the tree is.
+    // Damage channels + schools of magic, from magic.toml. Systems that
     // turn an authored name into an id or a palette go through this.
     const CombatVocabulary& vocabulary;
 };

@@ -1,6 +1,7 @@
 #include "EnemySystem.h"
 
 #include "GameCollision.h"
+#include "GameAssets.h"
 #include "GameContext.h"
 #include "combat/ActionStateSystem.h"
 #include "combat/CombatDirector.h"
@@ -209,7 +210,7 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
     if (auto it = mMeshCache.find(meshKey); it != mMeshCache.end()) {
         mesh = it->second;
     } else if (!def->visual.mesh.empty()) {
-        mesh = ctx.renderer.loadObj(ctx.assets + "/" + def->visual.mesh);
+        mesh = ctx.renderer.loadObj(assetPath(def->visual.mesh));
         mMeshCache[meshKey] = mesh;
     } else {
         // Built from the same two derived numbers as the collision capsule
@@ -229,7 +230,7 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
     ctx.renderer.setScale(node, def->visual.scale);
     ctx.renderer.setOrientation(node, orientation);
     ctx.renderer.attachMesh(node, mesh, def->visual.material,
-                            "Game/PrototypeFloor", def->visual.castShadows);
+                            "Game/Prototype/Floor", def->visual.castShadows);
 
     // --- components -------------------------------------------------------
     // The combat half first: the director creates the entity and owns the
@@ -429,8 +430,8 @@ void EnemySystem::spawnProjectile(GameContext& ctx, entt::entity owner,
         mBoltMesh = ctx.renderer.createPrimitiveMesh(pm);
     }
     const eng::NodeHandle node = ctx.renderer.createNode(eng::kRootNode, origin);
-    ctx.renderer.attachMesh(node, mBoltMesh, "Game/EnemyRedElite",
-                            "Game/PrototypeFloor", false);
+    ctx.renderer.attachMesh(node, mBoltMesh, "Game/Enemy/RedElite",
+                            "Game/Prototype/Floor", false);
 
     const entt::entity p = reg.create();
     EnemyProjectile& proj = reg.emplace<EnemyProjectile>(p);

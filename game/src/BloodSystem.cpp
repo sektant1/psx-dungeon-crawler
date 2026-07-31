@@ -62,6 +62,21 @@ float bloodSeverityScale(BloodSeverity severity)
     return 1.0f;
 }
 
+BloodSeverity bloodSeverityFor(float damageDealt, float maxHealth, bool killed)
+{
+    if (killed)
+        return BloodSeverity::Heavy;
+    if (maxHealth <= 0.0f)
+        return BloodSeverity::Normal;
+    const float fraction = damageDealt / maxHealth;
+    // A twentieth of the bar is a graze; a third of it takes a limb's worth.
+    if (fraction < 0.05f)
+        return BloodSeverity::Light;
+    if (fraction < 0.30f)
+        return BloodSeverity::Normal;
+    return BloodSeverity::Heavy;
+}
+
 bool parseBloodDefinitions(const std::string& tomlPath, BloodDefinitions& out)
 {
     const toml::parse_result parsed = toml::parse_file(tomlPath);
@@ -205,11 +220,61 @@ void BloodSystem::spawnHit(eng::Renderer& renderer, const std::string& id,
     if (!p->mistEffect.empty())
         renderer.spawnParticles(p->mistEffect, point, options);
 
-    // The immediate mark under the wound. Spray particles that travel and land
-    // leave their own decals through the simulation; this one is what makes a
-    // hit read instantly, before any particle has had time to fall.
-    if (!p->decalProfile.empty())
-        renderer.spawnDecal(p->decalProfile, point + out * 0.02f, out);
+    // No mark here: the wound is on a body, and the mark belongs on whatever is
+    // under it. Spray droplets carry their own decal profile and stamp what
+    // they land on; spawnSplat is the instant version, for a caller that has
+    // already found the surface.
+}
+
+void BloodSystem::spawnSplat(eng::Renderer& renderer, const std::string& id,
+                             glm::vec3 surfacePoint,
+                             glm::vec3 surfaceNormal) const
+{
+    const BloodProfile* p = profile(id);
+    if (!p || p->decalProfile.empty()) return;
+    const float length = glm::dot(surfaceNormal, surfaceNormal);
+    const glm::vec3 up = length > 1e-6f ? glm::normalize(surfaceNormal)
+                                        : glm::vec3(0.0f, 1.0f, 0.0f);
+    renderer.spawnDecal(p->decalProfile, surfacePoint, up);
+}
+
+void BloodSystem::updateDrip(eng::Renderer& renderer, uint32_t bleeder,
+                             const std::string& id, glm::vec3 wound,
+                             float healthFraction)
+{
+    const BloodProfile* p = profile(id);
+    const bool bleeding = p && !p->dripEffect.empty() &&
+                          healthFraction > 0.0f &&
+                          healthFraction <= p->dripHpFraction;
+    auto it = mDrips.find(bleeder);
+    if (!bleeding) {
+        if (it != mDrips.end() && it->second.fx.valid()) {
+            // Stop emitting, but leave the drops already falling: they are what
+            // marks the floor, and cutting them off in mid-air reads as a bug.
+            renderer.stopParticles(it->second.fx);
+            it->second.fx = {};
+        }
+        return;
+    }
+    if (it == mDrips.end()) {
+        Drip drip;
+        drip.node = renderer.createNode(eng::kRootNode, wound);
+        it = mDrips.emplace(bleeder, drip).first;
+    }
+    renderer.setPosition(it->second.node, wound);
+    if (!it->second.fx.valid())
+        it->second.fx = renderer.spawnParticles(p->dripEffect, it->second.node);
+}
+
+void BloodSystem::stopDrip(eng::Renderer& renderer, uint32_t bleeder)
+{
+    auto it = mDrips.find(bleeder);
+    if (it == mDrips.end()) return;
+    if (it->second.fx.valid())
+        renderer.despawnParticles(it->second.fx);
+    if (it->second.node.valid())
+        renderer.destroyNode(it->second.node);
+    mDrips.erase(it);
 }
 
 void BloodSystem::spawnPool(eng::Renderer& renderer, const std::string& id,

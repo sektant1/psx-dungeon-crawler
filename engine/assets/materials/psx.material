@@ -14,7 +14,7 @@
 //   shadows_disabled     -> no Ogre shadow technique enabled anywhere
 // ------------------------------------------------------------------------
 
-material PSX/Lit    // psx_lit.gdshader
+material Engine/Psx/Lit    // psx_lit.gdshader
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -27,7 +27,7 @@ material PSX/Lit    // psx_lit.gdshader
     } }
 }
 
-material PSX/Unlit    // psx_unlit.gdshader
+material Engine/Psx/Unlit    // psx_unlit.gdshader
 {
     technique { pass {
         vertex_program_ref PSX_VS_Unlit { }
@@ -40,7 +40,7 @@ material PSX/Unlit    // psx_unlit.gdshader
     } }
 }
 
-material PSX/LitMetal    // psx_lit_metal.gdshader
+material Engine/Psx/LitMetal    // psx_lit_metal.gdshader
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -53,7 +53,7 @@ material PSX/LitMetal    // psx_lit_metal.gdshader
     } }
 }
 
-material PSX/UnlitMetal    // psx_unlit_metal.gdshader
+material Engine/Psx/UnlitMetal    // psx_unlit_metal.gdshader
 {
     technique { pass {
         vertex_program_ref PSX_VS_Unlit { }
@@ -66,7 +66,7 @@ material PSX/UnlitMetal    // psx_unlit_metal.gdshader
     } }
 }
 
-material PSX/LitTransparent    // psx_lit_transparent.gdshader
+material Engine/Psx/LitTransparent    // psx_lit_transparent.gdshader
 {
     technique { pass {
         scene_blend alpha_blend
@@ -81,7 +81,7 @@ material PSX/LitTransparent    // psx_lit_transparent.gdshader
     } }
 }
 
-material PSX/UnlitTransparent    // psx_unlit_transparent.gdshader
+material Engine/Psx/UnlitTransparent    // psx_unlit_transparent.gdshader
 {
     technique { pass {
         scene_blend alpha_blend
@@ -96,7 +96,7 @@ material PSX/UnlitTransparent    // psx_unlit_transparent.gdshader
     } }
 }
 
-material Engine/PrototypeSurface
+material Engine/Psx/PrototypeSurface
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -112,7 +112,7 @@ material Engine/PrototypeSurface
 
 // Engine-owned particle fallback. Its generated orange/cyan diagnostic sprite
 // is deliberately distinct from missing surface and sprite textures.
-material Engine/PrototypeParticle
+material Engine/Psx/PrototypeParticle
 {
     technique { pass {
         cull_hardware none
@@ -133,7 +133,7 @@ material Engine/PrototypeParticle
 }
 
 // Reusable retro VFX atlas rows: fire, smoke, poison, lava ash.
-material Engine/Particles/Fire
+material Engine/Psx/Fire
 {
     technique { pass {
         cull_hardware none
@@ -155,7 +155,7 @@ material Engine/Particles/Fire
     } }
 }
 
-material Engine/Particles/Smoke
+material Engine/Psx/Smoke
 {
     technique { pass {
         cull_hardware none
@@ -177,7 +177,7 @@ material Engine/Particles/Smoke
     } }
 }
 
-material Engine/Particles/Poison
+material Engine/Psx/Poison
 {
     technique { pass {
         cull_hardware none
@@ -199,7 +199,7 @@ material Engine/Particles/Poison
     } }
 }
 
-material Engine/Particles/LavaAsh
+material Engine/Psx/LavaAsh
 {
     technique { pass {
         cull_hardware none
@@ -221,7 +221,7 @@ material Engine/Particles/LavaAsh
     } }
 }
 
-material Engine/Particles/Rain
+material Engine/Psx/Rain
 {
     technique { pass {
         cull_hardware none
@@ -232,7 +232,7 @@ material Engine/Particles/Rain
     } }
 }
 
-material Engine/Particles/ArcaneMote
+material Engine/Psx/ArcaneMote
 {
     technique { pass {
         cull_hardware none
@@ -243,7 +243,7 @@ material Engine/Particles/ArcaneMote
     } }
 }
 
-material Engine/Particles/FrostShard
+material Engine/Psx/FrostShard
 {
     technique { pass {
         cull_hardware none
@@ -254,7 +254,7 @@ material Engine/Particles/FrostShard
     } }
 }
 
-material Engine/Particles/ToxicBubble
+material Engine/Psx/ToxicBubble
 {
     technique { pass {
         cull_hardware none
@@ -265,7 +265,7 @@ material Engine/Particles/ToxicBubble
     } }
 }
 
-material Engine/Particles/PortalWisp
+material Engine/Psx/PortalWisp
 {
     technique { pass {
         cull_hardware none
@@ -276,7 +276,7 @@ material Engine/Particles/PortalWisp
     } }
 }
 
-material PSX/LitAlphaScissor    // psx_lit_alpha-scissor.gdshader
+material Engine/Psx/LitAlphaScissor    // psx_lit_alpha-scissor.gdshader
 {
     technique { pass {
         cull_hardware none
@@ -292,7 +292,7 @@ material PSX/LitAlphaScissor    // psx_lit_alpha-scissor.gdshader
     } }
 }
 
-material PSX/UnlitAlphaScissor    // psx_unlit_alpha-scissor.gdshader
+material Engine/Psx/UnlitAlphaScissor    // psx_unlit_alpha-scissor.gdshader
 {
     technique { pass {
         cull_hardware none
@@ -308,7 +308,7 @@ material PSX/UnlitAlphaScissor    // psx_unlit_alpha-scissor.gdshader
     } }
 }
 
-material PSX/LightVolume    // psx_light-volume.gdshader (NO_TEXTURE + LIGHT_VOLUME)
+material Engine/Psx/LightVolume    // psx_light-volume.gdshader (NO_TEXTURE + LIGHT_VOLUME)
 {
     technique { pass {
         cull_hardware none
@@ -321,12 +321,12 @@ material PSX/LightVolume    // psx_light-volume.gdshader (NO_TEXTURE + LIGHT_VOL
 
 // Debug line overlay: immediate-mode lines with per-vertex colour.
 // Used by Renderer::setDebugLines (physics collider wireframes etc.). Depth
-// state left DEFAULT (check+write on), exactly like PSX/DebugWireframe, so the
+// state left DEFAULT (check+write on), exactly like Engine/Psx/DebugWireframe, so the
 // lines integrate into the scene MRT the same way the working wireframe view
 // does. DebugLines_FS writes valid normal/depth metadata so the PSX stylize
 // pass treats them as real surfaces (zero metadata made them vanish except
 // where they overlapped geometry -- the "lines only inside objects" bug).
-material PSX/DebugLines
+material Engine/Psx/DebugLines
 {
     technique { pass {
         cull_hardware none
@@ -338,7 +338,7 @@ material PSX/DebugLines
 // Debug view: light-blue mesh lines only. Swapped onto every entity by
 // Renderer::setWireframeDebug; depth state stays default so lines occlude
 // like the solid geometry they replace.
-material PSX/DebugWireframe
+material Engine/Psx/DebugWireframe
 {
     technique { pass {
         polygon_mode wireframe
@@ -350,7 +350,7 @@ material PSX/DebugWireframe
 
 // post_process/dither-banding_mat.tres (pp_band-dither, psxdither.png,
 // col_depth 15, dither_banding true). Unit 0 = compositor scene target.
-material PSX/DitherPost
+material Engine/Psx/DitherPost
 {
     technique { pass {
         depth_check off
@@ -374,7 +374,7 @@ material PSX/DitherPost
 
 // Optional hardware-era reconstruction. Disabled by default (mode 0), so the
 // existing renderer remains pixel-identical until a profile selects a mode.
-material PSX/HardwareResolve
+material Engine/Psx/HardwareResolve
 {
     technique { pass {
         depth_check off
@@ -390,7 +390,7 @@ material PSX/HardwareResolve
     } }
 }
 
-material PSX/PixelStylize
+material Engine/Psx/PixelStylize
 {
     technique { pass {
         depth_check off
@@ -412,8 +412,8 @@ material PSX/PixelStylize
 }
 
 // Bloom: bright-pass -> separable blur (H, V) -> additive composite. All at
-// or below the pixelated resolution; composite runs before PSX/DitherPost.
-material PSX/BloomBright
+// or below the pixelated resolution; composite runs before Engine/Psx/DitherPost.
+material Engine/Psx/BloomBright
 {
     technique { pass {
         depth_check off
@@ -431,7 +431,7 @@ material PSX/BloomBright
     } }
 }
 
-material PSX/BloomBlurH
+material Engine/Psx/BloomBlurH
 {
     technique { pass {
         depth_check off
@@ -450,7 +450,7 @@ material PSX/BloomBlurH
     } }
 }
 
-material PSX/BloomBlurV
+material Engine/Psx/BloomBlurV
 {
     technique { pass {
         depth_check off
@@ -469,7 +469,7 @@ material PSX/BloomBlurV
     } }
 }
 
-material PSX/BloomComposite
+material Engine/Psx/BloomComposite
 {
     technique { pass {
         depth_check off
@@ -485,6 +485,27 @@ material PSX/BloomComposite
         texture_unit    // bloom
         {
             filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Base for the material preview's quad stand-in (eng::MaterialPreview). A
+// particle material cannot be drawn on a plain mesh -- its vertex program reads
+// a per-instance stream the mesh has no way to supply -- so the preview clones
+// this, copies the texture and blend across, and shows the art on geometry the
+// sprite program can actually take. Never used by the game itself.
+material Engine/Psx/PreviewSprite
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Sprite/VS { }
+        fragment_program_ref Sprite/FS { }
+        texture_unit
+        {
+            filtering none
             tex_address_mode clamp
         }
     } }

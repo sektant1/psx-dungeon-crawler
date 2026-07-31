@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -176,10 +177,34 @@ public:
             box.merge(Ogre::Vector3(p.pos.x + r, p.pos.y + r, p.pos.z + r));
         }
         setBoundingBox(box);
+        // The radius has to match the box, and it has to be measured from the
+        // NODE, not from the box's own centre: Ogre builds the world bounding
+        // sphere as (node derived position, getBoundingRadius()). The batch's
+        // node sits at the origin and never moves -- instance positions are
+        // world-space -- so a fixed 0.71 described a sphere around the world
+        // origin. Every batch whose particles were more than 0.71 m from the
+        // origin was frustum-culled outright, which is why nothing rendered no
+        // matter how correct the instance data was.
+        const Ogre::Vector3 lo = box.getMinimum();
+        const Ogre::Vector3 hi = box.getMaximum();
+        mBoundRadius = std::sqrt(std::max(lo.squaredLength(), hi.squaredLength()));
+
+        // Tell the node its bounds moved. Ogre caches a movable's world AABB
+        // and only recomputes it when the parent node is marked dirty -- and
+        // this node never moves, because instance positions are world-space.
+        // So the cached box stayed at whatever it was when the batch was
+        // created (empty), every batch failed the frustum test forever, and
+        // _updateRenderQueue was never called on any of them. That is the
+        // whole reason particles stopped appearing: the data, the shader and
+        // the material were all fine and nothing was ever asked to draw.
+        if (mNode)
+            mNode->needUpdate();
+
         Ogre::MovableObject::setVisible(mWantVisible);
     }
 
     std::size_t count() const override { return mStaging.size(); }
+
 
     void setVisible(bool visible) override
     {
@@ -275,6 +300,9 @@ private:
         // A quad's corners reach 0.5 * size from the centre; a cube's reach the
         // half-diagonal. Both are folded into the per-frame AABB, but the
         // radius is what the scene manager culls against first.
+        // Only until the first endFrame(), which measures the real extent from
+        // the filled box. A base-mesh radius alone is meaningless here: the
+        // mesh is a unit quad shared by every instance.
         mBoundRadius = voxel ? 0.87f : 0.71f;
     }
 

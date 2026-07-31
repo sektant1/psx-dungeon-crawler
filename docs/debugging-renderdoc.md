@@ -32,11 +32,11 @@ Every frame goes through `PSX/Stylized`
 | Target | Size | What it holds |
 |---|---|---|
 | `mrt` | ⅓ × ⅓ | **Where the world is drawn.** MRT: attachment 0 is scene colour, attachment 1 is `vec4(normal * 0.5 + 0.5, depth / farClip)`. Everything except world-space UI. |
-| `rt_post` | ⅓ | `PSX/PixelStylize` — outlines, ink, highlights, read off the normal/depth attachment |
-| `rt_bright` | ⅙ | `PSX/BloomBright` — the threshold cut |
-| `rt_blur` | ⅙ | `PSX/BloomBlurH`, then `BloomBlurV` back into `rt_bright` |
-| `rt_final` | ⅓ | `PSX/BloomComposite` — post + bloom |
-| `rt_resolve` | ⅓ | `PSX/HardwareResolve` — the era-specific resolve filter |
+| `rt_post` | ⅓ | `Engine/Psx/PixelStylize` — outlines, ink, highlights, read off the normal/depth attachment |
+| `rt_bright` | ⅙ | `Engine/Psx/BloomBright` — the threshold cut |
+| `rt_blur` | ⅙ | `Engine/Psx/BloomBlurH`, then `BloomBlurV` back into `rt_bright` |
+| `rt_final` | ⅓ | `Engine/Psx/BloomComposite` — post + bloom |
+| `rt_resolve` | ⅓ | `Engine/Psx/HardwareResolve` — the era-specific resolve filter |
 | `target_output` | full | the dither/grade pass upscales here, then world-space text plaques (render queue 100) are drawn at full resolution over it |
 
 Two things surprise people:

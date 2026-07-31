@@ -6,6 +6,22 @@
 namespace eng {
 class Renderer;
 
+// Which filter hardware_resolve.frag runs over the finished frame. These are
+// *techniques*, not profiles: the mode used to be assigned `float(preset)`,
+// which quietly said every new preset needs a new branch in that shader. It
+// does not -- a fantasy profile built on the PS1 look wants the PS1 composite,
+// and the era profiles are exactly where those filters were written down.
+namespace resolve {
+inline constexpr float kNone = 0.0f;          // exact pass-through
+inline constexpr float kPs1Chroma = 1.0f;     // chroma truncation, hard pixels
+inline constexpr float kPs2Flicker = 2.0f;    // interlace deflicker, vertical
+inline constexpr float kGamecubeCopy = 3.0f;  // copy-out AA + deflicker
+inline constexpr float kN64ThreePoint = 4.0f; // triangular reconstruction
+inline constexpr float kPixelCrisp = 5.0f;    // local-contrast crisping
+inline constexpr float kSoftCrisp = 6.0f;     // the same, gentler
+inline constexpr float kShadowCrisp = 7.0f;   // crisping weighted into shadow
+} // namespace resolve
+
 // Plain-data description of one render preset. Field names mirror the UI cache
 // in DebugUiImpl.h so the debug panel can copy a preset straight into its
 // sliders.
@@ -76,7 +92,7 @@ struct RenderPresetValues {
     float ditherDarkFade = 0.20f;
 
     bool hardwareResolveEnabled = true;
-    float hardwareResolveMode = 6.0f; // == preset id
+    float hardwareResolveMode = resolve::kSoftCrisp;
     float hardwareResolveStrength = 0.65f;
 
     float affineAmount = 0.0f; // 0 = perspective-correct, 1 = full affine warp
@@ -89,7 +105,8 @@ struct RenderPresetValues {
 };
 
 
-// Returns the tuned values for preset id 1..7. Any other id returns defaults.
+// Returns the tuned values for any id in renderPresets(). Any other id returns
+// defaults.
 RenderPresetValues renderPresetValues(int preset);
 
 // Pushes every value in v to the renderer (mirrors the old DebugUi apply block).

@@ -27,14 +27,13 @@ namespace eng { class Renderer; class Physics; }
 class LiveLevel {
 public:
     bool rebuild(eng::Renderer& r, eng::Physics& physics,
-                 const game::CombatVocabulary& vocabulary,
-                 const std::string& assets, uint32_t seed, int depth);
+                 const game::CombatVocabulary& vocabulary, uint32_t seed,
+                 int depth);
     bool rebuildLayout(eng::Renderer& r, eng::Physics& physics,
                        const game::CombatVocabulary& vocabulary,
-                       const std::string& assets, gen::Layout layout, int depth);
+                       gen::Layout layout, int depth);
     bool rebuildAuthored(eng::Renderer& r, eng::Physics& physics,
                          const game::CombatVocabulary& vocabulary,
-                         const std::string& assets,
                          const std::string& cookedMap, int depth);
     void update(eng::Renderer& r, float animationTime);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
@@ -49,13 +48,16 @@ public:
     bool torchIsLit(int index) const { return map.torchLit(index); }
     void toggleTorch(eng::Renderer& r, int index) { map.toggleTorch(r, index); }
     const DungeonMap& dungeon() const { return map; }
+    // The two portal props, for tooling that re-dresses them live (the debug
+    // console's Portal tab). Mutable: switching the wisp effect replaces the
+    // handle the prop is holding. The ascent one is invalid at depth 0.
+    PortalProp& portal(bool ascent) { return ascent ? upPortal : downPortal; }
     void clearPhysics();
 
 private:
     friend LiveLevel buildLevel(eng::Renderer&, eng::Physics&,
-                                 const std::string&, const game::CombatVocabulary&,
-                                 uint32_t, int, const gen::Layout*,
-                                 const std::string*);
+                                 const game::CombatVocabulary&, uint32_t, int,
+                                 const gen::Layout*, const std::string*);
     DungeonMap map;
     std::unique_ptr<eng::ecs::RendererSceneBackend> authoredBackend;
     std::unique_ptr<game::MapRuntime> authoredMap;
@@ -88,7 +90,6 @@ private:
 // or tools could build a level directly; defined in LiveLevel.cpp. depth>0 adds
 // an up-portal at the entry.
 LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
-                     const std::string& assets,
-                      const game::CombatVocabulary& vocabulary, uint32_t seed,
-                      int depth, const gen::Layout* authored = nullptr,
-                      const std::string* authoredMap = nullptr);
+                     const game::CombatVocabulary& vocabulary, uint32_t seed,
+                     int depth, const gen::Layout* authored = nullptr,
+                     const std::string* authoredMap = nullptr);

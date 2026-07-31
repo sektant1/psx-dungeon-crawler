@@ -12,7 +12,7 @@
 // Swapping in authored art means changing `visual.material` in enemies.toml.
 // Nothing in C++ names these.
 
-material Game/EnemyRed
+material Game/Enemy/Red
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -30,7 +30,7 @@ material Game/EnemyRed
 }
 
 // Heavies: darker, closer to dried blood. Reads as "this one hits harder".
-material Game/EnemyRedDark
+material Game/Enemy/RedDark
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -49,7 +49,7 @@ material Game/EnemyRedDark
 
 // Skirmishers/casters: lighter and pinker, so a fast one is distinguishable at
 // silhouette distance in a corridor.
-material Game/EnemyRedPale
+material Game/Enemy/RedPale
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -67,7 +67,7 @@ material Game/EnemyRedPale
 }
 
 // Bosses and elites: full-chroma, the only one in the palette that is.
-material Game/EnemyRedElite
+material Game/Enemy/RedElite
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }

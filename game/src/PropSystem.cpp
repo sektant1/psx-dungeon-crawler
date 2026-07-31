@@ -1,6 +1,7 @@
 #include "PropSystem.h"
 #include "GameCollision.h"
 
+#include "GameAssets.h"
 #include "GameContext.h"
 #include "scene/MapRuntime.h"
 
@@ -39,7 +40,7 @@ void PropSystem::spawnShowroom(
 {
     eng::Renderer& r = ctx.renderer;
     eng::Physics& physics = ctx.physics;
-    const std::string props = ctx.assets + "/meshes/props/";
+    const std::string props = assetDir("meshes/props");
     eng::MeshHandle mCrate   = r.loadObj(props + "prop_crate.obj");
     eng::MeshHandle mBarrel0 = r.loadObj(props + "prop_barrel_p0.obj");
     eng::MeshHandle mBarrel1 = r.loadObj(props + "prop_barrel_p1.obj");

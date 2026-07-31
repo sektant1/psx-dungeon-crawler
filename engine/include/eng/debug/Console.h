@@ -91,4 +91,22 @@ private:
     std::unique_ptr<Impl> mImpl;
 };
 
+// Splits an engine log line into (subsystem, message).
+//
+// Everything in this engine logs as "Subsystem: what happened" -- "Warmup: 96
+// materials, 0 unsupported", "RenderCore: walking '...'", "Ogre: Error: ...".
+// That convention was invisible to the console, which filed every captured line
+// under one category called "engine": the column showed the same word on every
+// row, the category filter could not narrow anything, and the eye had no left
+// edge to scan. Recovering the prefix is what turns the log back into columns.
+//
+// Only a plausible subsystem is split off: a short, space-free, non-numeric
+// token. Prose that happens to contain a colon ("note: see docs") and paths
+// ("C:/x") keep their full text and come back uncategorised.
+struct LogSplit {
+    std::string category; // empty when the line carries no subsystem prefix
+    std::string message;  // the line with that prefix removed
+};
+LogSplit splitLogCategory(const std::string& line);
+
 } // namespace eng

@@ -127,6 +127,24 @@ public:
                UiTone railTone, float opacity = 1.0f) const;
     void text(glm::ivec2 at, std::string_view value, unsigned int colour,
               Align align = Align::Left, bool shadow = true) const;
+    // A keyboard/mouse binding, drawn as a pressed cap: filled plate, border,
+    // label. `textAt` is the same top-left a text() call would take, so a cap
+    // and the words beside it line up by construction. Returns the plate width.
+    //
+    // It is a primitive rather than a string convention because a binding
+    // written into prose ("` console  ESC quit") stops reading as a key at
+    // all: punctuation bindings vanish into the sentence and the eye has no
+    // column to scan. Every surface that shows a binding goes through here.
+    int keyCap(glm::ivec2 textAt, std::string_view label,
+               float alpha = 1.0f) const;
+    int keyCapWidth(std::string_view label) const;
+    // The plate is sized from the glyph *cell*, not from lineHeight: the cell
+    // is taller, and a plate cut to a line height clips the letters inside it.
+    int keyCapHeight() const { return mFont.cellHeight() - 1; }
+    // Vertical pitch for a stacked column of caps -- taller than a text line,
+    // because plates need a gap or the column reads as one long box.
+    int keyCapRow() const { return keyCapHeight() + 2; }
+
     void bar(glm::ivec2 at, glm::ivec2 size, float ratio, unsigned int fill,
              unsigned int track) const;
     void icon(glm::ivec2 at, glm::ivec2 size, unsigned int colour,

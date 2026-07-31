@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Ogre { class SceneManager; class SceneNode; }
@@ -50,7 +51,13 @@ public:
 
     void setQuality(float q);
     std::vector<uint32_t> update(float dt);
+    // Release everything pointing into the scene graph. Effect descriptions
+    // survive: they are content, not scene state. The caller destroys the
+    // scene graph next, then calls rebuildBatches().
     void clear();
+    // Recreate one batch per (material, mode) for the retained effects. Must
+    // run after the scene graph has been wiped and before anything spawns.
+    void rebuildBatches();
     // Release everything that points into Ogre, while Ogre is still alive.
     // Engine tears the render core down explicitly before this object is
     // destroyed, so relying on the destructor would touch a dead SceneManager.
@@ -71,6 +78,10 @@ private:
         uint16_t simEffect = 0;
         size_t batch = 0;
         FlipbookDesc flipbook;
+        // Kept so a scene clear can rebuild this effect's batch without
+        // re-resolving the material, which would re-run texture lookups for
+        // every effect on every level transition.
+        ParticleBlend blend = ParticleBlend::Alpha;
     };
 
     struct Live {
@@ -93,9 +104,16 @@ private:
     // after any registration, since effects sharing a material share one
     // instance stream and must all fit in it at once.
     void resizeBatches();
+    // Drop everything that points into the scene graph, keeping the effect
+    // table. Shared by clear() (which then rebuilds) and shutdown() (which
+    // must not, because Ogre is going away).
+    void releaseAll();
+    // Not const: resolving a texture stem is what *creates* its material, so
+    // an effect that names a strip nobody has spawned yet pays for it here and
+    // the several hundred it did not name cost nothing.
     std::string resolveMaterial(const ParticleEffectDesc& desc,
                                 FlipbookDesc& flipbookOut,
-                                ParticleBlend& blendOut) const;
+                                ParticleBlend& blendOut);
     void pushTransforms();
     void fillBatches();
     glm::vec3 cameraPosition() const;
@@ -108,6 +126,10 @@ private:
     std::vector<Batch> mBatches;
     std::vector<Effect> mEffects;
     std::unordered_map<std::string, uint32_t> mByName; // name -> ParticleEffectId
+    // Names already complained about, so one bad spawn per frame does not
+    // become one log line per frame. Mutable: find() is const and reporting a
+    // miss is diagnostics, not state the caller can observe.
+    mutable std::unordered_set<std::string> mWarnedNames;
     std::unordered_map<uint32_t, Live> mLive;
     std::vector<DecalRequest> mDecalRequests;
     std::vector<ParticleInstance> mStaging;

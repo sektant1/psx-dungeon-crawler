@@ -368,7 +368,7 @@ fragment_program PSX_FS_LightVolume glsl
     }
 }
 
-// Debug wireframe view (PSX/DebugWireframe): flat colour, default light blue.
+// Debug wireframe view (Engine/Psx/DebugWireframe): flat colour, default light blue.
 fragment_program Wire_FS glsl
 {
     source wire.frag
@@ -453,6 +453,10 @@ vertex_program Particle_VS glsl
     default_params
     {
         param_named_auto worldViewProj worldviewproj_matrix
+        // Billboarding reads the camera axes out of the view matrix, the same
+        // way Particles/SpriteVS does. Without this bound the shader compiles
+        // and every quad collapses to a point.
+        param_named_auto view view_matrix
         param_named_auto time time 1.0
         param_named atlasGrid float2 1.0 1.0
         param_named atlasRow float 0.0
@@ -594,7 +598,7 @@ fragment_program BloomBlur_FS glsl
     default_params
     {
         param_named sceneTex int 0
-        // blurDir set per material (PSX/BloomBlurH vs PSX/BloomBlurV)
+        // blurDir set per material (Engine/Psx/BloomBlurH vs Engine/Psx/BloomBlurV)
     }
 }
 

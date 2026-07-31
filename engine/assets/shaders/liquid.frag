@@ -1,36 +1,30 @@
 #version 330 core
-in vec2 liquidUV;
+
+// Water / slime: two tiling layers scrolling at different rates and scales,
+// palette-quantised. The scrolling half of the surface split -- see
+// scroll_common.glsl for why it is not built on surface_common.glsl.
+
 uniform sampler2D liquidTexture;
-uniform vec4 liquidDark;
-uniform vec4 liquidMid;
-uniform vec4 liquidBright;
 uniform vec2 liquidFlowA;
 uniform vec2 liquidFlowB;
-uniform float liquidStepFps;
-uniform float liquidPixelGrid;
-uniform float liquidEmission;
-uniform float time;
-layout(location = 0) out vec4 fragColour;
 
-vec3 liquidPalette(float value)
-{
-    if (value < 0.38)
-        return liquidDark.rgb;
-    if (value < 0.76)
-        return liquidMid.rgb;
-    return liquidBright.rgb;
-}
+#include <scroll_common.glsl>
 
 void main()
 {
-    float steppedTime =
-        floor(time * liquidStepFps) / max(liquidStepFps, 1.0);
-    float grid = max(liquidPixelGrid, 4.0);
-    vec2 pixelUV = (floor(liquidUV * grid) + 0.5) / grid;
+    float steppedTime = liquidSteppedTime();
+    vec2 pixelUV = liquidPixelate(liquidUV);
+
+    // Two layers, different scale and direction: one sliding texture reads as a
+    // sliding texture, two crossing ones read as a surface with a current. The
+    // offsets are wrapped to a tile (liquidScroll) so a long session cannot
+    // grind them into judder.
     float layerA = texture(
-        liquidTexture, pixelUV + liquidFlowA * steppedTime).r;
+        liquidTexture, pixelUV + liquidScroll(liquidFlowA, steppedTime)).r;
     float layerB = texture(
-        liquidTexture, pixelUV * 1.7 + liquidFlowB * steppedTime).g;
+        liquidTexture,
+        pixelUV * 1.7 + liquidScroll(liquidFlowB, steppedTime)).g;
+
     float value = clamp(layerA * 0.62 + layerB * 0.38, 0.0, 1.0);
     vec3 colour = liquidPalette(value);
     float highlight = step(0.86, value) * liquidEmission;

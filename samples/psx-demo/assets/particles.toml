@@ -24,7 +24,7 @@
 [[effect]]
 name = "crystal_motes"
 visual_role = "ambient"
-material = "Engine/Particles/ArcaneMote"
+material = "Engine/Psx/ArcaneMote"
 base_width = 0.085
 base_height = 0.085
 quota = 90
@@ -73,7 +73,7 @@ scale = 0.4
 [[effect]]
 name = "crystal_core"
 visual_role = "ambient"
-material = "Engine/Particles/ArcaneMote"
+material = "Engine/Psx/ArcaneMote"
 base_width = 0.16
 base_height = 0.16
 quota = 40
@@ -115,7 +115,7 @@ scale = 0.2
 [[effect]]
 name = "portal_draw"
 visual_role = "ambient"
-material = "Engine/Particles/PortalWisp"
+material = "Engine/Psx/PortalWisp"
 base_width = 0.13
 base_height = 0.13
 quota = 110
@@ -161,7 +161,7 @@ scale = 0.25
 [[effect]]
 name = "portal_embers"
 visual_role = "ambient"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.07
 base_height = 0.07
 quota = 36
@@ -203,7 +203,7 @@ scale = 0.15
 [[effect]]
 name = "treasure_dust"
 visual_role = "ambient"
-material = "Engine/Particles/ArcaneMote"
+material = "Engine/Psx/ArcaneMote"
 base_width = 0.075
 base_height = 0.075
 quota = 70
@@ -253,7 +253,7 @@ scale = 0.35
 [[effect]]
 name = "hall_dust"
 visual_role = "ambient"
-material = "Engine/Particles/Smoke"
+material = "Engine/Psx/Smoke"
 base_width = 0.05
 base_height = 0.05
 quota = 120

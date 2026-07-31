@@ -219,11 +219,10 @@ void GameHud::drawArmament(const HudSnapshot& snapshot,
     const eng::ui::UiPalette& pal = mCanvas.palette();
     const std::string& name = snapshot.weapon.name;
     const std::string& discipline = snapshot.weapon.discipline;
-    const std::string keyCap = "[" + mSwapKey + "]";
     // Row two carries the key cap and the discipline side by side, so the
     // plate is as wide as the wider of the two rows -- not as wide as the
     // longest single string, which let them overlap.
-    const int keyW = mCanvas.measure(keyCap).x;
+    const int keyW = mCanvas.keyCapWidth(mSwapKey);
     const int width = bounds.size.x;
     const int row = mCanvas.lineHeight();
     const int height = bounds.size.y;
@@ -246,8 +245,9 @@ void GameHud::drawArmament(const HudSnapshot& snapshot,
             mCanvas.font().ellipsize(discipline, disciplineRoom);
         mCanvas.text({at.x + width - 8, at.y + 3 + row}, fittedDiscipline,
                      pal.textDim, Align::Right, false);
-        mCanvas.text({at.x + 5, at.y + 3 + row}, keyCap, pal.textDim,
-                     Align::Left, false);
+        // Drawn as a cap, not as "[X]" text: the binding is a control, and
+        // the same plate is what the tooltip and the demo placard put a key in.
+        mCanvas.keyCap({at.x + 5, at.y + 3 + row}, mSwapKey);
     }
 }
 
@@ -346,12 +346,11 @@ void GameHud::draw(const HudSnapshot& snapshot,
                                  : 0;
     const std::string& weaponName = snapshot.weapon.name;
     const std::string& discipline = snapshot.weapon.discipline;
-    const std::string keyCap = "[" + mSwapKey + "]";
     const int naturalArmamentWidth =
         viewport.compact
             ? mCanvas.measure(weaponName).x + 16
             : std::max(mCanvas.measure(weaponName).x,
-                       mCanvas.measure(keyCap).x + 6 +
+                       mCanvas.keyCapWidth(mSwapKey) + 6 +
                            mCanvas.measure(discipline).x) +
                   16;
     const int armamentHeight = (viewport.compact ? line : line * 2) + 7;

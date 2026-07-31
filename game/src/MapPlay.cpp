@@ -13,6 +13,7 @@
 #include <eng/Physics.h>
 #include <eng/Renderer.h>
 #include <eng/app/FpsGameApp.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
 #include <ecs/RendererSceneBackend.h>
 
@@ -29,16 +30,13 @@ namespace {
 class MapPlayApp : public eng::FpsGameApp
 {
 public:
-    MapPlayApp(std::string assetDir, std::string mapPath)
-        : mAssetDir(std::move(assetDir)), mMapPath(std::move(mapPath))
-    {
-    }
+    explicit MapPlayApp(std::string mapPath) : mMapPath(std::move(mapPath)) {}
 
     eng::AppConfig configure(int, char**) override
     {
         eng::AppConfig cfg;
-        cfg.assetDir = mAssetDir;
-        cfg.configPath = mAssetDir + "/game.toml";
+        cfg.mountSet = "game";
+        cfg.configPath = "game.toml";
         // MapRuntime::step() owns the one physics.update per frame, so the
         // fixed loop stays off here and stepping happens in onPresent.
         cfg.fixedDt = 0.0f;
@@ -72,15 +70,16 @@ protected:
         }
 
         // The editor stores absolute .obj paths in MeshSource (Palette scans
-        // <assetDir>/meshes/{props,tiles} and persists path().string()). Prefer
-        // the stored path as-is; fall back to assetDir-relative for portable maps.
+        // the game pack's meshes/{props,tiles} and persists path().string()).
+        // Prefer the stored path as-is; fall back to the resolver, which is
+        // what makes a portable map portable.
         rt.resolveMeshes([&](const std::string& path) -> eng::MeshHandle {
             std::error_code ec;
             if (std::filesystem::exists(path, ec))
                 return r.loadObj(path);
-            const std::string alt = mAssetDir + "/" + path;
-            if (std::filesystem::exists(alt, ec))
-                return r.loadObj(alt);
+            const std::filesystem::path alt = eng::assets::resolve(path);
+            if (!alt.empty())
+                return r.loadObj(alt.string());
             eng::log::error("playMap: mesh not found: %s", path.c_str());
             return r.prototypeMesh(path);
         });
@@ -139,7 +138,6 @@ protected:
     }
 
 private:
-    std::string mAssetDir;
     std::string mMapPath;
     std::optional<eng::ecs::RendererSceneBackend> mBackend;
     std::optional<MapRuntime> mRuntime;
@@ -148,9 +146,9 @@ private:
 
 } // namespace
 
-int runMap(const std::string& assetDir, const std::string& mapPath)
+int runMap(const std::string& mapPath)
 {
-    MapPlayApp app(assetDir, mapPath);
+    MapPlayApp app(mapPath);
     return eng::runApplication(app);
 }
 

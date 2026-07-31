@@ -26,7 +26,7 @@ enum class WeaponPrimitive {
 struct PlayerProjectileDef {
     WeaponPrimitive primitive = WeaponPrimitive::Sphere;
     glm::vec3 visualScale{0.08f};
-    std::string material = "Game/ProjectileVesper";
+    std::string material = "Game/Prototype/ProjectileVesper";
     std::string trailEffect;
     std::string impactEffect;
     float speed = 50.0f;

@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace eng {
@@ -74,6 +75,17 @@ void drawColliderOverlay(Physics& physics, Renderer& renderer,
 // and Engine::renderFrame). Ownership of referenced systems stays with the
 // application; draw() receives them per-frame via Deps so nothing dangles
 // across level rebuilds.
+// Where a panel docks by default. The tool UI used to be one narrow column of
+// eleven tabs, which made switching between two related controls a hunt; the
+// groups exist so a panel lands next to the ones it is actually used with, and
+// so no dock node holds more than three or four tabs.
+enum class PanelGroup {
+    World,    // left: what the simulation is doing (player, colliders, timing)
+    Look,     // right: how it is drawn (render profile, shaders, materials)
+    Content,  // right-lower: authored material profiles (portal, vfx)
+    Gameplay, // bottom: the game's own tuning (combat, feel, enemies)
+};
+
 class DebugTools {
 public:
     // Per-frame wiring. Any pointer may be null; the matching tab then shows a
@@ -101,7 +113,21 @@ public:
     // inside the tab item, once per frame the tab is selected. Call once at
     // startup: the callback should read whatever it needs through pointers the
     // application refreshes, so nothing dangles across level rebuilds.
-    void addPanel(std::string name, std::function<void()> draw);
+    void addPanel(std::string name, std::function<void()> draw,
+                  PanelGroup group = PanelGroup::Gameplay);
+
+    // Drops the current dock layout so the next draw() rebuilds the shipped
+    // one. The panel list is fixed at startup, so this is only for a viewer who
+    // has dragged things into a mess and wants the shipped arrangement back.
+    //
+    // It forces the rebuild past eng::imgui_layout: with persistence on, draw()
+    // otherwise leaves a restored layout alone, and this is the one call that
+    // is allowed to overwrite it. The result is saved like any other change.
+    void resetLayout()
+    {
+        mLayoutBuilt = false;
+        mForceLayout = true;
+    }
 
     bool visible() const { return mVisible; }
     void setVisible(bool v) { mVisible = v; }
@@ -122,7 +148,19 @@ private:
     struct Panel {
         std::string name;
         std::function<void()> draw;
+        PanelGroup group = PanelGroup::Gameplay;
     };
+
+    // Draws one dockable window, or nothing when the viewer closed it.
+    void drawWindow(const char* name, const std::function<void()>& body);
+    void buildDefaultLayout(unsigned int dockspace);
+    // Every panel and its group, engine's first then the application's. The
+    // single list both layout paths walk.
+    std::vector<std::pair<const char*, PanelGroup>> panelGroups() const;
+    // Docks the panels a restored layout has never heard of -- a panel added
+    // after the file was saved -- beside one of their own group. Without it a
+    // new panel opens floating over the middle of the game.
+    void placeNewPanels(unsigned int dockspace);
 
     // Editable copy of the active render profile and the rest of the UI-side
     // cache. Held out of line so the preset format stays an engine-private
@@ -131,6 +169,9 @@ private:
     std::unique_ptr<State> mState;
     std::vector<Panel> mPanels;
     bool mVisible = false;
+    bool mLayoutBuilt = false;
+    // Set only by resetLayout(): "rebuild even though a saved layout exists".
+    bool mForceLayout = false;
 };
 
 // Always-on performance HUD: a small top-left window with FPS, frame-time

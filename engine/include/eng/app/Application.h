@@ -12,8 +12,14 @@ namespace eng {
 // is a window: nothing in it may touch the renderer.
 struct AppConfig
 {
-    std::string configPath; // TOML passed to Engine::init
-    std::string assetDir;   // app asset root
+    // A LOGICAL path, resolved against the mounted packs -- "game.toml", not a
+    // directory plus a filename. The app no longer knows where its content
+    // lives on disk; assets.toml does.
+    std::string configPath;
+    // Which set from assets.toml's [mounts] this app runs on: "game",
+    // "editor", "demo". It picks the packs and their priority order, and with
+    // them every resource location the renderer registers.
+    std::string mountSet = "game";
     // Starting render profile (eng::renderPresetFromArgs / renderPresetFromName).
     // 0 leaves the choice to PSX_RENDER_PRESET and then kDefaultRenderPreset.
     // Only the *starting* look: the debug console switches profiles at runtime.

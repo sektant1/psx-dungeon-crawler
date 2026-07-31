@@ -2,7 +2,9 @@
 #include "Commands.h"
 #include "SceneValidate.h"
 #include "EditorState.h"
+#include "EntityComponents.h"
 #include "MaterialStage.h"
+#include "OutlinerTree.h"
 #include "Picker.h"
 #include "PreviewBridge.h"
 #include "SceneTemplates.h"
@@ -28,8 +30,7 @@ namespace ed {
 // ImGui::Image of the renderer's offscreen viewport. That inversion is what
 // makes this editor viable at all -- ImGui drawn *over* the Ogre overlay is
 // what made the previous one flicker badly enough to be deleted.
-class EditorApp : public eng::Application
-{
+class EditorApp : public eng::Application {
 public:
     EditorApp();
     ~EditorApp() override;
@@ -48,6 +49,17 @@ private:
     void drawViewport(const eng::FrameContext& f);
     void drawOutliner();
     void drawInspector();
+    // The grouped tree the outliner draws, rebuilt only when the document or
+    // the panel's own options change: it walks and sorts every entity, and the
+    // panel is open while the gizmo is being dragged.
+    const OutlinerTree& outlinerTree();
+    void selectGroup(const OutlinerGroup& group, bool add);
+    void drawSelectionContextMenu();
+    // Component editing, applied to the whole selection as one undo entry --
+    // "give these forty pillars a collider" is the reason the panel groups.
+    void addComponentToSelection(const ComponentType& type);
+    void removeComponentFromSelection(const ComponentType& type);
+    ComponentDefaults componentDefaults() const;
     void drawStatusBar();
     void drawCatalog();
     void drawIssues();
@@ -72,9 +84,8 @@ private:
     enum class Discard { Quit, Reload, NewScene };
     // Runs `what` immediately on a clean document, otherwise parks it behind
     // the save/discard/cancel prompt.
-    void requestDiscard(Discard what,
-                        game::content::SceneTemplate which =
-                            game::content::SceneTemplate::Empty);
+    void requestDiscard(Discard what, game::content::SceneTemplate which =
+                                          game::content::SceneTemplate::Empty);
     void performDiscard();
     void drawDiscardPopup();
     // F6 / F5: cook the authored scene to a runtime map, and play it.
@@ -85,7 +96,7 @@ private:
     Ray mouseRay() const;
     // Placement: the ghost under the cursor, and committing it.
     bool hoveredPlacement(game::content::CellPlacement& cell,
-                           game::content::XformAuthor& transform) const;
+                          game::content::XformAuthor& transform) const;
     void placeAt(const game::content::CellPlacement& cell,
                  const game::content::XformAuthor& transform);
     void drawPlacementGhost();
@@ -97,7 +108,13 @@ private:
     // no prefab and no mesh, so they are created straight in front of the
     // camera rather than placed with the kit brush.
     enum class Gameplay {
-        PlayerSpawn, Exit, Marker, EnemySpawn, Pickup, Trigger, PointLight,
+        PlayerSpawn,
+        Exit,
+        Marker,
+        EnemySpawn,
+        Pickup,
+        Trigger,
+        PointLight,
         DirectionalLight,
     };
     void addGameplayEntity(Gameplay kind);
@@ -132,7 +149,7 @@ private:
     // Set by the load step: the catalog is what everything else is placed
     // against, so a failure there has to abort the run at onStart.
     bool mCatalogFailed = false;
-    std::string mStatus;       // one-line feedback under the panels
+    std::string mStatus; // one-line feedback under the panels
 
     // Viewport geometry, in window pixels: where the offscreen image is drawn.
     // ImGuizmo will need exactly this rect, so it is kept as state rather than
@@ -159,7 +176,7 @@ private:
     glm::mat4 mDragGizmoMatrix{1.0f};
     std::vector<std::pair<game::content::AuthorId, game::content::XformAuthor>>
         mDragStart;
-    int mGizmoOperation = 0; // 0 translate, 1 rotate, 2 scale
+    int mGizmoOperation = 0;  // 0 translate, 1 rotate, 2 scale
     bool mGizmoLocal = false; // world by default; the grid is the usual frame
     // Off by default: placing things needs flat bright light. On, the viewport
     // uses the scene's own lighting, which is the only way to see whether the
@@ -212,6 +229,10 @@ private:
         game::content::SceneTemplate::Empty;
     char mOutlinerFilter[64] = {};
     bool mOutlinerShowGeometry = true;
+    OutlinerTree mOutliner;
+    uint64_t mOutlinerRevision = ~uint64_t(0);
+    OutlinerOptions mOutlinerOptions;
+    char mAddComponentFilter[64] = {};
     bool mThumbAutoSpin = true;
     bool mCycleMaterials = false;
     std::size_t mCycleIndex = 0;

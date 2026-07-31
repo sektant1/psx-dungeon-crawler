@@ -34,7 +34,7 @@ compositor PSX/Stylized
             input none
             pass render_quad
             {
-                material PSX/PixelStylize
+                material Engine/Psx/PixelStylize
                 input 0 mrt 0
                 input 1 mrt 1
             }
@@ -45,7 +45,7 @@ compositor PSX/Stylized
             input none
             pass render_quad
             {
-                material PSX/BloomBright
+                material Engine/Psx/BloomBright
                 input 0 rt_post
             }
         }
@@ -55,7 +55,7 @@ compositor PSX/Stylized
             input none
             pass render_quad
             {
-                material PSX/BloomBlurH
+                material Engine/Psx/BloomBlurH
                 input 0 rt_bright
             }
         }
@@ -65,7 +65,7 @@ compositor PSX/Stylized
             input none
             pass render_quad
             {
-                material PSX/BloomBlurV
+                material Engine/Psx/BloomBlurV
                 input 0 rt_blur
             }
         }
@@ -75,7 +75,7 @@ compositor PSX/Stylized
             input none
             pass render_quad
             {
-                material PSX/BloomComposite
+                material Engine/Psx/BloomComposite
                 input 0 rt_post
                 input 1 rt_bright
             }
@@ -86,7 +86,7 @@ compositor PSX/Stylized
             input none
             pass render_quad
             {
-                material PSX/HardwareResolve
+                material Engine/Psx/HardwareResolve
                 input 0 rt_final
             }
         }
@@ -103,7 +103,7 @@ compositor PSX/Stylized
             shadows off
             pass render_quad
             {
-                material PSX/DitherPost
+                material Engine/Psx/DitherPost
                 input 0 rt_resolve
             }
             pass render_scene

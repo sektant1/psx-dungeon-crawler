@@ -11,18 +11,14 @@ ogre.log
 .opencode/
 .goose/
 
-# Capture scratch: local recordings stay out, the README's preview clip is
-# committed (see the negation below).
-assets/*.mp4
-assets/*.gif
-# Source archives for imported art. These are inputs to the asset pipeline, not
-# build inputs: the meshes and textures the game loads are committed extracted.
-# 110 MB of them lived in history and made a fresh clone ~800 MB.
-assets/*.zip
-assets/**/*.zip
-assets/*.webm
-!assets/preview.mp4
-!assets/preview.gif
+# Pipeline source art: archives, .blend/.fbx source files, and raw effect
+# packs under art/. These are inputs to the asset pipeline, not build inputs
+# -- the meshes and textures the game actually loads are committed, extracted,
+# under assets/. 110 MB of these archives once lived in history and made a
+# fresh clone ~800 MB; keep all of art/ out. The README's preview clip and
+# logo media live under docs/media/ instead, outside this rule, and stay
+# committed.
+art/
 docs/superpowers/
 
 # Vendored SDK

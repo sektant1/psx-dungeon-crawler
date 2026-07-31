@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="PSX Retro Game Engine" width="360">
+<img src="docs/media/logo.png" alt="PSX Retro Game Engine" width="360">
 
 # psx-dungeon-crawler
 
@@ -13,7 +13,7 @@
 [![CMake](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
-<img src="assets/preview.gif" alt="Portal room, running live" width="720">
+<img src="docs/media/preview.gif" alt="Portal room, running live" width="720">
 
 </div>
 
@@ -30,8 +30,9 @@ make help      # full target and option reference
 ```sh
 make run                 # the game
 make editor SCENE=x.scn  # placement editor, F5 to playtest
+                         #   entities & components: docs/scene-editor-entities.md
 make cook SCENE=x.scn    # .scn -> .map, same cooker CI uses
-make demo                # shader sample
+make demo                # shader sample, see docs/psx-demo.md
 make sim                 # headless combat/physics harness
 make test                # ctest suite
 ```
@@ -41,7 +42,9 @@ make test                # ctest suite
 ```sh
 ./game level.map                    # play a cooked map
 ./game --scene portal               # portal showcase pose, sim frozen
-./game --render-preset ps1          # ps1 ps2 gamecube n64 pixel-3d modern-ps1 dungeon
+./game --render-preset ps1          # era:   ps1 ps2 gamecube n64
+                                    # style: pixel-3d modern-ps1 dungeon
+                                    # mood:  psx-horror fire-dimension poison-swamp
 ./game --record clip.gif --record-frames 60 --record-fps 20 \
        --record-start 120 --record-width 480
 ```
@@ -50,6 +53,7 @@ make test                # ctest suite
   `--record-keep-frames`. Needs `ffmpeg`.
 - Recording pins the frame delta to `1/fps`. Clip is reproducible.
 - Preset precedence: `--render-preset` > `PSX_RENDER_PRESET` > `dungeon`.
+- What each profile emulates, and how to add one: [`docs/render-presets.md`](docs/render-presets.md).
 
 ## Environment
 
@@ -66,7 +70,7 @@ make test                # ctest suite
 | `PSX_GEN_DUMP=<seed>` | print that seed's grid, exit | |
 | `PSX_DEBUG_UI` / `PSX_FULLSCREEN` | tuning panel open / fullscreen | |
 | `PSX_CONSOLE` | dev console open on frame 1 | |
-| `PSX_IMGUI_THEME` | imgui theme id (`one_dark`, `dark`, `light`, `classic`) | |
+| `PSX_IMGUI_THEME` | imgui theme id (`dougbinks_dark`, `one_dark`, `dark`, `light`, `classic`) | |
 
 ## Keys
 

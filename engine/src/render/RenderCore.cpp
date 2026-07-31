@@ -1,9 +1,11 @@
 #include <cstdlib>
 #include "RenderCore.h"
 #include "eng/Log.h"
+#include <eng/assets/AssetRoot.h>
 #include <eng/render/ImGuiHint.h>
 #include <eng/render/ImGuiTheme.h>
 #include <eng/render/PrototypeAssets.h>
+#include <eng/render/ImGuiLayout.h>
 
 #include <Ogre.h>
 #include <OgreCompositor.h>
@@ -26,20 +28,69 @@
 namespace eng {
 namespace {
 
+// Ogre logs the failures that matter most to this engine -- "has no supportable
+// Techniques", GLSL compile output, missing resources, compositor rejections --
+// and it logs them to ogre.log, where the console could not see them. Every one
+// of those bugs then presented as a blank material with a clean console.
+//
+// So Ogre's log is mirrored into eng::log, which is what the console listens
+// to. It is a listener rather than a replacement: ogre.log keeps its copy, and
+// the message goes on to Ogre's own file writer untouched.
+class OgreLogBridge final : public Ogre::LogListener {
+public:
+    void messageLogged(const Ogre::String& message, Ogre::LogMessageLevel level,
+                       bool /*maskDebug*/, const Ogre::String& /*logName*/,
+                       bool& /*skipThisMessage*/) override
+    {
+        // Ogre's own lines are already formatted: pass them as a literal
+        // argument, or a message containing a '%' reformats as garbage.
+        switch (level) {
+        case Ogre::LML_CRITICAL:
+            log::error("Ogre: %s", message.c_str());
+            break;
+        case Ogre::LML_WARNING:
+            log::warn("Ogre: %s", message.c_str());
+            break;
+        default:
+            // Trivial/normal Ogre chatter is voluminous (every resource, every
+            // parse). It stays in ogre.log; the console gets what went wrong.
+            break;
+        }
+    }
+};
+
+OgreLogBridge& ogreLogBridge()
+{
+    static OgreLogBridge bridge;
+    return bridge;
+}
+
 } // namespace
 
-RenderCore::~RenderCore() { shutdown(); }
+RenderCore::~RenderCore()
+{
+    shutdown();
+}
 
 bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
-                      int height, const std::string& title,
-                      const std::string& appAssetDir, bool vsync)
+                      int height, const std::string& title, bool vsync)
 {
     mSdlWindow = sdlWindow;
     // Fully programmatic setup: no plugins.cfg / ogre.cfg, no RTSS -- all
     // materials are hand-written GLSL.
     mRoot = new Ogre::Root("", "", "ogre.log");
+    // Attached immediately after Root creates the default log, so plugin load
+    // and render-system startup failures are already mirrored to the console.
+    if (Ogre::Log* ogreLog = Ogre::LogManager::getSingleton().getDefaultLog())
+        ogreLog->addListener(&ogreLogBridge());
     mRoot->loadPlugin(std::string(OGRE_PLUGIN_DIR) + "/RenderSystem_GL3Plus");
-    mRoot->loadPlugin(std::string(OGRE_PLUGIN_DIR) + "/Plugin_ParticleFX");
+    // D12 -- one particle stack, the engine's. Plugin_ParticleFX is
+    // deliberately NOT loaded: nothing calls createParticleSystem, the one
+    // ParticleFX script that existed (sparkle.particle) was orphaned and is
+    // gone, and eng's own particles are Ogre::BillboardSet. OGRE still *builds*
+    // the plugin (OGRE_BUILD_PLUGIN_PFX in cmake/Dependencies.cmake:161 and
+    // :278) because flipping that forces a multi-minute reconfigure of a
+    // from-source dependency; an unloaded plugin costs nothing at runtime.
     mRoot->loadPlugin(std::string(OGRE_PLUGIN_DIR) + "/Codec_STBI"); // PNG
     mRoot->setRenderSystem(mRoot->getAvailableRenderers().front());
     mRoot->initialise(false); // the engine owns the window
@@ -56,32 +107,22 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     // Ogre's own media: stencil shadow volume extrusion programs
     // (Ogre/ShadowExtrude*) live in Media/Main and are required the moment
     // a shadow technique is set.
-    rgm.addResourceLocation(std::string(OGRE_MEDIA_DIR) + "/Main",
-                            "FileSystem", "General");
-    // Every directory under both asset roots, discovered rather than listed.
-    // Ogre's FileSystem locations are not recursive, so each subdirectory has
-    // to be registered on its own; enumerating them means adding a texture
-    // folder is a matter of creating it, not of editing and rebuilding the
-    // engine. Meshes are loaded by path and are deliberately not part of this.
-    const auto addTree = [&rgm](const std::string& root) {
-        if (!std::filesystem::is_directory(root))
-            return;
-        rgm.addResourceLocation(root, "FileSystem", "General");
-        std::error_code ec;
-        for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
-             it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
-            if (ec) {
-                log::error("RenderCore: walking '%s': %s", root.c_str(),
-                           ec.message().c_str());
-                break;
-            }
-            if (it->is_directory())
-                rgm.addResourceLocation(it->path().string(), "FileSystem",
-                                        "General");
-        }
-    };
-    addTree(ENG_ASSET_DIR);
-    addTree(appAssetDir);
+    rgm.addResourceLocation(std::string(OGRE_MEDIA_DIR) + "/Main", "FileSystem",
+                            "General");
+    // The content packs the app mounted, in priority order -- and only the
+    // directories the manifest declares `resources`. Ogre's FileSystem
+    // locations are not recursive, so each one is registered on its own; the
+    // list comes from assets.toml rather than from a recursive walk, because a
+    // walk registers whatever authoring folder happens to be sitting under a
+    // root. Meshes, configs and scenes are read by path and are deliberately
+    // not here.
+    const std::vector<std::filesystem::path> resourceDirs =
+        assets::resourceDirs();
+    if (resourceDirs.empty())
+        log::error("RenderCore: no content mounted; every material and texture "
+                   "will be missing");
+    for (const std::filesystem::path& dir : resourceDirs)
+        rgm.addResourceLocation(dir.string(), "FileSystem", "General");
     // The prototype textures ship as real files in engine/assets/textures, so
     // the material scripts' texture units resolve like any other texture. They
     // used to be createManual'd here before this call, which made the script
@@ -118,14 +159,16 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
                         continue;
                     std::string materialName = mat->getName();
                     std::transform(materialName.begin(), materialName.end(),
-                                   materialName.begin(),
-                                   [](unsigned char c) { return char(std::tolower(c)); });
+                                   materialName.begin(), [](unsigned char c) {
+                                       return char(std::tolower(c));
+                                   });
                     const char* fallback =
                         materialName.find("particle") != std::string::npos
                             ? prototype::kParticleTexture
                             : prototype::kSurfaceTexture;
-                    log::error("Material '%s': texture '%s' is missing; using %s",
-                               mat->getName().c_str(), missing.c_str(), fallback);
+                    log::error(
+                        "Material '%s': texture '%s' is missing; using %s",
+                        mat->getName().c_str(), missing.c_str(), fallback);
                     unit->setTextureName(fallback);
                 }
             }
@@ -164,8 +207,16 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr; // no imgui.ini persistence
     io.DisplaySize = ImVec2(float(width), float(height));
+    // Docking, for every app on this context: the tool UI is a set of panels
+    // the viewer arranges, not one fixed column. DebugTools builds a default
+    // layout the first time it draws.
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // Layout persistence -- and ONLY layout; see eng/render/ImGuiLayout.h for
+    // what the ini holds and for the single switch that turns it off. This has
+    // to run before the first NewFrame, because that is when imgui would
+    // otherwise load the file itself.
+    imgui_layout::install();
     // Two fonts, in this order on purpose.
     //
     // Fonts[0] stays the imgui built-in: Renderer::attachTextSprite blits
@@ -180,8 +231,12 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     toolFont.OversampleH = 2;
     toolFont.OversampleV = 2;
     toolFont.PixelSnapH = false;
-    if (ImFont* mono = io.Fonts->AddFontFromFileTTF(
-            ENG_ASSET_DIR "/fonts/DejaVuSansMono.ttf", 15.0f, &toolFont))
+    const std::string monoPath =
+        assets::resolve("fonts/DejaVuSansMono.ttf").string();
+    if (ImFont* mono = monoPath.empty()
+                           ? nullptr
+                           : io.Fonts->AddFontFromFileTTF(monoPath.c_str(),
+                                                          15.0f, &toolFont))
         io.FontDefault = mono;
     else
         eng::log::warn("RenderCore: DejaVuSansMono.ttf missing; "
@@ -190,7 +245,7 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     // the engine default instead of failing the render init.
     const char* themeEnv = std::getenv("PSX_IMGUI_THEME");
     if (!themeEnv || !imguitheme::apply(themeEnv))
-        imguitheme::apply("one_dark");
+        imguitheme::apply("hud_reliquary");
     if (mSdlWindow)
         ImGui_ImplSDL2_InitForOpenGL(static_cast<SDL_Window*>(mSdlWindow),
                                      nullptr);
@@ -199,10 +254,46 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     // ImGui_ImplOpenGL3 uploads it lazily on first render otherwise).
     ImGui_ImplOpenGL3_CreateFontsTexture();
     // Hover help for every tool app, loaded once against the same context.
-    imguihint::load(ENG_ASSET_DIR "/ui/hints.toml");
+    imguihint::load(assets::resolve("ui/hints.toml").string());
     // Paint imgui after the window RT finishes its scene + post chain.
     mWindow->addListener(this);
     mImGuiInit = true;
+
+    // What actually came up. This is the first question asked of any render
+    // bug -- which GPU, which driver, what size, how many materials parsed --
+    // and every answer used to live in ogre.log, a file nobody opens until
+    // they already suspect the renderer. Four lines, once, at boot.
+    if (const Ogre::RenderSystemCapabilities* caps =
+            mRoot->getRenderSystem()->getCapabilities()) {
+        log::info("GPU: %s", caps->getDeviceName().c_str());
+        log::info("GPU: %s, GLSL %d, %d texture units, %d MRT",
+                  mRoot->getRenderSystem()->getName().c_str(),
+                  int(caps->getDriverVersion().major * 100 +
+                      caps->getDriverVersion().minor),
+                  int(caps->getNumTextureUnits()),
+                  int(caps->getNumMultiRenderTargets()));
+    }
+    log::info("Window: %ux%u, vsync %s", mWindow->getWidth(),
+              mWindow->getHeight(), vsync ? "on" : "off");
+    // Ogre's resource iterators are map iterators, not random access, so the
+    // counts are walked rather than subtracted.
+    const auto countResources = [](auto& manager) {
+        std::size_t n = 0;
+        for (const auto& unused : manager.getResourceIterator()) {
+            (void)unused;
+            ++n;
+        }
+        return n;
+    };
+    std::string mountList;
+    for (const assets::Pack& pack : assets::mounted())
+        mountList += (mountList.empty() ? "" : " + ") + pack.id;
+    log::info(
+        "Assets: %zu materials, %zu textures parsed from %zu dirs of [%s]",
+        countResources(Ogre::MaterialManager::getSingleton()),
+        countResources(Ogre::TextureManager::getSingleton()),
+        resourceDirs.size(),
+        mountList.empty() ? "(nothing mounted)" : mountList.c_str());
     return true;
 }
 
@@ -219,10 +310,10 @@ void RenderCore::beginImGuiFrame(float /*dt*/)
 
 void RenderCore::postRenderTargetUpdate(const Ogre::RenderTargetEvent&)
 {
-    // Called during renderOneFrame after the window's viewport has drawn, before
-    // the buffer swap. Blit the imgui draw data on top. ImGui_ImplOpenGL3 backs
-    // up and restores all GL state it touches, so Ogre's GL state cache stays
-    // coherent for the next frame.
+    // Called during renderOneFrame after the window's viewport has drawn,
+    // before the buffer swap. Blit the imgui draw data on top.
+    // ImGui_ImplOpenGL3 backs up and restores all GL state it touches, so
+    // Ogre's GL state cache stays coherent for the next frame.
     if (mImGuiRendered)
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
@@ -246,7 +337,8 @@ void RenderCore::enablePostChain()
         try {
             cm.addCompositor(mViewport, "PSX/Stylized");
             mChainAdded = true;
-        } catch (const Ogre::Exception& e) {
+        }
+        catch (const Ogre::Exception& e) {
             Ogre::LogManager::getSingleton().logError(
                 "PSX/Stylized compositor unavailable, post chain disabled: " +
                 e.getDescription());
@@ -269,7 +361,8 @@ void RenderCore::setRenderResolution(int width, int height)
     // 0 in either axis means "go back to the window/pixelSize divisor".
     if (width <= 0 || height <= 0) {
         mTargetW = mTargetH = 0;
-    } else {
+    }
+    else {
         mTargetW = std::clamp(width, 64, 4096);
         mTargetH = std::clamp(height, 64, 4096);
     }
@@ -300,7 +393,7 @@ void RenderCore::applyChainSizes()
         fy = float(mTargetH) / float(mViewport->getActualHeight()) + 1e-6f;
     }
     const std::pair<const char*, float> texFactors[] = {
-        {"mrt", 1.0f}, {"rt_post", 1.0f}, {"rt_final", 1.0f},
+        {"mrt", 1.0f},        {"rt_post", 1.0f},   {"rt_final", 1.0f},
         {"rt_resolve", 1.0f}, {"rt_bright", 0.5f}, {"rt_blur", 0.5f},
     };
     Ogre::CompositionTechnique* tech = comp->getTechnique(0);
@@ -336,8 +429,8 @@ void RenderCore::enableOffscreenViewport(int w, int h)
 
     // Dedicated free-fly editor eye, independent of the game/window MainCamera.
     // The app drives it every frame via setEditorCameraPose(). This is what
-    // makes the Scene panel a live, navigable viewport (Godot-style) rather than
-    // a mirror of some other camera.
+    // makes the Scene panel a live, navigable viewport (Godot-style) rather
+    // than a mirror of some other camera.
     if (!mEditorCam) {
         mEditorCam = mSceneMgr->createCamera("EditorViewportCamera");
         mEditorCam->setNearClipDistance(0.05f);
@@ -350,28 +443,31 @@ void RenderCore::enableOffscreenViewport(int w, int h)
     mEditorCam->setAspectRatio(float(w) / float(h));
 
     mOffscreenTex = Ogre::TextureManager::getSingleton().createManual(
-        "EditorViewportRTT", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+        "EditorViewportRTT",
+        Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
         Ogre::TEX_TYPE_2D, uint32_t(w), uint32_t(h), 0, Ogre::PF_R8G8B8A8,
         Ogre::TU_RENDERTARGET);
     Ogre::RenderTexture* rt = mOffscreenTex->getBuffer()->getRenderTarget();
-    rt->setAutoUpdated(true); // updated automatically before the window each frame
+    rt->setAutoUpdated(
+        true); // updated automatically before the window each frame
     mOffscreenVp = rt->addViewport(mEditorCam);
     mOffscreenVp->setOverlaysEnabled(false); // keep imgui OUT of the RTT
     mOffscreenVp->setClearEveryFrame(true);
-    mOffscreenVp->setBackgroundColour(Ogre::ColourValue(0.10f, 0.11f, 0.13f, 1.0f));
+    mOffscreenVp->setBackgroundColour(
+        Ogre::ColourValue(0.10f, 0.11f, 0.13f, 1.0f));
     // The preview sphere belongs to the thumbnail target alone.
     mOffscreenVp->setVisibilityMask(kWorldVisibilityMask);
 
-    // NOTE: the editor RTT runs NO PSX compositor. The chain uses fixed-name MRT
-    // textures, so a second live "PSX/Stylized" instance would collide with the
-    // window's and blacken both. A plain forward render also matches how DCC/
-    // engine editors show an unstylized working preview. The window keeps its own
-    // PSX chain untouched (it's hidden behind the imgui dockspace, harmless).
+    // NOTE: the editor RTT runs NO PSX compositor. The chain uses fixed-name
+    // MRT textures, so a second live "PSX/Stylized" instance would collide with
+    // the window's and blacken both. A plain forward render also matches how
+    // DCC/ engine editors show an unstylized working preview. The window keeps
+    // its own PSX chain untouched (it's hidden behind the imgui dockspace,
+    // harmless).
 }
 
-void RenderCore::setEditorCameraPose(float px, float py, float pz,
-                                     float qw, float qx, float qy, float qz,
-                                     float fovDeg)
+void RenderCore::setEditorCameraPose(float px, float py, float pz, float qw,
+                                     float qx, float qy, float qz, float fovDeg)
 {
     if (!mEditorCam || !mEditorCamNode)
         return;
@@ -410,7 +506,8 @@ void RenderCore::enableThumbnailViewport(int size)
     mThumbCamNode->attachObject(mThumbCam);
 
     mThumbTex = Ogre::TextureManager::getSingleton().createManual(
-        "MaterialThumbnailRTT", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+        "MaterialThumbnailRTT",
+        Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
         Ogre::TEX_TYPE_2D, uint32_t(size), uint32_t(size), 0, Ogre::PF_R8G8B8A8,
         Ogre::TU_RENDERTARGET);
     Ogre::RenderTexture* rt = mThumbTex->getBuffer()->getRenderTarget();
@@ -485,9 +582,9 @@ void RenderCore::markPostChainDirty()
 
 void RenderCore::renderFrame(float dt)
 {
-    // Close the imgui frame before Ogre renders so GetDrawData() is valid inside
-    // postRenderTargetUpdate. If the app didn't start a frame (e.g. a headless
-    // tool), skip Render entirely -- the listener then blits nothing.
+    // Close the imgui frame before Ogre renders so GetDrawData() is valid
+    // inside postRenderTargetUpdate. If the app didn't start a frame (e.g. a
+    // headless tool), skip Render entirely -- the listener then blits nothing.
     if (mImGuiFrameStarted) {
         ImGui::Render();
         mImGuiRendered = true;
@@ -567,10 +664,16 @@ void RenderCore::shutdown()
         mThumbCamNode = nullptr;
     }
     if (mViewport && mWindow)
-        Ogre::CompositorManager::getSingleton().removeCompositorChain(mViewport);
+        Ogre::CompositorManager::getSingleton().removeCompositorChain(
+            mViewport);
     // Tear down imgui while Ogre's GL context is still current (the GL3 backend
     // deletes GL objects), before the scene manager / root go.
     if (mImGuiInit) {
+        // Before the context goes: imgui's own save timer runs every few
+        // seconds, so without this the last arrangement of a session is lost
+        // whenever the app is closed inside that window -- which reads as the
+        // feature not working at all.
+        imgui_layout::save();
         if (mWindow)
             mWindow->removeListener(this);
         ImGui_ImplOpenGL3_Shutdown();
@@ -580,6 +683,12 @@ void RenderCore::shutdown()
     }
     if (mSceneMgr)
         mRoot->destroySceneManager(mSceneMgr);
+    // Detached before Root deletes the log it is attached to. The bridge itself
+    // is a function-local static and outlives everything, but the Log does not.
+    if (Ogre::LogManager::getSingletonPtr())
+        if (Ogre::Log* ogreLog =
+                Ogre::LogManager::getSingleton().getDefaultLog())
+            ogreLog->removeListener(&ogreLogBridge());
     delete mRoot; // last: tears down window, render system, resource managers
     mRoot = nullptr;
     mWindow = nullptr;

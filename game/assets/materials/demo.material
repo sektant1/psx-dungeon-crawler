@@ -3,7 +3,7 @@
 // ------------------------------------------------------------------------
 
 // world/floor/floor.tres (psx_lit, floor.png, uv_scale 24x24, modulate 0.66 0.7 0.8)
-material PSX/Floor
+material Game/Demo/Floor
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit
@@ -24,7 +24,7 @@ material PSX/Floor
 }
 
 // world/box_metal/box-metal_mat.tres (psx_lit_metal, metal-tex.png, modulate 0.95 0.6 0)
-material PSX/BoxMetal
+material Game/Demo/BoxMetal
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -44,7 +44,7 @@ material PSX/BoxMetal
 // world/box_lit/box-lit_mat.tres (psx_lit, modulate white). Texture swapped
 // from the Godot icon to a 32x32 prototype texture (~/gamedev/textures,
 // prototyping_textures_32x32px.zip) per user request.
-material PSX/BoxLit
+material Game/Demo/BoxLit
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -60,7 +60,7 @@ material PSX/BoxLit
 
 // world/crystal/crystal_spire_mat.tres (psx_lit, no texture -> vertex
 // colours) + glassy fresnel edge: icy sheen hugging the spire silhouettes.
-material PSX/CrystalSpire
+material Game/Demo/CrystalSpire
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -74,7 +74,7 @@ material PSX/CrystalSpire
 
 // world/crystal/crystal_ground_mat.tres (same base, separate mat as in
 // Godot). Subtler rim than the spires so the base chunks stay grounded.
-material PSX/CrystalGround
+material Game/Demo/CrystalGround
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -88,7 +88,7 @@ material PSX/CrystalGround
 
 // world/sparkle/sparkle_mat.tres (psx_unlit_alpha-scissor, sparkle.png,
 // billboard=true handled by Ogre's BillboardSet particle renderer)
-material PSX/Sparkle
+material Game/Demo/Sparkle
 {
     technique { pass {
         cull_hardware none
@@ -109,7 +109,7 @@ material PSX/Sparkle
 }
 
 // world/light-shaft/light-shaft_mat.tres (psx_light-volume, modulate white)
-material PSX/LightShaft
+material Game/Demo/LightShaft
 {
     technique { pass {
         cull_hardware none

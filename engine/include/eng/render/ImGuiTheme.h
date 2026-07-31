@@ -15,7 +15,7 @@ namespace eng {
 namespace imguitheme {
 
 // Ids of every registered theme, in registration order. "dark"/"light"/
-// "classic" are the imgui built-ins; "one_dark" is the engine default.
+// "classic" are the imgui built-ins; "dougbinks_dark" is the engine default.
 std::vector<std::string> ids();
 
 // Applies the theme to the current imgui context. Returns false (leaving the

@@ -23,13 +23,16 @@ public:
     Engine();
     ~Engine();
 
-    // Loads TOML config (window.title/width/height + [bindings]), creates
-    // the window, brings up the renderer with engine + app asset roots.
+    // Brings the content root up (eng::assets::init + mount(mountSet)), loads
+    // the TOML config (window.title/width/height + [bindings]) through the
+    // resolver, creates the window and starts the renderer on the mounted
+    // packs. `configPath` is a LOGICAL path -- "game.toml", not a filename on
+    // disk -- and an empty one means "engine defaults".
     // `renderPreset` is the starting render profile (0 = let PSX_RENDER_PRESET
     // decide, then the engine default). The applied id is readable afterwards
     // so the debug console can open on the look that is actually live instead
     // of assuming the default.
-    bool init(const std::string& configPath, const std::string& appAssetDir,
+    bool init(const std::string& configPath, const std::string& mountSet,
               int renderPreset = 0);
 
     // The render profile currently applied. Set by init and by

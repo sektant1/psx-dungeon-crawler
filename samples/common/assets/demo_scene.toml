@@ -24,7 +24,7 @@ range = 3.0
 
 [light_shaft]
 mesh = "light_shaft.obj"
-material = "PSX/LightShaft"
+material = "Game/Demo/LightShaft"
 position = [0.0109267, 2.05731, 0.0147681]
 
 [boxes]
@@ -34,16 +34,16 @@ metal_x = -1.0
 lit_x = 1.0
 metal_mesh = "bevel-box.obj"
 lit_mesh = "box.obj"
-metal_material = "PSX/BoxMetal"
-lit_material = "PSX/BoxLit"
+metal_material = "Game/Demo/BoxMetal"
+lit_material = "Game/Demo/BoxLit"
 sparkles = "sparkles"
 
 [crystals]
 ground_mesh = "crystal_ground.obj"
-ground_material = "PSX/CrystalGround"
+ground_material = "Game/Demo/CrystalGround"
 ground_offset = [-0.02274385, 0.0, 0.01232092]
 ground_scale = 0.31058314
-spire_material = "PSX/CrystalSpire"
+spire_material = "Game/Demo/CrystalSpire"
 
 # Spire transforms (rotation * non-uniform scale) baked into vertices.
 # Either quat+scale or a raw 3x3 given as rows (tscn Transform3D order).

@@ -23,7 +23,7 @@ muzzle_effect = "vesper_muzzle"
 [player_weapon.vesper_spindle.projectile]
 shape = "cone"
 visual_scale = [0.035, 0.22, 0.035]
-material = "Game/ProjectileVesper"
+material = "Game/Prototype/ProjectileVesper"
 trail_effect = "vesper_trail"
 impact_effect = "vesper_impact"
 speed = 72.0
@@ -76,7 +76,7 @@ muzzle_effect = "eidolon_muzzle"
 [player_weapon.eidolon_arbalest.projectile]
 shape = "cone"
 visual_scale = [0.070, 0.42, 0.070]
-material = "Game/ProjectileEidolon"
+material = "Game/Prototype/ProjectileEidolon"
 trail_effect = "eidolon_trail"
 impact_effect = "eidolon_impact"
 speed = 48.0
@@ -129,7 +129,7 @@ muzzle_effect = "talon_muzzle"
 [player_weapon.riven_talon.projectile]
 shape = "sphere"
 visual_scale = [0.09, 0.09, 0.09]
-material = "Game/ProjectileTalon"
+material = "Game/Prototype/ProjectileTalon"
 trail_effect = "talon_trail"
 impact_effect = "talon_impact"
 speed = 58.0

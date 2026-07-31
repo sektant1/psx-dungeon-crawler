@@ -185,7 +185,7 @@ bool buildTemplate(SceneTemplate which, const GridConfig& grid,
     for (Entity& entity : out.entities) {
         if (entity.prefab == "kit.floor" && entity.cell &&
             entity.cell->col == 2 && entity.cell->row == -7) {
-            entity.material = "Kit/Stone";
+            entity.material = "Game/Kit/Stone";
             entity.name = "Ritual Floor";
             break;
         }

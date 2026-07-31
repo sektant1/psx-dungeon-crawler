@@ -48,6 +48,12 @@ public:
     // to remember it themselves.
     const std::string& path() const { return mPath; }
 
+    // Appends a new effect and registers it. Returns its index, or the index of
+    // the existing effect when the name is already taken -- a tuning panel that
+    // clones an effect must not be able to shadow one, because the Renderer
+    // keys by name and the second definition would silently win.
+    size_t add(eng::Renderer& r, ParticleEffectDesc desc);
+
     void reregister(eng::Renderer& r, size_t index);
     // Renderer::clearScene drops GPU batches and effect ids. Definitions remain
     // here, so a rebuilt level can restore them without reparsing source data.

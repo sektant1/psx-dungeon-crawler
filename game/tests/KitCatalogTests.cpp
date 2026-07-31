@@ -4,6 +4,7 @@
 // is where the build says so.
 
 #include "KitCatalog.h"
+#include "TestAssets.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -24,9 +25,10 @@ static bool nearly(float a, float b) { return std::fabs(a - b) < 1e-4f; }
 
 int main()
 {
+    game::test::mountGameAssets();
     KitCatalog catalog;
     std::string error;
-    require(KitCatalog::load(KIT_TOML, catalog, error),
+    require(KitCatalog::load(game::test::asset("kit.toml"), catalog, error),
             ("kit.toml loads: " + error).c_str());
 
     // The unit contract every placement depends on: 20 kit units at 0.2 = 4 m.
@@ -42,7 +44,7 @@ int main()
     require(wall != nullptr, "kit.wall resolves");
     require(wall->meshPath == "meshes/kit/Wall_01.obj", "wall mesh path");
     require(wall->meshPath.front() != '/', "mesh paths are relative");
-    require(wall->material == "Kit/Dungeon", "wall material");
+    require(wall->material == "Game/Kit/Dungeon", "wall material");
     require(wall->socket == Socket::Wall, "wall sits on an edge");
     require(nearly(wall->sizeKit.x, 20.0f) && nearly(wall->sizeKit.y, 20.0f) &&
                 nearly(wall->sizeKit.z, 5.0f),

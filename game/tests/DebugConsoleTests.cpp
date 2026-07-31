@@ -63,6 +63,47 @@ int main()
     eng::log::info("console test line %d", 7);
     console.captureEngineLog(); // second call is a no-op, not a second sink
 
+    // --- category split ---------------------------------------------------
+    // Every subsystem here logs "Name: what happened", and the console files
+    // captured lines by that prefix. Getting the split wrong is not cosmetic:
+    // a false positive eats the front of a message, and a false negative puts
+    // the line back in the uncategorised pile the whole column exists to drain.
+    const auto split = [](const char* line) {
+        return eng::splitLogCategory(line);
+    };
+
+    require(split("Warmup: 96 materials, 0 unsupported").category == "Warmup",
+            "a subsystem prefix becomes the category");
+    require(split("Warmup: 96 materials, 0 unsupported").message ==
+                "96 materials, 0 unsupported",
+            "the prefix is removed from the message");
+    require(split("Ogre: Error: ScriptCompiler - bad ref").category == "Ogre",
+            "only the FIRST colon splits, so nested prefixes stay in the text");
+    require(split("Ogre: Error: ScriptCompiler - bad ref").message ==
+                "Error: ScriptCompiler - bad ref",
+            "the rest of the line survives intact");
+    require(split("ParticleMaterials: 6 textures").category ==
+                "ParticleMaterials",
+            "a long-but-plausible subsystem name is accepted");
+    require(split("r.preset: dungeon").category == "r.preset",
+            "dotted command names are subsystems too");
+
+    // Rejections. Each of these was a real shape in this project's log.
+    require(split("loaded C:/assets/kit.material").category.empty(),
+            "a path is not a category");
+    require(split("note that: this is prose").category.empty(),
+            "a sentence with a space before the colon is not a category");
+    require(split("42: not a subsystem").category.empty(),
+            "digits alone are a measurement, not a subsystem");
+    require(split("a very long prefix indeed: x").category.empty(),
+            "an over-long prefix is prose");
+    require(split(": leading colon").category.empty(),
+            "an empty prefix is not a category");
+    require(split("no colon at all").message == "no colon at all",
+            "an uncategorised line keeps its full text");
+    require(split("Compiling:no space after").category.empty(),
+            "a colon with no separator is not a split point");
+
     std::cout << "DebugConsoleTests: ok\n";
     return 0;
 }

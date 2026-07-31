@@ -1,4 +1,5 @@
 #include "Dummy.h"
+#include "GameAssets.h"
 #include "GameCollision.h"
 
 #include <eng/Physics.h>
@@ -46,9 +47,8 @@ void Dummy::init(eng::Physics& phys, eng::Renderer& r, glm::vec3 feetPos)
     //
     // Scale is now derived from the measurement so the silhouette is the
     // hitbox: Y 1.800/0.794, X 0.600/1.353, Z 0.600/1.800.
-    const std::string propsDir =
-        std::string(APP_ASSET_DIR) + "/meshes/props/";
-    eng::MeshHandle mesh = r.loadObj(propsDir + "prop_haybale.obj");
+    eng::MeshHandle mesh =
+        r.loadObj(game::assetPath("meshes/props/prop_haybale.obj"));
 
     mNode = r.createNode(eng::kRootNode, feetPos);
     constexpr float kMeshX = 1.353f, kMeshY = 0.794f, kMeshZ = 1.800f;

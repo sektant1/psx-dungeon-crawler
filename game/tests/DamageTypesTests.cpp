@@ -4,6 +4,7 @@
 #include "../src/combat/CombatComponents.h"
 #include "../src/combat/CombatVocabulary.h"
 #include "../src/combat/DamageSystem.h"
+#include "TestAssets.h"
 
 #include <cmath>
 #include <cstdio>
@@ -18,8 +19,9 @@ static void check(bool c, const char* m) {
 static bool nearly(float a, float b) { return std::fabs(a - b) < 1e-2f; }
 
 int main() {
+    game::test::mountGameAssets();
     CombatVocabulary vocab;
-    check(vocab.load(std::string(APP_ASSET_DIR) + "/magic.toml"),
+    check(vocab.load(game::test::asset("magic.toml")),
           "magic.toml failed to load");
 
     const DamageTypeId slash = vocab.damageType("slash");

@@ -53,11 +53,14 @@ eye_height        = 1.5
 separation_radius = 0.9
 
 [archetype.base.visual]
-material     = "Game/EnemyRed"
+material     = "Game/Enemy/Red"
 scale        = [1.0, 1.0, 1.0]
 hit_flash    = 0.16
 hit_flash_time = 0.12
 cast_shadows = true
+# Which profile in blood.toml it bleeds. One word covers spray, gibs, decal and
+# pool together; "" is a creature that does not bleed at all.
+blood        = "human"
 
 [archetype.base.stats]
 health        = 60.0
@@ -139,7 +142,7 @@ eye_height = 2.0
 separation_radius = 1.4
 
 [archetype.brute.visual]
-material = "Game/EnemyRedDark"
+material = "Game/Enemy/RedDark"
 
 [archetype.brute.stats]
 health        = 220.0
@@ -203,7 +206,7 @@ height = 1.7
 mass   = 55.0
 
 [archetype.skirmisher.visual]
-material = "Game/EnemyRedPale"
+material = "Game/Enemy/RedPale"
 
 [archetype.skirmisher.stats]
 health = 55.0
@@ -245,7 +248,7 @@ category = "Ranged"
 tier     = 2
 
 [archetype.ranged.visual]
-material = "Game/EnemyRedPale"
+material = "Game/Enemy/RedPale"
 
 [archetype.ranged.stats]
 health = 40.0
@@ -370,7 +373,7 @@ category = "Sentinel"
 mass = 400.0
 
 [archetype.sentinel.visual]
-material = "Game/EnemyRedDark"
+material = "Game/Enemy/RedDark"
 
 [archetype.sentinel.stats]
 health        = 90.0
@@ -390,7 +393,8 @@ tier     = 5
 boss     = true
 
 [archetype.boss.visual]
-material = "Game/EnemyRedElite"
+material = "Game/Enemy/RedElite"
+blood    = "boss"      # same effects, twice the amount
 
 [archetype.boss.stats]
 health      = 900.0
@@ -411,6 +415,9 @@ inherits = "grunt"
 name     = "Hollow"
 category = "Undead - brittle, mindless"
 
+[enemy.hollow.visual]
+blood = "undead_ichor"
+
 [enemy.hollow.stats.resistances]
 poison = 0.6      # already dead
 fire   = -0.4     # dry
@@ -420,6 +427,9 @@ inherits = "grunt"
 name     = "Hollow Soldier"
 category = "Undead - armoured"
 tier     = 2
+
+[enemy.hollow_soldier.visual]
+blood = "undead_ichor"
 
 [enemy.hollow_soldier.stats]
 health = 80.0
@@ -486,6 +496,9 @@ inherits = "brute"
 name     = "Stone Brute"
 category = "Construct - armoured, slow"
 
+[enemy.stone_brute.visual]
+blood = ""        # it is rock; it chips, it does not bleed
+
 [enemy.stone_brute.stats.resistances]
 slash    = 0.6
 pierce   = 0.6
@@ -497,6 +510,9 @@ lightning = -0.3
 inherits = "ranged"
 name     = "Hollow Marksman"
 category = "Undead - ranged"
+
+[enemy.crossbow_hollow.visual]
+blood = "undead_ichor"
 
 [enemy.crossbow_hollow.stats.resistances]
 poison = 0.6

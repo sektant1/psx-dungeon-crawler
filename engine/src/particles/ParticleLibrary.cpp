@@ -347,6 +347,26 @@ ParticleEffectId ParticleLibrary::id(const std::string& name) const {
     return it == mByName.end() ? eng::ParticleEffectId{} : mIds[it->second];
 }
 
+size_t ParticleLibrary::add(Renderer& r, ParticleEffectDesc desc) {
+    auto existing = mByName.find(desc.name);
+    if (existing != mByName.end()) {
+        log::warn("ParticleLibrary: effect '%s' already exists; not adding a "
+                  "second definition", desc.name.c_str());
+        return existing->second;
+    }
+    const ParticleEffectId id = r.registerParticleEffect(desc);
+    if (!id.valid()) {
+        log::error("ParticleLibrary: invalid effect '%s'; not added",
+                   desc.name.c_str());
+        return mDescs.size();
+    }
+    const size_t index = mDescs.size();
+    mDescs.push_back(std::move(desc));
+    mIds.push_back(id);
+    mByName[mDescs.back().name] = index;
+    return index;
+}
+
 void ParticleLibrary::reregister(Renderer& r, size_t index) {
     if (index < mDescs.size())
         mIds[index] = r.registerParticleEffect(mDescs[index]);

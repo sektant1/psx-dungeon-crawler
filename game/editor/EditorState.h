@@ -46,6 +46,10 @@ struct EditorState {
 
     std::string scenePath;    // "" until saved
     std::string kitPath;
+    // The game pack's directory (eng::assets::packDir("game")), resolved once
+    // in onLoad. The editor needs a directory, not a logical path: it saves
+    // and cooks *into* the tree, and validate() checks prefab meshes against a
+    // root. Read-only lookups go through the resolver instead.
     std::string assetRoot;
     bool dirty = false;
 

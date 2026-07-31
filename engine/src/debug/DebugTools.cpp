@@ -4,12 +4,19 @@
 #include "render/RenderPresets.h" // eng::RenderPresetValues, the editable profile cache
 
 #include <eng/Renderer.h>
+#include <eng/render/MaterialPreview.h>
+#include <eng/render/ImGuiLayout.h> // whether a saved dock layout was restored
 #include <eng/controllers/FpsController.h>
 
+// The math operators must be defined before imgui.h, not before
+// imgui_internal.h -- internal asserts on it.
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
+#include <imgui_internal.h> // DockBuilder*, for the default layout
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -44,11 +51,24 @@ int presetIndexOf(int id)
     return 0;
 }
 
+
+// Side of the material swatch, in pixels. Small on purpose: it is a reminder of
+// what a material looks like, not a place to judge one -- the editor's material
+// stage is where that happens.
+constexpr int kPreviewSwatch = 128;
+
 } // namespace
 
 // ----------------------------------------------------------------- state ----
 
 struct DebugTools::State {
+    // The material swatch rig, shared with the editor's material stage. Held
+    // here so it is built once and survives across frames; the thumbnail is
+    // rendered into its own small target and never touches the live scene.
+    MaterialPreview preview;
+    // Snapshot of Renderer::materialNames(), so the swatch and the list agree
+    // on what materialIdx refers to. Refreshed each time the list is drawn.
+    std::vector<std::string> materialList;
     // Combo selection into renderPresets(). Seeded on the first draw from the
     // profile the engine actually applied (Deps::renderPresetId), so the panel
     // opens showing the look that is really live.
@@ -71,14 +91,22 @@ struct DebugTools::State {
     float paramValue = 0.26f;
 };
 
-DebugTools::DebugTools() : mState(std::make_unique<State>()) {}
+DebugTools::DebugTools() : mState(std::make_unique<State>())
+{
+    // PSX_TUNE=1 opens the panel on the first frame, for the same reason
+    // PSX_CONSOLE does for the console: a deterministic capture has no key to
+    // press, so this is the only way a screenshot can prove the panel draws.
+    mVisible = std::getenv("PSX_TUNE") != nullptr;
+}
 DebugTools::~DebugTools() = default;
 DebugTools::DebugTools(DebugTools&&) noexcept = default;
 DebugTools& DebugTools::operator=(DebugTools&&) noexcept = default;
 
-void DebugTools::addPanel(std::string name, std::function<void()> draw)
+void DebugTools::addPanel(std::string name, std::function<void()> draw,
+                          PanelGroup group)
 {
-    if (draw) mPanels.push_back(Panel{std::move(name), std::move(draw)});
+    if (draw)
+        mPanels.push_back(Panel{std::move(name), std::move(draw), group});
 }
 
 // ---------------------------------------------------------------- shell -----
@@ -101,36 +129,143 @@ void DebugTools::draw(const Deps& d)
         s.profileInit = true;
     }
 
-    const ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x - kPanelWidth,
-                                   vp->WorkPos.y));
-    ImGui::SetNextWindowSize(ImVec2(kPanelWidth, vp->WorkSize.y));
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                             ImGuiWindowFlags_NoCollapse |
-                             ImGuiWindowFlags_NoSavedSettings;
-    if (!ImGui::Begin("Debug Console", nullptr, flags)) {
-        ImGui::End();
-        return;
+    // One dockspace over the whole viewport, with the centre left transparent
+    // so the game keeps rendering through it. Every panel below is its own
+    // window docked into that space, which is what lets a viewer put two
+    // related controls side by side instead of paging a tab bar.
+    const ImGuiID dockspace = ImGui::DockSpaceOverViewport(
+        0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+    if (!mLayoutBuilt) {
+        // A restored layout is the whole point of eng::imgui_layout, and
+        // building over it would silently undo the arrangement on the first
+        // frame the console opened, every run. resetLayout() still forces the
+        // shipped one back, for a viewer who has made a mess.
+        if (mForceLayout || !imgui_layout::restored())
+            buildDefaultLayout(dockspace);
+        else
+            placeNewPanels(dockspace);
+        mLayoutBuilt = true;
+        mForceLayout = false;
     }
 
-    ImGui::TextDisabled("edits apply live");
-    ImGui::Separator();
+    // Engine panels, grouped: World on the left, Look on the right. Each dock
+    // node ends up holding three or four tabs rather than all eleven.
+    drawWindow("Player", [&] { drawPlayerTab(d); });
+    drawWindow("Colliders", [&] { drawCollidersTab(d); });
+    drawWindow("Animation", [&] { drawAnimationTab(d); });
+    drawWindow("Render", [&] { drawRenderTab(d); });
+    drawWindow("Shaders", [&] { drawShadersTab(d); });
+    drawWindow("Materials", [&] { drawMaterialsTab(d); });
+    // Application panels last, so the engine's own keep a stable position
+    // however many the game registers.
+    for (Panel& p : mPanels)
+        drawWindow(p.name.c_str(), p.draw);
+}
 
-    if (ImGui::BeginTabBar("##dbgtabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
-        if (ImGui::BeginTabItem("Render"))    { drawRenderTab(d);    ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Animation")) { drawAnimationTab(d); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Shaders"))   { drawShadersTab(d);   ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Colliders")) { drawCollidersTab(d); ImGui::EndTabItem(); }
-        // Application tabs last, so the engine's own keep a stable position
-        // however many the game registers.
-        for (Panel& p : mPanels) {
-            if (ImGui::BeginTabItem(p.name.c_str())) { p.draw(); ImGui::EndTabItem(); }
-        }
-        if (ImGui::BeginTabItem("Player"))    { drawPlayerTab(d);    ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Materials")) { drawMaterialsTab(d); ImGui::EndTabItem(); }
-        ImGui::EndTabBar();
-    }
+// A panel is a plain dockable window. It carries no position or size of its
+// own: the dock node it belongs to owns both, and the viewer owns the node.
+void DebugTools::drawWindow(const char* name,
+                            const std::function<void()>& body)
+{
+    if (ImGui::Begin(name))
+        body();
     ImGui::End();
+}
+
+// Every panel and the group it belongs to, in draw order. Both the default
+// layout and the new-panel placement below walk it, so a panel cannot be
+// grouped in one and forgotten in the other.
+std::vector<std::pair<const char*, PanelGroup>> DebugTools::panelGroups() const
+{
+    std::vector<std::pair<const char*, PanelGroup>> all = {
+        {"Player", PanelGroup::World},   {"Colliders", PanelGroup::World},
+        {"Animation", PanelGroup::World}, {"Render", PanelGroup::Look},
+        {"Shaders", PanelGroup::Look},   {"Materials", PanelGroup::Look},
+    };
+    for (const Panel& p : mPanels)
+        all.emplace_back(p.name.c_str(), p.group);
+    return all;
+}
+
+// A saved layout only knows about the panels that existed when it was saved.
+// Add one afterwards and imgui has no settings for it, so it opens floating in
+// the middle of the screen -- which reads as the new panel being broken.
+//
+// Docking it beside a panel of its own group that *is* placed puts it where the
+// default layout would have, without touching anything the viewer arranged. It
+// cannot use the default layout's node ids: those come from DockBuilderSplitNode
+// and have nothing to do with the ids a restored tree happens to carry.
+void DebugTools::placeNewPanels(ImGuiID dockspace)
+{
+    const auto savedDock = [](const char* name) -> ImGuiID {
+        const ImGuiWindowSettings* ws =
+            ImGui::FindWindowSettingsByID(ImHashStr(name));
+        return ws ? ws->DockId : 0;
+    };
+
+    const std::vector<std::pair<const char*, PanelGroup>> all = panelGroups();
+    // One representative dock node per group, taken from the saved file.
+    ImGuiID home[4] = {0, 0, 0, 0};
+    for (const auto& [name, group] : all)
+        if (const ImGuiID dock = savedDock(name); dock && !home[int(group)])
+            home[int(group)] = dock;
+
+    bool placed = false;
+    for (const auto& [name, group] : all) {
+        if (savedDock(name))
+            continue;
+        // Its own group first; failing that, anywhere the layout already is.
+        // The dockspace root is the last resort -- docked somewhere odd still
+        // beats floating over the middle of the game.
+        ImGuiID target = home[int(group)];
+        for (int i = 0; !target && i < 4; ++i)
+            target = home[i];
+        ImGui::DockBuilderDockWindow(name, target ? target : dockspace);
+        placed = true;
+    }
+    if (placed)
+        ImGui::DockBuilderFinish(dockspace);
+}
+
+void DebugTools::buildDefaultLayout(ImGuiID dockspace)
+{
+    // Wipe whatever is there and lay the nodes out from scratch. This runs at
+    // most once per session, and only when there is no saved layout to restore
+    // (or resetLayout() asked for the shipped one back), so a headless capture
+    // with persistence off is still reproducible.
+    ImGui::DockBuilderRemoveNode(dockspace);
+    ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_DockSpace |
+                                             ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::DockBuilderSetNodeSize(dockspace,
+                                  ImGui::GetMainViewport()->WorkSize);
+
+    // Left a quarter, right a quarter, and the right column split again so the
+    // authored content profiles get their own node instead of a fifth tab.
+    // The centre is left empty on purpose: that is the game.
+    ImGuiID centre = dockspace;
+    ImGuiID left = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Left, 0.22f,
+                                               nullptr, &centre);
+    ImGuiID right = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Right, 0.28f,
+                                                nullptr, &centre);
+    ImGuiID content = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.42f,
+                                                  nullptr, &right);
+    ImGuiID bottom = ImGui::DockBuilderSplitNode(centre, ImGuiDir_Down, 0.30f,
+                                                 nullptr, &centre);
+
+    const auto nodeFor = [&](PanelGroup group) {
+        switch (group) {
+            case PanelGroup::World: return left;
+            case PanelGroup::Look: return right;
+            case PanelGroup::Content: return content;
+            case PanelGroup::Gameplay: break;
+        }
+        return bottom;
+    };
+
+    for (const auto& [name, group] : panelGroups())
+        ImGui::DockBuilderDockWindow(name, nodeFor(group));
+
+    ImGui::DockBuilderFinish(dockspace);
 }
 
 void DebugTools::loadProfile(const Deps& d, int id)
@@ -223,7 +358,7 @@ void DebugTools::drawRenderTab(const Deps& d)
         bool snap = v.bloomPixelSnap >= 0.5f;
         if (ImGui::Checkbox("Snap to pixel grid##bloom", &snap)) {
             v.bloomPixelSnap = snap ? 1.0f : 0.0f;
-            r->setMaterialParam("PSX/BloomComposite", "bloomPixelSnap",
+            r->setMaterialParam("Engine/Psx/BloomComposite", "bloomPixelSnap",
                                 v.bloomPixelSnap);
         }
     }
@@ -237,30 +372,30 @@ void DebugTools::drawRenderTab(const Deps& d)
             r->setGradeParams(v.gradeDesaturate, v.gradeContrast, v.gradeShadow,
                               v.gradeMid);
         if (ImGui::SliderFloat("Saturation", &v.gradeSaturation, 0.0f, 2.0f))
-            r->setMaterialParam("PSX/DitherPost", "gradeSaturation", v.gradeSaturation);
+            r->setMaterialParam("Engine/Psx/DitherPost", "gradeSaturation", v.gradeSaturation);
         if (ImGui::SliderFloat("Tint strength", &v.gradeTintStrength, 0.0f, 1.0f))
-            r->setMaterialParam("PSX/DitherPost", "gradeTintStrength", v.gradeTintStrength);
+            r->setMaterialParam("Engine/Psx/DitherPost", "gradeTintStrength", v.gradeTintStrength);
         if (ImGui::SliderFloat("Black lift", &v.gradeBlackLift, 0.0f, 0.5f))
-            r->setMaterialParam("PSX/DitherPost", "gradeBlackLift", v.gradeBlackLift);
+            r->setMaterialParam("Engine/Psx/DitherPost", "gradeBlackLift", v.gradeBlackLift);
     }
 
     if (section("Quantize / Dither")) {
         if (ImGui::SliderFloat("Colour depth", &v.colDepth, 3.0f, 63.0f, "%.0f"))
-            r->setMaterialParam("PSX/DitherPost", "colDepth", v.colDepth);
+            r->setMaterialParam("Engine/Psx/DitherPost", "colDepth", v.colDepth);
         if (ImGui::SliderFloat("Dither banding", &v.ditherBanding, 0.0f, 0.1f, "%.4f"))
-            r->setMaterialParam("PSX/DitherPost", "ditherBanding", v.ditherBanding);
+            r->setMaterialParam("Engine/Psx/DitherPost", "ditherBanding", v.ditherBanding);
         if (ImGui::SliderFloat("Dither dark fade", &v.ditherDarkFade, 0.0f, 1.0f))
-            r->setMaterialParam("PSX/DitherPost", "ditherDarkFade", v.ditherDarkFade);
+            r->setMaterialParam("Engine/Psx/DitherPost", "ditherDarkFade", v.ditherDarkFade);
     }
 
     if (section("Vignette")) {
         bool ch = ImGui::Checkbox("Enabled##vig", &v.vignetteEnabled);
         ch |= ImGui::SliderFloat("Strength##vig", &v.vignetteStrength, 0.0f, 1.0f);
         if (ch)
-            r->setMaterialParam("PSX/DitherPost", "vignetteStrength",
+            r->setMaterialParam("Engine/Psx/DitherPost", "vignetteStrength",
                                 v.vignetteEnabled ? v.vignetteStrength : 0.0f);
         if (ImGui::ColorEdit3("Colour##vig", &v.vignetteColor.x))
-            r->setMaterialParam("PSX/DitherPost", "vignetteColor", v.vignetteColor);
+            r->setMaterialParam("Engine/Psx/DitherPost", "vignetteColor", v.vignetteColor);
     }
 
     // Environment lives outside the render profile (it comes from the scene
@@ -384,7 +519,7 @@ void DebugTools::drawShadersTab(const Deps& d)
     Renderer* r = d.renderer;
     if (!r) { ImGui::TextDisabled("Renderer unavailable."); return; }
     RenderPresetValues& v = mState->rp;
-    const char* kStylize = "PSX/PixelStylize";
+    const char* kStylize = "Engine/Psx/PixelStylize";
 
     if (section("Master")) {
         if (ImGui::Checkbox("Stylize enabled", &v.stylizeEnabled))
@@ -456,10 +591,13 @@ void DebugTools::drawShadersTab(const Deps& d)
     }
 
     if (section("Hardware Resolve")) {
-        if (ImGui::SliderFloat("Mode", &v.hardwareResolveMode, 0.0f, 8.0f, "%.0f"))
-            r->setMaterialParam("PSX/HardwareResolve", "resolveMode", v.hardwareResolveMode);
+        // 0..7 are every branch hardware_resolve.frag has; anything above 7
+        // lands in the same final else, so a wider slider only looks like it
+        // does something.
+        if (ImGui::SliderFloat("Mode", &v.hardwareResolveMode, 0.0f, 7.0f, "%.0f"))
+            r->setMaterialParam("Engine/Psx/HardwareResolve", "resolveMode", v.hardwareResolveMode);
         if (ImGui::SliderFloat("Strength##hr", &v.hardwareResolveStrength, 0.0f, 1.0f))
-            r->setMaterialParam("PSX/HardwareResolve", "resolveStrength", v.hardwareResolveStrength);
+            r->setMaterialParam("Engine/Psx/HardwareResolve", "resolveStrength", v.hardwareResolveStrength);
     }
 
     ImGui::Separator();
@@ -616,8 +754,41 @@ void DebugTools::drawMaterialsTab(const Deps& d)
         ImGui::TextDisabled("Sets a float on every material declaring it.");
     }
 
+    // The staging swatch, the same rig the editor's material stage uses. It
+    // lives here rather than only in the editor because "what does this
+    // material actually look like" is a question you ask from the game and the
+    // demo too, and the rig is a renderer concern (eng::MaterialPreview).
+    if (section("Preview")) {
+        if (!s.preview.thumbnailBuilt())
+            s.preview.buildThumbnail(*r, kPreviewSwatch);
+        if (s.preview.thumbnailBuilt()) {
+            const std::vector<std::string>& names = s.materialList;
+            const std::string wanted =
+                s.materialIdx >= 0 && s.materialIdx < int(names.size())
+                    ? names[size_t(s.materialIdx)]
+                    : std::string();
+            if (!wanted.empty() && wanted != s.preview.thumbnailMaterial())
+                s.preview.setThumbnailMaterial(*r, wanted);
+            // Turntable: a material's angular behaviour is most of what the
+            // sphere rig exists to show, and a still swatch shows none of it.
+            s.preview.spinThumbnail(*r, s.preview.thumbnailSpin() +
+                                            ImGui::GetIO().DeltaTime * 0.6f);
+            const uint64_t id = r->materialThumbnailTextureId();
+            if (id != 0)
+                ImGui::Image(ImTextureID(id),
+                             ImVec2(float(kPreviewSwatch),
+                                    float(kPreviewSwatch)));
+            ImGui::TextDisabled("%s", s.preview.thumbnailMaterial().empty()
+                                          ? "pick a material below"
+                                          : s.preview.thumbnailMaterial().c_str());
+        } else {
+            ImGui::TextDisabled("Preview target unavailable.");
+        }
+    }
+
     if (section("Loaded Materials")) {
-        const std::vector<std::string> names = r->materialNames();
+        s.materialList = r->materialNames();
+        const std::vector<std::string>& names = s.materialList;
         ImGui::TextDisabled("%zu materials loaded", names.size());
         if (ImGui::BeginListBox("##mats", ImVec2(-FLT_MIN, 240))) {
             for (int i = 0; i < int(names.size()); ++i)

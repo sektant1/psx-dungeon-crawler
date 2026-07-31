@@ -31,6 +31,10 @@ public:
 
     int lineHeight() const { return mLineHeight; }
     int ascent() const { return mAscent; }
+    // Full glyph cell. Needed by anything that draws a *box around* text
+    // rather than text on a line: the cell is taller than the ink, so a plate
+    // sized from lineHeight() clips the glyphs it is meant to contain.
+    int cellHeight() const { return mCellH; }
     int advance(char c) const;
 
     // Width/height in font pixels. Handles '\n'.

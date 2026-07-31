@@ -1,5 +1,6 @@
 #include "LiveLevel.h"
 
+#include "GameAssets.h"
 #include "RenderPalette.h"
 #include "ShowcaseVisibility.h"
 #include "ShowroomMotion.h"
@@ -31,7 +32,6 @@ static eng::TextSpriteStyle showcaseLabelStyle(float worldHeight,
 // Build a complete level (dungeon + demo scene + props + chest + portals)
 // into the (already-clear) scene. depth>0 adds an up-portal at the entry.
 LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
-                      const std::string& assets,
                       const game::CombatVocabulary& vocabulary, uint32_t seed,
                       int depth, const gen::Layout* authored,
                       const std::string* authoredMapPath)
@@ -57,9 +57,10 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
                 std::error_code error;
                 if (std::filesystem::exists(path, error))
                     return r.loadObj(path);
-                const std::string resolved = assets + "/" + path;
-                if (std::filesystem::exists(resolved, error))
-                    return r.loadObj(resolved);
+                const std::filesystem::path resolved =
+                    eng::assets::resolve(path);
+                if (!resolved.empty())
+                    return r.loadObj(resolved.string());
                 eng::log::error("Authored scene mesh not found: %s",
                                 path.c_str());
                 return r.prototypeMesh(path);
@@ -73,8 +74,8 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
             r.createNode(levelRoot, glm::vec3(0.0f), "Procedural Dungeon");
         gen::Layout layout = authored ? *authored : gen::generate(seed);
         if (!lv.map.loadFromRows(r, physics, std::move(layout),
-                                 assets + "/meshes/kit/",
-                                 assets + "/meshes/props/", dungeonRoot)) {
+                                 game::assetDir("meshes/kit"),
+                                 game::assetDir("meshes/props"), dungeonRoot)) {
             eng::log::error("buildLevel: map load failed");
             return lv;
         }
@@ -85,7 +86,7 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
 
     RenderPalette palette;
     if (sourceAuthored) {
-        loadRenderPalette(assets + "/palettes.toml", "boss_arena", palette);
+        loadRenderPalette(game::assetPath("palettes.toml"), "boss_arena", palette);
         eng::NodeHandle sunNode{};
         eng::LightHandle sunLight{};
         auto& registry = lv.authoredMap->registry();
@@ -105,13 +106,13 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
              lv.authoredMap->placements("feature."))
             featurePlacements.emplace(placement.type.substr(8),
                                       placement.position);
-        loadPrimitiveShowcase(r, assets + "/boss_arena_features.toml",
+        loadPrimitiveShowcase(r, game::assetPath("boss_arena_features.toml"),
                               lv.exhibits, vocabulary, featurePlacements);
 
         lv.chestOrigin = lv.markerPosition("shrine.treasure");
-        buildCrystalRing(r, assets + "/meshes/", lv.chestOrigin);
+        buildCrystalRing(r, game::assetDir("meshes"), lv.chestOrigin);
         const TreasureShrine shrine = buildTreasureShrine(
-            r, assets + "/meshes/props/", lv.chestOrigin);
+            r, game::assetDir("meshes/props"), lv.chestOrigin);
         lv.chestBase = shrine.chestBase;
         lv.chestSpin = shrine.chestSpin;
         lv.chestGlowColour = shrine.chestGlowColour;
@@ -127,9 +128,9 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         DemoScene::Options sceneOptions;
         sceneOptions.crystals = false;
         sceneOptions.boxes = false;
-        lv.scene.load(r, DEMO_SCENE_TOML, assets + "/meshes/", sharedRoot,
-                      sceneOptions);
-        loadRenderPalette(assets + "/palettes.toml", "dungeon", palette);
+        lv.scene.load(r, game::assetPath("demo_scene.toml"),
+                      game::assetDir("meshes"), sharedRoot, sceneOptions);
+        loadRenderPalette(game::assetPath("palettes.toml"), "dungeon", palette);
         applyRenderPalette(r, palette, lv.scene.sunNode(), lv.scene.sunLight());
     }
 
@@ -137,10 +138,14 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
     // pieces, deliberately larger than the kit's doorways so the threshold reads
     // as the room's landmark. It stays on the cell boundary, keeping
     // interaction/navigation deterministic.
-    const std::string kitMeshDir = assets + "/meshes/kit/";
+    const std::string kitMeshDir = game::assetDir("meshes/kit");
     {
         PortalPropStyle down;
-        down.lightColour = {0.06f, 0.42f, 0.025f};
+        // The portal is the brightest thing in the room and should light it:
+        // this throws far enough to reach the arch's stone and the floor in
+        // front of it, which is what makes the threshold read from the door.
+        down.lightColour = {0.22f, 1.05f, 0.10f};
+        down.lightRange = 8.5f;
         down.yawDegrees = lv.exitYaw;
         down.kitMeshDir = kitMeshDir;
         lv.downPortal = createPortalProp(r, lv.exit, down);
@@ -162,8 +167,9 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
         }
         if (depth > 0) {
             PortalPropStyle up;
-            up.material = "Game/PortalUp";
-            up.lightColour = {0.18f, 0.90f, 1.35f};
+            up.material = "Game/Vfx/PortalUp";
+            up.lightColour = {0.42f, 1.60f, 2.35f};
+            up.lightRange = 8.5f;
             up.kitMeshDir = kitMeshDir;
             lv.upPortal = createPortalProp(r, lv.spawn, up);
         }
@@ -196,25 +202,30 @@ LiveLevel buildLevel(eng::Renderer& r, eng::Physics& physics,
 
 bool LiveLevel::rebuild(eng::Renderer& r, eng::Physics& physics,
                         const game::CombatVocabulary& vocabulary,
-                        const std::string& assets, uint32_t seed, int depth)
+                        uint32_t seed, int depth)
 {
     // Free the outgoing level's collider bodies before overwriting the map.
     map.clearPhysics();
     r.clearScene();
-    *this = buildLevel(r, physics, assets, vocabulary, seed, depth);
+    *this = buildLevel(r, physics, vocabulary, seed, depth);
+    // The seed is the whole reproduction recipe for a generated level: without
+    // it in the log, "the layout that trapped the player" is unrecoverable.
+    eng::log::info("Level: generated depth %d, seed %u, %d rows, spawn "
+                   "%.1f %.1f %.1f",
+                   depth, seed, map.debugRows(), double(spawn.x),
+                   double(spawn.y), double(spawn.z));
     return map.debugRows() > 0;
 }
 
 bool LiveLevel::rebuildLayout(eng::Renderer& r, eng::Physics& physics,
                               const game::CombatVocabulary& vocabulary,
-                              const std::string& assets, gen::Layout layout,
-                              int depth)
+                              gen::Layout layout, int depth)
 {
     if (!layout.valid())
         return false;
     map.clearPhysics();
     r.clearScene();
-    *this = buildLevel(r, physics, assets, vocabulary, 0, depth, &layout);
+    *this = buildLevel(r, physics, vocabulary, 0, depth, &layout);
     return map.debugRows() > 0;
 }
 
@@ -309,13 +320,22 @@ void LiveLevel::appendTargets(std::vector<GameplayTarget>& targets,
 
 bool LiveLevel::rebuildAuthored(eng::Renderer& r, eng::Physics& physics,
                                 const game::CombatVocabulary& vocabulary,
-                                const std::string& assets,
                                 const std::string& cookedMap, int depth)
 {
     map.clearPhysics();
     r.clearScene();
     *this =
-        buildLevel(r, physics, assets, vocabulary, 0, depth, nullptr, &cookedMap);
+        buildLevel(r, physics, vocabulary, 0, depth, nullptr, &cookedMap);
+    // A cooked map that fails to load leaves an empty level rather than an
+    // error, so the load is reported either way -- an empty room and a missing
+    // file used to look identical from inside the game.
+    if (authoredMap)
+        eng::log::info("Level: loaded '%s' at depth %d, %zu placements",
+                       cookedMap.c_str(), depth,
+                       authoredMap->placements().size());
+    else
+        eng::log::error("Level: '%s' did not load; the level is empty",
+                        cookedMap.c_str());
     return authoredMap != nullptr;
 }
 

@@ -72,6 +72,33 @@ their box. `ellipsize` provides deterministic one-line overflow. Tooltip body
 copy is capped at three lines; compact weapon and banner labels are ellipsized,
 so authored text cannot escape panel bounds.
 
+## Key caps
+
+Bindings are a canvas primitive, not a string convention:
+
+```cpp
+const int w = canvas.keyCap({x, y}, "SPACE");        // returns the plate width
+canvas.text({x + w + 6, y}, "pause", palette.textDim);
+canvas.keyCapWidth("SPACE");   // measure without drawing, for layout
+canvas.keyCapRow();            // vertical pitch for a stacked column
+```
+
+`keyCap` takes the *text* origin a `text()` call would take and places the plate
+around it, so a cap and the words beside it align by construction. The plate is
+sized from the glyph **cell** (`BitmapFont::cellHeight`), not from the line
+height: the cell reserves rows above and below the ink, and a plate cut to a
+line height clips the letters it is supposed to contain.
+
+Nothing writes `"[" + key + "]"` any more. A binding packed into prose stops
+reading as a binding at all — `` ` console  ESC quit `` scans as a typo, and
+`, . fov` as a comma splice — so `TooltipContent::hints` carries
+`{key, label}` pairs and the widget lays out the cap column with the
+descriptions aligned beside it. `TooltipStyle::maxHints` bounds the list; when
+the panel runs out of vertical room, body copy is dropped before bindings are.
+
+Consumers: the tooltip's action verb, `TooltipContent::hints` (the demo
+placard's control list), and the game's armament plate.
+
 Two fonts exist in the imgui atlas and the order matters:
 
 | slot | face | used by |

@@ -125,7 +125,7 @@ bool layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             // --- Floor slab --------------------------------------------------
             makeMesh(reg,
                      opts.kitDir + "Floor_Tiles.obj",
-                     "Kit/Dungeon",
+                     "Game/Kit/Dungeon",
                      centre,
                      glm::quat{1.f, 0.f, 0.f, 0.f},
                      kitScale);
@@ -143,7 +143,7 @@ bool layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
             // height with the two-sided material so it reads from below.
             makeMesh(reg,
                      opts.kitDir + "Floor_Tiles.obj",
-                     "Kit/DungeonTwoSided",
+                     "Game/Kit/DungeonTwoSided",
                      centre + glm::vec3{0.f, wallH, 0.f},
                      glm::quat{1.f, 0.f, 0.f, 0.f},
                      kitScale);
@@ -171,7 +171,7 @@ bool layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
 
                 makeMesh(reg,
                          opts.kitDir + "Wall_01.obj",
-                         "Kit/Dungeon",
+                         "Game/Kit/Dungeon",
                          wallPos,
                          wallRot,
                          kitScale);
@@ -193,7 +193,7 @@ bool layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
                 const glm::quat rotation = glm::angleAxis(
                     glm::radians(yaw), glm::vec3{0.f, 1.f, 0.f});
                 makeMesh(reg, opts.kitDir + "Door_Frame_01.obj",
-                         "Kit/Dungeon", centre, rotation, kitScale);
+                         "Game/Kit/Dungeon", centre, rotation, kitScale);
 
                 const float jamb = cell * 0.25f;
                 const float thickness = cell * 0.125f;

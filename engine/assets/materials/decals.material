@@ -34,7 +34,7 @@ fragment_program Decals/QuadFS glsl
 // bias it z-fights. The spawn code also offsets along the normal, but that
 // offset has to stay small enough not to detach the mark at grazing angles, so
 // the two work together.
-material Decals/Alpha
+material Engine/Decals/Alpha
 {
     technique { pass {
         cull_hardware clockwise
@@ -53,7 +53,7 @@ material Decals/Alpha
 
 // For glowing marks -- scorch embers, arcane residue -- where order does not
 // matter and the mark should brighten what is under it.
-material Decals/Additive
+material Engine/Decals/Additive
 {
     technique { pass {
         cull_hardware clockwise

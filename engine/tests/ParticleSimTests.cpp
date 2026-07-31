@@ -277,16 +277,14 @@ void testOneShotRetirement()
             "the burst emitted again after its " + num(window) +
                 "s window: " + num((long long)afterWindow) + " -> " +
                 num((long long)sim.liveCount()));
-    // A burst emits over the resolved 0.05 s window, so the exact total is a
-    // function of the step: the frame that lands on age >= duration is skipped
-    // and the fractional accumulator is dropped. It must never exceed
-    // burst_count, and must not lose most of it either.
+    // A burst emits its authored count, exactly, whatever the step size.
+    // It used to lose the frame that landed on age >= duration along with the
+    // fractional accumulator, which cost a third of the count at 60 Hz -- and
+    // *all* of it at the game's 18 Hz particle clock, where the very first
+    // update already arrives past the 50 ms window. See testBurstCountIsStepInvariant.
     const uint32_t emitted = afterWindow;
-    require(emitted <= 24,
-            "burst emitted more than burst_count: " +
-                num((long long)emitted) + " > 24");
-    require(emitted >= 16,
-            "burst lost most of burst_count over its emission window: " +
+    require(emitted == 24,
+            "burst did not emit its authored count: " +
                 num((long long)emitted) + " of 24, dt=" + num(dt));
 
     for (int i = 0; i < 20; ++i)     // to t = 0.50, past window + maxTtl
@@ -465,6 +463,80 @@ void testCollisionBudget()
     require(sim.raysLastFrame() == 0,
             "raysLastFrame was " + num((long long)sim.raysLastFrame()) +
                 " with no collider installed, expected 0");
+}
+
+// --- 3b. burst emission is step-invariant ----------------------------------
+
+// The property that matters for a burst: the authored count comes out, whole,
+// at whatever rate the game happens to step particles at. The shipped game
+// steps them at 18 Hz, which is slower than the 50 ms emission window a burst
+// resolves to -- so "one update covers the entire window" is the normal case,
+// not an edge case.
+void testBurstCountIsStepInvariant()
+{
+    using namespace eng;
+    const float steps[] = {1.0f / 240.0f, 1.0f / 144.0f, 1.0f / 60.0f,
+                           1.0f / 30.0f,  1.0f / 18.0f,  1.0f / 12.0f, 0.1f};
+    for (float dt : steps) {
+        ParticleEffectDesc desc;
+        desc.name = "test_burst_steps";
+        desc.loop = false;
+        desc.burstCount = 24.0f;
+        ParticleEmitterDesc emitter;
+        emitter.ttlMin = 1.0f; // long, so nothing expires while we count
+        emitter.ttlMax = 1.0f;
+        emitter.velocityMin = 0.0f;
+        emitter.velocityMax = 0.0f;
+        desc.emitters.push_back(emitter);
+
+        const ResolvedParticleSpawn resolved =
+            resolveParticleSpawn(desc, ParticleSpawnOptions{});
+        ParticleSim sim;
+        sim.reserve(512);
+        const uint16_t fx = sim.registerEffect(desc);
+        sim.addInstance(fx, resolved, glm::mat4(1.0f), 7u);
+        std::vector<DecalRequest> decals;
+
+        // Step past the 0.05 s window, but nowhere near the particles' 1 s
+        // ttl, so what is counted is everything the burst ever emitted.
+        for (float t = 0.0f; t < 0.2f; t += dt)
+            sim.update(dt, decals);
+
+        require(sim.liveCount() == 24,
+                "burst count is not step-invariant at dt=" + num(dt) + ": " +
+                    num((long long)sim.liveCount()) + " of 24");
+    }
+}
+
+// A burst spread over several emitters still totals the authored count, and
+// still does so in one 18 Hz step.
+void testBurstSplitsAcrossEmitters()
+{
+    using namespace eng;
+    ParticleEffectDesc desc;
+    desc.name = "test_burst_multi";
+    desc.loop = false;
+    desc.burstCount = 12.0f;
+    for (int i = 0; i < 3; ++i) {
+        ParticleEmitterDesc emitter;
+        emitter.ttlMin = 1.0f;
+        emitter.ttlMax = 1.0f;
+        emitter.velocityMin = 0.0f;
+        emitter.velocityMax = 0.0f;
+        desc.emitters.push_back(emitter);
+    }
+
+    const ResolvedParticleSpawn resolved =
+        resolveParticleSpawn(desc, ParticleSpawnOptions{});
+    ParticleSim sim;
+    sim.reserve(512);
+    const uint16_t fx = sim.registerEffect(desc);
+    sim.addInstance(fx, resolved, glm::mat4(1.0f), 8u);
+    std::vector<DecalRequest> decals;
+    sim.update(1.0f / 18.0f, decals);
+    require(sim.liveCount() == 12,
+            "a burst split across emitters lost particles: " +
+                num((long long)sim.liveCount()) + " of 12");
 }
 
 // --- 6. collide responses --------------------------------------------------
@@ -745,6 +817,8 @@ int main()
     testDeterminism();
     testSteadyState();
     testOneShotRetirement();
+    testBurstCountIsStepInvariant();
+    testBurstSplitsAcrossEmitters();
     testRamps();
     testCollisionBudget();
     testCollideResponses();

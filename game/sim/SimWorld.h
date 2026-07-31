@@ -29,8 +29,8 @@ public:
     // Load a weapons.toml over the built-in defaults (optional).
     void loadWeapons(const std::string& tomlPath);
 
-    // Damage channels + schools, as the game defines them. Loaded from
-    // APP_ASSET_DIR/magic.toml at construction, so scripts can name channels.
+    // Damage channels + schools, as the game defines them. Loaded from the
+    // game pack's magic.toml at construction, so scripts can name channels.
     const CombatVocabulary& vocabulary() const { return mVocabulary; }
 
     // Register a named combatant. Returns false if the name is already taken.

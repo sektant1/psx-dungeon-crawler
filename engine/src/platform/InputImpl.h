@@ -17,12 +17,14 @@ struct Input::Impl {
     std::set<Uint8> mouseDown;
     std::set<Uint8> mousePressed;
     glm::vec2 delta{0.0f};
+    float wheel = 0.0f;
 
     void beginTick()
     {
         pressed.clear();
         mousePressed.clear();
         delta = glm::vec2(0.0f);
+        wheel = 0.0f;
     }
 
     void onEvent(const SDL_Event& e)
@@ -47,6 +49,19 @@ struct Input::Impl {
         case SDL_MOUSEBUTTONUP:
             mouseDown.erase(e.button.button);
             break;
+        case SDL_MOUSEWHEEL: {
+            // preciseY carries trackpad/high-resolution wheels; on a notched
+            // mouse it is exactly the integer y. The flip flag is folded in
+            // here so no caller has to know the platform convention.
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+            const float notches = e.wheel.preciseY;
+#else
+            const float notches = float(e.wheel.y);
+#endif
+            wheel += e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -notches
+                                                                 : notches;
+            break;
+        }
         }
     }
 

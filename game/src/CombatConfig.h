@@ -34,7 +34,7 @@ struct CombatConfig {
         float segmentTtl = 0.10f;
         glm::vec3 lightColour{0.40f, 0.70f, 1.0f};
         float lightRange = 3.0f;
-        std::string coreParticle   = "Game/BeamCore";   // beam segment MESH material
+        std::string coreParticle   = "Game/Spells/BeamCore";   // beam segment MESH material
         std::string impactParticle = "beam_impact";      // particle EFFECT name
         std::string action = "cast_beam";
         std::string key    = "R";

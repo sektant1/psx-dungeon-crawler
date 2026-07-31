@@ -20,7 +20,7 @@
 [[effect]]
 name = "spell_muzzle"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.18
 base_height = 0.18
 quota = 32
@@ -47,7 +47,7 @@ scale = 0.15
 [[effect]]
 name = "fireball_trail"
 visual_role = "gameplay"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.16
 base_height = 0.16
 quota = 96
@@ -78,7 +78,7 @@ scale = 0.30
 [[effect]]
 name = "fireball_impact"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.16
 base_height = 0.16
 quota = 64
@@ -110,7 +110,7 @@ scale = 0.20
 [[effect]]
 name = "beam_core"
 visual_role = "critical"
-material = "Game/BeamCore"
+material = "Game/Spells/BeamCore"
 base_width = 0.12
 base_height = 0.12
 quota = 24
@@ -128,7 +128,7 @@ start_colour = [0.85, 1.0, 1.0, 1.0]
 [[effect]]
 name = "beam_impact"
 visual_role = "feedback"
-material = "Game/BeamImpact"
+material = "Game/Spells/BeamImpact"
 base_width = 0.10
 base_height = 0.10
 quota = 48
@@ -160,7 +160,7 @@ scale = 0.12
 [[effect]]
 name = "torch_fire"
 visual_role = "ambient"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.14
 base_height = 0.16
 quota = 20
@@ -195,7 +195,7 @@ scale = 0.28
 [[effect]]
 name = "torch_glow"
 visual_role = "ambient"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.20
 base_height = 0.22
 quota = 6
@@ -257,7 +257,7 @@ start_colour = [0.30, 0.34, 0.28, 0.8]
 [[effect]]
 name = "fire_smoke"
 visual_role = "ambient"
-material = "Engine/Particles/Smoke"
+material = "Engine/Psx/Smoke"
 base_width = 0.13
 base_height = 0.13
 quota = 12
@@ -296,7 +296,7 @@ scale = 2.15
 [[effect]]
 name = "spark_bounce"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "sprite"
 base_width = 0.05
 base_height = 0.05
@@ -377,7 +377,7 @@ rgba = [0.30, 0.28, 0.26, 0.0]
 [[effect]]
 name = "sparkles"
 visual_role = "ambient"
-material = "PSX/Sparkle"
+material = "Game/Demo/Sparkle"
 base_width = 0.3
 base_height = 0.3
 quota = 32
@@ -403,34 +403,40 @@ start_colour = [1.0, 1.0, 1.0, 1.0]
 [[effect]]
 name = "blood_spray"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+# A texture stem, NOT the fire atlas: Engine/Psx/Fire is a 4x4 flipbook of
+# flame frames, so blood wearing it came out orange and animated. blood_drop is
+# a plain round droplet, and the ramp below is then the only thing that decides
+# what colour blood is.
+texture = "blood_drop"
 render_mode = "sprite"
-base_width = 0.055
-base_height = 0.055
-quota = 64
+base_width = 0.075
+base_height = 0.075
+quota = 96
 loop = false
-burst_count = 26
+burst_count = 34
 acceleration = [0.0, -11.0, 0.0]
-drag = 0.6
+drag = 0.5
 rotation_jitter_deg = 180
-scale_jitter = 0.35
+# Wide on purpose: every droplet a different size, heading and speed, so a hit
+# reads as a burst rather than as one stamp played twice.
+scale_jitter = 0.8
 # Droplets mark whatever they land on. Without this the spray vanishes in
 # mid-air and the hit leaves nothing behind.
 collide = "decal"
 decal_profile = "blood_splat"
 [[effect.emitter]]
 direction = [0,1,0]
-angle = 42
-ttl_min = 0.35
-ttl_max = 0.85
-velocity_min = 2.2
-velocity_max = 5.4
+angle = 95
+ttl_min = 0.30
+ttl_max = 1.05
+velocity_min = 1.6
+velocity_max = 6.5
 [[effect.colour_ramp]]
 t = 0.0
-rgba = [0.62, 0.045, 0.035, 1.0]
+rgba = [0.85, 0.06, 0.05, 1.0]
 [[effect.colour_ramp]]
 t = 1.0
-rgba = [0.34, 0.02, 0.02, 1.0]
+rgba = [0.40, 0.02, 0.02, 1.0]
 [[effect.size_ramp]]
 t = 0.0
 scale = 1.0
@@ -441,79 +447,90 @@ scale = 0.7
 [[effect]]
 name = "blood_gibs"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+# Solid voxel material: the voxel shader has no texture at all, it shades six
+# fixed face tones off the instance colour, so a chunk is exactly as red as the
+# ramp says. The darkest face is 0.42 of it -- which is why the ramp starts
+# bright rather than at the colour blood "is".
+material = "Engine/Particles/VoxelSolid"
 render_mode = "voxel"
-base_width = 0.1
-base_height = 0.1
-quota = 40
+base_width = 0.11
+base_height = 0.11
+quota = 64
 loop = false
-burst_count = 14
+burst_count = 20
 acceleration = [0.0, -14.0, 0.0]
 drag = 0.25
 rotation_jitter_deg = 180
-scale_jitter = 0.45
+scale_jitter = 0.85
 # Heavier than the spray and barely bouncy: chunks land and stay.
 collide = "bounce"
 restitution = 0.16
 friction = 0.7
 [[effect.emitter]]
 direction = [0,1,0]
-angle = 58
-ttl_min = 1.6
-ttl_max = 2.8
-velocity_min = 1.8
-velocity_max = 4.6
+angle = 180
+ttl_min = 1.4
+ttl_max = 3.0
+velocity_min = 1.4
+velocity_max = 5.4
 [[effect.colour_ramp]]
 t = 0.0
-rgba = [0.48, 0.05, 0.045, 1.0]
+rgba = [0.72, 0.06, 0.05, 1.0]
 [[effect.colour_ramp]]
 t = 1.0
-rgba = [0.26, 0.025, 0.025, 1.0]
+rgba = [0.34, 0.03, 0.03, 1.0]
 
 [[effect]]
 name = "blood_drip"
 visual_role = "ambient"
-material = "Engine/Particles/Fire"
+texture = "blood_drop"
 render_mode = "sprite"
-base_width = 0.04
-base_height = 0.055
-quota = 24
+base_width = 0.05
+base_height = 0.07
+quota = 32
 loop = true
 acceleration = [0.0, -12.0, 0.0]
+scale_jitter = 0.6
 collide = "decal"
 decal_profile = "blood_splat_small"
 [[effect.emitter]]
 direction = [0,-1,0]
-angle = 12
-emission_rate = 5
+angle = 22
+emission_rate = 7
 ttl_min = 0.6
 ttl_max = 1.1
 velocity_min = 0.1
-velocity_max = 0.4
-start_colour = [0.55, 0.04, 0.03, 1.0]
+velocity_max = 0.6
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.70, 0.05, 0.04, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.38, 0.02, 0.02, 1.0]
 
 # Player weapon language ---------------------------------------------------
-# Tight quotas and short lifetimes keep these below hostile projectile
-# readability. Shape/material on the projectile remains the primary cue.
+# Loud on purpose: these are the player's own shots, and they are the one
+# thing on screen allowed to blow out. Start colours run past 1.0 so the
+# bloom pass catches them -- the threshold is 0.62 in the dungeon profile.
 
 [[effect]]
 name = "vesper_muzzle"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
-base_width = 0.055
-base_height = 0.055
-quota = 24
+material = "Engine/Psx/Fire"
+base_width = 0.088
+base_height = 0.088
+quota = 48
 loop = false
-burst_count = 12
+burst_count = 20
 rotation_jitter_deg = 180
 [[effect.emitter]]
 direction = [0,0,-1]
 angle = 35
 ttl_min = 0.06
 ttl_max = 0.11
-velocity_min = 0.5
-velocity_max = 1.4
-start_colour = [0.78, 0.42, 1.0, 0.95]
+velocity_min = 0.675
+velocity_max = 1.890
+start_colour = [1.48, 0.80, 1.90, 0.95]
 [[effect.size_ramp]]
 t = 0.0
 scale = 1.0
@@ -524,21 +541,21 @@ scale = 0.1
 [[effect]]
 name = "vesper_trail"
 visual_role = "gameplay"
-material = "Engine/Particles/Fire"
-base_width = 0.028
-base_height = 0.055
-quota = 28
+material = "Engine/Psx/Fire"
+base_width = 0.045
+base_height = 0.088
+quota = 56
 loop = true
 drag = 2.0
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 180
-emission_rate = 72
+emission_rate = 115
 ttl_min = 0.08
 ttl_max = 0.15
-velocity_min = 0.02
-velocity_max = 0.08
-start_colour = [0.72, 0.30, 1.0, 0.72]
+velocity_min = 0.027
+velocity_max = 0.108
+start_colour = [1.37, 0.57, 1.90, 0.72]
 [[effect.size_ramp]]
 t = 0.0
 scale = 1.0
@@ -549,13 +566,13 @@ scale = 0.15
 [[effect]]
 name = "vesper_impact"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "voxel"
-base_width = 0.035
-base_height = 0.035
-quota = 28
+base_width = 0.056
+base_height = 0.056
+quota = 56
 loop = false
-burst_count = 16
+burst_count = 27
 acceleration = [0.0, -5.0, 0.0]
 rotation_jitter_deg = 180
 [[effect.emitter]]
@@ -563,48 +580,48 @@ direction = [0,1,0]
 angle = 180
 ttl_min = 0.12
 ttl_max = 0.22
-velocity_min = 0.8
-velocity_max = 2.0
-start_colour = [0.72, 0.35, 1.0, 1.0]
+velocity_min = 1.080
+velocity_max = 2.700
+start_colour = [1.37, 0.66, 1.90, 1.00]
 
 [[effect]]
 name = "eidolon_muzzle"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "voxel"
-base_width = 0.08
-base_height = 0.08
-quota = 36
+base_width = 0.128
+base_height = 0.128
+quota = 72
 loop = false
-burst_count = 24
+burst_count = 41
 rotation_jitter_deg = 180
 [[effect.emitter]]
 direction = [0,0,-1]
 angle = 55
 ttl_min = 0.10
 ttl_max = 0.20
-velocity_min = 1.0
-velocity_max = 2.8
-start_colour = [0.42, 0.88, 1.0, 1.0]
+velocity_min = 1.350
+velocity_max = 3.780
+start_colour = [0.80, 1.67, 1.90, 1.00]
 
 [[effect]]
 name = "eidolon_trail"
 visual_role = "gameplay"
-material = "Engine/Particles/Fire"
-base_width = 0.045
-base_height = 0.08
-quota = 24
+material = "Engine/Psx/Fire"
+base_width = 0.072
+base_height = 0.128
+quota = 48
 loop = true
 drag = 1.5
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 180
-emission_rate = 48
+emission_rate = 77
 ttl_min = 0.12
 ttl_max = 0.22
-velocity_min = 0.02
-velocity_max = 0.10
-start_colour = [0.32, 0.85, 1.0, 0.65]
+velocity_min = 0.027
+velocity_max = 0.135
+start_colour = [0.61, 1.61, 1.90, 0.65]
 [[effect.size_ramp]]
 t = 0.0
 scale = 1.0
@@ -615,13 +632,13 @@ scale = 0.2
 [[effect]]
 name = "eidolon_impact"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "voxel"
-base_width = 0.065
-base_height = 0.065
-quota = 56
+base_width = 0.104
+base_height = 0.104
+quota = 112
 loop = false
-burst_count = 34
+burst_count = 58
 acceleration = [0.0, -7.0, 0.0]
 rotation_jitter_deg = 180
 scale_jitter = 0.25
@@ -630,57 +647,57 @@ direction = [0,1,0]
 angle = 180
 ttl_min = 0.18
 ttl_max = 0.36
-velocity_min = 1.4
-velocity_max = 3.8
-start_colour = [0.48, 0.92, 1.0, 1.0]
+velocity_min = 1.890
+velocity_max = 5.130
+start_colour = [0.91, 1.75, 1.90, 1.00]
 
 [[effect]]
 name = "talon_muzzle"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
-base_width = 0.07
-base_height = 0.045
-quota = 28
+material = "Engine/Psx/Fire"
+base_width = 0.112
+base_height = 0.072
+quota = 56
 loop = false
-burst_count = 18
+burst_count = 31
 rotation_jitter_deg = 180
 [[effect.emitter]]
 direction = [0,0,-1]
 angle = 45
 ttl_min = 0.055
 ttl_max = 0.10
-velocity_min = 0.8
-velocity_max = 2.2
-start_colour = [1.0, 0.24, 0.05, 1.0]
+velocity_min = 1.080
+velocity_max = 2.970
+start_colour = [1.90, 0.46, 0.10, 1.00]
 
 [[effect]]
 name = "talon_trail"
 visual_role = "gameplay"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "voxel"
-base_width = 0.025
-base_height = 0.025
-quota = 32
+base_width = 0.040
+base_height = 0.040
+quota = 64
 loop = true
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 180
-emission_rate = 88
+emission_rate = 141
 ttl_min = 0.08
 ttl_max = 0.14
-velocity_min = 0.04
-velocity_max = 0.16
-start_colour = [1.0, 0.18, 0.03, 0.88]
+velocity_min = 0.054
+velocity_max = 0.216
+start_colour = [1.90, 0.34, 0.06, 0.88]
 
 [[effect]]
 name = "talon_impact"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
-base_width = 0.055
-base_height = 0.055
-quota = 42
+material = "Engine/Psx/Fire"
+base_width = 0.088
+base_height = 0.088
+quota = 84
 loop = false
-burst_count = 24
+burst_count = 41
 acceleration = [0.0, -3.0, 0.0]
 rotation_jitter_deg = 180
 [[effect.emitter]]
@@ -688,14 +705,14 @@ direction = [0,1,0]
 angle = 180
 ttl_min = 0.10
 ttl_max = 0.22
-velocity_min = 1.0
-velocity_max = 2.8
-start_colour = [1.0, 0.20, 0.02, 1.0]
+velocity_min = 1.350
+velocity_max = 3.780
+start_colour = [1.90, 0.38, 0.04, 1.00]
 
 [[effect]]
 name = "weapon_hit_confirm"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.035
 base_height = 0.035
 quota = 20
@@ -720,7 +737,7 @@ scale = 0.05
 [[effect]]
 name = "enemy_overhead_telegraph"
 visual_role = "critical"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "voxel"
 base_width = 0.08
 base_height = 0.12
@@ -740,7 +757,7 @@ start_colour = [1.0, 0.72, 0.12, 1.0]
 [[effect]]
 name = "enemy_sweep_telegraph"
 visual_role = "critical"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.075
 base_height = 0.045
 quota = 36
@@ -759,7 +776,7 @@ start_colour = [1.0, 0.22, 0.04, 0.95]
 [[effect]]
 name = "enemy_pyre_telegraph"
 visual_role = "critical"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "voxel"
 base_width = 0.09
 base_height = 0.09
@@ -783,7 +800,7 @@ rgba = [0.22, 0.01, 0.005, 0.0]
 [[effect]]
 name = "enemy_death_burst"
 visual_role = "feedback"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 render_mode = "voxel"
 base_width = 0.09
 base_height = 0.09
@@ -812,7 +829,7 @@ rgba = [0.16, 0.03, 0.22, 0.0]
 [[effect]]
 name = "enemy_attack_telegraph"
 visual_role = "critical"
-material = "Engine/Particles/Fire"
+material = "Engine/Psx/Fire"
 base_width = 0.10
 base_height = 0.10
 quota = 36

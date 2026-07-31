@@ -31,7 +31,7 @@ struct ParticleInstance {
 // output is order-independent, so sorting it is pure cost.
 
 struct ParticleBatchDesc {
-    std::string       material   = "Particles/Sprite/Alpha";
+    std::string       material   = "Engine/Particles/SpriteAlpha";
     ParticleRenderMode mode      = ParticleRenderMode::Sprite;
     ParticleBlend      blend     = ParticleBlend::Alpha;
     std::size_t        capacity  = 2048;

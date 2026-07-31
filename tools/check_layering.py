@@ -74,10 +74,20 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("Loading.h", "core"),
     ("systems/", "core"),
     ("io/", "core"),
+    # The content root: <filesystem> and the TOML reader, no renderer and no
+    # window, which is what lets every layer, every tool and every test resolve
+    # an asset path. Only the catch-all below would otherwise file it under
+    # systems and make src/core/AssetRoot.cpp an upward include.
+    ("assets/", "core"),
     ("rhi/", "platform"),
     ("ecs/", "framework"),
     ("controllers/", "framework"),
     ("DebugTools.h", "framework"),  # imgui debug console over the fps/ecs layer
+    # The panels that dock into it. Same layer for the same reason: they are
+    # imgui tooling, they are built into eng_framework beside DebugTools.cpp,
+    # and a panel that could not name the host it registers with would have to
+    # invert the dependency for no benefit to anything below it.
+    ("debug/", "framework"),
     ("", "systems"),  # everything else: renderer/physics/audio/particles API
 ]
 

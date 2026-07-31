@@ -5,7 +5,7 @@
 // FireParticle_FS / BlockParticle_FS, sparkle.png, src_alpha one).
 
 // Bright white-gold muzzle puff.
-material Game/SpellMuzzle
+material Game/Spells/Muzzle
 {
     technique { pass {
         cull_hardware none
@@ -26,7 +26,7 @@ material Game/SpellMuzzle
 }
 
 // Orange streaming sparks for a fireball trail.
-material Game/FireballTrail
+material Game/Spells/FireballTrail
 {
     technique { pass {
         cull_hardware none
@@ -47,7 +47,7 @@ material Game/FireballTrail
 }
 
 // Orange-red radial burst on fireball impact.
-material Game/FireballImpact
+material Game/Spells/FireballImpact
 {
     technique { pass {
         cull_hardware none
@@ -68,7 +68,7 @@ material Game/FireballImpact
 }
 
 // Cyan-white thin core for a beam spell.
-material Game/BeamCore
+material Game/Spells/BeamCore
 {
     technique { pass {
         cull_hardware none
@@ -89,7 +89,7 @@ material Game/BeamCore
 }
 
 // Cyan spark burst at beam impact point.
-material Game/BeamImpact
+material Game/Spells/BeamImpact
 {
     technique { pass {
         cull_hardware none

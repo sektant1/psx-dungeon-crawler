@@ -30,8 +30,7 @@ bool near(float actual, float expected)
 
 bool near(glm::vec3 actual, glm::vec3 expected)
 {
-    return near(actual.x, expected.x) &&
-           near(actual.y, expected.y) &&
+    return near(actual.x, expected.x) && near(actual.y, expected.y) &&
            near(actual.z, expected.z);
 }
 
@@ -101,13 +100,11 @@ void test_mesh_validation_rejects_invalid_dimensions_and_tessellation()
             "default primitive mesh descriptor was rejected");
 
     desc.size.x = 0.0f;
-    require(!eng::validPrimitiveMeshDesc(desc),
-            "zero box size was accepted");
+    require(!eng::validPrimitiveMeshDesc(desc), "zero box size was accepted");
 
     desc = {};
     desc.radius = -0.1f;
-    require(!eng::validPrimitiveMeshDesc(desc),
-            "negative radius was accepted");
+    require(!eng::validPrimitiveMeshDesc(desc), "negative radius was accepted");
 
     desc = {};
     desc.height = std::numeric_limits<float>::infinity();
@@ -154,7 +151,7 @@ void test_renderer_dispatch_selects_every_generator()
                 "primitive kind selected the wrong mesh generator");
     }
     require(!eng::detail::primitiveMeshGenerator(
-                 static_cast<eng::PrimitiveKind>(999)),
+                static_cast<eng::PrimitiveKind>(999)),
             "unknown primitive kind selected a generator");
 }
 
@@ -163,8 +160,7 @@ void test_renderer_exposes_one_descriptor_driven_primitive_entry_point()
     using Method =
         eng::MeshHandle (eng::Renderer::*)(const eng::PrimitiveMeshDesc&);
     const Method method = &eng::Renderer::createPrimitiveMesh;
-    require(method != nullptr,
-            "renderer primitive entry point is missing");
+    require(method != nullptr, "renderer primitive entry point is missing");
 }
 
 eng::PrimitiveDesc collidable(eng::PrimitiveKind kind)
@@ -258,13 +254,11 @@ void test_parent_transform_drives_conservative_capsule_collider()
     desc.mesh.height = 2.0f;
     const eng::NodeTransform parent{
         {10.0f, 20.0f, 30.0f},
-        glm::angleAxis(glm::radians(90.0f),
-                       glm::vec3(0.0f, 0.0f, 1.0f)),
+        glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
         {1.0f, 4.0f, 1.0f},
     };
 
-    const auto resolved =
-        eng::resolvePrimitiveCollider(desc, parent);
+    const auto resolved = eng::resolvePrimitiveCollider(desc, parent);
 
     require(resolved && resolved->body.kind == eng::ShapeKind::Capsule,
             "parented capsule collider was rejected");
@@ -274,6 +268,59 @@ void test_parent_transform_drives_conservative_capsule_collider()
             "capsule radius did not conservatively include Y scale");
     require(near(resolved->body.halfHeight, 4.0f),
             "capsule straight half-height omitted composed Y scale");
+}
+
+// A sprite quad -- the material preview's above all -- is a billboard, not a
+// slab. The slab's four rims each carry the full 0..1 UV, so on a sprite
+// material the whole icon gets squeezed into a hairline strip along every
+// border of the frame, and the second coplanar face blends a duplicate over the
+// first.
+void test_zero_thickness_plane_is_a_single_flat_quad()
+{
+    eng::PrimitiveMeshDesc flat;
+    flat.kind = eng::PrimitiveKind::Plane;
+    flat.size = {1.6f, 1.0f, 1.6f};
+    flat.thickness = 0.0f;
+    require(eng::validPrimitiveMeshDesc(flat),
+            "a flat plane was rejected as a mesh descriptor");
+
+    const auto geometry = eng::detail::buildPrimitiveGeometry(flat);
+    require(geometry.has_value(), "flat plane geometry was rejected");
+    requireFiniteVertices(*geometry);
+    requireOutwardWinding(*geometry);
+    require(geometry->vertices.size() == 4 && geometry->indices.size() == 6,
+            "flat plane emitted more than one quad");
+    for (const auto& vertex : geometry->vertices) {
+        require(near(vertex.position.y, 0.0f),
+                "flat plane vertex left the XZ plane");
+        require(near(vertex.normal, {0.0f, 1.0f, 0.0f}),
+                "flat plane emitted a face that is not the front face");
+    }
+    const Bounds bounds = boundsOf(*geometry);
+    require(near(bounds.min, {-0.8f, 0.0f, -0.8f}) &&
+                near(bounds.max, {0.8f, 0.0f, 0.8f}),
+            "flat plane does not match its descriptor size");
+
+    // The slab is still what an unqualified plane means.
+    eng::PrimitiveMeshDesc slab = flat;
+    slab.thickness = 0.05f;
+    const auto slabGeometry = eng::detail::buildPrimitiveGeometry(slab);
+    require(slabGeometry && slabGeometry->vertices.size() > 8,
+            "a plane with thickness stopped emitting its rims");
+
+    // Zero thickness stays a plane affordance: it is degenerate anywhere else.
+    eng::PrimitiveMeshDesc disc;
+    disc.kind = eng::PrimitiveKind::Disc;
+    disc.thickness = 0.0f;
+    require(!eng::validPrimitiveMeshDesc(disc),
+            "a zero-thickness disc was accepted");
+
+    // And a collidable flat plane still resolves to a shape the solver takes.
+    eng::PrimitiveDesc collidableFlat = collidable(eng::PrimitiveKind::Plane);
+    collidableFlat.mesh.thickness = 0.0f;
+    const auto resolved = eng::resolvePrimitiveCollider(collidableFlat);
+    require(resolved && resolved->body.halfExtents.y > 0.0f,
+            "a flat plane resolved to a degenerate collision box");
 }
 
 void test_sphere_geometry_extents_finite_attributes_and_outward_winding()
@@ -297,22 +344,16 @@ void test_sphere_geometry_extents_finite_attributes_and_outward_winding()
 void test_every_outward_primitive_has_finite_aligned_geometry()
 {
     const eng::PrimitiveKind kinds[] = {
-        eng::PrimitiveKind::Box,
-        eng::PrimitiveKind::BeveledBox,
-        eng::PrimitiveKind::Sphere,
-        eng::PrimitiveKind::Capsule,
-        eng::PrimitiveKind::Cylinder,
-        eng::PrimitiveKind::Cone,
-        eng::PrimitiveKind::Plane,
-        eng::PrimitiveKind::Disc,
+        eng::PrimitiveKind::Box,      eng::PrimitiveKind::BeveledBox,
+        eng::PrimitiveKind::Sphere,   eng::PrimitiveKind::Capsule,
+        eng::PrimitiveKind::Cylinder, eng::PrimitiveKind::Cone,
+        eng::PrimitiveKind::Plane,    eng::PrimitiveKind::Disc,
     };
     for (eng::PrimitiveKind kind : kinds) {
         eng::PrimitiveMeshDesc desc;
         desc.kind = kind;
-        const auto geometry =
-            eng::detail::buildPrimitiveGeometry(desc);
-        require(geometry.has_value(),
-                "valid primitive geometry was rejected");
+        const auto geometry = eng::detail::buildPrimitiveGeometry(desc);
+        require(geometry.has_value(), "valid primitive geometry was rejected");
         requireFiniteVertices(*geometry);
         requireOutwardWinding(*geometry);
     }
@@ -360,14 +401,11 @@ void test_capsule_geometry_has_two_hemispheres_and_a_straight_strip()
                 geometry->vertices[geometry->indices[i + corner]];
             minY = std::min(minY, vertex.position.y);
             maxY = std::max(maxY, vertex.position.y);
-            radialNormals &=
-                std::fabs(vertex.normal.y) < 0.0001f;
+            radialNormals &= std::fabs(vertex.normal.y) < 0.0001f;
         }
-        straightStrip |= radialNormals && near(minY, -1.0f) &&
-                         near(maxY, 1.0f);
+        straightStrip |= radialNormals && near(minY, -1.0f) && near(maxY, 1.0f);
     }
-    require(straightStrip,
-            "capsule has no indexed straight cylindrical strip");
+    require(straightStrip, "capsule has no indexed straight cylindrical strip");
 }
 
 void test_cone_triangles_have_nonzero_uv_area()
@@ -383,12 +421,9 @@ void test_cone_triangles_have_nonzero_uv_area()
     requireFiniteVertices(*geometry);
     requireOutwardWinding(*geometry);
     for (size_t i = 0; i < geometry->indices.size(); i += 3) {
-        const glm::vec2 a =
-            geometry->vertices[geometry->indices[i]].uv;
-        const glm::vec2 b =
-            geometry->vertices[geometry->indices[i + 1]].uv;
-        const glm::vec2 c =
-            geometry->vertices[geometry->indices[i + 2]].uv;
+        const glm::vec2 a = geometry->vertices[geometry->indices[i]].uv;
+        const glm::vec2 b = geometry->vertices[geometry->indices[i + 1]].uv;
+        const glm::vec2 c = geometry->vertices[geometry->indices[i + 2]].uv;
         const glm::vec2 ab = b - a;
         const glm::vec2 ac = c - a;
         require(std::fabs(ab.x * ac.y - ab.y * ac.x) > 0.000001f,
@@ -467,8 +502,8 @@ void test_render_only_and_invalid_primitive_descriptors()
 
 void test_cleanup_releases_owned_handles_once_and_resets_instance()
 {
-    eng::PrimitiveInstance instance{
-        eng::NodeHandle{2}, eng::MeshHandle{3}, eng::BodyHandle{4}};
+    eng::PrimitiveInstance instance{eng::NodeHandle{2}, eng::MeshHandle{3},
+                                    eng::BodyHandle{4}};
     std::string calls;
 
     eng::detail::releasePrimitiveOwnership(
@@ -486,15 +521,13 @@ void test_cleanup_releases_owned_handles_once_and_resets_instance()
             calls += 'm';
         });
 
-    require(calls == "bnm",
-            "cleanup did not release body, node, then mesh");
+    require(calls == "bnm", "cleanup did not release body, node, then mesh");
     require(!instance.node.valid() && !instance.mesh.valid() &&
                 !instance.body.valid(),
             "cleanup did not reset the primitive instance");
 
     eng::detail::releasePrimitiveOwnership(
-        instance,
-        [&](eng::BodyHandle) { calls += 'B'; },
+        instance, [&](eng::BodyHandle) { calls += 'B'; },
         [&](eng::NodeHandle) { calls += 'N'; },
         [&](eng::MeshHandle) { calls += 'M'; });
     require(calls == "bnm",
@@ -503,8 +536,7 @@ void test_cleanup_releases_owned_handles_once_and_resets_instance()
 
 std::string readProjectFile(const std::string& relativePath)
 {
-    std::ifstream file(
-        std::string(PROJECT_SOURCE_DIR) + "/" + relativePath);
+    std::ifstream file(std::string(PROJECT_SOURCE_DIR) + "/" + relativePath);
     // Name the file. This guard scans source paths that a refactor can move
     // out from under it, and "a contract file could not be read" without
     // saying which one turns a one-line path fix into a hunt.
@@ -518,16 +550,11 @@ std::string readProjectFile(const std::string& relativePath)
 
 void test_repository_has_no_obsolete_round_frame_or_authored_arch()
 {
-    const std::string obsoleteRenderer =
-        std::string("createPortal") + "Ring";
-    const std::string obsoleteGenerator =
-        std::string("createPortal") + "Disc";
-    const std::string authoredAsset =
-        std::string("portal_stone") + "_arch.obj";
-    const std::string authoredField =
-        std::string("frame") + "Mesh";
-    const std::string oldShape =
-        std::string("shape == ") + '"' + "ring" + '"';
+    const std::string obsoleteRenderer = std::string("createPortal") + "Ring";
+    const std::string obsoleteGenerator = std::string("createPortal") + "Disc";
+    const std::string authoredAsset = std::string("portal_stone") + "_arch.obj";
+    const std::string authoredField = std::string("frame") + "Mesh";
+    const std::string oldShape = std::string("shape == ") + '"' + "ring" + '"';
     const char* files[] = {
         "engine/include/eng/Renderer.h",
         "engine/src/render/Renderer.cpp",
@@ -550,9 +577,9 @@ void test_repository_has_no_obsolete_round_frame_or_authored_arch()
         require(source.find(oldShape) == std::string::npos,
                 "obsolete showcase shape branch remains");
     }
-    require(!std::filesystem::exists(
-                std::string(PROJECT_SOURCE_DIR) +
-                "/game/assets/meshes/props/" + authoredAsset),
+    require(!std::filesystem::exists(std::string(PROJECT_SOURCE_DIR) +
+                                     "/game/assets/meshes/props/" +
+                                     authoredAsset),
             "authored portal arch asset still exists");
 }
 
@@ -566,6 +593,7 @@ int main()
     test_box_plane_and_sphere_collider_dimensions_follow_render_scale();
     test_round_primitive_collider_mapping_and_scaled_dimensions();
     test_parent_transform_drives_conservative_capsule_collider();
+    test_zero_thickness_plane_is_a_single_flat_quad();
     test_sphere_geometry_extents_finite_attributes_and_outward_winding();
     test_every_outward_primitive_has_finite_aligned_geometry();
     test_capsule_geometry_has_two_hemispheres_and_a_straight_strip();

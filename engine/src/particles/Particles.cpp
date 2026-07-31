@@ -109,7 +109,7 @@ void Particles::init(Ogre::SceneManager* sm)
 
 std::string Particles::resolveMaterial(const ParticleEffectDesc& desc,
                                        FlipbookDesc& flipbookOut,
-                                       ParticleBlend& blendOut) const
+                                       ParticleBlend& blendOut)
 {
     flipbookOut = FlipbookDesc{};
     blendOut = ParticleBlend::Alpha;
@@ -121,7 +121,9 @@ std::string Particles::resolveMaterial(const ParticleEffectDesc& desc,
         if (const ParticleTextureDesc* tex = mMaterials.find(desc.texture)) {
             flipbookOut = tex->flipbook;
             blendOut = tex->blend;
-            return particleAutoMaterialName(tex->stem);
+            // materialFor(), not the name helper: this is the call that builds
+            // the material the first time anything asks for this strip.
+            return mMaterials.materialFor(tex->stem);
         }
         log::warn("Particles: effect '%s' names unknown texture '%s'",
                   desc.name.c_str(), desc.texture.c_str());
@@ -211,6 +213,7 @@ ParticleEffectId Particles::registerEffect(const ParticleEffectDesc& desc)
         mEffects[i].desc = std::move(clean);
         mEffects[i].batch = batch;
         mEffects[i].flipbook = flipbook;
+        mEffects[i].blend = blend;
         resizeBatches();
         return ParticleEffectId{uint32_t(i + 1)};
     }
@@ -219,6 +222,7 @@ ParticleEffectId Particles::registerEffect(const ParticleEffectDesc& desc)
     effect.simEffect = mSim.registerEffect(clean);
     effect.batch = batch;
     effect.flipbook = flipbook;
+    effect.blend = blend;
     effect.desc = std::move(clean);
     mEffects.push_back(std::move(effect));
     const uint32_t id = uint32_t(mEffects.size());
@@ -230,8 +234,19 @@ ParticleEffectId Particles::registerEffect(const ParticleEffectDesc& desc)
 ParticleEffectId Particles::find(const std::string& name) const
 {
     auto it = mByName.find(name);
-    return it == mByName.end() ? ParticleEffectId{}
-                               : ParticleEffectId{it->second};
+    if (it != mByName.end())
+        return ParticleEffectId{it->second};
+
+    // Say something. An unresolved name used to return an invalid id that the
+    // spawn path quietly ignored, so a typo in a TOML, an effect that failed
+    // to register, or a whole registry wiped by a scene clear all looked
+    // exactly like "this effect has no particles" -- which is why the scene
+    // lifetime bug above survived so long. Once per name, so a looping caller
+    // cannot flood the log.
+    if (mWarnedNames.insert(name).second)
+        log::warn("Particles: no effect named '%s' (spawn ignored)",
+                  name.c_str());
+    return ParticleEffectId{};
 }
 
 // --- spawning --------------------------------------------------------------
@@ -417,23 +432,58 @@ std::vector<uint32_t> Particles::update(float dt)
 
 void Particles::shutdown()
 {
-    clear();
+    // releaseAll, not clear: clear() rebuilds the batches for the next scene,
+    // and doing that here would create fresh Ogre objects against a
+    // SceneManager the engine is in the middle of tearing down.
+    releaseAll();
+    mEffects.clear();
+    mByName.clear();
+    mWarnedNames.clear();
     mDecals.shutdown();
     mSm = nullptr;
 }
 
-void Particles::clear()
+void Particles::releaseAll()
 {
-    // Renderer::clearScene destroys the scene graph around us, so drop every
-    // reference into it before those nodes go away.
     mLive.clear();
-    mSim.clear();
+    mSim.clear(); // pool + instances only; ParticleSim keeps its effect table
     mDecals.clear();
     for (Batch& b : mBatches)
         if (b.batch) b.batch->destroy();
     mBatches.clear();
-    mEffects.clear();
-    mByName.clear();
+}
+
+void Particles::clear()
+{
+    // A scene clear kills what is *live*, not what is *known*.
+    //
+    // Effect descriptions are content: they are registered once at startup
+    // (engine presets and the game's particles.toml) and are meant to outlive
+    // every level. Dropping them here meant that the moment a level was
+    // rebuilt, every spawn issued during construction -- torches, portals,
+    // shrines -- resolved against an empty registry and silently did nothing.
+    // The game re-registered its own effects *after* construction, too late,
+    // and the engine's `engine.*` presets were never restored at all because
+    // nothing outside the renderer's init knows them.
+    //
+    // Only the scene-graph references go. Rebuilding the batches is a separate
+    // step (rebuildBatches) because the caller destroys the scene graph
+    // immediately after this returns: anything created here would have its
+    // node and manual object destroyed out from under it.
+    releaseAll();
+}
+
+void Particles::rebuildBatches()
+{
+    // Call once the scene graph has been wiped. The retained effects still
+    // index into the batch vector that releaseAll() emptied, so every one is
+    // re-pointed at a freshly created batch before anything can spawn again.
+    if (!mSm)
+        return;
+    for (Effect& e : mEffects)
+        e.batch = batchFor(e.desc.material, e.desc.renderMode, e.blend,
+                           size_t(std::max(1, e.desc.quota)) * 2);
+    resizeBatches();
 }
 
 } // namespace eng

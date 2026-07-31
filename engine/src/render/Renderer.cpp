@@ -2,6 +2,7 @@
 
 #include <eng/Log.h>
 #include <eng/Primitive.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/render/PrototypeAssets.h>
 #include <eng/particles/ParticlePresets.h>
 #include <eng/SceneView.h>
@@ -66,7 +67,7 @@ struct Renderer::Impl {
     int nameCounter = 0;
     EnvState env;
     // Original sub-entity materials, saved while the wireframe debug view
-    // holds every entity on PSX/DebugWireframe.
+    // holds every entity on Engine/Psx/DebugWireframe.
     std::unordered_map<Ogre::SubEntity*, std::string> savedMaterials;
     ModelMaterialFallbackWarnings missingMaterialWarnings;
     EnchantmentBookkeeping<Ogre::SubEntity*, Ogre::SceneNode*> enchantments;
@@ -532,11 +533,14 @@ std::vector<std::string> Renderer::materialNames() const
         const Ogre::ResourcePtr resource = it.getNext();
         const std::string& n = resource->getName();
         if (n.empty()) continue;
-        // Filter engine/Ogre internals + generated helper materials.
+        // Ogre's own built-ins. Not ours to name, so still matched by prefix.
         if (n.rfind("Ogre/", 0) == 0) continue;
-        if (n.rfind("__", 0) == 0) continue;                 // preview/internal
         if (n.rfind("BaseWhite", 0) == 0) continue;
-        if (n.rfind("Sprite/", 0) == 0) continue;            // per-clip generated
+        // Ours. Declared in assets.toml's [materials] internal, not encoded in
+        // the name: a "__" prefix and a "Sprite/" prefix used to do this job,
+        // which made two namespaces unrenameable and made visibility depend on
+        // spelling. See eng::assets::internalMaterials.
+        if (assets::materialInternal(n)) continue;
         if (n.find("DebugWireframe") != std::string::npos) continue;
         if (mImpl->enchantments.containsGeneratedMaterial(n)) continue;
         // Every pass must have a vertex program. This render system has no
@@ -684,7 +688,7 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     if (mImpl->env.wireframe) { // debug view active: join it immediately
         for (Ogre::SubEntity* se : e->getSubEntities()) {
             mImpl->savedMaterials[se] = resolved;
-            se->setMaterialName("PSX/DebugWireframe");
+            se->setMaterialName("Engine/Psx/DebugWireframe");
         }
     }
     mImpl->node(node, "attachMesh")->attachObject(e);
@@ -708,10 +712,10 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
 
 std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
 {
-    const char* base = clip.blend == SpriteBlend::Alpha ? "Sprite/Alpha"
-                     : clip.blend == SpriteBlend::Additive ? "Sprite/Additive"
-                     : clip.blend == SpriteBlend::Overlay ? "Sprite/Overlay"
-                                                          : "Sprite/Opaque";
+    const char* base = clip.blend == SpriteBlend::Alpha ? "Engine/Sprite/Alpha"
+                     : clip.blend == SpriteBlend::Additive ? "Engine/Sprite/Additive"
+                     : clip.blend == SpriteBlend::Overlay ? "Engine/Sprite/Overlay"
+                                                          : "Engine/Sprite/Opaque";
     Ogre::MaterialPtr source = Ogre::MaterialManager::getSingleton().getByName(base);
     if (!source)
         log::fatal("Renderer: sprite template '%s' is missing", base);
@@ -997,7 +1001,7 @@ void Renderer::buildStaticBatch(StaticBatchHandle batch)
                    batch.id);
     // Respect an already-active wireframe view (PSX_WIREFRAME startup).
     mImpl->fillStaticBatch(mImpl->staticBatches[batch.id - 1],
-                           mImpl->env.wireframe ? "PSX/DebugWireframe" : "");
+                           mImpl->env.wireframe ? "Engine/Psx/DebugWireframe" : "");
 }
 
 void Renderer::setStaticBatchVisible(StaticBatchHandle batch, bool visible)
@@ -1013,7 +1017,10 @@ void Renderer::clearScene()
     Ogre::SceneManager* sm = mImpl->core.sceneMgr();
     // Detach + destroy every SceneNode under the root, then free the objects
     // those nodes referenced (Ogre owns them; removing nodes alone leaks).
-    mImpl->particles.clear(); // drop pooled-system bookkeeping before Ogre frees them
+    // Two phases around the wipe: drop everything pointing into the scene
+    // graph first, then rebuild the particle batches once it is gone (see the
+    // rebuildBatches call at the end of this function).
+    mImpl->particles.clear();
     mImpl->clearEnchantmentSubtree(sm->getRootSceneNode());
     sm->getRootSceneNode()->removeAndDestroyAllChildren();
     sm->destroyAllStaticGeometry();
@@ -1039,6 +1046,14 @@ void Renderer::clearScene()
     // same way detail::registerRoot does at startup. nameCounter stays
     // MONOTONIC across levels so freshly created Ogre objects can never reuse
     // a name that a lingering resource still holds.
+    // What the level transition actually threw away. A wipe is the single most
+    // destructive thing this API does and it used to happen in silence, so a
+    // scene that came back empty gave no way to tell "nothing was built" from
+    // "everything was built and then cleared".
+    log::info("Scene: cleared %zu nodes, %zu lights, %zu sprites, %zu batches",
+              mImpl->nodes.size() ? mImpl->nodes.size() - 1 : 0,
+              mImpl->lights.size(), mImpl->sprites.size(),
+              mImpl->staticBatches.size());
     mImpl->nodes.clear();
     mImpl->lights.clear();
     mImpl->sprites.clear();
@@ -1052,6 +1067,11 @@ void Renderer::clearScene()
     mImpl->debugLines = nullptr; // destroyAllManualObjects freed it
     mImpl->mScene.clear();
     mImpl->nodes.push_back(sm->getRootSceneNode());
+    // The scene graph is gone, so the particle batches can be rebuilt against
+    // the fresh root. Effect descriptions survived the clear on purpose: the
+    // level is about to spawn torches and portals during construction, and
+    // those spawns have to resolve.
+    mImpl->particles.rebuildBatches();
 }
 
 ParticleEffectId Renderer::registerParticleEffect(const ParticleEffectDesc& desc)
@@ -1154,6 +1174,15 @@ void Renderer::despawnParticles(ParticlesHandle h) {
     mImpl->mScene.removeAttachment(NodeAttachKind::Particles, h.id);
 }
 void Renderer::setParticleQuality(float q) { mImpl->particles.setQuality(q); }
+const std::vector<ParticleTextureDesc>& Renderer::particleTextures() const {
+    return mImpl->particles.materials().all();
+}
+bool Renderer::reloadParticleTextures() {
+    return mImpl->particles.materials().reload();
+}
+uint32_t Renderer::liveParticleCount() const {
+    return mImpl->particles.liveParticles();
+}
 void Renderer::shutdownParticles() { mImpl->particles.shutdown(); }
 void Renderer::setParticleCollider(IParticleCollider* collider) {
     mImpl->particles.setCollider(collider);
@@ -1333,7 +1362,7 @@ void Renderer::setDitherEnabled(bool enabled)
     // The post chain hosts pixelation/bloom too, so it stays on;
     // "dither off" only bypasses the quantization inside the dither pass.
     mImpl->core.enablePostChain();
-    setMaterialParam("PSX/DitherPost", "ditherEnabled", enabled ? 1.0f : 0.0f);
+    setMaterialParam("Engine/Psx/DitherPost", "ditherEnabled", enabled ? 1.0f : 0.0f);
 }
 
 void Renderer::setPixelSize(int pixelSize)
@@ -1424,7 +1453,7 @@ void Renderer::setFogDesatBoost(float boost)
 void Renderer::setBloomEnabled(bool enabled)
 {
     mImpl->env.bloom = enabled;
-    setMaterialParam("PSX/BloomComposite", "bloomEnabled",
+    setMaterialParam("Engine/Psx/BloomComposite", "bloomEnabled",
                      enabled ? 1.0f : 0.0f);
 }
 
@@ -1432,8 +1461,8 @@ void Renderer::setBloomParams(float threshold, float intensity)
 {
     mImpl->env.bloomThreshold = threshold;
     mImpl->env.bloomIntensity = intensity;
-    setMaterialParam("PSX/BloomBright", "bloomThreshold", threshold);
-    setMaterialParam("PSX/BloomComposite", "bloomIntensity", intensity);
+    setMaterialParam("Engine/Psx/BloomBright", "bloomThreshold", threshold);
+    setMaterialParam("Engine/Psx/BloomComposite", "bloomIntensity", intensity);
 }
 
 void Renderer::setWireframeDebug(bool enabled)
@@ -1446,7 +1475,7 @@ void Renderer::setWireframeDebug(bool enabled)
         for (Ogre::SubEntity* se : e->getSubEntities()) {
             if (enabled) {
                 mImpl->savedMaterials[se] = se->getMaterial()->getName();
-                se->setMaterialName("PSX/DebugWireframe");
+                se->setMaterialName("Engine/Psx/DebugWireframe");
             } else {
                 auto found = mImpl->savedMaterials.find(se);
                 if (found != mImpl->savedMaterials.end())
@@ -1461,7 +1490,7 @@ void Renderer::setWireframeDebug(bool enabled)
     // originals (off).
     for (auto& b : mImpl->staticBatches)
         if (b.built)
-            mImpl->fillStaticBatch(b, enabled ? "PSX/DebugWireframe" : "");
+            mImpl->fillStaticBatch(b, enabled ? "Engine/Psx/DebugWireframe" : "");
     // The post chain smears the 1px lines, so bypass every post effect while
     // the view is up and restore it afterwards.
     // Bypass every post effect while the view is up, restore after.
@@ -1472,13 +1501,13 @@ void Renderer::setWireframeDebug(bool enabled)
         setPixelSize(1);
         // Wireframe is a diagnostic view: no ink/highlight pass should alter
         // its lines or introduce false contour noise.
-        setMaterialParam("PSX/PixelStylize", "stylizeEnabled", 0.0f);
+        setMaterialParam("Engine/Psx/PixelStylize", "stylizeEnabled", 0.0f);
         setDitherEnabled(false);
         setBloomEnabled(false);
         setGradeEnabled(false);
     } else {
         setPixelSize(mImpl->preWireframe.pixelSize);
-        setMaterialParam("PSX/PixelStylize", "stylizeEnabled", 1.0f);
+        setMaterialParam("Engine/Psx/PixelStylize", "stylizeEnabled", 1.0f);
         setDitherEnabled(mImpl->preWireframe.dither);
         setBloomEnabled(mImpl->preWireframe.bloom);
         setGradeEnabled(mImpl->preWireframe.grade);
@@ -1488,7 +1517,7 @@ void Renderer::setWireframeDebug(bool enabled)
 void Renderer::setGradeEnabled(bool enabled)
 {
     mImpl->env.grade = enabled;
-    setMaterialParam("PSX/DitherPost", "gradeEnabled", enabled ? 1.0f : 0.0f);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeEnabled", enabled ? 1.0f : 0.0f);
 }
 
 void Renderer::setGradeParams(float desaturate, float contrast,
@@ -1498,10 +1527,10 @@ void Renderer::setGradeParams(float desaturate, float contrast,
     mImpl->env.gradeContrast = contrast;
     mImpl->env.gradeShadowTint = shadowTint;
     mImpl->env.gradeMidTint = midTint;
-    setMaterialParam("PSX/DitherPost", "gradeDesaturate", desaturate);
-    setMaterialParam("PSX/DitherPost", "gradeContrast", contrast);
-    setMaterialParam("PSX/DitherPost", "gradeShadowTint", shadowTint);
-    setMaterialParam("PSX/DitherPost", "gradeMidTint", midTint);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeDesaturate", desaturate);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeContrast", contrast);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeShadowTint", shadowTint);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeMidTint", midTint);
 }
 
 const EnvState& Renderer::envState() const { return mImpl->env; }
@@ -1581,9 +1610,9 @@ void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
     mImpl->debugLines->clear();
     if (lines.empty())
         return;
-    // PSX/DebugLines: unlit, per-vertex colour, depth_write off (declared in
+    // Engine/Psx/DebugLines: unlit, per-vertex colour, depth_write off (declared in
     // engine/assets/materials/psx.material + debug_lines.frag).
-    const std::string matName = "PSX/DebugLines";
+    const std::string matName = "Engine/Psx/DebugLines";
     mImpl->debugLines->begin(matName, Ogre::RenderOperation::OT_LINE_LIST);
     for (const auto& l : lines) {
         mImpl->debugLines->position(l.a.x, l.a.y, l.a.z);
@@ -1615,10 +1644,10 @@ glm::mat4 Renderer::cameraViewProj() const
 
 void Renderer::setDebugLinesXray(bool xray)
 {
-    // Flip depth-check on the PSX/DebugLines pass. Off (xray) => lines pass the
+    // Flip depth-check on the Engine/Psx/DebugLines pass. Off (xray) => lines pass the
     // depth test everywhere and draw over all geometry; on => normal occlusion.
     Ogre::MaterialPtr m = Ogre::MaterialManager::getSingleton().getByName(
-        "PSX/DebugLines");
+        "Engine/Psx/DebugLines");
     if (!m || m->getTechniques().empty())
         return;
     Ogre::Technique* t = m->getTechnique(0);

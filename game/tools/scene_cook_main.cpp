@@ -10,20 +10,14 @@
 #include "SceneValidate.h"
 #include "SceneWriter.h"
 
+#include <eng/assets/AssetRoot.h>
+
 #include <cstdio>
 #include <filesystem>
 #include <cstring>
 #include <string>
 
 namespace {
-
-// Where kit mesh paths resolve from. Defaults to the kit.toml's own directory,
-// which is where mesh_dir is relative to -- deriving it from the scene path
-// instead breaks the moment a scene lives anywhere but assets/scenes.
-std::string assetRootFor(const std::string& kitPath)
-{
-    return std::filesystem::path(kitPath).parent_path().string();
-}
 
 int usage()
 {
@@ -33,8 +27,8 @@ int usage()
                  "         [--validate-only]        parse and resolve, write nothing\n"
                  "         [--rewrite <out.scn>]    re-emit canonical .scn "
                  "(formatting, v1 -> v2)\n"
-                 "         [--assets <dir>]         asset root for the "
-                 "mesh-on-disk check (default: the kit's directory)\n"
+                 "         [--kit/--assets]         both default to the game "
+                 "content pack; pass them to cook a tree that is not it\n"
                  "\n"
                  "  scene_cook --template <empty|room|techdemo> --kit <kit.toml>\n"
                  "             --rewrite <out.scn> [--id <scene.id>]\n"
@@ -47,6 +41,13 @@ int usage()
 
 int main(int argc, char** argv)
 {
+    // The cooker mounts the game content set like every other consumer, so
+    // --kit and --assets become overrides rather than requirements. They used
+    // to be neither: --kit was mandatory and --assets was *inferred from it*
+    // by taking the kit file's parent directory, which silently encoded "the
+    // kit lives at the root of the asset tree".
+    const bool mounted = eng::assets::init() && eng::assets::mount("game");
+
     std::string source, kit, out, rewrite, assets, templateName, sceneId;
     bool validateOnly = false;
     for (int i = 1; i < argc; ++i) {
@@ -78,6 +79,14 @@ int main(int argc, char** argv)
             return usage();
         }
     }
+    if (kit.empty() && mounted)
+        kit = eng::assets::resolve("kit.toml").string();
+    // The mesh-on-disk check needs a directory to join pack-relative mesh
+    // paths onto. That is the game pack itself; the old heuristic only
+    // happened to agree because kit.toml sits at the tree's root.
+    if (assets.empty() && mounted)
+        assets = eng::assets::packDir("game").string();
+
     if (kit.empty() || (source.empty() && templateName.empty()) ||
         (out.empty() && rewrite.empty() && !validateOnly))
         return usage();
@@ -130,8 +139,7 @@ int main(int argc, char** argv)
     // One validation pass for both modes: the CLI must refuse exactly what the
     // editor refuses, or "it cooked on my machine" starts happening.
     const std::vector<game::content::Issue> issues =
-        game::content::validate(document, catalog,
-                                assets.empty() ? assetRootFor(kit) : assets);
+        game::content::validate(document, catalog, assets);
     for (const game::content::Issue& issue : issues) {
         std::fprintf(issue.severity == game::content::Severity::Error ? stderr
                                                                       : stdout,

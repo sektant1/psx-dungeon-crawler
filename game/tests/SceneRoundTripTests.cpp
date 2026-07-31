@@ -5,6 +5,7 @@
 
 #include "SceneSource.h"
 #include "SceneWriter.h"
+#include "TestAssets.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -41,10 +42,11 @@ static int countLines(const std::string& text)
 
 int main()
 {
+    game::test::mountGameAssets();
     // --- the real shipped scene -------------------------------------------
     SceneDocument shipped;
     std::string error;
-    require(loadSceneSource(RITUAL_SCN, shipped, error),
+    require(loadSceneSource(game::test::asset("scenes/ritual_boss_showroom.scn"), shipped, error),
             ("the shipped scene loads: " + error).c_str());
     require(shipped.id == "scene.test.ritual_boss_showroom", "scene id");
     require(shipped.entities.size() > 20, "it has its entities");

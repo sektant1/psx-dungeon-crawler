@@ -33,9 +33,11 @@ struct Command {
     DebugConsole::Completer complete;
 };
 
-// Severity colours are the One Dark accents the engine theme is built from
-// (see eng::imguitheme), not an independent palette: a console painted in its
-// own reds and yellows is what makes a debug window look bolted on.
+// Severity colours are the active theme's own accents (Ash Reliquary: brass
+// warn, blood error, ritual violet fatal -- see eng::imguitheme), not an
+// independent palette: a console painted in its own reds and yellows is what
+// makes a debug window look bolted on. They were One Dark values when the tool
+// UI was One Dark; keep them in step when the theme changes.
 constexpr ImVec4 rgb(unsigned hex, float a = 1.0f)
 {
     return ImVec4(float((hex >> 16) & 0xFF) / 255.0f,
@@ -46,14 +48,41 @@ constexpr ImVec4 rgb(unsigned hex, float a = 1.0f)
 ImVec4 levelColor(log::Level level, bool command)
 {
     if (command)
-        return rgb(0x61AFEF); // blue: the user's own line
+        return rgb(0xF0B95C); // brass focus: the user's own line
     switch (level) {
-    case log::Level::Warn: return rgb(0xE5C07B);
-    case log::Level::Error: return rgb(0xE06C75);
-    case log::Level::Fatal: return rgb(0xC678DD);
+    case log::Level::Warn: return rgb(0xD9A441);
+    case log::Level::Error: return rgb(0xC74A46);
+    case log::Level::Fatal: return rgb(0x8F83C9);
     case log::Level::Info: break;
     }
     return ImGui::GetStyleColorVec4(ImGuiCol_Text);
+}
+
+// The tag printed in the level column. Fixed width, because the imgui font is
+// monospace and a ragged column is exactly what makes a log unscannable.
+//
+// A tag rather than colour alone: severity was carried only by a 2px bar and
+// the text tint, so every info line -- which is most of them -- looked
+// identical to every other, and telling a warning from a note meant comparing
+// two shades of brass. Colour is the fast path; the word is the certain one.
+const char* levelTag(log::Level level, bool command)
+{
+    if (command)
+        return " > ";
+    switch (level) {
+    case log::Level::Warn: return "WARN";
+    case log::Level::Error: return "ERR ";
+    case log::Level::Fatal: return "DEAD";
+    case log::Level::Info: break;
+    }
+    return "info";
+}
+
+// Background wash for the rows that matter. An error scrolling past in a wall
+// of info is findable by band before it is findable by reading.
+bool levelWantsRowTint(log::Level level, bool command)
+{
+    return !command && level != log::Level::Info;
 }
 
 // A filter chip: severity dot + label + count, drawn as a themed toggle rather
@@ -93,6 +122,11 @@ bool levelChip(const char* name, int count, bool on, ImVec4 accent)
         ImGui::SetTooltip("%s: click to %s", name, on ? "hide" : "show");
     return clicked;
 }
+
+// Longest prefix accepted as a subsystem name. "ParticleMaterials" is 17; the
+// cap keeps a sentence that happens to contain a colon from becoming a category
+// wide enough to push every message off the row.
+constexpr std::size_t kMaxCategory = 18;
 
 bool containsInsensitive(const std::string& haystack, const std::string& needle)
 {
@@ -144,6 +178,35 @@ std::string trim(const std::string& s)
 }
 
 } // namespace
+
+LogSplit splitLogCategory(const std::string& line)
+{
+    const std::size_t colon = line.find(':');
+    if (colon == 0 || colon == std::string::npos || colon > kMaxCategory)
+        return {{}, line};
+    // The prefix has to be followed by a separator. Without this, a Windows
+    // path ("C:/assets") and a time ("12:04 done") both read as categories.
+    if (colon + 1 < line.size() && line[colon + 1] != ' ')
+        return {{}, line};
+
+    const std::string head = line.substr(0, colon);
+    bool hasLetter = false;
+    for (const char c : head) {
+        // A subsystem is one identifier-ish token: letters, digits, and the
+        // separators the engine actually uses in its own names.
+        const unsigned char u = (unsigned char)c;
+        if (!std::isalnum(u) && c != '_' && c != '.' && c != '-')
+            return {{}, line};
+        hasLetter = hasLetter || std::isalpha(u) != 0;
+    }
+    // Digits alone are a measurement, not a subsystem ("42: ..." stays prose).
+    if (!hasLetter)
+        return {{}, line};
+
+    const std::size_t rest = line.find_first_not_of(' ', colon + 1);
+    return {head, rest == std::string::npos ? std::string{}
+                                            : line.substr(rest)};
+}
 
 struct DebugConsole::Impl {
     // --- log state ---
@@ -406,8 +469,12 @@ void DebugConsole::captureEngineLog()
     mImpl->logSink = log::addSink([impl](log::Level level, const char* text) {
         Entry e;
         e.level = level;
-        e.text = text;
-        e.category = "engine";
+        // "Warmup: 96 materials" becomes category "Warmup" + the message, so
+        // the column carries the subsystem instead of the word "engine" on
+        // every row. Uncategorised lines keep their full text.
+        LogSplit split = splitLogCategory(text);
+        e.category = std::move(split.category);
+        e.text = std::move(split.message);
         e.time = impl->now();
         std::lock_guard<std::mutex> lock(impl->pending_mutex);
         impl->pending.push_back(std::move(e));
@@ -563,7 +630,18 @@ void DebugConsole::draw(const char* title)
         ImGui::SetNextWindowFocus(); // docked: also selects its tab
     }
 
-    ImGui::SetNextWindowSize(ImVec2(760.0f, 420.0f), ImGuiCond_FirstUseEver);
+    // Placed as well as sized. With only a size, imgui puts a new window at a
+    // fixed offset that the dockspace then shifts, so the console opened half
+    // off the left edge and its timestamp/level columns were the part that fell
+    // outside -- the log looked like it had no metadata at all.
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const ImVec2 size(std::min(760.0f, vp->WorkSize.x - 32.0f),
+                      std::min(420.0f, vp->WorkSize.y - 32.0f));
+    ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->WorkPos.x + 16.0f,
+               vp->WorkPos.y + vp->WorkSize.y - size.y - 16.0f),
+        ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(title, &s.visible)) {
         ImGui::End();
         return;
@@ -659,9 +737,20 @@ void DebugConsole::draw(const char* title)
             const ImVec4 col = levelColor(e.level, e.command);
             const float lh = ImGui::GetTextLineHeight();
             const ImVec2 rowStart = ImGui::GetCursorScreenPos();
-            // A 2px severity bar instead of a four-letter tag: it carries the
-            // level without shouting it on every line, and costs no column.
-            ImGui::GetWindowDrawList()->AddRectFilled(
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float rowWidth = ImGui::GetContentRegionAvail().x;
+            // Warnings and above get a wash across the whole row. Scrolling a
+            // thousand info lines, a band is findable before any text is.
+            if (levelWantsRowTint(e.level, e.command))
+                dl->AddRectFilled(
+                    ImVec2(rowStart.x - 4.0f, rowStart.y),
+                    ImVec2(rowStart.x + rowWidth, rowStart.y + lh + 2.0f),
+                    ImGui::GetColorU32(ImVec4(col.x, col.y, col.z, 0.10f)));
+            // Severity bar: full strength for everything that is not routine,
+            // a hint for info. It is the colour half of the level read; the
+            // tag below is the half that survives a colourblind viewer and a
+            // washed-out capture.
+            dl->AddRectFilled(
                 ImVec2(rowStart.x, rowStart.y + 1.0f),
                 ImVec2(rowStart.x + 2.0f, rowStart.y + lh - 1.0f),
                 ImGui::GetColorU32(e.level == log::Level::Info && !e.command
@@ -674,17 +763,50 @@ void DebugConsole::draw(const char* title)
                 ImGui::TextDisabled("%7.2f", e.time);
                 ImGui::SameLine();
             }
-            if (s.showCategories && !e.category.empty()) {
-                ImGui::TextDisabled("%-9.9s", e.category.c_str());
+            // Level tag, in the severity colour. Info is dimmed on purpose:
+            // the routine case should recede so the exceptions stand out.
+            if (e.level == log::Level::Info && !e.command)
+                ImGui::TextDisabled("%-4s", levelTag(e.level, e.command));
+            else
+                ImGui::TextColored(col, "%-4s", levelTag(e.level, e.command));
+            ImGui::SameLine();
+            if (s.showCategories) {
+                // Padded even when empty, so an uncategorised line does not
+                // shift the message column left and break the block of text.
+                // Wide enough for the longest real subsystem name here
+                // ("ParticleMaterials"): truncating to 12 turned that into
+                // "ParticleMate", which reads as a different subsystem from
+                // "ParticleLibr" only if you already know both.
+                ImGui::TextDisabled("%-17.17s", e.category.c_str());
+                if (!e.category.empty() && ImGui::IsItemClicked()) {
+                    // Click the subsystem to isolate it. The one gesture that
+                    // turns "everything scrolled past" into "just the renderer".
+                    s.categoryFilter =
+                        s.categoryFilter == e.category ? std::string{}
+                                                       : e.category;
+                    s.filterDirty = true;
+                }
+                if (!e.category.empty() && ImGui::IsItemHovered()) {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    ImGui::SetTooltip("%s: click to %s", e.category.c_str(),
+                                      s.categoryFilter == e.category
+                                          ? "clear the filter"
+                                          : "show only this subsystem");
+                }
                 ImGui::SameLine();
             }
-            ImGui::PushStyleColor(ImGuiCol_Text, col);
+            // The message keeps the default text colour at info: a whole log
+            // tinted by severity is a log with no hierarchy, because the eye
+            // has nothing to compare the tint against.
+            if (e.level != log::Level::Info || e.command)
+                ImGui::PushStyleColor(ImGuiCol_Text, col);
             if (s.wrap)
                 ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(e.text.c_str());
             if (s.wrap)
                 ImGui::PopTextWrapPos();
-            ImGui::PopStyleColor();
+            if (e.level != log::Level::Info || e.command)
+                ImGui::PopStyleColor();
             if (e.count > 1) {
                 ImGui::SameLine();
                 ImGui::TextDisabled("x%d", e.count);

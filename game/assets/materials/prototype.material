@@ -1,6 +1,6 @@
 // Prototype materials for editor floors, blank scenes and physics projectiles.
 
-material Game/PrototypeFloor
+material Game/Prototype/Floor
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit
@@ -22,7 +22,7 @@ material Game/PrototypeFloor
 
 // Arrow: dark earth tones; Bolt: bright arcane white.
 
-material Game/ProtoArrow
+material Game/Prototype/Arrow
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -36,7 +36,7 @@ material Game/ProtoArrow
     } }
 }
 
-material Game/ProtoBolt
+material Game/Prototype/Bolt
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -52,7 +52,7 @@ material Game/ProtoBolt
 
 // Player projectile silhouettes. Shape remains primary identifier; colour
 // separates them at peripheral vision without resembling hostile red bolts.
-material Game/ProjectileVesper
+material Game/Prototype/ProjectileVesper
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -60,11 +60,15 @@ material Game/ProjectileVesper
         {
             param_named modulateColor float4 0.72 0.42 1.35 1.0
         }
-        texture_unit { texture proto_purple_10.png filtering none }
+        texture_unit
+        {
+            texture proto_purple_10.png
+            filtering none
+        }
     } }
 }
 
-material Game/ProjectileEidolon
+material Game/Prototype/ProjectileEidolon
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -72,11 +76,15 @@ material Game/ProjectileEidolon
         {
             param_named modulateColor float4 0.55 1.10 1.40 1.0
         }
-        texture_unit { texture proto_light_03.png filtering none }
+        texture_unit
+        {
+            texture proto_light_03.png
+            filtering none
+        }
     } }
 }
 
-material Game/ProjectileTalon
+material Game/Prototype/ProjectileTalon
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit { }
@@ -84,6 +92,10 @@ material Game/ProjectileTalon
         {
             param_named modulateColor float4 1.40 0.30 0.12 1.0
         }
-        texture_unit { texture proto_orange_07.png filtering none }
+        texture_unit
+        {
+            texture proto_orange_07.png
+            filtering none
+        }
     } }
 }

@@ -3,8 +3,9 @@
 // These survive the prototype content reset on purpose. They are shader
 // profiles, not art dressing: each is a palette + flow tuning of a PixelVfx
 // program, and the only textures they need are the small stylised flow maps in
-// textures/vfx/, which came back with them. Everything here should look exactly
-// as it did before the reset -- the parameter values are unchanged.
+// textures/vfx/, which came back with them. The liquids look exactly as they did
+// before the reset; only the two portal profiles have been retuned since, for
+// the rebuilt portal shader (see docs/portals.md).
 //
 // The engine keeps art-free equivalents of the same profiles in
 // engine/assets/materials/prototype_vfx.material, used as fallbacks when a
@@ -13,18 +14,42 @@
 // --- portals ---------------------------------------------------------------
 // Descent portal: opaque emissive sprite material with a continuously
 // scrolling texture. Values above 1 intentionally feed the bloom pass.
-material Game/PortalDown
+material Game/Vfx/PortalDown
 {
     technique { pass {
         cull_hardware none
         depth_write on
-        vertex_program_ref PixelVfx/PortalVS { }
+        vertex_program_ref PixelVfx/SurfaceVS { }
         fragment_program_ref PixelVfx/PortalFS
         {
-            param_named portalDark float4 0.025 0.075 0.015 1.0
-            param_named portalMid float4 0.12 0.92 0.055 1.0
-            param_named portalBright float4 0.80 1.65 0.18 1.0
-            param_named portalFlowSpeed float 0.28
+            param_named surfaceDark float4 0.076 0.000 0.535 1.0
+            param_named surfaceMid float4 0.858 0.000 1.000 1.0
+            param_named surfaceBright float4 0.540 0.000 1.000 1.0
+            param_named surfaceCore float4 0.566 0.000 1.000 1.0
+            param_named surfaceStepFps float 11.0
+            param_named portalFlowSpeed float 0.159
+            param_named portalSwirlSpeed float 0.521
+            param_named portalTwist float -0.355
+            param_named portalArms float 1
+            param_named portalArmWidth float 0.50
+            param_named surfaceTexelSize float 0.0240
+            param_named surfacePixelGrid float 39
+            param_named portalDepthScale float 1.466
+            param_named portalParallax float 0.350
+            param_named portalFieldWeight float 0.450
+            param_named portalCoreRadius float 0.227
+            param_named portalCoreBoost float 0.417
+            param_named portalRimRadius float 0.600
+            param_named portalRimWidth float 0.106
+            param_named portalRimIntensity float 0.000
+            param_named portalEdgeFade float 0.000
+            param_named surfaceDither float 0.863
+            param_named surfaceEdgeGlow float 1.882
+            param_named surfaceEdgeFlow float 3.000
+            param_named surfaceGlowColour float4 1.30 0.10 2.20 1.0
+            param_named surfaceGlowStrength float 1.05
+            param_named surfaceGlowThreshold float 0.50
+            param_named surfaceBrightness float 1.400
         }
         texture_unit
         {
@@ -36,18 +61,24 @@ material Game/PortalDown
 }
 
 // Ascent portal: the same continuous flow reversed and recoloured arcane-blue.
-material Game/PortalUp
+material Game/Vfx/PortalUp
 {
     technique { pass {
         cull_hardware none
         depth_write on
-        vertex_program_ref PixelVfx/PortalVS { }
+        vertex_program_ref PixelVfx/SurfaceVS { }
         fragment_program_ref PixelVfx/PortalFS
         {
-            param_named portalDark float4 0.015 0.04 0.15 1.0
-            param_named portalMid float4 0.08 0.58 1.10 1.0
-            param_named portalBright float4 0.32 1.15 1.80 1.0
-            param_named portalFlowSpeed float -0.22
+            param_named surfaceDark float4 0.015 0.04 0.15 1.0
+            param_named surfaceMid float4 0.08 0.58 1.10 1.0
+            param_named surfaceBright float4 0.32 1.15 1.80 1.0
+            param_named surfaceCore float4 1.05 1.85 2.60 1.0
+            param_named portalFlowSpeed float -0.26
+            param_named portalSwirlSpeed float -0.07
+            param_named surfaceGlowColour float4 0.45 1.55 2.40 1.0
+            param_named surfaceGlowStrength float 1.00
+            param_named surfaceGlowThreshold float 0.50
+            param_named surfaceBrightness float 1.350
         }
         texture_unit
         {
@@ -60,7 +91,7 @@ material Game/PortalUp
 
 // --- liquids ---------------------------------------------------------------
 
-material Fantasy/Lava
+material Game/Vfx/Lava
 {
     technique { pass {
         depth_write on
@@ -80,7 +111,7 @@ material Fantasy/Lava
     } }
 }
 
-material Fantasy/Water
+material Game/Vfx/Water
 {
     technique { pass {
         depth_write on
@@ -101,7 +132,7 @@ material Fantasy/Water
     } }
 }
 
-material Fantasy/ToxicSlime
+material Game/Vfx/ToxicSlime
 {
     technique { pass {
         depth_write on
@@ -124,7 +155,7 @@ material Fantasy/ToxicSlime
 
 // --- energy ----------------------------------------------------------------
 
-material Fantasy/FelEnergy
+material Game/Vfx/FelEnergy
 {
     technique { pass {
         cull_hardware none
@@ -143,7 +174,7 @@ material Fantasy/FelEnergy
     } }
 }
 
-material Fantasy/ArcaneGlow
+material Game/Vfx/ArcaneGlow
 {
     technique { pass {
         scene_blend add

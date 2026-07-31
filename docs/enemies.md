@@ -174,21 +174,22 @@ are the design. They live in the file.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `material` | `"Game/EnemyRed"` | see the palette below |
+| `material` | `"Game/Enemy/Red"` | see the palette below |
 | `mesh` | — | OBJ path relative to the asset root. Empty = the placeholder cylinder |
 | `scale` | `[1,1,1]` | node scale |
 | `hit_flash` / `hit_flash_time` | `0.16` / `0.12` | squash amplitude and duration on being hit |
 | `cast_shadows` | `true` | stencil shadow casting |
+| `blood` | `"human"` | profile in `blood.toml`: spray, gibs, decal and pool together. `"undead_ichor"` for the hollows; `""` for something that does not bleed (see `stone_brute`) |
 
 Placeholder palette, chosen so an enemy is identifiable by silhouette and tint
 alone at the resolution this renderer actually draws at:
 
 | Material | Reads as |
 |---|---|
-| `Game/EnemyRedPale` | fast / fragile |
-| `Game/EnemyRed` | standard |
-| `Game/EnemyRedDark` | heavy / armoured |
-| `Game/EnemyRedElite` | boss (the only full-chroma red in the palette) |
+| `Game/Enemy/RedPale` | fast / fragile |
+| `Game/Enemy/Red` | standard |
+| `Game/Enemy/RedDark` | heavy / armoured |
+| `Game/Enemy/RedElite` | boss (the only full-chroma red in the palette) |
 
 ### `[<row>.stats]`
 

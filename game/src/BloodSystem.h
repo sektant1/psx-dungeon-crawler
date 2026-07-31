@@ -1,8 +1,10 @@
 #pragma once
+#include <eng/Handles.h>
 #include <eng/particles/DecalSystem.h>
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -67,6 +69,17 @@ bool parseBloodDefinitions(const std::string& tomlPath, BloodDefinitions& out);
 // than buried in the .cpp so the mapping can be asserted without a renderer.
 float bloodSeverityScale(BloodSeverity severity);
 
+// What a damage event is worth, as a fraction of the victim's health rather
+// than an absolute: the same fifteen points is a scratch on a boss and a
+// maiming on a rat. A killing blow is always Heavy, which is what makes gibs
+// read as "that died" rather than "that was hit hard". `maxHealth` <= 0 (an
+// unknown victim) falls back to Normal instead of dividing by it.
+//
+// Pure, and separate from the call sites, because this is the one judgement
+// call in the whole path from "took damage" to "threw blood" -- everything else
+// is a name lookup, and a judgement nobody can test drifts.
+BloodSeverity bloodSeverityFor(float damageDealt, float maxHealth, bool killed);
+
 // Turns damage events into blood.
 //
 // This is the whole reason engine/ never learns what blood is: the decal system
@@ -87,18 +100,56 @@ public:
                   glm::vec3 point, glm::vec3 normal, glm::vec3 damageDir,
                   BloodSeverity severity = BloodSeverity::Normal) const;
 
+    // The instant mark, placed on a surface the *caller* has found. Split from
+    // spawnHit because a wound is on a body: a decal is a world-space quad, so
+    // painting it at the wound leaves one hanging in the air where a walking
+    // enemy's chest used to be -- permanently, for the profiles that never
+    // fade. Only the caller can say where the floor under that wound is.
+    void spawnSplat(eng::Renderer& renderer, const std::string& profile,
+                    glm::vec3 surfacePoint, glm::vec3 surfaceNormal) const;
+
     // A body that has come to rest and is still bleeding. Separate from
     // spawnHit because a pool grows from one persistent mark rather than
     // accumulating a fresh decal every frame.
     void spawnPool(eng::Renderer& renderer, const std::string& profile,
                    glm::vec3 groundPoint) const;
 
+    // --- drip -----------------------------------------------------------
+    // A wounded body drips, and unlike a hit that is a *state*: the emitter
+    // runs for as long as the victim is below its profile's drip_hp_fraction,
+    // and it has to travel with the body, so this owns a node per bleeder and
+    // moves it. Call once a frame per living combatant and let it decide -- the
+    // threshold is the profile's, not the caller's.
+    //
+    // `bleeder` is any stable integer id for the body. An integer and not an
+    // entity on purpose: nothing else in this file knows a registry exists, and
+    // a blood system that did could not be used by anything that has no ECS.
+    void updateDrip(eng::Renderer& renderer, uint32_t bleeder,
+                    const std::string& profile, glm::vec3 wound,
+                    float healthFraction);
+    // Stop one bleeder for good and release its node: death, despawn.
+    void stopDrip(eng::Renderer& renderer, uint32_t bleeder);
+    // Drop every bleeder WITHOUT touching the renderer, for a level transition:
+    // clearScene has already destroyed the nodes, and handing it their handles
+    // afterwards is how a use-after-free gets written.
+    void forgetDrips() { mDrips.clear(); }
+
     const BloodProfile* profile(const std::string& id) const;
     bool loaded() const { return mLoaded; }
     std::vector<std::string> profileIds() const;
 
 private:
+    // One per body that is bleeding or has bled: the node the emitter rides on,
+    // and the emitter itself while it is running. The node outlives a pause in
+    // the bleeding (healed above the threshold, then hurt again) because
+    // recreating it every time would churn the scene graph for nothing.
+    struct Drip {
+        eng::NodeHandle node;
+        eng::ParticlesHandle fx; // invalid while not currently bleeding
+    };
+
     std::unordered_map<std::string, BloodProfile> mProfiles;
+    std::unordered_map<uint32_t, Drip> mDrips;
     bool mLoaded = false;
 };
 

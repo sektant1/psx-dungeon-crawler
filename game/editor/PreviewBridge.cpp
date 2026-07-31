@@ -3,6 +3,7 @@
 #include "SceneCook.h"
 
 #include <eng/Renderer.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
 #include <eng/ecs/MeshSource.h>
 #include <ecs/RendererSceneBackend.h>
@@ -17,13 +18,11 @@ using game::content::AuthorId;
 
 struct PreviewBridge::Impl
 {
-    Impl(eng::Renderer& renderer, std::string root)
-        : assetRoot(std::move(root)), backend(renderer), sync(scene, backend),
-          renderer(renderer)
+    explicit Impl(eng::Renderer& renderer)
+        : backend(renderer), sync(scene, backend), renderer(renderer)
     {
     }
 
-    std::string assetRoot;
     eng::ecs::Scene scene;
     eng::ecs::RendererSceneBackend backend;
     eng::ecs::SceneSync sync;
@@ -54,12 +53,14 @@ struct PreviewBridge::Impl
         auto cached = meshCache.find(path);
         if (cached != meshCache.end())
             return cached->second;
-        const std::filesystem::path full =
-            std::filesystem::path(assetRoot) / path;
-        std::error_code code;
-        const eng::MeshHandle mesh =
-            std::filesystem::exists(full, code) ? renderer.loadObj(full.string())
-                                                : renderer.prototypeMesh(path);
+        // A MeshSource is a pack-relative path ("meshes/kit/Door_01.obj"),
+        // which is exactly what the resolver takes. An unresolved one draws as
+        // the prototype box, as it always has: an editor must stay usable with
+        // a broken reference in the document.
+        const std::filesystem::path full = eng::assets::resolve(path);
+        const eng::MeshHandle mesh = full.empty()
+                                         ? renderer.prototypeMesh(path)
+                                         : renderer.loadObj(full.string());
         return meshCache.emplace(path, mesh).first->second;
     }
 
@@ -82,9 +83,8 @@ struct PreviewBridge::Impl
     }
 };
 
-PreviewBridge::PreviewBridge(eng::Renderer& renderer,
-                             const std::string& assetRoot)
-    : mImpl(std::make_unique<Impl>(renderer, assetRoot))
+PreviewBridge::PreviewBridge(eng::Renderer& renderer)
+    : mImpl(std::make_unique<Impl>(renderer))
 {
 }
 
@@ -175,7 +175,7 @@ void PreviewBridge::showPlacementGhost(
         const eng::NodeHandle node = mImpl->renderer.createNode(
             eng::kRootNode, glm::vec3(0.0f), "editor_placement_ghost");
         mImpl->renderer.attachMesh(node, mImpl->meshFor(piece.meshPath),
-                                   "__Editor/PlacementGhost", false);
+                                   "Editor/PlacementGhost", false);
         found = mImpl->ghostNodes.emplace(piece.meshPath, node).first;
     }
 

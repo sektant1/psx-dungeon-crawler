@@ -7,6 +7,7 @@
 // stopped writing, which is worse than having no schema at all.
 
 #include "SceneWriter.h"
+#include "TestAssets.h"
 
 #include <nlohmann/json.hpp>
 
@@ -49,7 +50,8 @@ static void checkObject(const Json& value, const Json& schema,
 
 int main()
 {
-    std::ifstream input(SCENE_SCHEMA);
+    game::test::mountGameAssets();
+    std::ifstream input(game::test::asset("schemas/scene.schema.json"));
     require(bool(input), "the schema file opens");
     const Json schema = Json::parse(input, nullptr, false);
     require(!schema.is_discarded(), "the schema is valid JSON");
@@ -62,7 +64,7 @@ int main()
     entity.id = "everything";
     entity.name = "Every Field";
     entity.prefab = "kit.wall";
-    entity.material = "Kit/Stone";
+    entity.material = "Game/Kit/Stone";
     entity.castShadows = false;
     entity.transform.position = {1.0f, 2.0f, 3.0f};
     entity.transform.rotationDegrees = {0.0f, 90.0f, 0.0f};

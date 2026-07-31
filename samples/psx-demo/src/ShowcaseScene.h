@@ -3,6 +3,8 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -34,16 +36,51 @@ struct ShowcaseOptions {
     bool props = true;
 };
 
-class ShowcaseScene
-{
+// The generated surfaces whose material is a *choice* rather than a property of
+// the mesh: flat stone the scene stands on. They are named so the tuning panel
+// can re-dress them live with the dungeon materials the game is built from --
+// which is the whole reason the kit atlases ship with the sample.
+//
+// Everything else (crystal, portal membrane, props) keeps its authored
+// material: those are the shader profiles the demo exists to show.
+enum class SurfaceSlot {
+    DaisLower,
+    DaisUpper,
+    Plinth,
+    PortalBacking,
+    Shell,
+    Count,
+};
+
+const char* surfaceSlotName(SurfaceSlot slot);
+
+// Materials that tile cleanly over a generated primitive. Atlas profiles
+// (Game/Kit/Dungeon, Game/Kit/Doors, Game/Kit/Containers) are deliberately absent: a
+// primitive's 0..1 UVs stretch a whole atlas sheet over one face, which reads
+// as a smear rather than as stone. The kit meshes that ARE atlas-mapped keep
+// Game/Kit/Dungeon in code.
+std::span<const char* const> surfaceMaterialChoices();
+
+class ShowcaseScene {
 public:
     using Options = ShowcaseOptions;
 
-    bool build(eng::Renderer& renderer, const std::string& assetDir,
-               const Options& options = {});
+    // Content is named by logical path and resolved through the mount list
+    // (assets/assets.toml): the demo pack holds only its own deltas and the
+    // meshes come from the game pack underneath it.
+    bool build(eng::Renderer& renderer, const Options& options = {});
     // Turntable + per-station animation. `time` is seconds; the caller owns
     // pausing by simply not advancing it.
     void update(eng::Renderer& renderer, float time);
+
+    // Live re-dressing of one stone surface. Unknown material names are the
+    // renderer's problem, not the scene's: it swaps and reports what is set.
+    void setSurfaceMaterial(eng::Renderer& renderer, SurfaceSlot slot,
+                            const std::string& material);
+    const std::string& surfaceMaterial(SurfaceSlot slot) const
+    {
+        return mSurfaceMaterials[std::size_t(slot)];
+    }
 
     eng::NodeHandle root() const { return mRoot; }
     // The point the camera should orbit and look at: the centre of the dais at
@@ -52,18 +89,27 @@ public:
 
 private:
     void buildDais(eng::Renderer& renderer, const Options& options);
-    void buildCrystalShrine(eng::Renderer& renderer, const std::string& assetDir,
-                            const Options& options, glm::vec3 at);
-    void buildPortal(eng::Renderer& renderer, const std::string& assetDir,
-                     const Options& options, glm::vec3 at, float facingDeg);
-    void buildTreasure(eng::Renderer& renderer, const std::string& assetDir,
-                       const Options& options, glm::vec3 at);
-    void buildDressing(eng::Renderer& renderer, const std::string& assetDir,
-                       const Options& options);
+    void buildCrystalShrine(eng::Renderer& renderer, const Options& options,
+                            glm::vec3 at);
+    void buildPortal(eng::Renderer& renderer, const Options& options,
+                     glm::vec3 at, float facingDeg);
+    void buildTreasure(eng::Renderer& renderer, const Options& options,
+                       glm::vec3 at);
+    // Water / slime / lava pools, one per scrolling-shader profile.
+    void buildLiquids(eng::Renderer& renderer, const ShowcaseOptions& options);
+    void buildDressing(eng::Renderer& renderer, const Options& options);
     void buildLighting(eng::Renderer& renderer, const Options& options);
 
-    std::string mAssetDir;
+    // Attaches a generated primitive and remembers the node, so the surface can
+    // be re-dressed later without the scene searching for it.
+    void placeSurface(eng::Renderer& renderer, SurfaceSlot slot,
+                      eng::NodeHandle node, eng::MeshHandle mesh,
+                      const std::string& material, bool castShadows);
+
     eng::NodeHandle mRoot{};
+    std::array<eng::NodeHandle, std::size_t(SurfaceSlot::Count)> mSurfaces{};
+    std::array<std::string, std::size_t(SurfaceSlot::Count)>
+        mSurfaceMaterials{};
 
     // Animated pieces, held so update() can drive them without searching.
     eng::NodeHandle mCrystalSpin{};

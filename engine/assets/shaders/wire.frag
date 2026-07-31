@@ -1,5 +1,5 @@
 #version 330 core
-// Debug wireframe view: flat-colour mesh lines, drawn by PSX/DebugWireframe
+// Debug wireframe view: flat-colour mesh lines, drawn by Engine/Psx/DebugWireframe
 // with polygon_mode wireframe. Reuses PSX_VS_Unlit so the lines keep the
 // vertex snap/jitter of the real geometry. Still writes the MRT normal/depth
 // surface metadata remains valid for post-processing targets.

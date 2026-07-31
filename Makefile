@@ -28,6 +28,11 @@ GENERATOR   ?= Ninja
 GENERATOR_ORIGIN := $(origin GENERATOR)
 # Extra cache entries, e.g. CMAKE_ARGS='-DENABLE_UNITY=ON -DENABLE_LTO=ON'.
 CMAKE_ARGS  ?=
+# The visual-test harness. Distributions that dropped the unversioned `python`
+# (Debian/Ubuntu, Fedora without python-unversioned-command) made every
+# visual-test target fail with "python: No such file or directory", which reads
+# as a broken harness rather than as a missing alias.
+PYTHON      ?= $(shell command -v python3 2>/dev/null || echo python)
 # Force X11 on Wayland (XWayland): the GL3Plus path is unreliable on native
 # Wayland. Override with SDL_VIDEODRIVER=... on the command line if needed.
 SDL_VIDEODRIVER ?= x11
@@ -243,14 +248,14 @@ VISUAL_ARGS = --frame $(if $(FRAME),$(FRAME),90) \
 	$(if $(MAP),--map $(MAP),)
 
 visual-test: build-game
-	python tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
+	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
 
 visual-bench: build-game
-	python tools/visual_test.py $(VISUAL_COMMON) benchmark $(VISUAL_ARGS) \
+	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) benchmark $(VISUAL_ARGS) \
 		--frames $(if $(BENCH),$(BENCH),120)
 
 renderdoc-capture: build-app
-	python tools/visual_test.py $(VISUAL_COMMON) capture $(VISUAL_ARGS) --app $(APP_TARGET)
+	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) capture $(VISUAL_ARGS) --app $(APP_TARGET)
 
 # ---- GPU + native debugging ------------------------------------------------
 # All of these take APP=game|scene_editor|psx_demo, because every one of them is

@@ -29,7 +29,7 @@ material Game/PropPlanks
         fragment_program_ref PSX_FS_Lit { }
         texture_unit
         {
-            texture wood_planks.jpg
+            texture wood_planks.png
             filtering none
             tex_address_mode wrap
         }
@@ -167,7 +167,7 @@ material Game/PropMarket
         fragment_program_ref PSX_FS_Lit { }
         texture_unit
         {
-            texture market.jpg
+            texture market.png
             filtering none
             tex_address_mode wrap
         }
@@ -181,7 +181,7 @@ material Game/PropJute
         fragment_program_ref PSX_FS_Lit { }
         texture_unit
         {
-            texture jute.jpg
+            texture jute.png
             filtering none
             tex_address_mode wrap
         }
@@ -259,7 +259,11 @@ material Game/ViewModelVesper
         depth_write off
         vertex_program_ref PSX_VS_Lit { }
         fragment_program_ref PSX_FS_Lit { }
-        texture_unit { texture proto_dark_09.png filtering none }
+        texture_unit
+        {
+            texture proto_dark_09.png
+            filtering none
+        }
     } }
 }
 
@@ -274,7 +278,11 @@ material Game/ViewModelVesperGlow
         {
             param_named modulateColor float4 0.75 0.36 1.30 1.0
         }
-        texture_unit { texture proto_purple_10.png filtering none }
+        texture_unit
+        {
+            texture proto_purple_10.png
+            filtering none
+        }
     } }
 }
 
@@ -286,7 +294,11 @@ material Game/ViewModelEidolon
         depth_write off
         vertex_program_ref PSX_VS_Lit { }
         fragment_program_ref PSX_FS_Lit { }
-        texture_unit { texture proto_dark_05.png filtering none }
+        texture_unit
+        {
+            texture proto_dark_05.png
+            filtering none
+        }
     } }
 }
 
@@ -301,7 +313,11 @@ material Game/ViewModelEidolonGlow
         {
             param_named modulateColor float4 0.42 0.95 1.25 1.0
         }
-        texture_unit { texture proto_light_03.png filtering none }
+        texture_unit
+        {
+            texture proto_light_03.png
+            filtering none
+        }
     } }
 }
 
@@ -313,7 +329,11 @@ material Game/ViewModelTalon
         depth_write off
         vertex_program_ref PSX_VS_Lit { }
         fragment_program_ref PSX_FS_Lit { }
-        texture_unit { texture proto_dark_12.png filtering none }
+        texture_unit
+        {
+            texture proto_dark_12.png
+            filtering none
+        }
     } }
 }
 
@@ -328,7 +348,11 @@ material Game/ViewModelTalonGlow
         {
             param_named modulateColor float4 1.30 0.28 0.08 1.0
         }
-        texture_unit { texture proto_orange_07.png filtering none }
+        texture_unit
+        {
+            texture proto_orange_07.png
+            filtering none
+        }
     } }
 }
 
@@ -339,7 +363,7 @@ material Game/PropHay
         fragment_program_ref PSX_FS_LitPerspective { }
         texture_unit
         {
-            texture hay.jpg
+            texture hay.png
             filtering none
             tex_address_mode wrap
         }
@@ -373,7 +397,7 @@ material Game/PropPlanksTwoSided
         fragment_program_ref PSX_FS_Lit { }
         texture_unit
         {
-            texture wood_planks.jpg
+            texture wood_planks.png
             filtering none
             tex_address_mode wrap
         }
@@ -445,7 +469,7 @@ material Game/Torch
     } }
 }
 
-// Torch flame billboard. Same recipe as the proven PSX/Sparkle material:
+// Torch flame billboard. Same recipe as the proven Game/Demo/Sparkle material:
 // alpha-scissor cuts the quad to the sparkle shape (plain PSX_FS_Unlit
 // ignores texture alpha and shows the texture's black background as an
 // opaque square).

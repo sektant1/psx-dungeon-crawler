@@ -1,6 +1,7 @@
 #include "ShowcaseVisibility.h"
 #include "DungeonGen.h"
 #include "ShowroomMotion.h"
+#include "TestAssets.h"
 
 #define TOML_EXCEPTIONS 0
 #include <tomlplusplus/toml.hpp>
@@ -30,6 +31,7 @@ bool near(float a, float b)
 
 int main()
 {
+    game::test::mountGameAssets();
     constexpr float range = 16.0f;
     constexpr float hysteresis = 2.0f;
 
@@ -62,14 +64,14 @@ int main()
             "an exhibit without an authored range must remain available");
 
     const std::string path =
-        std::string(APP_ASSET_DIR) + "/showroom_exhibits.toml";
+        game::test::asset("showroom_exhibits.toml");
     const toml::parse_result parsed = toml::parse_file(path);
     require(bool(parsed), "showroom exhibit TOML must parse");
     const toml::array* exhibits = parsed.table()["exhibit"].as_array();
     require(exhibits != nullptr, "showroom must contain exhibits");
 
     const toml::parse_result showroom = toml::parse_file(
-        std::string(APP_ASSET_DIR) + "/showroom.toml");
+        game::test::asset("showroom.toml"));
     require(bool(showroom), "showroom TOML must parse");
     const toml::array* rowNodes = showroom.table()["dungeon"]["rows"].as_array();
     require(rowNodes != nullptr, "showroom must contain dungeon rows");
@@ -157,7 +159,7 @@ int main()
         "arrival_path", "reliquary_path", "proving_path"};
     require(ids == requiredIds, "showroom must retain every feature exhibit");
 
-    const toml::parse_result demo = toml::parse_file(DEMO_SCENE_TOML);
+    const toml::parse_result demo = toml::parse_file(game::test::asset("demo_scene.toml"));
     require(bool(demo), "shared crystal scene must parse");
     const toml::table* crystals = demo.table()["crystals"].as_table();
     require(crystals && (*crystals)["spire"].as_array() &&
@@ -166,7 +168,7 @@ int main()
                 (*crystals)["instance"].as_array()->size() == 5,
             "showroom crystal ring must retain four spires and five clusters");
     require(std::filesystem::exists(
-                std::string(APP_ASSET_DIR) + "/meshes/props/prop_chest.obj"),
+                game::test::asset("meshes/props/prop_chest.obj")),
             "showroom spinning chest mesh must exist");
     const game::showroom::TreasureMotion rest =
         game::showroom::treasureMotion(0.0f);

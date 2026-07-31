@@ -1,4 +1,4 @@
-material Sprite/Opaque
+material Engine/Sprite/Opaque
 {
     technique { pass {
         cull_hardware none
@@ -13,7 +13,7 @@ material Sprite/Opaque
     } }
 }
 
-material Sprite/Alpha
+material Engine/Sprite/Alpha
 {
     technique { pass {
         cull_hardware none
@@ -29,7 +29,7 @@ material Sprite/Alpha
     } }
 }
 
-material Sprite/Additive
+material Engine/Sprite/Additive
 {
     technique { pass {
         cull_hardware none
@@ -48,7 +48,7 @@ material Sprite/Additive
 // World-space UI: billboarded like other sprites, but never hidden by nearby
 // mesh depth. Kept opaque because the PSX compositor has a second MRT whose
 // depth/normal reconstruction must not be alpha-blended.
-material Sprite/Overlay
+material Engine/Sprite/Overlay
 {
     technique { pass {
         cull_hardware none

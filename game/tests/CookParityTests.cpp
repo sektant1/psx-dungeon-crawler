@@ -9,6 +9,7 @@
 #include "SceneCook.h"
 #include "SceneSource.h"
 #include "GameComponents.h"
+#include "TestAssets.h"
 
 #include <eng/ecs/Components.h>
 
@@ -41,6 +42,10 @@ static std::vector<char> readAll(const std::string& path)
 
 int main()
 {
+    game::test::mountGameAssets();
+    const std::string ritual =
+        game::test::asset("scenes/ritual_boss_showroom.scn");
+    const std::string kit = game::test::asset("kit.toml");
     const std::string outDir = COOK_PARITY_OUT_DIR;
     const std::string inProcess = outDir + "/parity_inprocess.map";
     const std::string viaCli = outDir + "/parity_cli.map";
@@ -49,16 +54,16 @@ int main()
     SceneDocument document;
     KitCatalog catalog;
     std::string error;
-    require(loadSceneSource(RITUAL_SCN, document, error), error.c_str());
-    require(KitCatalog::load(KIT_TOML, catalog, error), error.c_str());
+    require(loadSceneSource(ritual, document, error), error.c_str());
+    require(KitCatalog::load(kit, catalog, error), error.c_str());
 
     require(cookToMap(document, catalog, inProcess, error), error.c_str());
     require(cookToMap(document, catalog, again, error), error.c_str());
     require(readAll(inProcess) == readAll(again),
             "cooking the same scene twice gives the same bytes");
 
-    const std::string command = std::string(SCENE_COOK_EXE) + " " + RITUAL_SCN +
-                                " --kit " + KIT_TOML + " --out " + viaCli +
+    const std::string command = std::string(SCENE_COOK_EXE) + " " + ritual +
+                                " --kit " + kit + " --out " + viaCli +
                                 " > /dev/null";
     require(std::system(command.c_str()) == 0, "scene_cook CLI succeeds");
     require(readAll(inProcess) == readAll(viaCli),

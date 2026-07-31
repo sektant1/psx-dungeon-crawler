@@ -10,7 +10,15 @@ in vec2 uv3;      // instance: x rotation in radians, y flipbook frame
 
 uniform mat4 worldViewProj;
 uniform mat4 view;
-uniform vec2 flipbookGrid;   // columns, rows
+// Where this material's animation lives inside its texture, in UV. Cell is the
+// size of one frame, origin is frame 0's corner, and perRow is how many frames
+// run along a row before the strip wraps down one cell. A whole-sheet grid is
+// the special case origin = 0, cell = 1/(cols,rows), perRow = cols -- which is
+// why one set of uniforms covers both a dedicated flipbook PNG and a strip
+// carved out of a shared effect sheet.
+uniform vec2 flipbookCell;
+uniform vec2 flipbookOrigin;
+uniform float flipbookPerRow;
 
 out vec2  particleUV;
 out vec4  particleColour;
@@ -30,11 +38,11 @@ void main()
                        vertex.x * s + vertex.y * c);
     vec3 world = uv1.xyz + (right * corner.x + up * corner.y) * uv1.w;
 
-    vec2 grid = max(flipbookGrid, vec2(1.0));
+    float perRow = max(flipbookPerRow, 1.0);
     float frame = floor(max(uv3.y, 0.0));
-    float col = mod(frame, grid.x);
-    float row = mod(floor(frame / grid.x), grid.y);
-    particleUV = (uv0 + vec2(col, row)) / grid;
+    float col = mod(frame, perRow);
+    float row = floor(frame / perRow);
+    particleUV = flipbookOrigin + (uv0 + vec2(col, row)) * flipbookCell;
     particleColour = uv2;
 
     // The batch never moves its scene node, so instance positions are already

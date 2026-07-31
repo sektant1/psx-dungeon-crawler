@@ -175,44 +175,44 @@ height = 3.0
 
 [[material]]
 match = "portalup"
-material = "Engine/PrototypePortalUp"
+material = "Engine/PrototypeVfx/PortalUp"
 
 [[material]]
 match = "portalascend"
-material = "Engine/PrototypePortalUp"
+material = "Engine/PrototypeVfx/PortalUp"
 
 [[material]]
 match = "portal"
-material = "Engine/PrototypePortal"
+material = "Engine/PrototypeVfx/Portal"
 
 [[material]]
 match = "lava"
-material = "Engine/PrototypeLava"
+material = "Engine/PrototypeVfx/Lava"
 
 [[material]]
 match = "magma"
-material = "Engine/PrototypeLava"
+material = "Engine/PrototypeVfx/Lava"
 
 [[material]]
 match = "slime"
-material = "Engine/PrototypeSlime"
+material = "Engine/PrototypeVfx/Slime"
 
 [[material]]
 match = "toxic"
-material = "Engine/PrototypeSlime"
+material = "Engine/PrototypeVfx/Slime"
 
 [[material]]
 match = "ooze"
-material = "Engine/PrototypeSlime"
+material = "Engine/PrototypeVfx/Slime"
 
 [[material]]
 match = "water"
-material = "Engine/PrototypeLiquid"
+material = "Engine/PrototypeVfx/Liquid"
 
 [[material]]
 match = "liquid"
-material = "Engine/PrototypeLiquid"
+material = "Engine/PrototypeVfx/Liquid"
 
 [[material]]
 match = "particle"
-material = "Engine/PrototypeParticle"
+material = "Engine/Psx/PrototypeParticle"

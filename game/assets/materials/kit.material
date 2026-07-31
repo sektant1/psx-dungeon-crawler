@@ -25,7 +25,7 @@
 // --- the architecture atlas -------------------------------------------------
 // Walls, floors, blocks, stairs, pillars, arches, doorframes, skull walls,
 // candles, debris, spikes, wall decor.
-material Kit/Dungeon
+material Game/Kit/Dungeon
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit
@@ -45,7 +45,7 @@ material Kit/Dungeon
 
 // Two-sided variant for pieces a player sees from both faces: arch fences,
 // grilles, window openings. The dungeon atlas is otherwise identical.
-material Kit/DungeonTwoSided
+material Game/Kit/DungeonTwoSided
 {
     technique { pass {
         cull_hardware none
@@ -66,8 +66,8 @@ material Kit/DungeonTwoSided
 
 // --- doors ------------------------------------------------------------------
 // The three door leaves share a 128x128 atlas; their frames are architecture
-// and use Kit/Dungeon.
-material Kit/Doors
+// and use Game/Kit/Dungeon.
+material Game/Kit/Doors
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit
@@ -87,7 +87,7 @@ material Kit/Doors
 
 // --- containers -------------------------------------------------------------
 // Barrel, box, chest base and lid.
-material Kit/Containers
+material Game/Kit/Containers
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit
@@ -107,7 +107,7 @@ material Kit/Containers
 
 // --- metal --------------------------------------------------------------
 // Chain and chandelier: hung ironwork, lit like metal rather than stone.
-material Kit/Metal
+material Game/Kit/Metal
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit
@@ -127,7 +127,7 @@ material Kit/Metal
 
 // --- timber -----------------------------------------------------------------
 // The wall-mounted table.
-material Kit/Wood
+material Game/Kit/Wood
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit
@@ -150,7 +150,7 @@ material Kit/Wood
 // roof tiles from -3.25 to 4.25), so they need a wrapping, tileable texture
 // rather than an atlas -- sampling an atlas with those UVs would smear every
 // neighbouring tile across the surface.
-material Kit/Stone
+material Game/Kit/Stone
 {
     technique { pass {
         vertex_program_ref PSX_VS_Lit

@@ -80,7 +80,7 @@ public:
     // baked into the mesh; node scale remains available for placement.
     MeshHandle createPrimitiveMesh(const PrimitiveMeshDesc&);
     // Stand-in for a mesh that failed to load, mirroring the
-    // Engine/PrototypeSurface material fallback: a missing asset should read as
+    // Engine/Psx/PrototypeSurface material fallback: a missing asset should read as
     // an obviously untextured placeholder, not abort the frame. The primitive is
     // chosen from the asset's filename (prototype::meshShapeFor) so a missing
     // wall is wall-shaped; each distinct shape is built once and shared. Pass an
@@ -200,6 +200,15 @@ public:
     void stopParticles(ParticlesHandle h);
     void despawnParticles(ParticlesHandle h);
     void setParticleQuality(float q);
+    // Every texture the particle import declared, in stem order. This is what a
+    // tuning panel lists; nothing in gameplay reads it. The descs carry the
+    // flipbook window too, so a panel can show a strip's frame count and rate
+    // without re-reading the TOML.
+    const std::vector<ParticleTextureDesc>& particleTextures() const;
+    // Re-scan the particle texture import (new PNGs, edited *.toml). Materials
+    // already in use are updated in place, so live effects keep drawing.
+    bool reloadParticleTextures();
+    uint32_t liveParticleCount() const;
     // Install the world the particle simulation traces against. The renderer
     // never links physics, so the application owns the adapter and its
     // lifetime: it must outlive the renderer or be cleared with nullptr.
@@ -272,7 +281,7 @@ public:
     void setBloomEnabled(bool enabled);    // off = pass-through composite
     void setBloomParams(float threshold, float intensity);
     // Debug view: swaps every entity's materials for light-blue wireframe
-    // lines (PSX/DebugWireframe); off restores the original materials.
+    // lines (Engine/Psx/DebugWireframe); off restores the original materials.
     void setWireframeDebug(bool enabled);
     void setGradeEnabled(bool enabled); // colour grade before quantization
     void setGradeParams(float desaturate, float contrast,
