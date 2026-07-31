@@ -1,8 +1,7 @@
 #pragma once
-#include "CombatConfig.h"
-#include "Melee.h"
+#include "BloodSystem.h"
+#include "PlayerWeapons.h"
 #include "Projectiles.h"
-#include "Spells.h"
 #include "combat/CombatDirector.h"
 #include "combat/CombatVocabulary.h"
 
@@ -16,35 +15,28 @@ namespace game {
 
 struct GameContext;
 
-// Owns the three attack subsystems (arrows, spells, melee) and their shared
-// data-driven CombatConfig. Consolidates the lifecycle calls that were
-// scattered across the main loop (fixed-step, render sync, contact routing,
-// teardown) behind one combat owner. Weapon selection and viewmodels stay with
-// the player; this only fires and simulates.
+// Owns generic player projectile delivery and shared damage model. Archived
+// melee/spell prototypes remain in source but no longer participate here.
 class CombatSystem {
 public:
-    // Load combat.toml tunables and build procedural projectile/spell meshes.
-    void init(GameContext& ctx, const std::string& configTomlPath);
+    void init(GameContext& ctx);
+    void reloadPresentation(GameContext& ctx);
 
     // Advance all attack subsystems inside the fixed physics substep.
     void fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward, float dt);
-    // Reconcile projectile/spell render nodes after the substep.
+    // Reconcile projectile render nodes after the substep.
     void syncRender(GameContext& ctx);
-    // Route a physics contact to the projectile and spell systems.
+    // Route a physics contact to player projectiles.
     void onContact(GameContext& ctx, const eng::HitEvent& e);
-    // Free all live projectiles/spells (level transition / shutdown).
+    // Free all live projectiles (level transition / shutdown).
     void clear(GameContext& ctx);
 
-    // --- fire actions (called from input handling) ---
-    void fireArrow(GameContext& ctx, glm::vec3 eye, glm::vec3 forward);
-    void castFireball(GameContext& ctx, glm::vec3 eye, glm::vec3 forward);
-    void castBeam(GameContext& ctx, glm::vec3 eye, glm::vec3 forward);
-    void startSwing() { mMelee.startSwing(); }
+    void fireWeapon(GameContext& ctx, const PlayerWeaponDef& weapon,
+                    glm::vec3 eye, glm::vec3 forward);
+    ProjectileSystem& projectiles() { return mProjectiles; }
 
-    MeleeSystem& melee() { return mMelee; }        // hit-callback wiring
-
-    CombatConfig& config() { return mConfig; }     // debug UI
-    const CombatConfig& config() const { return mConfig; }
+    BloodSystem& blood() { return mBlood; }
+    const BloodSystem& blood() const { return mBlood; }
     // Damage model: HP/resistances/status effects + weapon table. Gameplay
     // registers combatants and routes hits through this.
     CombatDirector& director() { return mDirector; }
@@ -55,10 +47,8 @@ public:
 
 private:
     ProjectileSystem mProjectiles;
-    SpellSystem mSpells;
-    MeleeSystem mMelee;
-    CombatConfig mConfig;
     CombatDirector mDirector;
+    BloodSystem mBlood;
 };
 
 } // namespace game

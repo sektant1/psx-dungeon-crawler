@@ -40,6 +40,7 @@ struct Engine::Impl {
     // wall-clock time, so animTime/physics/particles advance identically every
     // run and PSX_SCREENSHOT becomes a real pixel-diff regression oracle.
     float fixedTickDt = 0.0f; // 0 = disabled (normal wall-clock timing)
+    bool loading = false;     // see Engine::setLoadingPhase
 };
 
 Engine::Engine() : mImpl(new Impl) {}
@@ -264,6 +265,15 @@ void Engine::renderFrame(float dt, float animDt)
                           ? mStepClock.delta(StepChannel::Particles)
                           : animDt;
     mRenderer.updateParticles(adt); // recycle finished one-shot particle systems
+    // Loading frames are presentation only: paint and get out before any of the
+    // capture/bench hooks can see them. PSX_CAPTURE_LOADING lifts that so the
+    // loading screen itself can be screenshotted -- it is the only way to see
+    // it in a deterministic capture, since by design it leaves no frames behind.
+    static const bool captureLoading = std::getenv("PSX_CAPTURE_LOADING");
+    if (mImpl->loading && !captureLoading) {
+        detail::coreOf(mRenderer).renderFrame(adt);
+        return;
+    }
     const int renderedFrame = mImpl->frameCount + 1;
     mImpl->frameCapture.beforeFrame(renderedFrame);
     detail::coreOf(mRenderer).renderFrame(adt);
@@ -309,6 +319,17 @@ void Engine::renderFrame(float dt, float animDt)
     }
 }
 
+void Engine::setLoadingPhase(bool loading)
+{
+    mImpl->loading = loading;
+    // The first gameplay frame must not inherit the wall-clock gap the load
+    // spent, or physics would eat a spike-clamped 100 ms step on frame one.
+    if (!loading)
+        mImpl->hasPrev = false;
+}
+
+bool Engine::loadingPhase() const { return mImpl->loading; }
+
 void Engine::startRecording(const RecordingOptions& options)
 {
     GifRecorder::Hooks hooks;
@@ -343,6 +364,9 @@ void Engine::shutdown()
     for (auto it = mSystems.rbegin(); it != mSystems.rend(); ++it)
         (*it)->terminate();
     mSystems.clear();
+    // Particle batches and decals are custom renderables holding scene nodes,
+    // so they have to go before the scene manager underneath them does.
+    mRenderer.shutdownParticles();
     detail::coreOf(mRenderer).shutdown(); // Ogre first
     mImpl->platform.shutdown();           // native window after
 }

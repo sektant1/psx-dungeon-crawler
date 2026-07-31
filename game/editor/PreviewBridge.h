@@ -43,6 +43,22 @@ public:
     // Hides the whole level without tearing it down, for the modes that need
     // the viewport to themselves.
     void setVisible(eng::Renderer& renderer, bool visible);
+    // Hides everything standing above `height` metres. A dungeon with ceilings
+    // is a closed box, and the editor looks into it from above: without a cut
+    // the top-down view is a lid. Cheap to call every frame -- it returns
+    // immediately unless the height moved.
+    void setCeilingCut(eng::Renderer& renderer, float height);
+
+    // Transient brush mesh under the cursor. It never enters the document or
+    // ECS preview, so it cannot be picked, cooked or recorded by undo.
+    void showPlacementGhost(const game::content::KitPiece& piece,
+                            const game::content::XformAuthor& transform,
+                            float importScale);
+    void hidePlacementGhost();
+
+    // Same storey/whole-preview visibility decision used by rendering. Picking
+    // must not select geometry hidden by the ceiling cut.
+    bool entityVisible(const game::content::AuthorId& id) const;
 
     // Null when the entity has no visual (a marker, or the document moved on).
     const eng::NodeHandle* nodeFor(const game::content::AuthorId& id) const;

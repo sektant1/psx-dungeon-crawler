@@ -19,6 +19,10 @@ void InteractionSystem::update(GameContext& ctx, LiveLevel& level, int depth,
 
     mTargets.clear();
     level.appendTargets(mTargets, depth);
+    // Targets owned by systems outside the level (combatants, spawned props)
+    // arbitrate against level targets instead of running a second aim test.
+    mTargets.insert(mTargets.end(), mExtraTargets.begin(), mExtraTargets.end());
+    mExtraTargets.clear();
     const GameplayTarget* target = aimedTarget(mTargets, eye, forward);
     if (!target)
         return;
@@ -27,6 +31,14 @@ void InteractionSystem::update(GameContext& ctx, LiveLevel& level, int depth,
     mFocus.kind = target->kind;
     mFocus.id = target->id;
     mFocus.distance = glm::length(target->position - eye);
+    mFocus.catalogIndex = target->catalogIndex;
+
+    if (target->kind == TargetKind::Prop || target->kind == TargetKind::Actor) {
+        // Look targets with no transition of their own: they exist so the HUD
+        // can describe them. Interaction verbs for props land here when the
+        // container systems arrive.
+        return;
+    }
 
     if (target->kind == TargetKind::Torch) {
         mFocus.active = level.torchIsLit(target->id);

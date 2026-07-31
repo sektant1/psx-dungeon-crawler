@@ -45,9 +45,9 @@ public:
     // `dir` orients knockback; `atPoint` is where the impulse is applied. No-op
     // if the body is not a registered combatant. Applies physics knockback and
     // fires the death callback when the hit kills.
-    void hitBody(eng::Physics& physics, eng::BodyHandle victimBody,
-                 const std::string& weaponId, entt::entity source,
-                 glm::vec3 dir, glm::vec3 atPoint);
+    DamageResult hitBody(eng::Physics& physics, eng::BodyHandle victimBody,
+                         const std::string& weaponId, entt::entity source,
+                         glm::vec3 dir, glm::vec3 atPoint);
 
     // Advance i-frame timers and status effects; fire death callbacks for any
     // entity a damage-over-time tick killed this frame.

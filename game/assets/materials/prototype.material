@@ -49,3 +49,41 @@ material Game/ProtoBolt
         }
     } }
 }
+
+// Player projectile silhouettes. Shape remains primary identifier; colour
+// separates them at peripheral vision without resembling hostile red bolts.
+material Game/ProjectileVesper
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.72 0.42 1.35 1.0
+        }
+        texture_unit { texture proto_purple_10.png filtering none }
+    } }
+}
+
+material Game/ProjectileEidolon
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 0.55 1.10 1.40 1.0
+        }
+        texture_unit { texture proto_light_03.png filtering none }
+    } }
+}
+
+material Game/ProjectileTalon
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit
+        {
+            param_named modulateColor float4 1.40 0.30 0.12 1.0
+        }
+        texture_unit { texture proto_orange_07.png filtering none }
+    } }
+}

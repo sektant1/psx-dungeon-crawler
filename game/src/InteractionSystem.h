@@ -28,10 +28,18 @@ public:
                 glm::vec3 eye, glm::vec3 forward,
                 const TransitionFn& onDescend, const TransitionFn& onAscend);
 
+    // Queue a target owned by another system for this frame's aim test. It is
+    // consumed by the next update(), so a caller that stops publishing simply
+    // stops being targetable.
+    void pushTarget(const GameplayTarget& target) {
+        mExtraTargets.push_back(target);
+    }
+
     const InteractionFocus& focus() const { return mFocus; }
 
 private:
     std::vector<GameplayTarget> mTargets;
+    std::vector<GameplayTarget> mExtraTargets;
     InteractionFocus mFocus;
 };
 

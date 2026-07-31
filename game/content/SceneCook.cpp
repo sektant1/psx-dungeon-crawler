@@ -7,20 +7,54 @@
 #include <eng/ecs/Components.h>
 #include <eng/ecs/MeshSource.h>
 
-#include <glm/gtc/quaternion.hpp>
-
 #include <algorithm>
+#include <cmath>
 
 namespace game::content {
 namespace {
 
-// Same convention the loader used and the runtime expects: yaw, then pitch,
-// then roll.
-glm::quat quatFromDegrees(const glm::vec3& degrees)
+// The collision a kit piece carries by virtue of what it IS, derived from its
+// socket and its authored size. Returns false for pieces that hold nothing up
+// and stop nothing: openings, and props, which collide only where the author
+// asked for it.
+//
+// Without this a cooked scene is architecture the player falls straight
+// through: `collider` in a .scn is an optional per-entity override, and no
+// authoring tool writes one for the 122 floors and walls of a room -- the
+// procedural path (LayoutToScene) generates the same slabs in code, so the
+// difference only showed up in scenes that came through the cooker. It is the
+// piece's own kit.toml size that decides, so a thicker wall gets a thicker
+// collider without a second table to keep in step.
+bool implicitCollider(const KitPiece& piece, const KitCatalog& catalog,
+                      glm::vec3& halfExtents, glm::vec3& offset)
 {
-    return glm::angleAxis(glm::radians(degrees.y), glm::vec3(0, 1, 0)) *
-           glm::angleAxis(glm::radians(degrees.x), glm::vec3(1, 0, 0)) *
-           glm::angleAxis(glm::radians(degrees.z), glm::vec3(0, 0, 1));
+    const glm::vec3 size = piece.sizeMeters(catalog.scale());
+    switch (piece.socket) {
+    case Socket::Floor: {
+        // Floors are authored flat (y = 0), so the slab is given a thickness of
+        // its own and hung just under the surface the mesh draws.
+        const float half = catalog.cellMeters() * 0.5f;
+        constexpr float slab = 0.05f;
+        halfExtents = {std::max(size.x * 0.5f, half), slab,
+                       std::max(size.z * 0.5f, half)};
+        offset = {0.0f, -slab, 0.0f};
+        return true;
+    }
+    case Socket::Wall:
+    case Socket::Fill:
+        // Base at Y=0 by the kit's convention, so the box's centre is half a
+        // height up. The piece's own thickness is used rather than a fixed thin
+        // slab: a wall placed by hand is not guaranteed to sit exactly on a
+        // cell boundary the way a generated one is.
+        halfExtents = glm::max(size * 0.5f, glm::vec3(0.05f));
+        offset = {0.0f, size.y * 0.5f + piece.yOffsetMeters(catalog.scale()),
+                  0.0f};
+        return true;
+    case Socket::Opening:
+    case Socket::Prop:
+        return false;
+    }
+    return false;
 }
 
 } // namespace
@@ -47,7 +81,7 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
         const Entity& authored = *source;
         eng::ecs::Transform transform;
         transform.position = authored.transform.position;
-        transform.rotation = quatFromDegrees(authored.transform.rotationDegrees);
+        transform.rotation = authorOrientation(authored.transform.rotationDegrees);
         transform.scale = authored.transform.scale;
 
         const entt::entity entity = built.create();
@@ -57,8 +91,9 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             entity,
             eng::ecs::Name{authored.name.empty() ? authored.id : authored.name});
 
+        const KitPiece* piece =
+            authored.prefab.empty() ? nullptr : catalog.find(authored.prefab);
         if (!authored.prefab.empty()) {
-            const KitPiece* piece = catalog.find(authored.prefab);
             if (!piece) {
                 error = "entity '" + authored.id + "' has unresolved prefab '" +
                         authored.prefab + "'";
@@ -110,22 +145,32 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
         // A collider is a child entity rather than a component on the visual:
         // the offset would otherwise have nowhere to live, and the physics body
         // must not inherit the mesh's kit scale.
-        if (authored.collider) {
+        const auto emitCollider = [&](glm::vec3 halfExtents, glm::vec3 offset) {
             const entt::entity collider = built.create();
             built.emplace<eng::ecs::Name>(
                 collider, eng::ecs::Name{authored.id + ".collision"});
             eng::ecs::Transform colliderTransform;
             colliderTransform.position =
                 authored.transform.position +
-                quatFromDegrees(authored.transform.rotationDegrees) *
-                    authored.collider->offset;
+                authorOrientation(authored.transform.rotationDegrees) * offset;
             colliderTransform.rotation =
-                quatFromDegrees(authored.transform.rotationDegrees);
+                authorOrientation(authored.transform.rotationDegrees);
             built.emplace<eng::ecs::Transform>(collider, colliderTransform);
             built.emplace<game::Collider>(
-                collider,
-                game::Collider{eng::ShapeKind::Box, authored.collider->halfExtents,
-                               game::layer::Static, false});
+                collider, game::Collider{eng::ShapeKind::Box, halfExtents,
+                                         game::layer::Static, false});
+        };
+        if (authored.collider) {
+            emitCollider(authored.collider->halfExtents,
+                         authored.collider->offset);
+        } else if (piece) {
+            // No authored override: the piece collides as what it is. An
+            // authored `collider` replaces this rather than adding to it, so a
+            // scene can still make one wall passable.
+            glm::vec3 halfExtents{0.0f};
+            glm::vec3 offset{0.0f};
+            if (implicitCollider(*piece, catalog, halfExtents, offset))
+                emitCollider(halfExtents, offset);
         }
     }
 

@@ -6,7 +6,15 @@
 # for a burst that has to register in a fraction of a second.
 #
 # All of them use the engine's procedural VFX materials, so the scene ships no
-# particle textures of its own.
+# particle textures of its own. They could instead name `texture = "<stem>"` to
+# pick up a generated material from particles/textures/, which is the preferred
+# route once a scene ships art.
+#
+# The optional keys none of these effects need, listed here so the schema is
+# discoverable from the file that uses it: `render_mode` ("sprite" | "voxel"),
+# `drag`, `collide` ("none" | "die" | "bounce" | "decal") with `restitution`,
+# `friction`, and `decal_profile`. The showcase is a turntable with no floor to
+# hit, so every effect here stays uncollided.
 
 # --- crystal shrine ---------------------------------------------------------
 

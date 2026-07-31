@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "DungeonGen.h"
+#include "PropInfo.h"
 #include "Targeting.h"
 
 namespace eng {
@@ -84,6 +85,12 @@ public:
 
     // Torch adapter for the shared gameplay-target seam.
     void appendTorchTargets(std::vector<GameplayTarget>& targets) const;
+    // Same seam for marker props. Only props that carry a display name are
+    // emitted: unnamed dressing stays scenery.
+    void appendPropTargets(std::vector<GameplayTarget>& targets) const;
+    // The builder used to drop every string in the prop catalog on the floor,
+    // so nothing downstream could name what the player is looking at.
+    const game::PropInfo* propInfo(int catalogIndex) const;
     bool torchLit(int index) const { return mTorches[size_t(index)].lit; }
     // Toggle flame + light together (the tip node carries both).
     void toggleTorch(eng::Renderer& r, int index);
@@ -150,6 +157,15 @@ private:
     std::vector<Torch> mTorches;
     struct PropBlocker { float minX, minZ, maxX, maxZ; };
     std::vector<PropBlocker> mPropBlockers;
+    // Placed marker props that can be looked at, paired with their catalog
+    // entry. Positions are the aim point (top of the prop), not the footprint.
+    struct PlacedProp {
+        glm::vec3 aimPos{0.0f};
+        float radius = 0.4f;
+        int catalogIndex = -1;
+    };
+    std::vector<PlacedProp> mPlacedProps;
+    std::vector<game::PropInfo> mPropCatalog;
     float mCell = 4.0f;
     glm::vec3 mOrigin{0.0f}; // world position of cell (0,0)'s NW corner
     glm::vec3 mSpawn{0.0f};

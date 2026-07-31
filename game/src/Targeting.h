@@ -4,7 +4,7 @@
 
 #include <vector>
 
-enum class TargetKind { Torch, PortalDown, PortalUp };
+enum class TargetKind { Torch, PortalDown, PortalUp, Prop, Actor };
 
 struct GameplayTarget {
     TargetKind kind;
@@ -15,6 +15,11 @@ struct GameplayTarget {
     // membrane is over two metres across, and a fixed view cone made it
     // *unusable at point-blank range* (see aimedTarget).
     float radius = 0.45f;
+    // Index into whatever catalog owns this target's description (the prop
+    // catalog, today). Presentation resolves names through it, so the
+    // targeting seam still carries no strings and no pointers. Deliberately
+    // last: every existing target site builds this aggregate positionally.
+    int catalogIndex = -1;
 };
 
 namespace game {
@@ -27,6 +32,7 @@ struct InteractionFocus {
     int id = -1;
     bool active = false; // currently lit for a torch; unused by portals
     float distance = 0.0f;
+    int catalogIndex = -1; // see GameplayTarget::catalogIndex
 };
 
 } // namespace game

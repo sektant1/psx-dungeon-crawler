@@ -46,15 +46,28 @@ int main()
     const std::string presetHeader =
         read("engine/include/eng/particles/ParticlePresets.h");
 
-    requireText(runtime, "kNonVisibleUpdateTimeout = 0.25f",
-                "particles need a short offscreen simulation grace");
-    requireText(runtime, "setNonVisibleUpdateTimeout("
-                         "kNonVisibleUpdateTimeout)",
-                "pooled particle systems do not consume the offscreen timeout");
-    requireText(runtime, "particleSystemLifetimeExpired(",
+    const std::string sim = read("engine/src/particles/ParticleSim.cpp");
+
+    // The offscreen simulation grace these assertions used to check was
+    // Ogre's setNonVisibleUpdateTimeout, and it went away with the Ogre
+    // backend. That is a deliberate trade, not an oversight: Ogre paused
+    // culled systems because an unbounded number of them each updated
+    // independently, whereas the CPU simulation walks one pool whose size is
+    // fixed at startup. Cost is now bounded by capacity rather than by how
+    // much of the level happens to be on screen, so pausing buys little and
+    // would cost a visible catch-up pop when an emitter comes back into view.
+    requireText(runtime, "kPoolCapacity",
+                "the particle pool is no longer bounded at a fixed capacity");
+    requireText(sim, "particleSystemLifetimeExpired(",
                 "one-shot cleanup does not consume the pure deadline policy");
     require(runtime.find("getNumParticles") == std::string::npos,
             "one-shot cleanup still waits for a possibly dormant Ogre count");
+    // Retirement must stay driven by the resolved emission window, never by a
+    // live count: an effect that is culled or throttled can legitimately hold
+    // zero particles for a frame without being finished.
+    requireText(runtime, "mSim.instanceActive(",
+                "handle retirement does not consult the simulation's own "
+                "instance lifetime");
 
     require(programs.find("fragment_program RainParticle_FS") !=
                 std::string::npos,

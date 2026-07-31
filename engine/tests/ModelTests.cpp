@@ -1,6 +1,6 @@
 #include <eng/Model.h>
 
-#include "MeshResources.h"
+#include "render/MeshResources.h"
 
 #include <cmath>
 #include <cstdlib>

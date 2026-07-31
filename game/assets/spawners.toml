@@ -1,0 +1,98 @@
+# Where enemies come from, and at what pace.
+#
+# A spawn point is pacing data, not placement data: it says how many, how often,
+# how close the player has to be, and whether it refills. `enemy` names a row in
+# enemies.toml.
+#
+# Presets exist so an encounter shape is authored once. A level marker named
+# "enemy.hollow.ambush" spawns a hollow using the [preset.ambush] pacing, so a
+# level author places encounters without restating six fields per room.
+
+# --- presets ---------------------------------------------------------------
+
+# Already there when the level loads. The default for scenery enemies.
+[preset.standing]
+count             = 1
+waves             = 1
+activation_radius = 0.0
+
+# Wakes when you get close, one burst, no refill. The classic room trap.
+[preset.ambush]
+count             = 3
+scatter           = 2.0
+waves             = 1
+activation_radius = 12.0
+arm_delay         = 0.35
+
+# Keeps feeding while you are in the room, up to a cap. Corridor pressure.
+[preset.patrol]
+count                  = 2
+waves                  = 0     # endless
+wave_delay             = 8.0
+clear_before_next_wave = false
+max_alive              = 4
+activation_radius      = 20.0
+deactivation_radius    = 34.0
+
+# Arena: three escalating waves, each gated on clearing the last.
+[preset.arena]
+count             = 4
+scatter           = 3.5
+waves             = 3
+wave_delay        = 2.5
+max_alive         = 8
+activation_radius = 14.0
+
+# --- the proving ground -----------------------------------------------------
+# Depth 0 is the showroom. The player spawns at (0, 0, 32) facing -Z, so these
+# sit along that lane, spread out so each archetype can be fought on its own
+# before the next comes into its sight range (18 m for most of them).
+#
+# yaw 0 faces +Z, which is where the player comes from. Facing them down the
+# lane instead (yaw 180) puts the player outside the sight cone and they never
+# notice you walk up behind them -- correct behaviour, wrong authoring.
+
+[[spawn]]
+id      = "lane_hollow"
+preset  = "standing"
+enemy   = "hollow"
+position = [-3.0, 0.0, 22.0]
+yaw_degrees = 0.0
+
+[[spawn]]
+id      = "lane_soldier"
+preset  = "standing"
+enemy   = "hollow_soldier"
+position = [3.0, 0.0, 20.0]
+yaw_degrees = 0.0
+
+[[spawn]]
+id       = "lane_rats"
+preset   = "ambush"
+enemy    = "rat_swarmer"
+position = [0.0, 0.0, 12.0]
+count    = 5
+scatter  = 2.5
+activation_radius = 14.0
+
+[[spawn]]
+id       = "lane_marksman"
+preset   = "standing"
+enemy    = "crossbow_hollow"
+position = [-8.0, 0.0, 4.0]
+yaw_degrees = 20.0
+
+[[spawn]]
+id       = "lane_hound"
+preset   = "ambush"
+enemy    = "hound"
+position = [8.0, 0.0, 2.0]
+count    = 2
+activation_radius = 16.0
+
+[[spawn]]
+id       = "lane_brute"
+preset   = "standing"
+enemy    = "stone_brute"
+position = [0.0, 0.0, -6.0]
+yaw_degrees = 0.0

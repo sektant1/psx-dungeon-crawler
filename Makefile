@@ -21,12 +21,11 @@
 BUILD_DIR   ?= build
 BUILD_TYPE  ?= Release
 JOBS        ?= $(shell nproc)
-# Ninja schedules a parallel build far better than make and links sooner, so it
-# is the default for any build tree that does not exist yet. An existing tree
-# keeps whatever generator it was created with: switching generators in place is
-# not supported by CMake and would force a full rebuild, so CONFIGURED below
-# only passes -G for a fresh directory.
-GENERATOR   ?= $(if $(shell command -v ninja 2>/dev/null),Ninja,Unix Makefiles)
+# Ninja owns fresh project build trees by default. Existing trees keep their
+# cached generator because CMake cannot switch one in place; an explicit
+# GENERATOR override still reports a mismatch instead of deleting user data.
+GENERATOR   ?= Ninja
+GENERATOR_ORIGIN := $(origin GENERATOR)
 # Extra cache entries, e.g. CMAKE_ARGS='-DENABLE_UNITY=ON -DENABLE_LTO=ON'.
 CMAKE_ARGS  ?=
 # Force X11 on Wayland (XWayland): the GL3Plus path is unreliable on native
@@ -101,11 +100,23 @@ all: build
 # still performs its own dependency check, so edits to CMake inputs regenerate
 # normally when cmake --build runs.
 configure:
+	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ] && [ "$(GENERATOR)" = "Ninja" ] && ! command -v ninja >/dev/null 2>&1; then \
+		echo "ninja not found -- run 'make deps' or install Ninja"; \
+		exit 2; \
+	fi
+	@if [ -f "$(BUILD_DIR)/CMakeCache.txt" ]; then \
+		actual=$$(grep '^CMAKE_GENERATOR:INTERNAL=' "$(BUILD_DIR)/CMakeCache.txt" | cut -d= -f2-); \
+		if [ -n "$$actual" ] && [ "$$actual" != "$(GENERATOR)" ] && [ "$(GENERATOR_ORIGIN)" != "file" ]; then \
+			echo "$(BUILD_DIR) uses '$$actual', requested '$(GENERATOR)'"; \
+			echo "choose another BUILD_DIR or remove that build tree before switching generators"; \
+			exit 2; \
+		fi; \
+	fi
 	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ]; then \
 		cmake -B "$(BUILD_DIR)" -G "$(GENERATOR)" \
 		      -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
-	elif ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
+	elif [ -n "$(strip $(CMAKE_ARGS))" ] || ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
 		cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	fi
@@ -205,7 +216,7 @@ test: build-all
 # Address/UB/Leak sanitizer build of game + game_sim (test targets aren't
 # ASan-hardened). Run e.g. `make asan && make run BUILD_DIR=build-asan`.
 asan:
-	cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DENABLE_ASAN=ON
+	$(MAKE) configure BUILD_DIR=build-asan BUILD_TYPE=Debug CMAKE_ARGS=-DENABLE_ASAN=ON
 	cmake --build build-asan --target game game_sim -j$(JOBS)
 
 # Frame-time percentiles over N frames (default 300), vsync off for real cost.
@@ -294,8 +305,7 @@ perf: build-app
 	cd $(BUILD_DIR) && perf report -i perf-$(APP_TARGET).data --stdio | head -40
 
 # ---- docs / debug / clean --------------------------------------------------
-docs:
-	cmake -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+docs: configure
 	cmake --build $(BUILD_DIR) --target docs
 	@if command -v xdg-open >/dev/null 2>&1; then \
 		xdg-open "$(BUILD_DIR)/docs/html/index.html"; \
@@ -368,4 +378,4 @@ help:
 	@echo "  BATCH=1             gdb: run to completion, print backtrace, exit"
 	@echo "  OUT=<path>          renderdoc: capture file"
 	@echo ""
-	@echo "Build config: BUILD_DIR=$(BUILD_DIR) BUILD_TYPE=$(BUILD_TYPE) JOBS=$(JOBS) APP=$(APP)"
+	@echo "Build config: BUILD_DIR=$(BUILD_DIR) BUILD_TYPE=$(BUILD_TYPE) GENERATOR=$(GENERATOR) JOBS=$(JOBS) APP=$(APP)"

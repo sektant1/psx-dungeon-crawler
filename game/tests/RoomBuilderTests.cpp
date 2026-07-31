@@ -36,6 +36,15 @@ static int countPrefab(const std::vector<Entity>& pieces, const std::string& id)
                              [&](const Entity& e) { return e.prefab == id; }));
 }
 
+// The ceiling is the floor piece again, one wall-height up, so the two have to
+// be told apart by height rather than by prefab.
+static int countAtGround(const std::vector<Entity>& pieces, const std::string& id)
+{
+    return int(std::count_if(pieces.begin(), pieces.end(), [&](const Entity& e) {
+        return e.prefab == id && e.transform.position.y < 0.5f;
+    }));
+}
+
 int main()
 {
     KitCatalog catalog;
@@ -52,7 +61,9 @@ int main()
         const std::vector<Entity> room = buildRoom(grid, catalog, spec, empty, error);
         require(error.empty(), error);
         require(spec.width() == 3 && spec.depth() == 2, "the rectangle is 3x2");
-        require(countPrefab(room, "kit.floor") == 6, "one floor tile per cell");
+        require(countAtGround(room, "kit.floor") == 6, "one floor tile per cell");
+        require(countPrefab(room, "kit.floor") == 12,
+                "and one ceiling tile above each of them");
         // Perimeter of a 3x2: 3 north + 3 south + 2 west + 2 east.
         require(countPrefab(room, "kit.wall") == 10, "walls on the perimeter only");
         require(countPrefab(room, "kit.pillar") == 4, "a post at each corner");
@@ -73,7 +84,7 @@ int main()
     {
         RoomSpec spec; // 1 x 1
         const std::vector<Entity> room = buildRoom(grid, catalog, spec, empty, error);
-        require(countPrefab(room, "kit.floor") == 1, "one tile");
+        require(countAtGround(room, "kit.floor") == 1, "one tile");
         require(countPrefab(room, "kit.wall") == 4, "walled on all four sides");
         require(countPrefab(room, "kit.pillar") == 4, "and four posts");
     }
@@ -166,6 +177,38 @@ int main()
         const std::vector<Entity> room = buildRoom(grid, catalog, spec, empty, error);
         require(room.empty() && !error.empty(),
                 "an unknown prefab fails loudly");
+    }
+
+    // --- the ceiling closes the room ---------------------------------------
+    {
+        RoomSpec spec;
+        spec.col1 = 1; spec.row1 = 1;
+        const std::vector<Entity> room = buildRoom(grid, catalog, spec, empty, error);
+        const KitPiece* wall = catalog.find("kit.wall");
+        require(wall, "the kit has a wall");
+        const float wallHeight = wall->sizeMeters(catalog.scale()).y;
+
+        int lids = 0;
+        for (const Entity& piece : room) {
+            if (piece.prefab != "kit.floor" || piece.transform.position.y < 0.5f)
+                continue;
+            ++lids;
+            require(nearly(piece.transform.position.y, wallHeight),
+                    "the ceiling sits exactly at wall height");
+            require(!piece.material.empty(),
+                    "seen from below it needs the two-sided material");
+            // Its collision goes above the mesh, not below it: hung the other
+            // way it is a slab across the room at head height.
+            require(piece.collider && piece.collider->offset.y > 0.0f,
+                    "the ceiling's collision is on top of it");
+        }
+        require(lids == 4, "one lid per cell");
+
+        RoomSpec open = spec;
+        open.ceiling = false;
+        require(countPrefab(buildRoom(grid, catalog, open, empty, error),
+                            "kit.floor") == 4,
+                "a room can still be authored open to the sky");
     }
 
     std::cout << "RoomBuilderTests: ok\n";

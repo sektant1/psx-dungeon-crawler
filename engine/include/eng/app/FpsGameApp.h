@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/DebugTools.h>
+#include <eng/debug/Console.h>
 #include <eng/FrameStats.h>
 #include <eng/Physics.h>
 #include <eng/app/Application.h>
@@ -44,6 +45,12 @@ struct FpsGameConfig
     std::string consoleAction = "debug_ui";       // F1
     std::string colliderAction = "show_colliders"; // F3
     std::string perfAction = "show_perf";          // F4
+    std::string devConsoleAction = "dev_console";  // backquote
+
+    // Compile materials and upload textures at the end of the load plan, while
+    // the loading screen is still up. Off only for a mode that builds no world
+    // and would just be paying for it (the material staging scene).
+    bool warmupRenderer = true;
 };
 
 // The genre base class: a first-person game with physics, a debug console, a
@@ -77,6 +84,7 @@ public:
 
     // Application seams, sealed: subclasses override the hooks below instead,
     // so the frame order stays the engine's.
+    void onLoad(Engine& engine, LoadPlan& plan) final;
     bool onStart(Engine& engine) final;
     void onFrameBegin(const FrameContext& f) final;
     void onFixedStep(const FrameContext& f, float fixedDt) final;
@@ -89,8 +97,22 @@ protected:
     // --- required -------------------------------------------------------
     // Runs before physics comes up and before any scene build.
     virtual FpsGameConfig setup(Engine& engine) = 0;
-    // Build the world. Physics, console and overlays already exist.
+    // Build the world. Physics, console and overlays already exist. Runs as
+    // one step of the load plan, named "Building the world".
+    //
+    // A game whose build is slow enough to want a progress bar of its own does
+    // not put it all here: it overrides onLoadGame and adds named steps, which
+    // run *before* this. Then onStartGame is whatever is left over.
     virtual bool onStartGame(Engine& engine) = 0;
+
+    // Game-owned load steps. Physics and the console exist; the world does
+    // not yet. Steps added here run before onStartGame and after the engine's
+    // own setup, with the loading screen up.
+    virtual void onLoadGame(Engine& engine, LoadPlan& plan)
+    {
+        (void)engine;
+        (void)plan;
+    }
 
     // --- per-frame hooks ------------------------------------------------
     // Render-rate input: camera look, weapon switches, mode toggles.
@@ -117,18 +139,24 @@ protected:
     // --- services -------------------------------------------------------
     Physics& physics();
     DebugTools& console();     // add game tabs with console().addPanel(...)
+    // Log + command line. Register game commands with
+    // devConsole().registerCommand(...) from onStartGame.
+    DebugConsole& devConsole();
     FrameStats& stats();
     ColliderDebug& colliderView();
     const FpsGameConfig& config() const;
 
-    // True while the debug console is open: the sim is meant to be frozen and
-    // the mouse belongs to the UI, not the camera.
+    // True while either debug surface is open: the sim is meant to be frozen
+    // and the mouse belongs to the UI, not the camera.
     bool uiOpen() const;
     // Whether the game should drive the player this frame. Games with their own
     // extra freeze conditions (a preview mode, a cutscene) override this.
     virtual bool playerDriven() const { return !uiOpen(); }
 
 private:
+    // First step of the load plan: stats, camera, physics, console commands.
+    void startSystems(Engine& engine);
+
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };

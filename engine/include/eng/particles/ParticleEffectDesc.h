@@ -1,4 +1,6 @@
 #pragma once
+#include <eng/particles/ParticleTypes.h>
+
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <cmath>
@@ -75,7 +77,12 @@ struct ParticleEmitterDesc {
 // this into a pooled Ogre ParticleSystem.
 struct ParticleEffectDesc {
     std::string name;                // stable id, e.g. "fireball_trail"
-    std::string material;            // existing Ogre material name
+    std::string material;            // explicit Ogre material, if hand-authored
+    // Preferred over `material`: the file stem of a PNG under
+    // assets/particles/textures/, whose material is generated at boot. Dropping
+    // a texture in and naming it here is the whole import workflow.
+    std::string texture;
+    ParticleRenderMode renderMode = ParticleRenderMode::Sprite;
     float baseWidth = 0.14f, baseHeight = 0.14f;
     int   quota = 48;                // before quality scaling
     std::vector<ParticleEmitterDesc> emitters;
@@ -94,6 +101,22 @@ struct ParticleEffectDesc {
     bool  softDepthFade = false;     // Task 8: use the soft-fade material variant
     bool  localSpace = false;        // true: particles follow the parent node
     glm::vec3 acceleration{0.0f};    // constant world/local force (gravity, wind)
+    float drag = 0.0f;               // linear velocity damping, per second
+
+    // --- collision --------------------------------------------------------
+    // Tracing is opt-in and globally budgeted: an effect that asks for it gets
+    // best effort, not a guarantee, so a burst degrades in accuracy instead of
+    // in frame time.
+    ParticleCollideResponse collideResponse = ParticleCollideResponse::None;
+    float restitution = 0.35f;       // Bounce: normal velocity retained
+    float friction = 0.20f;          // Bounce: tangential velocity lost
+    // Decal: which decal profile the mark is spawned from. Empty means the
+    // particle simply dies, so a missing profile cannot silently spam marks.
+    std::string decalProfile;
+
+    bool collides() const {
+        return collideResponse != ParticleCollideResponse::None;
+    }
 };
 
 inline float particleQualityScale(ParticleVisualRole role,

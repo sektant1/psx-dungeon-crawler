@@ -1,12 +1,14 @@
 #pragma once
 
 #include "Targeting.h"
+#include "PlayerWeapons.h"
 #include "combat/DamageTypes.h"
 #include "combat/FeelComponents.h"
 
 #include <entt/entt.hpp>
 
 #include <array>
+#include <string>
 
 namespace game {
 
@@ -21,7 +23,11 @@ struct HudStatus {
     float remaining = 0.0f;
 };
 
-enum class HudWeapon { Blade, Staff, Torch, Unknown };
+struct HudWeapon {
+    std::string name = "EMPTY HAND";
+    std::string discipline = "NO DISCIPLINE";
+    bool operator==(const HudWeapon&) const = default;
+};
 
 // Immutable render-frame data. Simulation components are copied after the
 // fixed tick, so the HUD never owns or mutates combat state while drawing.
@@ -34,21 +40,19 @@ struct HudSnapshot {
     HudResource mana;
     HudResource poise;
     ActionPhase action = ActionPhase::Idle;
-    HudWeapon weapon = HudWeapon::Unknown;
+    HudWeapon weapon;
     InteractionFocus interaction;
     std::array<HudStatus, kMaxStatuses> statuses{};
     int statusCount = 0;
 };
 
 float hudResourceRatio(const HudResource& resource);
-HudWeapon hudWeaponFromIndex(int weaponIndex);
-const char* hudWeaponName(HudWeapon weapon);
-const char* hudWeaponDiscipline(HudWeapon weapon);
 const char* hudInteractionAction(const InteractionFocus& focus);
 const char* hudStatusName(CrowdControl status);
 
 HudSnapshot buildHudSnapshot(const entt::registry& registry,
-                             entt::entity player, int weaponIndex,
-                             const InteractionFocus& interaction);
+                              entt::entity player,
+                              const PlayerWeaponDef* weapon,
+                              const InteractionFocus& interaction);
 
 } // namespace game

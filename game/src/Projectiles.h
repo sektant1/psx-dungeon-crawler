@@ -1,36 +1,52 @@
 #pragma once
+
+#include "PlayerWeapons.h"
+
 #include <eng/Handles.h>
 #include <eng/Physics.h>
+
 #include <glm/glm.hpp>
+
+#include <functional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace eng { class Renderer; }
-struct CombatConfig;
 
 class ProjectileSystem {
 public:
-    void init(eng::Renderer& r);
-    void setConfig(const CombatConfig* cfg) { mCfg = cfg; }
-    void fireArrow(eng::Physics&, eng::Renderer&, glm::vec3 eye, glm::vec3 forward);
-    void onHit(eng::Physics&, const eng::HitEvent&);
+    using ImpactFn = std::function<void(eng::BodyHandle victim,
+                                        const std::string& payload,
+                                        glm::vec3 travelDirection,
+                                        glm::vec3 point)>;
+
+    void setImpactCallback(ImpactFn fn) { mOnImpact = std::move(fn); }
+    void fire(eng::Physics&, eng::Renderer&, const game::PlayerWeaponDef&,
+              glm::vec3 aimOrigin, glm::vec3 aimDirection);
+    void onHit(eng::Physics&, eng::Renderer&, const eng::HitEvent&);
     void fixedUpdate(eng::Physics&, eng::Renderer&, float dt);
     void syncRender(eng::Physics&, eng::Renderer&);
     void clear(eng::Physics&, eng::Renderer&);
 
 private:
-    enum class Kind { Arrow };
     struct Projectile {
         eng::BodyHandle body;
         eng::NodeHandle node;
-        Kind kind;
-        float ttl;
-        bool stuck = false;
+        eng::ParticlesHandle trail;
+        std::string payload;
+        std::string impactEffect;
+        glm::vec3 direction{0.0f, 0.0f, -1.0f};
+        float ttl = 0.0f;
+        bool impacted = false;
     };
 
-    std::vector<Projectile> mLive;
-    eng::MeshHandle mArrowMesh{};
-    int mMaxLive = 40;
-    const CombatConfig* mCfg = nullptr;
-
+    eng::MeshHandle meshFor(eng::Renderer&,
+                            const game::PlayerWeaponDef& definition);
     void despawn(eng::Physics&, eng::Renderer&, Projectile&);
+
+    std::vector<Projectile> mLive;
+    std::unordered_map<std::string, eng::MeshHandle> mMeshes;
+    int mMaxLive = 96;
+    ImpactFn mOnImpact;
 };

@@ -68,6 +68,10 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("Trace.h", "core"),
     ("Profiler.h", "core"),
     ("StepClock.h", "core"),
+    # Plain data plus callbacks: std::function and strings, no renderer, which
+    # is what lets it be unit-tested without a window. Only the catch-all below
+    # would otherwise file it under systems.
+    ("Loading.h", "core"),
     ("systems/", "core"),
     ("io/", "core"),
     ("rhi/", "platform"),

@@ -28,7 +28,16 @@ toggle_snap = "G"
 level_up = "PageUp"
 level_down = "PageDown"
 level_reset = "Home"
-rotate = "R"
+# Cycles the gizmo through translate -> rotate -> scale. Named for what it does:
+# it was called "rotate", which is one of the three things it is not.
+gizmo_cycle = "R"
+# Local vs world axes. Kit pieces are authored on quarter turns, so a wall at 90
+# degrees needs its own frame to nudge along.
+gizmo_space = "X"
+# Drops the camera to the player's eye at the spawn, with the game's field of
+# view. Level readability is judged from head height, and the only way to get
+# there used to be F5 -- a full cook and launch.
+walk = "V"
 focus = "F"
 delete = "Delete"
 duplicate = "D"
@@ -37,3 +46,4 @@ undo = "Z"
 redo = "Y"
 run = "F5"
 cook = "F6"
+dev_console = "`"

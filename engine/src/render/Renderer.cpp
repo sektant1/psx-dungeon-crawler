@@ -1154,6 +1154,25 @@ void Renderer::despawnParticles(ParticlesHandle h) {
     mImpl->mScene.removeAttachment(NodeAttachKind::Particles, h.id);
 }
 void Renderer::setParticleQuality(float q) { mImpl->particles.setQuality(q); }
+void Renderer::shutdownParticles() { mImpl->particles.shutdown(); }
+void Renderer::setParticleCollider(IParticleCollider* collider) {
+    mImpl->particles.setCollider(collider);
+}
+void Renderer::setParticleRayBudget(uint32_t raysPerFrame) {
+    mImpl->particles.setRayBudget(raysPerFrame);
+}
+void Renderer::registerDecalProfile(const std::string& id,
+                                    const DecalProfileDesc& desc) {
+    mImpl->particles.decals().registerProfile(id, desc);
+}
+bool Renderer::spawnDecal(const std::string& profile, glm::vec3 position,
+                          glm::vec3 normal) {
+    DecalRequest request;
+    request.profile = profile;
+    request.position = position;
+    request.normal = normal;
+    return mImpl->particles.decals().spawn(request);
+}
 void Renderer::updateParticles(float dt) {
     for (uint32_t id : mImpl->particles.update(dt))
         mImpl->mScene.removeAttachment(NodeAttachKind::Particles, id);

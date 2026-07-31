@@ -211,10 +211,17 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
     constexpr float frameDepth = 0.42f;
     const float openingHalfWidth = fieldSize.x * 0.5f;
     const float openingHalfHeight = fieldSize.y * 0.5f;
-    // The membrane runs the full height of the surround, not just the opening:
-    // the Arch's soffit is a curve, so a membrane stopping at the opening's top
-    // edge leaves a dark crescent under the arch stones.
-    const float membraneHeight = fieldSize.y + headHeight;
+    // The whole surround, opening plus head: what the pillars run to and what
+    // the backing panel covers.
+    const float surroundHeight = fieldSize.y + headHeight;
+    const float surroundWidth = fieldSize.x + pillarWidth * 2.0f;
+    // The membrane stops just inside the springline. The Arch's soffit is a
+    // curve, so a membrane running the surround's full height fills the
+    // crescent under the stones but spills its square top corners past that
+    // curve; with a panel behind, the crescent is the panel's job and the
+    // membrane can stay inside the arch. Small overlap: the soffit narrows fast.
+    constexpr float headOverlap = 0.06f;
+    const float membraneHeight = fieldSize.y + headOverlap;
 
     eng::NodeHandle base = renderer.createNode(mRoot, at);
     // Turned to face the centre, so the orbiting camera meets it head-on rather
@@ -231,7 +238,7 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
         const eng::NodeHandle frame = renderer.createNode(base);
         const float pillarSide = pillarWidth / 5.65f; // Pillar is 5.65 across
         const glm::mat4 kitToPillar = glm::scale(
-            glm::mat4(1.0f), {pillarSide, membraneHeight / 30.2f, pillarSide});
+            glm::mat4(1.0f), {pillarSide, surroundHeight / 30.2f, pillarSide});
         const eng::MeshHandle pillar =
             renderer.loadObj(kit + "Pillar.obj", &kitToPillar);
         const float jambX = openingHalfWidth + pillarWidth * 0.5f;
@@ -239,7 +246,7 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
             renderer.attachMesh(renderer.createNode(frame, {x, 0.0f, 0.0f}),
                                 pillar, "Kit/Dungeon", true);
 
-        const float headScaleX = (fieldSize.x + pillarWidth * 2.0f) / 20.02f;
+        const float headScaleX = surroundWidth / 20.02f;
         const float headScaleY = headHeight / 12.0f;
         const glm::mat4 kitToHead =
             glm::translate(glm::mat4(1.0f), {0.0f, -4.81f * headScaleY, 0.0f}) *
@@ -253,6 +260,26 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
             renderer.createNode(frame, {0.0f, fieldSize.y,
                                         membraneInset + frameDepth * 0.25f}),
             head, "Kit/Dungeon", true);
+
+        // The back of the portal. Without it the station is a picture frame:
+        // the turntable carries the camera behind it and the arch is a hole
+        // with the rest of the scene through it. Behind the pillars, which are
+        // as deep as they are wide and centred on the frame plane.
+        eng::PrimitiveMeshDesc panel;
+        panel.kind = eng::PrimitiveKind::Plane;
+        panel.size = {surroundWidth, 1.0f, surroundHeight};
+        // Real depth, so the turntable passing the station's edge shows a slab
+        // of rock rather than the panel thinning to nothing.
+        panel.thickness = 0.22f;
+        const eng::NodeHandle back = renderer.createNode(
+            frame, {0.0f, surroundHeight * 0.5f, -(pillarWidth * 0.5f + 0.02f)});
+        renderer.setOrientation(back, glm::angleAxis(glm::radians(90.0f),
+                                                     glm::vec3(1, 0, 0)));
+        // Plain tiling stone rather than the kit atlas: a generated quad has
+        // 0..1 UVs over its whole face, and an atlas material stretches the
+        // whole sheet over it.
+        renderer.attachMesh(back, renderer.createPrimitiveMesh(panel),
+                            "PSX/ShowcaseStone", true);
     }
 
     // The membrane: a quad, not a disc -- an inscribed ellipse would leave the
@@ -261,6 +288,7 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
     eng::PrimitiveMeshDesc plane;
     plane.kind = eng::PrimitiveKind::Plane;
     plane.size = {fieldSize.x, 1.0f, membraneHeight};
+    plane.thickness = 0.14f; // matches the dungeon's portal membrane
     mPortalNode = renderer.createNode(
         arch, {0.0f, membraneHeight * 0.5f - openingHalfHeight, membraneInset});
     // The plane primitive lies flat and is two-sided; stand it up to fill the

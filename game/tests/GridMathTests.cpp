@@ -44,6 +44,34 @@ int main()
             "the wall inset matches the runtime's");
     require(nearly(grid.wallInset, 0.5f), "which is 0.5 m at a 4 m cell");
 
+    // Editor and cooker share authored yaw-pitch-roll conversion. Compound
+    // rotations are where different Euler conventions visibly diverge.
+    {
+        XformAuthor transform;
+        transform.position = {3.0f, -2.0f, 7.0f};
+        transform.rotationDegrees = {25.0f, 70.0f, -15.0f};
+        transform.scale = {2.0f, 3.0f, 4.0f};
+
+        const glm::quat expected =
+            glm::angleAxis(glm::radians(70.0f), glm::vec3(0, 1, 0)) *
+            glm::angleAxis(glm::radians(25.0f), glm::vec3(1, 0, 0)) *
+            glm::angleAxis(glm::radians(-15.0f), glm::vec3(0, 0, 1));
+        const glm::quat orientation =
+            authorOrientation(transform.rotationDegrees);
+        require(std::abs(glm::dot(expected, orientation)) > 0.99999f,
+                "authored rotation uses yaw-pitch-roll order");
+
+        const glm::vec3 roundTrip = authorRotationDegrees(orientation);
+        require(std::abs(glm::dot(orientation, authorOrientation(roundTrip))) >
+                    0.99999f,
+                "gizmo quaternion round-trips through authored degrees");
+
+        const glm::vec3 transformedOrigin = glm::vec3(
+            authorTransformMatrix(transform) * glm::vec4(0, 0, 0, 1));
+        require(nearly(transformedOrigin, transform.position),
+                "authored transform matrix preserves translation");
+    }
+
     // --- cell centres match the runtime ------------------------------------
     for (int col = -2; col <= 3; ++col) {
         for (int row = -2; row <= 3; ++row) {

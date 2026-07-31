@@ -138,6 +138,9 @@ struct BodyDesc {
     bool sensor = false;
     bool continuousCast = false;
     float mass = 1.0f;
+    // Per-body gravity multiplier. Magical projectiles use 0; ordinary dynamic
+    // props keep the default world gravity.
+    float gravityFactor = 1.0f;
     float friction = 0.5f;
     // No bounce by default: a grounded dungeon wants props to thud and settle
     // and arrows to stick, not rebound. Jolt combines the two bodies'

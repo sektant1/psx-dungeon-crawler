@@ -47,13 +47,15 @@ entt::entity CombatDirector::entityForBody(eng::BodyHandle body) const
     return it == mByBody.end() ? entt::null : it->second;
 }
 
-void CombatDirector::hitBody(eng::Physics& physics, eng::BodyHandle victimBody,
-                             const std::string& weaponId, entt::entity source,
-                             glm::vec3 dir, glm::vec3 atPoint)
+DamageResult CombatDirector::hitBody(eng::Physics& physics,
+                                     eng::BodyHandle victimBody,
+                                     const std::string& weaponId,
+                                     entt::entity source, glm::vec3 dir,
+                                     glm::vec3 atPoint)
 {
     const entt::entity target = entityForBody(victimBody);
     if (target == entt::null)
-        return;
+        return {};
 
     const WeaponDef& w = mWeapons.get(weaponId);
     std::uniform_real_distribution<float> unit(0.0f, 1.0f);
@@ -61,11 +63,12 @@ void CombatDirector::hitBody(eng::Physics& physics, eng::BodyHandle victimBody,
 
     const DamageResult res = damage::apply(mReg, target, packet);
     if (!res.hitLanded)
-        return;
+        return res;
     if (glm::length(res.knockback) > 0.0f)
         physics.applyImpulse(victimBody, res.knockback, atPoint);
     if (res.killed && mOnDeath)
         mOnDeath(target);
+    return res;
 }
 
 void CombatDirector::tick(float dt)

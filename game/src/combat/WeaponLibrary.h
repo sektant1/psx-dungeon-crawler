@@ -29,6 +29,7 @@ public:
     // Look up by id ("sword", "arrow", "fireball", ...). Never null: unknown ids
     // resolve to a neutral unarmed def.
     const WeaponDef& get(const std::string& id) const;
+    bool contains(const std::string& id) const { return mDefs.count(id) != 0; }
 
     std::unordered_map<std::string, WeaponDef>& defs() { return mDefs; }
 

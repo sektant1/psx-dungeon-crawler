@@ -6,7 +6,7 @@
 namespace ed {
 
 Ray screenRay(glm::vec2 ndc, glm::vec3 camPos, glm::quat camOrient,
-              float vFovRad, float aspect)
+               float vFovRad, float aspect)
 {
     const float tanHalf = std::tan(vFovRad * 0.5f);
     const glm::vec3 viewDir(ndc.x * tanHalf * aspect, ndc.y * tanHalf, -1.0f);
@@ -14,6 +14,31 @@ Ray screenRay(glm::vec2 ndc, glm::vec3 camPos, glm::quat camOrient,
     r.origin = camPos;
     r.dir = glm::normalize(camOrient * viewDir);
     return r;
+}
+
+Ray viewportRay(glm::vec2 screenPoint, glm::vec2 viewportOrigin,
+                glm::vec2 viewportSize, glm::vec3 camPos,
+                glm::quat camOrient, float vFovRad)
+{
+    const glm::vec2 within = (screenPoint - viewportOrigin) / viewportSize;
+    const glm::vec2 ndc{within.x * 2.0f - 1.0f,
+                        1.0f - within.y * 2.0f};
+    return screenRay(ndc, camPos, camOrient, vFovRad,
+                     viewportSize.x / viewportSize.y);
+}
+
+bool projectToViewport(glm::vec3 world, const glm::mat4& viewProjection,
+                       glm::vec2 viewportOrigin, glm::vec2 viewportSize,
+                       glm::vec2& screenPoint)
+{
+    const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
+    if (clip.w <= 1e-4f)
+        return false;
+    const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+    screenPoint = viewportOrigin +
+                  glm::vec2((ndc.x * 0.5f + 0.5f) * viewportSize.x,
+                            (1.0f - (ndc.y * 0.5f + 0.5f)) * viewportSize.y);
+    return true;
 }
 
 bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit)

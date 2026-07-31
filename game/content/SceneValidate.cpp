@@ -3,7 +3,9 @@
 #include <cmath>
 #include <filesystem>
 #include <map>
+#include <set>
 #include <string>
+#include <vector>
 
 namespace game::content {
 namespace {
@@ -20,6 +22,48 @@ void add(std::vector<Issue>& issues, Severity severity, std::string code,
     issues.push_back({severity, std::move(code), std::move(message),
                       std::move(entity), fix, position});
 }
+
+// The name a cell is known by inside this file. Reachability, the orphan check
+// and the walkable map all address cells the same way, so they agree on what
+// "the cell at (col,row)" means without any of them re-deriving it.
+//
+// Deliberately flat in Y: a level's work planes stack in the same columns, and
+// treating them as one plane is what cell.wall_orphan already does. A real
+// multi-storey reachability check needs stairs to be a modelled connection, and
+// the kit has no such piece yet.
+std::string cellName(int col, int row)
+{
+    return std::to_string(col) + ',' + std::to_string(row);
+}
+
+// The boundary BETWEEN two cells, named from the side that owns it, so that the
+// north edge of (c,r) and the south edge of (c,r-1) are one and the same thing.
+// Without this normalisation a room walled from the inside and a room walled
+// from the outside would flood differently, which is exactly the bug the check
+// is meant to catch.
+std::string edgeName(int col, int row, CellPlacement::Edge edge)
+{
+    switch (edge) {
+    case CellPlacement::Edge::North: return "h," + cellName(col, row);
+    case CellPlacement::Edge::South: return "h," + cellName(col, row + 1);
+    case CellPlacement::Edge::West: return "v," + cellName(col, row);
+    case CellPlacement::Edge::East: return "v," + cellName(col + 1, row);
+    case CellPlacement::Edge::None: break;
+    }
+    return {};
+}
+
+// What the flood fill needs to know about one cell: you can stand on it when
+// something floors it and nothing solid fills it. Both are accumulated rather
+// than overwritten, because a block dropped on a floored cell seals it even
+// though the floor is still there.
+struct CellState {
+    int col = 0;
+    int row = 0;
+    bool floor = false;
+    bool solid = false;
+    bool walkable() const { return floor && !solid; }
+};
 
 // Key for "two pieces claiming the same slot": a cell for floor/fill, a cell
 // edge for wall/opening. Props do not claim anything.
@@ -92,12 +136,24 @@ std::vector<Issue> validate(const SceneDocument& document,
     std::map<std::string, AuthorId> claimedSlots;
     // Cells that have something to stand on, so an orphan wall can be spotted.
     std::map<std::string, bool> walkableCells;
+    // The grid as the player experiences it, gathered in this one pass so the
+    // reachability flood below costs O(cells) instead of re-walking the entity
+    // list per cell. This runs on every document change in the editor.
+    std::map<std::string, CellState> cellStates;
+    std::set<std::string> blockedEdges;
+    // The first of each; duplicates are spawn.duplicate's problem, not ours.
+    const Entity* spawnEntity = nullptr;
+    const Entity* exitEntity = nullptr;
 
     for (const Entity& entity : document.entities) {
-        if (entity.playerSpawn)
+        if (entity.playerSpawn) {
             ++playerSpawns;
-        if (entity.exitYawDegrees)
+            if (!spawnEntity) spawnEntity = &entity;
+        }
+        if (entity.exitYawDegrees) {
             ++exits;
+            if (!exitEntity) exitEntity = &entity;
+        }
 
         if (!finite(entity.transform.position) ||
             !finite(entity.transform.rotationDegrees) ||
@@ -147,15 +203,37 @@ std::vector<Issue> validate(const SceneDocument& document,
                     claimedSlots.emplace(key, entity.id);
                 }
             }
+            const int span = cell.span > 0 ? cell.span : 1;
             if (piece->socket == Socket::Floor || piece->socket == Socket::Fill) {
-                for (int step = 0; step < (cell.span > 0 ? cell.span : 1); ++step) {
+                for (int step = 0; step < span; ++step) {
                     const int col = cell.yawQuarters % 2 == 0 ? cell.col + step
                                                               : cell.col;
                     const int row = cell.yawQuarters % 2 == 0 ? cell.row
                                                               : cell.row + step;
-                    walkableCells[std::to_string(col) + ',' +
-                                  std::to_string(row)] =
+                    walkableCells[cellName(col, row)] =
                         piece->socket == Socket::Floor;
+                    CellState& state = cellStates[cellName(col, row)];
+                    state.col = col;
+                    state.row = row;
+                    state.floor = state.floor || piece->socket == Socket::Floor;
+                    state.solid = state.solid || piece->socket == Socket::Fill;
+                }
+            }
+            if (piece->socket == Socket::Wall) {
+                // Only a Wall stops the player. An Opening -- an arch, a door
+                // frame -- claims the same slot precisely so that the level can
+                // say "there is a way through here".
+                //
+                // A spanning wall runs along the boundary it stands on: a
+                // north/south edge runs along X, an east/west edge along Z.
+                for (int step = 0; step < span; ++step) {
+                    const bool alongX = cell.edge == CellPlacement::Edge::North ||
+                                        cell.edge == CellPlacement::Edge::South;
+                    const int col = alongX ? cell.col + step : cell.col;
+                    const int row = alongX ? cell.row : cell.row + step;
+                    const std::string edge = edgeName(col, row, cell.edge);
+                    if (!edge.empty())
+                        blockedEdges.insert(edge);
                 }
             }
 
@@ -211,8 +289,7 @@ std::vector<Issue> validate(const SceneDocument& document,
         if (!piece || (piece->socket != Socket::Wall &&
                        piece->socket != Socket::Opening))
             continue;
-        const std::string own = std::to_string(entity.cell->col) + ',' +
-                                std::to_string(entity.cell->row);
+        const std::string own = cellName(entity.cell->col, entity.cell->row);
         if (walkableCells.find(own) == walkableCells.end()) {
             add(issues, Severity::Warning, "cell.wall_orphan",
                 "stands on a cell with no floor", entity.id,
@@ -311,6 +388,107 @@ std::vector<Issue> validate(const SceneDocument& document,
     if (exits == 0) {
         add(issues, Severity::Warning, "exit.missing",
             "the scene has no exit, so it cannot be left", {});
+    }
+
+    // Can the player actually walk from the spawn to the exit? Every other rule
+    // here checks that the data is well formed; this one checks that the level
+    // is playable. A room built with the exit behind an unbroken wall ring
+    // validates clean, cooks clean and is unfinishable, and once layouts are
+    // generated rather than hand-placed that has to be caught automatically.
+    //
+    // Skipped when there is no spawn or no exit: spawn.missing and exit.missing
+    // already name that cause, and saying it twice only pads the panel. Skipped
+    // too when nothing is placed on the grid, because a scene authored with free
+    // transforms (the older shipped scenes) has no cells to flood and a silent
+    // pass is honest -- there is no topology here to be wrong about.
+    if (spawnEntity && exitEntity && !cellStates.empty()) {
+        const auto cellOf = [&](const Entity& entity, int& col, int& row) {
+            // A spawn or exit is a bare marker with no prefab, so it usually has
+            // no authored cell; where it does, that intent beats the transform.
+            if (entity.cell) {
+                col = entity.cell->col;
+                row = entity.cell->row;
+                return;
+            }
+            pointToCell(grid, entity.transform.position, col, row);
+        };
+        const auto walkable = [&](const std::string& name) {
+            const auto found = cellStates.find(name);
+            return found != cellStates.end() && found->second.walkable();
+        };
+
+        int spawnCol = 0, spawnRow = 0;
+        cellOf(*spawnEntity, spawnCol, spawnRow);
+        // A spawn standing off the authored grid gives the flood nowhere to
+        // start from, and every cell would come back unreachable. That is a
+        // different fault with a different fix, and this rule cannot tell it
+        // apart from "the grid is somewhere else entirely", so it stays quiet.
+        if (walkable(cellName(spawnCol, spawnRow))) {
+            std::set<std::string> reached;
+            std::vector<std::pair<int, int>> pending;
+            reached.insert(cellName(spawnCol, spawnRow));
+            pending.emplace_back(spawnCol, spawnRow);
+            while (!pending.empty()) {
+                const auto [col, row] = pending.back();
+                pending.pop_back();
+                const std::pair<int, int> steps[] = {
+                    {0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+                const CellPlacement::Edge edges[] = {
+                    CellPlacement::Edge::North, CellPlacement::Edge::South,
+                    CellPlacement::Edge::West, CellPlacement::Edge::East};
+                for (int i = 0; i < 4; ++i) {
+                    if (blockedEdges.count(edgeName(col, row, edges[i])))
+                        continue;
+                    const std::string next =
+                        cellName(col + steps[i].first, row + steps[i].second);
+                    if (!walkable(next) || reached.count(next))
+                        continue;
+                    reached.insert(next);
+                    pending.emplace_back(col + steps[i].first,
+                                         row + steps[i].second);
+                }
+            }
+
+            int exitCol = 0, exitRow = 0;
+            cellOf(*exitEntity, exitCol, exitRow);
+            if (!reached.count(cellName(exitCol, exitRow))) {
+                // No quick fix: the cure is to knock a hole in one of several
+                // walls or to move the exit, and which one is a design decision
+                // the editor has no business guessing.
+                add(issues, Severity::Error, "exit.unreachable",
+                    "no walkable path leads from the player spawn to the exit "
+                    "at cell (" + std::to_string(exitCol) + ", " +
+                        std::to_string(exitRow) + ")",
+                    exitEntity->id, QuickFix::None,
+                    cellCentre(grid, exitCol, exitRow, 0.0f));
+            }
+
+            // Floor the player can never stand on. One issue for the whole
+            // group with an example location, never one per cell: a level that
+            // splits in half strands hundreds of cells and would bury every
+            // other issue in the panel.
+            int stranded = 0;
+            int firstCol = 0, firstRow = 0;
+            for (const auto& [name, state] : cellStates) {
+                if (!state.walkable() || reached.count(name))
+                    continue;
+                if (stranded == 0) {
+                    firstCol = state.col;
+                    firstRow = state.row;
+                }
+                ++stranded;
+            }
+            if (stranded > 0) {
+                add(issues, Severity::Warning, "cell.unreachable",
+                    std::to_string(stranded) +
+                        " walkable cells are cut off from the player spawn, "
+                        "one of them at (" +
+                        std::to_string(firstCol) + ", " +
+                        std::to_string(firstRow) + ")",
+                    {}, QuickFix::None,
+                    cellCentre(grid, firstCol, firstRow, 0.0f));
+            }
+        }
     }
     return issues;
 }

@@ -10,31 +10,23 @@
 
 namespace game {
 
-void CombatSystem::init(GameContext& ctx, const std::string& configTomlPath)
+void CombatSystem::init(GameContext& ctx)
 {
-    // Data-oriented attack tunables (speed/range/impulse/colours/particles/
-    // hotkeys), loaded from [combat.*]. Systems read this each cast/swing.
-    mConfig.load(configTomlPath);
-    mProjectiles.setConfig(&mConfig);
-    mSpells.setConfig(&mConfig);
-    mMelee.setConfig(&mConfig);
-    // init builds procedural meshes and registers the contact seam.
-    mProjectiles.init(ctx.renderer);
-    mSpells.init(ctx.renderer);
-    mMelee.setHitCallback([&ctx](eng::BodyHandle, glm::vec3 point, glm::vec3) {
-        ctx.renderer.spawnParticles("engine.hit_sparks", point);
-    });
+    reloadPresentation(ctx);
     // Damage model: weapon table (weapons.toml overlays built-in defaults).
     // The channel names it uses are resolved against the world's vocabulary.
     mDirector.init(ctx.assets + "/weapons.toml", ctx.vocabulary);
+}
+
+void CombatSystem::reloadPresentation(GameContext& ctx)
+{
+    mBlood.load(ctx.renderer, ctx.assets + "/blood.toml");
 }
 
 void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,
                              float dt)
 {
     mProjectiles.fixedUpdate(ctx.physics, ctx.renderer, dt);
-    mSpells.fixedUpdate(ctx.physics, ctx.renderer, dt);
-    mMelee.fixedUpdate(ctx.physics, eye, forward, dt);
     mDirector.tick(dt); // i-frames + status effects (Burn DoT) at fixed cadence
 
     // Feel layer: advance every combatant's action-state machine, then regen
@@ -49,34 +41,22 @@ void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,
 void CombatSystem::syncRender(GameContext& ctx)
 {
     mProjectiles.syncRender(ctx.physics, ctx.renderer);
-    mSpells.syncRender(ctx.physics, ctx.renderer);
 }
 
 void CombatSystem::onContact(GameContext& ctx, const eng::HitEvent& e)
 {
-    mProjectiles.onHit(ctx.physics, e);
-    mSpells.onHit(ctx.physics, ctx.renderer, e);
+    mProjectiles.onHit(ctx.physics, ctx.renderer, e);
 }
 
 void CombatSystem::clear(GameContext& ctx)
 {
     mProjectiles.clear(ctx.physics, ctx.renderer);
-    mSpells.clear(ctx.physics, ctx.renderer);
 }
 
-void CombatSystem::fireArrow(GameContext& ctx, glm::vec3 eye, glm::vec3 forward)
+void CombatSystem::fireWeapon(GameContext& ctx, const PlayerWeaponDef& weapon,
+                              glm::vec3 eye, glm::vec3 forward)
 {
-    mProjectiles.fireArrow(ctx.physics, ctx.renderer, eye, forward);
-}
-
-void CombatSystem::castFireball(GameContext& ctx, glm::vec3 eye, glm::vec3 fwd)
-{
-    mSpells.castFireball(ctx.physics, ctx.renderer, eye, fwd);
-}
-
-void CombatSystem::castBeam(GameContext& ctx, glm::vec3 eye, glm::vec3 fwd)
-{
-    mSpells.castBeam(ctx.physics, ctx.renderer, eye, fwd);
+    mProjectiles.fire(ctx.physics, ctx.renderer, weapon, eye, forward);
 }
 
 } // namespace game

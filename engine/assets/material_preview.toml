@@ -1,0 +1,16 @@
+# Which materials the editor's material stage previews as a flat animated quad
+# instead of a lit sphere.
+#
+# There is no material catalog in this project -- Renderer::materialNames()
+# enumerates Ogre's material manager directly -- so this tiny file is where that
+# one piece of per-material editor metadata lives.
+#
+# Entries are exact material names, or a name ending in `*` matching a prefix.
+# Anything not listed here previews as a sphere, which is the historical
+# behaviour: adding a name to this list is the only way to change how a material
+# is staged.
+#
+# Use the quad for materials judged on their own animation and silhouette --
+# particle sprites, procedural shaders, icons. Keep the sphere for surfaces,
+# which are judged on how they take light.
+quad = ["Engine/Particles/*", "Particles/Auto/*", "Editor/FireIcon"]

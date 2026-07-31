@@ -25,6 +25,7 @@ inline constexpr eng::CollisionMask kHittable =
 // The world's collision matrix. Everything interacts except:
 //   - static/static: two pieces of level geometry can never move into contact;
 //   - projectile/projectile: arrows pass through each other;
+//   - player/projectile: player-owned physics projectiles cannot hit their owner;
 //   - trigger against props and projectiles: interaction volumes exist for the
 //     player, and a barrel rolling through a door trigger must not open it.
 // The tuning half of the physics setup, kept separate from the layer table so
@@ -52,6 +53,7 @@ inline eng::PhysicsSetup physicsSetup(const PhysicsTuning& tuning = {})
     s.collideAll();
     s.setPair(Static, Static, false);
     s.setPair(Projectile, Projectile, false);
+    s.setPair(Player, Projectile, false);
     s.setPair(Trigger, Trigger, false);
     s.setPair(Trigger, Prop, false);
     s.setPair(Trigger, Projectile, false);

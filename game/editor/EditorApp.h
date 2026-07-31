@@ -3,11 +3,14 @@
 #include "SceneValidate.h"
 #include "EditorState.h"
 #include "MaterialStage.h"
+#include "Picker.h"
 #include "PreviewBridge.h"
 #include "SceneTemplates.h"
 #include "RunGame.h"
 
 #include <eng/app/Application.h>
+#include <eng/debug/Console.h>
+#include <eng/particles/ParticleLibrary.h>
 
 #include <memory>
 #include <string>
@@ -32,6 +35,7 @@ public:
     ~EditorApp() override;
 
     eng::AppConfig configure(int argc, char** argv) override;
+    void onLoad(eng::Engine& engine, eng::LoadPlan& plan) override;
     bool onStart(eng::Engine& engine) override;
     void onFrameBegin(const eng::FrameContext& f) override;
     void onUpdate(const eng::FrameContext& f) override;
@@ -48,6 +52,7 @@ private:
     void drawCatalog();
     void drawIssues();
     void drawMaterialPanel();
+    void drawParticlePanel();
     void applyMaterialToSelection(const std::string& material);
     void setMode(bool material);
     // Selection and manipulation, both driven from inside the viewport panel so
@@ -59,18 +64,31 @@ private:
     bool saveScene();
     void newScene(game::content::SceneTemplate which);
     void drawSaveAsPopup();
+
+    // Anything that throws the open document away. An hour of blockout is the
+    // most expensive thing in this program and four separate paths used to
+    // discard it without asking -- Escape most dangerously of all, since that
+    // is the key people press to leave a mode, not the editor.
+    enum class Discard { Quit, Reload, NewScene };
+    // Runs `what` immediately on a clean document, otherwise parks it behind
+    // the save/discard/cancel prompt.
+    void requestDiscard(Discard what,
+                        game::content::SceneTemplate which =
+                            game::content::SceneTemplate::Empty);
+    void performDiscard();
+    void drawDiscardPopup();
     // F6 / F5: cook the authored scene to a runtime map, and play it.
     bool cookScene(std::string& mapPath);
     void runPlaytest();
     void deleteSelection();
     void duplicateSelection();
+    Ray mouseRay() const;
     // Placement: the ghost under the cursor, and committing it.
-    bool hoveredPlacement(const eng::FrameContext& f,
-                          game::content::CellPlacement& cell,
-                          game::content::XformAuthor& transform) const;
+    bool hoveredPlacement(game::content::CellPlacement& cell,
+                           game::content::XformAuthor& transform) const;
     void placeAt(const game::content::CellPlacement& cell,
                  const game::content::XformAuthor& transform);
-    void drawPlacementGhost(const eng::FrameContext& f);
+    void drawPlacementGhost();
     // Room tool: drag a rectangle of cells, get a finished room.
     bool hoveredCell(int& col, int& row) const;
     void drawRoomPreview(const eng::FrameContext& f);
@@ -94,13 +112,26 @@ private:
                   glm::vec3& min, glm::vec3& max) const;
     void frameCamera(const glm::vec3& min, const glm::vec3& max);
     void frameSelectionOrAll();
+    // Drop to the player's eye at the spawn, or come back to where the author
+    // was. Judging whether a room reads -- is the exit legible, is the ceiling
+    // oppressive -- only works from head height, and the alternative was F5.
+    void toggleWalk();
+
+    // Shared engine developer console, docked with Status/Issues. Registers the
+    // editor's own commands in onStart; everything else about it is engine
+    // code, so the editor never grows a second log window.
+    void installConsoleCommands();
 
     EditorState mState;
+    eng::DebugConsole mConsole;
     std::unique_ptr<PreviewBridge> mPreview;
     // Held from onStart. The mode switch and the material panel need the
     // renderer outside a frame callback, and the Engine outlives this app.
     eng::Engine* mEngine = nullptr;
     std::string mPendingScene; // from the command line, opened in onStart
+    // Set by the load step: the catalog is what everything else is placed
+    // against, so a failure there has to abort the run at onStart.
+    bool mCatalogFailed = false;
     std::string mStatus;       // one-line feedback under the panels
 
     // Viewport geometry, in window pixels: where the offscreen image is drawn.
@@ -117,9 +148,23 @@ private:
     // Gizmo drag state: the transform as it was when the drag began, captured
     // once so the whole drag closes as a single undo entry.
     bool mGizmoDragging = false;
+    bool mGizmoHovered = false;
+    // Frozen for the duration of a drag. The live anchor is the centre of the
+    // selection's bounds, which moves as the selection rotates -- feeding that
+    // back into the gizmo each frame makes the pivot crawl mid-drag.
+    glm::vec3 mDragAnchor{0.0f};
+    // ImGuizmo mutates this cumulatively for the full pointer drag. Rebuilding
+    // from the already-edited document each frame compounds translation and
+    // loses rotation deltas when the operation changes.
+    glm::mat4 mDragGizmoMatrix{1.0f};
     std::vector<std::pair<game::content::AuthorId, game::content::XformAuthor>>
         mDragStart;
     int mGizmoOperation = 0; // 0 translate, 1 rotate, 2 scale
+    bool mGizmoLocal = false; // world by default; the grid is the usual frame
+    // Off by default: placing things needs flat bright light. On, the viewport
+    // uses the scene's own lighting, which is the only way to see whether the
+    // level actually guides the eye.
+    bool mGameLighting = false;
 
     // Place tool: painting drops one piece per cell/edge the cursor crosses,
     // and the whole drag closes as one undo entry.
@@ -148,10 +193,23 @@ private:
     float mStageSpinSpeed = 0.35f;
     std::vector<std::string> mMaterialNames;
     char mMaterialFilter[64] = {};
+
+    // Particle authoring. The library owns the descs; the panel edits them in
+    // place and re-registers, so a change is visible in the viewport on the
+    // next frame without a restart.
+    eng::ParticleLibrary mParticles;
+    int mParticleSelected = -1;
+    char mParticleFilter[64] = {};
+    std::vector<eng::ParticlesHandle> mParticlePreviews;
     int mFloorVariant = 0; // 0 default grey, 1 dark
     std::string mSelectedMaterial;
     bool mSaveAsOpen = false;
     char mSaveAsPath[512] = {};
+    // Set when a discard is waiting on the prompt; consumed by performDiscard.
+    bool mDiscardOpen = false;
+    Discard mDiscardWhat = Discard::Quit;
+    game::content::SceneTemplate mDiscardTemplate =
+        game::content::SceneTemplate::Empty;
     char mOutlinerFilter[64] = {};
     bool mOutlinerShowGeometry = true;
     bool mThumbAutoSpin = true;

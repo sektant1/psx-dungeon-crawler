@@ -1,4 +1,4 @@
-#include "../src/SceneRegistry.h"
+#include "render/SceneRegistry.h"
 #include <cstdlib>
 #include <iostream>
 using namespace eng;
