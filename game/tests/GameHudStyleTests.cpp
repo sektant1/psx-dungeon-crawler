@@ -74,6 +74,18 @@ int main()
     require(ultrawide.safe.size.x < 1280 && ultrawide.safe.position.x > 0,
             "ultrawide HUD must stay inside centered readable rails");
 
+    const game::GameHudViewportStyle overscan =
+        game::resolveGameHudViewportStyle(normal, {960, 720},
+                                          {96, 72, 96, 72});
+    require(overscan.safe.position.x == 104 && overscan.safe.position.y == 80 &&
+                overscan.safe.size.x == 752 && overscan.safe.size.y == 560,
+            "safe-area insets must affect real HUD layout, plus its own margin");
+    const game::GameHudBottomLayout overscanBottom = game::layoutGameHudBottom(
+        overscan, {overscan.vitalsWidth, 54}, {160, 22});
+    require(overscan.safe.contains(overscanBottom.vitals) &&
+                overscan.safe.contains(overscanBottom.armament),
+            "bottom HUD must remain inside TV/phone safe bounds");
+
     std::cout << "GameHudStyleTests: OK\n";
     return 0;
 }

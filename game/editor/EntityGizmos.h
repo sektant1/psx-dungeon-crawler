@@ -58,6 +58,10 @@ struct GizmoMark {
     std::string label;
     // Wire box, in metres, centred on `world`. Zero when the mark has none.
     glm::vec3 halfExtents{0.0f};
+    // World orientation for authored boxes and directed volumes. Keeping this
+    // beside the extents prevents rotated trigger/collider gizmos from lying
+    // about the volume used by runtime physics.
+    glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
     // Reach, in metres: a light's range, drawn as a wire sphere. Zero when the
     // mark has none.
     float radius = 0.0f;
@@ -80,7 +84,6 @@ struct GizmoMark {
     // 16:9 unless the caller says otherwise: the frustum is a framing aid and
     // has to match the aspect the shot will actually be composed at.
     float aspect = 16.0f / 9.0f;
-    glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
     // Drawn even when the mark is not selected, for the marks whose volume IS
     // the information. A room of light spheres buries the level; one camera
     // frustum is the shot.
@@ -92,6 +95,13 @@ struct GizmoMark {
     float orbitRadius = 0.0f;
     glm::vec3 orbitCentre{0.0f};
     glm::vec3 orbitAxis{0.0f, 1.0f, 0.0f};
+    // World-space radius vectors. They preserve parent rotation and scale, so
+    // a local circular orbit correctly appears as an ellipse under a scaled rig.
+    glm::vec3 orbitU{0.0f};
+    glm::vec3 orbitV{0.0f};
+    // Collider outlines normally defer to the mesh below them. A collider-only
+    // entity has no other hit target, so its visible mark must remain pickable.
+    bool pickable = true;
 };
 
 // Every mark the document implies. An entity can produce more than one -- a
@@ -118,6 +128,8 @@ struct GizmoOverlay {
     // Drawn brighter, labelled, and with their volumes at full strength, so a
     // selection made in the outliner can be found in the level.
     const std::vector<game::content::AuthorId>* selected = nullptr;
+    const std::vector<game::content::AuthorId>* hidden = nullptr;
+    const std::vector<game::content::AuthorId>* locked = nullptr;
     // The mark under the cursor, if any. It gets the same treatment as a
     // selected one, which is what makes the marks explorable: a level with
     // thirty of them cannot label them all at once and stay readable.
@@ -138,6 +150,8 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
 const GizmoMark* pickGizmoMark(const std::vector<GizmoMark>& marks,
                                const glm::mat4& viewProjection,
                                glm::vec2 viewportOrigin, glm::vec2 viewportSize,
-                               glm::vec2 point, float radius);
+                               glm::vec2 point, float radius,
+                               const std::vector<game::content::AuthorId>* hidden = nullptr,
+                               const std::vector<game::content::AuthorId>* locked = nullptr);
 
 } // namespace ed

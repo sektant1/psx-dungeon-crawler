@@ -49,7 +49,8 @@ const std::vector<ComponentType>& table()
          [](const Entity& e) { return e.light.has_value(); },
          [](Entity& e, const ComponentDefaults&) {
              e.light = LightAuthor{
-                 LightAuthor::Type::Point, {1.0f, 0.75f, 0.45f}, 8.0f, false};
+                 LightAuthor::Type::Point, {1.0f, 0.75f, 0.45f}, 8.0f, false,
+                 std::nullopt};
          },
          [](Entity& e) { e.light.reset(); }, always,
          ComponentGroup::Appearance},
@@ -75,6 +76,14 @@ const std::vector<ComponentType>& table()
              e.particles = game::content::ParticleAuthor{};
          },
          [](Entity& e) { e.particles.reset(); }, always,
+         ComponentGroup::Appearance},
+
+        {"portal", "Portal", "animated portal surface parameters",
+         [](const Entity& e) { return e.portal.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.portal = game::content::PortalAuthor{};
+         },
+         [](Entity& e) { e.portal.reset(); }, always,
          ComponentGroup::Appearance},
 
         {"camera", "Camera", "a point of view the scene can be played from",

@@ -21,13 +21,13 @@ bool Platform::init(const std::string& title, int width, int height)
     // "<instance> <class>"; the class (2nd token) is what Hyprland matches.
     SDL_setenv("SDL_VIDEO_X11_WMCLASS", "psx-dungeon-crawler", 0);
     SDL_setenv("SDL_VIDEO_WAYLAND_WMCLASS", "psx-dungeon-crawler", 0);
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
         log::error("Platform: SDL_Init failed: %s", SDL_GetError());
         return false;
     }
     mWindow = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
                                SDL_WINDOWPOS_CENTERED, width, height,
-                               SDL_WINDOW_RESIZABLE |
+                               SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI |
                                (std::getenv("PSX_FULLSCREEN") ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     if (!mWindow) {
         log::error("Platform: SDL_CreateWindow failed: %s", SDL_GetError());

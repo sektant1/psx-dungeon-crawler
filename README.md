@@ -17,6 +17,36 @@
 
 </div>
 
+## Engine showcase
+
+### Renderer demo
+
+The default `make demo` showcase running PSX post-processing, particles,
+animated surfaces, and the orbiting presentation camera.
+
+<img src="docs/media/engine-demo.gif" alt="Default PSX renderer demo running" width="720">
+
+### Live debug UI
+
+The same demo with the shared dockable tuning UI open for shaders, materials,
+animation, particles, colliders, and render profiles.
+
+<img src="docs/media/engine-demo-debug-ui.gif" alt="PSX renderer demo with live debug UI open" width="720">
+
+### Scene editor
+
+The placement editor with its 3D viewport, outliner, material browser,
+inspector, camera tools, and scene diagnostics.
+
+<img src="docs/media/scene-editor.gif" alt="PSX placement editor showing the cozy lair scene" width="720">
+
+### Model viewer
+
+The `make prefab-viewer` turntable inspecting an imported boss model under the
+engine's low-resolution lighting and material pipeline.
+
+<img src="docs/media/model-viewer-turntable.gif" alt="Model viewer rotating an imported boss model" width="600">
+
 ## Quick start
 
 ```sh

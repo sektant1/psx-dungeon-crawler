@@ -95,7 +95,8 @@ GameHudStyleSheet makeGameHudStyleSheet(float opacity, bool highContrast,
 }
 
 GameHudViewportStyle resolveGameHudViewportStyle(
-    const GameHudStyleSheet& style, glm::ivec2 canvasSize)
+    const GameHudStyleSheet& style, glm::ivec2 canvasSize,
+    eng::ui::Insets safeArea)
 {
     canvasSize = glm::max(canvasSize, glm::ivec2(1));
     GameHudViewportStyle resolved;
@@ -115,9 +116,12 @@ GameHudViewportStyle resolveGameHudViewportStyle(
                                 int(std::lround(float(canvasSize.y) *
                                                 style.contentAspect)));
     const int contentX = (canvasSize.x - contentWidth) / 2;
+    safeArea.left = std::max(safeArea.left, 0) + resolved.margin;
+    safeArea.top = std::max(safeArea.top, 0) + resolved.margin;
+    safeArea.right = std::max(safeArea.right, 0) + resolved.margin;
+    safeArea.bottom = std::max(safeArea.bottom, 0) + resolved.margin;
     resolved.safe = eng::ui::UiRect{{contentX, 0}, {contentWidth, canvasSize.y}}
-                        .inset({resolved.margin, resolved.margin,
-                                resolved.margin, resolved.margin});
+                        .inset(safeArea);
     resolved.vitalsWidth = std::min(resolved.vitalsWidth,
                                     std::max(1, resolved.safe.size.x / 2 -
                                                     resolved.gap));

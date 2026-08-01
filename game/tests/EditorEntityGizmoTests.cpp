@@ -74,6 +74,7 @@ int main()
     Entity volume;
     volume.id = "trigger_0001";
     volume.transform.position = {10.0f, 1.0f, 0.0f};
+    volume.transform.rotationDegrees.y = 90.0f;
     TriggerAuthor trigger;
     trigger.size = {2.0f, 1.5f, 2.0f};
     trigger.event = "boss_gate";
@@ -109,7 +110,11 @@ int main()
 
         const GizmoMark* box = find(marks, GizmoKind::Trigger);
         require(box->halfExtents == glm::vec3(2.0f, 1.5f, 2.0f),
-                "a trigger's volume is drawn as its own box");
+                 "a trigger's volume is drawn as its own box");
+        require(glm::length(box->orientation *
+                                glm::vec3(1.0f, 0.0f, 0.0f) -
+                            glm::vec3(0.0f, 0.0f, -1.0f)) < 1e-4f,
+                "a rotated trigger carries the runtime volume orientation");
         require(box->label.find("boss_gate") != std::string::npos,
                 "labelled with the event it fires, which is the only thing "
                 "that distinguishes two identical boxes");
@@ -167,6 +172,42 @@ int main()
                     nullptr,
                 "a zero radius hits nothing -- the caller decides how forgiving "
                 "the target is");
+
+        const std::vector<game::content::AuthorId> hidden{"light_0001"};
+        require(pickGizmoMark(marks, viewProjection, origin, size, screen, 12.0f,
+                              &hidden, nullptr) == nullptr,
+                "a hidden mark is not pickable");
+        const std::vector<game::content::AuthorId> locked{"light_0001"};
+        require(pickGizmoMark(marks, viewProjection, origin, size, screen, 12.0f,
+                              nullptr, &locked) == nullptr,
+                "a locked mark stays visible but is not pickable");
+    }
+
+    // --- collider-only entities use the mark as their hit target ------------
+    {
+        Entity volume;
+        volume.id = "collision_volume_0001";
+        volume.collider =
+            game::content::ColliderAuthor{{1.0f, 2.0f, 1.0f}, {2.0f, 0.0f, 0.0f}};
+        SceneDocument boxed;
+        boxed.add(volume);
+        const std::vector<GizmoMark> boxes = collectGizmoMarks(boxed);
+        require(boxes.size() == 1 && boxes[0].pickable,
+                "a collider with no mesh or point mark supplies its own hit target");
+
+        const glm::vec2 origin(0.0f), size(800.0f, 600.0f);
+        const glm::mat4 viewProjection =
+            glm::perspective(glm::radians(60.0f), size.x / size.y, 0.05f, 400.0f) *
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 8.0f), glm::vec3(0.0f),
+                        glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::vec2 screen;
+        require(projectToViewport(boxes[0].world, viewProjection, origin, size,
+                                  screen),
+                "the offset collider is visible");
+        const GizmoMark* hit =
+            pickGizmoMark(boxes, viewProjection, origin, size, screen, 12.0f);
+        require(hit && hit->id == volume.id,
+                "clicking the visible collider-only mark selects its entity");
     }
 
     // --- a collider outline never steals the click --------------------------
@@ -255,6 +296,51 @@ int main()
                 require(!candidate.volumeAlways,
                         "a parked framing is still visible, but does not lay "
                         "its frustum over the level");
+    }
+
+    // --- an orbit is marked as the ring it travels --------------------------
+    // Same argument as the frustum: "radius 5.4" is a number nobody can judge,
+    // and the circle it cuts next to the walls it must stay inside is the
+    // decision being made.
+    {
+        SceneDocument doc;
+        Entity rig;
+        rig.id = "rig_0001";
+        rig.transform.position = {4.0f, 0.0f, 0.0f};
+        rig.transform.rotationDegrees.y = 90.0f;
+        rig.transform.scale = {2.0f, 1.0f, 3.0f};
+        doc.add(rig);
+        Entity moon;
+        moon.id = "moon_0001";
+        moon.parent = "rig_0001";
+        moon.transform.position = {2.0f, 0.0f, 0.0f};
+        game::content::OrbitAuthor orbit;
+        orbit.centre = {0.0f, 1.0f, 0.0f};
+        orbit.radius = 3.0f;
+        orbit.height = 0.5f;
+        moon.orbit = orbit;
+        doc.add(moon);
+
+        const std::vector<GizmoMark> marks = collectGizmoMarks(doc);
+        require(has(marks, GizmoKind::Orbit), "an orbiting entity is marked");
+        const GizmoMark* mark = nullptr;
+        for (const GizmoMark& candidate : marks)
+            if (candidate.kind == GizmoKind::Orbit)
+                mark = &candidate;
+        require(mark->orbitRadius == 3.0f, "the mark carries the radius");
+        require(mark->volumeAlways,
+                "the ring is drawn at rest: a scene has one or two, and each "
+                "is a decision about where something goes");
+        // The centre is authored in the entity's own frame, so a ring inside a
+        // rig has to be composed against the rig -- not drawn at the origin.
+        require(std::abs(mark->orbitCentre.x - 4.0f) < 1e-4f &&
+                    std::abs(mark->orbitCentre.y - 1.5f) < 1e-4f,
+                "the ring centre and height are composed through the parent rig");
+        require(std::abs(glm::length(mark->orbitU) - 9.0f) < 1e-4f &&
+                    std::abs(glm::length(mark->orbitV) - 6.0f) < 1e-4f,
+                "parent scale turns the local circle into the runtime ellipse");
+        require(std::abs(mark->orbitU.x) > 8.9f,
+                "parent rotation turns the orbit basis into world space");
     }
 
     // --- an empty document draws nothing ------------------------------------

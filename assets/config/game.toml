@@ -88,6 +88,9 @@ high_contrast = false
 reduced_motion = false
 crosshair = true
 numeric_values = true
+# Critical HUD inset for TV overscan and displays with unsafe edges. Editor UI
+# stage previews this same percentage instead of drawing a cosmetic-only guide.
+safe_area_percent = 5.0
 
 [bindings]
 move_forward = "W"

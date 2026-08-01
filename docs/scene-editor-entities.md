@@ -414,6 +414,46 @@ The state → HUD-input mapping is `game/editor/UiStage.h`, pure and tested. The
 interesting failures live in that gap (a resource that reads full when it is
 empty, a status count past the array) and none of them show in a screenshot.
 
+## Reading the inspector
+
+Sections are grouped and always in the same order, whatever the entity carries:
+
+| band | holds |
+|---|---|
+| *(identity + transform)* | id, name, parent, position/rotation/scale |
+| **appearance** | Mesh (and its material), Shader, Particles, Light |
+| **physical** | Collider, Trigger |
+| **gameplay** | Camera, Spin, Player Spawn, Exit, Marker, Enemy Spawn, Pickup |
+| **placement** | Grid Cell |
+
+Before, sections came out in whatever order the component table happened to be
+written in, so "where is the material" depended on which entity was selected —
+and a fixed question whose answer moves around the screen is what makes a panel
+unscannable. The order is `ComponentGroup` in `EntityComponents.h`; every
+listing (inspector, add menu, outliner tooltip) sorts by it, stably, so the
+hand-picked order inside a band survives.
+
+Each section is a collapsing header with an **x** to remove it. **Ctrl+A** over
+the panel opens the add menu, which is grouped into the same bands — so the menu
+is a map of where the thing you are adding will appear.
+
+### The right column is the Inspector
+
+Material and Particles used to take its lower half, which cost the panel that
+answers "what is this thing" half its height so two panels nothing was selected
+in could be visible at once. They are on the **left** now, beside the Catalog,
+because they are the same kind of thing: a library you browse and pick from.
+
+What used to need them on the right is on the entity:
+
+- the **material** combo is on the Mesh component;
+- the **effect** combo is on the Particles component, filled from the live
+  library so a name that does not resolve cannot be typed;
+- the material **swatch follows the selection** — selecting a wall and looking
+  at a sphere wearing something else was the panel answering a question nobody
+  asked. Clicking a name in the material list still previews *that* name: the
+  author is then asking about the material, not about the entity.
+
 ## Materials that fit the mesh
 
 The material list was 126 names in one flat column and applying any of them to
@@ -493,7 +533,7 @@ moment they mean anything.
 
 ## The scene the editor opens
 
-`assets/scenes/spin_portal.scn` -- what `make editor` shows with no `SCENE=`.
+`assets/scenes/cozy_lair.scn` -- what `make editor` shows with no `SCENE=`.
 
 A *shot* rather than a level: two props turning at their own rates in a small
 lit room, a portal behind them, and a camera orbiting on a pivot. 36 entities in
@@ -619,9 +659,17 @@ Two of the entries are what turn a scene into a shot:
   judge and the wedge it cuts through the room is the same value made visible.
   The highest-priority active camera is the one the game looks through, so a
   second framing is added by copying the first and unticking `active`.
-- **Spin** -- an axis and degrees per second. Whatever is parented under it
-  turns with it, which is how an orbiting camera is authored rather than coded.
-  A chain with a Spin above it is the one case the cooker does *not* bake flat.
+- **Spin** -- an axis and degrees per second, turning the entity where it
+  stands. Whatever is parented under it turns with it.
+- **Orbit** -- a centre, a radius, an axis and a facing: the entity travels a
+  ring. No pivot entity, no parent link. The viewport draws the ring, for the
+  same reason it draws the frustum: "radius 5.4" is a number nobody can judge,
+  and the circle it cuts next to the walls it has to stay inside is the
+  decision. `facing: look at centre` is what a camera circling a subject wants;
+  `free` leaves the rotation to Spin, so one entity can do both.
+
+A chain with a Spin or an Orbit above it is the one case the cooker does *not*
+bake flat -- a live parent has to stay a parent.
 
 Two components are special, and the table says so rather than a panel doing:
 

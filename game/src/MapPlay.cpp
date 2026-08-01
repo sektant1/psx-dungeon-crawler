@@ -15,6 +15,7 @@
 #include <eng/Input.h>
 #include <eng/Log.h>
 #include <eng/Physics.h>
+#include <eng/RenderPresetInfo.h>
 #include <eng/Renderer.h>
 #include <eng/render/GifRecorder.h>
 #include <eng/app/FpsGameApp.h>
@@ -104,9 +105,10 @@ public:
         mRecording = std::move(options);
     }
 
-    eng::AppConfig configure(int, char**) override
+    eng::AppConfig configure(int argc, char** argv) override
     {
         eng::AppConfig cfg;
+        cfg.renderPreset = eng::renderPresetFromArgs(argc, argv);
         cfg.mountSet = "game";
         cfg.configPath = "config/game.toml";
         // This app steps physics itself in onPresent (one update per frame,
@@ -150,13 +152,15 @@ protected:
         // the game pack's meshes/{props,tiles} and persists path().string()).
         // Prefer the stored path as-is; fall back to the resolver, which is
         // what makes a portable map portable.
-        rt.resolveMeshes([&](const std::string& path) -> eng::MeshHandle {
+        eng::ModelImportOptions legacyImport;
+        legacyImport.pivot = eng::PivotMode::Source;
+        rt.resolveMeshes([&, legacyImport](const std::string& path) -> eng::MeshHandle {
             std::error_code ec;
             if (std::filesystem::exists(path, ec))
-                return r.loadObj(path);
+                return r.loadMesh(path, legacyImport);
             const std::filesystem::path alt = eng::assets::resolve(path);
             if (!alt.empty())
-                return r.loadObj(alt.string());
+                return r.loadMesh(alt.string(), legacyImport);
             eng::log::error("playMap: mesh not found: %s", path.c_str());
             return r.prototypeMesh(path);
         });

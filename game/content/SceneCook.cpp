@@ -247,6 +247,58 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                                        authored.spin->degreesPerSecond});
         }
 
+        // Compound prefabs own their attached parts. Scenes author only the
+        // root prefab; attachments stay local to it and therefore follow live
+        // parent chains, authored scale, and animation without extra entities
+        // in every source scene.
+        if (piece) {
+            const auto emitAttachments = [&](auto&& self, entt::entity parent,
+                                             const KitPiece& parentPiece,
+                                             const std::string& namePrefix)
+                -> void {
+                for (std::size_t index = 0;
+                     index < parentPiece.attachments.size(); ++index) {
+                    const KitAttachment& attachment =
+                        parentPiece.attachments[index];
+                    const KitPiece* attached = catalog.find(attachment.prefab);
+                    if (!attached)
+                        continue; // KitCatalog::load rejects this first.
+
+                    const entt::entity child = built.create();
+                    const std::string childName =
+                        namePrefix + ".attachment_" + std::to_string(index + 1);
+                    built.emplace<eng::ecs::Name>(child,
+                                                  eng::ecs::Name{childName});
+                    eng::ecs::Transform childTransform;
+                    childTransform.position = attachment.position;
+                    childTransform.scale *= attached->meshScale(catalog.scale());
+                    built.emplace<eng::ecs::Transform>(child, childTransform);
+                    built.emplace<eng::ecs::MeshSource>(
+                        child, eng::ecs::MeshSource{attached->meshPath});
+                    eng::ecs::MeshRenderer childRenderer;
+                    childRenderer.material = attached->material;
+                    childRenderer.castShadows = authored.castShadows;
+                    built.emplace<eng::ecs::MeshRenderer>(child,
+                                                          childRenderer);
+                    if (authored.shader) {
+                        const ShaderAuthor& shader = *authored.shader;
+                        built.emplace<eng::ecs::ShaderParams>(
+                            child,
+                            eng::ecs::ShaderParams{
+                                shader.tint, shader.opacity, shader.rimColour,
+                                shader.rimStrength, shader.rimPower,
+                                shader.alphaScissor});
+                    }
+                    built.emplace<eng::ecs::Parent>(
+                        child, eng::ecs::Parent{parent});
+                    built.get_or_emplace<eng::ecs::Children>(parent)
+                        .value.push_back(child);
+                    self(self, child, *attached, childName);
+                }
+            };
+            emitAttachments(emitAttachments, entity, *piece, authored.id);
+        }
+
         // A collider is a child entity rather than a component on the visual:
         // the offset would otherwise have nowhere to live, and the physics body
         // must not inherit the mesh's kit scale.

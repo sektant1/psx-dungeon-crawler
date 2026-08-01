@@ -37,7 +37,7 @@ conversion instead of being measured by hand afterwards.
 
 Usage:
   tools/blend_to_obj.py <src.blend> <out-dir> [--object NAME] [--scale S]
-                        [--name OUT] [--list]
+                        [--name OUT] [--ground-center] [--list]
 
   --list      print the meshes in the file and exit. Start here: a downloaded
               .blend rarely names its subject in English.
@@ -45,6 +45,14 @@ Usage:
               often enough to be a useful default and is always reported).
   --scale     multiply positions by this on the way out.
   --name      output stem; defaults to the object name, lowercased.
+  --ground-center
+              move the exported mesh so its footprint centre is x/z zero and
+              its lowest point is y zero in engine coordinates.
+  --ground-center-from OBJ
+              apply another OBJ's ground-centre pivot. Split meshes exported
+              from one source then retain their shared local origin.
+  --material-index N
+              export only faces assigned to material slot N after modifiers.
   --no-bake-colours
               write a plain OBJ instead. For a model that really is textured,
               where per-vertex colour would multiply the texture darker.
@@ -94,9 +102,39 @@ else:
     print("PSX_NOTE picked the largest mesh: '%s' (--list to see the rest)"
           % chosen.name)
 
+# Files are often saved in Edit, Sculpt or Texture Paint mode. Selection
+# operators have no valid object context there in background Blender, so make
+# object mode explicit before choosing export subject.
+if bpy.context.object and bpy.context.object.mode != "OBJECT":
+    bpy.ops.object.mode_set(mode="OBJECT")
 bpy.ops.object.select_all(action="DESELECT")
 chosen.select_set(True)
 bpy.context.view_layer.objects.active = chosen
+
+if argv["material_index"] >= 0:
+    import bmesh
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    evaluated = chosen.evaluated_get(depsgraph)
+    mesh = bpy.data.meshes.new_from_object(evaluated, depsgraph=depsgraph)
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.delete(
+        bm,
+        geom=[face for face in bm.faces
+              if face.material_index != argv["material_index"]],
+        context="FACES",
+    )
+    bmesh.ops.delete(bm, geom=[vert for vert in bm.verts if not vert.link_faces],
+                     context="VERTS")
+    bm.to_mesh(mesh)
+    bm.free()
+    split = bpy.data.objects.new(chosen.name + "_split", mesh)
+    bpy.context.collection.objects.link(split)
+    split.matrix_world = chosen.matrix_world
+    chosen.select_set(False)
+    split.select_set(True)
+    bpy.context.view_layer.objects.active = split
+    chosen = split
 
 out = argv["out"]
 
@@ -225,6 +263,37 @@ print("PSX_OK %s" % out)
 '''
 
 
+def obj_pivot(path: str) -> tuple[float, float, float]:
+    with open(path, "r", encoding="utf-8") as stream:
+        positions = [tuple(float(value) for value in line.split()[1:4])
+                     for line in stream if line.startswith("v ")]
+    if not positions:
+        raise ValueError("OBJ contains no positions: %s" % path)
+    minimum = [min(p[axis] for p in positions) for axis in range(3)]
+    maximum = [max(p[axis] for p in positions) for axis in range(3)]
+    return ((minimum[0] + maximum[0]) * 0.5, minimum[1],
+            (minimum[2] + maximum[2]) * 0.5)
+
+
+def ground_center_obj(path: str, reference: str = "") -> None:
+    """Normalize final exported coordinates, including evaluated modifiers."""
+    with open(path, "r", encoding="utf-8") as stream:
+        lines = stream.readlines()
+    pivot = obj_pivot(reference or path)
+    output = []
+    for line in lines:
+        if not line.startswith("v "):
+            output.append(line)
+            continue
+        values = line.split()
+        xyz = [float(values[i + 1]) - pivot[i] for i in range(3)]
+        suffix = " " + " ".join(values[4:]) if len(values) > 4 else ""
+        output.append("v %.6f %.6f %.6f%s\n" %
+                      (xyz[0], xyz[1], xyz[2], suffix))
+    with open(path, "w", encoding="utf-8") as stream:
+        stream.writelines(output)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("blend")
@@ -232,6 +301,9 @@ def main() -> int:
     parser.add_argument("--object", default="")
     parser.add_argument("--name", default="")
     parser.add_argument("--scale", type=float, default=1.0)
+    parser.add_argument("--ground-center", action="store_true")
+    parser.add_argument("--ground-center-from", default="")
+    parser.add_argument("--material-index", type=int, default=-1)
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--no-bake-colours", dest="bake", action="store_false")
     parser.set_defaults(bake=True)
@@ -253,6 +325,8 @@ def main() -> int:
         "object": args.object,
         "out": out,
         "scale": args.scale,
+        "ground_center": args.ground_center,
+        "material_index": args.material_index,
         "list": args.list,
         "bake": args.bake,
     }).replace("'", '"').replace("True", "true").replace("False", "false")
@@ -291,6 +365,9 @@ def main() -> int:
         for line in (proc.stdout + proc.stderr).splitlines()[-12:]:
             print("  " + line, file=sys.stderr)
         return proc.returncode or 1
+    if args.ground_center or args.ground_center_from:
+        ground_center_obj(out, args.ground_center_from)
+        print("ground-centred final evaluated mesh")
     return 0
 
 

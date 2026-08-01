@@ -43,7 +43,7 @@ int main(){
                     "every showroom torch marker must touch a wall");
         }
 
-    LevelResource missing("nope", eng::assets::packDir("game").string() +
+    LevelResource missing("nope", eng::assets::packDir("content").string() +
                                       "/does_not_exist.toml");
     require(!missing.load(), "missing file fails load");
 

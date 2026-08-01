@@ -76,6 +76,9 @@ int main()
                                                7.0f, 0.35f, 1.5f}};
     entity.camera = CameraAuthor{52.0f, 0.1f, 120.0f, 10, false};
     entity.spin = SpinAuthor{{0.0f, 1.0f, 0.0f}, 42.0f};
+    entity.orbit = OrbitAuthor{{1.0f, 2.0f, 3.0f}, {0.0f, 1.0f, 0.0f}, 5.5f,
+                               24.0f, 90.0f, 1.5f,
+                               OrbitAuthor::Facing::Centre};
     entity.exitYawDegrees = 90.0f;
     entity.marker = "boss.spawn";
     entity.enemySpawn = "goblin";
@@ -98,6 +101,7 @@ int main()
                 "a light animation");
     checkObject(emitted["camera"], defs["camera"], "a camera");
     checkObject(emitted["spin"], defs["spin"], "a spin");
+    checkObject(emitted["orbit"], defs["orbit"], "an orbit");
     checkObject(emitted["trigger"], defs["trigger"], "a trigger");
     checkObject(emitted["exit"], defs["entity"]["properties"]["exit"], "an exit");
 

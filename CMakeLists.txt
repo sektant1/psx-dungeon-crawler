@@ -194,6 +194,12 @@ target_include_directories(eng_platform PRIVATE third_party engine/src)
 target_link_libraries(eng_platform PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>"
                       PRIVATE SDL2::SDL2)
 
+# Renderer-independent source-model import. Kept as its own library so runtime,
+# validation CLI, and hermetic tests execute exactly the same Assimp path.
+add_library(eng_model_import STATIC engine/src/render/AssimpLoader.cpp)
+target_include_directories(eng_model_import PUBLIC engine/include engine/src)
+target_link_libraries(eng_model_import PUBLIC glm::glm PRIVATE assimp::assimp)
+
 add_library(
   eng_systems STATIC
   engine/src/render/RenderCore.cpp
@@ -239,7 +245,8 @@ target_link_libraries(
   eng_systems
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_platform>"
          "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_rhi>" OgreOverlay eng_imgui
-  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio OpenGL::GL ${CMAKE_DL_LIBS})
+  PRIVATE OgreMain SDL2::SDL2 Jolt miniaudio eng_model_import OpenGL::GL
+          ${CMAKE_DL_LIBS})
 target_compile_definitions(
   eng_systems
   # ENG_ASSET_DIR is gone. Its last consumer was ImGuiLayout.cpp, which *writes*
@@ -270,7 +277,7 @@ add_library(eng STATIC engine/src/app/Engine.cpp engine/src/app/Application.cpp
 target_include_directories(eng PRIVATE third_party engine/src)
 target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
 
-foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_systems
+foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_model_import eng_systems
                eng_framework eng)
   eng_target_hardening(${_layer})
 endforeach()
@@ -424,7 +431,8 @@ add_executable(
 target_include_directories(scene_editor PRIVATE game/editor game/src engine/src
                                                 third_party
                              engine/include)
-target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui)
+target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui
+                                             nlohmann_json::nlohmann_json)
 # No asset defines: the editor mounts the `editor` set and resolves logical
 # paths like every other app. Where it needs a directory rather than a file --
 # the default save location for a new scene -- it asks for the game pack's dir
@@ -437,6 +445,12 @@ eng_target_hardening(scene_editor)
 add_executable(scene_cook game/tools/scene_cook_main.cpp)
 target_link_libraries(scene_cook PRIVATE game_content eng_ecs_headless)
 eng_target_hardening(scene_cook)
+
+# Static-model production gate. Emits Markdown suitable for build artifacts and
+# production briefs; no renderer/window required.
+add_executable(model_validate engine/tools/model_validate_main.cpp)
+target_link_libraries(model_validate PRIVATE eng_model_import)
+eng_target_hardening(model_validate)
 
 add_executable(
   game
@@ -588,6 +602,10 @@ if(BUILD_TESTING)
   target_include_directories(ui_layout_tests PRIVATE engine/include)
   target_link_libraries(ui_layout_tests PRIVATE glm::glm)
   add_test(NAME ui_layout COMMAND ui_layout_tests)
+
+  add_executable(ui_canvas_tests engine/tests/UiCanvasTests.cpp)
+  target_link_libraries(ui_canvas_tests PRIVATE eng)
+  add_test(NAME ui_canvas COMMAND ui_canvas_tests)
 
   add_executable(game_hud_style_tests game/tests/GameHudStyleTests.cpp
                                       game/src/ui/GameHudStyle.cpp
@@ -1059,6 +1077,14 @@ if(BUILD_TESTING)
   target_include_directories(model_import_tests PRIVATE engine/include)
   target_link_libraries(model_import_tests PRIVATE eng glm::glm)
   add_test(NAME model_import COMMAND model_import_tests)
+
+  add_executable(assimp_model_import_tests
+                 engine/tests/AssimpModelImportTests.cpp)
+  target_link_libraries(assimp_model_import_tests PRIVATE eng_model_import)
+  target_compile_definitions(
+    assimp_model_import_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  eng_target_hardening(assimp_model_import_tests)
+  add_test(NAME assimp_model_import COMMAND assimp_model_import_tests)
 
   add_executable(
     audio_tests

@@ -15,6 +15,7 @@ using game::content::Entity;
 using game::content::KitPiece;
 using game::content::LightAuthor;
 using game::content::OrbitAuthor;
+using game::content::PortalAuthor;
 using game::content::SpinAuthor;
 
 // Every widget goes through this: ImGui reports "being dragged" and "released"
@@ -472,6 +473,30 @@ void drawParticles(Entity& entity, InspectorContext& context)
     track(context);
 }
 
+void drawPortal(Entity& entity, InspectorContext& context)
+{
+    PortalAuthor& portal = *entity.portal;
+    const eng::FieldSpan fields = eng::fieldsOf<PortalAuthor>();
+    for (int i = 0; i < fields.count; ++i) {
+        const eng::Field& field = fields.data[i];
+        void* value = eng::fieldPtr(&portal, field);
+        if (field.type == eng::FieldType::Colour) {
+            ImGui::ColorEdit3(field.name, &static_cast<glm::vec3*>(value)->x,
+                              ImGuiColorEditFlags_Float);
+            track(context);
+            continue;
+        }
+        if (field.type != eng::FieldType::Float)
+            continue;
+        float& number = *static_cast<float*>(value);
+        if (field.max > field.min)
+            ImGui::DragFloat(field.name, &number, 0.01f, field.min, field.max);
+        else
+            ImGui::DragFloat(field.name, &number, 0.01f);
+        track(context);
+    }
+}
+
 void drawOrbit(Entity& entity, InspectorContext& context)
 {
     OrbitAuthor& orbit = *entity.orbit;
@@ -545,6 +570,7 @@ constexpr Drawer kDrawers[] = {
     {"orbit", drawOrbit},
     {"shader", drawShader},
     {"particles", drawParticles},
+    {"portal", drawPortal},
     {"player_spawn", drawPlayerSpawn},
     {"exit", drawExit},
     {"marker", drawMarker},

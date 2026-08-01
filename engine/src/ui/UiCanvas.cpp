@@ -37,16 +37,22 @@ bool UiCanvas::initialise(const std::string& fontDefinition) {
     return mFont.load(fontDefinition);
 }
 
-void UiCanvas::begin(glm::vec2 displayPixels, glm::ivec2 preferred) {
+void UiCanvas::begin(glm::vec2 displayPixels, glm::ivec2 preferred,
+                     glm::vec2 framebufferScale) {
     mDisplay = displayPixels;
-    const int byWidth = int(displayPixels.x) / std::max(1, preferred.x);
-    const int byHeight = int(displayPixels.y) / std::max(1, preferred.y);
+    mFramebufferScale = glm::max(framebufferScale, glm::vec2(1e-3f));
+    const glm::vec2 physical = displayPixels * mFramebufferScale;
+    const int byWidth = int(physical.x) / std::max(1, preferred.x);
+    const int byHeight = int(physical.y) / std::max(1, preferred.y);
     mScale = std::clamp(std::min(byWidth, byHeight), 1, 8);
     // The virtual surface covers the whole window: layouts anchor to real
     // corners instead of living inside a letterboxed box.
-    mVirtual = {int(displayPixels.x) / mScale, int(displayPixels.y) / mScale};
+    mVirtual = {
+        std::max(1, int(std::ceil(physical.x / float(mScale)))),
+        std::max(1, int(std::ceil(physical.y / float(mScale))))};
     mOrigin = {0.0f, 0.0f};
     mTarget = nullptr;
+    mClipToTarget = false;
 }
 
 void UiCanvas::beginTarget(glm::vec2 originPixels, glm::ivec2 virtualSize,
@@ -55,15 +61,32 @@ void UiCanvas::beginTarget(glm::vec2 originPixels, glm::ivec2 virtualSize,
     mVirtual = {std::max(virtualSize.x, 1), std::max(virtualSize.y, 1)};
     mDisplay = {float(mVirtual.x * mScale), float(mVirtual.y * mScale)};
     mOrigin = originPixels;
+    mFramebufferScale = {1.0f, 1.0f};
     mTarget = target;
+    mClipToTarget = true;
 }
 
 ImDrawList* UiCanvas::list() const {
     return mTarget ? mTarget : ImGui::GetForegroundDrawList();
 }
 
+void UiCanvas::pushClip(ImDrawList* draw) const {
+    if (!mClipToTarget)
+        return;
+    draw->PushClipRect(ImVec2(mOrigin.x, mOrigin.y),
+                       ImVec2(mOrigin.x + mDisplay.x,
+                              mOrigin.y + mDisplay.y),
+                       true);
+}
+
+void UiCanvas::popClip(ImDrawList* draw) const {
+    if (mClipToTarget)
+        draw->PopClipRect();
+}
+
 glm::vec2 UiCanvas::toScreen(glm::ivec2 at) const {
-    return {mOrigin.x + float(at.x * mScale), mOrigin.y + float(at.y * mScale)};
+    return {mOrigin.x + float(at.x * mScale) / mFramebufferScale.x,
+            mOrigin.y + float(at.y * mScale) / mFramebufferScale.y};
 }
 
 void UiCanvas::rect(glm::ivec2 at, glm::ivec2 size, unsigned int colour) const {
@@ -71,7 +94,10 @@ void UiCanvas::rect(glm::ivec2 at, glm::ivec2 size, unsigned int colour) const {
         return;
     const glm::vec2 a = toScreen(at);
     const glm::vec2 b = toScreen(at + size);
-    list()->AddRectFilled(ImVec2(a.x, a.y), ImVec2(b.x, b.y), colour);
+    ImDrawList* draw = list();
+    pushClip(draw);
+    draw->AddRectFilled(ImVec2(a.x, a.y), ImVec2(b.x, b.y), colour);
+    popClip(draw);
 }
 
 void UiCanvas::border(glm::ivec2 at, glm::ivec2 size,
@@ -171,8 +197,12 @@ void UiCanvas::text(glm::ivec2 at, std::string_view value, unsigned int colour,
         const int width = mFont.measure(value).x;
         pos.x -= align == Align::Centre ? width / 2 : width;
     }
-    mFont.draw(list(), toScreen(pos), float(mScale), value, colour,
+    ImDrawList* draw = list();
+    pushClip(draw);
+    mFont.draw(draw, toScreen(pos), float(mScale) / mFramebufferScale.x,
+               value, colour,
                shadow ? mStyle.palette.shadow : 0u);
+    popClip(draw);
 }
 
 int UiCanvas::keyCapWidth(std::string_view label) const {

@@ -36,6 +36,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 namespace ed {
 namespace {
@@ -45,14 +47,10 @@ using namespace game::content;
 // What the editor opens when the command line names no .scn. Held as a bare
 // filename because configure() -- which needs it for the loading hint -- runs
 // before the resolver is mounted and cannot turn it into a path yet.
-// The scene the editor opens with no file named. A small authored *shot* --
-// one spinning prop, a portal behind it, a camera on an orbiting pivot --
-// rather than a level: it opens in under a second, every component the editor
-// can author is visible in one screen, and it is the thing to copy when making
-// a clip. start_hall.scn is still in assets/scenes and still opens with
-// `make editor SCENE=...`; it is a 128-entity level and was never a good first
-// thing to look at.
-constexpr const char* kDefaultScene = "spin_portal.scn";
+// The scene the editor opens with no file named. Cozy lair is a compact 3x3
+// test room with a static camera, warm lights, visible exit portal, and neutral
+// spinning humanoid for imported-model inspection.
+constexpr const char* kDefaultScene = "cozy_lair.scn";
 
 // Grid drawn as world-space debug lines rather than an ImGui overlay: it has to
 // sit *under* the geometry and take perspective, which a 2D draw list cannot
@@ -63,6 +61,21 @@ constexpr int kGridRadius = 16; // cells drawn either side of the camera
 // horizon, in metres. Roughly a room away: near enough to aim, far enough that
 // the piece does not sit in the camera's face.
 constexpr float kGhostFallbackDistance = 12.0f;
+
+std::string shellQuote(const std::string& value)
+{
+#ifdef _WIN32
+    std::string out = "\"";
+    for (const char c : value)
+        out += c == '"' ? "\\\"" : std::string(1, c);
+    return out + "\"";
+#else
+    std::string out = "'";
+    for (const char c : value)
+        out += c == '\'' ? "'\\''" : std::string(1, c);
+    return out + "'";
+#endif
+}
 
 constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoCollapse;
 
@@ -157,7 +170,7 @@ void EditorApp::onLoad(eng::Engine& engine, eng::LoadPlan& plan)
     // the tree, and validate() checks a prefab's mesh against a root. Asking
     // for the pack by name keeps that honest -- and keeps working after the
     // tree moves, which APP_ASSET_DIR did not.
-    mState.assetRoot = eng::assets::packDir("game").string();
+    mState.assetRoot = eng::assets::packDir("content").string();
     mState.kitPath = eng::assets::resolve("config/kit.toml").string();
     if (mPendingScene.empty())
         mPendingScene =
@@ -292,6 +305,8 @@ bool EditorApp::onStart(eng::Engine& engine)
             mStatus += "  |  a newer autosave exists -- Scene > Recover "
                        "autosave";
     }
+    if (const char* import = std::getenv("PSX_EDITOR_IMPORT_MODEL"))
+        importGlbModel(import);
     // Verification hook: start in the staging scene so a screenshot run can
     // capture it without driving the UI.
     if (std::getenv("PSX_EDITOR_MATERIAL"))
@@ -630,6 +645,7 @@ void EditorApp::drawDiscardPopup()
         // Save As collects a path rather than silently failing.
         if (mState.scenePath.empty()) {
             mDiscardOpen = false;
+            mContinueDiscardAfterSave = true;
             mSaveAsOpen = true;
             ImGui::CloseCurrentPopup();
         }
@@ -1156,28 +1172,28 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
     // collide by name: WASD held down during a flight would otherwise trip
     // focus, rotate, grid steps -- and delete.
     if (!ImGui::GetIO().WantCaptureKeyboard && !mFlying) {
-        if (input.wasPressed("focus"))
-            frameSelectionOrAll();
         const bool interactionActive =
             mGizmoDragging || mPainting || mRoomDragging ||
             ImGui::IsMouseDown(ImGuiMouseButton_Left);
+        if (!interactionActive && input.wasPressed("focus"))
+            frameSelectionOrAll();
         if (!interactionActive && input.wasPressed("tool_select"))
             mState.tool = Tool::Select;
         if (!interactionActive && input.wasPressed("tool_place"))
             mState.tool = Tool::Place;
         if (!interactionActive && input.wasPressed("tool_room"))
             mState.tool = Tool::Room;
-        if (input.wasPressed("grid_coarser"))
+        if (!interactionActive && input.wasPressed("grid_coarser"))
             mState.gridState.coarser();
-        if (input.wasPressed("grid_finer"))
+        if (!interactionActive && input.wasPressed("grid_finer"))
             mState.gridState.finer();
-        if (input.wasPressed("toggle_snap"))
+        if (!interactionActive && input.wasPressed("toggle_snap"))
             mState.gridState.snap = !mState.gridState.snap;
-        if (input.wasPressed("level_up"))
+        if (!interactionActive && input.wasPressed("level_up"))
             mState.gridState.level += mState.grid.cell;
-        if (input.wasPressed("level_down"))
+        if (!interactionActive && input.wasPressed("level_down"))
             mState.gridState.level -= mState.grid.cell;
-        if (input.wasPressed("level_reset"))
+        if (!interactionActive && input.wasPressed("level_reset"))
             mState.gridState.level = 0.0f;
         if (!interactionActive && input.wasPressed("gizmo_cycle"))
             mGizmoOperation = (mGizmoOperation + 1) % 3;
@@ -1187,37 +1203,38 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
         if (!interactionActive && !ImGui::GetIO().KeyCtrl &&
             input.wasPressed("gizmo_space"))
             mGizmoLocal = !mGizmoLocal;
-        if (!ImGui::GetIO().KeyCtrl && input.wasPressed("walk"))
+        if (!interactionActive && !ImGui::GetIO().KeyCtrl &&
+            input.wasPressed("walk"))
             toggleWalk();
         if (!interactionActive && input.wasPressed("delete"))
             deleteSelection();
 
         const ImGuiIO& io = ImGui::GetIO();
-        if (io.KeyCtrl && input.wasPressed("save"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("save"))
             saveScene();
-        if (input.wasPressed("run"))
+        if (!interactionActive && input.wasPressed("run"))
             runPlaytest();
-        if (input.wasPressed("cook")) {
+        if (!interactionActive && input.wasPressed("cook")) {
             std::string mapPath;
             cookScene(mapPath);
         }
-        if (io.KeyCtrl && input.wasPressed("duplicate"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("duplicate"))
             duplicateSelection();
-        if (io.KeyCtrl && input.wasPressed("undo"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("undo"))
             applyHistory(io.KeyShift);
-        if (io.KeyCtrl && input.wasPressed("redo"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("redo"))
             applyHistory(true);
-        if (io.KeyCtrl && input.wasPressed("open"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("open"))
             mOpenSceneOpen = true;
-        if (io.KeyCtrl && input.wasPressed("copy"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("copy"))
             copySelection(false);
-        if (io.KeyCtrl && input.wasPressed("cut"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("cut"))
             copySelection(true);
-        if (io.KeyCtrl && input.wasPressed("paste"))
+        if (!interactionActive && io.KeyCtrl && input.wasPressed("paste"))
             pasteClipboard();
-        if (input.wasPressed("help"))
+        if (!interactionActive && input.wasPressed("help"))
             mHelpOpen = !mHelpOpen;
-        if (input.wasPressed("dev_console"))
+        if (!interactionActive && input.wasPressed("dev_console"))
             mConsole.toggle();
     }
 
@@ -1233,9 +1250,12 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
         else if (ConfirmDialog::isOpen()) {
             ConfirmDialog::cancel();
         }
-        else if (mDiscardOpen || mSaveAsOpen || mOpenSceneOpen) {
+        else if (mSaveAsOpen) {
+            // Modal consumes Escape when drawn; global back must not leak to
+            // selection, tool, or quit state behind it.
+        }
+        else if (mDiscardOpen || mOpenSceneOpen) {
             mDiscardOpen = false;
-            mSaveAsOpen = false;
             mOpenSceneOpen = false;
         }
         else if (mPalette.open) {
@@ -1667,22 +1687,22 @@ void EditorApp::onGui(const eng::FrameContext& f)
 
             ImGui::DockBuilderDockWindow("Toolbar", top);
             ImGui::DockBuilderDockWindow("Status", bottom);
-            // Inspector above, Material below it -- the arrangement every DCC
-            // and engine editor converged on, because the preview is read while
-            // editing the thing above it.
-            ImGuiID rightTop = right;
-            const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(
-                rightTop, ImGuiDir_Down, 0.45f, nullptr, &rightTop);
-            ImGui::DockBuilderDockWindow("Inspector", rightTop);
-            // Material and Particles share that lower slot as tabs: both are
-            // the same job -- pick an asset from a list and tune it against the
-            // viewport -- and only one of them is ever the thing being worked
-            // on. A window left out of the builder floats loose over the
-            // dockspace, which is what this one did.
-            ImGui::DockBuilderDockWindow("Material", rightBottom);
-            ImGui::DockBuilderDockWindow("Particles", rightBottom);
+            // The right column is the Inspector, whole. It used to give its
+            // lower half to Material and Particles, which cost the panel that
+            // answers "what is this thing" half its height so that two panels
+            // nothing was selected in could be visible at once.
+            ImGui::DockBuilderDockWindow("Inspector", right);
+            // Material and Particles go left, beside the Catalog, because they
+            // are the same kind of thing: a library you browse and pick from.
+            // What used to need them on the right is on the entity now -- the
+            // material combo is on the Mesh component, the effect combo on the
+            // Particles component, and the swatch follows the selection -- so
+            // the right column is about the selected entity and the left column
+            // is about what exists to place on it.
             ImGui::DockBuilderDockWindow("Outliner", left);
             ImGui::DockBuilderDockWindow("Catalog", left);
+            ImGui::DockBuilderDockWindow("Material", left);
+            ImGui::DockBuilderDockWindow("Particles", left);
             ImGui::DockBuilderDockWindow("Issues", bottom);
             ImGui::DockBuilderDockWindow("Console", bottom);
             // The 2D viewport shares the centre slot as a tab beside the 3D
@@ -1695,9 +1715,10 @@ void EditorApp::onGui(const eng::FrameContext& f)
             ImGui::DockBuilderDockWindow("UI", centre);
             ImGui::DockBuilderDockWindow("Viewport", centre);
             ImGui::DockBuilderFinish(dock);
-            // The builder selects the last window docked into a node, so
-            // Particles wins the tab it shares with Material. A focus asked for
-            // before this point is overwritten by it; asked for here, it lands.
+            // The builder selects the last window docked into a node, so the
+            // Outliner has to be asked for last or the left column opens on
+            // Particles. A focus asked for before DockBuilderFinish is
+            // overwritten by it; asked for here, it lands.
             if (mMaterialMode) mFocusMaterialFrames = 4;
         }
     }
@@ -1721,6 +1742,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
     drawSettings();
     captureSettings();
     drawSaveAsPopup();
+    drawImportModelPopup();
     drawOpenScenePopup();
     drawDiscardPopup();
     ConfirmDialog::draw();
@@ -1749,6 +1771,12 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
         }
         if (ImGui::MenuItem("Open...", "Ctrl+O"))
             mOpenSceneOpen = true;
+        if (ImGui::MenuItem("Import model (.glb)...")) {
+            mImportModelOpen = true;
+            std::snprintf(mImportModelPath, sizeof(mImportModelPath), "%s",
+                          (eng::assets::project() / "assets" / "source" /
+                           "models" / "model.glb").string().c_str());
+        }
         if (ImGui::BeginMenu("Open recent", !mRecent.paths().empty())) {
             for (const std::string& path : mRecent.paths()) {
                 const std::string name =
@@ -2024,7 +2052,7 @@ void EditorApp::drawViewportToolbar()
 
 void EditorApp::drawViewportStats(const eng::FrameContext& f)
 {
-    if (!mShowFrameStats || mViewportW < 8.0f)
+    if (!mShowFrameStats || mViewportW < 8.0f || mViewportH < 8.0f)
         return;
 
     FrameStats sample;
@@ -2056,34 +2084,55 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
         const ImVec2 pos = ImGui::GetCursorScreenPos();
         mViewportX = pos.x;
         mViewportY = pos.y;
+        mViewportW = std::max(size.x, 0.0f);
+        mViewportH = std::max(size.y, 0.0f);
+        const bool validViewport = mViewportW > 8.0f && mViewportH > 8.0f;
+        bool hasViewportImage = false;
 
-        if (size.x > 8.0f && size.y > 8.0f) {
-            if (int(size.x) != int(mViewportW) ||
-                int(size.y) != int(mViewportH)) {
-                mViewportW = size.x;
-                mViewportH = size.y;
-                f.engine.renderer().resizeEditorViewport(int(size.x),
-                                                         int(size.y));
+        if (validViewport) {
+            const ImVec2 framebufferScale =
+                ImGui::GetIO().DisplayFramebufferScale;
+            const int textureW = std::max(
+                1, int(std::lround(mViewportW *
+                                   std::max(framebufferScale.x, 1.0f))));
+            const int textureH = std::max(
+                1, int(std::lround(mViewportH *
+                                   std::max(framebufferScale.y, 1.0f))));
+            if (textureW != mViewportTextureW ||
+                textureH != mViewportTextureH) {
+                mViewportTextureW = textureW;
+                mViewportTextureH = textureH;
+                f.engine.renderer().resizeEditorViewport(textureW, textureH);
             }
             const uint64_t texture =
                 f.engine.renderer().editorViewportTextureId();
             if (texture != 0) {
                 // Default uv: OGRE's render-to-texture already hands back a
                 // top-down image, so flipping V here turned the whole world
-                // upside down.
+                 // upside down.
                 ImGui::Image(static_cast<ImTextureID>(texture), size);
+                hasViewportImage = true;
             }
             else {
                 ImGui::TextUnformatted("offscreen viewport unavailable");
             }
         }
-        mViewportHovered = ImGui::IsWindowHovered(
-            ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        const ImVec2 imageMax(pos.x + mViewportW, pos.y + mViewportH);
+        mViewportHovered = hasViewportImage &&
+                           ImGui::IsWindowHovered(
+                               ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+                           ImGui::IsMouseHoveringRect(pos, imageMax, false);
         if (mMaterialMode || mState.tool != Tool::Place || !mViewportHovered ||
             mFlying)
             mPreview->hidePlacementGhost();
-        // Gizmo first, then picking: a click that lands on a gizmo handle is a
-        // drag, not a selection change.
+
+        ImDrawList* viewportDraw = ImGui::GetWindowDrawList();
+        if (validViewport)
+            viewportDraw->PushClipRect(pos, imageMax, true);
+        // Marks and diagnostics sit below manipulators. A selected light mark
+        // must not paint over the transform handle at the same screen point.
+        drawEntityGizmos();
+        drawViewportStats(f);
         if (mMaterialMode) {
             // Only the test shape may be manipulated: a reference stage whose
             // floor and lights can be dragged out of alignment has stopped
@@ -2139,14 +2188,13 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             }
         }
         else {
+            // Gizmo before picking: a click that lands on a handle is a drag,
+            // not a selection change.
             drawGizmo(f);
             handleViewportPicking(f);
         }
-        // Over the image and under ImGuizmo: the marks are affordances for the
-        // half of a level that has no mesh, and the manipulator must stay on
-        // top of everything.
-        drawEntityGizmos();
-        drawViewportStats(f);
+        if (validViewport)
+            viewportDraw->PopClipRect();
     }
     else {
         mViewportHovered = false;
@@ -2194,6 +2242,8 @@ void EditorApp::drawEntityGizmos()
     overlay.viewportOrigin = glm::vec2(mViewportX, mViewportY);
     overlay.viewportSize = glm::vec2(mViewportW, mViewportH);
     overlay.selected = &mState.selection;
+    overlay.hidden = &mState.hidden;
+    overlay.locked = &mState.locked;
     overlay.volumes = mShowGizmoVolumes;
     // A camera frustum is judged against the rectangle it is drawn in, so it is
     // drawn at the viewport's aspect rather than a nominal one.
@@ -2209,7 +2259,7 @@ void EditorApp::drawEntityGizmos()
                 entityGizmoMarks(), viewProjection,
                 glm::vec2(mViewportX, mViewportY),
                 glm::vec2(mViewportW, mViewportH), glm::vec2(mouse.x, mouse.y),
-                12.0f)) {
+                12.0f, &mState.hidden, &mState.locked)) {
             hovered = mark->id;
             overlay.hovered = &hovered;
         }
@@ -2237,9 +2287,10 @@ void EditorApp::handleViewportPicking(const eng::FrameContext& f)
     glm::mat4 view, projection;
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
     if (const GizmoMark* mark = pickGizmoMark(
-            entityGizmoMarks(), projection * view,
-            glm::vec2(mViewportX, mViewportY), glm::vec2(mViewportW, mViewportH),
-            glm::vec2(mouse.x, mouse.y), 12.0f)) {
+             entityGizmoMarks(), projection * view,
+             glm::vec2(mViewportX, mViewportY), glm::vec2(mViewportW, mViewportH),
+             glm::vec2(mouse.x, mouse.y), 12.0f, &mState.hidden,
+             &mState.locked)) {
         selectAndReveal(mark->id, ImGui::GetIO().KeyShift);
         return;
     }
@@ -2297,12 +2348,73 @@ game::content::AuthorId EditorApp::resolvePick(const AuthorId& hit) const
                              ImGui::GetIO().KeyAlt);
 }
 
+void EditorApp::finishGizmoDrag()
+{
+    if (!mGizmoDragging)
+        return;
+    mGizmoDragging = false;
+    std::vector<Command> parts;
+    for (const auto& [id, before] : mDragStart) {
+        const Entity* entity = mState.document.find(id);
+        if (!entity)
+            continue;
+        if (entity->transform.position == before.position &&
+            entity->transform.rotationDegrees == before.rotationDegrees &&
+            entity->transform.scale == before.scale)
+            continue;
+        parts.push_back(makeSetTransform(id, before, entity->transform));
+    }
+    if (!parts.empty()) {
+        const char* label = mGizmoOperation == 1 ? "rotate selection"
+                            : mGizmoOperation == 2 ? "scale selection"
+                                                   : "move selection";
+        // Document already holds final value, so applying this command is
+        // idempotent and gives undo/redo one transaction for whole drag.
+        runCommand(makeComposite(label, std::move(parts)));
+    }
+    mDragStart.clear();
+}
+
 void EditorApp::drawGizmo(const eng::FrameContext& f)
 {
     mGizmoHovered = false;
-    if (mState.selection.empty() || mViewportW < 8.0f)
+    if (mViewportW < 8.0f || mViewportH < 8.0f) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            finishGizmoDrag();
         return;
-    const Entity* primary = mState.document.find(*mState.primary());
+    }
+
+    // A parent already carries every selected descendant through its hierarchy.
+    // Manipulating both would apply the same group delta twice to the child.
+    std::vector<AuthorId> transformSelection;
+    transformSelection.reserve(mState.selection.size());
+    for (const AuthorId& id : mState.selection) {
+        const Entity* entity = mState.document.find(id);
+        if (!entity || mState.isHidden(id) || mState.isLocked(id))
+            continue;
+        bool selectedAncestor = false;
+        std::vector<AuthorId> seen;
+        for (AuthorId parent = entity->parent; !parent.empty();) {
+            if (std::find(seen.begin(), seen.end(), parent) != seen.end())
+                break;
+            seen.push_back(parent);
+            if (mState.isSelected(parent)) {
+                selectedAncestor = true;
+                break;
+            }
+            const Entity* ancestor = mState.document.find(parent);
+            parent = ancestor ? ancestor->parent : AuthorId{};
+        }
+        if (!selectedAncestor)
+            transformSelection.push_back(id);
+    }
+    if (transformSelection.empty()) {
+        // Selection can disappear through another editor action. Never leave a
+        // dead transaction claiming ownership of every later shortcut.
+        finishGizmoDrag();
+        return;
+    }
+    const Entity* primary = mState.document.find(transformSelection.front());
     if (!primary)
         return;
 
@@ -2322,7 +2434,7 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
     // centre of the combined bounds is where every DCC puts it, and it is the
     // point a person means when they say "this selection".
     glm::vec3 boundsMin, boundsMax;
-    const bool haveBounds = boundsOf(mState.selection, boundsMin, boundsMax);
+    const bool haveBounds = boundsOf(transformSelection, boundsMin, boundsMax);
     // The primary's *world* transform: for a parented entity the authored one
     // is an offset inside its parent, and anchoring the handles there would put
     // them somewhere the entity is not.
@@ -2341,7 +2453,7 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
     // delta to apply to every member, so a rotation turns the whole selection
     // about the anchor rather than spinning one entity in place while the rest
     // sit still -- which is what used to happen.
-    const bool multi = mState.selection.size() > 1;
+    const bool multi = transformSelection.size() > 1;
     const glm::vec3 identityScale(1.0f);
     glm::mat4 matrix(1.0f);
     if (mGizmoDragging) {
@@ -2395,7 +2507,7 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
         mGizmoDragging = true;
         mDragAnchor = liveAnchor;
         mDragStart.clear();
-        for (const AuthorId& id : mState.selection)
+        for (const AuthorId& id : transformSelection)
             if (const Entity* entity = mState.document.find(id))
                 mDragStart.emplace_back(id, entity->transform);
     }
@@ -2472,26 +2584,8 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
         mState.document.touch();
     }
 
-    if (!gizmoUsing && mGizmoDragging) {
-        mGizmoDragging = false;
-        std::vector<Command> parts;
-        for (const auto& [id, before] : mDragStart) {
-            const Entity* entity = mState.document.find(id);
-            if (!entity)
-                continue;
-            if (entity->transform.position == before.position &&
-                entity->transform.rotationDegrees == before.rotationDegrees &&
-                entity->transform.scale == before.scale)
-                continue; // a click that moved nothing is not an edit
-            parts.push_back(makeSetTransform(id, before, entity->transform));
-        }
-        if (!parts.empty()) {
-            // The document already holds the final value, so the composite is
-            // applied to a state it is idempotent on.
-            runCommand(makeComposite("move selection", std::move(parts)));
-        }
-        mDragStart.clear();
-    }
+    if (!gizmoUsing)
+        finishGizmoDrag();
 
     // Selection outline: a box around what the gizmo is acting on, so the
     // handles are never ambiguous about their subject.
@@ -3098,6 +3192,10 @@ void EditorApp::drawUiStage()
     ImGui::SameLine();
     ImGui::Checkbox("safe area", &mUiStage.showSafeArea);
     ImGui::SameLine();
+    ImGui::SetNextItemWidth(54.0f);
+    ImGui::SliderInt("##safe-area-percent", &mUiStage.safeAreaPercent, 0, 15,
+                     "%d%%");
+    ImGui::SameLine();
     ImGui::Checkbox("grid", &mUiStage.showGrid);
 
     // --- the canvas -------------------------------------------------------
@@ -3126,8 +3224,11 @@ void EditorApp::drawUiStage()
     // Centred in the room, the way any viewport centres its subject.
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
     const ImVec2 origin(cursor.x + std::max((available.x - extent.x) * 0.5f, 0.0f),
-                        cursor.y + std::max((available.y - extent.y) * 0.5f, 0.0f));
+                         cursor.y + std::max((available.y - extent.y) * 0.5f, 0.0f));
     ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->PushClipRect(cursor,
+                       ImVec2(cursor.x + available.x, cursor.y + available.y),
+                       true);
     // A black plate under it: the HUD is drawn over a game, and judging its
     // contrast against the editor's grey chrome is judging the wrong thing.
     draw->AddRectFilled(origin,
@@ -3151,23 +3252,30 @@ void EditorApp::drawUiStage()
     }
 
     // The real HUD, on the real canvas, into this panel's draw list.
+    const float safeFraction = float(mUiStage.safeAreaPercent) / 100.0f;
+    const eng::ui::Insets safeArea{
+        int(std::lround(float(virtualSize.x) * safeFraction)),
+        int(std::lround(float(virtualSize.y) * safeFraction)),
+        int(std::lround(float(virtualSize.x) * safeFraction)),
+        int(std::lround(float(virtualSize.y) * safeFraction))};
     mUiHud.drawInto(hudSnapshotFrom(mUiStage), hudTooltipFrom(mUiStage),
-                    mUiStage.dt, {origin.x, origin.y}, virtualSize, scale, draw);
+                     mUiStage.dt, {origin.x, origin.y}, virtualSize, scale, draw,
+                     safeArea);
 
     if (mUiStage.showSafeArea) {
         // A console HUD that ignores the safe area is legible on a monitor and
         // cropped on a television, and the crop is not something the developer
         // ever sees.
-        const float inset = float(mUiStage.safeAreaPercent) / 100.0f;
-        const ImVec2 a(origin.x + extent.x * inset,
-                       origin.y + extent.y * inset);
-        const ImVec2 b(origin.x + extent.x * (1.0f - inset),
-                       origin.y + extent.y * (1.0f - inset));
+        const ImVec2 a(origin.x + extent.x * safeFraction,
+                       origin.y + extent.y * safeFraction);
+        const ImVec2 b(origin.x + extent.x * (1.0f - safeFraction),
+                       origin.y + extent.y * (1.0f - safeFraction));
         draw->AddRect(a, b, IM_COL32(240, 200, 80, 110));
     }
     // The frame last, so it is never drawn over.
     draw->AddRect(origin, ImVec2(origin.x + extent.x, origin.y + extent.y),
                   IM_COL32(120, 140, 160, 160));
+    draw->PopClipRect();
     ImGui::Dummy(available);
 
     ImGui::TextDisabled("%d x %d virtual   x%d   %.0f x %.0f px",
@@ -3355,22 +3463,45 @@ void EditorApp::drawOutliner()
         actions.setHidden = [this](const AuthorId& id, bool on) {
             // Descendants follow: hiding a chandelier and leaving its candles
             // floating is not hiding it.
-            mState.setHidden(id, on);
-            for (const AuthorId& below : mState.document.descendantsOf(id))
-                mState.setHidden(below, on);
+            std::vector<AuthorId> affected{id};
+            const std::vector<AuthorId> descendants =
+                mState.document.descendantsOf(id);
+            affected.insert(affected.end(), descendants.begin(),
+                            descendants.end());
+            for (const AuthorId& entry : affected)
+                mState.setHidden(entry, on);
+            if (on)
+                mState.selection.erase(
+                    std::remove_if(mState.selection.begin(),
+                                   mState.selection.end(),
+                                   [&affected](const AuthorId& selected) {
+                                       return std::find(affected.begin(),
+                                                        affected.end(), selected) !=
+                                              affected.end();
+                                   }),
+                    mState.selection.end());
             mPreview->invalidate();
         };
         actions.isLocked = [this](const AuthorId& id) {
             return mState.isLocked(id);
         };
         actions.setLocked = [this](const AuthorId& id, bool on) {
-            mState.setLocked(id, on);
-            for (const AuthorId& below : mState.document.descendantsOf(id))
-                mState.setLocked(below, on);
+            std::vector<AuthorId> affected{id};
+            const std::vector<AuthorId> descendants =
+                mState.document.descendantsOf(id);
+            affected.insert(affected.end(), descendants.begin(),
+                            descendants.end());
+            for (const AuthorId& entry : affected)
+                mState.setLocked(entry, on);
             if (on)
                 mState.selection.erase(
-                    std::remove(mState.selection.begin(),
-                                mState.selection.end(), id),
+                    std::remove_if(mState.selection.begin(),
+                                   mState.selection.end(),
+                                   [&affected](const AuthorId& selected) {
+                                       return std::find(affected.begin(),
+                                                        affected.end(), selected) !=
+                                              affected.end();
+                                   }),
                     mState.selection.end());
         };
         // Reveal whatever the world selected while the panel was not looking.
@@ -3517,6 +3648,17 @@ void EditorApp::addGameplayEntity(Gameplay kind)
         stem = "player_spawn";
         component = "player_spawn";
         break;
+    case Gameplay::Portal:
+        if (!mState.catalog.find("kit.portal_membrane")) {
+            mStatus = "kit.portal_membrane is missing from the Catalog";
+            return;
+        }
+        stem = "portal";
+        entity.prefab = "kit.portal_membrane";
+        entity.portal = PortalAuthor{};
+        entity.exitYawDegrees = 0.0f;
+        entity.castShadows = false;
+        break;
     case Gameplay::Exit:
         stem = "exit";
         component = "exit";
@@ -3557,7 +3699,8 @@ void EditorApp::addGameplayEntity(Gameplay kind)
         entity.transform.position.y += 8.0f;
         entity.transform.rotationDegrees = {-55.0f, 30.0f, 0.0f};
         entity.light = LightAuthor{
-            LightAuthor::Type::Directional, {0.95f, 0.93f, 0.88f}, 0.0f, true};
+            LightAuthor::Type::Directional, {0.95f, 0.93f, 0.88f}, 0.0f, true,
+            std::nullopt};
     }
     entity.id = mState.document.allocateId(stem);
     entity.name = entity.id;
@@ -3583,18 +3726,18 @@ void EditorApp::drawCatalog()
 
         // Gameplay entities are authored here too: they are part of the level's
         // vocabulary even though they have no mesh.
-        if (ImGui::CollapsingHeader("gameplay")) {
+        if (ImGui::CollapsingHeader("gameplay",
+                                    ImGuiTreeNodeFlags_DefaultOpen)) {
             const auto button = [&](const char* label, Gameplay kind) {
                 if (ImGui::Button(label, ImVec2(-1.0f, 0.0f)))
                     addGameplayEntity(kind);
             };
             button("group (empty node)", Gameplay::Group);
             button("player spawn", Gameplay::PlayerSpawn);
-            // The level's portal IS its exit: the runtime builds the membrane,
-            // surround and wisps around this entity. There is no portal mesh to
-            // place, and naming the button after the thing an author sees in
-            // game is what stops them looking for one.
-            button("exit / portal", Gameplay::Exit);
+            // Portal is visible and tunable in the editor. Exit marker remains
+            // available for levels that intentionally use runtime fallback art.
+            button("portal", Gameplay::Portal);
+            button("exit marker", Gameplay::Exit);
             button("marker", Gameplay::Marker);
             button("enemy spawn", Gameplay::EnemySpawn);
             button("pickup", Gameplay::Pickup);
@@ -4927,21 +5070,181 @@ void EditorApp::drawHelp()
 
 void EditorApp::drawSaveAsPopup()
 {
-    if (mSaveAsOpen) {
-        ImGui::OpenPopup("Save scene as");
-        mSaveAsOpen = false;
-    }
-    if (!ImGui::BeginPopupModal("Save scene as", nullptr,
-                                ImGuiWindowFlags_AlwaysAutoResize))
+    static constexpr const char* kTitle = "Save scene as";
+    if (mSaveAsOpen && !ImGui::IsPopupOpen(kTitle))
+        ImGui::OpenPopup(kTitle);
+    if (!ImGui::BeginPopupModal(kTitle, nullptr,
+                                 ImGuiWindowFlags_AlwaysAutoResize))
         return;
+    bool performPendingDiscard = false;
     ImGui::TextUnformatted("Path (.scn)");
-    ImGui::SetNextItemWidth(520.0f);
+    const float available = ImGui::GetMainViewport()->WorkSize.x;
+    ImGui::SetNextItemWidth(std::clamp(available - 64.0f, 160.0f, 520.0f));
+    if (ImGui::IsWindowAppearing())
+        ImGui::SetKeyboardFocusHere();
     const bool entered =
         ImGui::InputText("##saveaspath", mSaveAsPath, sizeof(mSaveAsPath),
-                         ImGuiInputTextFlags_EnterReturnsTrue);
+                          ImGuiInputTextFlags_EnterReturnsTrue);
     if (entered || ImGui::Button("Save", ImVec2(120.0f, 0.0f))) {
         mState.scenePath = mSaveAsPath;
-        if (saveScene())
+        if (saveScene()) {
+            const bool continueDiscard = mContinueDiscardAfterSave;
+            mContinueDiscardAfterSave = false;
+            mSaveAsOpen = false;
+            ImGui::CloseCurrentPopup();
+            performPendingDiscard = continueDiscard;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+        ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        mContinueDiscardAfterSave = false;
+        mSaveAsOpen = false;
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+    if (performPendingDiscard)
+        performDiscard();
+}
+
+bool EditorApp::importGlbModel(const std::string& source)
+{
+    const std::filesystem::path path = std::filesystem::absolute(source);
+    if (path.extension() != ".glb" || !std::filesystem::is_regular_file(path)) {
+        mStatus = "model import needs an existing .glb file";
+        return false;
+    }
+
+    const std::filesystem::path artifactDir =
+        eng::assets::project() / "artifacts" / "editor";
+    std::error_code ec;
+    std::filesystem::create_directories(artifactDir, ec);
+    if (ec) {
+        mStatus = "cannot create model-import artifact directory: " +
+                  ec.message();
+        return false;
+    }
+    const std::filesystem::path manifest = artifactDir / "model_import.json";
+    const std::filesystem::path importer =
+        eng::assets::project() / "tools" / "editor_import_glb.py";
+    const std::string command =
+        "python3 " + shellQuote(importer.string()) + " " +
+        shellQuote(path.string()) + " " + shellQuote(mState.assetRoot) + " " +
+        shellQuote(manifest.string());
+    if (std::system(command.c_str()) != 0) {
+        mStatus = "GLB import failed; see terminal output";
+        return false;
+    }
+
+    nlohmann::json imported;
+    try {
+        std::ifstream input(manifest);
+        if (!input)
+            throw std::runtime_error("import manifest was not written");
+        input >> imported;
+    } catch (const std::exception& error) {
+        mStatus = std::string("cannot read model import result: ") + error.what();
+        return false;
+    }
+
+    const std::string materialScript =
+        imported.value("material_script", std::string());
+    if (!materialScript.empty() &&
+        !mEngine->renderer().loadMaterialScript(materialScript)) {
+        mStatus = "model converted, but generated material did not load";
+        return false;
+    }
+
+    KitCatalog catalog;
+    std::string error;
+    if (!KitCatalog::load(mState.kitPath, catalog, error)) {
+        mStatus = "model converted, but Catalog reload failed: " + error;
+        return false;
+    }
+    mState.catalog = std::move(catalog);
+    mState.grid = GridConfig::fromCatalog(mState.catalog);
+
+    const nlohmann::json& modelParts = imported["parts"];
+    if (!modelParts.is_array() || modelParts.empty()) {
+        mStatus = "GLB import produced no placeable mesh parts";
+        return false;
+    }
+
+    std::vector<Command> commands;
+    std::vector<AuthorId> created;
+    AuthorId parent;
+    const glm::vec3 position = viewFocusPoint();
+    if (modelParts.size() > 1) {
+        Entity group;
+        group.id = mState.document.allocateId("imported_model");
+        group.name = path.stem().string();
+        group.transform.position = position;
+        parent = group.id;
+        created.push_back(group.id);
+        commands.push_back(makeCreateEntity(std::move(group)));
+    }
+
+    for (const nlohmann::json& modelPart : modelParts) {
+        const std::string prefab = modelPart.value("prefab", std::string());
+        if (!mState.catalog.find(prefab)) {
+            mStatus = "imported prefab is missing from reloaded Catalog: " +
+                      prefab;
+            return false;
+        }
+        Entity entity;
+        entity.id = mState.document.allocateId(prefab);
+        entity.name = modelPart.value("name", entity.id);
+        entity.prefab = prefab;
+        entity.parent = parent;
+        entity.castShadows = true;
+        glm::vec3 offset{0.0f};
+        if (modelPart.contains("offset") && modelPart["offset"].is_array() &&
+            modelPart["offset"].size() == 3) {
+            offset = {modelPart["offset"][0].get<float>(),
+                      modelPart["offset"][1].get<float>(),
+                      modelPart["offset"][2].get<float>()};
+        }
+        entity.transform.position = parent.empty() ? position + offset : offset;
+        created.push_back(entity.id);
+        commands.push_back(makeCreateEntity(std::move(entity)));
+    }
+
+    runCommand(makeComposite("import " + path.stem().string(),
+                             std::move(commands)));
+    mState.selection = created;
+    mSelectionAnchor = created.back();
+    mOutlinerReveal = created.back();
+    mPreview->invalidate();
+    mMaterialNames = mEngine->renderer().materialNames();
+    std::sort(mMaterialNames.begin(), mMaterialNames.end());
+    mMaterialCatalog.clear();
+    mMaterialCatalogLoaded = false;
+    mStatus = "imported " + path.filename().string() + " as " +
+              std::to_string(modelParts.size()) + " mesh part(s)";
+    return true;
+}
+
+void EditorApp::drawImportModelPopup()
+{
+    if (mImportModelOpen) {
+        ImGui::OpenPopup("Import model");
+        mImportModelOpen = false;
+    }
+    ImGui::SetNextWindowSize(ImVec2(620.0f, 0.0f), ImGuiCond_Appearing);
+    if (!ImGui::BeginPopupModal("Import model", nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    ImGui::TextWrapped("Import a static GLB. Mesh node transforms, UVs, vertex "
+                       "colours and base-colour textures are baked into engine "
+                       "OBJ parts. Skins and animation are not imported.");
+    ImGui::Spacing();
+    ImGui::SetNextItemWidth(580.0f);
+    const bool entered = ImGui::InputText(
+        "##glbpath", mImportModelPath, sizeof(mImportModelPath),
+        ImGuiInputTextFlags_EnterReturnsTrue);
+    if (entered || ImGui::Button("Import", ImVec2(120.0f, 0.0f))) {
+        if (importGlbModel(mImportModelPath))
             ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();

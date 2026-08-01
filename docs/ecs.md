@@ -100,6 +100,7 @@ one, so a file needing `Transform` does not pull Jolt's layer enum in through
 | `Camera` | look through me: fov, clip planes, priority |
 | `LightAnimation` | how a light flickers or pulses |
 | `Spin` | turn forever about a local axis |
+| `Orbit` | travel a ring around a point — no pivot entity |
 | `ParticleEmitter` | play this effect from here |
 | `Collider` | a shape that occupies space |
 | `RigidBody` | …and the simulation moves it |
@@ -136,6 +137,7 @@ Four components do something over time. Each has one system in
 | Component | System | What it does |
 |---|---|---|
 | `Spin` | `spinSystem` | rotates the local `Transform`, so the subtree turns with it |
+| `Orbit` | `orbitSystem` | writes the position on a ring, and the facing when it is aiming |
 | `LightAnimation` | `lightAnimationSystem` | writes `LightColour` from the `LightRef`'s authored colour |
 | `Lifetime` | `lifetimeSystem` | counts down, then `destroyHierarchy` |
 | `Visibility` | *(SceneSync)* | pushed to the node when it changes |
@@ -154,6 +156,39 @@ Two rules these follow, and any new one should:
 - **No global RNG.** The flicker is value noise over accumulated time plus a
   per-instance `phase`, so two runs of a level light it identically and a
   capture is comparable frame for frame.
+
+### Spin vs. Orbit
+
+`Spin` turns a thing where it stands. `Orbit` moves it along a ring around a
+point — and it needs **no pivot entity** to do it: the entity carries its own
+`centre`, `radius` and `axis`.
+
+The pivot rig (an empty entity with a `Spin`, children parented to it) is still
+right when a *group* has to revolve as one, because a parent is how several
+things share a motion. `Orbit` is the single-entity case, which is nearly every
+case. It was two entities and a parent link for one moving camera, and the
+radius *was* the child's transform — a number that did not say what it was.
+
+They compose on one entity, and the order in `tickComponentSystems` is the
+contract that lets them:
+
+```
+spinSystem    accumulates a rotation
+orbitSystem   writes a position, and REPLACES the rotation only when facing != Free
+```
+
+So a moon is `Orbit(facing: Free) + Spin` — carried round its planet while
+turning on its own axis — and a camera is `Orbit(facing: Centre)`, whose aim
+Spin cannot fight over.
+
+`facing` has three values: `Free` keeps the authored rotation, `Centre` looks at
+what it circles, `Travel` looks along the direction of motion. `centre` is in
+the entity's own frame — its parent's, or the world — so an orbit inside a rig
+moves with the rig.
+
+`travelled` is accumulated runtime state and deliberately not reflected: it is
+where the entity currently *is*, not how it was authored, and a saved one would
+reload mid-arc. Same rule as `LightAnimation::time`.
 
 ### The camera is an entity
 

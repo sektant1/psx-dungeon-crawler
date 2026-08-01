@@ -63,7 +63,7 @@ demo = ["content"]
 # is the one place the question is answered; the resolver starts reading it in
 # phase P9.
 [formats]
-mesh = [".mesh", ".glb", ".gltf", ".obj"]
+mesh = [".glb", ".gltf", ".fbx", ".obj", ".dae", ".stl", ".ply", ".3ds"]
 texture = [".png"]
 
 # D14: materials hidden from Renderer::materialNames() -- a manifest flag, not

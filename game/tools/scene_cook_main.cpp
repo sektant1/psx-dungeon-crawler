@@ -85,7 +85,7 @@ int main(int argc, char** argv)
     // paths onto. That is the game pack itself; the old heuristic only
     // happened to agree because kit.toml sits at the tree's root.
     if (assets.empty() && mounted)
-        assets = eng::assets::packDir("game").string();
+        assets = eng::assets::packDir("content").string();
 
     if (kit.empty() || (source.empty() && templateName.empty()) ||
         (out.empty() && rewrite.empty() && !validateOnly))

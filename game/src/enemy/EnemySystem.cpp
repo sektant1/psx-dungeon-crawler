@@ -210,7 +210,9 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
     if (auto it = mMeshCache.find(meshKey); it != mMeshCache.end()) {
         mesh = it->second;
     } else if (!def->visual.mesh.empty()) {
-        mesh = ctx.renderer.loadObj(assetPath(def->visual.mesh));
+        eng::ModelImportOptions legacyImport;
+        legacyImport.pivot = eng::PivotMode::Source;
+        mesh = ctx.renderer.loadMesh(assetPath(def->visual.mesh), legacyImport);
         mMeshCache[meshKey] = mesh;
     } else {
         // Built from the same two derived numbers as the collision capsule

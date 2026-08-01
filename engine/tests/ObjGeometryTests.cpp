@@ -110,6 +110,26 @@ int main()
                 near(verts[2], {0.0f, 2.0f, 1.0606602f}),
             "45-degree sparse pivot used source AABB corners");
 
+    // Optional stress fixture for local source assets. CI remains hermetic;
+    // developers can send a converted hero mesh through the exact CPU parser.
+    if (const char* externalPath = std::getenv("PSX_TEST_OBJ")) {
+        verts.clear();
+        idx.clear();
+        require(ObjLoader::loadGeometry(externalPath, verts, idx),
+                "external OBJ stress fixture failed to load");
+        require(!verts.empty() && !idx.empty() && idx.size() % 3 == 0,
+                "external OBJ produced empty or non-triangular geometry");
+        for (uint32_t index : idx)
+            require(index < verts.size(),
+                    "external OBJ produced an out-of-range index");
+        for (glm::vec3 vertex : verts)
+            require(std::isfinite(vertex.x) && std::isfinite(vertex.y) &&
+                        std::isfinite(vertex.z),
+                    "external OBJ produced a non-finite vertex");
+        std::cout << "external fixture: " << verts.size() << " vertices, "
+                  << idx.size() / 3 << " triangles\n";
+    }
+
     std::cout << "ObjGeometryTests: OK\n";
     return 0;
 }

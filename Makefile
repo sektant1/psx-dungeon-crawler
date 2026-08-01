@@ -11,6 +11,7 @@
 #   make run SHOWROOM=assets/config/showroom.toml
 #   make run COLLIDERS=1 WIREFRAME=1       # debug overlays
 #   make screenshot SHOT=/tmp/x.png FRAME=200
+#   make prefab-viewer PRESET=modern-ps1   # compact turntable scene
 #   make sim SCRIPT=game/sim/scripts/smoke.txt
 #
 # Every app target (game, editor, demo) shares the same run/debug options, so
@@ -93,7 +94,7 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
               $(if $(filter psx_demo,$(APP)),psx_demo,game))
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
-        build-editor build-cook editor cook scene material \
+        build-editor build-cook editor cook scene material prefab-viewer \
         run game demo mapgen sim test asan bench screenshot visual-test \
         editor-selftest clip clip-mp4 look new-clip \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
@@ -203,6 +204,41 @@ ifndef SCENE
 endif
 	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/scene.map
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game scene.map
+
+# Compact imported-prefab turntable. PREFAB= is an id from kit.toml.
+# PRESET= uses the common run option;
+# VIEWER_PRESET= supplies this target's default when PRESET is omitted. Explicit
+# CLI options in VIEWER_FLAGS= win over either, matching Engine's normal
+# command-line > environment > default precedence.
+#
+#   make prefab-viewer
+#   make prefab-viewer PREFAB=kit.prop_raccoon_head SUBJECT_SCALE=0.8
+#   make prefab-viewer PRESET=ps1 WIREFRAME=1
+#   make prefab-viewer VIEWER_PRESET=pixel-3d
+#   make prefab-viewer VIEWER_FLAGS="--render-preset psx-horror"
+#   make prefab-viewer SHOT=/tmp/prefab.png FRAME=200
+PREFAB          ?= kit.prop_boss_placeholder
+SUBJECT_NAME    ?=
+SUBJECT_MATERIAL ?=
+SUBJECT_SCALE   ?= 1.0
+SUBJECT_YAW     ?= -20.0
+SUBJECT_Y       ?= 0.0
+GROUND_CLEARANCE ?= 0.02
+VIEWER_PRESET   ?= modern-ps1
+VIEWER_FLAGS    ?=
+PREFAB_SCENE     = $(BUILD_DIR)/prefab-viewer.scn
+PREFAB_MAP       = $(BUILD_DIR)/prefab-viewer.map
+
+prefab-viewer: build-cook build-game
+	$(PYTHON) tools/author_cozy_lair.py --output $(PREFAB_SCENE) \
+	    --prefab "$(PREFAB)" --subject-scale $(SUBJECT_SCALE) --subject-yaw $(SUBJECT_YAW) \
+	    --subject-y $(SUBJECT_Y) --ground-clearance $(GROUND_CLEARANCE) \
+	    $(if $(SUBJECT_NAME),--subject-name "$(SUBJECT_NAME)",) \
+	    $(if $(SUBJECT_MATERIAL),--subject-material "$(SUBJECT_MATERIAL)",)
+	$(MAKE) cook SCENE=$(PREFAB_SCENE) OUT=$(PREFAB_MAP)
+	cd $(BUILD_DIR) && env $(RUN_ENV) \
+	    $(if $(PRESET),,PSX_RENDER_PRESET=$(VIEWER_PRESET)) \
+	    ./game $(abspath $(PREFAB_MAP)) $(VIEWER_FLAGS)
 
 # --- clips ------------------------------------------------------------------
 # A scene that authors a Camera plays itself, which makes it the one thing in
@@ -441,6 +477,7 @@ help:
 	@echo "  make material       editor, opened in the material staging scene"
 	@echo "  make cook SCENE=    cook a .scn to a .map (OUT=, VALIDATE=1)"
 	@echo "  make scene SCENE=   cook a .scn and play it immediately"
+	@echo "  make prefab-viewer  compact turntable (PREFAB=<kit.id>, SUBJECT_SCALE=, VIEWER_PRESET=)"
 	@echo "  make look SCENE=    cook + one screenshot (FRAME=, SHOT=)"
 	@echo "  make clip SCENE=    cook + record a GIF (SECONDS=, FPS=, WIDTH=, OUT=, MP4=1)"
 	@echo "  make new-clip NAME= start a new shot from the example scene"
@@ -465,10 +502,17 @@ help:
 	@echo "  make debug          Debug build in build-debug/"
 	@echo "  make clean          remove build directories"
 	@echo ""
-	@echo "Run options (make run/demo/screenshot/bench):"
+	@echo "Run options (make run/demo/prefab-viewer/screenshot/bench):"
 	@echo "  SEED=<n>            world seed            (PSX_GEN_SEED)"
-	@echo "  PRESET=<name>       render preset: ps1 ps2 gamecube n64"
-	@echo "                      pixel-3d modern-ps1  (PSX_RENDER_PRESET)"
+	@echo "  PRESET=<name>       render preset: ps1 ps2 gamecube n64 pixel-3d"
+	@echo "                      modern-ps1 dungeon psx-horror fire-dimension"
+	@echo "                      poison-swamp          (PSX_RENDER_PRESET)"
+	@echo "  VIEWER_PRESET=<name> prefab-viewer default when PRESET is omitted"
+	@echo "  PREFAB=<kit.id>      subject prefab from assets/config/kit.toml"
+	@echo "  SUBJECT_SCALE=<n>    uniform scale; SUBJECT_YAW=<degrees>; SUBJECT_Y=<offset>"
+	@echo "  GROUND_CLEARANCE=<m> gap above floor after auto-grounding"
+	@echo "  SUBJECT_MATERIAL=<id> material override; SUBJECT_NAME=<label>"
+	@echo "  VIEWER_FLAGS=<args>  prefab-viewer game flags; --render-preset overrides vars"
 	@echo "  MAP=<file.map>      play an authored map (positional arg)"
 	@echo "  SHOWROOM=<file>     override the editable depth-zero showroom TOML"
 	@echo "  COLLIDERS=1         collider wireframe    (PSX_SHOW_COLLIDERS)"

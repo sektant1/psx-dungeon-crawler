@@ -110,6 +110,11 @@ void GameHud::configure(const eng::Config& config) {
     mReducedMotion = config.getBool("hud.reduced_motion", false);
     mShowCrosshair = config.getBool("hud.crosshair", true);
     mShowNumbers = config.getBool("hud.numeric_values", true);
+    const float requestedSafeArea =
+        float(config.getNumber("hud.safe_area_percent", 5.0));
+    mSafeAreaPercent = std::isfinite(requestedSafeArea)
+                           ? std::clamp(requestedSafeArea, 0.0f, 15.0f)
+                           : 5.0f;
     mInteractKey = upper(firstBinding(config, "interact", "E"));
     mSwapKey = upper(firstBinding(config, "swap_weapon", "X"));
 
@@ -327,14 +332,15 @@ bool GameHud::beginFrame(const HudSnapshot& snapshot, float dt, bool visible) {
 void GameHud::drawInto(const HudSnapshot& snapshot,
                        const eng::ui::TooltipContent& tooltip, float dt,
                        glm::vec2 originPixels, glm::ivec2 virtualSize,
-                       int scale, ImDrawList* target) {
+                       int scale, ImDrawList* target,
+                       eng::ui::Insets safeArea) {
     if (!beginFrame(snapshot, dt, true))
         return;
     // The same layout, on a surface somebody else sized. This is what makes the
     // editor's 2D viewport the real HUD rather than a drawing of one: the
     // canvas moves, the layout code does not know it moved.
     mCanvas.beginTarget(originPixels, virtualSize, scale, target);
-    paint(snapshot, tooltip, dt);
+    paint(snapshot, tooltip, dt, safeArea);
 }
 
 void GameHud::draw(const HudSnapshot& snapshot,
@@ -353,17 +359,26 @@ void GameHud::draw(const HudSnapshot& snapshot,
     // into blocks. Bigger windows still step up by whole factors.
     const glm::ivec2 preferred{int(std::lround(640.0f / mUserScale)),
                                int(std::lround(480.0f / mUserScale))};
-    mCanvas.begin({display.x, display.y}, preferred);
-    paint(snapshot, tooltip, dt);
+    const ImVec2 framebufferScale = ImGui::GetIO().DisplayFramebufferScale;
+    mCanvas.begin({display.x, display.y}, preferred,
+                  {framebufferScale.x, framebufferScale.y});
+    const glm::ivec2 canvasSize = mCanvas.size();
+    const eng::ui::Insets safeArea{
+        int(std::lround(float(canvasSize.x) * mSafeAreaPercent / 100.0f)),
+        int(std::lround(float(canvasSize.y) * mSafeAreaPercent / 100.0f)),
+        int(std::lround(float(canvasSize.x) * mSafeAreaPercent / 100.0f)),
+        int(std::lround(float(canvasSize.y) * mSafeAreaPercent / 100.0f))};
+    paint(snapshot, tooltip, dt, safeArea);
 }
 
 // The layout, against whatever surface the canvas is currently on. Nothing in
 // here knows where that surface is: every coordinate is virtual pixels within
 // mCanvas.size(), which is why the same code fills a window and fills a panel.
 void GameHud::paint(const HudSnapshot& snapshot,
-                    const eng::ui::TooltipContent& tooltip, float dt) {
+                    const eng::ui::TooltipContent& tooltip, float dt,
+                    eng::ui::Insets safeArea) {
     const GameHudViewportStyle viewport =
-        resolveGameHudViewportStyle(mStyle, mCanvas.size());
+        resolveGameHudViewportStyle(mStyle, mCanvas.size(), safeArea);
     const int line = mCanvas.lineHeight();
 
     const int vitalsRows = visibleResourceRows(snapshot);

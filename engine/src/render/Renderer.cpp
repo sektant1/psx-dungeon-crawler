@@ -7,7 +7,7 @@
 #include <eng/particles/ParticlePresets.h>
 #include <eng/SceneView.h>
 
-#include "ObjLoader.h"
+#include "AssimpLoader.h"
 #include "MeshResources.h"
 #include "particles/Particles.h"
 #include "ProceduralMeshes.h"
@@ -20,9 +20,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <functional>
 #include <regex>
 #include <set>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -39,13 +41,43 @@ bool finiteVec3(glm::vec3 v)
            std::isfinite(v.z);
 }
 
-Ogre::Matrix4 toOgre(const glm::mat4& m) // glm column-major -> Ogre row-major
+void uploadImportedModel(const detail::ImportedModelData& model,
+                         const std::string& meshName)
 {
-    Ogre::Matrix4 o;
-    for (int r = 0; r < 4; ++r)
-        for (int c = 0; c < 4; ++c)
-            o[r][c] = m[c][r];
-    return o;
+    struct PartialMeshGuard {
+        std::string name;
+        bool keep = false;
+        ~PartialMeshGuard()
+        {
+            if (keep)
+                return;
+            try {
+                Ogre::MeshManager* manager =
+                    Ogre::MeshManager::getSingletonPtr();
+                if (manager && manager->getByName(name))
+                    manager->remove(name);
+            } catch (...) {
+            }
+        }
+    } guard{meshName};
+
+    auto manual = std::make_unique<Ogre::ManualObject>(meshName + "_source");
+    for (const detail::ImportedModelSubmesh& submesh : model.submeshes) {
+        manual->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
+        for (const detail::ImportedModelVertex& vertex : submesh.vertices) {
+            manual->position(toOgre(vertex.position));
+            manual->normal(toOgre(vertex.normal));
+            manual->tangent(toOgre(glm::vec3(vertex.tangent)));
+            manual->textureCoord(vertex.texcoord.x, vertex.texcoord.y);
+            manual->colour(vertex.colour.r, vertex.colour.g,
+                           vertex.colour.b, vertex.colour.a);
+        }
+        for (uint32_t index : submesh.indices)
+            manual->index(index);
+        manual->end();
+    }
+    manual->convertToMesh(meshName);
+    guard.keep = true;
 }
 
 } // namespace
@@ -179,10 +211,13 @@ struct Renderer::Impl {
     }
     MeshHandle registerMesh(std::string name,
                             detail::MeshGeometry geometry = {},
-                            std::string importIdentity = {})
+                            std::string importIdentity = {},
+                            size_t submeshCount = 1,
+                            ModelImportReport importReport = {})
     {
         return meshes.add(std::move(name), std::move(geometry),
-                          std::move(importIdentity));
+                          std::move(importIdentity), submeshCount,
+                          std::move(importReport));
     }
     std::string nextName(const char* prefix)
     {
@@ -193,66 +228,145 @@ struct Renderer::Impl {
 Renderer::Renderer() : mImpl(new Impl) {}
 Renderer::~Renderer() = default;
 
-MeshHandle Renderer::loadObj(const std::string& path, const glm::mat4* bake)
+bool Renderer::loadMaterialScript(const std::string& path)
+{
+    std::ifstream input(path);
+    if (!input) {
+        log::error("Renderer: cannot open material script '%s'", path.c_str());
+        return false;
+    }
+    // Re-import keeps stable material and texture names so scene references do
+    // not churn. Replace those resources before parsing updated script; Ogre's
+    // ResourceManager otherwise rejects duplicate names.
+    const std::regex materialDecl(R"(^\s*material\s+([^\s:{]+))");
+    const std::regex textureDecl(R"(^\s*texture\s+([^\s]+))");
+    std::string line;
+    while (std::getline(input, line)) {
+        std::smatch match;
+        if (std::regex_search(line, match, materialDecl)) {
+            auto& manager = Ogre::MaterialManager::getSingleton();
+            if (manager.getByName(match[1].str()))
+                manager.remove(match[1].str());
+        } else if (std::regex_search(line, match, textureDecl)) {
+            auto& manager = Ogre::TextureManager::getSingleton();
+            if (manager.getByName(match[1].str()))
+                manager.remove(match[1].str());
+        }
+    }
+    input.clear();
+    input.seekg(0);
+    try {
+        Ogre::DataStreamPtr stream(OGRE_NEW Ogre::FileStreamDataStream(
+            path, &input, false));
+        Ogre::MaterialManager::getSingleton().parseScript(stream, "General");
+        return true;
+    } catch (const std::exception& error) {
+        log::error("Renderer: material script '%s' failed: %s", path.c_str(),
+                   error.what());
+    } catch (...) {
+        log::error("Renderer: material script '%s' failed", path.c_str());
+    }
+    return false;
+}
+
+MeshHandle Renderer::loadMesh(const std::string& path)
+{
+    return loadMesh(path, ModelImportOptions{});
+}
+
+MeshHandle Renderer::loadMesh(const std::string& path, const glm::mat4* bake)
 {
     const std::string name = mImpl->nextName("mesh");
-    detail::MeshGeometry geometry;
-    const auto removePartialMesh = [&] {
-        auto& manager = Ogre::MeshManager::getSingleton();
-        if (manager.getByName(name))
-            manager.remove(name);
-    };
+    detail::ImportedModelData imported;
+    ModelImportReport report;
+    ModelImportOptions options;
+    options.pivot = PivotMode::Source;
     try {
-        ObjLoader::load(path, name,
-                        bake ? toOgre(*bake) : Ogre::Matrix4::IDENTITY,
-                        &geometry.vertices, &geometry.indices);
+        if (!detail::importStaticModel(path, options, imported, report))
+            throw std::runtime_error(report.error);
+        if (bake) {
+            std::string error;
+            if (!detail::transformImportedModel(imported, *bake, error))
+                throw std::runtime_error(error);
+            report.finalBounds = detail::importedModelBounds(imported);
+            report.canonicalPivotStandard = false;
+        }
+        for (const std::string& warning : report.warnings)
+            log::warn("Renderer: model '%s': %s", path.c_str(),
+                      warning.c_str());
+        uploadImportedModel(imported, name);
     } catch (const std::exception& e) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+        log::error("Renderer: loadMesh('%s') failed: %s; using prototype mesh",
                    path.c_str(), e.what());
         return prototypeMesh(path);
     } catch (...) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+        log::error("Renderer: loadMesh('%s') failed with an unknown error; "
                    "using prototype mesh",
                    path.c_str());
         return prototypeMesh(path);
     }
-    return mImpl->registerMesh(name, std::move(geometry));
+    detail::MeshGeometry geometry{std::move(imported.collisionVertices),
+                                  std::move(imported.collisionIndices)};
+    return mImpl->registerMesh(name, std::move(geometry), {},
+                               imported.submeshes.size(),
+                               std::move(report));
 }
 
-MeshHandle Renderer::loadObj(const std::string& path,
-                             const ModelImportOptions& options)
+MeshHandle Renderer::loadMesh(const std::string& path,
+                              const ModelImportOptions& options)
 {
     const ModelImportOptions sanitized =
         sanitizeModelImportOptions(options);
     const std::string identity =
         modelImportCacheKey(path, sanitized);
     const std::string name = mImpl->nextName("model");
-    detail::MeshGeometry geometry;
-    const auto removePartialMesh = [&] {
-        auto& manager = Ogre::MeshManager::getSingleton();
-        if (manager.getByName(name))
-            manager.remove(name);
-    };
+    detail::ImportedModelData imported;
+    ModelImportReport report;
     try {
-        ObjLoader::load(path, name, sanitized, &geometry.vertices,
-                        &geometry.indices);
+        if (!detail::importStaticModel(path, sanitized, imported, report))
+            throw std::runtime_error(report.error);
+        for (const std::string& warning : report.warnings)
+            log::warn("Renderer: model '%s': %s", path.c_str(),
+                      warning.c_str());
+        uploadImportedModel(imported, name);
     } catch (const std::exception& e) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+        log::error("Renderer: loadMesh('%s') failed: %s; using prototype mesh",
                    path.c_str(), e.what());
         return prototypeMesh(path);
     } catch (...) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+        log::error("Renderer: loadMesh('%s') failed with an unknown error; "
                    "using prototype mesh",
                    path.c_str());
         return prototypeMesh(path);
     }
     // Identity metadata is retained, but every load still owns a distinct Ogre
     // resource/handle so destroying one ModelInstance cannot unload another.
-    return mImpl->registerMesh(name, std::move(geometry), identity);
+    detail::MeshGeometry geometry{std::move(imported.collisionVertices),
+                                  std::move(imported.collisionIndices)};
+    return mImpl->registerMesh(name, std::move(geometry), identity,
+                               imported.submeshes.size(),
+                               std::move(report));
+}
+
+MeshHandle Renderer::loadObj(const std::string& path, const glm::mat4* bake)
+{
+    return loadMesh(path, bake);
+}
+
+MeshHandle Renderer::loadObj(const std::string& path,
+                             const ModelImportOptions& options)
+{
+    return loadMesh(path, options);
+}
+
+std::vector<std::string> Renderer::supportedModelExtensions()
+{
+    return detail::supportedAssimpModelExtensions();
+}
+
+bool Renderer::supportsModelFile(const std::string& path)
+{
+    return detail::assimpSupportsModelFile(path);
 }
 
 MeshHandle Renderer::createPrimitiveMesh(const PrimitiveMeshDesc& desc)
@@ -284,8 +398,10 @@ MeshHandle Renderer::prototypeMesh(const std::string& assetPath)
 {
     const prototype::MeshShape shape = mImpl->prototypes.meshFor(assetPath);
     MeshHandle& cached = mImpl->prototypeMeshes[shape.role];
-    if (!cached.valid())
+    if (!cached.valid()) {
         cached = createPrimitiveMesh(shape.desc);
+        mImpl->meshes.markShared(cached);
+    }
     return cached;
 }
 
@@ -307,6 +423,20 @@ bool Renderer::meshBounds(MeshHandle mesh, MeshBounds& out) const
     out.min = {min.x, min.y, min.z};
     out.max = {max.x, max.y, max.z};
     return finiteVec3(out.min) && finiteVec3(out.max);
+}
+
+size_t Renderer::meshSubmeshCount(MeshHandle mesh) const
+{
+    return mImpl->meshes.submeshCount(mesh);
+}
+
+bool Renderer::meshImportReport(MeshHandle mesh, ModelImportReport& out) const
+{
+    const ModelImportReport* report = mImpl->meshes.importReport(mesh);
+    if (!report)
+        return false;
+    out = *report;
+    return true;
 }
 
 bool Renderer::meshCollisionGeometry(
@@ -718,18 +848,62 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
 }
 
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
-                          const ResolvedModelMaterial& material,
-                          bool castShadows, bool renderOnTop)
+                           const ResolvedModelMaterial& material,
+                           bool castShadows, bool renderOnTop)
 {
-    if (material.usedFallback &&
-        mImpl->missingMaterialWarnings.shouldLog(material.requested, true))
-        log::error("Renderer: material '%s' is missing; using '%s'",
-                   material.requested.c_str(), material.material.c_str());
-    // Resolve against what was originally asked for, not the already-substituted
-    // name, so a missing portal still lands on the portal prototype.
-    attachMesh(node, mesh, material.material,
-               mImpl->prototypes.materialFor(material.requested), castShadows,
-               renderOnTop);
+    attachMesh(node, mesh, std::vector<ResolvedModelMaterial>{material},
+               castShadows, renderOnTop);
+}
+
+void Renderer::attachMesh(
+    NodeHandle node, MeshHandle mesh,
+    const std::vector<ResolvedModelMaterial>& materials, bool castShadows,
+    bool renderOnTop)
+{
+    if (materials.empty()) {
+        log::error("Renderer: no materials supplied for mesh attachment");
+        return;
+    }
+    Ogre::Entity* entity =
+        mImpl->core.sceneMgr()->createEntity(mImpl->mesh(mesh, "attachMesh"));
+    std::string sceneMaterial;
+    for (size_t index = 0; index < entity->getNumSubEntities(); ++index) {
+        const ResolvedModelMaterial& material =
+            materials[std::min(index, materials.size() - 1)];
+        if (material.usedFallback &&
+            mImpl->missingMaterialWarnings.shouldLog(material.requested, true))
+            log::error("Renderer: material '%s' is missing; using '%s'",
+                       material.requested.c_str(), material.material.c_str());
+
+        std::string resolved = material.material;
+        auto& manager = Ogre::MaterialManager::getSingleton();
+        if (!manager.getByName(resolved)) {
+            const std::string fallback =
+                mImpl->prototypes.materialFor(material.requested);
+            if (mImpl->missingMaterialWarnings.shouldLog(resolved, true))
+                log::error("Renderer: material '%s' is missing; using '%s'",
+                           resolved.c_str(), fallback.c_str());
+            resolved = fallback;
+            if (!manager.getByName(resolved))
+                resolved = prototype::kSurfaceMaterial;
+        }
+        Ogre::SubEntity* subentity = entity->getSubEntity(index);
+        subentity->setMaterialName(resolved);
+        if (mImpl->env.wireframe) {
+            mImpl->savedMaterials[subentity] = resolved;
+            subentity->setMaterialName("Engine/Psx/DebugWireframe");
+        }
+        if (index == 0)
+            sceneMaterial = resolved;
+        else if (sceneMaterial != resolved)
+            sceneMaterial = "<mixed>";
+    }
+    entity->setCastShadows(castShadows);
+    if (renderOnTop)
+        entity->setRenderQueueGroup(Ogre::RENDER_QUEUE_8);
+    mImpl->node(node, "attachMesh")->attachObject(entity);
+    mImpl->mScene.addAttachment(
+        node, {NodeAttachKind::Mesh, 0, std::move(sceneMaterial)});
 }
 
 std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
@@ -1064,6 +1238,7 @@ void Renderer::clearScene()
     for (const std::string& name : mImpl->meshes.takeAll())
         if (mm.getByName(name))
             mm.remove(name);
+    mImpl->prototypeMeshes.clear();
     // Reset handle bookkeeping; re-register the root as kRootNode (id 1), the
     // same way detail::registerRoot does at startup. nameCounter stays
     // MONOTONIC across levels so freshly created Ogre objects can never reuse

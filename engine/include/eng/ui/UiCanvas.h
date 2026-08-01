@@ -111,7 +111,8 @@ public:
     //
     // Draws over the whole window, on imgui's foreground list: that is what a
     // game HUD is. Use beginTarget() to put the same canvas inside a panel.
-    void begin(glm::vec2 displayPixels, glm::ivec2 preferred = {640, 480});
+    void begin(glm::vec2 displayPixels, glm::ivec2 preferred = {640, 480},
+               glm::vec2 framebufferScale = {1.0f, 1.0f});
 
     // The same canvas, drawn into a rectangle of somebody else's window.
     //
@@ -178,16 +179,20 @@ public:
 private:
     glm::vec2 toScreen(glm::ivec2 at) const;
     ImDrawList* list() const;
+    void pushClip(ImDrawList* draw) const;
+    void popClip(ImDrawList* draw) const;
 
     BitmapFont mFont;
     UiStyleSheet mStyle;
     glm::ivec2 mVirtual{320, 240};
     glm::vec2 mDisplay{0.0f};
     glm::vec2 mOrigin{0.0f};
+    glm::vec2 mFramebufferScale{1.0f};
     int mScale = 1;
     // Null is imgui's foreground list, which is what a game HUD wants; a panel
     // passes its own so the canvas clips and z-orders with it.
     ImDrawList* mTarget = nullptr;
+    bool mClipToTarget = false;
 };
 
 } // namespace eng::ui

@@ -459,6 +459,36 @@ import_scale = 1.0
 size = [2.3300, 1.7527, 2.0703]
 
 [[piece]]
+id = "prop_humanoid_mannequin"
+role = "test_subject"
+mesh = "meshes/props/prop_humanoid_mannequin.obj"
+material = "Game/PropVertexColour"
+socket = "prop"
+import_scale = 1.0
+size = [1.6111, 1.8000, 0.2862]
+
+[[piece]]
+id = "prop_boss_placeholder"
+role = "test_subject"
+mesh = "meshes/props/prop_boss_placeholder.obj"
+material = "Game/BossPlaceholder"
+socket = "prop"
+import_scale = 1.0
+size = [1.2805, 1.8250, 1.6534]
+attachments = [
+  { prefab = "kit.prop_boss_placeholder_sword", position = [-0.591954, 0.164968, -0.518362] },
+]
+
+[[piece]]
+id = "prop_boss_placeholder_sword"
+role = "test_weapon"
+mesh = "meshes/props/prop_boss_placeholder_sword.obj"
+material = "Game/BossPlaceholderSword"
+socket = "prop"
+import_scale = 1.0
+size = [1.3017, 0.9077, 0.9878]
+
+[[piece]]
 id = "prop_barrel"
 role = "prop_container"
 mesh = "meshes/props/prop_barrel_p0.obj"
@@ -732,3 +762,239 @@ material = "Game/Demo/LightShaft"
 socket = "prop"
 import_scale = 1.0
 size = [4.717, 3.0, 4.717]
+# BEGIN editor import: modulardungeonfree
+[[piece]]
+id = "import_modulardungeonfree_p0"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p0.obj"
+material = "Game/import_modulardungeonfree/part0"
+socket = "prop"
+import_scale = 1.0
+size = [0.8931, 3.0004, 0.8931]
+
+[[piece]]
+id = "import_modulardungeonfree_p1"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p1.obj"
+material = "Game/import_modulardungeonfree/part1"
+socket = "prop"
+import_scale = 1.0
+size = [3.0222, 3.0000, 0.3450]
+
+[[piece]]
+id = "import_modulardungeonfree_p2"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p2.obj"
+material = "Game/import_modulardungeonfree/part2"
+socket = "prop"
+import_scale = 1.0
+size = [3.0222, 3.0000, 0.3450]
+
+[[piece]]
+id = "import_modulardungeonfree_p3"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p3.obj"
+material = "Game/import_modulardungeonfree/part3"
+socket = "prop"
+import_scale = 1.0
+size = [3.3051, 3.0024, 0.8931]
+
+[[piece]]
+id = "import_modulardungeonfree_p4"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p4.obj"
+material = "Game/import_modulardungeonfree/part4"
+socket = "prop"
+import_scale = 1.0
+size = [3.0222, 3.0000, 0.3450]
+
+[[piece]]
+id = "import_modulardungeonfree_p5"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p5.obj"
+material = "Game/import_modulardungeonfree/part5"
+socket = "prop"
+import_scale = 1.0
+size = [0.8931, 3.0031, 0.8931]
+
+[[piece]]
+id = "import_modulardungeonfree_p6"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p6.obj"
+material = "Game/import_modulardungeonfree/part6"
+socket = "prop"
+import_scale = 1.0
+size = [4.0000, 0.0000, 4.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p7"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p7.obj"
+material = "Game/import_modulardungeonfree/part7"
+socket = "prop"
+import_scale = 1.0
+size = [1.9856, 0.0648, 1.7216]
+
+[[piece]]
+id = "import_modulardungeonfree_p8"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p8.obj"
+material = "Game/import_modulardungeonfree/part8"
+socket = "prop"
+import_scale = 1.0
+size = [4.0000, 0.0000, 4.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p9"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p9.obj"
+material = "Game/import_modulardungeonfree/part9"
+socket = "prop"
+import_scale = 1.0
+size = [4.0000, 0.0000, 4.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p10"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p10.obj"
+material = "Game/import_modulardungeonfree/part10"
+socket = "prop"
+import_scale = 1.0
+size = [2.4164, 0.0648, 2.5562]
+
+[[piece]]
+id = "import_modulardungeonfree_p11"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p11.obj"
+material = "Game/import_modulardungeonfree/part11"
+socket = "prop"
+import_scale = 1.0
+size = [4.0000, 0.0000, 2.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p12"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p12.obj"
+material = "Game/import_modulardungeonfree/part12"
+socket = "prop"
+import_scale = 1.0
+size = [2.0000, 0.0000, 2.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p13"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p13.obj"
+material = "Game/import_modulardungeonfree/part13"
+socket = "prop"
+import_scale = 1.0
+size = [4.0000, 0.1232, 4.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p14"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p14.obj"
+material = "Game/import_modulardungeonfree/part14"
+socket = "prop"
+import_scale = 1.0
+size = [2.0000, 0.1257, 2.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p15"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p15.obj"
+material = "Game/import_modulardungeonfree/part15"
+socket = "prop"
+import_scale = 1.0
+size = [4.0000, 0.0000, 4.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p16"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p16.obj"
+material = "Game/import_modulardungeonfree/part16"
+socket = "prop"
+import_scale = 1.0
+size = [2.8445, 0.2569, 2.8445]
+
+[[piece]]
+id = "import_modulardungeonfree_p17"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p17.obj"
+material = "Game/import_modulardungeonfree/part17"
+socket = "prop"
+import_scale = 1.0
+size = [0.9090, 1.0526, 0.9090]
+
+[[piece]]
+id = "import_modulardungeonfree_p18"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p18.obj"
+material = "Game/import_modulardungeonfree/part18"
+socket = "prop"
+import_scale = 1.0
+size = [2.0014, 3.0002, 4.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p19"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p19.obj"
+material = "Game/import_modulardungeonfree/part19"
+socket = "prop"
+import_scale = 1.0
+size = [2.0000, 3.0002, 4.0000]
+
+[[piece]]
+id = "import_modulardungeonfree_p20"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p20.obj"
+material = "Game/import_modulardungeonfree/part20"
+socket = "prop"
+import_scale = 1.0
+size = [0.2523, 0.5508, 0.1303]
+
+[[piece]]
+id = "import_modulardungeonfree_p21"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p21.obj"
+material = "Game/import_modulardungeonfree/part21"
+socket = "prop"
+import_scale = 1.0
+size = [0.0878, 0.3497, 0.3858]
+
+[[piece]]
+id = "import_modulardungeonfree_p22"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p22.obj"
+material = "Game/import_modulardungeonfree/part22"
+socket = "prop"
+import_scale = 1.0
+size = [1.2583, 1.0039, 0.2022]
+
+[[piece]]
+id = "import_modulardungeonfree_p23"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p23.obj"
+material = "Game/import_modulardungeonfree/part23"
+socket = "prop"
+import_scale = 1.0
+size = [1.2884, 2.1318, 0.0515]
+
+[[piece]]
+id = "import_modulardungeonfree_p24"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p24.obj"
+material = "Game/import_modulardungeonfree/part24"
+socket = "prop"
+import_scale = 1.0
+size = [1.2768, 2.1805, 0.0692]
+
+[[piece]]
+id = "import_modulardungeonfree_p25"
+role = "imported_model"
+mesh = "meshes/props/import_modulardungeonfree_p25.obj"
+material = "Engine/Psx/PrototypeSurface"
+socket = "prop"
+import_scale = 1.0
+size = [2.0000, 2.0000, 2.0000]
+
+# END editor import: modulardungeonfree

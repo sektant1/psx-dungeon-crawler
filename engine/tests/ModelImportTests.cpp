@@ -115,8 +115,14 @@ void test_default_is_metres_y_up_negative_z_forward_bottom_center()
                  {0.0f, 1.0f, 0.0f}),
             "default orientation changed +Y up");
     require(near(options.sourceOrientation * glm::vec3(0, 0, -1),
-                 {0.0f, 0.0f, -1.0f}),
+                  {0.0f, 0.0f, -1.0f}),
             "default orientation changed -Z forward");
+    require(eng::modelImportMeetsSpatialStandard(
+                {{-2.0f, 0.0f, -3.0f}, {2.0f, 5.0f, 3.0f}}),
+            "canonical bounds failed spatial standard");
+    require(!eng::modelImportMeetsSpatialStandard(
+                {{-2.0f, 0.1f, -3.0f}, {2.0f, 5.1f, 3.0f}}),
+            "floating bounds passed grounding standard");
 }
 
 void test_normal_matrix_is_inverse_transpose()
@@ -168,6 +174,13 @@ void test_invalid_options_sanitize_to_safe_defaults()
     invalid.metresPerSourceUnit = -1.0f;
     invalid.sourceOrientation = {nan, 0.0f, 0.0f, 0.0f};
     invalid.customPivot = {nan, 2.0f, 3.0f};
+    invalid.texcoordV = static_cast<eng::TexcoordVMode>(99);
+    invalid.limits.maxSourceBytes = 0;
+    invalid.limits.maxVertices = 0;
+    invalid.limits.maxTriangles = 0;
+    invalid.limits.maxSubmeshes = 0;
+    invalid.limits.maxMaterials = 0;
+    invalid.limits.maxNodes = 0;
 
     const eng::ModelImportOptions sanitized =
         eng::sanitizeModelImportOptions(invalid);
@@ -180,6 +193,15 @@ void test_invalid_options_sanitize_to_safe_defaults()
             "non-normalizable orientation did not fall back to identity");
     require(near(sanitized.customPivot, {0.0f, 0.0f, 0.0f}),
             "invalid custom pivot did not fall back to source origin");
+    require(sanitized.texcoordV == eng::TexcoordVMode::FormatDefault,
+            "invalid UV convention did not use format default");
+    require(sanitized.limits.maxSourceBytes > 0 &&
+                sanitized.limits.maxVertices > 0 &&
+                sanitized.limits.maxTriangles > 0 &&
+                sanitized.limits.maxSubmeshes > 0 &&
+                sanitized.limits.maxMaterials > 0 &&
+                sanitized.limits.maxNodes > 0,
+            "zero import limits did not sanitize to safe defaults");
 
     invalid.metresPerSourceUnit = 0.0f;
     invalid.sourceOrientation = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -217,6 +239,22 @@ void test_cache_key_is_stable_and_covers_every_import_field()
     changed.customPivot = {1.0f, 2.0f, 3.0f};
     require(first != eng::modelImportCacheKey("models/prop.obj", changed),
             "custom pivot change aliased the cache key");
+    changed = base;
+    changed.texcoordV = eng::TexcoordVMode::Flip;
+    require(first != eng::modelImportCacheKey("models/prop.obj", changed),
+            "UV convention change aliased the cache key");
+    changed = base;
+    changed.limits.maxTriangles = 42;
+    require(first != eng::modelImportCacheKey("models/prop.obj", changed),
+            "import budget change aliased the cache key");
+    changed = base;
+    changed.limits.maxSourceBytes = 42;
+    require(first != eng::modelImportCacheKey("models/prop.obj", changed),
+            "source-byte budget change aliased the cache key");
+    changed = base;
+    changed.limits.maxNodes = 42;
+    require(first != eng::modelImportCacheKey("models/prop.obj", changed),
+            "node budget change aliased the cache key");
 
     eng::ModelImportOptions halfTurn;
     halfTurn.sourceOrientation =
@@ -270,6 +308,13 @@ void test_single_submesh_material_selection_falls_back()
     require(warnings.shouldLog("", true) &&
                 !warnings.shouldLog("", true),
             "blank material warning was not deduplicated");
+
+    desc.submeshMaterials.clear();
+    desc.material = "Shared/Material";
+    resolved = eng::resolveModelMaterialForSubmesh(desc, 3, true);
+    require(resolved.material == "Shared/Material" &&
+                !resolved.usedFallback,
+            "legacy material did not cover additional submeshes");
 }
 
 void test_production_material_resolution_queries_requested_name()

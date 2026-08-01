@@ -56,15 +56,17 @@ LiveLevel buildLevel(eng::ecs::World& world, eng::Renderer& r,
             world.setActiveGroup(0);
             return lv;
         }
+        eng::ModelImportOptions legacyImport;
+        legacyImport.pivot = eng::PivotMode::Source;
         lv.authoredMap->resolveMeshes(
-            [&](const std::string& path) -> eng::MeshHandle {
+            [&, legacyImport](const std::string& path) -> eng::MeshHandle {
                 std::error_code error;
                 if (std::filesystem::exists(path, error))
-                    return r.loadObj(path);
+                    return r.loadMesh(path, legacyImport);
                 const std::filesystem::path resolved =
                     eng::assets::resolve(path);
                 if (!resolved.empty())
-                    return r.loadObj(resolved.string());
+                    return r.loadMesh(resolved.string(), legacyImport);
                 eng::log::error("Authored scene mesh not found: %s",
                                 path.c_str());
                 return r.prototypeMesh(path);

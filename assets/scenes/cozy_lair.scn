@@ -1,0 +1,316 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "psx-dungeon-scene",
+  "version": 2,
+  "id": "scene.test.cozy_lair",
+  "palette": "cozy_lair",
+  "entities": [
+    {
+      "id": "floor_0001",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          -2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0002",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          -2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0003",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0004",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "wall_north_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_south_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_north_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_south_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_west_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_east_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_west_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_east_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "subject_pivot",
+      "name": "Imported Boss Reference Pivot",
+      "spin": {
+        "axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "degrees_per_second": 12.0
+      }
+    },
+    {
+      "id": "subject",
+      "name": "Imported Boss Reference",
+      "parent": "subject_pivot",
+      "prefab": "kit.prop_boss_placeholder",
+      "transform": {
+        "position": [
+          -0.1138306310714341,
+          0.02,
+          -0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -20.0,
+          0.0
+        ]
+      },
+      "shader": {
+        "rim_colour": [
+          1.0,
+          0.36,
+          0.18
+        ],
+        "rim_strength": 0.55,
+        "rim_power": 3.2
+      }
+    },
+    {
+      "id": "portal",
+      "name": "Tech Backdrop",
+      "prefab": "kit.portal_membrane",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -3.6
+        ],
+        "scale": [
+          0.86,
+          0.86,
+          0.86
+        ]
+      },
+      "cast_shadows": false,
+      "exit": {
+        "yaw_degrees": 0.0
+      },
+      "portal": {}
+    },
+    {
+      "id": "stage_key",
+      "name": "Warm Key",
+      "transform": {
+        "position": [
+          -1.5,
+          2.5,
+          1.8
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.55,
+          0.72,
+          0.38
+        ],
+        "range": 5.5
+      }
+    },
+    {
+      "id": "stage_fill",
+      "name": "Cold Fill",
+      "transform": {
+        "position": [
+          1.7,
+          1.5,
+          1.5
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.3,
+          0.42,
+          0.78
+        ],
+        "range": 4.5
+      }
+    },
+    {
+      "id": "stage_rim",
+      "name": "Scarlet Rim",
+      "transform": {
+        "position": [
+          0.0,
+          2.2,
+          -1.5
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.2,
+          0.24,
+          0.14
+        ],
+        "range": 4.2
+      }
+    },
+    {
+      "id": "camera_main",
+      "name": "Static Inspection Camera",
+      "transform": {
+        "position": [
+          0.0,
+          1.45,
+          3.25
+        ],
+        "rotation_degrees": [
+          -10.0,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 50.0,
+        "near_clip": 0.1,
+        "far_clip": 24.0,
+        "priority": 10
+      }
+    },
+    {
+      "id": "player_start",
+      "name": "Player Start",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          2.7
+        ]
+      },
+      "player_spawn": true
+    }
+  ]
+}

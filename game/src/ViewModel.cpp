@@ -115,7 +115,7 @@ void ViewModel::initWeapon(eng::Renderer& r, eng::NodeHandle headNode,
                     glm::radians(mPose.gripAxisTwistDegrees),
                     glm::vec3(0, 1, 0)) *
         glm::translate(glm::mat4(1.0f), -mPose.gripPivot);
-    const eng::MeshHandle weapon = r.loadObj(meshPath, &pivotBake);
+    const eng::MeshHandle weapon = r.loadMesh(meshPath, &pivotBake);
     r.attachMesh(mNode, weapon, materialName, false, true);
     mGlow = glow;
     mGlowNodes = {mNode};
@@ -174,7 +174,9 @@ void ViewModel::initStaff(eng::Renderer& r, eng::NodeHandle headNode,
     // Shaft top is at local y = +6. The crystal mesh's base sits at y=0.234 in
     // its own space, so at scale 2.0 the node must drop by 0.234*2 (=0.468) to
     // seat the base on the rod; a touch more embeds it for a seamless join.
-    const eng::MeshHandle tip = r.loadObj(crystalMeshPath);
+    eng::ModelImportOptions sourceImport;
+    sourceImport.pivot = eng::PivotMode::Source;
+    const eng::MeshHandle tip = r.loadMesh(crystalMeshPath, sourceImport);
     eng::NodeHandle tipNode = r.createNode(mNode, glm::vec3(0.0f, 6.0f - 0.55f, 0.0f));
     r.attachMesh(tipNode, tip, "Game/Demo/CrystalSpire", false, true);
     r.setScale(tipNode, glm::vec3(2.0f));

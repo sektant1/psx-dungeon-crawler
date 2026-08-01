@@ -12,6 +12,7 @@
 #include "TestAssets.h"
 
 #include <eng/ecs/Components.h>
+#include <eng/ecs/components/MeshSource.h>
 
 #include <entt/entt.hpp>
 
@@ -80,6 +81,31 @@ int main()
             "an unresolved prefab blocks the cook");
     require(error.find("unresolved") != std::string::npos,
             "and the error names the problem");
+
+    // Compound prefab parts come from kit.toml, not repeated scene entities or
+    // viewer-only arguments. Attached parts inherit parent transform and shader.
+    {
+        SceneDocument compound;
+        Entity boss;
+        boss.id = "boss";
+        boss.prefab = "kit.prop_boss_placeholder";
+        boss.shader = ShaderAuthor{};
+        compound.add(boss);
+
+        entt::registry registry;
+        require(buildRegistry(compound, catalog, registry, error), error.c_str());
+        int meshes = 0;
+        int attached = 0;
+        for (const entt::entity entity : registry.view<eng::ecs::MeshSource>()) {
+            ++meshes;
+            if (registry.all_of<eng::ecs::Parent,
+                                eng::ecs::ShaderParams>(entity))
+                ++attached;
+        }
+        require(meshes == 2, "boss prefab cooks body and sword");
+        require(attached == 1,
+                "sword is attached and inherits subject shader parameters");
+    }
 
     // Architecture collides by virtue of being architecture. A .scn authors a
     // `collider` only as an exception, so without this the cooked map is a

@@ -73,8 +73,20 @@ class Renderer
 {
 public:
     // --- meshes -----------------------------------------------------------
+    // Format-neutral static-model import. Supported source formats are
+    // discovered from the pinned Assimp build; skeletal/deforming data is
+    // rejected by this API rather than silently discarded.
+    // Default world/static standard: metres, +Y up, -Z forward, X/Z centred,
+    // bottom on Y=0. Use explicit options or bake overload for exceptions.
+    MeshHandle loadMesh(const std::string& path);
+    MeshHandle loadMesh(const std::string& path, const glm::mat4* bake);
+    MeshHandle loadMesh(const std::string& path,
+                        const ModelImportOptions& options);
+    static std::vector<std::string> supportedModelExtensions();
+    static bool supportsModelFile(const std::string& path);
     // bake, when given, is multiplied into vertex positions (normals get
     // its inverse-transpose) -- for transforms TRS nodes can't represent.
+    // Compatibility spelling; new code should use loadMesh().
     MeshHandle loadObj(const std::string& path, const glm::mat4* bake = nullptr);
     MeshHandle loadObj(const std::string& path,
                        const ModelImportOptions& options);
@@ -94,7 +106,9 @@ public:
     // See eng::prototype::PrototypeCatalog for why the application owns these.
     void setPrototypeCatalog(prototype::PrototypeCatalog catalog);
     bool meshBounds(MeshHandle mesh, MeshBounds& out) const;
-    // OBJ geometry captured during the render-mesh load, never reparsed or
+    size_t meshSubmeshCount(MeshHandle mesh) const;
+    bool meshImportReport(MeshHandle mesh, ModelImportReport& out) const;
+    // Triangle geometry captured during render-mesh load, never reparsed or
     // read back from Ogre. Returns false for meshes without cached triangles.
     bool meshCollisionGeometry(MeshHandle mesh,
                                std::vector<glm::vec3>& vertices,
@@ -150,6 +164,9 @@ public:
                     bool castShadows = false, bool renderOnTop = false);
     void attachMesh(NodeHandle node, MeshHandle mesh,
                     const ResolvedModelMaterial& material,
+                    bool castShadows = false, bool renderOnTop = false);
+    void attachMesh(NodeHandle node, MeshHandle mesh,
+                    const std::vector<ResolvedModelMaterial>& materials,
                     bool castShadows = false, bool renderOnTop = false);
 
     // Sprite seam: createSpriteMaterial applies a clip to arbitrary mesh UVs;
@@ -249,6 +266,10 @@ public:
     glm::mat4 cameraViewProj() const;
 
     // --- materials --------------------------------------------------------
+    // Parse one generated Ogre material script at runtime. Editor imports use
+    // this after writing a GLB's base-colour texture material so new geometry
+    // does not require an editor restart before it renders correctly.
+    bool loadMaterialScript(const std::string& path);
     void setMaterialParam(const std::string& materialName,
                           const std::string& paramName, float value);
     void setMaterialParam(const std::string& materialName,

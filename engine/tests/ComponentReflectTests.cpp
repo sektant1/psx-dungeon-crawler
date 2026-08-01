@@ -218,6 +218,30 @@ int main()
                 "the whole lens round-trips, including the int field");
     }
 
+    {
+        const ComponentType* orbit = byName(reg, "Orbit");
+        require(orbit != nullptr, "Orbit is registered");
+        Orbit in;
+        in.centre = {1.0f, 2.0f, 3.0f};
+        in.axis = {0.0f, 0.0f, 1.0f};
+        in.radius = 7.5f;
+        in.degreesPerSecond = -24.0f;
+        in.phaseDegrees = 90.0f;
+        in.height = 1.5f;
+        in.facing = Orbit::Centre;
+        in.travelled = 999.0f; // runtime state: must not travel
+        const Orbit out = roundTripValue(*orbit, in);
+        require(out.centre == in.centre && out.axis == in.axis &&
+                    out.radius == in.radius &&
+                    out.degreesPerSecond == in.degreesPerSecond &&
+                    out.phaseDegrees == in.phaseDegrees &&
+                    out.height == in.height && out.facing == in.facing,
+                "every authored field of an orbit round-trips");
+        require(out.travelled == 0.0f,
+                "and the un-reflected arc position does not, so a reloaded "
+                "orbit starts where a new one would");
+    }
+
     // A tag has no fields but still has to save and load, or an entity comes
     // back from a file missing the thing that made it interesting.
     {

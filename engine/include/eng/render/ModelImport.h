@@ -4,7 +4,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -20,17 +22,64 @@ namespace eng {
 // Engine model space is metres, +Y up, and -Z forward.
 enum class PivotMode { Source, BoundsCenter, BottomCenter, Custom };
 
+// OBJ historically enters this renderer with V flipped. Modern interchange
+// formats keep Assimp's decoded UV convention unless an asset overrides it.
+enum class TexcoordVMode : uint8_t { FormatDefault, Preserve, Flip };
+
+struct ModelImportLimits {
+    uint64_t maxSourceBytes = 512ull * 1024ull * 1024ull;
+    uint64_t maxVertices = 5'000'000;
+    uint64_t maxTriangles = 5'000'000;
+    uint32_t maxSubmeshes = 1'024;
+    uint32_t maxMaterials = 1'024;
+    uint32_t maxNodes = 100'000;
+};
+
 struct ModelImportOptions {
     PivotMode pivot = PivotMode::BottomCenter;
     // Multiplier converting one source-file unit to metres. Must be positive.
     float metresPerSourceUnit = 1.0f;
     glm::quat sourceOrientation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 customPivot{0.0f};
+    TexcoordVMode texcoordV = TexcoordVMode::FormatDefault;
+    ModelImportLimits limits;
 };
 
 struct MeshBounds {
     glm::vec3 min{0.0f};
     glm::vec3 max{0.0f};
+};
+
+// Retained with each imported mesh for editor diagnostics and production
+// briefs. Counts describe final render buffers after node instancing/cleanup.
+struct ModelImportReport {
+    std::string sourcePath;
+    std::string format;
+    std::string importer = "Assimp";
+    std::string error;
+    uint64_t sourceBytes = 0;
+    uint64_t vertices = 0;
+    uint64_t triangles = 0;
+    uint32_t sourceMeshes = 0;
+    uint32_t submeshes = 0;
+    uint32_t materials = 0;
+    uint32_t embeddedTextures = 0;
+    uint64_t removedLooseVertices = 0;
+    uint64_t removedDegenerateTriangles = 0;
+    uint64_t removedDuplicateTriangles = 0;
+    PivotMode appliedPivot = PivotMode::Source;
+    float appliedMetresPerSourceUnit = 1.0f;
+    glm::quat appliedSourceOrientation{1.0f, 0.0f, 0.0f, 0.0f};
+    bool sourceUnitsAssumed = true;
+    MeshBounds sourceBounds;
+    MeshBounds finalBounds;
+    // Verifies bottom-center pivot/grounding only. Source-facing direction and
+    // physical units remain explicit import assumptions above.
+    bool canonicalPivotStandard = false;
+    std::vector<std::string> sourceMaterials;
+    std::vector<std::string> warnings;
+
+    bool succeeded() const { return error.empty() && submeshes > 0; }
 };
 
 struct ResolvedModelMaterial {
@@ -83,6 +132,17 @@ inline bool validPivot(PivotMode value)
     return false;
 }
 
+inline bool validTexcoordV(TexcoordVMode value)
+{
+    switch (value) {
+    case TexcoordVMode::FormatDefault:
+    case TexcoordVMode::Preserve:
+    case TexcoordVMode::Flip:
+        return true;
+    }
+    return false;
+}
+
 inline uint32_t floatBits(float value)
 {
     if (value == 0.0f)
@@ -106,6 +166,26 @@ inline std::string canonicalPath(const std::string& path)
 
 } // namespace model_import_detail
 
+// Canonical world/static-mesh standard: pivot on ground at horizontal bounds
+// centre. Relative tolerance scales with asset size to absorb float roundoff.
+inline bool modelImportMeetsSpatialStandard(const MeshBounds& bounds,
+                                            float relativeTolerance = 0.00001f)
+{
+    if (!model_import_detail::finite(bounds.min) ||
+        !model_import_detail::finite(bounds.max) ||
+        glm::any(glm::greaterThan(bounds.min, bounds.max)))
+        return false;
+    const glm::vec3 size = bounds.max - bounds.min;
+    const float tolerance =
+        std::max(0.000001f,
+                 std::max({size.x, size.y, size.z, 1.0f}) *
+                     std::max(relativeTolerance, 0.0f));
+    const glm::vec3 centre = (bounds.min + bounds.max) * 0.5f;
+    return std::abs(centre.x) <= tolerance &&
+           std::abs(bounds.min.y) <= tolerance &&
+           std::abs(centre.z) <= tolerance;
+}
+
 // Pure field sanitizer. Malformed fields independently fall back to canonical
 // defaults, so one bad authoring value cannot poison a transform or cache key.
 inline ModelImportOptions
@@ -114,6 +194,8 @@ sanitizeModelImportOptions(const ModelImportOptions& input)
     ModelImportOptions result = input;
     if (!model_import_detail::validPivot(result.pivot))
         result.pivot = PivotMode::BottomCenter;
+    if (!model_import_detail::validTexcoordV(result.texcoordV))
+        result.texcoordV = TexcoordVMode::FormatDefault;
     if (!std::isfinite(result.metresPerSourceUnit) ||
         result.metresPerSourceUnit <= 0.0f)
         result.metresPerSourceUnit = 1.0f;
@@ -148,6 +230,19 @@ sanitizeModelImportOptions(const ModelImportOptions& input)
 
     if (!model_import_detail::finite(result.customPivot))
         result.customPivot = glm::vec3(0.0f);
+    const ModelImportLimits defaults;
+    if (result.limits.maxSourceBytes == 0)
+        result.limits.maxSourceBytes = defaults.maxSourceBytes;
+    if (result.limits.maxVertices == 0)
+        result.limits.maxVertices = defaults.maxVertices;
+    if (result.limits.maxTriangles == 0)
+        result.limits.maxTriangles = defaults.maxTriangles;
+    if (result.limits.maxSubmeshes == 0)
+        result.limits.maxSubmeshes = defaults.maxSubmeshes;
+    if (result.limits.maxMaterials == 0)
+        result.limits.maxMaterials = defaults.maxMaterials;
+    if (result.limits.maxNodes == 0)
+        result.limits.maxNodes = defaults.maxNodes;
     return result;
 }
 
@@ -275,6 +370,13 @@ inline std::string modelImportCacheKey(const std::string& path,
     appendFloat(options.customPivot.x);
     appendFloat(options.customPivot.y);
     appendFloat(options.customPivot.z);
+    key << static_cast<unsigned>(options.texcoordV) << '|'
+        << options.limits.maxSourceBytes << '|'
+        << options.limits.maxVertices << '|'
+        << options.limits.maxTriangles << '|'
+        << options.limits.maxSubmeshes << '|'
+        << options.limits.maxMaterials << '|'
+        << options.limits.maxNodes << '|';
     return key.str();
 }
 

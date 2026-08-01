@@ -23,6 +23,13 @@ bool socketFromName(std::string_view name, Socket& out);
 // Grid-constrained sockets snap to a cell or an edge; Prop is placed freely.
 inline bool socketUsesGrid(Socket socket) { return socket != Socket::Prop; }
 
+// Part attached to a prefab. Position uses the parent's authoring units; the
+// cooker creates and parents the runtime entity automatically.
+struct KitAttachment {
+    std::string prefab;
+    glm::vec3 position{0.0f};
+};
+
 // One entry of the modular kit. Sizes stay in *kit units* (pre-scale), exactly
 // as authored, so this struct can be diffed against kit.toml without doing
 // arithmetic; ask for metres explicitly.
@@ -46,6 +53,7 @@ struct KitPiece {
     // of an opening). kit.toml calls these out with `pivot`.
     float yOffsetKit = 0.0f;
     std::string pivot; // "" = centred/base-at-zero, else the named exception
+    std::vector<KitAttachment> attachments;
 
     // `kitScale` is the catalogue's scale; a piece that carries its own wins.
     // Every caller passes catalog.scale() and gets the right answer either way,

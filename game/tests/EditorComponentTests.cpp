@@ -68,6 +68,14 @@ int main()
             "mesh cannot be added without a brush prefab");
     require(mesh->addable(defaults), "mesh can be added with one");
 
+    const ComponentType* portal = findComponentType("portal");
+    require(portal && portal->group == ComponentGroup::Appearance,
+            "portal parameters are editable appearance");
+    Entity membrane;
+    portal->add(membrane, defaults);
+    require(membrane.portal.has_value(),
+            "adding Portal creates the shader parameter block");
+
     // --- components compose freely on one entity ---------------------------
     Entity wall;
     wall.id = "wall_0001";

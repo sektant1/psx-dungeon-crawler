@@ -43,9 +43,10 @@ struct GameHudBottomLayout {
 };
 
 GameHudStyleSheet makeGameHudStyleSheet(float opacity, bool highContrast,
-                                        bool reducedMotion);
+                                         bool reducedMotion);
 GameHudViewportStyle resolveGameHudViewportStyle(
-    const GameHudStyleSheet& style, glm::ivec2 canvasSize);
+    const GameHudStyleSheet& style, glm::ivec2 canvasSize,
+    eng::ui::Insets safeArea = {});
 GameHudBottomLayout layoutGameHudBottom(const GameHudViewportStyle& viewport,
                                         glm::ivec2 vitalsSize,
                                         glm::ivec2 armamentSize);

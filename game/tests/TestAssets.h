@@ -46,7 +46,7 @@ inline std::string asset(std::string_view logical)
 // pack-relative paths onto (SceneValidate's mesh-on-disk pass).
 inline std::string gamePackDir()
 {
-    return eng::assets::packDir("game").string();
+    return eng::assets::packDir("content").string();
 }
 
 } // namespace game::test

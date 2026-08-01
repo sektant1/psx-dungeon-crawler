@@ -37,9 +37,18 @@ ModelInstance spawnModel(Renderer& renderer, Physics& physics,
         return {};
     }
 
-    const MeshHandle mesh = renderer.loadObj(desc.meshPath, desc.import);
+    const MeshHandle mesh = renderer.loadMesh(desc.meshPath, desc.import);
     if (!mesh.valid())
         return {};
+    ModelImportReport importReport;
+    if (desc.collider != ColliderMode::None &&
+        !renderer.meshImportReport(mesh, importReport)) {
+        log::error(
+            "Model: collision refused for fallback mesh '%s'; fix import first",
+            desc.meshPath.c_str());
+        renderer.releaseMesh(mesh);
+        return {};
+    }
 
     MeshBounds bounds;
     if ((desc.collider == ColliderMode::AutoBox ||
@@ -67,7 +76,7 @@ ModelInstance spawnModel(Renderer& renderer, Physics& physics,
                                         collisionIndices)) {
         log::error(
             "Model: StaticMesh collider unsupported for '%s': "
-            "cached OBJ collision geometry is unavailable",
+            "cached model collision geometry is unavailable",
             desc.meshPath.c_str());
         renderer.releaseMesh(mesh);
         return {};
@@ -77,13 +86,16 @@ ModelInstance spawnModel(Renderer& renderer, Physics& physics,
         renderer.createNode(desc.parent, desc.position);
     renderer.setOrientation(node, glm::normalize(desc.orientation));
     renderer.setScale(node, desc.scale);
-    const ResolvedModelMaterial material =
-        resolveModelMaterialForSubmesh(
-            desc, 0, [&](const std::string& requested) {
+    const size_t submeshCount = renderer.meshSubmeshCount(mesh);
+    std::vector<ResolvedModelMaterial> materials;
+    materials.reserve(submeshCount);
+    for (size_t index = 0; index < submeshCount; ++index)
+        materials.push_back(resolveModelMaterialForSubmesh(
+            desc, index, [&](const std::string& requested) {
                 return renderer.materialAvailable(requested);
-            });
-    renderer.attachMesh(node, mesh, material, desc.castShadows,
-                        desc.renderOnTop);
+            }));
+    renderer.attachMesh(node, mesh, materials, desc.castShadows,
+                         desc.renderOnTop);
     if (desc.enchantment)
         renderer.setNodeEnchantment(node, *desc.enchantment);
 

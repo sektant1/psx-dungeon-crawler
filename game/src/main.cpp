@@ -1002,7 +1002,7 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
         game::buildHudSnapshot(mCombat.director().registry(), mPlayerEntity,
                                mPlayerSys.selectedWeapon(),
                                mInteraction.focus());
-    mHud.draw(hudFrame, lookTooltip(), f.dt,
+    mHud.draw(hudFrame, lookTooltip(), f.realDt,
               !uiOpen() && !mPortalPreviewMode);
 
 

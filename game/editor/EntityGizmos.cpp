@@ -17,6 +17,12 @@ std::string labelFor(const Entity& entity)
     return entity.name.empty() ? entity.id : entity.name;
 }
 
+bool containsId(const std::vector<game::content::AuthorId>* ids,
+                const game::content::AuthorId& id)
+{
+    return ids && std::find(ids->begin(), ids->end(), id) != ids->end();
+}
+
 } // namespace
 
 std::vector<GizmoMark> collectGizmoMarks(const game::content::SceneDocument& doc)
@@ -36,6 +42,7 @@ std::vector<GizmoMark> collectGizmoMarks(const game::content::SceneDocument& doc
             mark.id = entity.id;
             mark.kind = kind;
             mark.world = world.position;
+            mark.orientation = world.orientation;
             mark.label = labelFor(entity);
             marks.push_back(std::move(mark));
             return marks.back();
@@ -93,13 +100,29 @@ std::vector<GizmoMark> collectGizmoMarks(const game::content::SceneDocument& doc
             // be a second thing to click for one decision.
             const game::content::OrbitAuthor& orbit = *entity.orbit;
             GizmoMark& mark = push(GizmoKind::Orbit);
-            mark.orbitRadius = orbit.radius;
-            mark.orbitAxis = orbit.axis;
-            // The centre is authored in the entity's own frame, so it has to be
-            // composed the same way the entity's position was -- otherwise the
-            // ring of anything inside a rig is drawn at the world origin.
-            mark.orbitCentre = world.position - entity.transform.position +
-                               orbit.centre;
+            const game::content::WorldTransform frame =
+                entity.parent.empty() ? game::content::WorldTransform{}
+                                      : doc.worldTransform(entity.parent);
+            mark.orbitCentre = world.position;
+            const float axisLength = glm::length(orbit.axis);
+            if (axisLength > 0.0f) {
+                const glm::vec3 axis = orbit.axis / axisLength;
+                const glm::vec3 seed = std::abs(axis.x) > 0.9f
+                                           ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                           : glm::vec3(1.0f, 0.0f, 0.0f);
+                const glm::vec3 u = glm::normalize(glm::cross(seed, axis));
+                const glm::vec3 v = glm::cross(axis, u);
+                const auto vectorToWorld = [&frame](glm::vec3 value) {
+                    return frame.orientation * (frame.scale * value);
+                };
+                mark.orbitRadius = orbit.radius;
+                mark.orbitCentre = frame.position +
+                                   vectorToWorld(orbit.centre +
+                                                 axis * orbit.height);
+                mark.orbitAxis = vectorToWorld(axis);
+                mark.orbitU = vectorToWorld(u * orbit.radius);
+                mark.orbitV = vectorToWorld(v * orbit.radius);
+            }
             mark.world = mark.orbitCentre;
             mark.volumeAlways = true;
             mark.label = labelFor(entity) + "  r " +
@@ -125,8 +148,10 @@ std::vector<GizmoMark> collectGizmoMarks(const game::content::SceneDocument& doc
                          " deg";
         }
         if (entity.collider) {
+            const bool hasOtherMark = marks.size() != before;
             GizmoMark& mark = push(GizmoKind::Collider);
             mark.halfExtents = entity.collider->halfExtents;
+            mark.pickable = entity.prefab.empty() && !hasOtherMark;
             // Turned with the entity, the way the cooker places the collider
             // body: an offset collider on a rotated wall sits beside it, not
             // along the world axis.
@@ -217,14 +242,15 @@ bool project(const GizmoOverlay& overlay, glm::vec3 world, ImVec2& out)
 // camera: a box with one corner behind the eye projects to a shape that sweeps
 // across the whole screen, which reads as a rendering bug.
 bool projectBox(const GizmoOverlay& overlay, glm::vec3 centre, glm::vec3 half,
-                ImVec2 out[8])
+                const glm::quat& orientation, ImVec2 out[8])
 {
     static const glm::vec3 kSigns[8] = {
         {-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {-1, -1, 1},
         {-1, 1, -1},  {1, 1, -1},  {1, 1, 1},  {-1, 1, 1},
     };
     for (int i = 0; i < 8; ++i)
-        if (!project(overlay, centre + kSigns[i] * half, out[i]))
+        if (!project(overlay,
+                     centre + orientation * (kSigns[i] * half), out[i]))
             return false;
     return true;
 }
@@ -383,18 +409,10 @@ void drawCameraBody(ImDrawList* list, ImVec2 centre, unsigned colour,
 void drawOrbitRing(ImDrawList* list, const GizmoOverlay& overlay,
                    const GizmoMark& mark, unsigned colour, bool active)
 {
-    const float length = glm::length(mark.orbitAxis);
-    if (length <= 0.0f)
+    if (glm::length(mark.orbitU) <= 0.0f || glm::length(mark.orbitV) <= 0.0f)
         return;
-    const glm::vec3 axis = mark.orbitAxis / length;
-    // The same basis the system builds, for the same reason: the ring drawn
-    // here and the path walked at runtime must be the one circle.
-    const glm::vec3 seed = std::abs(axis.x) > 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f)
-                                                   : glm::vec3(1.0f, 0.0f, 0.0f);
-    const glm::vec3 u = glm::normalize(glm::cross(seed, axis));
-    const glm::vec3 v = glm::cross(axis, u);
-    drawCircle(list, overlay, mark.orbitCentre, mark.orbitRadius, u, v, colour,
-               active ? 2.0f : 1.0f);
+    drawCircle(list, overlay, mark.orbitCentre, 1.0f, mark.orbitU, mark.orbitV,
+               colour, active ? 2.0f : 1.0f);
 
     // The centre, as a cross rather than a dot: a dot on a busy floor reads as
     // a speck of texture.
@@ -433,6 +451,8 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
         return;
 
     for (const GizmoMark& mark : marks) {
+        if (containsId(overlay.hidden, mark.id))
+            continue;
         const bool isSelected =
             overlay.selected &&
             std::find(overlay.selected->begin(), overlay.selected->end(),
@@ -454,7 +474,8 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
 
         if (overlay.volumes && mark.halfExtents != glm::vec3(0.0f)) {
             ImVec2 corners[8];
-            if (projectBox(overlay, mark.world, mark.halfExtents, corners))
+            if (projectBox(overlay, mark.world, mark.halfExtents,
+                           mark.orientation, corners))
                 drawBox(list, corners, active ? colour : fade(colour, 0.5f),
                         active ? 2.0f : 1.0f);
         }
@@ -536,15 +557,15 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
 const GizmoMark* pickGizmoMark(const std::vector<GizmoMark>& marks,
                                const glm::mat4& viewProjection,
                                glm::vec2 viewportOrigin, glm::vec2 viewportSize,
-                               glm::vec2 point, float radius)
+                               glm::vec2 point, float radius,
+                               const std::vector<game::content::AuthorId>* hidden,
+                               const std::vector<game::content::AuthorId>* locked)
 {
     const GizmoMark* best = nullptr;
     float bestDistance = radius;
     for (const GizmoMark& mark : marks) {
-        // A collider is drawn as an outline around something that already has
-        // its own bounds; letting it steal the click would make the mesh under
-        // it unselectable.
-        if (mark.kind == GizmoKind::Collider)
+        if (!mark.pickable || containsId(hidden, mark.id) ||
+            containsId(locked, mark.id))
             continue;
         glm::vec2 screen;
         if (!projectToViewport(mark.world, viewProjection, viewportOrigin,

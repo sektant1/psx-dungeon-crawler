@@ -121,6 +121,7 @@ private:
     // they share its rect with ImGuizmo.
     void handleViewportPicking(const eng::FrameContext& f);
     void drawGizmo(const eng::FrameContext& f);
+    void finishGizmoDrag();
     void drawStageGizmo(const eng::FrameContext& f);
     void runCommand(Command command);
     // Undo/redo as one call. The menu, the keybind and the palette all reach
@@ -135,6 +136,8 @@ private:
     bool saveScene();
     void newScene(game::content::SceneTemplate which);
     void drawSaveAsPopup();
+    void drawImportModelPopup();
+    bool importGlbModel(const std::string& path);
     // Opening an existing scene: the dialog, and the one path everything else
     // (recent list, palette, console) goes through so the unsaved-work prompt
     // can never be skipped.
@@ -223,9 +226,9 @@ private:
     bool hoveredCell(int& col, int& row) const;
     void drawRoomPreview(const eng::FrameContext& f);
     void commitRoom();
-    // Non-kit entities: markers, spawns, encounters, lights, volumes. They have
-    // no prefab and no mesh, so they are created straight in front of the
-    // camera rather than placed with the kit brush.
+    // Gameplay entities are created straight in front of the camera rather
+    // than placed with the kit brush. Portal is the one visible compound: its
+    // mesh, shader parameters and exit meaning belong to one entity.
     enum class Gameplay {
         // A transform and nothing else, to hang other entities from. Composing
         // a room's dressing needs a parent that is not itself a barrel: without
@@ -233,6 +236,7 @@ private:
         // then being unable to delete it without taking the rest.
         Group,
         PlayerSpawn,
+        Portal,
         Exit,
         Marker,
         EnemySpawn,
@@ -280,6 +284,9 @@ private:
     // recomputed.
     float mViewportX = 0.0f, mViewportY = 0.0f;
     float mViewportW = 0.0f, mViewportH = 0.0f;
+    // RTT dimensions are physical pixels; interaction remains in ImGui's
+    // logical coordinates. Tracking both makes DPI-only changes resize the RTT.
+    int mViewportTextureW = 0, mViewportTextureH = 0;
     bool mViewportHovered = false;
     bool mFlying = false;
     bool mLayoutBuilt = false;
@@ -376,7 +383,10 @@ private:
     int mFloorVariant = 0; // 0 default grey, 1 dark
     std::string mSelectedMaterial;
     bool mSaveAsOpen = false;
+    bool mContinueDiscardAfterSave = false;
     char mSaveAsPath[512] = {};
+    bool mImportModelOpen = false;
+    char mImportModelPath[512] = {};
     // Set when a discard is waiting on the prompt; consumed by performDiscard.
     bool mDiscardOpen = false;
     Discard mDiscardWhat = Discard::Quit;

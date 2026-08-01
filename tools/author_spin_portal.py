@@ -60,10 +60,18 @@ add(id="prop_shaft", name="God Ray", prefab="kit.light_shaft",
     pos=[0.0, 0.0, 0.0], scale=[0.75, 1.1, 0.75])
 
 # --- the portal -----------------------------------------------------------
-# An Exit, not a prop: the runtime builds the membrane, its green key light and
-# its wisps from the authored fact, exactly as it does in a played level.
+# Exit remains gameplay destination. Membrane is explicit presentation so
+# scene editor shows and tunes same portal that play mode uses.
 add(id="portal_exit", name="Portal", pos=[0.0, 0.0, -5.4],
     exit={"yaw_degrees": 0.0})
+add(id="portal_membrane_0001", name="Portal Membrane",
+    prefab="kit.portal_membrane", pos=[0.0, 0.0, -5.4],
+    portal={"portalArms": 6.0, "portalFlowSpeed": -0.9,
+            "portalTwist": 0.55, "surfaceDark": [0.22, 0.03, 0.3],
+            "surfaceMid": [0.75, 0.1, 1.0],
+            "surfaceBright": [1.4, 0.45, 1.9],
+            "surfaceCore": [2.0, 1.3, 2.4],
+            "surfaceGlowColour": [1.3, 0.2, 2.1]})
 
 # --- light ----------------------------------------------------------------
 add(id="light_key", name="Crystal Key", pos=[0.0, 3.6, 1.0],
@@ -80,18 +88,23 @@ add(id="light_fill", name="Fill", pos=[0.0, 5.0, 4.0], rot=[-48.0, 20.0, 0.0],
     light={"type": "directional", "colour": [0.42, 0.44, 0.55]})
 
 # --- the shot -------------------------------------------------------------
-# The camera DOES hang off a pivot, and this is the case that needs one: the
-# camera stands 5.4 m out from the centre -- inside a 12 m room, which is
-# the constraint an orbit radius has that a static framing does not, so the pivot's rotation becomes an
-# orbit. A Spin on the camera itself would only make it pirouette on the spot.
-add(id="camera_pivot", name="Camera Orbit", pos=[0.0, 0.0, 0.0],
-    rot=[0.0, -34.0, 0.0],
-    spin={"axis": [0.0, 1.0, 0.0], "degrees_per_second": 7.0})
-add(id="camera_main", name="Main Camera", parent="camera_pivot",
-    pos=[0.0, 3.10, 5.4], rot=[-13.0, 0.0, 0.0],
-    camera={"fov_degrees": 55.0, "far_clip": 60.0, "priority": 10})
-# A parked second framing: closer, wider, off to one side. Inactive, so it is
-# there to switch to rather than in the way.
+# One entity, one component. The camera used to be a `camera_pivot` with a Spin
+# and the camera parented to it, where the child's z offset *was* the orbit
+# radius -- so changing the radius meant editing a transform, and the pivot was
+# an entity in the outliner that stood for nothing.
+#
+# Orbit says what it means: circle this point, at this radius, looking at it.
+add(id="camera_main", name="Main Camera", pos=[0.0, 3.1, 5.4],
+    camera={"fov_degrees": 55.0, "far_clip": 60.0, "priority": 10},
+    # The centre is what it circles AND what it looks at, so it sits at the
+    # subject's height rather than on the floor; `height` then lifts the ring
+    # above it. Centred at the floor with the ring raised, the camera orbits
+    # correctly and spends the whole clip looking at tiles.
+    orbit={"centre": [0.0, 1.9, 0.0], "radius": 5.4, "height": 1.2,
+           "degrees_per_second": 7.0, "phase_degrees": 34.0,
+           "facing": "centre"})
+# A parked second framing: closer, wider, off to one side, and static. Inactive,
+# so it is there to switch to rather than in the way.
 add(id="camera_close", name="Close Framing", pos=[2.6, 1.5, 2.6],
     rot=[-8.0, 42.0, 0.0],
     camera={"fov_degrees": 68.0, "active": False})

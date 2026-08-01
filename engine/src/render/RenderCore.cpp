@@ -211,7 +211,9 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     // Docking, for every app on this context: the tool UI is a set of panels
     // the viewer arranges, not one fixed column. DebugTools builds a default
     // layout the first time it draws.
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable |
+                      ImGuiConfigFlags_NavEnableKeyboard |
+                      ImGuiConfigFlags_NavEnableGamepad;
     // Layout persistence -- and ONLY layout; see eng/render/ImGuiLayout.h for
     // what the ini holds and for the single switch that turns it off. This has
     // to run before the first NewFrame, because that is when imgui would

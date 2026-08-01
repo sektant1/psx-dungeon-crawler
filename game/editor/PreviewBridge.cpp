@@ -75,9 +75,12 @@ struct PreviewBridge::Impl
         // the prototype box, as it always has: an editor must stay usable with
         // a broken reference in the document.
         const std::filesystem::path full = eng::assets::resolve(path);
+        eng::ModelImportOptions legacyImport;
+        legacyImport.pivot = eng::PivotMode::Source;
         const eng::MeshHandle mesh = full.empty()
                                          ? renderer.prototypeMesh(path)
-                                         : renderer.loadObj(full.string());
+                                         : renderer.loadMesh(full.string(),
+                                                             legacyImport);
         return meshCache.emplace(path, mesh).first->second;
     }
 

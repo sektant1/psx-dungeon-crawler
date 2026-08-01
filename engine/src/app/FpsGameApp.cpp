@@ -222,11 +222,14 @@ void FpsGameApp::onFrameBegin(const FrameContext& f)
     // frame's stats are closed, and beginFrame() would otherwise wipe it.
     mImpl->stats->setPhase(mImpl->renderPhase, mImpl->lastRenderMs);
 
-    // First press releases the mouse, second quits; a click grabs it back.
-    // Suppressed while the console is open, where the cursor belongs to the UI
-    // and the click is the panel's.
+    // Escape belongs to the top UI first. Only with no UI open does it release
+    // the mouse, then quit on a second press.
     if (!cfg.quitAction.empty() && in.wasPressed(cfg.quitAction.c_str())) {
-        if (in.mouseGrabbed())
+        if (mImpl->dev.visible())
+            mImpl->dev.toggle();
+        else if (mImpl->console.visible())
+            mImpl->console.setVisible(false);
+        else if (in.mouseGrabbed())
             in.setMouseGrab(false);
         else
             f.engine.requestClose();

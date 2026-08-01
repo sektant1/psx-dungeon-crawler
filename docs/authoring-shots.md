@@ -9,15 +9,14 @@ point: the thing you record is the thing the game renders.
 
 ## The example
 
-`assets/scenes/spin_portal.scn` is the editor's default scene and the one to
+`assets/scenes/cozy_lair.scn` is the editor's default scene and the one to
 copy. It is 36 entities and the whole of it is:
 
 | Entity | Carries | Doing |
 |---|---|---|
 | `prop_crystal` | a mesh, `spin` 42°/s, `shader` | turns in place |
 | `prop_raccoon` | a mesh, `spin` −28°/s, `shader` | turns the other way |
-| `camera_pivot` | `spin` 7°/s, yaw −34° | turns slowly |
-| `camera_main` | `parent: camera_pivot`, `camera` fov 55, priority 10 | orbits, looking in |
+| `camera_main` | `camera` fov 55 priority 10, `orbit` r 5.4 facing centre | circles the subject, looking at it |
 | `portal_exit` | `exit` | becomes a portal at runtime |
 | `light_torch_*` | `light.animation` flicker, four phases | gutter, out of step |
 | `light_key` | `light.animation` pulse | breathes over the crystal |
@@ -25,26 +24,39 @@ copy. It is 36 entities and the whole of it is:
 
 No C++ anywhere in that list.
 
-### Spin in place vs. orbit — when a pivot is needed
+### Spin in place vs. orbit around a point
 
-The two props carry **their own** `spin`. A prop turning on the spot needs no
-parent: the component rotates the entity's own transform, and giving two props
-one shared pivot only couples them — change the rate and both change, hide one
-and the node is still there. Two independent rates is also what makes the pair
-read as two objects rather than one turntable.
+Two components, and the choice is one question — *does it move, or does it just
+turn?*
 
-The camera is the case that *does* need a pivot. It stands 5.4 m out from the
-centre, so the pivot's rotation becomes an **orbit**; a `spin` on the camera
-itself would only make it pirouette on the spot. The rule is:
+| | |
+|---|---|
+| **Spin** | turns where it stands. The two props here, at different rates and signs, which is what makes them read as two objects rather than one turntable. |
+| **Orbit** | travels a ring: `centre`, `radius`, `axis`, `facing`. On the entity itself — no pivot, no parent. |
 
-> spin the thing → put `Spin` on the thing.
-> orbit the thing → put `Spin` on a pivot and parent to it, offset = radius.
+The camera used to be a `camera_pivot` carrying a Spin with the camera parented
+to it, where the child's z offset *was* the orbit radius. Changing the radius
+meant editing a transform that did not say what it was, and the pivot was a row
+in the outliner that stood for nothing. It is one entity now.
 
-The orbit radius is bounded by the room: at 5.4 m in a 12 m room the camera
-stays inside. Push it past the walls and the shot is a close-up of masonry.
+Two things about `Orbit` worth knowing before placing one:
+
+- **`centre` is what it circles *and* what `facing: centre` looks at.** Put it
+  at the subject's height, not on the floor: a ring centred at `y = 0` and
+  raised with `height` orbits correctly and spends the whole clip looking at
+  tiles.
+- **The radius is bounded by the room.** At 5.4 m in a 12 m room the camera
+  stays inside; push it past the walls and the shot is a close-up of masonry.
+  The editor draws the ring in the viewport for exactly this reason.
+
+They compose. `Orbit(facing: free)` leaves the rotation alone, so an entity with
+both is carried round *and* turns on its own axis — a moon.
+
+A pivot is still right when a *group* has to revolve as one: a parent is how
+several things share a motion.
 
 ```sh
-make editor                      # opens spin_portal.scn
+make editor                      # opens cozy_lair.scn
 make scene SCENE=assets/scenes/spin_portal.scn   # cook and play it
 ```
 
@@ -55,9 +67,9 @@ make scene SCENE=assets/scenes/spin_portal.scn   # cook and play it
    the wedge it cuts through the room *is* the fov, which is the only way to
    judge one. `far_clip` is the authored plane; the gizmo clamps what it draws
    to 6 m, because 200 m of frustum is two lines leaving the screen.
-2. **Orbit it.** Add an empty entity at the centre of the motion, give it
-   **Spin**, and parent the camera to it (drag the row in the Outliner). The
-   camera's offset from the pivot is the orbit radius; keep it inside the room.
+2. **Orbit it.** Add **Orbit** to the camera. It starts centred where the camera
+   already is, so drag the centre onto the subject, set a radius, and pick
+   `look at centre`. The viewport draws the ring; keep it inside the walls.
 3. **Move the subject** by putting **Spin** on the prop *itself* — no pivot, it
    turns on the spot. Give each prop a different rate and sign; the spins
    reading against each other is most of what makes a ten-second loop
