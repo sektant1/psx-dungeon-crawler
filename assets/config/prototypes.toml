@@ -1,0 +1,218 @@
+# What stands in for an asset that fails to load.
+#
+# A missing asset never aborts the frame: the renderer substitutes a primitive
+# and the loud checkered prototype material. This file decides *which*
+# primitive and *which* material, so a missing barrel still reads as a barrel
+# and a missing portal still swirls. Without it every miss is a unit box, which
+# is correct and unreadable.
+#
+# `match` is a case-insensitive substring, tested in file order, so the more
+# specific rule goes first ("portalup" before "portal"). Mesh rules match the
+# asset's *filename* only; material rules match the requested material name.
+
+# --- meshes ------------------------------------------------------------------
+# Sized to roughly the silhouette the authored mesh had. Shapes: box,
+# beveled_box, cylinder, sphere, cone.
+#
+# Structural tiles (floor/ceiling/wall/arch/pillar) deliberately have no rule
+# and fall through to the unit box. Sizing them by the cell would be right
+# visually, but primitives are built centred on their origin while the authored
+# tile meshes are modelled base-at-zero, so a cell-sized slab lands half a cell
+# out and seals the player inside the room. A small box in the right place
+# beats a large one in the wrong place; giving prototypes a pivot convention is
+# the real fix.
+
+[[mesh]]
+match = "barrel"
+role = "prop_barrel"
+shape = "cylinder"
+radius = 0.38
+height = 0.95
+
+[[mesh]]
+match = "vase"
+role = "prop_barrel"
+shape = "cylinder"
+radius = 0.38
+height = 0.95
+
+[[mesh]]
+match = "pot"
+role = "prop_barrel"
+shape = "cylinder"
+radius = 0.38
+height = 0.95
+
+[[mesh]]
+match = "torch"
+role = "prop_torch"
+shape = "cylinder"
+radius = 0.06
+height = 0.7
+
+[[mesh]]
+match = "candle"
+role = "prop_torch"
+shape = "cylinder"
+radius = 0.06
+height = 0.7
+
+[[mesh]]
+match = "sword"
+role = "prop_blade"
+shape = "box"
+size = [0.10, 1.10, 0.06]
+
+[[mesh]]
+match = "blade"
+role = "prop_blade"
+shape = "box"
+size = [0.10, 1.10, 0.06]
+
+[[mesh]]
+match = "shield"
+role = "prop_shield"
+shape = "box"
+size = [0.6, 0.8, 0.12]
+
+[[mesh]]
+match = "table"
+role = "prop_table"
+shape = "box"
+size = [1.6, 0.8, 0.9]
+
+[[mesh]]
+match = "chest"
+role = "prop_crate"
+shape = "beveled_box"
+size = [0.9, 0.7, 0.7]
+
+[[mesh]]
+match = "crate"
+role = "prop_crate"
+shape = "beveled_box"
+size = [0.9, 0.7, 0.7]
+
+[[mesh]]
+match = "hay"
+role = "prop_bale"
+shape = "beveled_box"
+size = [1.1, 0.85, 1.1]
+bevel = 0.2
+
+[[mesh]]
+match = "sack"
+role = "prop_bale"
+shape = "beveled_box"
+size = [1.1, 0.85, 1.1]
+bevel = 0.2
+
+[[mesh]]
+match = "jute"
+role = "prop_bale"
+shape = "beveled_box"
+size = [1.1, 0.85, 1.1]
+bevel = 0.2
+
+[[mesh]]
+match = "bread"
+role = "prop_produce"
+shape = "sphere"
+radius = 0.22
+
+[[mesh]]
+match = "pumpkin"
+role = "prop_produce"
+shape = "sphere"
+radius = 0.22
+
+[[mesh]]
+match = "lamp"
+role = "prop_lamp"
+shape = "cylinder"
+radius = 0.16
+height = 0.5
+
+[[mesh]]
+match = "beam"
+role = "prop_beam"
+shape = "box"
+size = [0.25, 0.25, 4.0] # one dungeon cell long
+
+[[mesh]]
+match = "plank"
+role = "prop_beam"
+shape = "box"
+size = [0.25, 0.25, 4.0]
+
+[[mesh]]
+match = "spire"
+role = "crystal_spire"
+shape = "cone"
+radius = 0.5
+height = 2.4
+
+[[mesh]]
+match = "crystal"
+role = "crystal_spire"
+shape = "cone"
+radius = 0.5
+height = 2.4
+
+[[mesh]]
+match = "shaft"
+role = "light_shaft"
+shape = "cylinder"
+radius = 0.7
+height = 3.0
+
+# --- materials ---------------------------------------------------------------
+# The engine ships art-free, shader-driven prototypes for these; unlike the
+# checkered surface they still animate, so a missing portal reads as a portal
+# that lost its art rather than as broken geometry. Order matters: the
+# ascending portal and the specific liquids are matched before their generic
+# counterparts.
+
+[[material]]
+match = "portalup"
+material = "Engine/PrototypeVfx/PortalUp"
+
+[[material]]
+match = "portalascend"
+material = "Engine/PrototypeVfx/PortalUp"
+
+[[material]]
+match = "portal"
+material = "Engine/PrototypeVfx/Portal"
+
+[[material]]
+match = "lava"
+material = "Engine/PrototypeVfx/Lava"
+
+[[material]]
+match = "magma"
+material = "Engine/PrototypeVfx/Lava"
+
+[[material]]
+match = "slime"
+material = "Engine/PrototypeVfx/Slime"
+
+[[material]]
+match = "toxic"
+material = "Engine/PrototypeVfx/Slime"
+
+[[material]]
+match = "ooze"
+material = "Engine/PrototypeVfx/Slime"
+
+[[material]]
+match = "water"
+material = "Engine/PrototypeVfx/Liquid"
+
+[[material]]
+match = "liquid"
+material = "Engine/PrototypeVfx/Liquid"
+
+[[material]]
+match = "particle"
+material = "Engine/Psx/PrototypeParticle"

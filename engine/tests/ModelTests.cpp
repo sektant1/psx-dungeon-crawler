@@ -322,6 +322,37 @@ void test_mesh_resource_release_is_isolated_and_idempotent()
             "releasing one mesh damaged another mesh handle");
 }
 
+void test_mesh_resource_retains_import_report()
+{
+    eng::detail::MeshResources resources;
+    eng::ModelImportReport report;
+    report.submeshes = 2;
+    report.triangles = 12;
+    report.sourceMaterials = {"MAT_Body", "MAT_Trim"};
+    const eng::MeshHandle mesh =
+        resources.add("imported", {}, "identity", 2, report);
+
+    const eng::ModelImportReport* stored = resources.importReport(mesh);
+    require(resources.submeshCount(mesh) == 2 && stored &&
+                stored->triangles == 12 &&
+                stored->sourceMaterials == report.sourceMaterials,
+            "mesh resource lost spatial/material import metadata");
+}
+
+void test_shared_mesh_cannot_be_released_individually()
+{
+    eng::detail::MeshResources resources;
+    const eng::MeshHandle shared = resources.add("prototype");
+    require(resources.markShared(shared), "valid mesh was not marked shared");
+    require(!resources.release(shared) && resources.name(shared) &&
+                *resources.name(shared) == "prototype",
+            "shared prototype was released through instance ownership");
+    const std::vector<std::string> all = resources.takeAll();
+    require(all == std::vector<std::string>{"prototype"} &&
+                !resources.name(shared),
+            "scene teardown did not reclaim shared prototype");
+}
+
 } // namespace
 
 int main()
@@ -340,6 +371,8 @@ int main()
     test_parent_transform_composes_model_world_transform();
     test_parent_transform_is_applied_to_auto_collider();
     test_mesh_resource_release_is_isolated_and_idempotent();
+    test_mesh_resource_retains_import_report();
+    test_shared_mesh_cannot_be_released_individually();
     std::cout << "ModelTests: OK\n";
     return 0;
 }

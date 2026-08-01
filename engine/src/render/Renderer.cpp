@@ -2,11 +2,12 @@
 
 #include <eng/Log.h>
 #include <eng/Primitive.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/render/PrototypeAssets.h>
 #include <eng/particles/ParticlePresets.h>
 #include <eng/SceneView.h>
 
-#include "ObjLoader.h"
+#include "AssimpLoader.h"
 #include "MeshResources.h"
 #include "particles/Particles.h"
 #include "ProceduralMeshes.h"
@@ -19,9 +20,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <functional>
 #include <regex>
 #include <set>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -38,13 +41,43 @@ bool finiteVec3(glm::vec3 v)
            std::isfinite(v.z);
 }
 
-Ogre::Matrix4 toOgre(const glm::mat4& m) // glm column-major -> Ogre row-major
+void uploadImportedModel(const detail::ImportedModelData& model,
+                         const std::string& meshName)
 {
-    Ogre::Matrix4 o;
-    for (int r = 0; r < 4; ++r)
-        for (int c = 0; c < 4; ++c)
-            o[r][c] = m[c][r];
-    return o;
+    struct PartialMeshGuard {
+        std::string name;
+        bool keep = false;
+        ~PartialMeshGuard()
+        {
+            if (keep)
+                return;
+            try {
+                Ogre::MeshManager* manager =
+                    Ogre::MeshManager::getSingletonPtr();
+                if (manager && manager->getByName(name))
+                    manager->remove(name);
+            } catch (...) {
+            }
+        }
+    } guard{meshName};
+
+    auto manual = std::make_unique<Ogre::ManualObject>(meshName + "_source");
+    for (const detail::ImportedModelSubmesh& submesh : model.submeshes) {
+        manual->begin("BaseWhite", Ogre::RenderOperation::OT_TRIANGLE_LIST);
+        for (const detail::ImportedModelVertex& vertex : submesh.vertices) {
+            manual->position(toOgre(vertex.position));
+            manual->normal(toOgre(vertex.normal));
+            manual->tangent(toOgre(glm::vec3(vertex.tangent)));
+            manual->textureCoord(vertex.texcoord.x, vertex.texcoord.y);
+            manual->colour(vertex.colour.r, vertex.colour.g,
+                           vertex.colour.b, vertex.colour.a);
+        }
+        for (uint32_t index : submesh.indices)
+            manual->index(index);
+        manual->end();
+    }
+    manual->convertToMesh(meshName);
+    guard.keep = true;
 }
 
 } // namespace
@@ -66,10 +99,22 @@ struct Renderer::Impl {
     int nameCounter = 0;
     EnvState env;
     // Original sub-entity materials, saved while the wireframe debug view
-    // holds every entity on PSX/DebugWireframe.
+    // holds every entity on Engine/Psx/DebugWireframe.
     std::unordered_map<Ogre::SubEntity*, std::string> savedMaterials;
     ModelMaterialFallbackWarnings missingMaterialWarnings;
     EnchantmentBookkeeping<Ogre::SubEntity*, Ogre::SceneNode*> enchantments;
+    // Per-subentity material clones made for ShaderParams, and the shared
+    // material each one was cloned from. Kept so the clone is made once and
+    // reused for every later push, and so clearing puts the shared one back
+    // instead of leaving the entity on an orphaned copy.
+    struct ShaderClone {
+        std::string baseMaterial;
+        std::string cloneMaterial;
+    };
+    std::unordered_map<Ogre::SubEntity*, ShaderClone> shaderClones;
+    // "<material>/<uniform>" already reported as unsupported, so the warning is
+    // one line per material rather than one per frame.
+    std::set<std::string> shaderParamWarned;
 
     void restoreEnchantment(Ogre::SubEntity* sub)
     {
@@ -166,10 +211,13 @@ struct Renderer::Impl {
     }
     MeshHandle registerMesh(std::string name,
                             detail::MeshGeometry geometry = {},
-                            std::string importIdentity = {})
+                            std::string importIdentity = {},
+                            size_t submeshCount = 1,
+                            ModelImportReport importReport = {})
     {
         return meshes.add(std::move(name), std::move(geometry),
-                          std::move(importIdentity));
+                          std::move(importIdentity), submeshCount,
+                          std::move(importReport));
     }
     std::string nextName(const char* prefix)
     {
@@ -180,66 +228,145 @@ struct Renderer::Impl {
 Renderer::Renderer() : mImpl(new Impl) {}
 Renderer::~Renderer() = default;
 
-MeshHandle Renderer::loadObj(const std::string& path, const glm::mat4* bake)
+bool Renderer::loadMaterialScript(const std::string& path)
+{
+    std::ifstream input(path);
+    if (!input) {
+        log::error("Renderer: cannot open material script '%s'", path.c_str());
+        return false;
+    }
+    // Re-import keeps stable material and texture names so scene references do
+    // not churn. Replace those resources before parsing updated script; Ogre's
+    // ResourceManager otherwise rejects duplicate names.
+    const std::regex materialDecl(R"(^\s*material\s+([^\s:{]+))");
+    const std::regex textureDecl(R"(^\s*texture\s+([^\s]+))");
+    std::string line;
+    while (std::getline(input, line)) {
+        std::smatch match;
+        if (std::regex_search(line, match, materialDecl)) {
+            auto& manager = Ogre::MaterialManager::getSingleton();
+            if (manager.getByName(match[1].str()))
+                manager.remove(match[1].str());
+        } else if (std::regex_search(line, match, textureDecl)) {
+            auto& manager = Ogre::TextureManager::getSingleton();
+            if (manager.getByName(match[1].str()))
+                manager.remove(match[1].str());
+        }
+    }
+    input.clear();
+    input.seekg(0);
+    try {
+        Ogre::DataStreamPtr stream(OGRE_NEW Ogre::FileStreamDataStream(
+            path, &input, false));
+        Ogre::MaterialManager::getSingleton().parseScript(stream, "General");
+        return true;
+    } catch (const std::exception& error) {
+        log::error("Renderer: material script '%s' failed: %s", path.c_str(),
+                   error.what());
+    } catch (...) {
+        log::error("Renderer: material script '%s' failed", path.c_str());
+    }
+    return false;
+}
+
+MeshHandle Renderer::loadMesh(const std::string& path)
+{
+    return loadMesh(path, ModelImportOptions{});
+}
+
+MeshHandle Renderer::loadMesh(const std::string& path, const glm::mat4* bake)
 {
     const std::string name = mImpl->nextName("mesh");
-    detail::MeshGeometry geometry;
-    const auto removePartialMesh = [&] {
-        auto& manager = Ogre::MeshManager::getSingleton();
-        if (manager.getByName(name))
-            manager.remove(name);
-    };
+    detail::ImportedModelData imported;
+    ModelImportReport report;
+    ModelImportOptions options;
+    options.pivot = PivotMode::Source;
     try {
-        ObjLoader::load(path, name,
-                        bake ? toOgre(*bake) : Ogre::Matrix4::IDENTITY,
-                        &geometry.vertices, &geometry.indices);
+        if (!detail::importStaticModel(path, options, imported, report))
+            throw std::runtime_error(report.error);
+        if (bake) {
+            std::string error;
+            if (!detail::transformImportedModel(imported, *bake, error))
+                throw std::runtime_error(error);
+            report.finalBounds = detail::importedModelBounds(imported);
+            report.canonicalPivotStandard = false;
+        }
+        for (const std::string& warning : report.warnings)
+            log::warn("Renderer: model '%s': %s", path.c_str(),
+                      warning.c_str());
+        uploadImportedModel(imported, name);
     } catch (const std::exception& e) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+        log::error("Renderer: loadMesh('%s') failed: %s; using prototype mesh",
                    path.c_str(), e.what());
         return prototypeMesh(path);
     } catch (...) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+        log::error("Renderer: loadMesh('%s') failed with an unknown error; "
                    "using prototype mesh",
                    path.c_str());
         return prototypeMesh(path);
     }
-    return mImpl->registerMesh(name, std::move(geometry));
+    detail::MeshGeometry geometry{std::move(imported.collisionVertices),
+                                  std::move(imported.collisionIndices)};
+    return mImpl->registerMesh(name, std::move(geometry), {},
+                               imported.submeshes.size(),
+                               std::move(report));
 }
 
-MeshHandle Renderer::loadObj(const std::string& path,
-                             const ModelImportOptions& options)
+MeshHandle Renderer::loadMesh(const std::string& path,
+                              const ModelImportOptions& options)
 {
     const ModelImportOptions sanitized =
         sanitizeModelImportOptions(options);
     const std::string identity =
         modelImportCacheKey(path, sanitized);
     const std::string name = mImpl->nextName("model");
-    detail::MeshGeometry geometry;
-    const auto removePartialMesh = [&] {
-        auto& manager = Ogre::MeshManager::getSingleton();
-        if (manager.getByName(name))
-            manager.remove(name);
-    };
+    detail::ImportedModelData imported;
+    ModelImportReport report;
     try {
-        ObjLoader::load(path, name, sanitized, &geometry.vertices,
-                        &geometry.indices);
+        if (!detail::importStaticModel(path, sanitized, imported, report))
+            throw std::runtime_error(report.error);
+        for (const std::string& warning : report.warnings)
+            log::warn("Renderer: model '%s': %s", path.c_str(),
+                      warning.c_str());
+        uploadImportedModel(imported, name);
     } catch (const std::exception& e) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed: %s; using prototype mesh",
+        log::error("Renderer: loadMesh('%s') failed: %s; using prototype mesh",
                    path.c_str(), e.what());
         return prototypeMesh(path);
     } catch (...) {
-        removePartialMesh();
-        log::error("Renderer: loadObj('%s') failed with an unknown error; "
+        log::error("Renderer: loadMesh('%s') failed with an unknown error; "
                    "using prototype mesh",
                    path.c_str());
         return prototypeMesh(path);
     }
     // Identity metadata is retained, but every load still owns a distinct Ogre
     // resource/handle so destroying one ModelInstance cannot unload another.
-    return mImpl->registerMesh(name, std::move(geometry), identity);
+    detail::MeshGeometry geometry{std::move(imported.collisionVertices),
+                                  std::move(imported.collisionIndices)};
+    return mImpl->registerMesh(name, std::move(geometry), identity,
+                               imported.submeshes.size(),
+                               std::move(report));
+}
+
+MeshHandle Renderer::loadObj(const std::string& path, const glm::mat4* bake)
+{
+    return loadMesh(path, bake);
+}
+
+MeshHandle Renderer::loadObj(const std::string& path,
+                             const ModelImportOptions& options)
+{
+    return loadMesh(path, options);
+}
+
+std::vector<std::string> Renderer::supportedModelExtensions()
+{
+    return detail::supportedAssimpModelExtensions();
+}
+
+bool Renderer::supportsModelFile(const std::string& path)
+{
+    return detail::assimpSupportsModelFile(path);
 }
 
 MeshHandle Renderer::createPrimitiveMesh(const PrimitiveMeshDesc& desc)
@@ -271,8 +398,10 @@ MeshHandle Renderer::prototypeMesh(const std::string& assetPath)
 {
     const prototype::MeshShape shape = mImpl->prototypes.meshFor(assetPath);
     MeshHandle& cached = mImpl->prototypeMeshes[shape.role];
-    if (!cached.valid())
+    if (!cached.valid()) {
         cached = createPrimitiveMesh(shape.desc);
+        mImpl->meshes.markShared(cached);
+    }
     return cached;
 }
 
@@ -294,6 +423,20 @@ bool Renderer::meshBounds(MeshHandle mesh, MeshBounds& out) const
     out.min = {min.x, min.y, min.z};
     out.max = {max.x, max.y, max.z};
     return finiteVec3(out.min) && finiteVec3(out.max);
+}
+
+size_t Renderer::meshSubmeshCount(MeshHandle mesh) const
+{
+    return mImpl->meshes.submeshCount(mesh);
+}
+
+bool Renderer::meshImportReport(MeshHandle mesh, ModelImportReport& out) const
+{
+    const ModelImportReport* report = mImpl->meshes.importReport(mesh);
+    if (!report)
+        return false;
+    out = *report;
+    return true;
 }
 
 bool Renderer::meshCollisionGeometry(
@@ -532,11 +675,14 @@ std::vector<std::string> Renderer::materialNames() const
         const Ogre::ResourcePtr resource = it.getNext();
         const std::string& n = resource->getName();
         if (n.empty()) continue;
-        // Filter engine/Ogre internals + generated helper materials.
+        // Ogre's own built-ins. Not ours to name, so still matched by prefix.
         if (n.rfind("Ogre/", 0) == 0) continue;
-        if (n.rfind("__", 0) == 0) continue;                 // preview/internal
         if (n.rfind("BaseWhite", 0) == 0) continue;
-        if (n.rfind("Sprite/", 0) == 0) continue;            // per-clip generated
+        // Ours. Declared in assets.toml's [materials] internal, not encoded in
+        // the name: a "__" prefix and a "Sprite/" prefix used to do this job,
+        // which made two namespaces unrenameable and made visibility depend on
+        // spelling. See eng::assets::internalMaterials.
+        if (assets::materialInternal(n)) continue;
         if (n.find("DebugWireframe") != std::string::npos) continue;
         if (mImpl->enchantments.containsGeneratedMaterial(n)) continue;
         // Every pass must have a vertex program. This render system has no
@@ -635,6 +781,16 @@ void Renderer::destroyNode(NodeHandle node)
         n->detachObject(o);
         // Pool-owned particle systems recycle themselves; only detach them.
         if (o->getMovableType() == "ParticleSystem") continue;
+        // The camera is owned by the render core, not by whatever node it
+        // happens to be riding: there is exactly one, and destroying a node it
+        // is attached to must not take it with it. Detaching is the whole job.
+        //
+        // Without this, any teardown of the node the camera sat on freed the
+        // camera itself, and the next attachCamera() dereferenced it -- which
+        // is a segfault inside Ogre with no hint of where it came from. The
+        // editor hit it on every preview rebuild once scenes could author a
+        // camera; the game hit it on level transitions.
+        if (o->getMovableType() == "Camera") continue;
         if (o->getMovableType() == "Light")
             for (auto& lp : mImpl->lights) if (lp == o) lp = nullptr;
         sm->destroyMovableObject(o); // handles Light/Entity/etc.
@@ -684,7 +840,7 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     if (mImpl->env.wireframe) { // debug view active: join it immediately
         for (Ogre::SubEntity* se : e->getSubEntities()) {
             mImpl->savedMaterials[se] = resolved;
-            se->setMaterialName("PSX/DebugWireframe");
+            se->setMaterialName("Engine/Psx/DebugWireframe");
         }
     }
     mImpl->node(node, "attachMesh")->attachObject(e);
@@ -692,26 +848,70 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
 }
 
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
-                          const ResolvedModelMaterial& material,
-                          bool castShadows, bool renderOnTop)
+                           const ResolvedModelMaterial& material,
+                           bool castShadows, bool renderOnTop)
 {
-    if (material.usedFallback &&
-        mImpl->missingMaterialWarnings.shouldLog(material.requested, true))
-        log::error("Renderer: material '%s' is missing; using '%s'",
-                   material.requested.c_str(), material.material.c_str());
-    // Resolve against what was originally asked for, not the already-substituted
-    // name, so a missing portal still lands on the portal prototype.
-    attachMesh(node, mesh, material.material,
-               mImpl->prototypes.materialFor(material.requested), castShadows,
-               renderOnTop);
+    attachMesh(node, mesh, std::vector<ResolvedModelMaterial>{material},
+               castShadows, renderOnTop);
+}
+
+void Renderer::attachMesh(
+    NodeHandle node, MeshHandle mesh,
+    const std::vector<ResolvedModelMaterial>& materials, bool castShadows,
+    bool renderOnTop)
+{
+    if (materials.empty()) {
+        log::error("Renderer: no materials supplied for mesh attachment");
+        return;
+    }
+    Ogre::Entity* entity =
+        mImpl->core.sceneMgr()->createEntity(mImpl->mesh(mesh, "attachMesh"));
+    std::string sceneMaterial;
+    for (size_t index = 0; index < entity->getNumSubEntities(); ++index) {
+        const ResolvedModelMaterial& material =
+            materials[std::min(index, materials.size() - 1)];
+        if (material.usedFallback &&
+            mImpl->missingMaterialWarnings.shouldLog(material.requested, true))
+            log::error("Renderer: material '%s' is missing; using '%s'",
+                       material.requested.c_str(), material.material.c_str());
+
+        std::string resolved = material.material;
+        auto& manager = Ogre::MaterialManager::getSingleton();
+        if (!manager.getByName(resolved)) {
+            const std::string fallback =
+                mImpl->prototypes.materialFor(material.requested);
+            if (mImpl->missingMaterialWarnings.shouldLog(resolved, true))
+                log::error("Renderer: material '%s' is missing; using '%s'",
+                           resolved.c_str(), fallback.c_str());
+            resolved = fallback;
+            if (!manager.getByName(resolved))
+                resolved = prototype::kSurfaceMaterial;
+        }
+        Ogre::SubEntity* subentity = entity->getSubEntity(index);
+        subentity->setMaterialName(resolved);
+        if (mImpl->env.wireframe) {
+            mImpl->savedMaterials[subentity] = resolved;
+            subentity->setMaterialName("Engine/Psx/DebugWireframe");
+        }
+        if (index == 0)
+            sceneMaterial = resolved;
+        else if (sceneMaterial != resolved)
+            sceneMaterial = "<mixed>";
+    }
+    entity->setCastShadows(castShadows);
+    if (renderOnTop)
+        entity->setRenderQueueGroup(Ogre::RENDER_QUEUE_8);
+    mImpl->node(node, "attachMesh")->attachObject(entity);
+    mImpl->mScene.addAttachment(
+        node, {NodeAttachKind::Mesh, 0, std::move(sceneMaterial)});
 }
 
 std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
 {
-    const char* base = clip.blend == SpriteBlend::Alpha ? "Sprite/Alpha"
-                     : clip.blend == SpriteBlend::Additive ? "Sprite/Additive"
-                     : clip.blend == SpriteBlend::Overlay ? "Sprite/Overlay"
-                                                          : "Sprite/Opaque";
+    const char* base = clip.blend == SpriteBlend::Alpha ? "Engine/Sprite/Alpha"
+                     : clip.blend == SpriteBlend::Additive ? "Engine/Sprite/Additive"
+                     : clip.blend == SpriteBlend::Overlay ? "Engine/Sprite/Overlay"
+                                                          : "Engine/Sprite/Opaque";
     Ogre::MaterialPtr source = Ogre::MaterialManager::getSingleton().getByName(base);
     if (!source)
         log::fatal("Renderer: sprite template '%s' is missing", base);
@@ -997,7 +1197,7 @@ void Renderer::buildStaticBatch(StaticBatchHandle batch)
                    batch.id);
     // Respect an already-active wireframe view (PSX_WIREFRAME startup).
     mImpl->fillStaticBatch(mImpl->staticBatches[batch.id - 1],
-                           mImpl->env.wireframe ? "PSX/DebugWireframe" : "");
+                           mImpl->env.wireframe ? "Engine/Psx/DebugWireframe" : "");
 }
 
 void Renderer::setStaticBatchVisible(StaticBatchHandle batch, bool visible)
@@ -1013,7 +1213,10 @@ void Renderer::clearScene()
     Ogre::SceneManager* sm = mImpl->core.sceneMgr();
     // Detach + destroy every SceneNode under the root, then free the objects
     // those nodes referenced (Ogre owns them; removing nodes alone leaks).
-    mImpl->particles.clear(); // drop pooled-system bookkeeping before Ogre frees them
+    // Two phases around the wipe: drop everything pointing into the scene
+    // graph first, then rebuild the particle batches once it is gone (see the
+    // rebuildBatches call at the end of this function).
+    mImpl->particles.clear();
     mImpl->clearEnchantmentSubtree(sm->getRootSceneNode());
     sm->getRootSceneNode()->removeAndDestroyAllChildren();
     sm->destroyAllStaticGeometry();
@@ -1035,10 +1238,19 @@ void Renderer::clearScene()
     for (const std::string& name : mImpl->meshes.takeAll())
         if (mm.getByName(name))
             mm.remove(name);
+    mImpl->prototypeMeshes.clear();
     // Reset handle bookkeeping; re-register the root as kRootNode (id 1), the
     // same way detail::registerRoot does at startup. nameCounter stays
     // MONOTONIC across levels so freshly created Ogre objects can never reuse
     // a name that a lingering resource still holds.
+    // What the level transition actually threw away. A wipe is the single most
+    // destructive thing this API does and it used to happen in silence, so a
+    // scene that came back empty gave no way to tell "nothing was built" from
+    // "everything was built and then cleared".
+    log::info("Scene: cleared %zu nodes, %zu lights, %zu sprites, %zu batches",
+              mImpl->nodes.size() ? mImpl->nodes.size() - 1 : 0,
+              mImpl->lights.size(), mImpl->sprites.size(),
+              mImpl->staticBatches.size());
     mImpl->nodes.clear();
     mImpl->lights.clear();
     mImpl->sprites.clear();
@@ -1052,6 +1264,11 @@ void Renderer::clearScene()
     mImpl->debugLines = nullptr; // destroyAllManualObjects freed it
     mImpl->mScene.clear();
     mImpl->nodes.push_back(sm->getRootSceneNode());
+    // The scene graph is gone, so the particle batches can be rebuilt against
+    // the fresh root. Effect descriptions survived the clear on purpose: the
+    // level is about to spawn torches and portals during construction, and
+    // those spawns have to resolve.
+    mImpl->particles.rebuildBatches();
 }
 
 ParticleEffectId Renderer::registerParticleEffect(const ParticleEffectDesc& desc)
@@ -1154,6 +1371,15 @@ void Renderer::despawnParticles(ParticlesHandle h) {
     mImpl->mScene.removeAttachment(NodeAttachKind::Particles, h.id);
 }
 void Renderer::setParticleQuality(float q) { mImpl->particles.setQuality(q); }
+const std::vector<ParticleTextureDesc>& Renderer::particleTextures() const {
+    return mImpl->particles.materials().all();
+}
+bool Renderer::reloadParticleTextures() {
+    return mImpl->particles.materials().reload();
+}
+uint32_t Renderer::liveParticleCount() const {
+    return mImpl->particles.liveParticles();
+}
 void Renderer::shutdownParticles() { mImpl->particles.shutdown(); }
 void Renderer::setParticleCollider(IParticleCollider* collider) {
     mImpl->particles.setCollider(collider);
@@ -1281,6 +1507,193 @@ void applyMaterialParam(const std::string& materialName,
 }
 } // namespace
 
+namespace {
+
+// Sets a named constant on whichever program of a pass declares it.
+//
+// Silent when neither does, on purpose: the PSX family compiles into variants
+// (`PSX_FS_Lit`, `PSX_FS_LitMetal`, the unlit pair) and they do not all declare
+// every uniform. A material on the unlit variant has no `rimColour`, and that
+// is a material choice rather than a caller error -- erroring here would make
+// every entity with a rim value log once per frame for a scene that renders
+// exactly as intended.
+template <typename T>
+bool setPassConstant(Ogre::Pass* pass, const char* name, const T& value)
+{
+    bool found = false;
+    if (pass->hasFragmentProgram()) {
+        auto params = pass->getFragmentProgramParameters();
+        if (params && params->_findNamedConstantDefinition(name)) {
+            params->setNamedConstant(name, value);
+            found = true;
+        }
+    }
+    if (pass->hasVertexProgram()) {
+        auto params = pass->getVertexProgramParameters();
+        if (params && params->_findNamedConstantDefinition(name)) {
+            params->setNamedConstant(name, value);
+            found = true;
+        }
+    }
+    return found;
+}
+
+} // namespace
+
+// Runs `visit` over every pass of every subentity of `node`, on a material this
+// node owns privately -- cloning it on first use and reusing the clone after.
+//
+// The clone is the whole point of a per-entity uniform: Ogre materials are
+// shared by name, so setting a constant on `Game/Kit/Dungeon` sets it on all
+// hundred and sixty walls. Shared by both push paths below, so an entity that
+// carries a portal block and a tint gets one private material, not two.
+// A free function rather than a member: its signature names Ogre::Pass, and
+// Renderer.h is a public header that must not drag Ogre into every consumer --
+// eng_systems is the only layer allowed to see it.
+template <typename Clones, typename Saved, typename NextName, typename Visit>
+void forEachPrivatePass(Ogre::SceneNode* n, Clones& shaderClones, Saved& savedMaterials,
+                        NextName nextName, Visit visit)
+{
+    if (!n)
+        return;
+    auto& materials = Ogre::MaterialManager::getSingleton();
+
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i) {
+        auto* entity = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i));
+        if (!entity)
+            continue;
+        for (Ogre::SubEntity* sub : entity->getSubEntities()) {
+            auto existing = shaderClones.find(sub);
+            Ogre::MaterialPtr clone;
+            if (existing != shaderClones.end())
+                clone = materials.getByName(existing->second.cloneMaterial);
+            if (!clone) {
+                // First push for this subentity: take a private copy of
+                // whatever it currently wears. savedMaterials is consulted
+                // first because a node in the editor's material staging holds
+                // its real material there rather than on the subentity.
+                auto saved = savedMaterials.find(sub);
+                const std::string baseName =
+                    saved != savedMaterials.end()
+                        ? saved->second
+                        : sub->getMaterialName();
+                Ogre::MaterialPtr base = materials.getByName(baseName);
+                if (!base)
+                    continue;
+                clone = base->clone(nextName("shaderparams"));
+                shaderClones[sub] = {baseName, clone->getName()};
+                if (saved != savedMaterials.end())
+                    saved->second = clone->getName();
+                else
+                    sub->setMaterialName(clone->getName());
+            }
+            const std::string& base = shaderClones[sub].baseMaterial;
+            for (unsigned short t = 0; t < clone->getNumTechniques(); ++t) {
+                Ogre::Technique* tech = clone->getTechnique(t);
+                for (unsigned short pi = 0; pi < tech->getNumPasses(); ++pi)
+                    visit(tech->getPass(pi), base);
+            }
+            clone->load();
+        }
+    }
+}
+
+void Renderer::setNodeShaderParams(NodeHandle node, const ShaderUniforms& p)
+{
+    forEachPrivatePass(mImpl->node(node, "shader params"), mImpl->shaderClones,
+                       mImpl->savedMaterials,
+                       [this](const char* p) { return mImpl->nextName(p); },
+                       [&](Ogre::Pass* pass, const std::string&) {
+        setPassConstant(pass, "modulateColor",
+                        Ogre::Vector4(p.tint.r, p.tint.g, p.tint.b, p.opacity));
+        setPassConstant(pass, "rimColour",
+                        Ogre::Vector4(p.rimColour.r, p.rimColour.g,
+                                      p.rimColour.b, p.rimStrength));
+        setPassConstant(pass, "rimPower", p.rimPower);
+        setPassConstant(pass, "alphaScissor", p.alphaScissor);
+    });
+    mImpl->core.markPostChainDirty();
+}
+
+void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
+{
+    if (!block.valid())
+        return;
+    forEachPrivatePass(mImpl->node(node, "shader block"), mImpl->shaderClones,
+                       mImpl->savedMaterials,
+                       [this](const char* p) { return mImpl->nextName(p); },
+                       [&](Ogre::Pass* pass, const std::string&) {
+        for (int i = 0; i < block.fields.count; ++i) {
+            const Field& f = block.fields.data[i];
+            const void* at = fieldPtr(block.instance, f);
+            switch (f.type) {
+            case FieldType::Bool:
+                // A bool uniform is a float in GLSL 330 for this family: there
+                // is no bool in the default_params syntax, and a shader that
+                // wants a switch reads `x >= 0.5`.
+                setPassConstant(pass, f.name,
+                                *static_cast<const bool*>(at) ? 1.0f : 0.0f);
+                break;
+            case FieldType::Int:
+                setPassConstant(pass, f.name,
+                                float(*static_cast<const int*>(at)));
+                break;
+            case FieldType::Float:
+                setPassConstant(pass, f.name, *static_cast<const float*>(at));
+                break;
+            case FieldType::Vec3:
+            case FieldType::Colour: {
+                const glm::vec3& v = *static_cast<const glm::vec3*>(at);
+                // As a float4 with w = 1: every colour uniform in this engine's
+                // shaders is a vec4, and a vec3 constant set on one is a
+                // size mismatch Ogre reports at runtime.
+                setPassConstant(pass, f.name, Ogre::Vector4(v.r, v.g, v.b, 1.0f));
+                break;
+            }
+            case FieldType::Quat: {
+                const glm::quat& q = *static_cast<const glm::quat*>(at);
+                setPassConstant(pass, f.name, Ogre::Vector4(q.x, q.y, q.z, q.w));
+                break;
+            }
+            case FieldType::String:
+                // Not a uniform. A string field on a shader block names a
+                // texture or a profile, which is the material's business, not
+                // a constant's -- skipped rather than reported, so a block may
+                // carry one for the inspector's sake.
+                break;
+            }
+        }
+    });
+    mImpl->core.markPostChainDirty();
+}
+
+void Renderer::clearNodeShaderParams(NodeHandle node)
+{
+    Ogre::SceneNode* n = mImpl->node(node, "clearNodeShaderParams");
+    if (!n)
+        return;
+    auto& materials = Ogre::MaterialManager::getSingleton();
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i) {
+        auto* entity = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i));
+        if (!entity)
+            continue;
+        for (Ogre::SubEntity* sub : entity->getSubEntities()) {
+            const auto found = mImpl->shaderClones.find(sub);
+            if (found == mImpl->shaderClones.end())
+                continue;
+            auto saved = mImpl->savedMaterials.find(sub);
+            if (saved != mImpl->savedMaterials.end())
+                saved->second = found->second.baseMaterial;
+            else
+                sub->setMaterialName(found->second.baseMaterial);
+            if (materials.getByName(found->second.cloneMaterial))
+                materials.remove(found->second.cloneMaterial);
+            mImpl->shaderClones.erase(found);
+        }
+    }
+    mImpl->core.markPostChainDirty();
+}
+
 void Renderer::setMaterialParam(const std::string& m, const std::string& p, float v)
 {
     applyMaterialParam(m, p, [&](auto& params) { params->setNamedConstant(p, v); });
@@ -1333,7 +1746,7 @@ void Renderer::setDitherEnabled(bool enabled)
     // The post chain hosts pixelation/bloom too, so it stays on;
     // "dither off" only bypasses the quantization inside the dither pass.
     mImpl->core.enablePostChain();
-    setMaterialParam("PSX/DitherPost", "ditherEnabled", enabled ? 1.0f : 0.0f);
+    setMaterialParam("Engine/Psx/DitherPost", "ditherEnabled", enabled ? 1.0f : 0.0f);
 }
 
 void Renderer::setPixelSize(int pixelSize)
@@ -1424,7 +1837,7 @@ void Renderer::setFogDesatBoost(float boost)
 void Renderer::setBloomEnabled(bool enabled)
 {
     mImpl->env.bloom = enabled;
-    setMaterialParam("PSX/BloomComposite", "bloomEnabled",
+    setMaterialParam("Engine/Psx/BloomComposite", "bloomEnabled",
                      enabled ? 1.0f : 0.0f);
 }
 
@@ -1432,8 +1845,8 @@ void Renderer::setBloomParams(float threshold, float intensity)
 {
     mImpl->env.bloomThreshold = threshold;
     mImpl->env.bloomIntensity = intensity;
-    setMaterialParam("PSX/BloomBright", "bloomThreshold", threshold);
-    setMaterialParam("PSX/BloomComposite", "bloomIntensity", intensity);
+    setMaterialParam("Engine/Psx/BloomBright", "bloomThreshold", threshold);
+    setMaterialParam("Engine/Psx/BloomComposite", "bloomIntensity", intensity);
 }
 
 void Renderer::setWireframeDebug(bool enabled)
@@ -1446,7 +1859,7 @@ void Renderer::setWireframeDebug(bool enabled)
         for (Ogre::SubEntity* se : e->getSubEntities()) {
             if (enabled) {
                 mImpl->savedMaterials[se] = se->getMaterial()->getName();
-                se->setMaterialName("PSX/DebugWireframe");
+                se->setMaterialName("Engine/Psx/DebugWireframe");
             } else {
                 auto found = mImpl->savedMaterials.find(se);
                 if (found != mImpl->savedMaterials.end())
@@ -1461,7 +1874,7 @@ void Renderer::setWireframeDebug(bool enabled)
     // originals (off).
     for (auto& b : mImpl->staticBatches)
         if (b.built)
-            mImpl->fillStaticBatch(b, enabled ? "PSX/DebugWireframe" : "");
+            mImpl->fillStaticBatch(b, enabled ? "Engine/Psx/DebugWireframe" : "");
     // The post chain smears the 1px lines, so bypass every post effect while
     // the view is up and restore it afterwards.
     // Bypass every post effect while the view is up, restore after.
@@ -1472,13 +1885,13 @@ void Renderer::setWireframeDebug(bool enabled)
         setPixelSize(1);
         // Wireframe is a diagnostic view: no ink/highlight pass should alter
         // its lines or introduce false contour noise.
-        setMaterialParam("PSX/PixelStylize", "stylizeEnabled", 0.0f);
+        setMaterialParam("Engine/Psx/PixelStylize", "stylizeEnabled", 0.0f);
         setDitherEnabled(false);
         setBloomEnabled(false);
         setGradeEnabled(false);
     } else {
         setPixelSize(mImpl->preWireframe.pixelSize);
-        setMaterialParam("PSX/PixelStylize", "stylizeEnabled", 1.0f);
+        setMaterialParam("Engine/Psx/PixelStylize", "stylizeEnabled", 1.0f);
         setDitherEnabled(mImpl->preWireframe.dither);
         setBloomEnabled(mImpl->preWireframe.bloom);
         setGradeEnabled(mImpl->preWireframe.grade);
@@ -1488,7 +1901,7 @@ void Renderer::setWireframeDebug(bool enabled)
 void Renderer::setGradeEnabled(bool enabled)
 {
     mImpl->env.grade = enabled;
-    setMaterialParam("PSX/DitherPost", "gradeEnabled", enabled ? 1.0f : 0.0f);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeEnabled", enabled ? 1.0f : 0.0f);
 }
 
 void Renderer::setGradeParams(float desaturate, float contrast,
@@ -1498,10 +1911,10 @@ void Renderer::setGradeParams(float desaturate, float contrast,
     mImpl->env.gradeContrast = contrast;
     mImpl->env.gradeShadowTint = shadowTint;
     mImpl->env.gradeMidTint = midTint;
-    setMaterialParam("PSX/DitherPost", "gradeDesaturate", desaturate);
-    setMaterialParam("PSX/DitherPost", "gradeContrast", contrast);
-    setMaterialParam("PSX/DitherPost", "gradeShadowTint", shadowTint);
-    setMaterialParam("PSX/DitherPost", "gradeMidTint", midTint);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeDesaturate", desaturate);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeContrast", contrast);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeShadowTint", shadowTint);
+    setMaterialParam("Engine/Psx/DitherPost", "gradeMidTint", midTint);
 }
 
 const EnvState& Renderer::envState() const { return mImpl->env; }
@@ -1581,9 +1994,9 @@ void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
     mImpl->debugLines->clear();
     if (lines.empty())
         return;
-    // PSX/DebugLines: unlit, per-vertex colour, depth_write off (declared in
-    // engine/assets/materials/psx.material + debug_lines.frag).
-    const std::string matName = "PSX/DebugLines";
+    // Engine/Psx/DebugLines: unlit, per-vertex colour, depth_write off (declared in
+    // assets/engine/materials/psx.material + debug_lines.frag).
+    const std::string matName = "Engine/Psx/DebugLines";
     mImpl->debugLines->begin(matName, Ogre::RenderOperation::OT_LINE_LIST);
     for (const auto& l : lines) {
         mImpl->debugLines->position(l.a.x, l.a.y, l.a.z);
@@ -1615,10 +2028,10 @@ glm::mat4 Renderer::cameraViewProj() const
 
 void Renderer::setDebugLinesXray(bool xray)
 {
-    // Flip depth-check on the PSX/DebugLines pass. Off (xray) => lines pass the
+    // Flip depth-check on the Engine/Psx/DebugLines pass. Off (xray) => lines pass the
     // depth test everywhere and draw over all geometry; on => normal occlusion.
     Ogre::MaterialPtr m = Ogre::MaterialManager::getSingleton().getByName(
-        "PSX/DebugLines");
+        "Engine/Psx/DebugLines");
     if (!m || m->getTechniques().empty())
         return;
     Ogre::Technique* t = m->getTechnique(0);

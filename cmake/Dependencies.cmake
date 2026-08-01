@@ -113,6 +113,56 @@ CPMAddPackage(
     OPTIONS "JSON_BuildTests OFF" "JSON_Install OFF"
 )
 
+# --- Assimp (static model source import) -------------------------------------
+# Import-only and deliberately limited to formats used by production DCC and
+# interchange workflows. Runtime code copies Assimp's scene into engine-owned
+# buffers immediately; no Assimp type crosses the engine API boundary.
+#
+# BUILD_SHARED_LIBS is a generic Assimp option. Keep it scoped here so Assimp is
+# self-contained without changing SDL/OGRE linkage selected below.
+if(DEFINED BUILD_SHARED_LIBS)
+    set(_eng_saved_build_shared_libs "${BUILD_SHARED_LIBS}")
+    set(_eng_had_build_shared_libs ON)
+else()
+    set(_eng_had_build_shared_libs OFF)
+endif()
+set(BUILD_SHARED_LIBS OFF)
+CPMAddPackage(
+    NAME assimp
+    GITHUB_REPOSITORY assimp/assimp
+    GIT_TAG v6.0.5
+    OPTIONS
+        "ASSIMP_BUILD_TESTS OFF"
+        "ASSIMP_BUILD_ASSIMP_TOOLS OFF"
+        "ASSIMP_BUILD_SAMPLES OFF"
+        "ASSIMP_BUILD_DOCS OFF"
+        "ASSIMP_INSTALL OFF"
+        "ASSIMP_NO_EXPORT ON"
+        "ASSIMP_WARNINGS_AS_ERRORS OFF"
+        "ASSIMP_IGNORE_GIT_HASH ON"
+        "ASSIMP_BUILD_ZLIB ON"
+        "ASSIMP_BUILD_MINIZIP ON"
+        "ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF"
+        "ASSIMP_BUILD_GLTF_IMPORTER ON"
+        "ASSIMP_BUILD_FBX_IMPORTER ON"
+        "ASSIMP_BUILD_OBJ_IMPORTER ON"
+        "ASSIMP_BUILD_COLLADA_IMPORTER ON"
+        "ASSIMP_BUILD_STL_IMPORTER ON"
+        "ASSIMP_BUILD_PLY_IMPORTER ON"
+        "ASSIMP_BUILD_3DS_IMPORTER ON"
+        "ASSIMP_BUILD_M3D_IMPORTER OFF"
+        "ASSIMP_BUILD_USD_IMPORTER OFF"
+        "ASSIMP_BUILD_VRML_IMPORTER OFF"
+        "ASSIMP_BUILD_DRACO OFF"
+)
+if(_eng_had_build_shared_libs)
+    set(BUILD_SHARED_LIBS "${_eng_saved_build_shared_libs}")
+else()
+    unset(BUILD_SHARED_LIBS)
+endif()
+unset(_eng_saved_build_shared_libs)
+unset(_eng_had_build_shared_libs)
+
 # --- ImGuizmo (ImGui gizmo widget) -------------------------------------------
 # DOWNLOAD_ONLY: fetch the source + expose its include dir. eng compiles
 # ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp (see CMakeLists) so it draws through

@@ -42,7 +42,7 @@ void add(Renderer& renderer, ParticleEffectDesc effect)
 void registerDefaults(Renderer& renderer)
 {
     {
-        auto d = base(Fire, "Engine/Particles/Fire", 0.32f, 0.38f, 96);
+        auto d = base(Fire, "Engine/Psx/Fire", 0.32f, 0.38f, 96);
         d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.35f, 0};
         d.rotationJitterDeg = 70;
@@ -55,7 +55,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(Smoke, "Engine/Particles/Smoke", 0.32f, 0.32f, 64);
+        auto d = base(Smoke, "Engine/Psx/Smoke", 0.32f, 0.32f, 64);
         d.visualRole = ParticleVisualRole::Ambient;
         d.acceleration = {0.03f, 0.12f, 0.01f};
         d.rotationJitterDeg = 30;
@@ -67,7 +67,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(Poison, "Engine/Particles/Poison", 0.20f, 0.26f, 72);
+        auto d = base(Poison, "Engine/Psx/Poison", 0.20f, 0.26f, 72);
         d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.18f, 0};
         d.rotationJitterDeg = 80;
@@ -80,7 +80,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(Rain, "Engine/Particles/Rain", 0.018f, 0.24f, 240);
+        auto d = base(Rain, "Engine/Psx/Rain", 0.018f, 0.24f, 240);
         d.visualRole = ParticleVisualRole::Ambient;
         auto e = emitter({0,-1,0}, 1.5f, 220, 0.25f, 0.38f, 10, 14);
         e.shape = ParticleEmitterShape::Box;
@@ -92,7 +92,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(LavaAsh, "Engine/Particles/LavaAsh", 0.14f, 0.14f, 64);
+        auto d = base(LavaAsh, "Engine/Psx/LavaAsh", 0.14f, 0.14f, 64);
         d.visualRole = ParticleVisualRole::Ambient;
         d.acceleration = {0, -0.55f, 0};
         d.rotationJitterDeg = 150;
@@ -105,7 +105,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(HitSparks, "Engine/Particles/LavaAsh", 0.075f, 0.075f, 32);
+        auto d = base(HitSparks, "Engine/Psx/LavaAsh", 0.075f, 0.075f, 32);
         d.loop = false; d.burstCount = 18;
         d.acceleration = {0, -5, 0};
         d.rotationJitterDeg = 180; d.scaleJitter = 0.25f;
@@ -115,7 +115,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(FootstepDust, "Engine/Particles/Smoke", 0.13f, 0.10f, 20);
+        auto d = base(FootstepDust, "Engine/Psx/Smoke", 0.13f, 0.10f, 20);
         d.visualRole = ParticleVisualRole::Ambient;
         d.loop = false; d.burstCount = 7;
         d.acceleration = {0, -0.3f, 0};
@@ -127,7 +127,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(PickupBurst, "Engine/Particles/Poison", 0.10f, 0.10f, 32);
+        auto d = base(PickupBurst, "Engine/Psx/Poison", 0.10f, 0.10f, 32);
         d.loop = false; d.burstCount = 16;
         d.acceleration = {0, -1.5f, 0};
         d.rotationJitterDeg = 180; d.scaleJitter = 0.2f;
@@ -137,7 +137,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(ArcaneMotes, "Engine/Particles/ArcaneMote",
+        auto d = base(ArcaneMotes, "Engine/Psx/ArcaneMote",
                       0.13f, 0.13f, 72);
         d.visualRole = ParticleVisualRole::Ambient;
         d.acceleration = {0.08f, 0.10f, -0.06f};
@@ -151,7 +151,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(FrostShards, "Engine/Particles/FrostShard",
+        auto d = base(FrostShards, "Engine/Psx/FrostShard",
                       0.10f, 0.19f, 64);
         d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, -1.4f, 0};
@@ -165,7 +165,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(ToxicBubbles, "Engine/Particles/ToxicBubble",
+        auto d = base(ToxicBubbles, "Engine/Psx/ToxicBubble",
                       0.16f, 0.16f, 72);
         d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.32f, 0};
@@ -179,7 +179,7 @@ void registerDefaults(Renderer& renderer)
         add(renderer, std::move(d));
     }
     {
-        auto d = base(PortalWisps, "Engine/Particles/PortalWisp",
+        auto d = base(PortalWisps, "Engine/Psx/PortalWisp",
                       0.18f, 0.27f, 96);
         d.visualRole = ParticleVisualRole::Gameplay;
         d.acceleration = {0, 0.14f, 0};
@@ -193,6 +193,56 @@ void registerDefaults(Renderer& renderer)
                         {0.5f, {0.10f,0.72f,1.35f,0.76f}},
                         {1, {0.08f,0.12f,0.58f,0}}};
         d.sizeRamp = {{0, 0.35f}, {0.42f, 1.18f}, {1, 0.18f}};
+        add(renderer, std::move(d));
+    }
+
+    // --- sprite flipbooks --------------------------------------------------
+    // `texture`, not `material`: the stem carries the blend mode and the
+    // flipbook window with it, so nothing here restates where the frames are.
+    // The colour ramps stay near white on purpose -- the imported sheets are
+    // the least saturated variant of their pack precisely so a ramp can colour
+    // them, and a saturated ramp over a saturated sprite muddies both.
+    {
+        auto d = base(SpriteBurst, "", 0.42f, 0.42f, 48);
+        d.texture = "shade_starburst_a1";
+        d.visualRole = ParticleVisualRole::Feedback;
+        d.loop = false; d.burstCount = 6;
+        d.rotationJitterDeg = 180;
+        d.scaleJitter = 0.28f;
+        d.acceleration = {0, -1.2f, 0};
+        d.emitters = {emitter({0,1,0}, 180, 1, 0.45f, 0.7f, 0.8f, 2.4f)};
+        d.colourRamp = {{0, {1.4f,1.15f,0.85f,1}},
+                        {0.55f, {1.2f,0.55f,0.25f,0.9f}},
+                        {1, {0.5f,0.12f,0.05f,0}}};
+        d.sizeRamp = {{0, 0.7f}, {0.35f, 1.15f}, {1, 0.5f}};
+        add(renderer, std::move(d));
+    }
+    {
+        auto d = base(SpriteBolt, "", 0.30f, 0.30f, 64);
+        d.texture = "bullet_orb_hot";
+        d.visualRole = ParticleVisualRole::Gameplay;
+        d.rotationJitterDeg = 20;
+        d.scaleJitter = 0.18f;
+        d.acceleration = {0, 0.9f, 0};
+        d.emitters = {emitter({0,1,0}, 20, 18, 0.5f, 1.0f, 0.6f, 1.6f)};
+        d.colourRamp = {{0, {1.3f,0.95f,0.55f,1}},
+                        {0.6f, {1.15f,0.42f,0.12f,0.85f}},
+                        {1, {0.35f,0.06f,0.02f,0}}};
+        d.sizeRamp = {{0, 0.55f}, {0.3f, 1.0f}, {1, 0.35f}};
+        add(renderer, std::move(d));
+    }
+    {
+        // 64x96 cells: the source art is a tall coil, so the card is tall too.
+        // A square card would letterbox it into thin air on both sides.
+        auto d = base(SpriteCoil, "", 0.55f, 0.82f, 32);
+        d.texture = "coil_p1_01a";
+        d.visualRole = ParticleVisualRole::Feedback;
+        d.scaleJitter = 0.15f;
+        d.emitters = {emitter({0,1,0}, 12, 6, 0.9f, 1.6f, 0.15f, 0.5f)};
+        d.colourRamp = {{0, {0.9f,1.35f,0.75f,0}},
+                        {0.2f, {0.8f,1.45f,0.7f,0.95f}},
+                        {1, {0.2f,0.6f,0.3f,0}}};
+        d.sizeRamp = {{0, 0.8f}, {1, 1.25f}};
         add(renderer, std::move(d));
     }
 }

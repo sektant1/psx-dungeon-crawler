@@ -7,8 +7,12 @@
 #include <eng/ui/Tooltip.h>
 #include <eng/ui/UiCanvas.h>
 
+#include <glm/glm.hpp>
+
 #include <string>
 #include <span>
+
+struct ImDrawList;
 
 namespace eng { class Config; }
 
@@ -37,11 +41,28 @@ public:
     // Key cap the tooltip pairs with an interaction verb.
     const std::string& interactKey() const { return mInteractKey; }
 
+    // The game's entry point: the whole window, on imgui's foreground list, at
+    // the integer scale the window allows.
     void draw(const HudSnapshot& snapshot,
               const eng::ui::TooltipContent& tooltip, float dt,
               bool visible = true);
 
+    // The same HUD inside somebody else's rectangle, at a virtual resolution
+    // and scale the caller picks. This is what the editor's 2D viewport draws,
+    // and it goes through the same layout as the game -- a HUD preview that
+    // reimplements the HUD only tells you about the preview.
+    void drawInto(const HudSnapshot& snapshot,
+                   const eng::ui::TooltipContent& tooltip, float dt,
+                   glm::vec2 originPixels, glm::ivec2 virtualSize, int scale,
+                   ImDrawList* target, eng::ui::Insets safeArea = {});
+
 private:
+    // Per-frame animation timers, and whether there is anything to draw.
+    bool beginFrame(const HudSnapshot& snapshot, float dt, bool visible);
+    // The layout, against whatever surface the canvas is currently on.
+    void paint(const HudSnapshot& snapshot,
+               const eng::ui::TooltipContent& tooltip, float dt,
+               eng::ui::Insets safeArea);
     void drawVitals(const HudSnapshot& snapshot, eng::ui::UiRect bounds,
                     bool compact) const;
     void drawArmament(const HudSnapshot& snapshot, eng::ui::UiRect bounds,
@@ -67,6 +88,7 @@ private:
     bool mShowCrosshair = true;
     bool mShowNumbers = true;
     float mUserScale = 1.0f; // multiplies the automatic integer fit
+    float mSafeAreaPercent = 5.0f;
     std::string mInteractKey = "E";
     std::string mSwapKey = "X";
     HudWeapon mLastWeapon;

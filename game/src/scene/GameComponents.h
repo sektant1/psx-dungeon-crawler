@@ -56,4 +56,13 @@ struct SceneMarker {
     std::string type;
 };
 
+// The look a level is lit and graded with: a table in palettes.toml. Cooked
+// onto one entity because a .map is a flat list of entities and has nowhere
+// else to put a fact about the whole level.
+//
+// The runtime reads the first one it finds; the cooker only ever writes one.
+struct SceneEnvironment {
+    std::string palette;
+};
+
 } // namespace game

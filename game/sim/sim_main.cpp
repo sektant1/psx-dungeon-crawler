@@ -16,6 +16,8 @@
 // Usage: game_sim [script.txt]   (no arg runs the built-in smoke script)
 #include "SimWorld.h"
 
+#include <eng/assets/AssetRoot.h>
+
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -160,6 +162,14 @@ struct Runner {
 
 int main(int argc, char** argv)
 {
+    // No window and no eng::Engine here, so nothing else mounts the content
+    // set: the harness does it itself, before the World that reads magic.toml
+    // and weapons.toml exists.
+    if (!eng::assets::init() || !eng::assets::mount("game")) {
+        std::fprintf(stderr, "game_sim: no content root\n");
+        return 2;
+    }
+
     std::string text;
     if (argc >= 2) {
         std::ifstream f(argv[1]);

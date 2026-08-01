@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace eng {
@@ -12,6 +13,12 @@ namespace eng {
 // reference the file *stem* ("ember"), never an Ogre material name, which keeps
 // particles.toml free of renderer vocabulary and means a texture can change its
 // blend mode without every effect that uses it being edited.
+//
+// A texture may also be declared without a file of its own: an entry naming a
+// `sheet` carves one animation strip out of a shared PNG. That is how a bought
+// effect pack with a couple of hundred animations packed into a dozen sheets
+// becomes a couple of hundred named textures without a couple of hundred files
+// and a couple of hundred texture bindings.
 //
 // The generated material is deliberately minimal -- unlit, depth-write off,
 // depth-check on, culling off, point filtering -- because that is what every
@@ -26,36 +33,44 @@ public:
     // any extra plumbing. The path is a build-time define, never a literal.
     static std::string defaultRoot();
 
-    // Scans `root`/textures for *.png, parses `root`/textures.toml, and creates
-    // or updates one material per file. Safe to call before any effect loads.
+    // Scans `root`/textures for *.png and parses every *.toml directly in
+    // `root`. Safe to call before any effect loads. Materials themselves are
+    // NOT created here: a pack can declare hundreds of strips, and paying an
+    // Ogre material for every one of them at boot would be a startup cost for
+    // content the level never spawns. They are built on first use instead.
     void load(const std::string& root = defaultRoot());
 
     // Re-runs the scan against the root last passed to load(), picking up new
-    // files and edited overrides. Existing materials are updated in place so
-    // that anything already holding a MaterialPtr keeps working across a
-    // hot-reload. Returns false if load() was never called.
+    // files and edited overrides. Materials already built are rebuilt in place
+    // so that anything holding a MaterialPtr keeps working across a hot-reload;
+    // the rest stay unbuilt. Returns false if load() was never called.
     bool reload();
 
-    // Null when no such PNG was found. Callers that only need presentation
-    // metadata (flipbook, soft fade) should go through this rather than
-    // re-reading the TOML.
+    // Null when no such texture was declared. Callers that only need
+    // presentation metadata (flipbook, soft fade) should go through this rather
+    // than re-reading the TOML.
     const ParticleTextureDesc* find(const std::string& stem) const;
 
-    // Ogre material name for a stem, or an empty string when the stem is
-    // unknown -- an empty name lets the caller fall back to its own prototype
-    // material instead of this class deciding on a fallback it cannot see.
-    std::string materialFor(const std::string& stem) const;
+    // Ogre material name for a stem, creating the material if this is its first
+    // use. Empty when the stem is unknown -- an empty name lets the caller fall
+    // back to its own prototype material instead of this class deciding on a
+    // fallback it cannot see.
+    std::string materialFor(const std::string& stem);
 
     // Stable ordering (directory scan order is not), for editor listings.
     const std::vector<ParticleTextureDesc>& all() const { return mDescs; }
 
 private:
     void scan();
+    // Creates or refreshes the Ogre material for one texture and records it as
+    // built. Idempotent.
+    void build(const ParticleTextureDesc& desc);
 
     std::string mRoot;
     bool mLoaded = false;
     std::vector<ParticleTextureDesc> mDescs;
     std::unordered_map<std::string, size_t> mByStem;
+    std::unordered_set<std::string> mBuilt;
 };
 
 } // namespace eng

@@ -7,6 +7,7 @@
 #include "SceneTemplates.h"
 #include "SceneValidate.h"
 #include "SceneWriter.h"
+#include "TestAssets.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -24,9 +25,10 @@ static void require(bool condition, const std::string& message)
 
 int main()
 {
+    game::test::mountGameAssets();
     KitCatalog catalog;
     std::string error;
-    require(KitCatalog::load(KIT_TOML, catalog, error), error);
+    require(KitCatalog::load(game::test::asset("config/kit.toml"), catalog, error), error);
     const GridConfig grid = GridConfig::fromCatalog(catalog);
 
     for (const SceneTemplate which :

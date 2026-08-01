@@ -2,12 +2,19 @@
 #include <entt/entt.hpp>
 
 #include <eng/DebugTools.h> // eng::DebugTools, the console these panels join
+#include <eng/debug/ParticlePanel.h> // Particles: engine library, engine panel
+#include <eng/debug/SurfacePanels.h> // Portal/VFX: engine shaders, engine panels
 
 #include <glm/glm.hpp>
 
 #include <string>
 
-namespace eng { class Renderer; }
+namespace eng {
+class Renderer;
+class ParticleLibrary;
+} // namespace eng
+
+class LiveLevel;
 
 namespace game {
 
@@ -21,6 +28,16 @@ struct GameContext;
 // type `game::ColliderDebug` (eng::FpsGameApp owns the instance and the F3
 // toggle).
 using ColliderDebug = eng::ColliderDebug;
+
+// The portal *prop's* dressing, which is level state rather than shader state:
+// the glow the membrane throws into the room and the wisp effect drifting in
+// front of it. The shader's own knobs are eng::PortalTuning -- they drive an
+// engine shader, so they live with it and the demo can reach them too.
+struct PortalDressing {
+    glm::vec3 lightColour{0.22f, 1.05f, 0.10f};
+    float lightRange = 8.5f;
+    std::string wisps = "engine.portal_wisps";
+};
 
 // The two debug tabs that are game policy: Combat (weapon/projectile tuning)
 // and Feel (stamina, poise, action state). Everything that tunes the *engine*
@@ -36,8 +53,8 @@ public:
     struct Deps {
         entt::registry* registry = nullptr; // combat director registry
         entt::entity player = entt::null;   // player entity in `registry`
-        // Weapon presentation toggles live on the player system; the panel needs
-        // the renderer to push a change through to the live viewmodels.
+        // Weapon presentation toggles live on the player system; the panel
+        // needs the renderer to push a change through to the live viewmodels.
         PlayerSystem* playerSystem = nullptr;
         eng::Renderer* renderer = nullptr;
 
@@ -48,19 +65,55 @@ public:
         EnemyLibrary* enemyLibrary = nullptr;
         EnemySpawner* spawner = nullptr;
         GameContext* context = nullptr;
+
+        // Portal dressing: the live props (light, wisps) and the effect table
+        // the wisp selector lists. Both are rebuilt on a level transition,
+        // which is why they arrive per-frame like everything else here.
+        LiveLevel* level = nullptr;
+        eng::ParticleLibrary* particles = nullptr;
         glm::vec3 playerFeet{0.0f};
         glm::vec3 playerForward{0.0f, 0.0f, 1.0f};
+        // Frame delta, for the panels that own something with a lifetime. Only
+        // the particle panel does: it retires the one-shots it spawned, and it
+        // has to keep doing that while its tab is hidden or a tuning session
+        // walks away holding every burst it ever fired.
+        float dt = 0.0f;
     };
 
     void install(eng::DebugTools& console);
-    void update(const Deps& deps) { mCur = deps; }
+    void update(const Deps& deps)
+    {
+        mCur = deps;
+        mSurfaces.setRenderer(deps.renderer);
+        mParticlePanel.setSources(deps.renderer, deps.particles);
+        mParticlePanel.update(deps.dt);
+    }
+
+    // Level transitions destroy the scene the panel's spawns live in. The
+    // handles go stale harmlessly, but the panel's own list would keep growing
+    // across every transition of a session.
+    void releaseParticleSpawns() { mParticlePanel.releaseSpawns(); }
 
 private:
     void drawCombatTab();
     void drawFeelTab();
     void drawEnemiesTab();
+    // The Dressing section of the engine's Portal tab, called with the index of
+    // the selected profile -- 1 is the ascent portal, matching the order the
+    // materials are registered in install().
+    void drawPortalDressing(int profileIdx);
 
     Deps mCur;
+    // The Portal and VFX tabs themselves belong to the engine: they tune engine
+    // shaders, and the demo stages the same materials. This class registers the
+    // game's materials with them and adds the one section that is the game's.
+    eng::SurfacePanels mSurfaces;
+    // Likewise engine tooling: it edits eng::ParticleLibrary and spawns through
+    // the Renderer, neither of which is a game concept.
+    eng::ParticlePanel mParticlePanel;
+    // Descent/ascent prop dressing, in the order install() registers the
+    // materials.
+    PortalDressing mDressing[2];
     // Enemies tab UI state: which definition the spawn button uses, and which
     // one the tuning sliders edit. Ids, not pointers: a library reload
     // invalidates definitions but not their names.

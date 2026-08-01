@@ -1,6 +1,7 @@
 #pragma once
 
 #include <eng/Handles.h>
+#include <eng/render/ModelImport.h>
 
 #include <glm/glm.hpp>
 
@@ -24,10 +25,12 @@ class MeshResources
 {
 public:
     MeshHandle add(std::string name, MeshGeometry geometry = {},
-                   std::string importIdentity = {})
+                   std::string importIdentity = {}, size_t submeshCount = 1,
+                   ModelImportReport importReport = {})
     {
         mRecords.push_back({std::move(name), std::move(geometry),
-                            std::move(importIdentity)});
+                            std::move(importIdentity), submeshCount,
+                            std::move(importReport)});
         return {static_cast<uint32_t>(mRecords.size())};
     }
 
@@ -49,10 +52,33 @@ public:
         return record ? &record->importIdentity : nullptr;
     }
 
-    std::optional<std::string> release(MeshHandle handle)
+    size_t submeshCount(MeshHandle handle) const
+    {
+        const Record* record = find(handle);
+        return record ? record->submeshCount : 0;
+    }
+
+    const ModelImportReport* importReport(MeshHandle handle) const
+    {
+        const Record* record = find(handle);
+        return record && record->importReport.succeeded()
+                   ? &record->importReport
+                   : nullptr;
+    }
+
+    bool markShared(MeshHandle handle)
     {
         Record* record = find(handle);
         if (!record)
+            return false;
+        record->shared = true;
+        return true;
+    }
+
+    std::optional<std::string> release(MeshHandle handle)
+    {
+        Record* record = find(handle);
+        if (!record || record->shared)
             return std::nullopt;
         std::string name = std::move(record->name);
         *record = {};
@@ -75,6 +101,9 @@ private:
         std::string name;
         MeshGeometry geometry;
         std::string importIdentity;
+        size_t submeshCount = 1;
+        ModelImportReport importReport;
+        bool shared = false;
     };
 
     const Record* find(MeshHandle handle) const

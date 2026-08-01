@@ -51,7 +51,7 @@ writes the metrics beside it:
 ```sh
 tools/gen_font_atlas.py --font /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf \
     --size 13 --name ui_regular
-# -> engine/assets/fonts/ui_regular.png + ui_regular.toml
+# -> assets/fonts/ui_regular.png + ui_regular.toml
 ```
 
 Glyph coverage is thresholded to full alpha: no anti-aliased fringe survives,
@@ -62,7 +62,7 @@ under every glyph and most HUD strings are upper case.
 
 Both files resolve by bare filename: `RenderCore` registers every subdirectory
 of the asset roots as an Ogre resource location, so adding a font is a matter
-of dropping two files into `engine/assets/fonts`.
+of dropping two files into `assets/fonts`.
 
 The atlas is uploaded as a one-mip manual texture and forced to `GL_NEAREST`,
 because a texture imgui samples directly carries its own filter state.
@@ -71,6 +71,33 @@ because a texture imgui samples directly carries its own filter state.
 their box. `ellipsize` provides deterministic one-line overflow. Tooltip body
 copy is capped at three lines; compact weapon and banner labels are ellipsized,
 so authored text cannot escape panel bounds.
+
+## Key caps
+
+Bindings are a canvas primitive, not a string convention:
+
+```cpp
+const int w = canvas.keyCap({x, y}, "SPACE");        // returns the plate width
+canvas.text({x + w + 6, y}, "pause", palette.textDim);
+canvas.keyCapWidth("SPACE");   // measure without drawing, for layout
+canvas.keyCapRow();            // vertical pitch for a stacked column
+```
+
+`keyCap` takes the *text* origin a `text()` call would take and places the plate
+around it, so a cap and the words beside it align by construction. The plate is
+sized from the glyph **cell** (`BitmapFont::cellHeight`), not from the line
+height: the cell reserves rows above and below the ink, and a plate cut to a
+line height clips the letters it is supposed to contain.
+
+Nothing writes `"[" + key + "]"` any more. A binding packed into prose stops
+reading as a binding at all — `` ` console  ESC quit `` scans as a typo, and
+`, . fov` as a comma splice — so `TooltipContent::hints` carries
+`{key, label}` pairs and the widget lays out the cap column with the
+descriptions aligned beside it. `TooltipStyle::maxHints` bounds the list; when
+the panel runs out of vertical room, body copy is dropped before bindings are.
+
+Consumers: the tooltip's action verb, `TooltipContent::hints` (the demo
+placard's control list), and the game's armament plate.
 
 Two fonts exist in the imgui atlas and the order matters:
 
@@ -128,7 +155,7 @@ configuration change, preventing cumulative alpha or sticky contrast settings.
 
 ### Making a prop describe itself
 
-Add the fields to its `[[prop]]` entry in `game/assets/dungeon_props.toml`:
+Add the fields to its `[[prop]]` entry in `assets/config/dungeon_props.toml`:
 
 ```toml
 [[prop]]
@@ -163,7 +190,7 @@ eng::imguihint::marker("editor.staging_mode");     // the "(?)" marker + hover
 eng::imguihint::showText(title, dynamicBody);      // inherently dynamic text
 ```
 
-Hint text lives in `engine/assets/ui/hints.toml` and is loaded once by
+Hint text lives in `assets/ui/hints.toml` and is loaded once by
 `RenderCore` after the imgui context exists:
 
 ```toml
@@ -182,13 +209,13 @@ hand-rolled `SetTooltip` is a one-line change that cannot regress.
 | --- | --- |
 | `engine/include/eng/ui/`, `engine/src/ui/` | BitmapFont, UiCanvas, UiLayout, TooltipView |
 | `engine/src/render/ImGuiHint.cpp` | tool hover help |
-| `engine/assets/fonts/` | `ui_regular.{png,toml}`, `DejaVuSansMono.ttf`, `DejaVu-LICENSE` |
-| `engine/assets/ui/hints.toml` | tool hint text |
+| `assets/fonts/` | `ui_regular.{png,toml}`, `DejaVuSansMono.ttf`, `DejaVu-LICENSE` |
+| `assets/ui/hints.toml` | tool hint text |
 | `game/src/ui/GameHud.{h,cpp}` | player HUD layout |
 | `game/src/ui/GameHudStyle.{h,cpp}` | game theme and responsive policy |
 | `game/src/ui/TooltipBuilder.{h,cpp}` | focus -> TooltipContent |
 | `game/src/PropInfo.h` | prop presentation metadata |
 | `tools/gen_font_atlas.py` | atlas generator |
 
-Fonts are DejaVu (Bitstream Vera licence, see `engine/assets/fonts/DejaVu-LICENSE`).
+Fonts are DejaVu (Bitstream Vera licence, see `assets/fonts/DejaVu-LICENSE`).
 No proprietary game font or artwork is vendored.

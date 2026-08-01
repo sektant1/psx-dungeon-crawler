@@ -16,7 +16,7 @@ class Physics;
 } // namespace eng
 
 // Data-driven modular dungeon built from the modular dungeon kit
-// (game/assets/meshes/kit, catalogued in game/assets/kit.toml). Kit pieces are
+// (assets/game/meshes/kit, catalogued in assets/game/kit.toml). Kit pieces are
 // authored on a 20-unit grid, centred on X/Z with their base at Y=0; they are
 // baked to this map's cell size at load, so a placement is just a cell centre.
 //

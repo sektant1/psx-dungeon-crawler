@@ -44,6 +44,20 @@ float StepClock::stepDuration(StepChannel c) const
     return hz > 0.0f ? 1.0f / hz : 0.0f; // 0 = continuous
 }
 
+void StepClock::rewind()
+{
+    mRaw = 0.0;
+    mPrevRaw = 0.0;
+    for (int i = 0; i < kStepChannelCount; ++i) {
+        mTime[i] = 0.0;
+        mDelta[i] = 0.0f;
+        mAppliedStep[i] = 0.0f;
+    }
+    // Unprimed, so the next advance() behaves like the first one of a run
+    // rather than reporting a delta measured against the discarded time.
+    mPrimed = false;
+}
+
 void StepClock::advance(float dt)
 {
     // Negative frame deltas would rewind every integrator downstream.

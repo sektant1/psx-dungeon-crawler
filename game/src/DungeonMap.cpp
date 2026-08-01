@@ -3,6 +3,7 @@
 #include "GameCollision.h"
 #include "ParticleEffects.h"
 
+#include <eng/assets/AssetRoot.h>
 #include <eng/Log.h>
 #include <eng/Physics.h>
 #include <eng/Renderer.h>
@@ -25,8 +26,8 @@ namespace {
 // one material covers floors, walls, pillars and door frames. The ceiling is
 // the floor piece flipped over by the viewer rather than by the mesh, so it
 // needs the two-sided variant to be visible from below.
-constexpr const char* kKitMaterial = "Kit/Dungeon";
-constexpr const char* kKitTwoSided = "Kit/DungeonTwoSided";
+constexpr const char* kKitMaterial = "Game/Kit/Dungeon";
+constexpr const char* kKitTwoSided = "Game/Kit/DungeonTwoSided";
 
 float lin(float srgb) { return std::pow(srgb, 2.2f); }
 
@@ -213,7 +214,7 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     const eng::MeshHandle floor =
         r.loadObj(kitMeshDir + "Floor_Tiles.obj", &kitToCell);
     // The kit has no ceiling piece (kit.toml's only overhead piece, Arch_Roof,
-    // is a vault that tiles its UVs outside 0..1 and needs Kit/Stone). The
+    // is a vault that tiles its UVs outside 0..1 and needs Game/Kit/Stone). The
     // floor slab is the right shape and the right atlas cell, so the ceiling
     // is the same mesh at wall height drawn two-sided -- cheaper than a
     // mirrored copy, and it shares the floor's mesh and batch.
@@ -260,13 +261,12 @@ bool DungeonMap::buildFromLayout(eng::Renderer& r, eng::Physics& physics,
     std::vector<PropDef> ambientCatalog;
     int ambientChance = 13;
     std::vector<std::string> roomRoles;
-    // Normalise lexically: propMeshDir may not exist on disk (prototype trees
-    // ship no prop meshes), and resolving ".." through a missing directory
-    // fails at the OS level even though the catalog beside it is present.
+    // Asked for by name, not derived from propMeshDir. Climbing "../.." out of
+    // a mesh directory to reach a config file coupled the two layouts: moving
+    // the TOMLs under config/ silently produced a path that resolved to
+    // nothing, and the level failed to build with the meshes themselves fine.
     const std::string catalogPath =
-        std::filesystem::path(propMeshDir + "../../dungeon_props.toml")
-            .lexically_normal()
-            .string();
+        eng::assets::resolve("config/dungeon_props.toml").string();
     toml::parse_result catalogResult = toml::parse_file(catalogPath);
     if (!catalogResult) {
         eng::log::error("DungeonMap: prop catalog failed: %s",
@@ -705,7 +705,7 @@ bool DungeonMap::loadFromRows(eng::Renderer& r, eng::Physics& physics,
                               eng::NodeHandle sceneRoot)
 {
     // Generator grids use the same tile scale and warm-torch defaults as the
-    // TOML fallback (game/assets/dungeon.toml [dungeon.light]).
+    // TOML fallback (assets/game/dungeon.toml [dungeon.light]).
     return buildFromLayout(r, physics, std::move(layout), 4.0f, 3.0f,
                          {lin(1.0f), lin(0.68f), lin(0.34f)}, 4.4f, 6.5f, 1.9f,
                          kitMeshDir, propMeshDir, sceneRoot);

@@ -1,6 +1,8 @@
 #pragma once
 #include <eng/Handles.h>
 #include <eng/LightDesc.h>
+#include <eng/ShaderBlock.h>
+#include <eng/ShaderUniforms.h>
 #include <eng/particles/DecalSystem.h>
 #include <eng/particles/ParticleCollider.h>
 #include <eng/particles/ParticleEffectDesc.h>
@@ -71,8 +73,20 @@ class Renderer
 {
 public:
     // --- meshes -----------------------------------------------------------
+    // Format-neutral static-model import. Supported source formats are
+    // discovered from the pinned Assimp build; skeletal/deforming data is
+    // rejected by this API rather than silently discarded.
+    // Default world/static standard: metres, +Y up, -Z forward, X/Z centred,
+    // bottom on Y=0. Use explicit options or bake overload for exceptions.
+    MeshHandle loadMesh(const std::string& path);
+    MeshHandle loadMesh(const std::string& path, const glm::mat4* bake);
+    MeshHandle loadMesh(const std::string& path,
+                        const ModelImportOptions& options);
+    static std::vector<std::string> supportedModelExtensions();
+    static bool supportsModelFile(const std::string& path);
     // bake, when given, is multiplied into vertex positions (normals get
     // its inverse-transpose) -- for transforms TRS nodes can't represent.
+    // Compatibility spelling; new code should use loadMesh().
     MeshHandle loadObj(const std::string& path, const glm::mat4* bake = nullptr);
     MeshHandle loadObj(const std::string& path,
                        const ModelImportOptions& options);
@@ -80,7 +94,7 @@ public:
     // baked into the mesh; node scale remains available for placement.
     MeshHandle createPrimitiveMesh(const PrimitiveMeshDesc&);
     // Stand-in for a mesh that failed to load, mirroring the
-    // Engine/PrototypeSurface material fallback: a missing asset should read as
+    // Engine/Psx/PrototypeSurface material fallback: a missing asset should read as
     // an obviously untextured placeholder, not abort the frame. The primitive is
     // chosen from the asset's filename (prototype::meshShapeFor) so a missing
     // wall is wall-shaped; each distinct shape is built once and shared. Pass an
@@ -92,7 +106,9 @@ public:
     // See eng::prototype::PrototypeCatalog for why the application owns these.
     void setPrototypeCatalog(prototype::PrototypeCatalog catalog);
     bool meshBounds(MeshHandle mesh, MeshBounds& out) const;
-    // OBJ geometry captured during the render-mesh load, never reparsed or
+    size_t meshSubmeshCount(MeshHandle mesh) const;
+    bool meshImportReport(MeshHandle mesh, ModelImportReport& out) const;
+    // Triangle geometry captured during render-mesh load, never reparsed or
     // read back from Ogre. Returns false for meshes without cached triangles.
     bool meshCollisionGeometry(MeshHandle mesh,
                                std::vector<glm::vec3>& vertices,
@@ -149,6 +165,9 @@ public:
     void attachMesh(NodeHandle node, MeshHandle mesh,
                     const ResolvedModelMaterial& material,
                     bool castShadows = false, bool renderOnTop = false);
+    void attachMesh(NodeHandle node, MeshHandle mesh,
+                    const std::vector<ResolvedModelMaterial>& materials,
+                    bool castShadows = false, bool renderOnTop = false);
 
     // Sprite seam: createSpriteMaterial applies a clip to arbitrary mesh UVs;
     // attachSprite uses the same clip as a camera-facing world billboard.
@@ -200,6 +219,15 @@ public:
     void stopParticles(ParticlesHandle h);
     void despawnParticles(ParticlesHandle h);
     void setParticleQuality(float q);
+    // Every texture the particle import declared, in stem order. This is what a
+    // tuning panel lists; nothing in gameplay reads it. The descs carry the
+    // flipbook window too, so a panel can show a strip's frame count and rate
+    // without re-reading the TOML.
+    const std::vector<ParticleTextureDesc>& particleTextures() const;
+    // Re-scan the particle texture import (new PNGs, edited *.toml). Materials
+    // already in use are updated in place, so live effects keep drawing.
+    bool reloadParticleTextures();
+    uint32_t liveParticleCount() const;
     // Install the world the particle simulation traces against. The renderer
     // never links physics, so the application owns the adapter and its
     // lifetime: it must outlive the renderer or be cleared with nullptr.
@@ -238,6 +266,10 @@ public:
     glm::mat4 cameraViewProj() const;
 
     // --- materials --------------------------------------------------------
+    // Parse one generated Ogre material script at runtime. Editor imports use
+    // this after writing a GLB's base-colour texture material so new geometry
+    // does not require an editor restart before it renders correctly.
+    bool loadMaterialScript(const std::string& path);
     void setMaterialParam(const std::string& materialName,
                           const std::string& paramName, float value);
     void setMaterialParam(const std::string& materialName,
@@ -246,6 +278,37 @@ public:
                           const std::string& paramName, glm::vec3 value);
     void setMaterialParam(const std::string& materialName,
                           const std::string& paramName, glm::vec4 value);
+
+    // Per-node shader uniforms: give this node's meshes their own copy of the
+    // material they wear, and set the PSX family's per-entity uniforms on it
+    // (see eng::ecs::ShaderParams for what each one drives).
+    //
+    // A named material is shared -- `Game/Kit/Dungeon` is one object a hundred
+    // and sixty walls point at -- so setMaterialParam below tints all of them.
+    // This clones instead, which costs a material and breaks this node out of
+    // its batch. That is the right trade for the handful of hero objects that
+    // want it and the wrong one for a level, which is why it is opt-in per
+    // node and never applied by default.
+    //
+    // The clone is made once per subentity and reused, so calling this every
+    // frame with an animated value costs constant sets, not clones. Reverted by
+    // clearNodeShaderParams(), which puts the shared material back.
+    void setNodeShaderParams(NodeHandle node, const ShaderUniforms& params);
+    void clearNodeShaderParams(NodeHandle node);
+
+    // The general form: push an arbitrary block of uniforms onto this node's
+    // private material, taking each uniform's name, type and address from the
+    // block's own field table (see eng/ShaderBlock.h).
+    //
+    // This is what lets a shader have a component without the renderer knowing
+    // the shader exists. `setNodeShaderParams` above is the same mechanism with
+    // the PSX family's six knobs hard-coded, kept because those six are
+    // universal and worth a typed call.
+    //
+    // Shares the clone with setNodeShaderParams -- one private material per
+    // subentity, however many blocks are pushed onto it -- so an entity may
+    // carry both a portal block and the universal tint.
+    void setNodeShaderBlock(NodeHandle node, const ShaderBlock& block);
 
     // Sets a float param on EVERY loaded material that declares it, in both
     // vertex and fragment program params (emulates a Godot global uniform).
@@ -272,7 +335,7 @@ public:
     void setBloomEnabled(bool enabled);    // off = pass-through composite
     void setBloomParams(float threshold, float intensity);
     // Debug view: swaps every entity's materials for light-blue wireframe
-    // lines (PSX/DebugWireframe); off restores the original materials.
+    // lines (Engine/Psx/DebugWireframe); off restores the original materials.
     void setWireframeDebug(bool enabled);
     void setGradeEnabled(bool enabled); // colour grade before quantization
     void setGradeParams(float desaturate, float contrast,

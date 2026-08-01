@@ -18,11 +18,11 @@ namespace eng { class Renderer; }
 // Reusable descriptors/results for composed scene objects. Primitive meshes
 // remain in Renderer; factories assemble them into game-facing prefabs.
 struct PortalPropStyle {
-    std::string material = "Game/PortalDown";
+    std::string material = "Game/Vfx/PortalDown";
     // The surround is built from kit meshes, so it wears the kit's atlas. This
     // used to be beveled-box primitives under an atlas material, whose 0..1
     // per-face UVs stretched the *whole* dungeon sheet over every block.
-    std::string frameMaterial = "Kit/Dungeon";
+    std::string frameMaterial = "Game/Kit/Dungeon";
     // Directory holding the kit .obj files, trailing slash included. Empty
     // leaves the membrane bare (a caller that supplies its own surround).
     std::string kitMeshDir;
@@ -58,7 +58,7 @@ struct PortalPropStyle {
     // Plain tiling stone, NOT the kit atlas: a generated quad carries 0..1 UVs
     // over its whole face, so an atlas material stretches the entire sheet
     // across it and the panel reads as a collage of unrelated wall bits.
-    std::string backingMaterial = "Kit/Stone";
+    std::string backingMaterial = "Game/Kit/Stone";
     // How far the membrane's top edge tucks past the springline, so the two
     // meet with no seam. Small on purpose: the soffit narrows fast, and past
     // roughly a tenth of a metre the corners are outside the curve again.
@@ -110,7 +110,11 @@ struct PortalProp {
     eng::NodeHandle root{};
     eng::NodeHandle field{};
     eng::NodeHandle labelAnchor{};
+    // The node the surround, the glow and the wisps hang from -- kept so the
+    // debug panel can respawn the effect on it without rebuilding the level.
+    eng::NodeHandle arch{};
     eng::LightHandle light{};
+    eng::ParticlesHandle wisps{};
     glm::vec3 labelWorldPosition{0.0f};
     // The membrane's size as built, so the interaction target is derived from
     // the thing the player is looking at rather than tuned alongside it.

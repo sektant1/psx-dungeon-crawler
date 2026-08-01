@@ -1,6 +1,7 @@
 #include <eng/Engine.h>
 
 #include <eng/Log.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/render/FrameCapture.h>
 #include <eng/render/GifRecorder.h>
 
@@ -57,10 +58,29 @@ void Engine::updateSystems(float dt) {
     for (auto& s : mSystems) s->update(dt);
 }
 
-bool Engine::init(const std::string& configPath, const std::string& appAssetDir,
+bool Engine::init(const std::string& configPath, const std::string& mountSet,
                   int renderPreset)
 {
-    if (!mConfig.load(configPath))
+    // The content root comes up first: everything below -- the config file, the
+    // renderer's resource locations, the font, the hint table -- is resolved
+    // through it, so a failure here has to stop the run rather than surface
+    // later as a window full of missing textures.
+    if (!assets::init()) {
+        log::error("Engine: no content root; cannot start");
+        return false;
+    }
+    if (!assets::mount(mountSet)) {
+        log::error("Engine: cannot mount content set '%s'", mountSet.c_str());
+        return false;
+    }
+
+    const std::string configFile = assets::resolve(configPath).string();
+    if (configFile.empty()) {
+        log::error("Engine: config '%s' is not in any mounted pack",
+                   configPath.c_str());
+        return false;
+    }
+    if (!mConfig.load(configFile))
         return false;
     const std::string title = mConfig.getString("window.title", "eng");
     const int width = static_cast<int>(mConfig.getNumber("window.width", 960));
@@ -76,7 +96,7 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir,
         return false;
     if (!detail::coreOf(mRenderer).init(mImpl->platform.nativeHandle(),
                                         mImpl->platform.window(), width, height,
-                                        title, appAssetDir, vsync)) {
+                                        title, vsync)) {
         shutdown();
         return false;
     }
@@ -132,6 +152,13 @@ bool Engine::init(const std::string& configPath, const std::string& appAssetDir,
         shutdown();
         return false;
     }
+    // The config and the profile the run is actually on. Both are overridable
+    // three ways (file, environment, command line), so "which one won" is a
+    // real question, and answering it by reading code is how a session gets
+    // spent debugging a look that was never applied.
+    log::info("Engine: mount set '%s', config %s, %zu actions bound",
+              mountSet.c_str(), configFile.c_str(), mConfig.bindings().size());
+    log::info("Engine: render profile '%s'", renderPresetName(presetId));
 
     const char* shot = std::getenv("PSX_SCREENSHOT");
     if (shot)
@@ -172,6 +199,10 @@ void Engine::setRenderPreset(int id)
 {
     mRenderPreset = id;
     applyRenderPreset(mRenderer, id);
+    // A profile switch changes the whole image, so it belongs in the log the
+    // screenshot is read against. Silent, it was impossible to tell "the look
+    // regressed" from "something switched the profile".
+    log::info("Engine: render profile -> '%s'", renderPresetName(id));
 }
 
 float Engine::tick()
@@ -201,6 +232,10 @@ float Engine::tick()
     // One advance per frame, on every path, so quantised time cannot desync from
     // real time (a missed advance would strand every stepped channel).
     mStepClock.advance(dt);
+    // Both abstract timelines advance from the same measured delta; the game
+    // clock is the one that scale/pause act on, so it is what simulation reads.
+    mRealClock.update(dt);
+    mGameClock.update(dt);
     return dt;
 }
 
@@ -324,8 +359,22 @@ void Engine::setLoadingPhase(bool loading)
     mImpl->loading = loading;
     // The first gameplay frame must not inherit the wall-clock gap the load
     // spent, or physics would eat a spike-clamped 100 ms step on frame one.
-    if (!loading)
+    if (!loading) {
         mImpl->hasPrev = false;
+        // Nor the *stepped* time it spent. The load loop runs a variable number
+        // of frames (it pumps work against a millisecond budget, so a slower
+        // shader compile means more frames) and every one of them advanced the
+        // step clock. Frame counting for captures already restarts here; the
+        // animation phase every stepped system reads did not, so a capture
+        // pinned to frame 300 still landed on a different viewmodel pose run to
+        // run. Same boundary, same rebase.
+        mStepClock.rewind();
+        // Same argument for the abstract timelines: gameplay starts at t=0
+        // regardless of how many frames the load took, so anything keyed off
+        // absolute game time is reproducible across runs.
+        mGameClock.reset();
+        mRealClock.reset();
+    }
 }
 
 bool Engine::loadingPhase() const { return mImpl->loading; }

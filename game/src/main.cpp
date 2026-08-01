@@ -21,10 +21,10 @@
 #include "ParticleCollider.h"
 #include "DebugOverlay.h"
 #include "Dummy.h"
+#include "GameAssets.h"
 #include "GameContext.h"
 #include "ui/GameHud.h"
 #include "ui/TooltipBuilder.h"
-#include "GameScene.h"
 #include "HudModel.h"
 #include "InteractionSystem.h"
 #include "PlayerSystem.h"
@@ -72,7 +72,6 @@ class DungeonApp : public eng::FpsGameApp
 public:
     eng::AppConfig configure(int argc, char** argv) override
     {
-        mAssets = APP_ASSET_DIR;
         // `--scene <name>` picks the framing a clip is shot from, so a recording
         // is reproducible from the command line alone. "portal" is the
         // down-portal showcase the PSX_SHOWCASE_PORTAL env var also selects.
@@ -80,6 +79,13 @@ public:
             const std::string arg = argv[i] ? argv[i] : "";
             if (arg == "--scene" && i + 1 < argc)
                 mScene = argv[i + 1];
+            // A cooked map plays as the level itself, inside the full game --
+            // enemies, combat, HUD, portals. LiveLevel::rebuildAuthored was
+            // written for exactly this and had no caller, so the editor's F5
+            // went to a stripped walk loop instead and every authored encounter
+            // silently did nothing.
+            if (arg.size() > 4 && arg.compare(arg.size() - 4, 4, ".map") == 0)
+                mAuthoredMap = arg;
         }
         mRecording = eng::GifRecorder::optionsFromArgs(argc, argv);
         eng::AppConfig cfg;
@@ -87,8 +93,8 @@ public:
         // "gamecube", "n64", "pixel-3d", "modern-ps1", "dungeon"). The debug
         // console still switches profiles live; this only picks the start.
         cfg.renderPreset = eng::renderPresetFromArgs(argc, argv);
-        cfg.assetDir = mAssets;
-        cfg.configPath = mAssets + "/game.toml";
+        cfg.mountSet = "game";
+        cfg.configPath = "config/game.toml";
         cfg.fixedDt = kFixedDt;
         cfg.maxFixedSteps = 5;
         cfg.imgui = true;
@@ -138,6 +144,17 @@ private:
     // A no-op on bodies that are not registered combatants.
     void playerHit(eng::BodyHandle body, const char* weaponId, glm::vec3 dir,
                    glm::vec3 point);
+    // Which blood.toml profile a combatant bleeds. Data, not a branch: it comes
+    // off the enemy's own definition, so an undead shedding ichor and a
+    // construct shedding nothing are both a word in enemies.toml.
+    std::string bloodProfileFor(entt::entity e);
+    // Everything a landed hit throws: spray and gibs at the wound, and the
+    // instant mark on whatever is under it. One place, so the player and an
+    // enemy bleed by the same rules.
+    void bleed(entt::entity victim, glm::vec3 point, glm::vec3 dir,
+               const game::DamageResult& result);
+    // Once a frame: everything still standing that is hurt enough to drip.
+    void updateBleeders();
 
     static constexpr float kFixedDt = 1.0f / 60.0f;
     // Matches eng::CharacterDesc::height as the player is created with it.
@@ -145,7 +162,6 @@ private:
     // controller only reports the eye.
     static constexpr float kPlayerEyeHeight = 1.7f;
 
-    std::string mAssets;
     eng::Engine* mEngine = nullptr; // set in onStart; used by enterLevel
 
     // Persistent level stack: mSeeds[d] is depth d's seed (stored so revisits
@@ -157,6 +173,7 @@ private:
 
     float mSpeed = 3.0f;
     float mSens = 0.002f;
+    std::string mPlayerBlood = "human";
     eng::FpsController::DashTuning mDashTuning;
     float mDodgeIframes = 0.22f;
     float mDodgeStamina = 25.0f;
@@ -180,11 +197,18 @@ private:
     game::EnemySystem mEnemies;
     game::EnemySpawner mSpawner;
 
+    // The game's one ECS world, and the renderer view driven from it. It
+    // outlives every level: the player and anything else persistent live here
+    // ungrouped, while a level's own entities carry kLevelGroup and are
+    // destroyed by group on a transition.
+    std::optional<eng::ecs::RendererSceneBackend> mBackend;
+    eng::ecs::World mWorld;
     LiveLevel mLevel;
     game::PlayerSystem mPlayerSys;
     game::GameHud mHud;
     bool mPortalPreviewMode = false;
     std::string mScene;                                  // --scene
+    std::string mAuthoredMap; // a cooked .map named on the command line
     std::optional<eng::RecordingOptions> mRecording;     // --record
     eng::Content mLevelContent;
     std::string mShowroomPath;
@@ -200,7 +224,6 @@ private:
 // frame-stat ring -- the base owns those now.
 eng::FpsGameConfig DungeonApp::setup(eng::Engine& engine)
 {
-    mAssets = APP_ASSET_DIR;
     eng::Config& cfg = engine.config();
 
     game::layer::PhysicsTuning physicsTuning;
@@ -233,7 +256,7 @@ void DungeonApp::onLoadGame(eng::Engine& engine, eng::LoadPlan& plan)
     // so the very first missing asset already reads as what it was meant to be.
     plan.add("Reading prototypes", [this, &r] {
         eng::prototype::PrototypeCatalog prototypes;
-        game::loadPrototypeCatalog(mAssets + "/prototypes.toml", prototypes);
+        game::loadPrototypeCatalog(game::assetPath("config/prototypes.toml"), prototypes);
         r.setPrototypeCatalog(std::move(prototypes));
     });
 
@@ -241,14 +264,16 @@ void DungeonApp::onLoadGame(eng::Engine& engine, eng::LoadPlan& plan)
     // one, and owned here because the level builder, the viewmodels and the
     // combat model all resolve names through the same table.
     plan.add("Binding the schools of magic", [this] {
-        if (!mVocabulary.load(mAssets + "/magic.toml"))
+        if (!mVocabulary.load(game::assetPath("config/magic.toml")))
             eng::log::error("magic.toml failed to load; combat names resolve "
                             "to nothing and weapons fall back to the first "
                             "channel");
     });
 
     plan.add("Kindling particle effects",
-             [this, &r] { mParticles.load(r, mAssets + "/particles.toml"); },
+             [this, &r] {
+                 mParticles.load(r, game::assetPath("config/particles.toml"));
+             },
              2.0f);
 }
 
@@ -269,15 +294,16 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mDodgeIframes = float(cfg.getNumber("dodge.iframes", 0.22));
     mDodgeStamina = float(cfg.getNumber("dodge.stamina", 25.0));
     mSens = float(cfg.getNumber("player.mouse_sensitivity", 0.002));
+    mPlayerBlood = cfg.getString("player.blood", "human");
 
     colliderView().enabled = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
 
-    mCtx.emplace(r, physics(), engine.input(), mAssets, mVocabulary);
+    mCtx.emplace(r, physics(), engine.input(), mVocabulary);
 
     // Player controller + three data-authored magical ranged weapons.
     mPlayerSys.setTuning(mSpeed, mSens);
     mPlayerSys.controller().setDashTuning(mDashTuning);
-    mPlayerSys.loadWeapons(mAssets + "/weapons.toml");
+    mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
     mHud.initialise();
     mHud.configure(cfg);
     mPortalPreviewMode = std::getenv("PSX_SHOWCASE_PORTAL") != nullptr ||
@@ -288,7 +314,16 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // anchor, which is world origin.
     const char* showroomOverride = std::getenv("PSX_SHOWROOM_MAP");
     mShowroomPath =
-        showroomOverride ? showroomOverride : mAssets + "/showroom.toml";
+        showroomOverride ? showroomOverride
+                         : game::assetPath("config/showroom.toml");
+
+    // The world comes up before the first level goes into it. Explicit
+    // attach-then-sync ordering rather than a constructor: both views need
+    // their subsystem alive first, and the order they reconcile in is engine
+    // policy (eng::ecs::World).
+    mBackend.emplace(engine.renderer());
+    mWorld.attachRenderer(*mBackend);
+    mWorld.attachPhysics(physics());
 
     enterLevel(engine, false); // depth 0, spawn at entry
 
@@ -365,6 +400,14 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // nodes. Enemies go first: their bodies and nodes are both ours, and a node
     // destroyed by clearScene underneath a live enemy is a dangling handle.
     mProps.teardown(physics());
+    // The drip nodes belong to the scene that is about to be cleared; drop the
+    // handles rather than destroying them one by one through a renderer that is
+    // seconds away from wiping the lot.
+    mCombat.blood().forgetDrips();
+    // Same reason: whatever the particle panel spawned into this level is about
+    // to have its nodes wiped, and the panel should not carry the handles into
+    // the next one.
+    mPanels.releaseParticleSpawns();
     if (mCtx)
         mEnemies.clear(*mCtx);
     if (mCtx)
@@ -372,15 +415,22 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     mSpawner.clear();
     teardownDummy();
     bool loaded = false;
-    if (mDepth == 0) {
+    if (!mAuthoredMap.empty()) {
+        // An authored level replaces the whole progression: there is one map,
+        // and descending is not a thing it does. Every depth loads it, so an
+        // exit taken during a playtest returns to the level being worked on
+        // rather than into a generated dungeon.
+        loaded = mLevel.rebuildAuthored(mWorld, r, physics(), mVocabulary, mAuthoredMap,
+                                        mDepth);
+    } else if (mDepth == 0) {
         if (LevelResource* showroom =
                 mLevelContent.load<LevelResource>("showroom", mShowroomPath)) {
-            loaded = mLevel.rebuildLayout(r, physics(), mVocabulary, mAssets,
+            loaded = mLevel.rebuildLayout(mWorld, r, physics(), mVocabulary,
                                           showroom->layout(), mDepth);
         }
         // load() already logged on failure; leaves `loaded` false.
     } else {
-        loaded = mLevel.rebuild(r, physics(), mVocabulary, mAssets,
+        loaded = mLevel.rebuild(mWorld, r, physics(), mVocabulary,
                                 mSeeds[size_t(mDepth)], mDepth);
     }
     if (!loaded) {
@@ -407,10 +457,10 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // Encounters. Markers named "enemy.<id>[.<preset>]" in the level are the
     // authored placements; spawners.toml carries the presets and the standalone
     // spawn points. Both feed one spawner, so a level author can use either.
-    mSpawner.loadFromToml(mAssets + "/spawners.toml");
+    mSpawner.loadFromToml(game::assetPath("config/spawners.toml"));
     {
         std::vector<game::EnemySpawner::Marker> markers;
-        for (const game::ScenePlacement& p : mLevel.markerPlacements("enemy.")) {
+        for (const game::ScenePlacement& p : mLevel.enemyPlacements()) {
             game::EnemySpawner::Marker m;
             m.type = p.type;
             m.position = p.position;
@@ -467,6 +517,72 @@ void DungeonApp::wireCombatModel()
 
 }
 
+std::string DungeonApp::bloodProfileFor(entt::entity e)
+{
+    if (e == mPlayerEntity)
+        return mPlayerBlood;
+    const entt::registry& reg = mCombat.director().registry();
+    if (const game::EnemyTag* tag = reg.try_get<game::EnemyTag>(e))
+        if (tag->def)
+            return tag->def->visual.blood;
+    return mPlayerBlood; // the training dummy and anything else fleshy
+}
+
+void DungeonApp::bleed(entt::entity victim, glm::vec3 point, glm::vec3 dir,
+                       const game::DamageResult& result)
+{
+    const std::string profile = bloodProfileFor(victim);
+    const game::Health* health =
+        mCombat.director().registry().try_get<game::Health>(victim);
+    // A hit carries no surface normal -- neither an impact callback nor a melee
+    // arc has one -- so the wound opens back along the blow, which is the
+    // direction a wound sprays anyway.
+    mCombat.blood().spawnHit(
+        mCtx->renderer, profile, point, -dir, dir,
+        game::bloodSeverityFor(result.dealt, health ? health->max : 0.0f,
+                               result.killed));
+    // The mark lands on the floor under the wound rather than at it: a decal is
+    // a world-space quad and the victim is walking away from where it was hit.
+    // Static geometry only -- the ray starts inside the victim's own capsule,
+    // and anything else would catch it immediately.
+    eng::RayHit ground;
+    if (physics().rayCast(point, glm::vec3(0.0f, -1.0f, 0.0f), 2.6f, ground,
+                          eng::layerMask(game::layer::Static)))
+        mCombat.blood().spawnSplat(mCtx->renderer, profile, ground.point,
+                                   ground.normal);
+}
+
+void DungeonApp::updateBleeders()
+{
+    entt::registry& reg = mCombat.director().registry();
+    game::BloodSystem& blood = mCombat.blood();
+    const auto fraction = [](const game::Health& h) {
+        return h.max > 0.0f ? h.current / h.max : 0.0f;
+    };
+    // Enemies drip from the middle of the body, not from their feet, so the
+    // drops have somewhere to fall from and land around them rather than
+    // inside the floor. A corpse does not drip: the pool it left is the mark.
+    for (auto [e, tag, motion, health] :
+         reg.view<game::EnemyTag, game::EnemyMotion, game::Health>().each()) {
+        const game::EnemyRender* render = reg.try_get<game::EnemyRender>(e);
+        const float height = tag.def ? tag.def->body.height : 1.8f;
+        const bool standing = !health.dead() && !(render && render->dying);
+        blood.updateDrip(mCtx->renderer, entt::to_integral(e),
+                         tag.def ? tag.def->visual.blood : mPlayerBlood,
+                         motion.feet + glm::vec3(0.0f, height * 0.5f, 0.0f),
+                         standing ? fraction(health) : 0.0f);
+    }
+    // The player drips too, below the eye so the drops fall through the lower
+    // half of the view rather than out of the camera's own position. Wounded
+    // and walking leaves a trail, which is the point.
+    if (mPlayerEntity != entt::null && reg.valid(mPlayerEntity))
+        if (const game::Health* health = reg.try_get<game::Health>(mPlayerEntity))
+            blood.updateDrip(mCtx->renderer, entt::to_integral(mPlayerEntity),
+                             mPlayerBlood,
+                             playerFeet() + glm::vec3(0.0f, 1.1f, 0.0f),
+                             health->dead() ? 0.0f : fraction(*health));
+}
+
 void DungeonApp::playerHit(eng::BodyHandle body, const char* weaponId,
                            glm::vec3 dir, glm::vec3 point)
 {
@@ -482,6 +598,12 @@ void DungeonApp::playerHit(eng::BodyHandle body, const char* weaponId,
     if (!result.hitLanded)
         return;
     mCtx->renderer.spawnParticles("weapon_hit_confirm", point);
+    // Blood. The profile is the victim's own -- an undead sheds ichor, a
+    // construct sheds nothing -- and the severity is what the blow took off it,
+    // so a graze spatters and a killing blow gibs without this knowing either
+    // effect by name. A projectile impact carries no surface normal, so the
+    // wound opens back along the shot, which is the direction a wound sprays.
+    bleed(victim, point, dir, result);
     // Feel layer: chip the victim's poise by the weapon's payload so heavy or
     // blunt hits can stagger it, opening the punish window.
     const float poiseDamage =
@@ -506,7 +628,7 @@ glm::vec3 DungeonApp::playerFeet() const
 // and hit reactions go back to the enemy that took the hit.
 void DungeonApp::wireEnemies()
 {
-    if (!mEnemyLibrary.load(mAssets + "/enemies.toml")) {
+    if (!mEnemyLibrary.load(game::assetPath("config/enemies.toml"))) {
         eng::log::error("enemies.toml failed to load; no enemy can spawn");
         return;
     }
@@ -566,10 +688,16 @@ void DungeonApp::wireEnemies()
         const game::WeaponDef& wd = mCombat.director().weapons().get(weapon);
         const game::DamagePacket packet =
             wd.makePacket(enemy, dir, 0.5f); // no crits against the player
-        game::damage::apply(reg, mPlayerEntity, packet);
+        const game::DamageResult result =
+            game::damage::apply(reg, mPlayerEntity, packet);
         if (poiseDamage > 0.0f)
             game::feel::poise::apply(reg, mPlayerEntity, poiseDamage);
         mCtx->renderer.spawnParticles("engine.hit_sparks", point);
+        // The player bleeds through the same path an enemy does: the packet
+        // reports what actually landed after resistances and i-frames, so a
+        // blocked or dodged hit leaves no mark.
+        if (result.hitLanded)
+            bleed(mPlayerEntity, point, dir, result);
     });
     mEnemies.setTelegraphCallback(
         [this](entt::entity, const game::EnemyAttack& attack, glm::vec3 at) {
@@ -597,7 +725,16 @@ void DungeonApp::wireEnemies()
                         pos);
             return;
         }
+        // The pool a body leaves where it fell. Read before onKilled, which
+        // hands the corpse to the physics world: from that moment the feet the
+        // AI was tracking are a ragdoll's and no longer where it died.
+        const entt::registry& reg = mCombat.director().registry();
+        const game::EnemyMotion* motion = reg.try_get<game::EnemyMotion>(e);
+        const std::string blood = bloodProfileFor(e);
+        mCombat.blood().stopDrip(mCtx->renderer, entt::to_integral(e));
         mEnemies.onKilled(*mCtx, e, mLastPlayerHitDirection);
+        if (motion)
+            mCombat.blood().spawnPool(mCtx->renderer, blood, motion->feet);
     });
 }
 
@@ -680,13 +817,17 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // whether their transform is copied this frame.
     if (steps.stepped(eng::StepChannel::Characters))
         mEnemies.syncRender(*mCtx);
+    // Bleeding is a state, not an event, so it is refreshed every frame from
+    // the health the sim just wrote -- not on the stop-motion channel: the
+    // emitter has to follow the body smoothly or it strings drops behind it.
+    updateBleeders();
 
     // World anim (torch flicker, animated dressing) is pose-from-time, so it
     // takes the quantised clock directly rather than accumulating a delta -- no
     // drift, and it re-bases correctly if the rate is changed live.
     {
         const auto timed = stats().time(PhaseWorld);
-        mLevel.update(r, steps.time(eng::StepChannel::World));
+        mLevel.update(r, steps.time(eng::StepChannel::World), f.dt);
         mLevel.updateVisibility(r, player.eyePosition());
     }
 
@@ -851,14 +992,17 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
     deps.enemyLibrary = &mEnemyLibrary;
     deps.spawner = &mSpawner;
     deps.context = mCtx ? &*mCtx : nullptr;
+    deps.level = &mLevel;
+    deps.particles = &mParticles;
     deps.playerFeet = playerFeet();
     deps.playerForward = mPlayerSys.controller().forward();
+    deps.dt = f.dt;
     mPanels.update(deps);
     const game::HudSnapshot hudFrame =
         game::buildHudSnapshot(mCombat.director().registry(), mPlayerEntity,
                                mPlayerSys.selectedWeapon(),
                                mInteraction.focus());
-    mHud.draw(hudFrame, lookTooltip(), f.dt,
+    mHud.draw(hudFrame, lookTooltip(), f.realDt,
               !uiOpen() && !mPortalPreviewMode);
 
 
@@ -876,6 +1020,10 @@ void DungeonApp::onStopGame(eng::Engine&)
     mLevel.clearPhysics();
     if (mCtx)
         mCombat.clear(*mCtx);
+    // Nodes and bodies go before the renderer and the physics world they came
+    // from; the registry itself outlives both.
+    mWorld.detachAll();
+    mBackend.reset();
 }
 
 } // namespace
@@ -891,12 +1039,37 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    // `game <file.map>`: play an authored editor scene instead of the procedural
-    // dungeon. Its own Application, so it brings up its own engine + physics.
+    // Which loop plays a `.map`, and why the scene itself decides.
+    //
+    //   the full game     the map is a level: enemies, weapons, HUD, the FPS
+    //                     player. "Does this room work" is a question about
+    //                     those, which is why it is the default.
+    //   the scene loop    the map is a *shot* or a blockout: no combat, and an
+    //                     authored Camera drives the view.
+    //
+    // The scene loop used to require `--walk`, which meant an authored camera
+    // was silently ignored unless you knew to pass a flag whose name says the
+    // opposite of what it does -- so the last step of "model -> material ->
+    // scene -> camera -> run it" failed with no message at all.
+    //
+    // Now a map that authored a camera picks the scene loop by itself. That is
+    // the honest signal: placing a camera in a scene *is* saying "look through
+    // this", and nothing else in the game does. `--walk` still forces the scene
+    // loop for a map with no camera (a blockout you only want to walk), and
+    // `--play` forces the full game for one that has one.
+    bool forceScene = false;
+    bool forceGame = false;
+    std::string mapArg;
     for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
+        const std::string arg = argv[i] ? argv[i] : "";
+        forceScene = forceScene || arg == "--walk" || arg == "--scene";
+        forceGame = forceGame || arg == "--play";
         if (arg.size() > 4 && arg.substr(arg.size() - 4) == ".map")
-            return game::runMap(APP_ASSET_DIR, arg);
+            mapArg = arg;
+    }
+    if (!mapArg.empty() && !forceGame &&
+        (forceScene || game::mapHasCamera(mapArg))) {
+        return game::runMap(mapArg, argc, argv);
     }
 
     DungeonApp app;

@@ -94,6 +94,16 @@ public:
     const StepRates& rates() const { return mRates; }
     StepRates& rates() { return mRates; } // live-tweakable from debug UI
     void setRates(const StepRates& r) { mRates = r; }
+    // Rewinds every channel to zero, keeping the rates. The engine calls this
+    // when the loading phase ends.
+    //
+    // It has to exist because the load loop runs a *variable* number of frames
+    // -- it pumps work against a wall-clock millisecond budget, so a slower
+    // shader compile means more frames -- and each one advances this clock.
+    // Without a rebase, everything stepped (viewmodel, characters, world VFX)
+    // started gameplay at a phase that depended on how long the load took, and
+    // a "deterministic" capture came out different run to run.
+    void rewind();
 
     // Call once per frame with the real (unquantised) frame delta.
     void advance(float dt);

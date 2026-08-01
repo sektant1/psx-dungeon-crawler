@@ -1,5 +1,6 @@
 #include "CombatSystem.h"
 
+#include "GameAssets.h"
 #include "GameContext.h"
 #include "combat/ActionStateSystem.h"
 #include "combat/PoiseSystem.h"
@@ -15,12 +16,12 @@ void CombatSystem::init(GameContext& ctx)
     reloadPresentation(ctx);
     // Damage model: weapon table (weapons.toml overlays built-in defaults).
     // The channel names it uses are resolved against the world's vocabulary.
-    mDirector.init(ctx.assets + "/weapons.toml", ctx.vocabulary);
+    mDirector.init(assetPath("config/weapons.toml"), ctx.vocabulary);
 }
 
 void CombatSystem::reloadPresentation(GameContext& ctx)
 {
-    mBlood.load(ctx.renderer, ctx.assets + "/blood.toml");
+    mBlood.load(ctx.renderer, assetPath("config/blood.toml"));
 }
 
 void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,

@@ -24,8 +24,24 @@ const std::vector<RenderPresetInfo>& renderPresets();
 // profile like any other, not an unprofiled fallback path.
 inline constexpr int kDefaultRenderPreset = 7;
 
-// "ps1".."modern-ps1" -> 1..6, "dungeon" -> 7, unknown -> -1.
+// A preset name from the table above -> its id; unknown -> -1.
 int renderPresetFromName(const char* name);
+
+// The inverse, for logs and UI labels. Never null: an id outside the table
+// reports "unknown" rather than crashing a log line.
+const char* renderPresetName(int id);
+
+// The bloom a profile applies. The rest of a profile stays engine-private on
+// purpose (see applyRenderPreset below), but bloom is *global* post that other
+// panels mirror -- the portal tuner shows it because a portal authored above
+// 1.0 is half an effect without it -- and a mirror seeded from a guess is a
+// slider that jumps the frame the first time it is touched.
+struct RenderPresetBloom {
+    bool enabled = true;
+    float threshold = 0.72f;
+    float intensity = 0.72f;
+};
+RenderPresetBloom renderPresetBloom(int id);
 
 // Reads `--render-preset <name>` off the command line. Returns 0 when the
 // switch is absent, so a caller can fall through to the environment and then to
@@ -33,8 +49,8 @@ int renderPresetFromName(const char* name);
 // dropping the app into an undefined look.
 int renderPresetFromArgs(int argc, const char* const* argv);
 
-// Applies preset `id` (1..kDefaultRenderPreset) to the renderer. An out-of-range
-// id applies the built-in defaults rather than doing nothing, so a bad config
+// Applies the preset with this id to the renderer. An id outside the table
+// applies the built-in defaults rather than doing nothing, so a bad config
 // value still lands the app in a defined look.
 //
 // The tuned field-by-field values behind an id stay engine-private on purpose:

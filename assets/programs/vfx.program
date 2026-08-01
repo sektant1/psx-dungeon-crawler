@@ -1,0 +1,104 @@
+vertex_program PixelVfx/SurfaceVS glsl
+{
+    source surface.vert
+    default_params {
+        param_named_auto worldViewProj worldviewproj_matrix
+        // The swirl's depth layers shift with the eye, which needs the camera
+        // in the membrane's own space -- the mesh is a slab, and the parallax
+        // is what makes its face read as a hole rather than a poster.
+        param_named_auto cameraPositionObject camera_position_object_space
+    }
+}
+
+// Every knob below is documented beside its declaration in
+// surface_common.glsl, and the game's debug console pushes all of them live
+// (Portal tab). Material profiles override only what makes them a profile:
+// palette and flow direction.
+fragment_program PixelVfx/PortalFS glsl
+{
+    source portal.frag
+    default_params {
+        param_named surfaceTexture int 0
+        param_named surfaceDark float4 0.05 0.24 0.04 1.0
+        param_named surfaceMid float4 0.20 1.00 0.10 1.0
+        param_named surfaceBright float4 0.80 1.70 0.24 1.0
+        param_named surfaceCore float4 1.30 2.20 0.55 1.0
+        param_named surfaceStepFps float 12.0
+        param_named portalFlowSpeed float 0.35
+        param_named portalSwirlSpeed float 0.09
+        param_named portalTwist float 0.18
+        param_named portalArms float 3.0
+        // 0.5 is the raw sine's even arm/gap split, so this default
+        // changes nothing; below thins the arms, above fattens them.
+        param_named portalArmWidth float 0.5
+        // 5.5 cm per portal pixel: chunkier than the 480x360 framebuffer at any
+        // sane viewing distance, so the membrane keeps its own pixel size
+        // instead of inheriting the screen's.
+        param_named surfaceTexelSize float 0.055
+        param_named surfacePixelGrid float 48.0
+        param_named portalDepthScale float 0.70
+        param_named portalParallax float 0.35
+        param_named portalFieldWeight float 0.45
+        param_named portalCoreRadius float 0.10
+        param_named portalCoreBoost float 0.85
+        param_named portalRimRadius float 0.44
+        param_named portalRimWidth float 0.035
+        param_named portalRimIntensity float 0.70
+        param_named portalEdgeFade float 0.045
+        param_named surfaceDither float 0.60
+        param_named surfaceEdgeGlow float 0.85
+        param_named surfaceEdgeFlow float 0.50
+        // The slab's four thickness faces: 0 continues the front
+        // pattern through them, 1 gives them a band of their own
+        // (surfaceEdgeGlow/Flow), 2 removes them.
+        param_named surfaceEdgeMode float 0.0
+        // Emission: what the portal BLOOMS, separate from what colour it is.
+        // The palette alone cannot express this -- see surface_common.glsl.
+        param_named surfaceGlowColour float4 0.55 1.90 0.35 1.0
+        param_named surfaceGlowStrength float 0.85
+        param_named surfaceGlowThreshold float 0.55
+        param_named surfaceBrightness float 1.0
+        param_named_auto time time 1.0
+    }
+}
+
+vertex_program PixelVfx/LiquidVS glsl
+{
+    source liquid.vert
+    default_params {
+        param_named_auto worldViewProj worldviewproj_matrix
+    }
+}
+
+fragment_program PixelVfx/LiquidFS glsl
+{
+    source liquid.frag
+    default_params {
+        param_named liquidTexture int 0
+        param_named liquidDark float4 0.02 0.08 0.16 1.0
+        param_named liquidMid float4 0.05 0.42 0.78 1.0
+        param_named liquidBright float4 0.28 0.90 1.0 1.0
+        param_named liquidFlowA float2 0.07 0.035
+        param_named liquidFlowB float2 -0.035 0.055
+        param_named liquidStepFps float 8.0
+        param_named liquidPixelGrid float 32.0
+        param_named liquidEmission float 0.0
+        param_named_auto time time 1.0
+    }
+}
+
+fragment_program PixelVfx/LavaFS glsl
+{
+    source lava.frag
+    default_params {
+        param_named lavaTexture int 0
+        param_named lavaDark float4 0.12 0.004 0.001 1.0
+        param_named lavaCrust float4 0.46 0.025 0.004 1.0
+        param_named lavaHot float4 1.65 0.36 0.018 1.0
+        param_named lavaCore float4 2.20 1.10 0.12 1.0
+        param_named lavaStepFps float 10.0
+        param_named lavaPixelGrid float 40.0
+        param_named lavaFlowSpeed float 0.22
+        param_named_auto time time 1.0
+    }
+}

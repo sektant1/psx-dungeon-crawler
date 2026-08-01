@@ -30,6 +30,11 @@ public:
     bool isMouseDown(MouseButton button) const;
     bool wasMousePressed(MouseButton button) const;
     glm::vec2 mouseDelta() const;                     // relative, this tick
+    // Wheel notches accumulated this tick: positive is away from the user
+    // (scroll up), which every app reads as "zoom in". Fractional on
+    // high-resolution wheels and trackpads, and already un-flipped, so a
+    // caller never has to know about SDL_MOUSEWHEEL_FLIPPED.
+    float wheelDelta() const;
 
     void setMouseGrab(bool grab); // relative mouse mode + cursor capture
     bool mouseGrabbed() const;

@@ -86,6 +86,7 @@ bool Input::wasMousePressed(MouseButton button) const
     return mImpl->mousePressed.count(toSdlButton(button)) != 0;
 }
 glm::vec2 Input::mouseDelta() const { return mImpl->delta; }
+float Input::wheelDelta() const { return mImpl->wheel; }
 
 void Input::setMouseGrab(bool grab)
 {

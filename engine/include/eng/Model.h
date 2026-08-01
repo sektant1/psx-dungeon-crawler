@@ -113,14 +113,14 @@ inline bool validModelDesc(const ModelDesc& desc)
     return false;
 }
 
-// The current OBJ loader emits one submesh. Slot zero overrides the legacy
-// one-material request; absent/blank requests resolve to the model fallback.
+// Indexed overrides win; the legacy one-material request is the default for
+// every remaining submesh. Absent/blank requests resolve to model fallback.
 inline std::string modelRequestedMaterialForSubmesh(
     const ModelDesc& desc, size_t submeshIndex)
 {
     if (submeshIndex < desc.submeshMaterials.size())
         return desc.submeshMaterials[submeshIndex];
-    return submeshIndex == 0 ? desc.material : std::string{};
+    return desc.material;
 }
 
 inline ResolvedModelMaterial resolveModelMaterialForSubmesh(

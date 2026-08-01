@@ -41,10 +41,11 @@ class RenderCore : public Ogre::RenderTargetListener
 public:
     ~RenderCore(); // calls shutdown(); safe if already shut down
     // sdlWindow is the SDL_Window* (as void*) the imgui SDL2 backend binds to
-    // for input, cursors, and display size.
+    // for input, cursors, and display size. The content packs must already be
+    // mounted (Engine::init does it): the resource locations registered here
+    // are exactly eng::assets::resourceDirs().
     bool init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
-              int height, const std::string& title,
-              const std::string& appAssetDir, bool vsync);
+              int height, const std::string& title, bool vsync);
     // Brings up the PSX post chain (scene downscale + bloom + dither) if not
     // already active. Idempotent; the chain stays on once up.
     void enablePostChain();

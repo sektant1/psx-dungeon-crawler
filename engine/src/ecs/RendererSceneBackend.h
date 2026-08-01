@@ -24,6 +24,16 @@ public:
                     bool castShadows) override;
     LightHandle attachLight(NodeHandle, const LightDesc&) override;
     void setLightColour(LightHandle, glm::vec3) override;
+    void setNodeMaterial(NodeHandle, const std::string&) override;
+    void setNodeShaderParams(NodeHandle, const ShaderParams&) override;
+    void clearNodeShaderParams(NodeHandle) override;
+    void setNodeShaderBlock(NodeHandle, const ShaderBlock&) override;
+    void setNodeVisible(NodeHandle, bool) override;
+    void setCameraNode(NodeHandle) override;
+    void setCameraLens(float fovDegrees, float nearClip, float farClip) override;
+    ParticlesHandle attachParticles(NodeHandle, const std::string& effect,
+                                    glm::vec3 localOffset) override;
+    void detachParticles(ParticlesHandle) override;
 
 private:
     Renderer& mR;

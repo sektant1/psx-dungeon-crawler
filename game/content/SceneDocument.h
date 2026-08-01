@@ -1,4 +1,7 @@
 #pragma once
+#include <eng/ecs/components/ParticleEmitter.h>
+#include <eng/ecs/components/PortalParams.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -37,6 +40,34 @@ glm::quat authorOrientation(const glm::vec3& rotationDegrees);
 glm::vec3 authorRotationDegrees(const glm::quat& orientation);
 glm::mat4 authorTransformMatrix(const XformAuthor& transform);
 
+// A transform resolved against the world, as position/orientation/scale rather
+// than a matrix: that is what the ECS transform holds, and decomposing a matrix
+// back into those three is lossy in exactly the shear cases a level never has.
+struct WorldTransform {
+    glm::vec3 position{0.0f};
+    glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 scale{1.0f};
+};
+
+// Composes a child onto its parent, TRS-style: rotate and scale the child's
+// offset by the parent, multiply the rotations, multiply the scales.
+//
+// Component-wise scale composition is only exact while the parent's rotation
+// keeps the child's axes aligned -- the same caveat every engine with a
+// non-uniform scale in its hierarchy carries. Levels are authored on quarter
+// turns, where it holds.
+WorldTransform composeTransform(const WorldTransform& parent,
+                                const XformAuthor& local);
+
+// The inverse: what a child's authored transform must be for it to end up at
+// `world` while hanging under `parent`.
+//
+// This is what keeps an entity where it is drawn when it changes parents, and
+// what turns a gizmo drag -- which is always in world space, because that is
+// where the mouse is -- back into the local numbers the file stores.
+XformAuthor localFromWorld(const WorldTransform& parent,
+                           const WorldTransform& world);
+
 // Where a grid-constrained piece sits. Derived quantities (the world transform)
 // come from GridMath; this is the authored intent, and it is what makes a wall
 // still be "the north wall of cell (3,4)" after somebody nudges the geometry.
@@ -56,12 +87,28 @@ struct ColliderAuthor {
     glm::vec3 offset{0.0f};
 };
 
+// How a light modulates over time. Cooks to eng::ecs::LightAnimation, whose
+// header is where the modes are defined; Steady means the light is not animated
+// and is what a light with no `animation` block gets.
+struct LightAnimAuthor {
+    enum class Mode { Steady, Flicker, Pulse };
+    Mode mode = Mode::Flicker;
+    float speed = 7.0f;
+    float amount = 0.3f;
+    // Per-instance offset. Two torches on one wall with identical numbers and
+    // no phase gutter in lockstep, which reads as a switch rather than fire.
+    float phase = 0.0f;
+};
+
 struct LightAuthor {
     enum class Type { Directional, Point };
     Type type = Type::Point;
     glm::vec3 colour{1.0f};
     float range = 8.0f;
     bool castShadows = false;
+    // Absent means a steady light, which is every light authored before this
+    // existed.
+    std::optional<LightAnimAuthor> animation;
 };
 
 struct TriggerAuthor {
@@ -69,9 +116,91 @@ struct TriggerAuthor {
     std::string event;
 };
 
+// A point of view placed in the level. Cooks to eng::ecs::Camera, whose header
+// is where the rules live; this is only what the file carries.
+//
+// The entity's transform is the shot -- position and facing -- so a camera
+// parented to something that moves is a moving shot, and the composition rules
+// are the ones every other entity already follows.
+struct CameraAuthor {
+    float fovDegrees = 60.0f; // vertical; the game's own framing is 70
+    float nearClip = 0.05f;
+    float farClip = 200.0f;
+    int priority = 0;   // highest active camera wins
+    bool active = true; // a parked alternate framing, kept but not used
+};
+
+// Travel around a point. Cooks to eng::ecs::Orbit, whose header is where the
+// rules live; this is only what the file carries.
+//
+// `Spin` turns a thing where it stands; this moves it along a ring, and it
+// needs no pivot entity to do it. The pivot rig is still what a *group* uses --
+// a parent is how several things share one motion -- but a single orbiting
+// camera, moon or drone is one component on one entity.
+struct OrbitAuthor {
+    enum class Facing { Free, Centre, Travel };
+    glm::vec3 centre{0.0f}; // in the entity's own frame: its parent's, or world
+    glm::vec3 axis{0.0f, 1.0f, 0.0f};
+    float radius = 5.0f;
+    float degreesPerSecond = 30.0f;
+    float phaseDegrees = 0.0f;
+    float height = 0.0f;
+    Facing facing = Facing::Free;
+};
+
+// Constant rotation, in degrees per second about a local axis. Cooks to
+// eng::ecs::Spin.
+//
+// Authored because the things it is for -- a turning pickup, a slowly rotating
+// hazard, a pivot an orbiting camera hangs from -- are level decisions, and
+// every one of them would otherwise be a line of C++ that has to find the
+// entity again each frame.
+// Per-entity shader uniforms, authored. Cooks to eng::ecs::ShaderParams, whose
+// header says what each field drives; the defaults here are that struct's, so
+// an entity that carries the component but sets nothing renders exactly as it
+// did without it.
+struct ShaderAuthor {
+    glm::vec3 tint{1.0f, 1.0f, 1.0f};
+    float opacity = 1.0f;
+    glm::vec3 rimColour{0.55f, 0.75f, 1.0f};
+    float rimStrength = 0.0f;
+    float rimPower = 3.0f;
+    float alphaScissor = 0.0f;
+};
+
+// The portal shader's knobs, authored. Field names are the uniform names, the
+// same contract eng::ecs::PortalParams states -- so this is a mirror of that
+// struct rather than a translation of it, and the cook is a field-by-field copy
+// with nothing to get wrong in between.
+using PortalAuthor = eng::ecs::PortalParams;
+
+// A particle effect playing from this entity. The same mirror-not-translate
+// trick: the authored type IS the component, so the cook is a copy and the
+// accepted .scn keys are the component's own fields.
+//
+// This is what makes "give that torch smoke" inspector work. It used to be the
+// Particles dock or nothing, and the dock spawns an effect into the *level* --
+// a runtime act nothing saves, so an authored scene could not carry one.
+using ParticleAuthor = eng::ecs::ParticleEmitter;
+
+struct SpinAuthor {
+    glm::vec3 axis{0.0f, 1.0f, 0.0f};
+    float degreesPerSecond = 45.0f;
+};
+
 struct Entity {
     AuthorId id;
     std::string name;   // display name; defaults to id
+    // Whose frame `transform` is expressed in. Empty means the world.
+    //
+    // A level is not a flat list: a torch belongs to the wall it hangs on, a
+    // patrol route belongs to the room it guards, and a chandelier plus its
+    // four candles is one thing an author moves. Without this the only way to
+    // move a composed object was to select its parts and hope none was missed.
+    //
+    // The runtime map stays flat: the cooker bakes the chain into a world
+    // transform, so nothing downstream of the editor knows hierarchies exist.
+    AuthorId parent;
     std::string prefab; // "kit.wall", or empty for a marker/light/trigger
     // Overrides the kit piece's own material. Empty means "use the kit's",
     // which is what almost every piece should do -- an override is for the
@@ -83,6 +212,12 @@ struct Entity {
     std::optional<CellPlacement> cell;
     std::optional<ColliderAuthor> collider;
     std::optional<LightAuthor> light;
+    std::optional<CameraAuthor> camera;
+    std::optional<SpinAuthor> spin;
+    std::optional<OrbitAuthor> orbit;
+    std::optional<ShaderAuthor> shader;
+    std::optional<PortalAuthor> portal;
+    std::optional<ParticleAuthor> particles;
     std::optional<float> exitYawDegrees;
     std::optional<std::string> marker;
     std::optional<std::string> enemySpawn; // enemy type id
@@ -97,6 +232,21 @@ class SceneDocument
 {
 public:
     std::string id; // "scene.test.ritual_boss_showroom"
+
+    // The look this level is lit and graded with: a table in palettes.toml
+    // ("dungeon", "showroom"). Empty means the game's default.
+    //
+    // A level's palette is a level design decision -- a crypt and a cathedral
+    // are not the same room with different props -- and it was the one such
+    // decision the format could not carry. Every authored scene played under
+    // whatever the runtime happened to apply, so the only way to see a level in
+    // its own light was to edit the game.
+    //
+    // A name rather than the values: palettes.toml already holds forty tuned
+    // fields per look, and a copy of them in every .scn is forty fields that
+    // drift.
+    std::string palette;
+
     std::vector<Entity> entities;
 
     Entity* find(std::string_view authorId);
@@ -110,6 +260,30 @@ public:
     // timestamp or a session counter -- two authors editing in parallel must
     // not be guaranteed a merge conflict.
     AuthorId allocateId(std::string_view stem) const;
+
+    // --- hierarchy ----------------------------------------------------------
+    // Where the entity actually is, with its parent chain applied. Entities
+    // with no parent return their own transform unchanged, which is every
+    // entity in every scene authored before hierarchies existed.
+    //
+    // A broken chain -- a missing parent, or a cycle -- resolves as if the
+    // first unreachable link were the world. That keeps a damaged document
+    // openable and editable: validate() reports the break, and refusing to draw
+    // the scene would leave nothing to fix it with.
+    WorldTransform worldTransform(std::string_view authorId) const;
+
+    // The entities whose `parent` is `authorId`, in document order. Pass an
+    // empty id for the roots.
+    std::vector<const Entity*> childrenOf(std::string_view authorId) const;
+
+    // Every descendant of `authorId`, depth first, excluding itself. Cycles are
+    // walked once and dropped, so this terminates on any document.
+    std::vector<AuthorId> descendantsOf(std::string_view authorId) const;
+
+    // True when making `child` a child of `parent` would close a loop -- either
+    // because they are the same entity or because `parent` is already below
+    // `child`. The one check that stops a hierarchy from becoming unwalkable.
+    bool wouldCycle(std::string_view child, std::string_view parent) const;
 
     // Bumped on every mutation the editor makes, so the preview bridge can skip
     // its diff when nothing changed. Not serialized.

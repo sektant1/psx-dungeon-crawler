@@ -37,9 +37,9 @@ void requireText(const std::string& text, const char* expected,
 
 int main()
 {
-    const std::string programs = read("engine/assets/programs/psx.program");
-    const std::string materials = read("engine/assets/materials/psx.material");
-    const std::string shader = read("engine/assets/shaders/particle.frag");
+    const std::string programs = read("assets/programs/psx.program");
+    const std::string materials = read("assets/materials/psx.material");
+    const std::string shader = read("assets/shaders/particle.frag");
     const std::string runtime = read("engine/src/particles/Particles.cpp");
     const std::string presets =
         read("engine/src/particles/ParticlePresets.cpp");
@@ -91,7 +91,7 @@ int main()
             "particle atlas texture unit uses parser-unsafe one-line syntax");
 
     const std::size_t rainMaterial =
-        materials.find("material Engine/Particles/Rain");
+        materials.find("material Engine/Psx/Rain");
     require(rainMaterial != std::string::npos, "rain material exists");
     require(materials.find("fragment_program_ref RainParticle_FS",
                            rainMaterial) != std::string::npos,
@@ -114,21 +114,21 @@ int main()
                     "modern pixel particle program is missing");
     }
     for (const char* materialName :
-         {"material Engine/Particles/ArcaneMote",
-          "material Engine/Particles/FrostShard",
-          "material Engine/Particles/ToxicBubble",
-          "material Engine/Particles/PortalWisp"}) {
+         {"material Engine/Psx/ArcaneMote",
+          "material Engine/Psx/FrostShard",
+          "material Engine/Psx/ToxicBubble",
+          "material Engine/Psx/PortalWisp"}) {
         requireText(materials, materialName,
                     "modern pixel particle material is missing");
     }
     requireText(presets,
-                "base(Fire, \"Engine/Particles/Fire\", 0.32f, 0.38f, 96)",
+                "base(Fire, \"Engine/Psx/Fire\", 0.32f, 0.38f, 96)",
                 "fire particles are not substantially larger or more numerous");
     requireText(presets,
                 "emitter({0,1,0}, 24, 42, 0.38f, 0.78f",
                 "fire emission is not dense enough");
     requireText(presets,
-                "base(Poison, \"Engine/Particles/Poison\", 0.20f, 0.26f, 72)",
+                "base(Poison, \"Engine/Psx/Poison\", 0.20f, 0.26f, 72)",
                 "poison particles lack the quality-first size/quota");
     requireText(presets, "{1.35f,0.12f,0.025f",
                 "fire palette is not saturated HDR");
@@ -140,7 +140,7 @@ int main()
                 "r.spawnParticles(style.particles, arch)",
                 "portal wisps are not centered on the portal membrane");
 
-    const std::string showcase = read("game/assets/showroom_exhibits.toml");
+    const std::string showcase = read("assets/config/showroom_exhibits.toml");
     for (const char* id : {"fire_particles", "smoke_particles",
                            "rain_volume"}) {
         const std::string altar = exhibit(showcase, id);

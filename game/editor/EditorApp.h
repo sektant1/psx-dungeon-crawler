@@ -1,8 +1,23 @@
 #pragma once
+#include "Clipboard.h"
+#include "CommandPalette.h"
 #include "Commands.h"
+#include "ConfirmDialog.h"
+#include "EditorIcons.h"
+#include "EntityGizmos.h"
+#include "GameVocabulary.h"
+#include "MaterialCatalog.h"
+#include "RenderPalette.h"
+#include "ViewportOverlay.h"
+#include "SceneBrowser.h"
 #include "SceneValidate.h"
+#include "EditorSettings.h"
 #include "EditorState.h"
+#include "EntityComponents.h"
+#include "OutlinerPanel.h"
+#include "UiStage.h"
 #include "MaterialStage.h"
+#include "OutlinerTree.h"
 #include "Picker.h"
 #include "PreviewBridge.h"
 #include "SceneTemplates.h"
@@ -14,6 +29,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace ed {
 
@@ -28,8 +44,7 @@ namespace ed {
 // ImGui::Image of the renderer's offscreen viewport. That inversion is what
 // makes this editor viable at all -- ImGui drawn *over* the Ogre overlay is
 // what made the previous one flicker badly enough to be deleted.
-class EditorApp : public eng::Application
-{
+class EditorApp : public eng::Application {
 public:
     EditorApp();
     ~EditorApp() override;
@@ -46,46 +61,164 @@ private:
     void drawMenuBar(const eng::FrameContext& f);
     void drawToolbar();
     void drawViewport(const eng::FrameContext& f);
+    // The 2D viewport: the game's real HUD drawn against a dialled-in state.
+    void drawUiStage();
     void drawOutliner();
+    // Select from outside the outliner (viewport pick, placement, a jump from
+    // the validation list) and ask the panel to scroll to the row.
+    void selectAndReveal(const game::content::AuthorId& id, bool toggle);
+    // A viewport click hits a mesh; this says which entity that click means --
+    // the composed object it belongs to, or the exact piece when the author is
+    // already working inside it (or holding Alt).
+    game::content::AuthorId
+    resolvePick(const game::content::AuthorId& hit) const;
     void drawInspector();
+    // The grouped tree the outliner draws, rebuilt only when the document or
+    // the panel's own options change: it walks and sorts every entity, and the
+    // panel is open while the gizmo is being dragged.
+    const OutlinerTree& outlinerTree();
+    void selectGroup(const OutlinerGroup& group, bool add);
+    // Hangs `child` under `parent` (empty detaches it), keeping the place it is
+    // drawn in. Refuses anything that would close a loop.
+    void reparentEntity(const game::content::AuthorId& child,
+                        const game::content::AuthorId& parent);
+    // The same edit, built but not run, so a batch closes as one undo entry.
+    // False when the move is refused or would change nothing.
+    bool buildReparent(const game::content::AuthorId& child,
+                       const game::content::AuthorId& parent, Command& out);
+    // Multi-selection shortcuts for the same thing: compose, and break apart.
+    void parentSelectionToPrimary();
+    void detachSelection();
+    // Hides everything the selection does not need. Session state, not a
+    // document edit -- the show-everything button is its undo.
+    void isolateSelection();
+    void focusPanelIfRequested(const char* name);
+    void drawSelectionContextMenu();
+    // Component editing, applied to the whole selection as one undo entry --
+    // "give these forty pillars a collider" is the reason the panel groups.
+    void addComponentToSelection(const ComponentType& type);
+    void removeComponentFromSelection(const ComponentType& type);
+    ComponentDefaults componentDefaults() const;
+    // The level's own properties, shown where the entity inspector would be
+    // when nothing is selected.
+    void drawSceneProperties();
+    void setScenePalette(const std::string& palette);
     void drawStatusBar();
     void drawCatalog();
     void drawIssues();
     void drawMaterialPanel();
     void drawParticlePanel();
     void applyMaterialToSelection(const std::string& material);
+    // The shipped .material scripts, classified by what geometry they need.
+    // Loaded once, on first use.
+    const std::vector<MaterialInfo>& materialCatalog();
+    const MaterialInfo* materialInfo(const std::string& name);
+    // What the selected entities' meshes offer a material, taken from the
+    // material their kit pieces were authored with.
+    MeshKind selectionMeshKind();
     void setMode(bool material);
     // Selection and manipulation, both driven from inside the viewport panel so
     // they share its rect with ImGuizmo.
     void handleViewportPicking(const eng::FrameContext& f);
     void drawGizmo(const eng::FrameContext& f);
+    void finishGizmoDrag();
     void drawStageGizmo(const eng::FrameContext& f);
     void runCommand(Command command);
+    // Undo/redo as one call. The menu, the keybind and the palette all reach
+    // for it, and the three copies this replaced had already drifted: one of
+    // them forgot to invalidate the preview, so an undone placement stayed on
+    // screen until the next unrelated edit.
+    void applyHistory(bool redo);
+    // Every verb the editor has, named. Rebuilt each time the palette opens,
+    // because half of them are only available -- or only meaningful -- given
+    // the current selection, tool and document.
+    std::vector<PaletteAction> paletteActions();
     bool saveScene();
     void newScene(game::content::SceneTemplate which);
     void drawSaveAsPopup();
+    void drawImportModelPopup();
+    bool importGlbModel(const std::string& path);
+    // Opening an existing scene: the dialog, and the one path everything else
+    // (recent list, palette, console) goes through so the unsaved-work prompt
+    // can never be skipped.
+    void drawOpenScenePopup();
+    void requestOpen(const std::string& path);
+    // Clipboard. Cut is copy plus delete, in that order, as one undo entry.
+    void copySelection(bool cut);
+    void pasteClipboard();
+    // Adds already-built copies as one undo entry and selects them. Duplicate
+    // and paste differ only in where the entities came from.
+    void addCopies(const std::vector<game::content::Entity>& copies,
+                   const std::string& label);
+    // Periodic backup of the open document, and the recovery it enables.
+    void tickAutosave(float dt);
+    void writeAutosave();
+    void recoverAutosave();
+    // Preferences, and the one panel that edits them. Written on every change
+    // rather than on quit: an editor that loses its settings when it crashes is
+    // an editor whose settings nobody trusts.
+    void drawSettings();
+    void commitSettings();
+    // The reverse: fold the live view toggles back into the settings and save
+    // them if any moved. Once a frame, because the menus edit the state.
+    void captureSettings();
+    // Push the loaded preferences onto the things they configure: the render
+    // profile, the lighting mode and the view toggles. Called once at start-up
+    // and again whenever the panel changes one, so there is one direction of
+    // travel -- settings to state, never back.
+    void applySettings();
+    // PSX_EDITOR_SELFTEST: run the edits the UI performs, one per frame, then
+    // quit. The four ways the editor was reported to crash -- deleting an
+    // entity, removing a component, removing a mesh, unparenting -- are all
+    // mouse gestures, which is why they were only ever reproduced by hand.
+    // Driving them through the same functions the widgets call makes them a
+    // test, and a stack trace.
+    void runSelfTest(eng::Engine& engine);
+    int mSelfTestStep = -1; // <0 = off
+    // The name of the render profile a playtest should launch with, resolved
+    // from the settings and the viewport's current one. Empty means "let the
+    // game pick", which is what the engine default is.
+    std::string playtestPresetName() const;
+    // Every keybind, in one table, drawn as a panel. The bindings themselves
+    // live in editor.toml; this is the reading of them.
+    void drawHelp();
+    // Screen-space marks for the entities with no mesh -- spawns, lights,
+    // triggers, markers. Rebuilt on a document change, not per frame.
+    const std::vector<GizmoMark>& entityGizmoMarks();
+    void drawEntityGizmos();
+    // The strip of view toggles inside the 3D view, and the cost readout in its
+    // corner. Both belong to the viewport rather than to the toolbar panel:
+    // they answer questions about what is on screen.
+    void drawViewportToolbar();
+    void drawViewportStats(const eng::FrameContext& f);
 
     // Anything that throws the open document away. An hour of blockout is the
     // most expensive thing in this program and four separate paths used to
     // discard it without asking -- Escape most dangerously of all, since that
     // is the key people press to leave a mode, not the editor.
-    enum class Discard { Quit, Reload, NewScene };
+    enum class Discard { Quit, Reload, NewScene, Open };
     // Runs `what` immediately on a clean document, otherwise parks it behind
     // the save/discard/cancel prompt.
-    void requestDiscard(Discard what,
-                        game::content::SceneTemplate which =
-                            game::content::SceneTemplate::Empty);
+    void requestDiscard(Discard what, game::content::SceneTemplate which =
+                                          game::content::SceneTemplate::Empty);
     void performDiscard();
     void drawDiscardPopup();
     // F6 / F5: cook the authored scene to a runtime map, and play it.
     bool cookScene(std::string& mapPath);
     void runPlaytest();
     void deleteSelection();
+    // The delete itself, past the confirmation. Separate because a confirmed
+    // delete runs a frame later, from the dialog's callback, by which time the
+    // selection may have moved on -- the ids are what it acts on.
+    void commitDelete(const std::vector<game::content::AuthorId>& ids);
+    // Above this many entities, a delete asks first. Small enough that a room
+    // drag counts, large enough that nudging a handful never does.
+    static constexpr std::size_t kConfirmDeleteAbove = 8;
     void duplicateSelection();
     Ray mouseRay() const;
     // Placement: the ghost under the cursor, and committing it.
     bool hoveredPlacement(game::content::CellPlacement& cell,
-                           game::content::XformAuthor& transform) const;
+                          game::content::XformAuthor& transform) const;
     void placeAt(const game::content::CellPlacement& cell,
                  const game::content::XformAuthor& transform);
     void drawPlacementGhost();
@@ -93,11 +226,23 @@ private:
     bool hoveredCell(int& col, int& row) const;
     void drawRoomPreview(const eng::FrameContext& f);
     void commitRoom();
-    // Non-kit entities: markers, spawns, encounters, lights, volumes. They have
-    // no prefab and no mesh, so they are created straight in front of the
-    // camera rather than placed with the kit brush.
+    // Gameplay entities are created straight in front of the camera rather
+    // than placed with the kit brush. Portal is the one visible compound: its
+    // mesh, shader parameters and exit meaning belong to one entity.
     enum class Gameplay {
-        PlayerSpawn, Exit, Marker, EnemySpawn, Pickup, Trigger, PointLight,
+        // A transform and nothing else, to hang other entities from. Composing
+        // a room's dressing needs a parent that is not itself a barrel: without
+        // one, "move all of this" means picking one prop to be the root and
+        // then being unable to delete it without taking the rest.
+        Group,
+        PlayerSpawn,
+        Portal,
+        Exit,
+        Marker,
+        EnemySpawn,
+        Pickup,
+        Trigger,
+        PointLight,
         DirectionalLight,
     };
     void addGameplayEntity(Gameplay kind);
@@ -132,16 +277,23 @@ private:
     // Set by the load step: the catalog is what everything else is placed
     // against, so a failure there has to abort the run at onStart.
     bool mCatalogFailed = false;
-    std::string mStatus;       // one-line feedback under the panels
+    std::string mStatus; // one-line feedback under the panels
 
     // Viewport geometry, in window pixels: where the offscreen image is drawn.
     // ImGuizmo will need exactly this rect, so it is kept as state rather than
     // recomputed.
     float mViewportX = 0.0f, mViewportY = 0.0f;
     float mViewportW = 0.0f, mViewportH = 0.0f;
+    // RTT dimensions are physical pixels; interaction remains in ImGui's
+    // logical coordinates. Tracking both makes DPI-only changes resize the RTT.
+    int mViewportTextureW = 0, mViewportTextureH = 0;
     bool mViewportHovered = false;
     bool mFlying = false;
     bool mLayoutBuilt = false;
+    // How many level cells one drawn grid cell covers right now: 1 up close, a
+    // power of two once the camera pulls back. Shown in the toolbar so a coarse
+    // grid never misreports the scale.
+    int mGridMultiple = 1;
     std::size_t mBatches = 0, mTriangles = 0;
 
     CommandStack mCommands;
@@ -159,7 +311,7 @@ private:
     glm::mat4 mDragGizmoMatrix{1.0f};
     std::vector<std::pair<game::content::AuthorId, game::content::XformAuthor>>
         mDragStart;
-    int mGizmoOperation = 0; // 0 translate, 1 rotate, 2 scale
+    int mGizmoOperation = 0;  // 0 translate, 1 rotate, 2 scale
     bool mGizmoLocal = false; // world by default; the grid is the usual frame
     // Off by default: placing things needs flat bright light. On, the viewport
     // uses the scene's own lighting, which is the only way to see whether the
@@ -183,6 +335,11 @@ private:
     uint64_t mIssuesRevision = ~uint64_t(0);
     std::string mCookStatus = "not cooked";
     RunHandle mPlaytest;
+    // F5 starts the playtest at the editor camera rather than at the scene's
+    // spawn. On by default: while building, "does this room work" is the
+    // question, and it is asked about the room on screen. Turn it off to check
+    // the arrival itself.
+    bool mPlayFromCamera = true;
     std::string mExecutablePath; // argv[0], for finding the game binary
 
     // Material staging mode. A separate scene rather than a panel over the
@@ -192,6 +349,28 @@ private:
     bool mStageAutoSpin = true;
     float mStageSpinSpeed = 0.35f;
     std::vector<std::string> mMaterialNames;
+    std::vector<MaterialInfo> mMaterialCatalog;
+    bool mMaterialCatalogLoaded = false;
+    // Off by default: the catalogue is mostly materials that cannot go on an
+    // entity, and offering them is how a compositor pass ends up on a wall.
+    bool mShowAllMaterials = false;
+    // Frames of pending focus for the Material tab. A count rather than a
+    // flag: the docked layout re-selects its saved tab a frame after the
+    // request lands, so one request is not enough.
+    int mFocusMaterialFrames = 0;
+    // A docked panel to bring forward for the first few frames, named by
+    // PSX_EDITOR_PANEL. Verification only: panels share tabs, and a screenshot
+    // run has no mouse to click one with.
+    std::string mFocusPanel;
+    int mFocusPanelFrames = 6;
+    // The vocabularies the game defines, read once at startup. Empty is
+    // survivable: the inspector falls back to free text and says so.
+    std::vector<std::string> mEnemyIds;
+    std::vector<std::string> mPickupIds;
+    // The looks palettes.toml defines, and where it is. Resolved once: the
+    // combo is drawn every frame the inspector is open with nothing selected.
+    std::vector<std::string> mPalettes;
+    std::string mPalettesPath;
     char mMaterialFilter[64] = {};
 
     // Particle authoring. The library owns the descs; the panel edits them in
@@ -204,14 +383,71 @@ private:
     int mFloorVariant = 0; // 0 default grey, 1 dark
     std::string mSelectedMaterial;
     bool mSaveAsOpen = false;
+    bool mContinueDiscardAfterSave = false;
     char mSaveAsPath[512] = {};
+    bool mImportModelOpen = false;
+    char mImportModelPath[512] = {};
     // Set when a discard is waiting on the prompt; consumed by performDiscard.
     bool mDiscardOpen = false;
     Discard mDiscardWhat = Discard::Quit;
     game::content::SceneTemplate mDiscardTemplate =
         game::content::SceneTemplate::Empty;
+    PaletteState mPalette;
+    RecentScenes mRecent;
+    std::string mRecentFile; // artifacts/editor/recent.txt, resolved in onLoad
+    bool mOpenSceneOpen = false;
+    char mOpenFilter[64] = {};
+    std::string mPendingOpen; // parked behind the unsaved-work prompt
+    // Entities lifted with Ctrl+C, held as authored data rather than as ids:
+    // the originals may be deleted, or the document replaced, before the paste.
+    std::vector<game::content::Entity> mClipboard;
+    // Preferences and where they live. Loaded next to recent.txt, for the same
+    // reason: both are per-user state about the editor, not content.
+    EditorSettings mSettings;
+    std::string mSettingsFile; // artifacts/editor/settings.txt
+    bool mSettingsOpen = false;
+    // Seconds until the next backup. The interval is a setting now
+    // (EditorSettings::autosaveSeconds); losing two minutes of blockout is an
+    // annoyance, losing an hour is the afternoon.
+    float mAutosaveIn = EditorSettings{}.autosaveSeconds;
+    bool mAutosaveOffered = false; // recovery is proposed once per scene
+    bool mHelpOpen = false;
+    std::vector<GizmoMark> mGizmoMarks;
+    uint64_t mGizmoMarksRevision = ~uint64_t(0);
+    // Both on by default: an editor that hides half the level until a checkbox
+    // is found is the state this feature was written to end.
+    bool mShowEntityGizmos = true;
+    bool mShowGizmoVolumes = true;
+    bool mShowFrameStats = true;
+    FrameStatsSmoother mFrameStats;
+    FrameBudget mFrameBudget;
     char mOutlinerFilter[64] = {};
     bool mOutlinerShowGeometry = true;
+    OutlinerTree mOutliner;
+    uint64_t mOutlinerRevision = ~uint64_t(0);
+    OutlinerOptions mOutlinerOptions;
+    // The rows as the panel last drew them, which is what a Shift-click
+    // resolves a range against (see OutlinerRowOrder).
+    OutlinerRowOrder mOutlinerRows;
+    // The 2D viewport's state and the HUD it drives. The HUD is the game's own
+    // class, constructed once here, so what the panel shows is what ships.
+    UiStageState mUiStage;
+    game::GameHud mUiHud;
+    bool mUiHudReady = false;
+    // Where the next Shift-range starts: the last row clicked without Shift.
+    // Cleared when the document changes under it, so a range can never reach
+    // back to a row that no longer exists.
+    game::content::AuthorId mSelectionAnchor;
+    // A row the panel should scroll to and open its way down to, consumed on
+    // the frame it is honoured. Set when the selection came from anywhere but
+    // the panel -- a viewport pick, a command, an undo.
+    game::content::AuthorId mOutlinerReveal;
+    // Whose material the swatch is currently showing, so the preview follows a
+    // change of selection without overriding a click in the material list.
+    game::content::AuthorId mPreviewedEntity;
+    // Effect names for the Particles component's combo, refreshed per frame.
+    std::vector<std::string> mParticleEffectNames;
+    char mAddComponentFilter[64] = {};
     bool mThumbAutoSpin = true;
     bool mCycleMaterials = false;
     std::size_t mCycleIndex = 0;

@@ -48,6 +48,7 @@ void readVisual(const toml::table& t, EnemyVisual& v)
     v.hitFlash = num(t, "hit_flash", v.hitFlash);
     v.hitFlashTime = num(t, "hit_flash_time", v.hitFlashTime);
     v.castShadows = t["cast_shadows"].value_or(v.castShadows);
+    v.blood = t["blood"].value_or(v.blood);
 }
 
 void readStats(const toml::table& t, EnemyStats& s)

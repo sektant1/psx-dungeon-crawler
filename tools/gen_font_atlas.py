@@ -32,7 +32,7 @@ def main() -> int:
     ap.add_argument("--size", type=int, default=12)
     ap.add_argument("--name", default="ui_regular")
     ap.add_argument("--threshold", type=int, default=128)
-    ap.add_argument("--out", default="engine/assets/fonts")
+    ap.add_argument("--out", default="assets/engine/fonts")
     args = ap.parse_args()
 
     face = ImageFont.truetype(args.font, args.size)

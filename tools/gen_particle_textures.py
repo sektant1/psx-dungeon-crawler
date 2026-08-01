@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the placeholder particle textures in engine/assets/particles/textures/.
+"""Generate the placeholder particle textures in assets/engine/particles/textures/.
 
     tools/gen_particle_textures.py
 
@@ -19,7 +19,7 @@ filtering magnifies it further.
 particle sprite with a soft 8-bit falloff reads as a modern smoke puff; banding
 it to four steps reads as a sprite.
 
-Blending, per `engine/assets/materials/particles.material` and
+Blending, per `assets/engine/materials/particles.material` and
 `ParticleMaterials::buildMaterial`: alpha materials use SBT_TRANSPARENT_ALPHA
 (src_alpha, 1-src_alpha), so alpha art is *straight*, never premultiplied.
 Additive materials use SBT_ADD (one, one), which ignores alpha entirely, so
@@ -41,7 +41,7 @@ from PIL import Image
 
 SEED = 0x50535831  # "PSX1"
 
-OUT_DIR = Path(__file__).resolve().parent.parent / "engine/assets/particles/textures"
+OUT_DIR = Path(__file__).resolve().parent.parent / "assets/engine/particles/textures"
 
 UPSCALE = 2
 

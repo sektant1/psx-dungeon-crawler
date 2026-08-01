@@ -12,8 +12,14 @@ namespace eng {
 // is a window: nothing in it may touch the renderer.
 struct AppConfig
 {
-    std::string configPath; // TOML passed to Engine::init
-    std::string assetDir;   // app asset root
+    // A LOGICAL path, resolved against the mounted packs -- "config/game.toml", not a
+    // directory plus a filename. The app no longer knows where its content
+    // lives on disk; assets.toml does.
+    std::string configPath;
+    // Which set from assets.toml's [mounts] this app runs on: "game",
+    // "editor", "demo". It picks the packs and their priority order, and with
+    // them every resource location the renderer registers.
+    std::string mountSet = "game";
     // Starting render profile (eng::renderPresetFromArgs / renderPresetFromName).
     // 0 leaves the choice to PSX_RENDER_PRESET and then kDefaultRenderPreset.
     // Only the *starting* look: the debug console switches profiles at runtime.
@@ -49,9 +55,16 @@ struct AppConfig
 struct FrameContext
 {
     Engine& engine;
-    float dt;    // wall-clock delta for this frame, already spike-clamped
+    // Game-time delta: the spike-clamped wall delta after the game clock's
+    // scale and pause (eng::Clock). Zero on a paused frame, which is what makes
+    // pause and slow-motion work without any system opting in. Simulation and
+    // presentation both read this.
+    float dt;
     float alpha; // fixed-step interpolation alpha in [0,1); 1 with no fixed loop
     uint64_t frame; // frames rendered so far (0 on the first one)
+    // Unscaled wall delta. For the few things that must keep moving while the
+    // world is frozen: debug camera, UI animation, profiling readouts.
+    float realDt = 0.0f;
 };
 
 // The entrypoint contract: an app is a set of ordered callbacks, and

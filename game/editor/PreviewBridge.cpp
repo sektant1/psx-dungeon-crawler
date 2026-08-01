@@ -3,13 +3,15 @@
 #include "SceneCook.h"
 
 #include <eng/Renderer.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
-#include <eng/ecs/MeshSource.h>
+#include <eng/ecs/components/MeshSource.h>
 #include <ecs/RendererSceneBackend.h>
 
 #include <filesystem>
 #include <glm/gtc/quaternion.hpp>
 #include <limits>
+#include <unordered_set>
 
 namespace ed {
 
@@ -17,16 +19,21 @@ using game::content::AuthorId;
 
 struct PreviewBridge::Impl
 {
-    Impl(eng::Renderer& renderer, std::string root)
-        : assetRoot(std::move(root)), backend(renderer), sync(scene, backend),
-          renderer(renderer)
+    explicit Impl(eng::Renderer& renderer) : backend(renderer), renderer(renderer)
     {
+        // The editor preview is a world of its own, not half of the game's:
+        // a different simulation, with no physics and no gameplay on it.
+        //
+        // It does NOT drive the camera. The cameras in the document are
+        // content the author is placing, and the viewport belongs to the
+        // EditorCamera -- a preview that attached the renderer's camera to an
+        // authored one would throw the author out of their own view on every
+        // rebuild, which is once per keystroke.
+        world.attachRenderer(backend, /*drivesCamera=*/false);
     }
 
-    std::string assetRoot;
-    eng::ecs::Scene scene;
     eng::ecs::RendererSceneBackend backend;
-    eng::ecs::SceneSync sync;
+    eng::ecs::World world;
     eng::Renderer& renderer;
 
     std::unordered_map<AuthorId, entt::entity> authorToEntity;
@@ -43,8 +50,17 @@ struct PreviewBridge::Impl
     bool visible = true;
     float ceilingCut = std::numeric_limits<float>::infinity();
 
+    // Entities the outliner's eye has switched off. A set rather than a flag
+    // on the node, because the node is rebuilt on every edit and the choice
+    // must survive that.
+    std::unordered_set<AuthorId> hidden;
+
+    // Everything that keeps an entity off screen, in one place: the ceiling
+    // cut, and the author's own choice.
     bool cutAway(const AuthorId& id) const
     {
+        if (hidden.count(id) != 0)
+            return true;
         const auto found = authorToHeight.find(id);
         return found != authorToHeight.end() && found->second > ceilingCut;
     }
@@ -54,12 +70,17 @@ struct PreviewBridge::Impl
         auto cached = meshCache.find(path);
         if (cached != meshCache.end())
             return cached->second;
-        const std::filesystem::path full =
-            std::filesystem::path(assetRoot) / path;
-        std::error_code code;
-        const eng::MeshHandle mesh =
-            std::filesystem::exists(full, code) ? renderer.loadObj(full.string())
-                                                : renderer.prototypeMesh(path);
+        // A MeshSource is a pack-relative path ("meshes/kit/Door_01.obj"),
+        // which is exactly what the resolver takes. An unresolved one draws as
+        // the prototype box, as it always has: an editor must stay usable with
+        // a broken reference in the document.
+        const std::filesystem::path full = eng::assets::resolve(path);
+        eng::ModelImportOptions legacyImport;
+        legacyImport.pivot = eng::PivotMode::Source;
+        const eng::MeshHandle mesh = full.empty()
+                                         ? renderer.prototypeMesh(path)
+                                         : renderer.loadMesh(full.string(),
+                                                             legacyImport);
         return meshCache.emplace(path, mesh).first->second;
     }
 
@@ -82,9 +103,8 @@ struct PreviewBridge::Impl
     }
 };
 
-PreviewBridge::PreviewBridge(eng::Renderer& renderer,
-                             const std::string& assetRoot)
-    : mImpl(std::make_unique<Impl>(renderer, assetRoot))
+PreviewBridge::PreviewBridge(eng::Renderer& renderer)
+    : mImpl(std::make_unique<Impl>(renderer))
 {
 }
 
@@ -103,12 +123,12 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
     // Rebuild from scratch. Wasteful per keystroke, and deliberately so for
     // now: a correct full rebuild is the baseline the incremental path has to
     // match, and the scenes this edits are hundreds of entities, not millions.
-    mImpl->sync.clear();
+    mImpl->world.clear();
     mImpl->authorToNode.clear();
     mImpl->authorToHeight.clear();
     for (const game::content::Entity& entity : document.entities)
         mImpl->authorToHeight[entity.id] = entity.transform.position.y;
-    entt::registry& registry = mImpl->scene.registry();
+    entt::registry& registry = mImpl->world.registry();
     if (!game::content::buildRegistry(document, catalog, registry, mError,
                                       &mImpl->authorToEntity)) {
         // A document with an unresolved prefab still has to be editable, so
@@ -124,7 +144,7 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
         view.get<eng::ecs::MeshRenderer>(entity).mesh = mImpl->meshFor(path);
     }
 
-    mImpl->sync.sync();
+    mImpl->world.sync();
 
     for (const auto& [id, entity] : mImpl->authorToEntity) {
         if (const auto* node = registry.try_get<eng::ecs::NodeRef>(entity)) {
@@ -175,7 +195,7 @@ void PreviewBridge::showPlacementGhost(
         const eng::NodeHandle node = mImpl->renderer.createNode(
             eng::kRootNode, glm::vec3(0.0f), "editor_placement_ghost");
         mImpl->renderer.attachMesh(node, mImpl->meshFor(piece.meshPath),
-                                   "__Editor/PlacementGhost", false);
+                                   "Editor/PlacementGhost", false);
         found = mImpl->ghostNodes.emplace(piece.meshPath, node).first;
     }
 
@@ -191,6 +211,25 @@ void PreviewBridge::showPlacementGhost(
 void PreviewBridge::hidePlacementGhost()
 {
     mImpl->hideGhost();
+}
+
+void PreviewBridge::setHiddenEntities(eng::Renderer& renderer,
+                                      const std::vector<AuthorId>& hidden)
+{
+    // Compared before doing anything: this is called every frame from the
+    // panel, and re-walking every node per frame would cost more than the
+    // feature saves.
+    if (mImpl->hidden.size() == hidden.size()) {
+        bool same = true;
+        for (const AuthorId& id : hidden)
+            same = same && mImpl->hidden.count(id) != 0;
+        if (same)
+            return;
+    }
+    mImpl->hidden.clear();
+    mImpl->hidden.insert(hidden.begin(), hidden.end());
+    for (const auto& [id, node] : mImpl->authorToNode)
+        renderer.setNodeVisible(node, mImpl->visible && !mImpl->cutAway(id));
 }
 
 bool PreviewBridge::entityVisible(const AuthorId& id) const

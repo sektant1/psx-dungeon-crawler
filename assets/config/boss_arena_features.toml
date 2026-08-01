@@ -1,0 +1,176 @@
+# Feature definitions for scene.test.ritual_boss_showroom. Positions do not
+# live here: each `placement` resolves a `feature.<placement>` marker authored
+# in ritual_boss_showroom.scn. A missing marker is a load error, not (0,0,0).
+
+[[exhibit]]
+id = "fire_particles"
+label = "EMBER TELEGRAPH — rising ignition and hot core"
+shape = "asset_mesh"
+mesh = "meshes/kit/Candle_02.obj"
+material = "Game/Kit/Dungeon"
+scale = [0.28, 0.28, 0.28]
+particles = "engine.fire"
+particle_offset = [0.0, 0.72, 0.0]
+light_colour = [1.25, 0.18, 0.02]
+light_range = 3.5
+label_accent = [1.0, 0.30, 0.05]
+label_highlight_pattern = "EMBER|ignition"
+label_offset = [1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "poison_particles"
+label = "ROT TELEGRAPH — persistent toxic control zone"
+shape = "asset_mesh"
+mesh = "meshes/kit/Spikes.obj"
+material = "Game/Kit/Dungeon"
+scale = [0.16, 0.16, 0.16]
+particles = "engine.poison"
+light_colour = [0.10, 0.72, 0.02]
+light_range = 3.2
+label_accent = [0.24, 1.0, 0.10]
+label_highlight_pattern = "ROT|control"
+label_offset = [1.5, 0.0, 0.0]
+
+[exhibit.particle_options]
+size_scale = 1.8
+amount_scale = 3.0
+lifetime_scale = 1.15
+radius_scale = 1.25
+local_offset = [0.0, 0.72, 0.0]
+
+[[exhibit]]
+id = "water_pool"
+label = "WATER FIELD — directional surface motion"
+shape = "asset_mesh"
+mesh = "meshes/kit/Floor_Tiles.obj"
+material = "Game/Vfx/Water"
+scale = [0.24, 0.20, 0.24]
+label_accent = [0.20, 0.62, 1.0]
+label_highlight_pattern = "WATER|motion"
+label_offset = [1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "arcane_enchantment"
+label = "ASTRAL BLADE — additive rune motion"
+shape = "asset_mesh"
+mesh = "meshes/props/prop_sword.obj"
+material = "Game/PropWeapon"
+scale = [0.06, 0.06, 0.06]
+rotation = [8.0, -18.0, 168.0]
+enchantment = "arcane"
+enchantment_strength = 1.0
+label_accent = [0.64, 0.38, 1.0]
+label_highlight_pattern = "ASTRAL|rune"
+label_offset = [1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "rain_volume"
+label = "RAIN VOLUME — overhead arena pressure"
+shape = "asset_mesh"
+mesh = "meshes/kit/Chandelier.obj"
+material = "Game/Kit/Metal"
+scale = [0.12, 0.12, 0.12]
+particles = "engine.rain"
+particle_offset = [0.0, -2.5, 0.0]
+label_accent = [0.34, 0.64, 1.0]
+label_highlight_pattern = "RAIN|pressure"
+label_offset = [1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "carved_column"
+label = "BROKEN PILLAR — readable low cover"
+shape = "asset_mesh"
+mesh = "meshes/kit/Pillar_Collapsed_01.obj"
+material = "Game/Kit/Dungeon"
+scale = [0.22, 0.22, 0.22]
+rotation = [0.0, 12.0, -2.0]
+label_accent = [0.58, 0.64, 0.72]
+label_highlight_pattern = "STONE|cover"
+label_offset = [1.2, 0.0, 0.0]
+
+[[exhibit]]
+id = "smoke_particles"
+label = "SMOKE TELEGRAPH — expanding obscuration"
+shape = "asset_mesh"
+mesh = "meshes/kit/Barrel.obj"
+material = "Game/Kit/Containers"
+scale = [0.18, 0.18, 0.18]
+particles = "engine.smoke"
+particle_offset = [0.0, 0.72, 0.0]
+label_accent = [0.62, 0.66, 0.74]
+label_highlight_pattern = "SMOKE|obscuration"
+label_offset = [-1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "lava_ash_particles"
+label = "LAVA ASH — lifted embers and gravity"
+shape = "asset_mesh"
+mesh = "meshes/kit/Debris.obj"
+material = "Game/Kit/Dungeon"
+scale = [0.18, 0.18, 0.18]
+particles = "engine.lava_ash"
+light_colour = [0.95, 0.07, 0.01]
+light_range = 3.0
+label_accent = [1.0, 0.22, 0.03]
+label_highlight_pattern = "ASH|gravity"
+label_offset = [-1.5, 0.0, 0.0]
+
+[exhibit.particle_options]
+size_scale = 1.7
+amount_scale = 3.0
+lifetime_scale = 1.2
+radius_scale = 1.35
+local_offset = [0.0, 0.72, 0.0]
+
+[[exhibit]]
+id = "lava_pool"
+label = "LAVA FIELD — moving hazard language"
+shape = "asset_mesh"
+mesh = "meshes/kit/Floor_Tiles.obj"
+material = "Game/Vfx/Lava"
+scale = [0.24, 0.20, 0.24]
+light_colour = [1.25, 0.18, 0.02]
+light_range = 4.2
+label_accent = [1.0, 0.30, 0.06]
+label_highlight_pattern = "LAVA|hazard"
+label_offset = [-1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "fire_enchantment"
+label = "EMBER BLADE — animated combat enchantment"
+shape = "asset_mesh"
+mesh = "meshes/props/prop_sword.obj"
+material = "Game/PropWeapon"
+scale = [0.06, 0.06, 0.06]
+rotation = [8.0, 18.0, 168.0]
+enchantment = "fire"
+enchantment_strength = 1.0
+label_accent = [1.0, 0.28, 0.05]
+label_highlight_pattern = "EMBER|enchantment"
+label_offset = [-1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "frost_enchantment"
+label = "FROST BLADE — counter-pattern enchantment"
+shape = "asset_mesh"
+mesh = "meshes/props/prop_sword.obj"
+material = "Game/PropWeapon"
+scale = [0.06, 0.06, 0.06]
+rotation = [8.0, 12.0, 168.0]
+enchantment = "frost"
+enchantment_strength = 1.0
+label_accent = [0.30, 0.72, 1.0]
+label_highlight_pattern = "FROST|counter"
+label_offset = [-1.5, 0.0, 0.0]
+
+[[exhibit]]
+id = "iron_obelisk"
+label = "DARK IRON — hanging chain silhouette"
+shape = "asset_mesh"
+mesh = "meshes/kit/Chain.obj"
+material = "Game/Kit/Metal"
+scale = [0.30, 0.30, 0.30]
+rotation = [0.0, 22.0, 0.0]
+label_accent = [0.42, 0.48, 0.58]
+label_highlight_pattern = "IRON|silhouette"
+label_offset = [-1.2, 0.0, 0.0]

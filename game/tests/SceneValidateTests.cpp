@@ -4,6 +4,7 @@
 
 #include "SceneSource.h"
 #include "SceneValidate.h"
+#include "TestAssets.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -52,9 +53,10 @@ static SceneDocument healthy()
 
 int main()
 {
+    game::test::mountGameAssets();
     KitCatalog catalog;
     std::string error;
-    require(KitCatalog::load(KIT_TOML, catalog, error), error);
+    require(KitCatalog::load(game::test::asset("config/kit.toml"), catalog, error), error);
 
     {
         const std::vector<Issue> issues = validate(healthy(), catalog);
@@ -302,8 +304,8 @@ int main()
     // --- the real shipped scene --------------------------------------------
     {
         SceneDocument shipped;
-        require(loadSceneSource(RITUAL_SCN, shipped, error), error);
-        const std::vector<Issue> issues = validate(shipped, catalog, ASSET_ROOT);
+        require(loadSceneSource(game::test::asset("scenes/ritual_boss_showroom.scn"), shipped, error), error);
+        const std::vector<Issue> issues = validate(shipped, catalog, game::test::gamePackDir());
         for (const Issue& issue : issues) {
             std::cerr << "  shipped scene: " << severityName(issue.severity)
                       << ' ' << issue.code << " (" << issue.entity

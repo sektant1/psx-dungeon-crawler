@@ -110,6 +110,11 @@ void GameHud::configure(const eng::Config& config) {
     mReducedMotion = config.getBool("hud.reduced_motion", false);
     mShowCrosshair = config.getBool("hud.crosshair", true);
     mShowNumbers = config.getBool("hud.numeric_values", true);
+    const float requestedSafeArea =
+        float(config.getNumber("hud.safe_area_percent", 5.0));
+    mSafeAreaPercent = std::isfinite(requestedSafeArea)
+                           ? std::clamp(requestedSafeArea, 0.0f, 15.0f)
+                           : 5.0f;
     mInteractKey = upper(firstBinding(config, "interact", "E"));
     mSwapKey = upper(firstBinding(config, "swap_weapon", "X"));
 
@@ -219,11 +224,10 @@ void GameHud::drawArmament(const HudSnapshot& snapshot,
     const eng::ui::UiPalette& pal = mCanvas.palette();
     const std::string& name = snapshot.weapon.name;
     const std::string& discipline = snapshot.weapon.discipline;
-    const std::string keyCap = "[" + mSwapKey + "]";
     // Row two carries the key cap and the discipline side by side, so the
     // plate is as wide as the wider of the two rows -- not as wide as the
     // longest single string, which let them overlap.
-    const int keyW = mCanvas.measure(keyCap).x;
+    const int keyW = mCanvas.keyCapWidth(mSwapKey);
     const int width = bounds.size.x;
     const int row = mCanvas.lineHeight();
     const int height = bounds.size.y;
@@ -246,8 +250,9 @@ void GameHud::drawArmament(const HudSnapshot& snapshot,
             mCanvas.font().ellipsize(discipline, disciplineRoom);
         mCanvas.text({at.x + width - 8, at.y + 3 + row}, fittedDiscipline,
                      pal.textDim, Align::Right, false);
-        mCanvas.text({at.x + 5, at.y + 3 + row}, keyCap, pal.textDim,
-                     Align::Left, false);
+        // Drawn as a cap, not as "[X]" text: the binding is a control, and
+        // the same plate is what the tooltip and the demo placard put a key in.
+        mCanvas.keyCap({at.x + 5, at.y + 3 + row}, mSwapKey);
     }
 }
 
@@ -305,23 +310,44 @@ void GameHud::drawRegionNotice(const glm::ivec4& keepClear,
                  withAlpha(pal.edge, alpha));
 }
 
-void GameHud::draw(const HudSnapshot& snapshot,
-                   const eng::ui::TooltipContent& tooltip, float dt,
-                   bool visible) {
-    // Timers decay even while hidden: coming back from a menu should not
-    // replay a weapon flash the player already saw.
+// Everything that is true of a frame whether the HUD is drawn or not: the
+// animation timers. Split out because the two entry points below share it and
+// neither is allowed to skip it -- a timer that only advances while visible
+// replays a weapon flash the player already saw when they close a menu.
+bool GameHud::beginFrame(const HudSnapshot& snapshot, float dt, bool visible) {
     mWeaponFlash = std::max(0.0f, mWeaponFlash - dt * 2.5f);
     mRegionNotice = std::max(0.0f, mRegionNotice - dt);
     if (snapshot.weapon != mLastWeapon) {
         mLastWeapon = snapshot.weapon;
         mWeaponFlash = mReducedMotion ? 0.0f : 1.0f;
     }
-
     if (!mCanvas.ready() || !visible || !snapshot.valid) {
         mTooltip.update({}, dt);
         mBanner.update({}, dt);
-        return;
+        return false;
     }
+    return true;
+}
+
+void GameHud::drawInto(const HudSnapshot& snapshot,
+                       const eng::ui::TooltipContent& tooltip, float dt,
+                       glm::vec2 originPixels, glm::ivec2 virtualSize,
+                       int scale, ImDrawList* target,
+                       eng::ui::Insets safeArea) {
+    if (!beginFrame(snapshot, dt, true))
+        return;
+    // The same layout, on a surface somebody else sized. This is what makes the
+    // editor's 2D viewport the real HUD rather than a drawing of one: the
+    // canvas moves, the layout code does not know it moved.
+    mCanvas.beginTarget(originPixels, virtualSize, scale, target);
+    paint(snapshot, tooltip, dt, safeArea);
+}
+
+void GameHud::draw(const HudSnapshot& snapshot,
+                   const eng::ui::TooltipContent& tooltip, float dt,
+                   bool visible) {
+    if (!beginFrame(snapshot, dt, visible))
+        return;
 
     const ImVec2 display = ImGui::GetIO().DisplaySize;
     // hud.scale is honoured by re-basing the *preferred* resolution, not by
@@ -333,10 +359,26 @@ void GameHud::draw(const HudSnapshot& snapshot,
     // into blocks. Bigger windows still step up by whole factors.
     const glm::ivec2 preferred{int(std::lround(640.0f / mUserScale)),
                                int(std::lround(480.0f / mUserScale))};
-    mCanvas.begin({display.x, display.y}, preferred);
+    const ImVec2 framebufferScale = ImGui::GetIO().DisplayFramebufferScale;
+    mCanvas.begin({display.x, display.y}, preferred,
+                  {framebufferScale.x, framebufferScale.y});
+    const glm::ivec2 canvasSize = mCanvas.size();
+    const eng::ui::Insets safeArea{
+        int(std::lround(float(canvasSize.x) * mSafeAreaPercent / 100.0f)),
+        int(std::lround(float(canvasSize.y) * mSafeAreaPercent / 100.0f)),
+        int(std::lround(float(canvasSize.x) * mSafeAreaPercent / 100.0f)),
+        int(std::lround(float(canvasSize.y) * mSafeAreaPercent / 100.0f))};
+    paint(snapshot, tooltip, dt, safeArea);
+}
 
+// The layout, against whatever surface the canvas is currently on. Nothing in
+// here knows where that surface is: every coordinate is virtual pixels within
+// mCanvas.size(), which is why the same code fills a window and fills a panel.
+void GameHud::paint(const HudSnapshot& snapshot,
+                    const eng::ui::TooltipContent& tooltip, float dt,
+                    eng::ui::Insets safeArea) {
     const GameHudViewportStyle viewport =
-        resolveGameHudViewportStyle(mStyle, mCanvas.size());
+        resolveGameHudViewportStyle(mStyle, mCanvas.size(), safeArea);
     const int line = mCanvas.lineHeight();
 
     const int vitalsRows = visibleResourceRows(snapshot);
@@ -346,12 +388,11 @@ void GameHud::draw(const HudSnapshot& snapshot,
                                  : 0;
     const std::string& weaponName = snapshot.weapon.name;
     const std::string& discipline = snapshot.weapon.discipline;
-    const std::string keyCap = "[" + mSwapKey + "]";
     const int naturalArmamentWidth =
         viewport.compact
             ? mCanvas.measure(weaponName).x + 16
             : std::max(mCanvas.measure(weaponName).x,
-                       mCanvas.measure(keyCap).x + 6 +
+                       mCanvas.keyCapWidth(mSwapKey) + 6 +
                            mCanvas.measure(discipline).x) +
                   16;
     const int armamentHeight = (viewport.compact ? line : line * 2) + 7;

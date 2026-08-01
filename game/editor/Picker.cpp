@@ -6,7 +6,7 @@
 namespace ed {
 
 Ray screenRay(glm::vec2 ndc, glm::vec3 camPos, glm::quat camOrient,
-               float vFovRad, float aspect)
+              float vFovRad, float aspect)
 {
     const float tanHalf = std::tan(vFovRad * 0.5f);
     const glm::vec3 viewDir(ndc.x * tanHalf * aspect, ndc.y * tanHalf, -1.0f);
@@ -17,12 +17,11 @@ Ray screenRay(glm::vec2 ndc, glm::vec3 camPos, glm::quat camOrient,
 }
 
 Ray viewportRay(glm::vec2 screenPoint, glm::vec2 viewportOrigin,
-                glm::vec2 viewportSize, glm::vec3 camPos,
-                glm::quat camOrient, float vFovRad)
+                glm::vec2 viewportSize, glm::vec3 camPos, glm::quat camOrient,
+                float vFovRad)
 {
     const glm::vec2 within = (screenPoint - viewportOrigin) / viewportSize;
-    const glm::vec2 ndc{within.x * 2.0f - 1.0f,
-                        1.0f - within.y * 2.0f};
+    const glm::vec2 ndc{within.x * 2.0f - 1.0f, 1.0f - within.y * 2.0f};
     return screenRay(ndc, camPos, camOrient, vFovRad,
                      viewportSize.x / viewportSize.y);
 }
@@ -48,14 +47,18 @@ bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit)
     for (int i = 0; i < 3; ++i) {
         const float o = r.origin[i], d = r.dir[i];
         if (std::fabs(d) < 1e-8f) {
-            if (o < mn[i] || o > mx[i]) return false;
-        } else {
+            if (o < mn[i] || o > mx[i])
+                return false;
+        }
+        else {
             float t1 = (mn[i] - o) / d;
             float t2 = (mx[i] - o) / d;
-            if (t1 > t2) std::swap(t1, t2);
+            if (t1 > t2)
+                std::swap(t1, t2);
             tmin = std::max(tmin, t1);
             tmax = std::min(tmax, t2);
-            if (tmin > tmax) return false;
+            if (tmin > tmax)
+                return false;
         }
     }
     tHit = tmin;
@@ -71,6 +74,18 @@ bool rayPlaneY(const Ray& r, float level, glm::vec3& hit)
         return false;
     hit = r.origin + r.dir * t;
     return true;
+}
+
+glm::vec3 workPlanePoint(const Ray& r, float level, float fallbackDistance)
+{
+    glm::vec3 hit;
+    if (rayPlaneY(r, level, hit))
+        return hit;
+    // Behind, above or parallel: take a point out along the ray and drop it to
+    // the plane, so the ghost keeps tracking the cursor's direction instead of
+    // disappearing.
+    const glm::vec3 ahead = r.origin + r.dir * fallbackDistance;
+    return glm::vec3(ahead.x, level, ahead.z);
 }
 
 } // namespace ed

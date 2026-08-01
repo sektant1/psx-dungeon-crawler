@@ -1,14 +1,19 @@
 #include "SimWorld.h"
 #include "GameCollision.h"
 
+#include <eng/assets/AssetRoot.h>
+
 namespace game::sim {
 
 World::World()
 {
     mPhysics.init(game::layer::physicsSetup());
     mPhysics.setGravity(0.0f); // combat sim: no falling, hits/DoT only
-    mVocabulary.load(std::string(APP_ASSET_DIR) + "/magic.toml");
-    mCombat.init(std::string(APP_ASSET_DIR) + "/weapons.toml", mVocabulary);
+    // sim_main mounts the game content set before constructing a World; an
+    // unresolved table leaves the built-in defaults in place, which is what
+    // this already did when the file was missing.
+    mVocabulary.load(eng::assets::resolve("config/magic.toml").string());
+    mCombat.init(eng::assets::resolve("config/weapons.toml").string(), mVocabulary);
 }
 
 World::~World()

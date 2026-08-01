@@ -14,34 +14,47 @@ Checks:
   3. every material name referenced from a .toml is defined by some .material;
   4. no material name is defined twice (Ogre rejects the duplicate, and the
      scene silently keeps the first definition);
-  5. no two texture files share a basename (Ogre's lookup is flat, so the
-     collision is resolved arbitrarily).
+  5. no two texture files share a basename, and no two .material scripts do
+     either (Ogre's file index is as flat as its resource namespace: the
+     duplicate is skipped and openResource() resolves it arbitrarily).
 
-Usage: assetlint.py [asset-root ...]   (defaults to the engine + game + samples
-trees). Run standalone or as the `assetlint` ctest.
+Usage: assetlint.py [asset-root ...]   (defaults to every mount set declared in
+assets/assets.toml). Run standalone or as the `assetlint` ctest.
 """
 
 from __future__ import annotations
 
 import re
 import sys
+import tomllib
 from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+MANIFEST = ROOT / "assets" / "assets.toml"
 
-# Uniqueness is per *application*, not global: Ogre only ever has one app's
-# asset roots registered at a time, so `game` and `psx-demo` are allowed to
-# define the same material name. Each app is linted as engine + shared + its
-# own tree, which is exactly what RenderCore registers at startup.
-SHARED_ROOTS = [
-    ROOT / "engine" / "assets",
-    ROOT / "samples" / "common" / "assets",
-]
-APPS = {
-    "game": ROOT / "game" / "assets",
-    "psx-demo": ROOT / "samples" / "psx-demo" / "assets",
-}
+
+def mount_sets() -> dict[str, list[Path]]:
+    """The manifest's [mounts], resolved to directories.
+
+    Uniqueness is per *mount set*, not global: Ogre's namespaces are flat, but
+    only one set is ever registered at a time, so two packs that are never
+    mounted together may reuse a name. Two packs in the SAME set may not --
+    ResourceManager::add throws rather than warns -- which is what makes this
+    the check that lets `demo` sit on top of `game`.
+
+    Every root comes from the manifest now. assets/game used to be
+    appended here by hand because DEMO_SCENE_TOML reached it outside the
+    resolver; it is the declared `common` pack since P2.
+    """
+    with MANIFEST.open("rb") as f:
+        manifest = tomllib.load(f)
+    dirs = {p["id"]: (MANIFEST.parent / p["dir"]).resolve()
+            for p in manifest.get("pack", [])}
+    return {
+        name: [dirs[pack] for pack in packs if pack in dirs]
+        for name, packs in manifest.get("mounts", {}).items()
+    }
 
 MATERIAL_DEF_RE = re.compile(r"^\s*material\s+(\S+)", re.M)
 TEXTURE_RE = re.compile(r"^\s*texture\s+(\S+)", re.M)
@@ -53,30 +66,55 @@ QUOTED_RE = re.compile(r'"([^"]*)"')
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tga", ".dds", ".bmp"}
 
+# Pipeline INPUTS, not content: archives, .blend files and the raw effect/model
+# packs they extract to. They sit under assets/ so the artist finds them next to
+# the thing they produce, but nothing loads them and they are not registered
+# with Ogre -- so their basenames cannot collide with anything, and linting them
+# only produces noise (the dungeon pack ships the same texture names the game
+# already committed, extracted, under textures/).
+SKIP_DIRS = {"source"}
+
+# The manifest describes the tree, it is not content in it. It also declares
+# `[formats] mesh = [..., ".obj"]`, which the mesh-reference regex would
+# otherwise read as a reference to a file literally named ".obj".
+SKIP_FILES = {"assets.toml"}
+
+
+def skipped(path: Path, root: Path) -> bool:
+    try:
+        parts = path.relative_to(root).parts
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    return parts[0] in SKIP_DIRS or (len(parts) == 1 and parts[0] in SKIP_FILES)
+
 
 def collect(roots: list[Path]):
     textures: dict[str, list[Path]] = defaultdict(list)
     meshes: set[str] = set()
     materials: dict[str, list[Path]] = defaultdict(list)
+    scripts: dict[str, list[Path]] = defaultdict(list)
 
     for root in roots:
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not path.is_file():
+            if not path.is_file() or skipped(path, root):
                 continue
             if path.suffix.lower() in IMAGE_SUFFIXES:
                 textures[path.name].append(path)
             elif path.suffix == ".obj":
                 meshes.add(path.name)
             elif path.suffix == ".material":
+                scripts[path.name].append(path)
                 for name in MATERIAL_DEF_RE.findall(path.read_text(errors="replace")):
                     materials[name].append(path)
-    return textures, meshes, materials
+    return textures, meshes, materials, scripts
 
 
 def lint(roots: list[Path]) -> tuple[list[str], str]:
-    textures, meshes, materials = collect(roots)
+    textures, meshes, materials, scripts = collect(roots)
     errors: list[str] = []
 
     # 4/5: ambiguity in the flat namespaces Ogre actually resolves against.
@@ -88,12 +126,18 @@ def lint(roots: list[Path]) -> tuple[list[str], str]:
         if len(files) > 1:
             where = ", ".join(str(f.relative_to(ROOT)) for f in files)
             errors.append(f"texture basename '{name}' used {len(files)}x: {where}")
+    for name, files in sorted(scripts.items()):
+        if len(files) > 1:
+            where = ", ".join(str(f.relative_to(ROOT)) for f in files)
+            errors.append(f"script basename '{name}' used {len(files)}x: {where}")
 
     # 1: texture units.
     for root in roots:
         if not root.is_dir():
             continue
         for mat in sorted(root.rglob("*.material")):
+            if skipped(mat, root):
+                continue
             text = mat.read_text(errors="replace")
             for tex in TEXTURE_RE.findall(text):
                 if tex not in textures:
@@ -107,6 +151,8 @@ def lint(roots: list[Path]) -> tuple[list[str], str]:
         if not root.is_dir():
             continue
         for doc in sorted(root.rglob("*.toml")):
+            if skipped(doc, root):
+                continue
             text = doc.read_text(errors="replace")
             for obj in OBJ_RE.findall(text):
                 if Path(obj).name not in meshes:
@@ -128,11 +174,7 @@ def lint(roots: list[Path]) -> tuple[list[str], str]:
 
 def main(argv: list[str]) -> int:
     explicit = [Path(a).resolve() for a in argv[1:]]
-    jobs = (
-        {"(explicit)": explicit}
-        if explicit
-        else {name: [*SHARED_ROOTS, root] for name, root in APPS.items()}
-    )
+    jobs = {"(explicit)": explicit} if explicit else mount_sets()
 
     failed = 0
     for name, roots in jobs.items():

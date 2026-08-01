@@ -4,7 +4,7 @@
 #include "ComponentRegistry.h"
 
 #include <eng/ecs/Components.h> // eng::ecs::Parent
-#include <eng/ecs/MeshSource.h>
+#include <eng/ecs/components/MeshSource.h>
 
 #include <algorithm>
 #include <cstdint>

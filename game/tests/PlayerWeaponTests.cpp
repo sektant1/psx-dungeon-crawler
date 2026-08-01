@@ -1,4 +1,5 @@
 #include "PlayerWeapons.h"
+#include "TestAssets.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -25,10 +26,11 @@ bool near(float a, float b, float epsilon = 0.001f)
 
 int main()
 {
+    game::test::mountGameAssets();
     using namespace game;
 
     PlayerWeaponLibrary library;
-    require(library.load(std::string(APP_ASSET_DIR) + "/weapons.toml"),
+    require(library.load(game::test::asset("config/weapons.toml")),
             "shipped player weapons did not load");
     require(library.defs().size() == 3,
             "shipped loadout must contain exactly three MVP weapons");
@@ -44,7 +46,7 @@ int main()
                 near(arbalest->spreadDegrees, 8.0f),
             "heavy weapon spread did not parse");
     require(talon->viewmodel.parts.size() == 4 &&
-                talon->projectile.material == "Game/ProjectileTalon",
+                talon->projectile.material == "Game/Prototype/ProjectileTalon",
             "talon presentation did not parse");
     PlayerWeaponDef invalidDefinition = *spindle;
     invalidDefinition.fireInterval =

@@ -108,7 +108,28 @@ public:
     // `preferred` is the smallest virtual resolution the layout is authored
     // against; the canvas picks the largest integer magnification that still
     // fits it, then reports the true virtual size (usually wider).
-    void begin(glm::vec2 displayPixels, glm::ivec2 preferred = {640, 480});
+    //
+    // Draws over the whole window, on imgui's foreground list: that is what a
+    // game HUD is. Use beginTarget() to put the same canvas inside a panel.
+    void begin(glm::vec2 displayPixels, glm::ivec2 preferred = {640, 480},
+               glm::vec2 framebufferScale = {1.0f, 1.0f});
+
+    // The same canvas, drawn into a rectangle of somebody else's window.
+    //
+    // Exists because a canvas that can only paint the whole window at the
+    // window's own origin can never be previewed, embedded or composited -- and
+    // the editor's job is to show the HUD *beside* the thing it is being
+    // authored against, at a virtual resolution the author picks rather than
+    // the one the window happens to give.
+    //
+    //   originPixels  screen position of virtual (0,0)
+    //   scale         integer magnification, >= 1
+    //   virtualSize   how many virtual pixels the surface is; layouts anchor to
+    //                 its corners exactly as they anchor to the window's
+    //   target        the draw list to paint onto (a window's, so it clips and
+    //                 z-orders with the panel). Null means the foreground list.
+    void beginTarget(glm::vec2 originPixels, glm::ivec2 virtualSize, int scale,
+                     ImDrawList* target);
 
     glm::ivec2 size() const { return mVirtual; }
     int scale() const { return mScale; }
@@ -127,6 +148,24 @@ public:
                UiTone railTone, float opacity = 1.0f) const;
     void text(glm::ivec2 at, std::string_view value, unsigned int colour,
               Align align = Align::Left, bool shadow = true) const;
+    // A keyboard/mouse binding, drawn as a pressed cap: filled plate, border,
+    // label. `textAt` is the same top-left a text() call would take, so a cap
+    // and the words beside it line up by construction. Returns the plate width.
+    //
+    // It is a primitive rather than a string convention because a binding
+    // written into prose ("` console  ESC quit") stops reading as a key at
+    // all: punctuation bindings vanish into the sentence and the eye has no
+    // column to scan. Every surface that shows a binding goes through here.
+    int keyCap(glm::ivec2 textAt, std::string_view label,
+               float alpha = 1.0f) const;
+    int keyCapWidth(std::string_view label) const;
+    // The plate is sized from the glyph *cell*, not from lineHeight: the cell
+    // is taller, and a plate cut to a line height clips the letters inside it.
+    int keyCapHeight() const { return mFont.cellHeight() - 1; }
+    // Vertical pitch for a stacked column of caps -- taller than a text line,
+    // because plates need a gap or the column reads as one long box.
+    int keyCapRow() const { return keyCapHeight() + 2; }
+
     void bar(glm::ivec2 at, glm::ivec2 size, float ratio, unsigned int fill,
              unsigned int track) const;
     void icon(glm::ivec2 at, glm::ivec2 size, unsigned int colour,
@@ -140,12 +179,20 @@ public:
 private:
     glm::vec2 toScreen(glm::ivec2 at) const;
     ImDrawList* list() const;
+    void pushClip(ImDrawList* draw) const;
+    void popClip(ImDrawList* draw) const;
 
     BitmapFont mFont;
     UiStyleSheet mStyle;
     glm::ivec2 mVirtual{320, 240};
     glm::vec2 mDisplay{0.0f};
+    glm::vec2 mOrigin{0.0f};
+    glm::vec2 mFramebufferScale{1.0f};
     int mScale = 1;
+    // Null is imgui's foreground list, which is what a game HUD wants; a panel
+    // passes its own so the canvas clips and z-orders with it.
+    ImDrawList* mTarget = nullptr;
+    bool mClipToTarget = false;
 };
 
 } // namespace eng::ui

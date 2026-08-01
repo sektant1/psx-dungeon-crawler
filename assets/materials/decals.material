@@ -1,0 +1,71 @@
+// Instanced surface decals (engine/src/particles/DecalSystem.cpp).
+//
+// Same shape as particles.material: the programs live beside their materials so
+// the decal renderer is one file to add or remove, and every fragment program
+// writes both MRT attachments because these draw into the compositor's `mrt`
+// target.
+//
+// DecalSystem clones these per texture stem into Decals/Auto/<Blend>/<stem>,
+// so a new blood texture never means editing this file.
+
+vertex_program Decals/QuadVS glsl
+{
+    source decal_quad.vert
+    default_params
+    {
+        param_named_auto worldViewProj worldviewproj_matrix
+        param_named_auto view view_matrix
+        param_named_auto farClip far_clip_distance
+    }
+}
+
+fragment_program Decals/QuadFS glsl
+{
+    source decal_quad.frag
+    default_params
+    {
+        param_named albedoTex int 0
+        param_named alphaScissor float 0.004
+    }
+}
+
+// Depth-tested but never depth-writing, and pushed toward the camera by a
+// constant bias: a decal is coplanar with the wall it sits on, and without the
+// bias it z-fights. The spawn code also offsets along the normal, but that
+// offset has to stay small enough not to detach the mark at grazing angles, so
+// the two work together.
+material Engine/Decals/Alpha
+{
+    technique { pass {
+        cull_hardware clockwise
+        scene_blend alpha_blend
+        depth_write off
+        depth_bias 1.0 1.0
+        vertex_program_ref Decals/QuadVS { }
+        fragment_program_ref Decals/QuadFS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// For glowing marks -- scorch embers, arcane residue -- where order does not
+// matter and the mark should brighten what is under it.
+material Engine/Decals/Additive
+{
+    technique { pass {
+        cull_hardware clockwise
+        scene_blend add
+        depth_write off
+        depth_bias 1.0 1.0
+        vertex_program_ref Decals/QuadVS { }
+        fragment_program_ref Decals/QuadFS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}

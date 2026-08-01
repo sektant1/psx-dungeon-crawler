@@ -57,7 +57,6 @@ This task is specifically about:
 
 The reference should guide presentation and feel, not be copied literally.
 
-Do NOT copy copyrighted game assets, textures, sounds, code, models, UI, or artwork.
 
 ---
 

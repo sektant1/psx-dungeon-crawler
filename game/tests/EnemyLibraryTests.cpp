@@ -2,6 +2,7 @@
 // is supposed to refuse.
 #include "../src/enemy/EnemyLibrary.h"
 #include "../src/combat/CombatVocabulary.h"
+#include "TestAssets.h"
 
 #include <cmath>
 #include <cstdio>
@@ -17,6 +18,7 @@ static bool nearly(float a, float b) { return std::fabs(a - b) < 1e-3f; }
 
 int main()
 {
+    game::test::mountGameAssets();
     // Field-wise inheritance: a row states one number, inherits the rest.
     {
         EnemyLibrary lib;
@@ -246,12 +248,11 @@ id = "chill"
     // chain at build time instead of at "why does this enemy not resist fire".
     {
         EnemyLibrary lib;
-        const std::string assets = APP_ASSET_DIR;
-        check(lib.load(assets + "/enemies.toml"), "shipped enemies.toml loads");
+        check(lib.load(game::test::asset("config/enemies.toml")), "shipped enemies.toml loads");
         check(lib.size() >= 8, "shipped table defines the full roster");
 
         CombatVocabulary vocab;
-        check(vocab.load(assets + "/magic.toml"), "shipped magic.toml loads");
+        check(vocab.load(game::test::asset("config/magic.toml")), "shipped magic.toml loads");
         for (const std::string& id : lib.ids()) {
             const auto def = lib.find(id);
             if (!def)

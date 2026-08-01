@@ -99,7 +99,33 @@ glm::ivec4 TooltipView::draw(const UiCanvas& canvas,
     }
     const std::string actionKey =
         canvas.font().ellipsize(mContent.actionKey, inner / 3);
-    const int actionKeyWidth = actionKey.empty() ? 0 : canvas.measure(actionKey).x;
+    const int actionKeyWidth =
+        actionKey.empty() ? 0 : canvas.keyCapWidth(actionKey);
+
+    // Bindings: a cap column plus descriptions, measured together so every
+    // label starts on the same x no matter how wide its own cap is.
+    struct HintRow {
+        std::string key;
+        std::string label;
+    };
+    std::vector<HintRow> hints;
+    const std::size_t hintBudget =
+        mStyle.maxHints < 0
+            ? mContent.hints.size()
+            : std::min(mContent.hints.size(), std::size_t(mStyle.maxHints));
+    int hintCapColumn = 0;
+    for (std::size_t i = 0; i < hintBudget; ++i) {
+        const TooltipContent::Hint& hint = mContent.hints[i];
+        if (hint.key.empty() && hint.label.empty())
+            continue;
+        const std::string key = canvas.font().ellipsize(hint.key, inner / 2);
+        hintCapColumn = std::max(hintCapColumn, canvas.keyCapWidth(key));
+        hints.push_back({key, hint.label});
+    }
+    const int hintLabelX = hintCapColumn + 6;
+    for (HintRow& row : hints)
+        row.label = canvas.font().ellipsize(row.label,
+                                            std::max(1, inner - hintLabelX));
     const std::string action = canvas.font().ellipsize(
         mContent.action, std::max(1, inner - actionKeyWidth - 13));
     const std::size_t barCount = std::min<std::size_t>(mContent.bars.size(), 2);
@@ -120,7 +146,9 @@ glm::ivec4 TooltipView::draw(const UiCanvas& canvas,
         width = std::max(width, canvas.measure(b.label).x + 5 + 52 + valueW);
     }
     if (!mContent.action.empty())
-        width = std::max(width, actionKeyWidth + canvas.measure(action).x + 20);
+        width = std::max(width, actionKeyWidth + canvas.measure(action).x + 13);
+    for (const HintRow& row : hints)
+        width = std::max(width, hintLabelX + canvas.measure(row.label).x);
     width = std::clamp(width + textX + pad, minWidth, maxWidth);
 
     // Vertical: each block contributes its lines plus the rule above it.
@@ -130,12 +158,19 @@ glm::ivec4 TooltipView::draw(const UiCanvas& canvas,
     height += int(subtitle.size()) * line;
     if (barCount > 0)
         height += 4 + int(barCount) * (barH + 2);
+    // Cap rows are taller than text rows: the plate is sized from the glyph
+    // cell, and a column of them needs a gap between plates.
+    const int capRow = canvas.keyCapRow();
     if (!body.empty())
         height += 5 + int(body.size()) * line;
+    if (!hints.empty())
+        height += 5 + int(hints.size()) * capRow;
     if (!mContent.action.empty())
-        height += 6 + line;
+        height += 6 + capRow;
     height += pad;
 
+    // Bindings survive longer than body copy when room runs out: a panel that
+    // has to choose keeps the thing the player acts on, not the prose about it.
     bool verticallyClamped = false;
     while (height > safeBounds.size.y && !body.empty()) {
         body.pop_back();
@@ -146,6 +181,10 @@ glm::ivec4 TooltipView::draw(const UiCanvas& canvas,
         height -= 5;
     if (verticallyClamped && !body.empty())
         body.back().text = continued(body.back().text, inner);
+    while (height > safeBounds.size.y && hints.size() > 1) {
+        hints.pop_back();
+        height -= capRow;
+    }
     while (height > safeBounds.size.y && !subtitle.empty()) {
         subtitle.pop_back();
         height -= line;
@@ -212,15 +251,10 @@ glm::ivec4 TooltipView::draw(const UiCanvas& canvas,
         y += 2;
         rule(y);
         y += 3;
-        const int capW = actionKeyWidth + 7;
-        const int capH = line - 1;
-        canvas.rect({x, y - 1}, {capW, capH}, detail::fade(pal.inkSoft, a));
-        canvas.border({x, y - 1}, {capW, capH}, detail::fade(pal.edge, a));
-        canvas.text({x + 4, y}, actionKey, detail::fade(pal.text, a),
-                    Align::Left, false);
+        const int capW = canvas.keyCap({x, y}, actionKey, a);
         canvas.text({x + capW + 6, y}, action,
                     detail::fade(accent, a), Align::Left, false);
-        y += line;
+        y += capRow;
     }
 
     if (barCount > 0) {
@@ -253,6 +287,18 @@ glm::ivec4 TooltipView::draw(const UiCanvas& canvas,
                 canvas.text({right, y - 1}, value, detail::fade(pal.text, a),
                               Align::Right, false);
             y += barH + 2;
+        }
+    }
+
+    if (!hints.empty()) {
+        y += 2;
+        rule(y);
+        y += 3;
+        for (const HintRow& row : hints) {
+            canvas.keyCap({x, y}, row.key, a);
+            canvas.text({x + hintLabelX, y}, row.label,
+                        detail::fade(pal.textDim, a), Align::Left, false);
+            y += capRow;
         }
     }
 

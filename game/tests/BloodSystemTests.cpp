@@ -1,4 +1,5 @@
 #include "BloodSystem.h"
+#include "TestAssets.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -51,12 +52,13 @@ const game::BloodDecalDef* findDecal(const game::BloodDefinitions& defs,
 
 int main()
 {
+    game::test::mountGameAssets();
     // 1. The shipped file. This is the test that fails when someone renames a
     // key or drops a profile the game asks for by name at runtime.
     {
         game::BloodDefinitions defs;
         const std::string path =
-            std::string(PROJECT_SOURCE_DIR) + "/game/assets/blood.toml";
+            game::test::asset("config/blood.toml");
         require(game::parseBloodDefinitions(path, defs),
                 "the shipped blood.toml no longer parses");
 
@@ -112,8 +114,14 @@ int main()
 
         const game::BloodDecalDef* splat = findDecal(defs, "blood_splat");
         require(splat != nullptr, "decal 'blood_splat' is missing");
-        require(splat->desc.texture.empty(),
-                "decal 'blood_splat' is no longer an untextured tinted quad");
+        // Every shipped mark must name a texture stem. An empty one resolves to
+        // the base decal material, whose texture unit binds nothing at all, and
+        // the mark renders as black blocks rather than as the flat tinted quad
+        // the field's name suggests -- which is exactly how it shipped.
+        for (const game::BloodDecalDef& decal : defs.decals)
+            require(!decal.desc.texture.empty(),
+                    "a shipped decal has no texture stem; it will render as "
+                    "black blocks, not as a tinted quad");
         require(near(splat->desc.sizeMin, 0.18f) &&
                     near(splat->desc.sizeMax, 0.34f),
                 "decal 'blood_splat' size range changed");
@@ -288,6 +296,34 @@ int main()
                 "Normal does not bleed more than Light");
         require(game::bloodSeverityScale(game::BloodSeverity::Light) > 0.0f,
                 "Light produces no blood at all");
+    }
+
+    // 6. Severity from a damage event. This is the decision the call sites make
+    // on every hit, and it is a pure function precisely so it can be asserted
+    // here rather than eyeballed in a fight: a scratch must not throw gibs, and
+    // a killing blow must, whatever fraction of the health bar it took.
+    {
+        using game::BloodSeverity;
+        require(game::bloodSeverityFor(2.0f, 100.0f, false) ==
+                    BloodSeverity::Light,
+                "a scratch is not Light");
+        require(game::bloodSeverityFor(15.0f, 100.0f, false) ==
+                    BloodSeverity::Normal,
+                "an ordinary hit is not Normal");
+        require(game::bloodSeverityFor(45.0f, 100.0f, false) ==
+                    BloodSeverity::Heavy,
+                "a maiming hit is not Heavy");
+        require(game::bloodSeverityFor(1.0f, 100.0f, true) ==
+                    BloodSeverity::Heavy,
+                "a killing blow is not Heavy");
+        // Fractions, not absolutes: the same 15 damage is a scratch on a boss
+        // and a maiming on a rat, and a missing/zero max must not divide by it.
+        require(game::bloodSeverityFor(15.0f, 500.0f, false) ==
+                    BloodSeverity::Light,
+                "damage is being read as an absolute rather than a fraction");
+        require(game::bloodSeverityFor(15.0f, 0.0f, false) ==
+                    BloodSeverity::Normal,
+                "an unknown maximum health should fall back to Normal");
     }
 
     std::cout << "BloodSystemTests OK\n";

@@ -1,0 +1,28 @@
+[window]
+title = "PSX Dungeon Crawler -- Engine Tech Demo"
+width = 960
+height = 720
+
+# Keys are SDL names. F2 is not bound here: the engine claims it for the
+# wireframe debug view in every app.
+[bindings]
+pause = ["Space", "Return"]
+restart = "R"
+quit = "Escape"
+preset_next = "Tab"
+preset_prev = "Backspace"
+dev_console = "`"
+tuning = "F1"     # the sliders panel (render, shaders, steps, Demo tab)
+perf = "F4"       # frame-time HUD
+hud = "H"         # the on-screen placard
+# Keyboard fallbacks for the wheel, so the demo is drivable on a trackpad or
+# over a remote session with no scroll events.
+zoom_in = ["=", "Keypad +"]
+zoom_out = ["-", "Keypad -"]
+spin_up = "]"
+spin_down = "["
+# Lens, not dolly: zoom moves the camera, fov changes how much of the scene it
+# takes in. The two look similar and read very differently, which is the point
+# of having both on the keyboard.
+fov_up = "."
+fov_down = ","

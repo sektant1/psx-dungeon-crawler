@@ -1,11 +1,13 @@
 #include "../src/LevelResource.h"
 #include <eng/Content.h>
+#include "TestAssets.h"
 #include <cstdlib>
 #include <iostream>
 static void require(bool c, const char* m){ if(!c){ std::cerr<<"LevelResourceTests: "<<m<<'\n'; std::exit(1);} }
 
 int main(){
-    const std::string showroom = std::string(APP_ASSET_DIR) + "/showroom.toml";
+    game::test::mountGameAssets();
+    const std::string showroom = game::test::asset("config/showroom.toml");
 
     // Direct: LevelResource loads the default showroom into a valid layout.
     LevelResource lr("showroom", showroom);
@@ -41,7 +43,8 @@ int main(){
                     "every showroom torch marker must touch a wall");
         }
 
-    LevelResource missing("nope", std::string(APP_ASSET_DIR) + "/does_not_exist.toml");
+    LevelResource missing("nope", eng::assets::packDir("content").string() +
+                                      "/does_not_exist.toml");
     require(!missing.load(), "missing file fails load");
 
     // Through eng::Content: cached + deduped by name.

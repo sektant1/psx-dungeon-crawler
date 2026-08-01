@@ -92,7 +92,13 @@ bool KitCatalog::load(const std::string& tomlPath, KitCatalog& out,
             return false;
         }
         entry.id = "kit." + id;
-        entry.meshPath = catalog.mMeshDir + "/" + mesh;
+        // A bare filename lives in the kit's mesh dir; a path with a separator
+        // is pack-relative, which is how the prop and set-dressing meshes join
+        // the catalogue without a second one.
+        entry.meshPath = mesh.find('/') == std::string::npos
+                             ? catalog.mMeshDir + "/" + mesh
+                             : mesh;
+        entry.importScale = float((*piece)["import_scale"].value_or(0.0));
 
         const std::string socket =
             (*piece)["socket"].value_or(std::string("prop"));
@@ -114,6 +120,30 @@ bool KitCatalog::load(const std::string& tomlPath, KitCatalog& out,
         entry.span = int((*piece)["span"].value_or(1));
         entry.yOffsetKit = float((*piece)["y_offset"].value_or(0.0));
         entry.pivot = (*piece)["pivot"].value_or(std::string());
+        if (const toml::array* attachments = (*piece)["attachments"].as_array()) {
+            for (const toml::node& attachmentNode : *attachments) {
+                const toml::table* attachment = attachmentNode.as_table();
+                if (!attachment) {
+                    error = tomlPath + ": piece '" + id +
+                            "' attachments must be inline tables";
+                    return false;
+                }
+                KitAttachment part;
+                part.prefab =
+                    (*attachment)["prefab"].value_or(std::string());
+                const toml::array* position =
+                    (*attachment)["position"].as_array();
+                if (part.prefab.empty() || !position || position->size() != 3) {
+                    error = tomlPath + ": piece '" + id +
+                            "' attachment needs prefab and position [x,y,z]";
+                    return false;
+                }
+                part.position = {float((*position)[0].value_or(0.0)),
+                                 float((*position)[1].value_or(0.0)),
+                                 float((*position)[2].value_or(0.0))};
+                entry.attachments.push_back(std::move(part));
+            }
+        }
         if (entry.span < 1) {
             error = tomlPath + ": piece '" + id + "' span must be >= 1";
             return false;
@@ -129,6 +159,37 @@ bool KitCatalog::load(const std::string& tomlPath, KitCatalog& out,
         error = tomlPath + ": no [[piece]] entries";
         return false;
     }
+    for (const KitPiece& piece : catalog.mPieces) {
+        for (const KitAttachment& attachment : piece.attachments) {
+            if (!catalog.find(attachment.prefab)) {
+                error = tomlPath + ": piece '" + piece.id +
+                        "' has unresolved attachment '" + attachment.prefab + "'";
+                return false;
+            }
+        }
+    }
+    std::vector<unsigned char> attachmentState(catalog.mPieces.size(), 0);
+    const auto visitAttachments = [&](auto&& self, std::size_t index) -> bool {
+        if (attachmentState[index] == 1) {
+            error = tomlPath + ": attachment cycle at piece '" +
+                    catalog.mPieces[index].id + "'";
+            return false;
+        }
+        if (attachmentState[index] == 2)
+            return true;
+        attachmentState[index] = 1;
+        for (const KitAttachment& attachment :
+             catalog.mPieces[index].attachments) {
+            const auto child = catalog.mById.find(attachment.prefab);
+            if (!self(self, child->second))
+                return false;
+        }
+        attachmentState[index] = 2;
+        return true;
+    };
+    for (std::size_t index = 0; index < catalog.mPieces.size(); ++index)
+        if (!visitAttachments(visitAttachments, index))
+            return false;
 
     out = std::move(catalog);
     return true;

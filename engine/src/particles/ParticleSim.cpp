@@ -437,18 +437,49 @@ void ParticleSim::emit(float dt)
 
 void ParticleSim::emitFrom(EffectInstance& inst, uint32_t instanceIndex, float dt)
 {
+    // `inst.age` has already been advanced by dt, so this step covers the
+    // interval [age - dt, age].
+    const float previousAge = inst.age - dt;
+
     for (size_t e = 0; e < inst.resolved.emitters.size(); ++e) {
         const ResolvedParticleEmitter& emitter = inst.resolved.emitters[e];
         const float duration = finiteOr(emitter.emissionDuration, 0.0f);
-        if (duration > 0.0f && inst.age >= duration)
+
+        // Emit for the part of this step that actually falls inside the
+        // emission window, rather than for the whole step or for none of it.
+        //
+        // Testing `age >= duration` and skipping was wrong in both directions.
+        // A burst resolves to a 50 ms window, so at the game's 18 Hz particle
+        // clock the very first update arrives with age 55.6 ms -- already past
+        // the window -- and every one-shot in the game emitted exactly zero
+        // particles: muzzle flashes, impacts, blood, death bursts, telegraphs.
+        // Even at 60 Hz it lost the final partial step and a third of the
+        // authored count with it.
+        //
+        // Integrating the overlap makes the emitted total the authored total
+        // at any step size, which is the property a burst actually needs.
+        float slice = dt;
+        if (duration > 0.0f) {
+            if (previousAge >= duration)
+                continue;
+            slice = std::min(dt, duration - previousAge);
+        }
+        if (slice <= 0.0f)
             continue;
+
         const float rate = std::max(0.0f, finiteOr(emitter.emissionRate, 0.0f));
         if (rate <= 0.0f)
             continue;
 
         float& accum = inst.accum[e];
-        accum += rate * dt;
-        while (accum >= 1.0f) {
+        accum += rate * slice;
+        // Tolerance, not sloppiness: a burst of 24 resolves to rate 480 over
+        // 0.05 s, and summing 480*dt across three 60 Hz slices lands a hair
+        // under 24.0. Without it the last particle of every exact-count burst
+        // is silently dropped. The bias is bounded at one part in 10^4 of the
+        // rate, which no emitter can accumulate into a visible error.
+        constexpr float kAccumEpsilon = 1e-4f;
+        while (accum >= 1.0f - kAccumEpsilon) {
             accum -= 1.0f;
             if (pool_.full())
                 break;

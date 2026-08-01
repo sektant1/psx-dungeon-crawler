@@ -37,20 +37,56 @@ bool UiCanvas::initialise(const std::string& fontDefinition) {
     return mFont.load(fontDefinition);
 }
 
-void UiCanvas::begin(glm::vec2 displayPixels, glm::ivec2 preferred) {
+void UiCanvas::begin(glm::vec2 displayPixels, glm::ivec2 preferred,
+                     glm::vec2 framebufferScale) {
     mDisplay = displayPixels;
-    const int byWidth = int(displayPixels.x) / std::max(1, preferred.x);
-    const int byHeight = int(displayPixels.y) / std::max(1, preferred.y);
+    mFramebufferScale = glm::max(framebufferScale, glm::vec2(1e-3f));
+    const glm::vec2 physical = displayPixels * mFramebufferScale;
+    const int byWidth = int(physical.x) / std::max(1, preferred.x);
+    const int byHeight = int(physical.y) / std::max(1, preferred.y);
     mScale = std::clamp(std::min(byWidth, byHeight), 1, 8);
     // The virtual surface covers the whole window: layouts anchor to real
     // corners instead of living inside a letterboxed box.
-    mVirtual = {int(displayPixels.x) / mScale, int(displayPixels.y) / mScale};
+    mVirtual = {
+        std::max(1, int(std::ceil(physical.x / float(mScale)))),
+        std::max(1, int(std::ceil(physical.y / float(mScale))))};
+    mOrigin = {0.0f, 0.0f};
+    mTarget = nullptr;
+    mClipToTarget = false;
 }
 
-ImDrawList* UiCanvas::list() const { return ImGui::GetForegroundDrawList(); }
+void UiCanvas::beginTarget(glm::vec2 originPixels, glm::ivec2 virtualSize,
+                           int scale, ImDrawList* target) {
+    mScale = std::clamp(scale, 1, 8);
+    mVirtual = {std::max(virtualSize.x, 1), std::max(virtualSize.y, 1)};
+    mDisplay = {float(mVirtual.x * mScale), float(mVirtual.y * mScale)};
+    mOrigin = originPixels;
+    mFramebufferScale = {1.0f, 1.0f};
+    mTarget = target;
+    mClipToTarget = true;
+}
+
+ImDrawList* UiCanvas::list() const {
+    return mTarget ? mTarget : ImGui::GetForegroundDrawList();
+}
+
+void UiCanvas::pushClip(ImDrawList* draw) const {
+    if (!mClipToTarget)
+        return;
+    draw->PushClipRect(ImVec2(mOrigin.x, mOrigin.y),
+                       ImVec2(mOrigin.x + mDisplay.x,
+                              mOrigin.y + mDisplay.y),
+                       true);
+}
+
+void UiCanvas::popClip(ImDrawList* draw) const {
+    if (mClipToTarget)
+        draw->PopClipRect();
+}
 
 glm::vec2 UiCanvas::toScreen(glm::ivec2 at) const {
-    return {float(at.x * mScale), float(at.y * mScale)};
+    return {mOrigin.x + float(at.x * mScale) / mFramebufferScale.x,
+            mOrigin.y + float(at.y * mScale) / mFramebufferScale.y};
 }
 
 void UiCanvas::rect(glm::ivec2 at, glm::ivec2 size, unsigned int colour) const {
@@ -58,7 +94,10 @@ void UiCanvas::rect(glm::ivec2 at, glm::ivec2 size, unsigned int colour) const {
         return;
     const glm::vec2 a = toScreen(at);
     const glm::vec2 b = toScreen(at + size);
-    list()->AddRectFilled(ImVec2(a.x, a.y), ImVec2(b.x, b.y), colour);
+    ImDrawList* draw = list();
+    pushClip(draw);
+    draw->AddRectFilled(ImVec2(a.x, a.y), ImVec2(b.x, b.y), colour);
+    popClip(draw);
 }
 
 void UiCanvas::border(glm::ivec2 at, glm::ivec2 size,
@@ -158,8 +197,48 @@ void UiCanvas::text(glm::ivec2 at, std::string_view value, unsigned int colour,
         const int width = mFont.measure(value).x;
         pos.x -= align == Align::Centre ? width / 2 : width;
     }
-    mFont.draw(list(), toScreen(pos), float(mScale), value, colour,
+    ImDrawList* draw = list();
+    pushClip(draw);
+    mFont.draw(draw, toScreen(pos), float(mScale) / mFramebufferScale.x,
+               value, colour,
                shadow ? mStyle.palette.shadow : 0u);
+    popClip(draw);
+}
+
+int UiCanvas::keyCapWidth(std::string_view label) const {
+    if (label.empty())
+        return 0;
+    // Padding either side of the glyphs, plus a floor so a one-character cap
+    // (`W`, `.`) is still a cap and not a tight box around a comma.
+    return std::max(mFont.measure(label).x + 8, 13);
+}
+
+int UiCanvas::keyCap(glm::ivec2 textAt, std::string_view label,
+                     float alpha) const {
+    if (label.empty())
+        return 0;
+    const int width = keyCapWidth(label);
+    const int height = keyCapHeight();
+    // The plate is placed from the text, not the other way round: the glyph
+    // cell carries blank rows above the ink (cellHeight - ascent - 1), so a box
+    // drawn at the text origin sits a couple of pixels too high and cuts
+    // through the baseline -- which is how the first version of this looked.
+    const int inkTop = mFont.cellHeight() - mFont.ascent() - 1;
+    const glm::ivec2 at{textAt.x, textAt.y + inkTop - 2};
+    const auto tint = [alpha](unsigned int colour) {
+        const unsigned int a = (colour >> 24) & 0xFFu;
+        const unsigned int scaled = (unsigned int)std::lround(
+            float(a) * std::clamp(alpha, 0.0f, 1.0f));
+        return (colour & 0x00FFFFFFu) | (scaled << 24);
+    };
+    rect(at, {width, height}, tint(mStyle.palette.inkSoft));
+    border(at, {width, height}, tint(mStyle.palette.edge));
+    // The label is centred in the plate rather than left-padded by a constant:
+    // caps hold anything from "." to "WHEEL", and a fixed inset leaves the
+    // short ones visibly off-centre in a column of wider ones.
+    text({textAt.x + width / 2, textAt.y}, label, tint(mStyle.palette.text),
+         Align::Centre, false);
+    return width;
 }
 
 void UiCanvas::bar(glm::ivec2 at, glm::ivec2 size, float ratio,

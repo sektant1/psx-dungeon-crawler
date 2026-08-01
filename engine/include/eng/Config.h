@@ -5,9 +5,13 @@
 
 namespace eng {
 
-// TOML config, flattened to dotted "section.key" leaves. The [bindings]
-// table is kept separately: action -> list of SDL key names (a binding
-// value may be a string or an array of strings).
+// TOML config, flattened to dotted "section.key" leaves, at any depth --
+// `[combat.fireball] speed = 18` reads back as "combat.fireball.speed". The
+// [bindings] table is kept separately: action -> list of SDL key names (a
+// binding value may be a string or an array of strings).
+//
+// Arrays are not stored: there is no vector getter to read one back with, so a
+// caller that needs one parses the file itself (game/src/CombatConfig.cpp).
 class Config
 {
 public:

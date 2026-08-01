@@ -38,7 +38,7 @@ struct RoomSpec {
     std::string cornerPrefab = "kit.pillar";
     // The ceiling is the floor mesh seen from below, so it needs the two-sided
     // variant of the atlas or it renders as nothing at all.
-    std::string ceilingMaterial = "Kit/DungeonTwoSided";
+    std::string ceilingMaterial = "Game/Kit/DungeonTwoSided";
 
     // Cell range, normalised so col0 <= col1 regardless of drag direction.
     int minCol() const { return col0 < col1 ? col0 : col1; }

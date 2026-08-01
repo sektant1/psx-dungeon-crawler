@@ -1,15 +1,31 @@
 #include "ShowcaseScene.h"
 
 #include <eng/LightDesc.h>
+#include <eng/Log.h>
 #include <eng/Primitive.h>
 #include <eng/Renderer.h>
+#include <eng/assets/AssetRoot.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <cmath>
+#include <filesystem>
 
 namespace {
+
+// Every mesh here is the game's. The demo pack carries only its own deltas
+// since the P4 dedupe -- four materials and six particle effects -- and mounts
+// the game pack underneath it, so a mesh is named by logical path and the
+// resolver walks demo -> game -> engine to find the file. Unresolved is a
+// content bug, not a silently empty scene.
+std::string meshPath(const std::string& logical)
+{
+    const std::filesystem::path path = eng::assets::resolve(logical);
+    if (path.empty())
+        eng::log::fatal("ShowcaseScene: unresolved mesh '%s'", logical.c_str());
+    return path.string();
+}
 
 // The surrounding volume. Its floor is y=0 by construction.
 constexpr float kShellSize = 46.0f;
@@ -20,7 +36,8 @@ constexpr float kShellSize = 46.0f;
 constexpr float kDaisTop = 0.40f;
 
 // The chest's rest height above the plinth's base, and the swing of its bob.
-// plinth top (0.50) + chest half-height (0.44) + the swing + a hand's clearance.
+// plinth top (0.50) + chest half-height (0.44) + the swing + a hand's
+// clearance.
 constexpr float kChestBob = 0.22f;
 constexpr float kChestHover = 0.50f + 0.44f + kChestBob + 0.05f;
 
@@ -44,12 +61,49 @@ glm::vec3 srgb(float r, float g, float b, float gain = 1.0f)
            gain;
 }
 
+// The dungeon's own tiling surfaces, plus the demo's original two so a tuning
+// session can always get back to the shipped look.
+constexpr const char* kSurfaceMaterials[] = {
+    "Game/Kit/Stone", // TEX_Wall_03, the dungeon's tiling masonry
+    "Game/Kit/Metal", // hung ironwork
+    "Game/Kit/Wood",  // planking
+    "Game/FantasySurfaces/CarvedStone",
+    "Game/FantasySurfaces/WarmDungeonStone",
+    "Game/FantasySurfaces/DarkIron",
+    "Game/FantasySurfaces/AgedWood",
+    "Demo/Showcase/Stone",
+    "Game/Demo/Floor",
+};
+
 } // namespace
 
-bool ShowcaseScene::build(eng::Renderer& renderer, const std::string& assetDir,
+const char* surfaceSlotName(SurfaceSlot slot)
+{
+    switch (slot) {
+    case SurfaceSlot::DaisLower:
+        return "Dais step";
+    case SurfaceSlot::DaisUpper:
+        return "Dais top";
+    case SurfaceSlot::Plinth:
+        return "Chest plinth";
+    case SurfaceSlot::PortalBacking:
+        return "Portal backing";
+    case SurfaceSlot::Shell:
+        return "Surrounding shell";
+    case SurfaceSlot::Count:
+        break;
+    }
+    return "?";
+}
+
+std::span<const char* const> surfaceMaterialChoices()
+{
+    return {kSurfaceMaterials, std::size(kSurfaceMaterials)};
+}
+
+bool ShowcaseScene::build(eng::Renderer& renderer,
                           const ShowcaseOptions& options)
 {
-    mAssetDir = assetDir;
     mRoot = renderer.createNode(eng::kRootNode, glm::vec3(0.0f), "showcase");
 
     buildDais(renderer, options);
@@ -58,16 +112,16 @@ bool ShowcaseScene::build(eng::Renderer& renderer, const std::string& assetDir,
     // thing in the scene that levitates. Off on the ring it read as a prop that
     // had come loose from the floor, because two of its three neighbours were
     // also floor-standing objects at the same radius.
-    buildTreasure(renderer, assetDir, options, {0.0f, kDaisTop, 0.0f});
+    buildTreasure(renderer, options, {0.0f, kDaisTop, 0.0f});
     // Two stations flanking it, 120 degrees apart, each readable on its own as
     // the camera comes round: the crystal leads (brightest silhouette), the
     // portal answers it far enough away that the pink and the green never wash
     // into each other.
-    buildCrystalShrine(renderer, assetDir, options, polar(0.0f, options.radius));
-    buildPortal(renderer, assetDir, options, polar(120.0f, options.radius),
-                120.0f);
+    buildCrystalShrine(renderer, options, polar(0.0f, options.radius));
+    buildPortal(renderer, options, polar(120.0f, options.radius), 120.0f);
     if (options.props)
-        buildDressing(renderer, assetDir, options);
+        buildDressing(renderer, options);
+    buildLiquids(renderer, options);
     buildLighting(renderer, options);
 
     if (options.particles) {
@@ -78,7 +132,28 @@ bool ShowcaseScene::build(eng::Renderer& renderer, const std::string& assetDir,
     return true;
 }
 
-void ShowcaseScene::buildDais(eng::Renderer& renderer, const ShowcaseOptions& options)
+void ShowcaseScene::placeSurface(eng::Renderer& renderer, SurfaceSlot slot,
+                                 eng::NodeHandle node, eng::MeshHandle mesh,
+                                 const std::string& material, bool castShadows)
+{
+    renderer.attachMesh(node, mesh, material, castShadows);
+    mSurfaces[std::size_t(slot)] = node;
+    mSurfaceMaterials[std::size_t(slot)] = material;
+}
+
+void ShowcaseScene::setSurfaceMaterial(eng::Renderer& renderer,
+                                       SurfaceSlot slot,
+                                       const std::string& material)
+{
+    const std::size_t index = std::size_t(slot);
+    if (index >= mSurfaces.size() || !mSurfaces[index].valid())
+        return;
+    renderer.setNodeMaterial(mSurfaces[index], material);
+    mSurfaceMaterials[index] = material;
+}
+
+void ShowcaseScene::buildDais(eng::Renderer& renderer,
+                              const ShowcaseOptions& options)
 {
     // A shallow stepped dais. Two discs rather than one: the step catches the
     // rim light and gives the floor a readable edge, which a flat plane at this
@@ -88,16 +163,22 @@ void ShowcaseScene::buildDais(eng::Renderer& renderer, const ShowcaseOptions& op
     lower.radius = options.daisRadius + 0.55f;
     lower.height = 0.22f;
     lower.segments = 64;
-    renderer.attachMesh(renderer.createNode(mRoot, {0.0f, 0.11f, 0.0f}),
-                        renderer.createPrimitiveMesh(lower), "PSX/ShowcaseStone", false);
+    // Dressed in the dungeon's own masonry rather than the demo's generic
+    // stone: the showcase and the game should be standing on the same floor.
+    // Every slot below is re-dressable from the Demo tuning tab.
+    placeSurface(renderer, SurfaceSlot::DaisLower,
+                 renderer.createNode(mRoot, {0.0f, 0.11f, 0.0f}),
+                 renderer.createPrimitiveMesh(lower),
+                 "Game/FantasySurfaces/WarmDungeonStone", false);
 
     eng::PrimitiveMeshDesc upper;
     upper.kind = eng::PrimitiveKind::Cylinder;
     upper.radius = options.daisRadius;
     upper.height = 0.18f;
     upper.segments = 64;
-    renderer.attachMesh(renderer.createNode(mRoot, {0.0f, 0.31f, 0.0f}),
-                        renderer.createPrimitiveMesh(upper), "PSX/Floor", false);
+    placeSurface(renderer, SurfaceSlot::DaisUpper,
+                 renderer.createNode(mRoot, {0.0f, 0.31f, 0.0f}),
+                 renderer.createPrimitiveMesh(upper), "Game/Kit/Stone", false);
 
     // The surrounding ground: a large inward-facing box, so the scene sits in a
     // dark volume instead of floating against the clear colour. Fog does the
@@ -110,15 +191,16 @@ void ShowcaseScene::buildDais(eng::Renderer& renderer, const ShowcaseOptions& op
     // Centred at HALF its size, so its floor lands on y=0 -- the plane every
     // prop is placed on. Centred anywhere else and the whole set dressing
     // hovers by the difference, which is exactly what it looked like.
-    renderer.attachMesh(renderer.createNode(mRoot, {0.0f, kShellSize * 0.5f, 0.0f}),
-                        renderer.createPrimitiveMesh(shell), "PSX/Floor", false);
+    placeSurface(renderer, SurfaceSlot::Shell,
+                 renderer.createNode(mRoot, {0.0f, kShellSize * 0.5f, 0.0f}),
+                 renderer.createPrimitiveMesh(shell), "Game/Demo/Floor", false);
 }
 
 void ShowcaseScene::buildCrystalShrine(eng::Renderer& renderer,
-                                       const std::string& assetDir,
-                                       const ShowcaseOptions& options, glm::vec3 at)
+                                       const ShowcaseOptions& options,
+                                       glm::vec3 at)
 {
-    const std::string meshes = assetDir + "/meshes/";
+    const std::string meshes = "meshes/";
     eng::NodeHandle base = renderer.createNode(mRoot, at);
     // The whole shrine scales as ONE group. The crystal meshes are authored at
     // landscape size -- scaling the spires alone left a boulder-sized base with
@@ -127,9 +209,10 @@ void ShowcaseScene::buildCrystalShrine(eng::Renderer& renderer,
 
     // The ground slab the spires grow out of, so they are not simply stuck into
     // the floor.
-    renderer.attachMesh(renderer.createNode(base, {0.0f, 0.42f, 0.0f}),
-                        renderer.loadObj(meshes + "crystal_ground.obj"),
-                        "PSX/CrystalGroundPink", false);
+    renderer.attachMesh(
+        renderer.createNode(base, {0.0f, 0.42f, 0.0f}),
+        renderer.loadObj(meshPath(meshes + "crystal_ground.obj")),
+        "Demo/Showcase/CrystalGroundPink", false);
 
     // A slowly turning cluster. Four different spires at varied scale, angle
     // and lean: identical copies at even spacing is what makes a crystal
@@ -140,17 +223,18 @@ void ShowcaseScene::buildCrystalShrine(eng::Renderer& renderer,
         float angleDeg, radius, scale, leanDeg;
     };
     const Shard shards[] = {
-        // Scales are small: these meshes are authored large, and at 1.0 a single
+        // Scales are small: these meshes are authored large, and at 1.0 a
+        // single
         // spire is taller than the portal and dwarfs the station it belongs to.
-        {"crystal_spire1.obj", 20.0f, 0.0f, 1.25f, 0.0f},   // the tall centre
+        {"crystal_spire1.obj", 20.0f, 0.0f, 1.25f, 0.0f}, // the tall centre
         {"crystal_spire2.obj", 95.0f, 1.5f, 0.80f, 11.0f},
         {"crystal_spire3.obj", 200.0f, 1.8f, 0.95f, -9.0f},
         {"crystal_spire4.obj", 290.0f, 1.3f, 0.62f, 14.0f},
         {"crystal_spire2.obj", 330.0f, 2.2f, 0.48f, -16.0f}, // low outlier
     };
     for (const Shard& shard : shards) {
-        eng::NodeHandle node =
-            renderer.createNode(mCrystalSpin, polar(shard.angleDeg, shard.radius));
+        eng::NodeHandle node = renderer.createNode(
+            mCrystalSpin, polar(shard.angleDeg, shard.radius));
         renderer.setOrientation(node,
                                 yaw(shard.angleDeg) *
                                     glm::angleAxis(glm::radians(shard.leanDeg),
@@ -158,8 +242,9 @@ void ShowcaseScene::buildCrystalShrine(eng::Renderer& renderer,
         renderer.setScale(node, glm::vec3(shard.scale));
         // Crystals cast shadows: the shader is translucent-looking, and the
         // shadow is what proves they are solid objects in the scene.
-        renderer.attachMesh(node, renderer.loadObj(meshes + shard.mesh),
-                            "PSX/CrystalSpirePink", true);
+        renderer.attachMesh(node,
+                            renderer.loadObj(meshPath(meshes + shard.mesh)),
+                            "Demo/Showcase/CrystalSpirePink", true);
         mCrystalShards.push_back(node);
     }
 
@@ -167,10 +252,12 @@ void ShowcaseScene::buildCrystalShrine(eng::Renderer& renderer,
         // Parented to the ROOT at the station's position, not to the scaled
         // group: a particle system under a 0.42 scale emits 0.42-sized motes in
         // a 0.42-sized volume, which reads as dust rather than as magic.
-        renderer.spawnParticles("crystal_motes",
-                                renderer.createNode(mRoot, at + glm::vec3(0.0f, 0.5f, 0.0f)));
-        renderer.spawnParticles("crystal_core",
-                                renderer.createNode(mRoot, at + glm::vec3(0.0f, 0.35f, 0.0f)));
+        renderer.spawnParticles(
+            "crystal_motes",
+            renderer.createNode(mRoot, at + glm::vec3(0.0f, 0.5f, 0.0f)));
+        renderer.spawnParticles(
+            "crystal_core",
+            renderer.createNode(mRoot, at + glm::vec3(0.0f, 0.35f, 0.0f)));
     }
 
     // No light shaft here. The cone mesh is modelled standing on its own base
@@ -189,21 +276,21 @@ void ShowcaseScene::buildCrystalShrine(eng::Renderer& renderer,
 }
 
 void ShowcaseScene::buildPortal(eng::Renderer& renderer,
-                                const std::string& assetDir,
                                 const ShowcaseOptions& options, glm::vec3 at,
                                 float facingDeg)
 {
     // The portal the GAME builds, piece for piece: same membrane size, same kit
     // surround, same materials, same numbers as createPortalProp() in
-    // game/src/SceneFactory.cpp. It is duplicated rather than shared because the
-    // sample does not link the game, but it is deliberately not *reinterpreted*
+    // game/src/SceneFactory.cpp. It is duplicated rather than shared because
+    // the sample does not link the game, but it is deliberately not
+    // *reinterpreted*
     // -- a station whose whole job is to show the portal off has to be showing
     // the real one. The two beams and a prototype quad that stood here before
     // read as a green sliver in a doorframe and looked nothing like it.
     //
     // Keep in step with createPortalProp; the constants below are its
     // PortalPropStyle defaults.
-    const std::string kit = assetDir + "/meshes/kit/";
+    const std::string kit = "meshes/kit/";
     constexpr glm::vec2 fieldSize{2.8f, 2.5f}; // the opening, in metres
     constexpr float membraneInset = 0.06f;     // clear of the frame plane
     constexpr float pillarWidth = 0.50f;
@@ -219,7 +306,8 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
     // curve, so a membrane running the surround's full height fills the
     // crescent under the stones but spills its square top corners past that
     // curve; with a panel behind, the crescent is the panel's job and the
-    // membrane can stay inside the arch. Small overlap: the soffit narrows fast.
+    // membrane can stay inside the arch. Small overlap: the soffit narrows
+    // fast.
     constexpr float headOverlap = 0.06f;
     const float membraneHeight = fieldSize.y + headOverlap;
 
@@ -240,11 +328,11 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
         const glm::mat4 kitToPillar = glm::scale(
             glm::mat4(1.0f), {pillarSide, surroundHeight / 30.2f, pillarSide});
         const eng::MeshHandle pillar =
-            renderer.loadObj(kit + "Pillar.obj", &kitToPillar);
+            renderer.loadObj(meshPath(kit + "Pillar.obj"), &kitToPillar);
         const float jambX = openingHalfWidth + pillarWidth * 0.5f;
         for (const float x : {-jambX, jambX})
             renderer.attachMesh(renderer.createNode(frame, {x, 0.0f, 0.0f}),
-                                pillar, "Kit/Dungeon", true);
+                                pillar, "Game/Kit/Dungeon", true);
 
         const float headScaleX = surroundWidth / 20.02f;
         const float headScaleY = headHeight / 12.0f;
@@ -252,14 +340,15 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
             glm::translate(glm::mat4(1.0f), {0.0f, -4.81f * headScaleY, 0.0f}) *
             glm::scale(glm::mat4(1.0f),
                        {headScaleX, headScaleY, frameDepth / 4.0f});
-        const eng::MeshHandle head = renderer.loadObj(kit + "Arch.obj", &kitToHead);
+        const eng::MeshHandle head =
+            renderer.loadObj(meshPath(kit + "Arch.obj"), &kitToHead);
         // The head straddles the membrane in depth rather than sitting behind
         // it, so the stone covers the membrane's square top corners while its
         // opening still shows the membrane through.
         renderer.attachMesh(
-            renderer.createNode(frame, {0.0f, fieldSize.y,
-                                        membraneInset + frameDepth * 0.25f}),
-            head, "Kit/Dungeon", true);
+            renderer.createNode(
+                frame, {0.0f, fieldSize.y, membraneInset + frameDepth * 0.25f}),
+            head, "Game/Kit/Dungeon", true);
 
         // The back of the portal. Without it the station is a picture frame:
         // the turntable carries the camera behind it and the arch is a hole
@@ -271,15 +360,17 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
         // Real depth, so the turntable passing the station's edge shows a slab
         // of rock rather than the panel thinning to nothing.
         panel.thickness = 0.22f;
-        const eng::NodeHandle back = renderer.createNode(
-            frame, {0.0f, surroundHeight * 0.5f, -(pillarWidth * 0.5f + 0.02f)});
-        renderer.setOrientation(back, glm::angleAxis(glm::radians(90.0f),
-                                                     glm::vec3(1, 0, 0)));
+        const eng::NodeHandle back =
+            renderer.createNode(frame, {0.0f, surroundHeight * 0.5f,
+                                        -(pillarWidth * 0.5f + 0.02f)});
+        renderer.setOrientation(
+            back, glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0)));
         // Plain tiling stone rather than the kit atlas: a generated quad has
         // 0..1 UVs over its whole face, and an atlas material stretches the
-        // whole sheet over it.
-        renderer.attachMesh(back, renderer.createPrimitiveMesh(panel),
-                            "PSX/ShowcaseStone", true);
+        // whole sheet over it. Game/Kit/Stone is the dungeon's tiling wall, which is
+        // what the pillars and arch in front of it are cut from.
+        placeSurface(renderer, SurfaceSlot::PortalBacking, back,
+                     renderer.createPrimitiveMesh(panel), "Game/Kit/Stone", true);
     }
 
     // The membrane: a quad, not a disc -- an inscribed ellipse would leave the
@@ -293,11 +384,10 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
         arch, {0.0f, membraneHeight * 0.5f - openingHalfHeight, membraneInset});
     // The plane primitive lies flat and is two-sided; stand it up to fill the
     // archway and it reads from both sides of the threshold.
-    renderer.setOrientation(mPortalNode,
-                            glm::angleAxis(glm::radians(90.0f),
-                                           glm::vec3(1, 0, 0)));
+    renderer.setOrientation(
+        mPortalNode, glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0)));
     renderer.attachMesh(mPortalNode, renderer.createPrimitiveMesh(plane),
-                        "Game/PortalDown", false);
+                        "Demo/Portal/Down", false);
 
     if (options.particles) {
         // The game's own portal wisps, an engine preset -- no TOML, and the
@@ -319,10 +409,9 @@ void ShowcaseScene::buildPortal(eng::Renderer& renderer,
 }
 
 void ShowcaseScene::buildTreasure(eng::Renderer& renderer,
-                                  const std::string& assetDir,
                                   const ShowcaseOptions& options, glm::vec3 at)
 {
-    const std::string props = assetDir + "/meshes/props/";
+    const std::string props = "meshes/props/";
     eng::NodeHandle base = renderer.createNode(mRoot, at);
 
     // A low plinth directly under the chest, so the levitation has a reference
@@ -333,17 +422,20 @@ void ShowcaseScene::buildTreasure(eng::Renderer& renderer,
     plinth.kind = eng::PrimitiveKind::BeveledBox;
     plinth.size = {1.5f, 0.5f, 1.5f};
     plinth.bevel = 0.09f;
-    renderer.attachMesh(renderer.createNode(base, {0.0f, 0.25f, 0.0f}),
-                        renderer.createPrimitiveMesh(plinth), "PSX/ShowcaseStone",
-                        true);
+    placeSurface(renderer, SurfaceSlot::Plinth,
+                 renderer.createNode(base, {0.0f, 0.25f, 0.0f}),
+                 renderer.createPrimitiveMesh(plinth), "Game/FantasySurfaces/CarvedStone",
+                 true);
 
     // Hover height measured from the plinth's top (0.50) plus the chest's own
     // half-height (0.08 authored * 5.5 = 0.44) plus the gap the bob swings in,
     // so the chest never dips into the stone at the bottom of its travel.
     mChestBase = renderer.createNode(base, {0.0f, kChestHover, 0.0f});
     mChestSpin = renderer.createNode(mChestBase);
-    renderer.setScale(mChestSpin, glm::vec3(5.5f)); // the prop is authored small
-    renderer.attachMesh(mChestSpin, renderer.loadObj(props + "prop_chest.obj"),
+    renderer.setScale(mChestSpin,
+                      glm::vec3(5.5f)); // the prop is authored small
+    renderer.attachMesh(mChestSpin,
+                        renderer.loadObj(meshPath(props + "prop_chest.obj")),
                         "Game/PropChest", true);
 
     if (options.particles) {
@@ -398,13 +490,50 @@ void ShowcaseScene::buildTreasure(eng::Renderer& renderer,
     mChestLight = renderer.attachLight(mChestBase, glow);
 }
 
+// One pool per profile of the scrolling shader family (scroll_common.glsl), so
+// water, slime and lava can be seen and tuned side by side instead of only
+// existing in a dungeon nobody opens to look at a material.
+//
+// Thick planes, not sheets: edge on, a zero-thickness pool vanishes and
+// z-fights the floor it lies on. Same reason the portal membrane is a slab.
+void ShowcaseScene::buildLiquids(eng::Renderer& renderer,
+                                 const ShowcaseOptions& options)
+{
+    // Its own station on the showcase ring, at 240 deg -- the widest gap left
+    // between the working corner (60), the market (180) and the armoury (300).
+    const float ring = options.radius + 1.25f;
+    struct Pool {
+        const char* material;
+        float angleDeg;
+    };
+    static const Pool kPools[3] = {{"Game/Vfx/Water", 230.0f},
+                                   {"Game/Vfx/ToxicSlime", 240.0f},
+                                   {"Game/Vfx/Lava", 250.0f}};
+
+    eng::PrimitiveMeshDesc desc;
+    desc.kind = eng::PrimitiveKind::Plane;
+    desc.size = {1.5f, 1.0f, 1.1f};
+    desc.thickness = 0.09f;
+    const eng::MeshHandle pool = renderer.createPrimitiveMesh(desc);
+    if (!pool.valid())
+        return;
+
+    for (const Pool& p : kPools) {
+        // Just clear of the floor: the slab has its own thickness, so sinking
+        // it would bury the rim that makes it read as a pool rather than as a
+        // painted rectangle.
+        const eng::NodeHandle node =
+            renderer.createNode(mRoot, polar(p.angleDeg, ring, 0.05f));
+        renderer.attachMesh(node, pool, p.material, false);
+    }
+}
+
 void ShowcaseScene::buildDressing(eng::Renderer& renderer,
-                                  const std::string& assetDir,
                                   const ShowcaseOptions& options)
 {
-    const std::string props = assetDir + "/meshes/props/";
+    const std::string props = "meshes/props/";
     const auto mesh = [&](const char* file) {
-        return renderer.loadObj(props + file);
+        return renderer.loadObj(meshPath(props + file));
     };
     const auto place = [&](eng::MeshHandle m, const char* material,
                            glm::vec3 position, float yawDeg,
@@ -478,11 +607,9 @@ void ShowcaseScene::buildDressing(eng::Renderer& renderer,
         renderer.setScale(sword, glm::vec3(0.06f));
         // Modelled pointing +Y; roll past 180 so it points down, with a lean
         // that reads as "driven into the ground" rather than "dropped".
-        renderer.setOrientation(sword,
-                                glm::angleAxis(glm::radians(168.0f),
-                                               glm::vec3(0, 0, 1)) *
-                                    glm::angleAxis(glm::radians(9.0f),
-                                                   glm::vec3(1, 0, 0)));
+        renderer.setOrientation(
+            sword, glm::angleAxis(glm::radians(168.0f), glm::vec3(0, 0, 1)) *
+                       glm::angleAxis(glm::radians(9.0f), glm::vec3(1, 0, 0)));
         renderer.attachMesh(sword, mesh("prop_sword.obj"), "Game/PropWeapon",
                             true);
 
@@ -492,8 +619,8 @@ void ShowcaseScene::buildDressing(eng::Renderer& renderer,
         eng::NodeHandle shield =
             renderer.createNode(mRoot, b + glm::vec3(0.0f, 0.55f, 0.78f));
         renderer.setScale(shield, glm::vec3(0.08f));
-        renderer.setOrientation(shield, glm::angleAxis(glm::radians(-20.0f),
-                                                       glm::vec3(1, 0, 0)));
+        renderer.setOrientation(
+            shield, glm::angleAxis(glm::radians(-20.0f), glm::vec3(1, 0, 0)));
         renderer.attachMesh(shield, mesh("prop_shield.obj"), "Game/PropWeapon",
                             true);
         place2(vase0, "Game/PropTerracotta", vase1, "Game/PropPlanks",
@@ -520,9 +647,11 @@ void ShowcaseScene::buildLighting(eng::Renderer& renderer,
     // The post and the hanging lamp are real geometry. They used to be a bare
     // node with a light on it, which left three warm pools on the floor with
     // nothing casting them.
-    const std::string props = mAssetDir + "/meshes/props/";
-    const eng::MeshHandle beam = renderer.loadObj(props + "prop_beam.obj");
-    const eng::MeshHandle head = renderer.loadObj(props + "prop_lamp.obj");
+    const std::string props = "meshes/props/";
+    const eng::MeshHandle beam =
+        renderer.loadObj(meshPath(props + "prop_beam.obj"));
+    const eng::MeshHandle head =
+        renderer.loadObj(meshPath(props + "prop_lamp.obj"));
     for (const float angle : {60.0f, 180.0f, 300.0f}) {
         const glm::vec3 at = polar(angle, options.radius + 2.9f);
         eng::NodeHandle post = renderer.createNode(mRoot, at);
@@ -541,10 +670,9 @@ void ShowcaseScene::buildLighting(eng::Renderer& renderer,
     moon.type = eng::LightDesc::Type::Directional;
     moon.colour = srgb(0.55f, 0.64f, 0.92f, 0.30f);
     eng::NodeHandle moonNode = renderer.createNode(mRoot, {0.0f, 12.0f, 0.0f});
-    renderer.setOrientation(moonNode,
-                            glm::angleAxis(glm::radians(-62.0f),
-                                           glm::vec3(1, 0, 0)) *
-                                yaw(28.0f));
+    renderer.setOrientation(
+        moonNode,
+        glm::angleAxis(glm::radians(-62.0f), glm::vec3(1, 0, 0)) * yaw(28.0f));
     renderer.attachLight(moonNode, moon);
 }
 
@@ -579,10 +707,10 @@ void ShowcaseScene::update(eng::Renderer& renderer, float time)
         if (mChestSpin.valid()) {
             // Turn, plus a slight tilt that follows the bob: a pure yaw on a
             // levitating object reads mechanical, like a display turntable.
-            renderer.setOrientation(
-                mChestSpin,
-                yaw(glm::degrees(time * 0.55f)) *
-                    glm::angleAxis(glm::radians(4.5f * bob), glm::vec3(1, 0, 0)));
+            renderer.setOrientation(mChestSpin,
+                                    yaw(glm::degrees(time * 0.55f)) *
+                                        glm::angleAxis(glm::radians(4.5f * bob),
+                                                       glm::vec3(1, 0, 0)));
         }
         if (mChestLight.valid()) {
             const float pulse = 0.92f + 0.08f * bob;

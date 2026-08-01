@@ -218,6 +218,58 @@ int main()
                 "channel rate");
     }
 
+    // --- rewind ---------------------------------------------------------
+    // The engine rebases this clock when the loading phase ends. The load loop
+    // runs a *variable* number of frames -- it pumps work against a wall-clock
+    // millisecond budget, so a slower shader compile means more frames -- and
+    // each one advanced the clock. Without the rebase, every stepped system
+    // started gameplay at a phase that depended on how long the load took, and
+    // a capture pinned to a frame number came out different run to run (64k
+    // differing pixels between two runs of the same binary; zero after).
+    {
+        StepClock a, b;
+        StepRates rates;
+        rates.enabled = true;
+        for (int i = 0; i < eng::kStepChannelCount; ++i)
+            rates.rate[i] = kHz;
+        a.setRates(rates);
+        b.setRates(rates);
+
+        // Two clocks that ran a different number of "loading" frames.
+        for (int i = 0; i < 7; ++i)
+            a.advance(kFrame);
+        for (int i = 0; i < 23; ++i)
+            b.advance(kFrame);
+        require(a.time(StepChannel::Viewmodel) != b.time(StepChannel::Viewmodel),
+                "the fixture must actually diverge before the rebase");
+
+        a.rewind();
+        b.rewind();
+        require(a.time(StepChannel::Viewmodel) == 0.0f &&
+                    b.time(StepChannel::Viewmodel) == 0.0f,
+                "rewind zeroes every channel");
+        require(a.delta(StepChannel::Viewmodel) == 0.0f,
+                "rewind leaves no delta from the discarded time");
+
+        // From here the two must agree forever: this is the property the
+        // deterministic capture actually depends on.
+        for (int i = 0; i < kFramesPerSec; ++i) {
+            a.advance(kFrame);
+            b.advance(kFrame);
+            for (int c = 0; c < eng::kStepChannelCount; ++c) {
+                const StepChannel ch = StepChannel(c);
+                require(a.time(ch) == b.time(ch),
+                        "rebased clocks must stay in phase");
+                require(a.stepped(ch) == b.stepped(ch),
+                        "rebased clocks must snap on the same frames");
+            }
+        }
+        // And the rates survive the rebase -- it rewinds time, not tuning.
+        require(a.stepDuration(StepChannel::Viewmodel) ==
+                    b.stepDuration(StepChannel::Viewmodel),
+                "rewind keeps the configured rates");
+    }
+
     std::cout << "StepClockTests: OK\n";
     return 0;
 }

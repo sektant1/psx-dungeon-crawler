@@ -1,0 +1,450 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://psx-dungeon-crawler.invalid/schemas/scene.schema.json",
+  "title": "PSX Dungeon Scene",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "version",
+    "id",
+    "entities"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "psx-dungeon-scene"
+    },
+    "version": {
+      "description": "1 shipped before the placement editor; 2 adds cell, encounters and triggers. Readers accept both, the writer emits 2.",
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity"
+      }
+    }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/vec3"
+        },
+        "rotation_degrees": {
+          "$ref": "#/$defs/vec3"
+        },
+        "scale": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "collider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "half_extents"
+      ],
+      "properties": {
+        "shape": {
+          "const": "box"
+        },
+        "half_extents": {
+          "$ref": "#/$defs/vec3"
+        },
+        "offset": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "cell": {
+      "description": "Authored grid placement for kit pieces that occupy a cell or a cell edge. The transform is derived from this; both are stored so re-editing never has to guess a cell back out of a world position.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "col",
+        "row"
+      ],
+      "properties": {
+        "col": {
+          "type": "integer"
+        },
+        "row": {
+          "type": "integer"
+        },
+        "edge": {
+          "enum": [
+            "north",
+            "east",
+            "south",
+            "west"
+          ]
+        },
+        "span": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "yaw_quarters": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "level": {
+          "type": "number"
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "size",
+        "event"
+      ],
+      "properties": {
+        "size": {
+          "$ref": "#/$defs/vec3"
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "light": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "colour"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "directional",
+            "point"
+          ]
+        },
+        "colour": {
+          "$ref": "#/$defs/vec3"
+        },
+        "range": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cast_shadows": {
+          "type": "boolean"
+        },
+        "animation": {
+          "description": "How the light modulates over time. The modulation only ever darkens: the authored colour is the brightest the light gets, because that is the value the palette was graded against.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "steady",
+                "flicker",
+                "pulse"
+              ]
+            },
+            "speed": {
+              "type": "number",
+              "minimum": 0
+            },
+            "amount": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "phase": {
+              "description": "Per-instance offset. Two torches with identical numbers and no phase gutter in lockstep, which reads as a switch rather than fire.",
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "camera": {
+      "description": "A point of view. The entity's transform is where it is and what it looks along; this is the lens. A scene with an active camera plays itself as a shot rather than as a level.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fov_degrees": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 180
+        },
+        "near_clip": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "far_clip": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "priority": {
+          "description": "The highest-priority active camera in the scene is the one the game looks through.",
+          "type": "integer"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "spin": {
+      "description": "Constant rotation about a local axis. Whatever is parented under it turns with it, which is how an orbiting camera is authored rather than coded.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "axis": {
+          "$ref": "#/$defs/vec3"
+        },
+        "degrees_per_second": {
+          "type": "number"
+        }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "prefab": {
+          "type": "string",
+          "pattern": "^kit\\."
+        },
+        "material": {
+          "description": "Overrides the material the prefab's kit piece would otherwise use. For one-off dressing (a scorched wall, a mossy floor) without adding a kit entry.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cast_shadows": {
+          "type": "boolean"
+        },
+        "transform": {
+          "$ref": "#/$defs/transform"
+        },
+        "cell": {
+          "description": "Authored grid placement for kit pieces that occupy a cell or a cell edge. The transform is derived from this; both are stored so re-editing never has to guess a cell back out of a world position.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "col",
+            "row"
+          ],
+          "properties": {
+            "col": {
+              "type": "integer"
+            },
+            "row": {
+              "type": "integer"
+            },
+            "edge": {
+              "enum": [
+                "north",
+                "east",
+                "south",
+                "west"
+              ]
+            },
+            "span": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "yaw_quarters": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
+            "level": {
+              "type": "number"
+            }
+          }
+        },
+        "collider": {
+          "$ref": "#/$defs/collider"
+        },
+        "trigger": {
+          "$ref": "#/$defs/trigger"
+        },
+        "light": {
+          "$ref": "#/$defs/light"
+        },
+        "camera": {
+          "$ref": "#/$defs/camera"
+        },
+        "spin": {
+          "$ref": "#/$defs/spin"
+        },
+        "player_spawn": {
+          "type": "boolean"
+        },
+        "exit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "yaw_degrees"
+          ],
+          "properties": {
+            "yaw_degrees": {
+              "type": "number"
+            }
+          }
+        },
+        "enemy_spawn": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pickup": {
+          "type": "string",
+          "minLength": 1
+        },
+        "marker": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shader": {
+          "$ref": "#/$defs/shader"
+        },
+        "portal": {
+          "$ref": "#/$defs/portal"
+        },
+        "orbit": {
+          "$ref": "#/$defs/orbit"
+        },
+        "particles": {
+          "$ref": "#/$defs/particles"
+        }
+      }
+    },
+    "shader": {
+      "type": "object",
+      "description": "Per-entity shader uniforms. Every field optional; omitted means the engine default, which renders exactly as an entity without the component.",
+      "additionalProperties": false,
+      "properties": {
+        "tint": {
+          "$ref": "#/$defs/vec3",
+          "description": "multiplied into the albedo before lighting; white is unchanged"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rim_colour": {
+          "$ref": "#/$defs/vec3",
+          "description": "fresnel sheen at glancing angles"
+        },
+        "rim_strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "rim_power": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 64,
+          "description": "falloff: low is a broad wash, high a thin edge"
+        },
+        "alpha_scissor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "cutout threshold; below it the fragment is discarded"
+        }
+      }
+    },
+    "portal": {
+      "type": "object",
+      "description": "The portal shader's uniforms, on this entity. Keys are the uniform names -- see eng::ecs::PortalParams. Every one optional; omitted means the material's own default.",
+      "additionalProperties": true
+    },
+    "orbit": {
+      "description": "Travel around a point, without a pivot entity. Spin turns a thing where it stands; this moves it along a ring. The centre is in the entity's own frame -- its parent's, or the world when it has none.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "centre": {
+          "$ref": "#/$defs/vec3"
+        },
+        "axis": {
+          "$ref": "#/$defs/vec3"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0
+        },
+        "degrees_per_second": {
+          "type": "number"
+        },
+        "phase_degrees": {
+          "description": "Where on the ring it starts. Two entities on one ring with the same rate and no phase occupy the same point forever.",
+          "type": "number"
+        },
+        "height": {
+          "description": "Along the axis from the centre: the ring's height above what it circles.",
+          "type": "number"
+        },
+        "facing": {
+          "description": "free keeps the authored rotation (and leaves it to Spin); centre looks at what it circles; travel looks along the direction of motion.",
+          "enum": [
+            "free",
+            "centre",
+            "travel"
+          ]
+        }
+      }
+    },
+    "particles": {
+      "type": "object",
+      "description": "A particle effect playing from this entity. Keys are the fields of eng::ecs::ParticleEmitter.",
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "type": "string",
+          "description": "a name from the particle library; empty plays nothing"
+        },
+        "offset": {
+          "$ref": "#/$defs/vec3"
+        },
+        "playing": {
+          "type": "boolean"
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 16
+        }
+      }
+    }
+  }
+}

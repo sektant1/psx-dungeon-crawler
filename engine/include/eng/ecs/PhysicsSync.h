@@ -1,13 +1,13 @@
 #pragma once
 
 #include <eng/Physics.h>
+#include <eng/ecs/World.h>
 
 #include <entt/entt.hpp>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include <utility>
 #include <vector>
 
 namespace eng { class Physics; }
@@ -22,22 +22,32 @@ namespace eng::ecs {
 // What a collider *means* is not decided here -- layers and sensor-ness are
 // data on the component, so the application owns its collision taxonomy (see
 // its layer table and collision matrix) and the engine only materialises it.
-class PhysicsSync {
+// Owned by World (World::attachPhysics); construct one directly only in a test.
+class PhysicsSync : public WorldReconciler {
 public:
     PhysicsSync(entt::registry& reg, Physics& physics)
         : mReg(reg), mPhysics(physics) {}
-    ~PhysicsSync();
+    ~PhysicsSync() override;
 
     PhysicsSync(const PhysicsSync&) = delete;
     PhysicsSync& operator=(const PhysicsSync&) = delete;
 
     // Run once per frame, after gameplay mutated the registry.
-    void sync();
+    void sync() override;
+    // Simulated poses -> Transform, before the renderer reads them. Without it
+    // a dynamic body falls in Jolt and draws where it was authored: the
+    // registry is the source of truth for everything except the one thing the
+    // simulation owns, and this is where that exception is reconciled.
+    void readback() override;
     // Remove every materialised body. Used before wholesale registry reloads;
     // also called by the destructor.
-    void clear();
+    void clear() override;
 
 private:
+    // What the body was built from. Everything Jolt bakes in at creation and
+    // offers no setter for lives here, and a difference against the components
+    // is a rebuild -- which is the only way "edit the mass in the inspector and
+    // watch it fall differently" works at all.
     struct Tracked {
         entt::entity entity{entt::null};
         BodyHandle body{};
@@ -45,9 +55,17 @@ private:
         glm::vec3 size{0.5f};
         CollisionLayer layer = 0;
         bool sensor = false;
+        bool dynamic = false;
+        RigidBody params{};
         glm::vec3 position{0.0f};
         glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
     };
+
+    // Whether two RigidBodys would produce the same body. Lives here rather
+    // than as an operator== on the component so that adding a field to
+    // RigidBody without deciding whether it forces a rebuild is a compile
+    // error's worth of thought instead of a silent no-op.
+    static bool sameBuild(const RigidBody& a, const RigidBody& b);
 
     entt::registry& mReg;
     Physics& mPhysics;

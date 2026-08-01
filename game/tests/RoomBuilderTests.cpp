@@ -8,6 +8,7 @@
 
 #include "RoomBuilder.h"
 #include "SceneValidate.h"
+#include "TestAssets.h"
 
 #include <algorithm>
 #include <cmath>
@@ -47,9 +48,10 @@ static int countAtGround(const std::vector<Entity>& pieces, const std::string& i
 
 int main()
 {
+    game::test::mountGameAssets();
     KitCatalog catalog;
     std::string error;
-    require(KitCatalog::load(KIT_TOML, catalog, error), error);
+    require(KitCatalog::load(game::test::asset("config/kit.toml"), catalog, error), error);
     const GridConfig grid = GridConfig::fromCatalog(catalog);
     const SceneDocument empty;
 

@@ -1,0 +1,57 @@
+// The showcase's descent-portal profile.
+//
+// This file used to be a mirror of game/assets/materials/{kit,vfx}.material --
+// the whole dungeon atlas set, copied because the sample could only see its own
+// asset root. It no longer needs to: the demo mounts the game pack, so
+// Game/Kit/Dungeon, Game/Kit/Doors, Game/Kit/Stone and the rest are the game's originals and
+// the Demo tuning tab still swaps between them live.
+//
+// What survives is the one material that genuinely differs. The game's
+// Game/Vfx/PortalDown (materials/vfx.material) and the showcase's tune the same
+// PixelVfx/PortalFS to different ends -- the game's carries the surfaceGlow*
+// set and a hotter surfaceBrightness, the showcase's is a plainer membrane read
+// against the pink crystal station. Two authored looks, one name, and Ogre
+// throws ItemIdentityException rather than warning on a duplicate, so the
+// showcase's is named for its pack: Demo/Portal/Down. (D14 will eventually spell
+// this Demo/Vfx/PortalDown, once the Pack/Domain/Name migration lands.)
+material Demo/Portal/Down
+{
+    technique { pass {
+        cull_hardware none
+        depth_write on
+        vertex_program_ref PixelVfx/SurfaceVS { }
+        fragment_program_ref PixelVfx/PortalFS
+        {
+            param_named surfaceDark float4 0.076 0.000 0.535 1.0
+            param_named surfaceMid float4 0.858 0.000 1.000 1.0
+            param_named surfaceBright float4 0.540 0.000 1.000 1.0
+            param_named surfaceCore float4 0.566 0.000 1.000 1.0
+            param_named surfaceStepFps float 11.0
+            param_named portalFlowSpeed float 0.159
+            param_named portalSwirlSpeed float 0.521
+            param_named portalTwist float -0.355
+            param_named portalArms float 1
+            param_named surfaceTexelSize float 0.0240
+            param_named surfacePixelGrid float 39
+            param_named portalDepthScale float 1.466
+            param_named portalParallax float 0.350
+            param_named portalFieldWeight float 0.450
+            param_named portalCoreRadius float 0.227
+            param_named portalCoreBoost float 0.417
+            param_named portalRimRadius float 0.600
+            param_named portalRimWidth float 0.106
+            param_named portalRimIntensity float 0.000
+            param_named portalEdgeFade float 0.000
+            param_named surfaceDither float 0.863
+            param_named surfaceEdgeGlow float 1.882
+            param_named surfaceEdgeFlow float 3.000
+            param_named surfaceBrightness float 1.039
+        }
+        texture_unit
+        {
+            texture slime_stylized.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}

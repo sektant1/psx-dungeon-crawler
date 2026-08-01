@@ -1,0 +1,512 @@
+// ------------------------------------------------------------------------
+// Generic wrapper materials, one per Godot .gdshader wrapper. The scene
+// materials below (Godot .tres ports) use the same program combos with the
+// .tres uniform values baked in.
+//
+// Godot render_mode -> Ogre pass state:
+//   cull_back            -> cull_hardware clockwise (default)
+//   cull_disabled        -> cull_hardware none
+//   depth_draw_opaque    -> depth_write on (opaque) / off (with blending)
+//   depth_draw_always    -> depth_write on even when blended
+//   depth_prepass_alpha  -> alpha discard in shader + depth_write on
+//   blend_mix            -> scene_blend alpha_blend (when transparent)
+//   blend_add            -> scene_blend src_alpha one
+//   shadows_disabled     -> no Ogre shadow technique enabled anywhere
+// ------------------------------------------------------------------------
+
+material Engine/Psx/Lit    // psx_lit.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/Unlit    // psx_unlit.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_Unlit { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/LitMetal    // psx_lit_metal.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitMetal { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/UnlitMetal    // psx_unlit_metal.gdshader
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitMetal { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/LitTransparent    // psx_lit_transparent.gdshader
+{
+    technique { pass {
+        scene_blend alpha_blend
+        depth_write on            // depth_draw_always
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitTransparent { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/UnlitTransparent    // psx_unlit_transparent.gdshader
+{
+    technique { pass {
+        scene_blend alpha_blend
+        depth_write on
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitTransparent { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/PrototypeSurface
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture EnginePrototypeSurface.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Engine-owned particle fallback. Its generated orange/cyan diagnostic sprite
+// is deliberately distinct from missing surface and sprite textures.
+material Engine/Psx/PrototypeParticle
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref BlockParticle_FS
+        {
+            param_named alphaScissor float 0.05
+        }
+        texture_unit
+        {
+            texture EnginePrototypeParticle.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Reusable retro VFX atlas rows: fire, smoke, poison, lava ash.
+material Engine/Psx/Fire
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 0.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 10.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/Smoke
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 1.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 6.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/Poison
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 2.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 7.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/LavaAsh
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS {
+            param_named atlasGrid float2 4.0 4.0
+            param_named atlasRow float 3.0
+            param_named atlasFrames float 4.0
+            param_named atlasFps float 8.0
+        }
+        fragment_program_ref AtlasParticle_FS { }
+        texture_unit
+        {
+            texture retro_particle_atlas.png
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/Rain
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref RainParticle_FS { }
+    } }
+}
+
+material Engine/Psx/ArcaneMote
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref MoteParticle_FS { }
+    } }
+}
+
+material Engine/Psx/FrostShard
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref ShardParticle_FS { }
+    } }
+}
+
+material Engine/Psx/ToxicBubble
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref BubbleParticle_FS { }
+    } }
+}
+
+material Engine/Psx/PortalWisp
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one
+        depth_write off
+        vertex_program_ref Particle_VS { }
+        fragment_program_ref WispParticle_FS { }
+    } }
+}
+
+material Engine/Psx/LitAlphaScissor    // psx_lit_alpha-scissor.gdshader
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write on            // depth_prepass_alpha approximation
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LitAlphaScissor { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/UnlitAlphaScissor    // psx_unlit_alpha-scissor.gdshader
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write on
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref PSX_FS_UnlitAlphaScissor { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+material Engine/Psx/LightVolume    // psx_light-volume.gdshader (NO_TEXTURE + LIGHT_VOLUME)
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend src_alpha one    // Godot blend_add = (SRC_ALPHA, ONE)
+        depth_write off           // depth_draw_opaque + blend_add => no depth write
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_LightVolume { }
+    } }
+}
+
+// Debug line overlay: immediate-mode lines with per-vertex colour.
+// Used by Renderer::setDebugLines (physics collider wireframes etc.). Depth
+// state left DEFAULT (check+write on), exactly like Engine/Psx/DebugWireframe, so the
+// lines integrate into the scene MRT the same way the working wireframe view
+// does. DebugLines_FS writes valid normal/depth metadata so the PSX stylize
+// pass treats them as real surfaces (zero metadata made them vanish except
+// where they overlapped geometry -- the "lines only inside objects" bug).
+material Engine/Psx/DebugLines
+{
+    technique { pass {
+        cull_hardware none
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref DebugLines_FS { }
+    } }
+}
+
+// Debug view: light-blue mesh lines only. Swapped onto every entity by
+// Renderer::setWireframeDebug; depth state stays default so lines occlude
+// like the solid geometry they replace.
+material Engine/Psx/DebugWireframe
+{
+    technique { pass {
+        polygon_mode wireframe
+        cull_hardware none
+        vertex_program_ref PSX_VS_Unlit { }
+        fragment_program_ref Wire_FS { }
+    } }
+}
+
+// post_process/dither-banding_mat.tres (pp_band-dither, psxdither.png,
+// col_depth 15, dither_banding true). Unit 0 = compositor scene target.
+material Engine/Psx/DitherPost
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref Dither_FS { }
+        texture_unit    // scene render target, injected by the compositor
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+        texture_unit
+        {
+            texture psxdither.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+
+// Optional hardware-era reconstruction. Disabled by default (mode 0), so the
+// existing renderer remains pixel-identical until a profile selects a mode.
+material Engine/Psx/HardwareResolve
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref HardwareResolve_FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/PixelStylize
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Stylize_VS { }
+        fragment_program_ref Stylize_FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Bloom: bright-pass -> separable blur (H, V) -> additive composite. All at
+// or below the pixelated resolution; composite runs before Engine/Psx/DitherPost.
+material Engine/Psx/BloomBright
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        // Dither_VS = passthrough fullscreen quad VS (outputs uv); reused by
+        // all bloom passes.
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomBright_FS { }
+        texture_unit
+        {
+            filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/BloomBlurH
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomBlur_FS
+        {
+            param_named blurDir float2 1.0 0.0
+        }
+        texture_unit
+        {
+            filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/BloomBlurV
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomBlur_FS
+        {
+            param_named blurDir float2 0.0 1.0
+        }
+        texture_unit
+        {
+            filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}
+
+material Engine/Psx/BloomComposite
+{
+    technique { pass {
+        depth_check off
+        depth_write off
+        cull_hardware none
+        vertex_program_ref Dither_VS { }
+        fragment_program_ref BloomComposite_FS { }
+        texture_unit    // scene
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+        texture_unit    // bloom
+        {
+            filtering bilinear
+            tex_address_mode clamp
+        }
+    } }
+}
+
+// Base for the material preview's quad stand-in (eng::MaterialPreview). A
+// particle material cannot be drawn on a plain mesh -- its vertex program reads
+// a per-instance stream the mesh has no way to supply -- so the preview clones
+// this, copies the texture and blend across, and shows the art on geometry the
+// sprite program can actually take. Never used by the game itself.
+material Engine/Psx/PreviewSprite
+{
+    technique { pass {
+        cull_hardware none
+        scene_blend alpha_blend
+        depth_write off
+        vertex_program_ref Sprite/VS { }
+        fragment_program_ref Sprite/FS { }
+        texture_unit
+        {
+            filtering none
+            tex_address_mode clamp
+        }
+    } }
+}

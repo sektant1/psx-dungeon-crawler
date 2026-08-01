@@ -158,8 +158,9 @@ PortalProp createPortalProp(eng::Renderer& r, glm::vec3 floorPosition,
                                     glm::vec3(1, 0, 0)));
     r.attachMesh(out.field, membrane, style.material);
     out.opening = style.fieldSize;
+    out.arch = arch;
     if (!style.particles.empty())
-        r.spawnParticles(style.particles, arch);
+        out.wisps = r.spawnParticles(style.particles, arch);
     eng::LightDesc glow;
     glow.colour = style.lightColour;
     glow.range = style.lightRange;
@@ -312,15 +313,15 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             // A stable carved plinth keeps the prop readable even when the
             // displayed weapon is posed at an angle.
             part(placed, {0, 0.12f, 0}, {1.18f, 0.24f, 1.18f},
-                 meshFor("box"), "Fantasy/CarvedStone");
+                 meshFor("box"), "Game/FantasySurfaces/CarvedStone");
         }
         if (isSword) {
             part(display, {0, 0.50f, 0}, {0.17f, 0.38f, 0.17f},
-                 meshFor("box"), "Fantasy/AgedWood");
+                 meshFor("box"), "Game/FantasySurfaces/AgedWood");
             part(display, {0, 0.18f, 0}, {0.23f, 0.18f, 0.23f},
-                 meshFor("sphere"), "Fantasy/DarkIron");
+                 meshFor("sphere"), "Game/FantasySurfaces/DarkIron");
             part(display, {0, 0.94f, 0}, {0.78f, 0.10f, 0.20f},
-                 meshFor("box"), "Fantasy/DarkIron");
+                 meshFor("box"), "Game/FantasySurfaces/DarkIron");
             part(display, {0, 2.02f, 0}, {0.24f, 1.02f, 0.075f},
                  meshFor("box"), material, true);
             const eng::NodeHandle tip =
@@ -330,9 +331,9 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
                 glm::radians(45.0f), glm::vec3(0, 1, 0)));
         } else if (isStaff) {
             part(display, {0, 1.42f, 0}, {0.13f, 1.30f, 0.13f},
-                 meshFor("box"), "Fantasy/AgedWood");
+                 meshFor("box"), "Game/FantasySurfaces/AgedWood");
             part(display, {0, 2.80f, 0}, {0.42f, 0.18f, 0.42f},
-                 meshFor("sphere"), "Fantasy/DarkIron");
+                 meshFor("sphere"), "Game/FantasySurfaces/DarkIron");
             part(display, {0, 3.25f, 0}, {0.42f, 0.42f, 0.42f},
                  meshFor("sphere"), material, true);
             part(display, {0, 3.72f, 0}, {0.30f, 0.48f, 0.30f},
@@ -343,7 +344,7 @@ bool loadPrimitiveShowcase(eng::Renderer& r, const std::string& path,
             part(display, {0, 0.55f, 0}, {0.62f, 0.08f, 0.62f},
                  meshFor("disc"), material);
             part(display, {0, 0.48f, 0}, {0.46f, 0.16f, 0.46f},
-                 meshFor("sphere"), "Fantasy/DarkIron");
+                 meshFor("sphere"), "Game/FantasySurfaces/DarkIron");
         } else {
             r.attachMesh(display, mesh, material, false);
         }
@@ -474,12 +475,12 @@ void buildCrystalRing(eng::Renderer& r, const std::string& meshDir,
         r.setOrientation(root, glm::angleAxis(-angle, glm::vec3(0, 1, 0)));
         const eng::NodeHandle base = r.createNode(root);
         r.setScale(base, glm::vec3(0.31f));
-        r.attachMesh(base, ground, "PSX/CrystalGround", true);
+        r.attachMesh(base, ground, "Game/Demo/CrystalGround", true);
         const eng::NodeHandle crystal = r.createNode(root);
         const float height = 0.72f + 0.10f * float(i % 3);
         r.setScale(crystal, {0.48f, height, 0.48f});
         r.attachMesh(crystal, spires[i % std::size(spires)],
-                     "PSX/CrystalSpire", true);
+                     "Game/Demo/CrystalSpire", true);
     }
 }
 

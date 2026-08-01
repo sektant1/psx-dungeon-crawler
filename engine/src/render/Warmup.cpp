@@ -3,6 +3,9 @@
 #include <eng/Log.h>
 
 #include <OgreMaterial.h>
+#include <OgreRenderSystem.h>
+#include <OgreRenderSystemCapabilities.h>
+#include <OgreRoot.h>
 #include <OgreMaterialManager.h>
 #include <OgreMesh.h>
 #include <OgreMeshManager.h>
@@ -38,6 +41,52 @@ std::vector<Ogre::ResourcePtr> snapshot(Ogre::ResourceManager& manager)
     return out;
 }
 
+// The blind spot getBestTechnique() leaves, and the reason it is worth its own
+// pass here: Technique::checkHardwareSupport only rejects a shaderless pass if
+// Pass::isProgrammable() is true, and that is false when the pass has *no*
+// programs at all. So a technique with a fully fixed-function pass is reported
+// as supported, and the failure surfaces instead as an exception out of
+// SceneManager::_setPass -- at the first DRAW, not at load. An effect that is
+// never spawned during a capture takes the crash to a player rather than to CI.
+//
+// This matters for materials built in C++ rather than scripted (the generated
+// Particles/Auto/<stem> ones), where nothing parses a *_program_ref to get the
+// binding wrong in the first place.
+void unshadedPassCheck(const Ogre::Material& material,
+                       const Ogre::Technique& technique, int& failures)
+{
+    // Ogre ships its own shaderless built-ins ("BaseWhite", "DefaultSettings",
+    // the shadow caster/receiver pair). Nothing here ever draws them, and they
+    // are not ours to fix, so they would be five permanent errors teaching
+    // everyone to ignore this message. Same prefixes Renderer::materialNames
+    // filters on, for the same reason.
+    const std::string& name = material.getName();
+    if (name.rfind("Ogre/", 0) == 0 || name.rfind("BaseWhite", 0) == 0 ||
+        name == "DefaultSettings")
+        return;
+
+    Ogre::RenderSystem* rs = Ogre::Root::getSingleton().getRenderSystem();
+    const Ogre::RenderSystemCapabilities* caps =
+        rs ? rs->getCapabilities() : nullptr;
+    // With fixed function available a shaderless pass is legal, so there is
+    // nothing to report.
+    if (!caps || caps->hasCapability(Ogre::RSC_FIXED_FUNCTION))
+        return;
+
+    const auto& passes = technique.getPasses();
+    for (size_t i = 0; i < passes.size(); ++i) {
+        const Ogre::Pass* pass = passes[i];
+        if (!pass || (pass->hasVertexProgram() && pass->hasFragmentProgram()))
+            continue;
+        ++failures;
+        log::error("Warmup: material '%s' pass %zu has no %s program; this "
+                   "render system has no fixed function and will throw the "
+                   "first time it is drawn",
+                   material.getName().c_str(), i,
+                   pass->hasVertexProgram() ? "fragment" : "vertex");
+    }
+}
+
 } // namespace
 
 void addRenderWarmup(LoadPlan& plan, const WarmupOptions& options)
@@ -64,12 +113,15 @@ void addRenderWarmup(LoadPlan& plan, const WarmupOptions& options)
                     // actually reports "no supportable Techniques", which is
                     // how a broken shader surfaces here instead of on screen.
                     material->load();
-                    if (!material->getBestTechnique()) {
+                    Ogre::Technique* best = material->getBestTechnique();
+                    if (!best) {
                         ++cursor->failures;
                         log::warn("Warmup: material '%s' has no supportable "
                                   "technique",
                                   material->getName().c_str());
+                        continue;
                     }
+                    unshadedPassCheck(*material, *best, cursor->failures);
                 }
                 const bool done = cursor->next >= cursor->items.size();
                 if (done)

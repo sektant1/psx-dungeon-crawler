@@ -114,32 +114,32 @@ void applyRenderPalette(eng::Renderer& r, const RenderPalette& p,
     r.setLightStepSoftness(p.lightStepSoftness);
     r.setFogDesatBoost(p.fogDesatBoost);
 
-    r.setMaterialParam("PSX/LightShaft", "modulateColor", p.lightShaftColour);
+    r.setMaterialParam("Game/Demo/LightShaft", "modulateColor", p.lightShaftColour);
 
     r.setGradeEnabled(true);
     r.setGradeParams(p.gradeDesaturate, p.gradeContrast, p.gradeShadowTint,
                      p.gradeMidTint);
 
-    r.setMaterialParam("PSX/DitherPost", "gradeSaturation", p.gradeSaturation);
-    r.setMaterialParam("PSX/DitherPost", "gradeTintStrength", p.gradeTintStrength);
-    r.setMaterialParam("PSX/DitherPost", "gradeBlackLift", p.gradeBlackLift);
-    r.setMaterialParam("PSX/DitherPost", "vignetteStrength", p.vignetteStrength);
-    r.setMaterialParam("PSX/DitherPost", "vignetteColor", p.vignetteColour);
-    r.setMaterialParam("PSX/DitherPost", "ditherEnabled", 1.0f);
-    r.setMaterialParam("PSX/DitherPost", "colDepth", p.colDepth);
-    r.setMaterialParam("PSX/DitherPost", "ditherBanding", p.ditherBanding);
-    r.setMaterialParam("PSX/DitherPost", "ditherDarkFade", p.ditherDarkFade);
+    r.setMaterialParam("Engine/Psx/DitherPost", "gradeSaturation", p.gradeSaturation);
+    r.setMaterialParam("Engine/Psx/DitherPost", "gradeTintStrength", p.gradeTintStrength);
+    r.setMaterialParam("Engine/Psx/DitherPost", "gradeBlackLift", p.gradeBlackLift);
+    r.setMaterialParam("Engine/Psx/DitherPost", "vignetteStrength", p.vignetteStrength);
+    r.setMaterialParam("Engine/Psx/DitherPost", "vignetteColor", p.vignetteColour);
+    r.setMaterialParam("Engine/Psx/DitherPost", "ditherEnabled", 1.0f);
+    r.setMaterialParam("Engine/Psx/DitherPost", "colDepth", p.colDepth);
+    r.setMaterialParam("Engine/Psx/DitherPost", "ditherBanding", p.ditherBanding);
+    r.setMaterialParam("Engine/Psx/DitherPost", "ditherDarkFade", p.ditherDarkFade);
 
-    r.setMaterialParam("PSX/PixelStylize", "shadowColor", p.shadowColour);
-    r.setMaterialParam("PSX/PixelStylize", "shadowStrength", p.shadowStrength);
-    r.setMaterialParam("PSX/PixelStylize", "highlightColor", p.highlightColour);
-    r.setMaterialParam("PSX/PixelStylize", "highlightColorOverride",
+    r.setMaterialParam("Engine/Psx/PixelStylize", "shadowColor", p.shadowColour);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "shadowStrength", p.shadowStrength);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "highlightColor", p.highlightColour);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "highlightColorOverride",
                        p.highlightColourOverride ? 1.0f : 0.0f);
-    r.setMaterialParam("PSX/PixelStylize", "highlightStrength", p.highlightStrength);
-    r.setMaterialParam("PSX/PixelStylize", "outlineColor", p.outlineColour);
-    r.setMaterialParam("PSX/PixelStylize", "outlineOpacity", p.outlineOpacity);
-    r.setMaterialParam("PSX/PixelStylize", "outlineDepthSens", p.outlineDepthSens);
-    r.setMaterialParam("PSX/PixelStylize", "outlineNormalSens", p.outlineNormalSens);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "highlightStrength", p.highlightStrength);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "outlineColor", p.outlineColour);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "outlineOpacity", p.outlineOpacity);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "outlineDepthSens", p.outlineDepthSens);
+    r.setMaterialParam("Engine/Psx/PixelStylize", "outlineNormalSens", p.outlineNormalSens);
 
     r.setBloomParams(p.bloomThreshold, p.bloomIntensity);
 }

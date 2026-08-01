@@ -1,0 +1,155 @@
+[window]
+title = "Debug"
+width = 960
+height = 720
+# Run unsynced (vsync=true had its own overlay-scanout flicker on this
+# Mesa/GL3Plus/XWayland stack) and pace with the frame limiter below.
+vsync = false
+# Frame limiter: caps the loop so vsync=false doesn't run the GPU flat out.
+# The ImGui overlay is patched to retain a ring of vertex/index buffers
+# (cmake/patches/ogre-imgui-overlay-fresh-buffer.patch) so capping the fps no
+# longer reintroduces the buffer-aliasing flicker. If flicker ever returns on
+# other hardware, limit_fps=false (uncapped) is the fallback.
+limit_fps = false
+max_fps = 144
+
+# Stop-motion animation stepping (OSRS / claymation look). Each channel holds
+# its pose between snaps at its own rate; 0 = that channel runs smooth. See
+# engine/include/eng/StepClock.h for what each channel covers.
+#
+# Camera, player movement, physics and UI are deliberately NOT stepped and have
+# no channel here: stepping the view reads as input lag and makes people motion
+# sick, and stepping locomotion makes the controls feel broken rather than
+# stylised. Physics keeps running at 60 Hz under every stepped channel, so
+# collisions and hit registration are never affected by these numbers.
+#
+# 12 Hz is the rate the look is named after: classic stop-motion is 24 fps shot
+# on twos, i.e. 12 distinct poses a second. Tune live in the debug overlay's
+# Animation tab (F1) and paste the result back here.
+[animation]
+enabled = true
+scale = 1.0            # multiplies every rate below
+characters_fps = 18    # enemies/NPCs: the channel that carries the look
+viewmodel_fps = 24     # hands/weapon: fastest stepped channel, it sits next to
+                       # the eye where a coarse rate reads as a dropped frame
+world_fps = 15         # props, torch flicker, animated dressing
+particles_fps = 18     # VFX; smooth particles beside stepped chars look broken
+projectiles_fps = 30   # arrows/spells must stay trackable, so: fast
+phase_jitter = 0.35    # spread per-object step phase so crowds aren't one puppet
+
+# Dodge: the defensive verb the fight is built around. A dash is a commitment
+# -- fixed direction, fixed distance, no steering -- and the i-frames are what
+# you are paying stamina for. iframes shorter than duration on purpose: the
+# tail of the dash is vulnerable, so a mistimed dodge still gets punished.
+# Neutral movement input dashes backwards (the backstep).
+[dodge]
+speed = 14.0        # m/s during the dash
+duration = 0.32     # seconds of movement
+cooldown = 0.45     # seconds after it ends before another is allowed
+iframes = 0.22      # seconds of invulnerability, from the start of the dash
+stamina = 25.0      # cost; an empty bar means no dodge
+
+# Simulation feel. These are game tuning, not engine internals: the engine
+# takes them from PhysicsSetup and has no opinion about the numbers.
+[physics]
+# World gravity in m/s^2, negative is down. Earth is -9.81; we run roughly
+# double that because a fast first-person game wants a short, snappy fall arc
+# -- a realistic value makes jumps feel floaty and drops feel slow. Raising the
+# magnitude shortens jumps and makes props settle harder; lowering it makes the
+# whole game feel moon-like.
+gravity = -18.0
+# How hard the player shoves a dynamic prop they walk into, as a multiple of
+# the player's speed along the contact normal (so a fast walk into a barrel
+# shoves it harder than a slow one). 0 makes props immovable walls; 2.0 lets
+# you clear a crate out of a doorway by walking through it without launching
+# it across the room.
+character_push_impulse = 2.0
+# Multi-threaded physics. Off on purpose. With more than one worker Jolt
+# resolves contacts in thread-race order, so a stack of barrels settles
+# differently every run and a boss retry is not the same fight. Single-worker
+# simulation is reproducible, which is what retries and replays need, and it
+# measures at roughly a tenth of a millisecond a frame in this scene. Turn on
+# only if a scene gets heavy enough for that to matter.
+multithreaded = false
+
+[player]
+speed = 3.0
+mouse_sensitivity = 0.002
+# Profile in blood.toml the player bleeds when something lands a hit.
+blood = "human"
+
+# Player-facing HUD is rendered at native output resolution after the PSX post
+# chain. Scale and contrast are accessibility controls; reduced_motion removes
+# fades/flashes without changing combat timing or information.
+[hud]
+scale = 1.0
+opacity = 0.92
+high_contrast = false
+reduced_motion = false
+crosshair = true
+numeric_values = true
+# Critical HUD inset for TV overscan and displays with unsafe edges. Editor UI
+# stage previews this same percentage instead of drawing a cosmetic-only guide.
+safe_area_percent = 5.0
+
+[bindings]
+move_forward = "W"
+move_back = "S"
+move_left = "A"
+move_right = "D"
+sprint = "Left Shift"
+walk = "Left Alt"
+crouch = "Left Ctrl"
+jump = "Space"
+slide = "C"
+quit = "Escape"
+interact = "E"
+swap_weapon = "X"
+weapon_1 = "1"
+weapon_2 = "2"
+weapon_3 = "3"
+deflect = "V"
+dodge = "B"
+kick = "G"
+debug_ui = "F1"
+dev_console = "`"
+show_colliders = "F3"
+show_perf = "F4"
+
+# Archived sword/staff/torch prototype tuning. Source systems and values remain
+# available for later reactivation but are disconnected from the live loadout.
+[combat.fireball]
+speed = 18.0
+radius = 0.14
+mass = 0.30
+ttl = 6.0
+impact_impulse = 3.0
+light_colour = [1.0, 0.55, 0.15]
+light_range = 4.0
+trail_particle = "fireball_trail"
+muzzle_particle = "spell_muzzle"
+impact_particle = "fireball_impact"
+
+[combat.beam]
+range = 40.0
+width = 0.06
+impulse = 4.0
+segment_ttl = 0.10
+light_colour = [0.40, 0.70, 1.0]
+light_range = 3.0
+core_particle = "Game/Spells/BeamCore"
+impact_particle = "beam_impact"
+
+[combat.arrow]
+speed = 60.0
+radius = 0.03
+half_height = 0.22
+mass = 0.10
+ttl = 10.0
+
+[combat.melee]
+reach = 1.80
+radius = 0.50
+impulse = 6.0
+windup = 0.12
+active = 0.13

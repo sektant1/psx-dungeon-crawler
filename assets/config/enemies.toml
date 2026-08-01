@@ -1,0 +1,674 @@
+# Enemy definitions.
+#
+# Two kinds of table live here.
+#
+#   [archetype.<id>]  a template. Never spawns. This is where a *type* of enemy
+#                     is defined: what it is made of and how it thinks.
+#   [enemy.<id>]      a spawnable enemy. `inherits` names an archetype (or
+#                     another enemy) and every field it does not state comes
+#                     from there. Inheritance is transitive.
+#
+# Adding an enemy is adding one of these tables. There is no C++ to write, no
+# registration call, and no factory: EnemyLibrary reads the file, EnemySystem
+# turns a row into a body + node + components, and EnemyAI runs the same state
+# machine for all of them. The archetypes below are the "different types"
+# scaffolding -- between them they cover trash, heavy, skirmisher, ranged,
+# caster, charger, ambusher, turret and boss, and any new enemy is a
+# recombination of those dials rather than a new behaviour.
+#
+# Two rules worth knowing before editing:
+#   - `[stats.resistances]` and `[[...attack]]` REPLACE the inherited value
+#     rather than merging into it. Stating one means stating all of them.
+#     Anything else makes "this variant has no resistances" unwritable.
+#   - attack `weapon` names a row in weapons.toml. That is where damage,
+#     damage type, crit and crowd-control live; the attack here owns range,
+#     cadence and timing. One weapon can back several enemies' moves.
+#   - ranged attacks may add `[...attack.pattern]` and one or more
+#     `[[...attack.pattern.track]]` blocks. Tracks support `aimed`, `fan`, and
+#     `ring`; `repeat` + `interval` make bursts, and `rotate_degrees` makes
+#     spirals/rotating volleys. All schedules must fit inside attack `active`.
+#     `aim` is `facing`, `commit_target`, or `live_target`. Runtime caps each
+#     pattern at 8 tracks, 64 repeats/track, 64 shots/volley, and 512 total.
+#
+# Placeholder art: every enemy is a red cylinder that is exactly its collision
+# cylinder, so what you can see is what you can hit. Tint carries the read --
+# EnemyRedPale is fast, EnemyRed is standard, EnemyRedDark is heavy,
+# EnemyRedElite is a boss.
+
+# ============================================================================
+# ARCHETYPES
+# ============================================================================
+
+# The root every other archetype starts from. Nothing inherits nothing.
+[archetype.base]
+name     = "Creature"
+category = "Unknown"
+tier     = 1
+
+[archetype.base.body]
+radius            = 0.35
+height            = 1.8
+mass              = 70.0
+eye_height        = 1.5
+separation_radius = 0.9
+
+[archetype.base.visual]
+material     = "Game/Enemy/Red"
+scale        = [1.0, 1.0, 1.0]
+hit_flash    = 0.16
+hit_flash_time = 0.12
+cast_shadows = true
+# Which profile in blood.toml it bleeds. One word covers spray, gibs, decal and
+# pool together; "" is a creature that does not bleed at all.
+blood        = "human"
+
+[archetype.base.stats]
+health        = 60.0
+poise         = 40.0
+poise_regen   = 30.0
+stamina       = 100.0
+stamina_regen = 25.0
+death_impulse = 6.0
+corpse_time   = 12.0
+
+[archetype.base.locomotion]
+walk_speed    = 1.6
+chase_speed   = 3.2
+strafe_speed  = 2.0
+acceleration  = 14.0
+turn_rate_deg = 300.0
+lunge_speed   = 0.0
+step_height   = 0.4
+
+[archetype.base.perception]
+sight_range     = 18.0
+sight_fov_deg   = 140.0
+hearing_range   = 5.0
+lose_sight_time = 4.0
+alert_time      = 0.45
+leash_range     = 0.0
+
+[archetype.base.behaviour]
+aggression       = 0.6
+preferred_range  = 0.0   # 0 = derive from the longest attack range
+backoff_range    = 0.0
+circle_chance    = 0.35
+reposition_time  = 1.1
+flee_health_pct  = 0.0
+dodge_chance     = 0.0
+think_interval   = 0.2
+starts_dormant   = false
+stationary       = false
+
+[[archetype.base.attack]]
+id           = "swing"
+weapon       = "claw"
+max_range    = 2.0
+aim_cone_deg = 45.0
+cooldown     = 1.6
+windup       = 0.35
+active       = 0.08
+recovery     = 0.45
+stamina_cost = 8.0
+poise_damage = 12.0
+
+# --- trash: numerous, readable, dies fast -----------------------------------
+[archetype.grunt]
+inherits = "base"
+category = "Fodder"
+
+[archetype.grunt.stats]
+health = 45.0
+poise  = 25.0
+
+[archetype.grunt.behaviour]
+aggression    = 0.7
+circle_chance = 0.25
+
+# --- heavy: slow, enormous windup, breaks your guard ------------------------
+# The design contract of a heavy is that its windup is long enough to punish
+# and its poise is high enough that you cannot stagger out of it. Both dials
+# are here, not in code.
+[archetype.brute]
+inherits = "base"
+category = "Heavy"
+tier     = 3
+
+[archetype.brute.body]
+radius     = 0.55
+height     = 2.4
+mass       = 180.0
+eye_height = 2.0
+separation_radius = 1.4
+
+[archetype.brute.visual]
+material = "Game/Enemy/RedDark"
+
+[archetype.brute.stats]
+health        = 220.0
+poise         = 110.0
+poise_regen   = 22.0
+stamina       = 140.0
+death_impulse = 10.0
+
+[archetype.brute.locomotion]
+walk_speed    = 1.3
+chase_speed   = 2.5
+strafe_speed  = 1.2
+acceleration  = 8.0
+turn_rate_deg = 120.0    # slow turn: circling it actually works
+lunge_speed   = 3.4      # but it lunges, so circling late does not
+
+[archetype.brute.behaviour]
+aggression      = 0.85
+circle_chance   = 0.05
+reposition_time = 1.4
+
+[[archetype.brute.attack]]
+id           = "overhead"
+weapon       = "greatclub"
+telegraph_effect = "enemy_overhead_telegraph"
+max_range    = 3.0
+aim_cone_deg = 35.0
+cooldown     = 3.0
+windup       = 0.95
+active       = 0.12
+recovery     = 0.9
+stamina_cost = 25.0
+poise_damage = 55.0
+
+[[archetype.brute.attack]]
+id           = "sweep"
+weapon       = "greatclub"
+telegraph_effect = "enemy_sweep_telegraph"
+min_range    = 0.0
+max_range    = 3.4
+aim_cone_deg = 80.0
+cooldown     = 5.0
+weight       = 0.6
+windup       = 1.15
+active       = 0.16
+recovery     = 1.1
+stamina_cost = 32.0
+poise_damage = 70.0
+is_sweep     = true
+arc          = 1.2
+
+# --- skirmisher: fast, circles, refuses to stand in front of you ------------
+[archetype.skirmisher]
+inherits = "base"
+category = "Skirmisher"
+tier     = 2
+
+[archetype.skirmisher.body]
+radius = 0.3
+height = 1.7
+mass   = 55.0
+
+[archetype.skirmisher.visual]
+material = "Game/Enemy/RedPale"
+
+[archetype.skirmisher.stats]
+health = 55.0
+poise  = 30.0
+
+[archetype.skirmisher.locomotion]
+walk_speed    = 2.2
+chase_speed   = 4.6
+strafe_speed  = 3.6
+acceleration  = 22.0
+turn_rate_deg = 520.0
+lunge_speed   = 2.0
+
+[archetype.skirmisher.behaviour]
+aggression      = 0.45
+circle_chance   = 0.7
+reposition_time = 0.8
+dodge_chance    = 0.4
+think_interval  = 0.15
+
+[[archetype.skirmisher.attack]]
+id           = "slash"
+weapon       = "rusted_blade"
+max_range    = 2.2
+aim_cone_deg = 40.0
+cooldown     = 1.2
+windup       = 0.28
+active       = 0.06
+recovery     = 0.32
+stamina_cost = 10.0
+poise_damage = 14.0
+
+# --- ranged: holds distance, kites when crowded -----------------------------
+# backoff_range is what makes this a distinct type rather than a grunt with a
+# bow: below it, the enemy walks backwards instead of attacking.
+[archetype.ranged]
+inherits = "base"
+category = "Ranged"
+tier     = 2
+
+[archetype.ranged.visual]
+material = "Game/Enemy/RedPale"
+
+[archetype.ranged.stats]
+health = 40.0
+poise  = 20.0
+
+[archetype.ranged.locomotion]
+chase_speed  = 2.8
+strafe_speed = 2.8
+
+[archetype.ranged.perception]
+sight_range = 26.0
+
+[archetype.ranged.behaviour]
+aggression      = 0.5
+preferred_range = 11.0
+backoff_range   = 6.0
+circle_chance   = 0.5
+reposition_time = 1.2
+flee_health_pct = 0.25
+
+[[archetype.ranged.attack]]
+id               = "shot"
+weapon           = "enemy_bolt"
+min_range        = 3.0
+max_range        = 24.0
+aim_cone_deg     = 12.0
+cooldown         = 2.4
+ranged           = true
+projectile_speed = 26.0
+windup           = 0.6
+active           = 0.05
+recovery         = 0.7
+stamina_cost     = 6.0
+
+# --- caster: slower projectile, applies crowd control -----------------------
+[archetype.caster]
+inherits = "ranged"
+category = "Caster"
+
+[archetype.caster.stats]
+health = 48.0
+
+[archetype.caster.behaviour]
+preferred_range = 13.0
+backoff_range   = 7.0
+flee_health_pct = 0.3
+
+[[archetype.caster.attack]]
+id               = "hex"
+weapon           = "hex_bolt"
+min_range        = 3.0
+max_range        = 22.0
+aim_cone_deg     = 15.0
+cooldown         = 3.2
+ranged           = true
+projectile_speed = 14.0
+windup           = 0.9       # long tell: casters are meant to be rushed
+active           = 0.05
+recovery         = 0.8
+stamina_cost     = 10.0
+
+# --- charger: closes the gap, all-in, little spacing sense ------------------
+[archetype.charger]
+inherits = "base"
+category = "Charger"
+tier     = 2
+
+[archetype.charger.body]
+radius = 0.4
+height = 1.5
+mass   = 90.0
+
+[archetype.charger.stats]
+health = 70.0
+poise  = 45.0
+
+[archetype.charger.locomotion]
+chase_speed   = 6.0
+acceleration  = 26.0
+turn_rate_deg = 180.0
+lunge_speed   = 7.5
+
+[archetype.charger.behaviour]
+aggression      = 1.0
+circle_chance   = 0.0
+reposition_time = 0.6
+
+[[archetype.charger.attack]]
+id           = "gore"
+weapon       = "spear_thrust"
+max_range    = 3.6
+aim_cone_deg = 25.0
+cooldown     = 2.6
+windup       = 0.55
+active       = 0.1
+recovery     = 0.7
+stamina_cost = 18.0
+poise_damage = 35.0
+
+# --- ambusher: sleeps until seen, then everything at once -------------------
+[archetype.ambusher]
+inherits = "skirmisher"
+category = "Ambusher"
+
+[archetype.ambusher.behaviour]
+starts_dormant = true
+alert_time     = 0.2
+aggression     = 0.9
+circle_chance  = 0.2
+
+[archetype.ambusher.perception]
+sight_range   = 9.0
+hearing_range = 3.0
+alert_time    = 0.2
+
+# --- sentinel: never moves. Turret, statue, wall trap -----------------------
+[archetype.sentinel]
+inherits = "ranged"
+category = "Sentinel"
+
+[archetype.sentinel.body]
+mass = 400.0
+
+[archetype.sentinel.visual]
+material = "Game/Enemy/RedDark"
+
+[archetype.sentinel.stats]
+health        = 90.0
+poise         = 999.0   # cannot be staggered; it is furniture that shoots
+death_impulse = 2.0
+
+[archetype.sentinel.behaviour]
+stationary      = true
+aggression      = 1.0
+flee_health_pct = 0.0
+
+# --- boss: leashed, high poise, mixed move list -----------------------------
+[archetype.boss]
+inherits = "brute"
+category = "Boss"
+tier     = 5
+boss     = true
+
+[archetype.boss.visual]
+material = "Game/Enemy/RedElite"
+blood    = "boss"      # same effects, twice the amount
+
+[archetype.boss.stats]
+health      = 900.0
+poise       = 200.0
+corpse_time = 0.0        # a boss corpse stays
+
+[archetype.boss.perception]
+leash_range = 32.0       # it owns its arena and will not follow you out
+
+# ============================================================================
+# ENEMIES
+# ============================================================================
+# Everything below is a one-table variation on the archetypes above. Note how
+# little each one has to say.
+
+[enemy.hollow]
+inherits = "grunt"
+name     = "Hollow"
+category = "Undead - brittle, mindless"
+
+[enemy.hollow.visual]
+blood = "undead_ichor"
+
+[enemy.hollow.stats.resistances]
+poison = 0.6      # already dead
+fire   = -0.4     # dry
+
+[enemy.hollow_soldier]
+inherits = "grunt"
+name     = "Hollow Soldier"
+category = "Undead - armoured"
+tier     = 2
+
+[enemy.hollow_soldier.visual]
+blood = "undead_ichor"
+
+[enemy.hollow_soldier.stats]
+health = 80.0
+poise  = 50.0
+
+[enemy.hollow_soldier.stats.resistances]
+slash  = 0.4
+pierce = 0.3
+blunt  = -0.25    # plate does nothing against a mace
+fire   = -0.2
+
+[[enemy.hollow_soldier.attack]]
+id           = "chop"
+weapon       = "rusted_blade"
+max_range    = 2.3
+aim_cone_deg = 40.0
+cooldown     = 1.8
+windup       = 0.45
+active       = 0.08
+recovery     = 0.55
+stamina_cost = 12.0
+poise_damage = 20.0
+
+[enemy.rat_swarmer]
+inherits = "skirmisher"
+name     = "Plague Rat"
+category = "Vermin - fast, fragile"
+tier     = 1
+
+[enemy.rat_swarmer.body]
+radius            = 0.25
+height            = 0.7
+eye_height        = 0.5
+mass              = 20.0
+separation_radius = 0.6
+
+[enemy.rat_swarmer.stats]
+health        = 18.0
+poise         = 8.0
+corpse_time   = 6.0
+death_impulse = 4.0
+
+[enemy.rat_swarmer.stats.resistances]
+poison = 0.8
+
+[enemy.rat_swarmer.behaviour]
+aggression    = 0.9
+circle_chance = 0.2
+
+[[enemy.rat_swarmer.attack]]
+id           = "bite"
+weapon       = "claw"
+max_range    = 1.2
+aim_cone_deg = 60.0
+cooldown     = 0.9
+windup       = 0.18
+active       = 0.06
+recovery     = 0.25
+stamina_cost = 4.0
+poise_damage = 5.0
+
+[enemy.stone_brute]
+inherits = "brute"
+name     = "Stone Brute"
+category = "Construct - armoured, slow"
+
+[enemy.stone_brute.visual]
+blood = ""        # it is rock; it chips, it does not bleed
+
+[enemy.stone_brute.stats.resistances]
+slash    = 0.6
+pierce   = 0.6
+blunt    = -0.4
+poison   = 0.9
+lightning = -0.3
+
+[enemy.crossbow_hollow]
+inherits = "ranged"
+name     = "Hollow Marksman"
+category = "Undead - ranged"
+
+[enemy.crossbow_hollow.visual]
+blood = "undead_ichor"
+
+[enemy.crossbow_hollow.stats.resistances]
+poison = 0.6
+
+[enemy.hex_acolyte]
+inherits = "caster"
+name     = "Hex Acolyte"
+category = "Cultist - slows, fragile"
+
+[enemy.hex_acolyte.stats.resistances]
+arcane = 0.5
+blunt  = -0.2
+
+[enemy.hound]
+inherits = "charger"
+name     = "Grave Hound"
+category = "Beast - lunges, relentless"
+
+[enemy.hound.body]
+radius     = 0.35
+height     = 1.0
+eye_height = 0.8
+
+[enemy.hound.stats]
+health = 55.0
+
+[[enemy.hound.attack]]
+id           = "pounce"
+weapon       = "claw"
+max_range    = 3.2
+aim_cone_deg = 30.0
+cooldown     = 2.0
+windup       = 0.4
+active       = 0.1
+recovery     = 0.6
+stamina_cost = 14.0
+poise_damage = 25.0
+
+[enemy.venom_lurker]
+inherits = "ambusher"
+name     = "Venom Lurker"
+category = "Beast - ambush, poison"
+
+[enemy.venom_lurker.stats.resistances]
+poison = 0.9
+frost  = -0.4
+
+[[enemy.venom_lurker.attack]]
+id           = "rake"
+weapon       = "claw"
+max_range    = 2.0
+aim_cone_deg = 45.0
+cooldown     = 1.1
+windup       = 0.25
+active       = 0.06
+recovery     = 0.3
+stamina_cost = 8.0
+poise_damage = 12.0
+
+[[enemy.venom_lurker.attack]]
+id               = "spit"
+weapon           = "venom_spit"
+min_range        = 4.0
+max_range        = 14.0
+aim_cone_deg     = 18.0
+cooldown         = 4.0
+weight           = 0.5
+ranged           = true
+projectile_speed = 16.0
+windup           = 0.5
+active           = 0.05
+recovery         = 0.5
+stamina_cost     = 8.0
+
+[enemy.watcher_idol]
+inherits = "sentinel"
+name     = "Watcher Idol"
+category = "Construct - immobile, ranged"
+
+[enemy.watcher_idol.stats.resistances]
+slash  = 0.7
+pierce = 0.7
+blunt  = -0.3
+poison = 0.9
+
+[enemy.ashen_warden]
+inherits = "boss"
+name     = "Ashen Warden"
+category = "Boss - fire, unstaggerable"
+
+[enemy.ashen_warden.stats.resistances]
+fire   = 0.8
+frost  = -0.5
+poison = 0.9
+
+[[enemy.ashen_warden.attack]]
+id           = "overhead"
+weapon       = "greatclub"
+max_range    = 3.4
+aim_cone_deg = 35.0
+cooldown     = 2.8
+windup       = 0.85
+active       = 0.12
+recovery     = 0.8
+stamina_cost = 25.0
+poise_damage = 60.0
+
+[[enemy.ashen_warden.attack]]
+id           = "sweep"
+weapon       = "greatclub"
+max_range    = 4.0
+aim_cone_deg = 90.0
+cooldown     = 6.0
+weight       = 0.7
+windup       = 1.2
+active       = 0.18
+recovery     = 1.1
+stamina_cost = 32.0
+poise_damage = 80.0
+is_sweep     = true
+arc          = 1.4
+
+[[enemy.ashen_warden.attack]]
+id               = "pyre"
+weapon           = "pyre_breath"
+telegraph_effect = "enemy_pyre_telegraph"
+min_range        = 4.0
+max_range        = 16.0
+aim_cone_deg     = 25.0
+cooldown         = 8.0
+weight           = 0.5
+ranged           = true
+projectile_speed = 12.0
+windup           = 1.1
+active           = 1.40
+recovery         = 1.0
+stamina_cost     = 20.0
+
+[enemy.ashen_warden.attack.pattern]
+id = "pyre_rite"
+
+[[enemy.ashen_warden.attack.pattern.track]]
+at = 0.0
+repeat = 1
+shape = "fan"
+aim = "commit_target"
+projectile = "pyre_breath"
+shot_count = 7
+arc_degrees = 70.0
+
+[[enemy.ashen_warden.attack.pattern.track]]
+at = 0.30
+repeat = 10
+interval = 0.08
+shape = "aimed"
+aim = "commit_target"
+projectile = "pyre_breath"
+shot_count = 1
+rotate_degrees = 20.0

@@ -71,7 +71,7 @@ std::vector<PlayerWeaponDef> defaults()
     spindle.muzzleEffect = "vesper_muzzle";
     spindle.projectile.primitive = WeaponPrimitive::Cone;
     spindle.projectile.visualScale = {0.035f, 0.22f, 0.035f};
-    spindle.projectile.material = "Game/ProjectileVesper";
+    spindle.projectile.material = "Game/Prototype/ProjectileVesper";
     spindle.projectile.trailEffect = "vesper_trail";
     spindle.projectile.impactEffect = "vesper_impact";
     spindle.projectile.speed = 72.0f;
@@ -96,7 +96,7 @@ std::vector<PlayerWeaponDef> defaults()
     arbalest.muzzleEffect = "eidolon_muzzle";
     arbalest.projectile.primitive = WeaponPrimitive::Cone;
     arbalest.projectile.visualScale = {0.07f, 0.42f, 0.07f};
-    arbalest.projectile.material = "Game/ProjectileEidolon";
+    arbalest.projectile.material = "Game/Prototype/ProjectileEidolon";
     arbalest.projectile.trailEffect = "eidolon_trail";
     arbalest.projectile.impactEffect = "eidolon_impact";
     arbalest.projectile.speed = 48.0f;
@@ -125,7 +125,7 @@ std::vector<PlayerWeaponDef> defaults()
     talon.muzzleEffect = "talon_muzzle";
     talon.projectile.primitive = WeaponPrimitive::Sphere;
     talon.projectile.visualScale = glm::vec3(0.09f);
-    talon.projectile.material = "Game/ProjectileTalon";
+    talon.projectile.material = "Game/Prototype/ProjectileTalon";
     talon.projectile.trailEffect = "talon_trail";
     talon.projectile.impactEffect = "talon_impact";
     talon.projectile.speed = 58.0f;

@@ -27,16 +27,16 @@ its material staging mode (`make material`) isolates one material on one sphere.
 ## What you are looking at
 
 Every frame goes through `PSX/Stylized`
-(`engine/assets/compositors/psx.compositor`). The render targets, in order:
+(`assets/compositors/psx.compositor`). The render targets, in order:
 
 | Target | Size | What it holds |
 |---|---|---|
 | `mrt` | ⅓ × ⅓ | **Where the world is drawn.** MRT: attachment 0 is scene colour, attachment 1 is `vec4(normal * 0.5 + 0.5, depth / farClip)`. Everything except world-space UI. |
-| `rt_post` | ⅓ | `PSX/PixelStylize` — outlines, ink, highlights, read off the normal/depth attachment |
-| `rt_bright` | ⅙ | `PSX/BloomBright` — the threshold cut |
-| `rt_blur` | ⅙ | `PSX/BloomBlurH`, then `BloomBlurV` back into `rt_bright` |
-| `rt_final` | ⅓ | `PSX/BloomComposite` — post + bloom |
-| `rt_resolve` | ⅓ | `PSX/HardwareResolve` — the era-specific resolve filter |
+| `rt_post` | ⅓ | `Engine/Psx/PixelStylize` — outlines, ink, highlights, read off the normal/depth attachment |
+| `rt_bright` | ⅙ | `Engine/Psx/BloomBright` — the threshold cut |
+| `rt_blur` | ⅙ | `Engine/Psx/BloomBlurH`, then `BloomBlurV` back into `rt_bright` |
+| `rt_final` | ⅓ | `Engine/Psx/BloomComposite` — post + bloom |
+| `rt_resolve` | ⅓ | `Engine/Psx/HardwareResolve` — the era-specific resolve filter |
 | `target_output` | full | the dither/grade pass upscales here, then world-space text plaques (render queue 100) are drawn at full resolution over it |
 
 Two things surprise people:
@@ -52,7 +52,7 @@ Two things surprise people:
 ## Reading the world pass
 
 Geometry is drawn by the `PSX_VS_*` / `PSX_FS_*` program family
-(`engine/assets/programs/psx.program`), compiled into variants by preprocessor
+(`assets/programs/psx.program`), compiled into variants by preprocessor
 define: `LIT`, `METAL`, `NO_TEXTURE`, `ALPHA_BLEND`, `ALPHA_SCISSOR`,
 `LIGHT_VOLUME`, `BLEND_ADD`, `RIM`. In a capture, the variant is the fastest way
 to tell what a draw *is*: a `NO_TEXTURE` draw with `ALPHA_BLEND` is VFX, a plain

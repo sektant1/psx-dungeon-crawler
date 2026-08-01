@@ -23,6 +23,10 @@ enum class QuickFix {
     SnapToCell,
     ResetTransform,
     FillCornerGap,
+    // Detaches an entity whose parent is missing, itself, or above it in a
+    // loop. Deleting it would be the other option and it is the wrong one: the
+    // entity is fine, only the link is broken.
+    ClearParent,
 };
 
 struct Issue {

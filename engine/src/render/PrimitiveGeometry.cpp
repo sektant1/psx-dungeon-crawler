@@ -16,8 +16,7 @@ uint32_t vertex(PrimitiveGeometry& geometry, glm::vec3 position,
     return static_cast<uint32_t>(geometry.vertices.size() - 1);
 }
 
-void triangle(PrimitiveGeometry& geometry, uint32_t a, uint32_t b,
-              uint32_t c)
+void triangle(PrimitiveGeometry& geometry, uint32_t a, uint32_t b, uint32_t c)
 {
     geometry.indices.insert(geometry.indices.end(), {a, b, c});
 }
@@ -29,10 +28,8 @@ void outwardTriangle(PrimitiveGeometry& geometry, uint32_t a, uint32_t b,
     const PrimitiveVertex& vb = geometry.vertices[b];
     const PrimitiveVertex& vc = geometry.vertices[c];
     const glm::vec3 face =
-        glm::cross(vb.position - va.position,
-                   vc.position - va.position);
-    const glm::vec3 averageNormal =
-        va.normal + vb.normal + vc.normal;
+        glm::cross(vb.position - va.position, vc.position - va.position);
+    const glm::vec3 averageNormal = va.normal + vb.normal + vc.normal;
     if (glm::dot(face, averageNormal) < 0.0f)
         std::swap(b, c);
     triangle(geometry, a, b, c);
@@ -50,28 +47,38 @@ PrimitiveGeometry boxGeometry(const PrimitiveMeshDesc& desc)
         glm::vec3 normal;
     };
     const Face faces[6] = {
-        {{half.x, -half.y, half.z}, {0, 0, -desc.size.z},
-         {0, desc.size.y, 0}, {1, 0, 0}},
-        {{-half.x, -half.y, -half.z}, {0, 0, desc.size.z},
-         {0, desc.size.y, 0}, {-1, 0, 0}},
-        {{-half.x, half.y, half.z}, {desc.size.x, 0, 0},
-         {0, 0, -desc.size.z}, {0, 1, 0}},
-        {{-half.x, -half.y, -half.z}, {desc.size.x, 0, 0},
-         {0, 0, desc.size.z}, {0, -1, 0}},
-        {{-half.x, -half.y, half.z}, {desc.size.x, 0, 0},
-         {0, desc.size.y, 0}, {0, 0, 1}},
-        {{half.x, -half.y, -half.z}, {-desc.size.x, 0, 0},
-         {0, desc.size.y, 0}, {0, 0, -1}},
+        {{half.x, -half.y, half.z},
+         {0, 0, -desc.size.z},
+         {0, desc.size.y, 0},
+         {1, 0, 0}},
+        {{-half.x, -half.y, -half.z},
+         {0, 0, desc.size.z},
+         {0, desc.size.y, 0},
+         {-1, 0, 0}},
+        {{-half.x, half.y, half.z},
+         {desc.size.x, 0, 0},
+         {0, 0, -desc.size.z},
+         {0, 1, 0}},
+        {{-half.x, -half.y, -half.z},
+         {desc.size.x, 0, 0},
+         {0, 0, desc.size.z},
+         {0, -1, 0}},
+        {{-half.x, -half.y, half.z},
+         {desc.size.x, 0, 0},
+         {0, desc.size.y, 0},
+         {0, 0, 1}},
+        {{half.x, -half.y, -half.z},
+         {-desc.size.x, 0, 0},
+         {0, desc.size.y, 0},
+         {0, 0, -1}},
     };
 
     for (size_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
         const Face& face = faces[faceIndex];
-        const uint32_t base =
-            static_cast<uint32_t>(geometry.vertices.size());
+        const uint32_t base = static_cast<uint32_t>(geometry.vertices.size());
         const float u0 = float(faceIndex % 3) / 3.0f;
         const float v0 = float(faceIndex / 3) / 2.0f;
-        const glm::vec3 normal =
-            desc.inwardFacing ? -face.normal : face.normal;
+        const glm::vec3 normal = desc.inwardFacing ? -face.normal : face.normal;
         for (int y = 0; y <= segments; ++y) {
             for (int x = 0; x <= segments; ++x) {
                 const float u = float(x) / float(segments);
@@ -83,15 +90,15 @@ PrimitiveGeometry boxGeometry(const PrimitiveMeshDesc& desc)
         const uint32_t stride = uint32_t(segments + 1);
         for (int y = 0; y < segments; ++y) {
             for (int x = 0; x < segments; ++x) {
-                const uint32_t a =
-                    base + uint32_t(y) * stride + uint32_t(x);
+                const uint32_t a = base + uint32_t(y) * stride + uint32_t(x);
                 const uint32_t b = a + 1;
                 const uint32_t c = a + stride;
                 const uint32_t d = c + 1;
                 if (desc.inwardFacing) {
                     triangle(geometry, a, c, b);
                     triangle(geometry, b, c, d);
-                } else {
+                }
+                else {
                     triangle(geometry, a, b, c);
                     triangle(geometry, b, d, c);
                 }
@@ -107,19 +114,20 @@ PrimitiveGeometry beveledBoxGeometry(const PrimitiveMeshDesc& desc)
     const glm::vec3 half = desc.size * 0.5f;
     const glm::vec3 core = half - glm::vec3(desc.bevel);
     const auto axis = [&](int component, int index) {
-        const float values[4] = {
-            -half[component], -core[component],
-            core[component], half[component]};
+        const float values[4] = {-half[component], -core[component],
+                                 core[component], half[component]};
         return values[index];
     };
-    struct Face { int fixed, u, v; float sign; };
+    struct Face {
+        int fixed, u, v;
+        float sign;
+    };
     const Face faces[6] = {
-        {0, 2, 1, 1}, {0, 1, 2, -1}, {1, 0, 2, 1},
-        {1, 2, 0, -1}, {2, 0, 1, 1}, {2, 1, 0, -1},
+        {0, 2, 1, 1},  {0, 1, 2, -1}, {1, 0, 2, 1},
+        {1, 2, 0, -1}, {2, 0, 1, 1},  {2, 1, 0, -1},
     };
     for (const Face& face : faces) {
-        const uint32_t base =
-            static_cast<uint32_t>(geometry.vertices.size());
+        const uint32_t base = static_cast<uint32_t>(geometry.vertices.size());
         for (int y = 0; y < 4; ++y) {
             for (int x = 0; x < 4; ++x) {
                 glm::vec3 p(0.0f);
@@ -142,12 +150,12 @@ PrimitiveGeometry beveledBoxGeometry(const PrimitiveMeshDesc& desc)
             glm::dot(glm::cross(v, u), expected) > 0.0f;
         for (int y = 0; y < 3; ++y) {
             for (int x = 0; x < 3; ++x) {
-                const uint32_t a =
-                    base + uint32_t(y * 4 + x);
+                const uint32_t a = base + uint32_t(y * 4 + x);
                 if (currentIsOutward) {
                     triangle(geometry, a, a + 4, a + 1);
                     triangle(geometry, a + 1, a + 4, a + 5);
-                } else {
+                }
+                else {
                     triangle(geometry, a, a + 1, a + 4);
                     triangle(geometry, a + 1, a + 5, a + 4);
                 }
@@ -167,6 +175,13 @@ PrimitiveGeometry beveledBoxGeometry(const PrimitiveMeshDesc& desc)
 // those at once, and the faces keep their own 0..1 UVs (a box's atlas-style
 // per-face UVs would break the scrolling water/lava and the tiled floor
 // materials), so the top surface renders exactly as it did.
+//
+// thickness == 0 is the one deliberate exception, and it emits a *single* face:
+// a billboard, not a slab. Anything drawn flat and camera-facing -- the
+// material preview's sprite quad above all -- wants exactly one quad. A slab
+// gives it four rim quads that each carry the full 0..1 UV, so the whole sprite
+// gets squeezed into a hairline strip along all four borders of the frame, and
+// a second coplanar back face that alpha-blends a mirrored copy over the front.
 PrimitiveGeometry planeGeometry(const PrimitiveMeshDesc& desc)
 {
     PrimitiveGeometry geometry;
@@ -175,9 +190,9 @@ PrimitiveGeometry planeGeometry(const PrimitiveMeshDesc& desc)
     const float halfY = std::max(desc.thickness, 0.0f) * 0.5f;
     const float xs[2] = {-halfX, halfX};
     const float zs[2] = {-halfZ, halfZ};
-    for (int face = 0; face < 2; ++face) {
-        const uint32_t base =
-            static_cast<uint32_t>(geometry.vertices.size());
+    const int faces = halfY > 0.0f ? 2 : 1;
+    for (int face = 0; face < faces; ++face) {
+        const uint32_t base = static_cast<uint32_t>(geometry.vertices.size());
         const float y = face == 0 ? halfY : -halfY;
         const glm::vec3 normal =
             face == 0 ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
@@ -188,7 +203,8 @@ PrimitiveGeometry planeGeometry(const PrimitiveMeshDesc& desc)
         if (face == 0) {
             triangle(geometry, base, base + 2, base + 1);
             triangle(geometry, base + 1, base + 2, base + 3);
-        } else {
+        }
+        else {
             triangle(geometry, base, base + 1, base + 2);
             triangle(geometry, base + 1, base + 3, base + 2);
         }
@@ -198,7 +214,9 @@ PrimitiveGeometry planeGeometry(const PrimitiveMeshDesc& desc)
 
     // Rims. Each is a quad spanning the slab's height, wound outward, with its
     // U running along the edge so a tiling material does not smear across it.
-    struct Rim { glm::vec3 a, b, normal; };
+    struct Rim {
+        glm::vec3 a, b, normal;
+    };
     const Rim rims[4] = {
         {{-halfX, 0.0f, halfZ}, {halfX, 0.0f, halfZ}, {0, 0, 1}},
         {{halfX, 0.0f, -halfZ}, {-halfX, 0.0f, -halfZ}, {0, 0, -1}},
@@ -206,8 +224,7 @@ PrimitiveGeometry planeGeometry(const PrimitiveMeshDesc& desc)
         {{-halfX, 0.0f, -halfZ}, {-halfX, 0.0f, halfZ}, {-1, 0, 0}},
     };
     for (const Rim& rim : rims) {
-        const uint32_t base =
-            static_cast<uint32_t>(geometry.vertices.size());
+        const uint32_t base = static_cast<uint32_t>(geometry.vertices.size());
         vertex(geometry, {rim.a.x, halfY, rim.a.z}, rim.normal, {0.0f, 0.0f});
         vertex(geometry, {rim.b.x, halfY, rim.b.z}, rim.normal, {1.0f, 0.0f});
         vertex(geometry, {rim.a.x, -halfY, rim.a.z}, rim.normal, {0.0f, 1.0f});
@@ -226,49 +243,42 @@ PrimitiveGeometry sphereGeometry(const PrimitiveMeshDesc& desc)
     PrimitiveGeometry geometry;
     // Poles are explicit fans. Only non-pole latitudes participate in quad
     // strips, avoiding duplicate pole vertices and ambiguous pole winding.
-    const uint32_t ringBase =
-        static_cast<uint32_t>(geometry.vertices.size());
+    const uint32_t ringBase = static_cast<uint32_t>(geometry.vertices.size());
     for (int y = 1; y < desc.rings; ++y) {
         const float v = float(y) / float(desc.rings);
         const float phi = v * glm::pi<float>();
         for (int x = 0; x <= desc.segments; ++x) {
             const float u = float(x) / float(desc.segments);
             const float theta = u * glm::two_pi<float>();
-            const glm::vec3 normal(
-                std::sin(phi) * std::cos(theta), std::cos(phi),
-                std::sin(phi) * std::sin(theta));
+            const glm::vec3 normal(std::sin(phi) * std::cos(theta),
+                                   std::cos(phi),
+                                   std::sin(phi) * std::sin(theta));
             vertex(geometry, normal * desc.radius, normal, {u, v});
         }
     }
     const uint32_t stride = uint32_t(desc.segments + 1);
     for (int y = 0; y < desc.rings - 2; ++y) {
         for (int x = 0; x < desc.segments; ++x) {
-            const uint32_t a =
-                ringBase + uint32_t(y) * stride + uint32_t(x);
+            const uint32_t a = ringBase + uint32_t(y) * stride + uint32_t(x);
             const uint32_t b = a + stride;
             outwardTriangle(geometry, a, a + 1, b);
             outwardTriangle(geometry, a + 1, b + 1, b);
         }
     }
 
-    const uint32_t bottomRing =
-        ringBase + uint32_t(desc.rings - 2) * stride;
+    const uint32_t bottomRing = ringBase + uint32_t(desc.rings - 2) * stride;
     for (int x = 0; x < desc.segments; ++x) {
         const float u0 = float(x) / float(desc.segments);
         const float u1 = float(x + 1) / float(desc.segments);
-        const uint32_t topPole = vertex(
-            geometry, {0, desc.radius, 0}, {0, 1, 0},
-            {(u0 + u1) * 0.5f, 0});
-        outwardTriangle(
-            geometry, topPole, ringBase + uint32_t(x),
-            ringBase + uint32_t(x + 1));
+        const uint32_t topPole = vertex(geometry, {0, desc.radius, 0},
+                                        {0, 1, 0}, {(u0 + u1) * 0.5f, 0});
+        outwardTriangle(geometry, topPole, ringBase + uint32_t(x),
+                        ringBase + uint32_t(x + 1));
 
-        const uint32_t bottomPole = vertex(
-            geometry, {0, -desc.radius, 0}, {0, -1, 0},
-            {(u0 + u1) * 0.5f, 1});
-        outwardTriangle(
-            geometry, bottomPole, bottomRing + uint32_t(x + 1),
-            bottomRing + uint32_t(x));
+        const uint32_t bottomPole = vertex(geometry, {0, -desc.radius, 0},
+                                           {0, -1, 0}, {(u0 + u1) * 0.5f, 1});
+        outwardTriangle(geometry, bottomPole, bottomRing + uint32_t(x + 1),
+                        bottomRing + uint32_t(x));
     }
     return geometry;
 }
@@ -278,31 +288,26 @@ uint32_t emitHemisphereRings(PrimitiveGeometry& geometry, float radius,
                              int firstRing, int lastRing, int rings,
                              int segments, float vBegin, float vEnd)
 {
-    const uint32_t base =
-        static_cast<uint32_t>(geometry.vertices.size());
+    const uint32_t base = static_cast<uint32_t>(geometry.vertices.size());
     for (int y = firstRing; y <= lastRing; ++y) {
         const float t = float(y) / float(rings);
-        const float angle =
-            angleBegin + (angleEnd - angleBegin) * t;
+        const float angle = angleBegin + (angleEnd - angleBegin) * t;
         const float v = vBegin + (vEnd - vBegin) * t;
         for (int x = 0; x <= segments; ++x) {
             const float u = float(x) / float(segments);
             const float theta = u * glm::two_pi<float>();
-            const glm::vec3 normal(
-                std::cos(angle) * std::cos(theta),
-                std::sin(angle),
-                std::cos(angle) * std::sin(theta));
-            vertex(geometry,
-                   normal * radius + glm::vec3(0, centerY, 0),
-                   normal, {u, v});
+            const glm::vec3 normal(std::cos(angle) * std::cos(theta),
+                                   std::sin(angle),
+                                   std::cos(angle) * std::sin(theta));
+            vertex(geometry, normal * radius + glm::vec3(0, centerY, 0), normal,
+                   {u, v});
         }
     }
     const uint32_t stride = uint32_t(segments + 1);
     const int emittedRows = lastRing - firstRing + 1;
     for (int y = 0; y < emittedRows - 1; ++y) {
         for (int x = 0; x < segments; ++x) {
-            const uint32_t a =
-                base + uint32_t(y) * stride + uint32_t(x);
+            const uint32_t a = base + uint32_t(y) * stride + uint32_t(x);
             const uint32_t b = a + stride;
             outwardTriangle(geometry, a, a + 1, b);
             outwardTriangle(geometry, a + 1, b + 1, b);
@@ -319,23 +324,20 @@ PrimitiveGeometry capsuleGeometry(const PrimitiveMeshDesc& desc)
     const float totalVLength = desc.height + capArc * 2.0f;
     const float bottomV = capArc / totalVLength;
     const float topV = (capArc + desc.height) / totalVLength;
-    const int hemisphereRingCount =
-        std::max(2, (desc.rings + 1) / 2);
+    const int hemisphereRingCount = std::max(2, (desc.rings + 1) / 2);
 
     // Bottom fan + non-pole rings through the equator.
     const uint32_t bottomHemisphere = emitHemisphereRings(
-        geometry, desc.radius, -halfStraight, -glm::half_pi<float>(),
-        0.0f, 1, hemisphereRingCount, hemisphereRingCount, desc.segments,
-        0.0f, bottomV);
+        geometry, desc.radius, -halfStraight, -glm::half_pi<float>(), 0.0f, 1,
+        hemisphereRingCount, hemisphereRingCount, desc.segments, 0.0f, bottomV);
     for (int x = 0; x < desc.segments; ++x) {
         const float u0 = float(x) / float(desc.segments);
         const float u1 = float(x + 1) / float(desc.segments);
-        const uint32_t pole = vertex(
-            geometry, {0, -halfStraight - desc.radius, 0},
-            {0, -1, 0}, {(u0 + u1) * 0.5f, 0});
-        outwardTriangle(
-            geometry, pole, bottomHemisphere + uint32_t(x + 1),
-            bottomHemisphere + uint32_t(x));
+        const uint32_t pole =
+            vertex(geometry, {0, -halfStraight - desc.radius, 0}, {0, -1, 0},
+                   {(u0 + u1) * 0.5f, 0});
+        outwardTriangle(geometry, pole, bottomHemisphere + uint32_t(x + 1),
+                        bottomHemisphere + uint32_t(x));
     }
 
     const uint32_t cylinderBase =
@@ -346,11 +348,9 @@ PrimitiveGeometry capsuleGeometry(const PrimitiveMeshDesc& desc)
         for (int x = 0; x <= desc.segments; ++x) {
             const float u = float(x) / float(desc.segments);
             const float theta = u * glm::two_pi<float>();
-            const glm::vec3 normal(
-                std::cos(theta), 0.0f, std::sin(theta));
-            vertex(geometry,
-                   normal * desc.radius + glm::vec3(0, y, 0),
-                   normal, {u, v});
+            const glm::vec3 normal(std::cos(theta), 0.0f, std::sin(theta));
+            vertex(geometry, normal * desc.radius + glm::vec3(0, y, 0), normal,
+                   {u, v});
         }
     }
     const uint32_t stride = uint32_t(desc.segments + 1);
@@ -363,21 +363,20 @@ PrimitiveGeometry capsuleGeometry(const PrimitiveMeshDesc& desc)
 
     // A separately emitted equator gives the hemisphere and straight strip
     // independent topology while retaining identical normals and UVs.
-    const uint32_t topHemisphere = emitHemisphereRings(
-        geometry, desc.radius, halfStraight, 0.0f,
-        glm::half_pi<float>(), 0, hemisphereRingCount - 1,
-        hemisphereRingCount, desc.segments, topV, 1.0f);
+    const uint32_t topHemisphere =
+        emitHemisphereRings(geometry, desc.radius, halfStraight, 0.0f,
+                            glm::half_pi<float>(), 0, hemisphereRingCount - 1,
+                            hemisphereRingCount, desc.segments, topV, 1.0f);
     const uint32_t lastTopRing =
         topHemisphere + uint32_t(hemisphereRingCount - 1) * stride;
     for (int x = 0; x < desc.segments; ++x) {
         const float u0 = float(x) / float(desc.segments);
         const float u1 = float(x + 1) / float(desc.segments);
-        const uint32_t pole = vertex(
-            geometry, {0, halfStraight + desc.radius, 0},
-            {0, 1, 0}, {(u0 + u1) * 0.5f, 1});
-        outwardTriangle(
-            geometry, pole, lastTopRing + uint32_t(x),
-            lastTopRing + uint32_t(x + 1));
+        const uint32_t pole =
+            vertex(geometry, {0, halfStraight + desc.radius, 0}, {0, 1, 0},
+                   {(u0 + u1) * 0.5f, 1});
+        outwardTriangle(geometry, pole, lastTopRing + uint32_t(x),
+                        lastTopRing + uint32_t(x + 1));
     }
     return geometry;
 }
@@ -439,14 +438,11 @@ PrimitiveGeometry coneGeometry(const PrimitiveMeshDesc& desc)
         const float u1 = float(i + 1) / float(desc.segments);
         const float a = u0 * glm::two_pi<float>();
         const float b = u1 * glm::two_pi<float>();
-        const glm::vec3 p0(
-            std::cos(a) * desc.radius, -half,
-            std::sin(a) * desc.radius);
-        const glm::vec3 p1(
-            std::cos(b) * desc.radius, -half,
-            std::sin(b) * desc.radius);
-        const glm::vec3 normal =
-            glm::normalize(glm::cross(tip - p0, p1 - p0));
+        const glm::vec3 p0(std::cos(a) * desc.radius, -half,
+                           std::sin(a) * desc.radius);
+        const glm::vec3 p1(std::cos(b) * desc.radius, -half,
+                           std::sin(b) * desc.radius);
+        const glm::vec3 normal = glm::normalize(glm::cross(tip - p0, p1 - p0));
 
         uint32_t base = static_cast<uint32_t>(geometry.vertices.size());
         vertex(geometry, p0, normal, {u0, 1});
@@ -456,12 +452,12 @@ PrimitiveGeometry coneGeometry(const PrimitiveMeshDesc& desc)
 
         base = static_cast<uint32_t>(geometry.vertices.size());
         vertex(geometry, {0, -half, 0}, {0, -1, 0}, {0.5f, 0.5f});
-        vertex(geometry, p0, {0, -1, 0},
-               {0.5f + p0.x / (2 * desc.radius),
-                0.5f + p0.z / (2 * desc.radius)});
-        vertex(geometry, p1, {0, -1, 0},
-               {0.5f + p1.x / (2 * desc.radius),
-                0.5f + p1.z / (2 * desc.radius)});
+        vertex(
+            geometry, p0, {0, -1, 0},
+            {0.5f + p0.x / (2 * desc.radius), 0.5f + p0.z / (2 * desc.radius)});
+        vertex(
+            geometry, p1, {0, -1, 0},
+            {0.5f + p1.x / (2 * desc.radius), 0.5f + p1.z / (2 * desc.radius)});
         triangle(geometry, base, base + 1, base + 2);
     }
     return geometry;
@@ -473,16 +469,15 @@ PrimitiveGeometry discGeometry(const PrimitiveMeshDesc& desc)
     for (int face = 0; face < 2; ++face) {
         const glm::vec3 normal =
             face == 0 ? glm::vec3(0, 1, 0) : glm::vec3(0, -1, 0);
-        const uint32_t base =
-            static_cast<uint32_t>(geometry.vertices.size());
+        const uint32_t base = static_cast<uint32_t>(geometry.vertices.size());
         vertex(geometry, {0, 0, 0}, normal, {0.5f, 0.5f});
         for (int i = 0; i <= desc.segments; ++i) {
             const float angle =
                 float(i) / float(desc.segments) * glm::two_pi<float>();
             const float x = std::cos(angle);
             const float z = std::sin(angle);
-            vertex(geometry, {x * desc.radius, 0, z * desc.radius},
-                   normal, {0.5f + x * 0.5f, 0.5f + z * 0.5f});
+            vertex(geometry, {x * desc.radius, 0, z * desc.radius}, normal,
+                   {0.5f + x * 0.5f, 0.5f + z * 0.5f});
         }
         for (int i = 0; i < desc.segments; ++i) {
             if (face == 0)
@@ -533,17 +528,20 @@ namespace eng {
 
 bool validPrimitiveMeshDesc(const PrimitiveMeshDesc& desc)
 {
-    const bool finiteSize =
-        std::isfinite(desc.size.x) && std::isfinite(desc.size.y) &&
-        std::isfinite(desc.size.z);
+    const bool finiteSize = std::isfinite(desc.size.x) &&
+                            std::isfinite(desc.size.y) &&
+                            std::isfinite(desc.size.z);
+    // A flat plane is a legal primitive -- planeGeometry emits one quad for it.
+    // Every other kind still needs a real thickness: a zero-thickness disc is a
+    // degenerate cylinder, not a billboard.
+    const float minThickness = desc.kind == PrimitiveKind::Plane ? 0.0f : 1e-6f;
     if (!finiteSize ||
         glm::any(glm::lessThanEqual(desc.size, glm::vec3(0.0f))) ||
         !std::isfinite(desc.radius) || desc.radius <= 0.0f ||
         !std::isfinite(desc.height) || desc.height <= 0.0f ||
         !std::isfinite(desc.bevel) || desc.bevel <= 0.0f ||
-        !std::isfinite(desc.thickness) || desc.thickness <= 0.0f ||
-        desc.rings < 3 || desc.segments < 3 ||
-        desc.subdivisions < 0)
+        !std::isfinite(desc.thickness) || desc.thickness < minThickness ||
+        desc.rings < 3 || desc.segments < 3 || desc.subdivisions < 0)
         return false;
 
     if ((desc.inwardFacing || desc.subdivisions != 0) &&
@@ -573,8 +571,7 @@ bool validPrimitiveMeshDesc(const PrimitiveMeshDesc& desc)
 
 namespace detail {
 
-std::optional<PrimitiveMeshGenerator>
-primitiveMeshGenerator(PrimitiveKind kind)
+std::optional<PrimitiveMeshGenerator> primitiveMeshGenerator(PrimitiveKind kind)
 {
     switch (kind) {
     case PrimitiveKind::Box:

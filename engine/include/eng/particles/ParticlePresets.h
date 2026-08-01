@@ -17,6 +17,16 @@ inline constexpr const char* FrostShards = "engine.frost_shards";
 inline constexpr const char* ToxicBubbles = "engine.toxic_bubbles";
 inline constexpr const char* PortalWisps = "engine.portal_wisps";
 
+// Sprite-flipbook presets, as opposed to every preset above, which draws a
+// procedural shape from assets/engine/shaders/particle.frag. These are the
+// worked examples of the animated-sheet path: each names a strip out of the
+// import in assets/particles/sprite_sheets.toml, so what they demonstrate is
+// the whole route from an effect pack on disk to something on screen. Copy one
+// and change `texture` to retarget it -- that is the entire workflow.
+inline constexpr const char* SpriteBurst = "engine.sprite_burst";
+inline constexpr const char* SpriteBolt = "engine.sprite_bolt";
+inline constexpr const char* SpriteCoil = "engine.sprite_coil";
+
 // Called by Renderer initialization. Public for custom renderer bootstraps and
 // safe to call again: registration updates presets by stable name.
 void registerDefaults(Renderer& renderer);

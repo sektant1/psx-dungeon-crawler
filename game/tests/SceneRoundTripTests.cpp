@@ -5,6 +5,7 @@
 
 #include "SceneSource.h"
 #include "SceneWriter.h"
+#include "TestAssets.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -41,10 +42,11 @@ static int countLines(const std::string& text)
 
 int main()
 {
+    game::test::mountGameAssets();
     // --- the real shipped scene -------------------------------------------
     SceneDocument shipped;
     std::string error;
-    require(loadSceneSource(RITUAL_SCN, shipped, error),
+    require(loadSceneSource(game::test::asset("scenes/ritual_boss_showroom.scn"), shipped, error),
             ("the shipped scene loads: " + error).c_str());
     require(shipped.id == "scene.test.ritual_boss_showroom", "scene id");
     require(shipped.entities.size() > 20, "it has its entities");
@@ -67,6 +69,55 @@ int main()
             "markers survive");
     const Entity* exit = reparsed.find("descent_exit");
     require(exit && exit->exitYawDegrees, "the exit survives");
+
+    // PreviewBridge only draws prefab-backed meshes. Keep both showcase
+    // subjects explicit: a bare Exit gets generated portal art in play mode,
+    // but remains only a marker in the editor viewport.
+    SceneDocument spinPortal;
+    require(loadSceneSource(game::test::asset("scenes/spin_portal.scn"),
+                            spinPortal, error),
+            ("the spin portal scene loads: " + error).c_str());
+    const Entity* raccoon = spinPortal.find("prop_raccoon");
+    require(raccoon && raccoon->prefab == "kit.prop_raccoon_head",
+            "the raccoon head has an editor-preview mesh");
+    const Entity* portal = spinPortal.find("portal_membrane_0001");
+    require(portal && portal->prefab == "kit.portal_membrane" &&
+                portal->portal,
+            "the portal membrane has an editor-preview mesh and shader params");
+
+    SceneDocument cozyLair;
+    require(loadSceneSource(game::test::asset("scenes/cozy_lair.scn"),
+                            cozyLair, error),
+            ("the cozy lair scene loads: " + error).c_str());
+    int floors = 0;
+    for (const Entity& entity : cozyLair.entities)
+        if (entity.prefab == "kit.floor")
+            ++floors;
+    require(floors == 4, "the cozy lair is a compact 2x2 stage");
+    const Entity* subjectPivot = cozyLair.find("subject_pivot");
+    require(subjectPivot && subjectPivot->spin &&
+                subjectPivot->spin->degreesPerSecond == 12.0f,
+            "the centred inspection pivot turns in place");
+    const Entity* subject = cozyLair.find("subject");
+    require(subject && subject->prefab == "kit.prop_boss_placeholder" &&
+                subject->parent == "subject_pivot" && !subject->spin &&
+                subject->shader && subject->transform.position.y > 0.0f,
+            "the imported boss reference is centred and grounded on the pivot");
+    require(!cozyLair.find("subject_child"),
+            "prefab attachments do not leak into authored scene entities");
+    int stageLights = 0;
+    for (const Entity& entity : cozyLair.entities)
+        if (entity.id.starts_with("stage_") && entity.light)
+            ++stageLights;
+    require(stageLights == 3, "the compact stage has key, fill, and rim lights");
+    const Entity* camera = cozyLair.find("camera_main");
+    require(camera && camera->camera && !camera->spin && !camera->orbit,
+            "the cozy lair camera is static");
+    const Entity* lairPortal = cozyLair.find("portal");
+    require(lairPortal && lairPortal->portal &&
+                lairPortal->exitYawDegrees &&
+                lairPortal->prefab == "kit.portal_membrane",
+            "the lair portal is visible, tunable, and usable as its exit");
 
     // --- diff friendliness -------------------------------------------------
     SceneDocument nudged = reparsed;

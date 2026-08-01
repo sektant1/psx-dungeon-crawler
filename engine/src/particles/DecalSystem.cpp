@@ -258,12 +258,12 @@ private:
     bool mWantVisible = true;
 };
 
-// Base materials live in engine/assets/materials/decals.material. One clone per
+// Base materials live in assets/engine/materials/decals.material. One clone per
 // texture stem carries the texture, so adding a decal texture is a PNG plus a
 // TOML profile and never a material edit.
 const char* baseMaterialFor(ParticleBlend blend)
 {
-    return blend == ParticleBlend::Additive ? "Decals/Additive" : "Decals/Alpha";
+    return blend == ParticleBlend::Additive ? "Engine/Decals/Additive" : "Engine/Decals/Alpha";
 }
 
 std::string autoMaterialName(const std::string& stem, ParticleBlend blend)

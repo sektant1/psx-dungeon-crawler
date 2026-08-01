@@ -33,6 +33,13 @@ struct TooltipContent {
         UiTone tone = UiTone::Positive;
         std::string value; // optional readout drawn at the bar's right edge
     };
+    // One binding: the key(s) and what they do. Drawn as a cap column with the
+    // descriptions aligned beside it -- never as prose, which is what makes a
+    // list of punctuation bindings unreadable.
+    struct Hint {
+        std::string key;
+        std::string label;
+    };
 
     std::string id;       // identity, so re-entering the same target does not restart the fade
     std::string title;
@@ -45,12 +52,14 @@ struct TooltipContent {
     TooltipEmphasis emphasis = TooltipEmphasis::Inline;
     std::vector<Line> lines;
     std::vector<Bar> bars;
+    std::vector<Hint> hints;
     std::string action; // e.g. "OPEN", paired with a key cap
     std::string actionKey;
 
     bool empty() const {
         return title.empty() && subtitle.empty() && meta.empty() &&
-               lines.empty() && bars.empty() && action.empty();
+               lines.empty() && bars.empty() && hints.empty() &&
+               action.empty();
     }
 };
 
@@ -74,6 +83,9 @@ struct TooltipStyle {
     int gap = 24;
     int safeMargin = 8;
     int maxBodyLines = 3;
+    // Bindings are a reference list, not flavour: a caption panel wants all of
+    // them, a look-target tooltip normally carries none. -1 means unlimited.
+    int maxHints = -1;
     PanelPaint chrome{PanelStyle::Solid, RailEdge::Left, UiTone::Focus,
                       true, true, true};
 

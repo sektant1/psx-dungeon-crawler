@@ -8,9 +8,10 @@
 # Run options are plain make variables mapped to the game's PSX_* env vars, e.g.
 #   make run SEED=42 PRESET=ps1            # seed + render preset
 #   make run MAP=level.map                 # play an authored .map
-#   make run SHOWROOM=game/assets/showroom.toml
+#   make run SHOWROOM=assets/config/showroom.toml
 #   make run COLLIDERS=1 WIREFRAME=1       # debug overlays
 #   make screenshot SHOT=/tmp/x.png FRAME=200
+#   make prefab-viewer PRESET=modern-ps1   # compact turntable scene
 #   make sim SCRIPT=game/sim/scripts/smoke.txt
 #
 # Every app target (game, editor, demo) shares the same run/debug options, so
@@ -28,6 +29,11 @@ GENERATOR   ?= Ninja
 GENERATOR_ORIGIN := $(origin GENERATOR)
 # Extra cache entries, e.g. CMAKE_ARGS='-DENABLE_UNITY=ON -DENABLE_LTO=ON'.
 CMAKE_ARGS  ?=
+# The visual-test harness. Distributions that dropped the unversioned `python`
+# (Debian/Ubuntu, Fedora without python-unversioned-command) made every
+# visual-test target fail with "python: No such file or directory", which reads
+# as a broken harness rather than as a missing alias.
+PYTHON      ?= $(shell command -v python3 2>/dev/null || echo python)
 # Force X11 on Wayland (XWayland): the GL3Plus path is unreliable on native
 # Wayland. Override with SDL_VIDEODRIVER=... on the command line if needed.
 SDL_VIDEODRIVER ?= x11
@@ -88,10 +94,11 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
               $(if $(filter psx_demo,$(APP)),psx_demo,game))
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
-        build-editor build-cook editor cook scene material \
+        build-editor build-cook editor cook scene material prefab-viewer \
         run game demo mapgen sim test asan bench screenshot visual-test \
+        editor-selftest clip clip-mp4 look new-clip \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
-        debug debug-run clean help
+        asset debug debug-run clean help
 
 all: build
 
@@ -168,7 +175,7 @@ demo: build-demo
 # The placement editor. SCENE= opens a specific .scn; with none it opens the
 # shipped showroom scene.
 #   make editor
-#   make editor SCENE=game/assets/scenes/ritual_boss_showroom.scn
+#   make editor SCENE=assets/scenes/ritual_boss_showroom.scn
 #   make material                  open straight into the material staging scene
 editor: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./scene_editor $(if $(SCENE),$(abspath $(SCENE)),)
@@ -179,7 +186,7 @@ material: build-editor
 
 # Cook an authored .scn into a runtime .map -- the same cooker the editor calls
 # in-process, which is what makes the two produce identical bytes.
-#   make cook SCENE=game/assets/scenes/ritual_boss_showroom.scn
+#   make cook SCENE=assets/scenes/ritual_boss_showroom.scn
 #   make cook SCENE=... OUT=/tmp/level.map
 #   make cook SCENE=... VALIDATE=1        report issues, write nothing
 cook: build-cook
@@ -187,7 +194,7 @@ ifndef SCENE
 	$(error set SCENE=<file.scn> (optional OUT=<file.map>, VALIDATE=1))
 endif
 	./$(BUILD_DIR)/scene_cook $(abspath $(SCENE)) \
-	    --kit $(abspath game/assets/kit.toml) \
+	    --kit $(abspath assets/config/kit.toml) \
 	    $(if $(VALIDATE),--validate-only,--out $(if $(OUT),$(abspath $(OUT)),$(abspath $(basename $(SCENE)).map)))
 
 # Cook a scene and immediately play it: the editor's F5, from the shell.
@@ -197,6 +204,131 @@ ifndef SCENE
 endif
 	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/scene.map
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game scene.map
+
+# Compact imported-prefab turntable. PREFAB= is an id from kit.toml.
+# PRESET= uses the common run option;
+# VIEWER_PRESET= supplies this target's default when PRESET is omitted. Explicit
+# CLI options in VIEWER_FLAGS= win over either, matching Engine's normal
+# command-line > environment > default precedence.
+#
+#   make prefab-viewer
+#   make prefab-viewer PREFAB=kit.prop_raccoon_head SUBJECT_SCALE=0.8
+#   make prefab-viewer PRESET=ps1 WIREFRAME=1
+#   make prefab-viewer VIEWER_PRESET=pixel-3d
+#   make prefab-viewer VIEWER_FLAGS="--render-preset psx-horror"
+#   make prefab-viewer SHOT=/tmp/prefab.png FRAME=200
+PREFAB          ?= kit.prop_boss_placeholder
+SUBJECT_NAME    ?=
+SUBJECT_MATERIAL ?=
+SUBJECT_SCALE   ?= 1.0
+SUBJECT_YAW     ?= -20.0
+SUBJECT_Y       ?= 0.0
+GROUND_CLEARANCE ?= 0.02
+VIEWER_PRESET   ?= modern-ps1
+VIEWER_FLAGS    ?=
+PREFAB_SCENE     = $(BUILD_DIR)/prefab-viewer.scn
+PREFAB_MAP       = $(BUILD_DIR)/prefab-viewer.map
+
+prefab-viewer: build-cook build-game
+	$(PYTHON) tools/author_cozy_lair.py --output $(PREFAB_SCENE) \
+	    --prefab "$(PREFAB)" --subject-scale $(SUBJECT_SCALE) --subject-yaw $(SUBJECT_YAW) \
+	    --subject-y $(SUBJECT_Y) --ground-clearance $(GROUND_CLEARANCE) \
+	    $(if $(SUBJECT_NAME),--subject-name "$(SUBJECT_NAME)",) \
+	    $(if $(SUBJECT_MATERIAL),--subject-material "$(SUBJECT_MATERIAL)",)
+	$(MAKE) cook SCENE=$(PREFAB_SCENE) OUT=$(PREFAB_MAP)
+	cd $(BUILD_DIR) && env $(RUN_ENV) \
+	    $(if $(PRESET),,PSX_RENDER_PRESET=$(VIEWER_PRESET)) \
+	    ./game $(abspath $(PREFAB_MAP)) $(VIEWER_FLAGS)
+
+# --- clips ------------------------------------------------------------------
+# A scene that authors a Camera plays itself, which makes it the one thing in
+# this project that can be filmed without a hand on the mouse. These wrap that.
+#
+#   make clip SCENE=assets/scenes/spin_portal.scn
+#   make clip SCENE=... SECONDS=6 WIDTH=480 OUT=docs/media/teaser
+#   make clip SCENE=... MP4=1              also encode an .mp4 beside the .gif
+#
+# Cooks first, so the clip is always of what the .scn currently says. Recording
+# pins the simulation timestep, so the same scene films identically on a fast
+# machine and a slow one.
+CLIP_SECONDS ?= 10
+CLIP_FPS     ?= 20
+CLIP_WIDTH   ?= 320
+# Warm-up frames dropped before the first capture: the level is fully built by
+# then, so a load hitch is not baked into the clip's timing.
+CLIP_START   ?= 60
+CLIP_FRAMES  := $(shell expr $(CLIP_SECONDS) \* $(CLIP_FPS))
+CLIP_OUT      = $(if $(OUT),$(OUT),docs/media/$(basename $(notdir $(SCENE))))
+CLIP_DIR      = $(BUILD_DIR)/clip-frames
+
+clip: build-cook build-game
+ifndef SCENE
+	$(error set SCENE=<file.scn> (optional OUT=<path-without-extension>, SECONDS=, FPS=, WIDTH=, MP4=1))
+endif
+	@mkdir -p $(dir $(CLIP_OUT))
+	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/clip.map
+	@rm -rf $(CLIP_DIR)
+	cd $(BUILD_DIR) && env $(RUN_ENV) ./game clip.map \
+	    --record $(abspath $(CLIP_OUT)).gif \
+	    --record-frames $(CLIP_FRAMES) --record-fps $(CLIP_FPS) \
+	    --record-start $(CLIP_START) --record-width $(CLIP_WIDTH) \
+	    --record-keep-frames --record-frame-dir clip-frames
+	$(if $(MP4),$(MAKE) clip-mp4 OUT=$(CLIP_OUT),)
+	@echo "wrote $(CLIP_OUT).gif ($(CLIP_SECONDS)s at $(CLIP_FPS) fps)"
+
+# Re-encodes the frames the last `make clip` kept, so a second format costs no
+# second run of the game. Nearest-neighbour scaling: bilinear turns a
+# low-resolution retro image into mush.
+clip-mp4:
+	ffmpeg -y -loglevel error -framerate $(CLIP_FPS) \
+	    -i $(CLIP_DIR)/frame_%05d.png -c:v libx264 -pix_fmt yuv420p -crf 20 \
+	    -vf "scale=720:-2:flags=neighbor" $(CLIP_OUT).mp4
+	@echo "wrote $(CLIP_OUT).mp4"
+
+# One frame of a scene, for a look rather than a clip. The fast loop while
+# framing a shot: edit the .scn, run this, read the PNG.
+#   make look SCENE=assets/scenes/spin_portal.scn
+#   make look SCENE=... FRAME=400 SHOT=/tmp/x.png
+look: build-cook build-game
+ifndef SCENE
+	$(error set SCENE=<file.scn> (optional FRAME=<n>, SHOT=<path.png>))
+endif
+	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/clip.map
+	cd $(BUILD_DIR) && env $(RUN_ENV) \
+	    PSX_SCREENSHOT=$(if $(SHOT),$(abspath $(SHOT)),$(abspath $(BUILD_DIR))/look.png) \
+	    PSX_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game clip.map
+	@echo "wrote $(if $(SHOT),$(SHOT),$(BUILD_DIR)/look.png)"
+
+# Start a new shot from the one that works: copies the example scene under a new
+# name and opens it. Beats an empty document, because a shot is mostly lighting
+# and framing and those are the parts nobody wants to re-derive.
+#   make new-clip NAME=my_teaser
+new-clip: build-editor
+ifndef NAME
+	$(error set NAME=<scene-name>)
+endif
+	@test ! -f assets/scenes/$(NAME).scn || \
+	    (echo "assets/scenes/$(NAME).scn already exists" && false)
+	@$(PYTHON) -c "import json,sys; \
+d=json.load(open('assets/scenes/spin_portal.scn')); \
+d['id']='scene.$(NAME)'; \
+json.dump(d, open('assets/scenes/$(NAME).scn','w'), indent=2)"
+	@echo "created assets/scenes/$(NAME).scn from spin_portal"
+	$(MAKE) editor SCENE=assets/scenes/$(NAME).scn
+
+# Blender -> engine. The front of the asset pipeline, which had no target:
+#   make asset BLEND=assets/source/models/Raccoon_Head.blend LIST=1
+#   make asset BLEND=... OBJECT=Mapache NAME=prop_raccoon_head
+# Prints the `size = [...]` line a kit.toml entry needs, so the next step is a
+# paste rather than a measurement. See docs/assets-pipeline.md.
+asset:
+ifndef BLEND
+	$(error set BLEND=<file.blend>)
+endif
+	$(PYTHON) tools/blend_to_obj.py $(BLEND) $(if $(OUT),$(OUT),assets/meshes/props) \
+	    $(if $(OBJECT),--object $(OBJECT),) $(if $(NAME),--name $(NAME),) \
+	    $(if $(SCALE),--scale $(SCALE),) $(if $(LIST),--list,) \
+	    $(if $(NO_BAKE),--no-bake-colours,)
 
 # Generate a .map from a BSP seed: make mapgen SEED=7 OUT=out.map
 mapgen: build-mapgen
@@ -242,15 +374,23 @@ VISUAL_ARGS = --frame $(if $(FRAME),$(FRAME),90) \
 	$(if $(PRESET),--preset $(PRESET),) \
 	$(if $(MAP),--map $(MAP),)
 
+# Drives the editor through the edits that only a mouse could reach -- removing
+# a component, deleting an entity, unparenting one -- one per frame, with the
+# entity selected a frame earlier so the gizmo, inspector and outliner have all
+# drawn it. Every one of those was reported as a crash and none of them was
+# reproducible from a test until this existed.
+editor-selftest: build-editor
+	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_EDITOR_SELFTEST=1 ./scene_editor
+
 visual-test: build-game
-	python tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
+	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
 
 visual-bench: build-game
-	python tools/visual_test.py $(VISUAL_COMMON) benchmark $(VISUAL_ARGS) \
+	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) benchmark $(VISUAL_ARGS) \
 		--frames $(if $(BENCH),$(BENCH),120)
 
 renderdoc-capture: build-app
-	python tools/visual_test.py $(VISUAL_COMMON) capture $(VISUAL_ARGS) --app $(APP_TARGET)
+	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) capture $(VISUAL_ARGS) --app $(APP_TARGET)
 
 # ---- GPU + native debugging ------------------------------------------------
 # All of these take APP=game|scene_editor|psx_demo, because every one of them is
@@ -337,9 +477,15 @@ help:
 	@echo "  make material       editor, opened in the material staging scene"
 	@echo "  make cook SCENE=    cook a .scn to a .map (OUT=, VALIDATE=1)"
 	@echo "  make scene SCENE=   cook a .scn and play it immediately"
+	@echo "  make prefab-viewer  compact turntable (PREFAB=<kit.id>, SUBJECT_SCALE=, VIEWER_PRESET=)"
+	@echo "  make look SCENE=    cook + one screenshot (FRAME=, SHOT=)"
+	@echo "  make clip SCENE=    cook + record a GIF (SECONDS=, FPS=, WIDTH=, OUT=, MP4=1)"
+	@echo "  make new-clip NAME= start a new shot from the example scene"
+	@echo "  make asset BLEND=   .blend -> engine .obj (LIST=1, OBJECT=, NAME=, SCALE=)"
 	@echo "  make mapgen         generate a .map (SEED=, OUT=)"
 	@echo "  make sim            headless action-simulation harness (SCRIPT=)"
 	@echo "  make test           build + run the ctest suite"
+	@echo "  make editor-selftest  drive the editor through the edits a mouse makes"
 	@echo "  make asan           ASan+UBSan+Leak build of game + game_sim"
 	@echo "  make bench          frame-time percentiles (BENCH=<frames>)"
 	@echo "  make screenshot     deterministic capture (SHOT=<path> FRAME=)"
@@ -356,10 +502,17 @@ help:
 	@echo "  make debug          Debug build in build-debug/"
 	@echo "  make clean          remove build directories"
 	@echo ""
-	@echo "Run options (make run/demo/screenshot/bench):"
+	@echo "Run options (make run/demo/prefab-viewer/screenshot/bench):"
 	@echo "  SEED=<n>            world seed            (PSX_GEN_SEED)"
-	@echo "  PRESET=<name>       render preset: ps1 ps2 gamecube n64"
-	@echo "                      pixel-3d modern-ps1  (PSX_RENDER_PRESET)"
+	@echo "  PRESET=<name>       render preset: ps1 ps2 gamecube n64 pixel-3d"
+	@echo "                      modern-ps1 dungeon psx-horror fire-dimension"
+	@echo "                      poison-swamp          (PSX_RENDER_PRESET)"
+	@echo "  VIEWER_PRESET=<name> prefab-viewer default when PRESET is omitted"
+	@echo "  PREFAB=<kit.id>      subject prefab from assets/config/kit.toml"
+	@echo "  SUBJECT_SCALE=<n>    uniform scale; SUBJECT_YAW=<degrees>; SUBJECT_Y=<offset>"
+	@echo "  GROUND_CLEARANCE=<m> gap above floor after auto-grounding"
+	@echo "  SUBJECT_MATERIAL=<id> material override; SUBJECT_NAME=<label>"
+	@echo "  VIEWER_FLAGS=<args>  prefab-viewer game flags; --render-preset overrides vars"
 	@echo "  MAP=<file.map>      play an authored map (positional arg)"
 	@echo "  SHOWROOM=<file>     override the editable depth-zero showroom TOML"
 	@echo "  COLLIDERS=1         collider wireframe    (PSX_SHOW_COLLIDERS)"

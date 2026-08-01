@@ -10,7 +10,7 @@ class Renderer;
 
 // Shared PSX demo scene (environment palette, sun, omni lamps, light shaft,
 // animated boxes + sparkles, crystals), described by a TOML
-// file (see samples/common/assets/demo_scene.toml). The sun light is created
+// file (see assets/game/demo_scene.toml). The sun light is created
 // under `sunParent` so apps can orbit it (demo) or keep it static (game).
 class DemoScene
 {

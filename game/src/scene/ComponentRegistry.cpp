@@ -121,6 +121,18 @@ void deMarker(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
     r.emplace_or_replace<game::SceneMarker>(e, game::SceneMarker{type});
 }
 
+void serEnvironment(const entt::registry& r, entt::entity e, ByteWriter& w)
+{ w.str(r.get<game::SceneEnvironment>(e).palette); }
+void deEnvironment(entt::registry& r, entt::entity e, ByteReader& b,
+                   uint32_t bytes)
+{
+    if (bytes < 4) { b.invalidate(); return; }
+    const std::string palette = b.str();
+    if (palette.empty()) { b.invalidate(); return; }
+    r.emplace_or_replace<game::SceneEnvironment>(
+        e, game::SceneEnvironment{palette});
+}
+
 void serEmpty(const entt::registry&, entt::entity, ByteWriter&) {}
 void dePlayerSpawn(entt::registry& r, entt::entity e, ByteReader&, uint32_t)
 { r.emplace_or_replace<game::PlayerSpawn>(e); }
@@ -146,6 +158,9 @@ ComponentRegistry buildCore()
     reg.add({"SceneMarker", 16, addDefault<game::SceneMarker>,
              has<game::SceneMarker>, remove<game::SceneMarker>,
              serMarker, deMarker});
+    reg.add({"SceneEnvironment", 17, addDefault<game::SceneEnvironment>,
+             has<game::SceneEnvironment>, remove<game::SceneEnvironment>,
+             serEnvironment, deEnvironment});
     return reg;
 }
 
