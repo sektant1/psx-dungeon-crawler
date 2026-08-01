@@ -1,5 +1,6 @@
 #include "render/AssimpLoader.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -125,7 +126,8 @@ int main(int argc, char** argv)
         if (argument == "--scale" && index + 1 < argc) {
             char* end = nullptr;
             const float scale = std::strtof(argv[++index], &end);
-            if (!end || *end != '\0' || !(scale > 0.0f)) {
+            if (!end || *end != '\0' || !std::isfinite(scale) ||
+                !(scale > 0.0f)) {
                 std::fprintf(stderr, "model_validate: invalid --scale\n");
                 return 2;
             }

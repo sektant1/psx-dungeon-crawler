@@ -13,39 +13,21 @@
 [![CMake](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
-<img src="assets/preview.gif" alt="Portal room, running live" width="720">
-
 </div>
 
-## Engine showcase
+## Samples
 
-### Renderer demo
+<img src="assets/preview.gif" alt="Portal room running in game" width="720">
 
-The default `make demo` showcase running PSX post-processing, particles,
-animated surfaces, and the orbiting presentation camera.
+<img src="docs/media/engine-demo.gif" alt="Default engine demo running" width="900">
 
-<img src="docs/media/engine-demo.gif" alt="Default PSX renderer demo running" width="720">
+<img src="docs/media/engine-demo-debug-ui.gif" alt="Engine demo running with Debug UI" width="900">
 
-### Live debug UI
+<img src="docs/media/scene-editor.gif" alt="Scene editor" width="900">
 
-The same demo with the shared dockable tuning UI open for shaders, materials,
-animation, particles, colliders, and render profiles.
+<img src="docs/media/model-viewer-turntable.gif" alt="Model viewer turntable" width="600">
 
-<img src="docs/media/engine-demo-debug-ui.gif" alt="PSX renderer demo with live debug UI open" width="720">
-
-### Scene editor
-
-The placement editor with its 3D viewport, outliner, material browser,
-inspector, camera tools, and scene diagnostics.
-
-<img src="docs/media/scene-editor.gif" alt="PSX placement editor showing the cozy lair scene" width="720">
-
-### Model viewer
-
-The `make prefab-viewer` turntable inspecting an imported boss model under the
-engine's low-resolution lighting and material pipeline.
-
-<img src="docs/media/model-viewer-turntable.gif" alt="Model viewer rotating an imported boss model" width="600">
+<img src="docs/media/spin_portal.gif" alt="Portal scene" width="640">
 
 ## Quick start
 

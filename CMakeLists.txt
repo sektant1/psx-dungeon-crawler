@@ -1086,6 +1086,12 @@ if(BUILD_TESTING)
   eng_target_hardening(assimp_model_import_tests)
   add_test(NAME assimp_model_import COMMAND assimp_model_import_tests)
 
+  add_test(NAME model_validate_rejects_infinite_scale
+           COMMAND model_validate --scale inf
+                   ${CMAKE_SOURCE_DIR}/assets/meshes/box.obj)
+  set_tests_properties(model_validate_rejects_infinite_scale
+                       PROPERTIES WILL_FAIL TRUE)
+
   add_executable(
     audio_tests
     engine/tests/AudioTests.cpp engine/src/audio/Audio.cpp
