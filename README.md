@@ -17,17 +17,15 @@
 
 ## Samples
 
-<img src="assets/preview.gif" alt="Portal room running in game" width="720">
+<p align="center"><img src="docs/media/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
 
-<img src="docs/media/engine-demo.gif" alt="Default engine demo running" width="900">
+<p align="center"><img src="assets/preview.gif" alt="Portal room running in game" width="900"></p>
 
-<img src="docs/media/engine-demo-debug-ui.gif" alt="Engine demo running with Debug UI" width="900">
+<p align="center"><img src="docs/media/engine-demo.gif" alt="Default engine demo running" width="900"></p>
 
-<img src="docs/media/scene-editor.gif" alt="Scene editor" width="900">
+<p align="center"><img src="docs/media/engine-demo-debug-ui.gif" alt="Engine demo running with Debug UI" width="900"></p>
 
-<img src="docs/media/model-viewer-turntable.gif" alt="Model viewer turntable" width="600">
-
-<img src="docs/media/spin_portal.gif" alt="Portal scene" width="640">
+<p align="center"><img src="docs/media/scene-editor.gif" alt="Scene editor" width="900"></p>
 
 ## Quick start
 
