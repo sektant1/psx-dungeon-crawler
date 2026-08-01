@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png" alt="PSX Retro Game Engine" width="360">
 
-# psx-dungeon-crawler
+# PSX Retro Game Engine
 
 **First-person PSX-style dungeon crawler. Plus C++20 engine written to run it.**
 
