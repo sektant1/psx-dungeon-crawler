@@ -52,36 +52,36 @@ std::string material(const std::string& source, const std::string& name)
 int main()
 {
     const std::string program =
-        read("engine/assets/programs/vfx.program");
+        read("assets/programs/vfx.program");
     const std::string portalFragment =
-        read("engine/assets/shaders/portal.frag");
+        read("assets/shaders/portal.frag");
     const std::string prototypePortalFragment =
-        read("engine/assets/shaders/prototype_portal.frag");
+        read("assets/shaders/prototype_portal.frag");
     // The look is split in two: a kernel every stylised surface shares, and the
     // pattern that makes this one a portal. The two fragment shaders are only
     // the field lookup that differs between them.
     const std::string surfaceCommon =
-        read("engine/assets/shaders/surface_common.glsl");
+        read("assets/shaders/surface_common.glsl");
     const std::string portalPattern =
-        read("engine/assets/shaders/portal_pattern.glsl");
+        read("assets/shaders/portal_pattern.glsl");
     const std::string portalVertex =
-        read("engine/assets/shaders/surface.vert");
+        read("assets/shaders/surface.vert");
     const std::string liquidFragment =
-        read("engine/assets/shaders/liquid.frag");
+        read("assets/shaders/liquid.frag");
     const std::string prototypeLiquidFragment =
-        read("engine/assets/shaders/prototype_liquid.frag");
+        read("assets/shaders/prototype_liquid.frag");
     const std::string lavaFragment =
-        read("engine/assets/shaders/lava.frag");
+        read("assets/shaders/lava.frag");
     // The portal and liquid profiles moved into one vfx.material when the
     // prototype content reset removed game.material/fantasy.material; the
     // shader-driven materials survived that reset deliberately.
     const std::string gameMaterials =
-        read("game/assets/materials/vfx.material");
+        read("assets/materials/vfx.material");
     const std::string& fantasyMaterials = gameMaterials;
     const std::string editorMaterials =
-        read("engine/assets/materials/editor.material");
+        read("assets/materials/editor.material");
     const std::string placementGhost =
-        read("engine/assets/shaders/placement_ghost.frag");
+        read("assets/shaders/placement_ghost.frag");
 
     requireText(program, "vertex_program PixelVfx/SurfaceVS glsl",
                 "dedicated portal vertex program is missing");
@@ -153,7 +153,7 @@ int main()
     // The scrolling family. Deliberately NOT the surface kernel: this look
     // comes from sliding tiling art, not from a field evaluated per pixel.
     const std::string scrollCommon =
-        read("engine/assets/shaders/scroll_common.glsl");
+        read("assets/shaders/scroll_common.glsl");
     requireText(scrollCommon, "floor(time * liquidStepFps)",
                 "liquid animation is not frame-stepped");
     requireText(scrollCommon, "liquidPalette",

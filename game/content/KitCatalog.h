@@ -33,7 +33,13 @@ struct KitPiece {
     std::string material; // "Game/Kit/Dungeon"
     Socket socket = Socket::Prop;
 
-    glm::vec3 sizeKit{0.0f}; // straight off the mesh, kit units
+    // The scale this piece's mesh is imported at. Zero means "the kit's own",
+    // which is what every architectural piece uses. Props authored in metres
+    // (the meshes/props set) override it with 1.0, and then `sizeKit` below is
+    // in metres too -- the sizes are always in the piece's own authoring units.
+    float importScale = 0.0f;
+
+    glm::vec3 sizeKit{0.0f}; // straight off the mesh, in authoring units
     int span = 1;            // cells covered along its length
     // Non-zero only for the handful of pieces not authored centred on X/Z with
     // their base at Y=0 (a chandelier hangs from its mount, an arch is the head
@@ -41,8 +47,21 @@ struct KitPiece {
     float yOffsetKit = 0.0f;
     std::string pivot; // "" = centred/base-at-zero, else the named exception
 
-    glm::vec3 sizeMeters(float scale) const { return sizeKit * scale; }
-    float yOffsetMeters(float scale) const { return yOffsetKit * scale; }
+    // `kitScale` is the catalogue's scale; a piece that carries its own wins.
+    // Every caller passes catalog.scale() and gets the right answer either way,
+    // which is what keeps a metre-authored prop from being shrunk to a fifth.
+    float meshScale(float kitScale) const
+    {
+        return importScale > 0.0f ? importScale : kitScale;
+    }
+    glm::vec3 sizeMeters(float kitScale) const
+    {
+        return sizeKit * meshScale(kitScale);
+    }
+    float yOffsetMeters(float kitScale) const
+    {
+        return yOffsetKit * meshScale(kitScale);
+    }
     // Local AABB in metres with the piece's own origin at (0,0,0), i.e. what a
     // placement ghost should draw and what picking should test. Applies the
     // base-at-Y=0 convention and the y_offset exception.

@@ -2,12 +2,13 @@
 #include "GameCollision.h"
 
 #include "GameComponents.h"
-#include <eng/ecs/MeshSource.h>
+#include <eng/ecs/components/MeshSource.h>
 #include "MapSerializer.h"
 
 #include <eng/Physics.h>
 #include <eng/ecs/Components.h>
 #include <eng/ecs/SceneBackend.h>
+#include <eng/ecs/World.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -59,22 +60,39 @@ int main()
     physics.init(game::layer::physicsSetup());
     MockBackend backend;
     {
-        MapRuntime rt(backend, physics);
+        eng::ecs::World world;
+        world.attachRenderer(backend);
+        world.attachPhysics(physics);
+
+        // An entity the map knows nothing about, spawned before the load. It is
+        // the whole reason load() merges instead of replacing the registry: it
+        // stands for the player, the enemies and every other live actor that
+        // now shares the level's world with the authored geometry.
+        const entt::entity resident = world.create("resident");
+
+        constexpr uint32_t kMapGroup = 7;
+        MapRuntime rt(world, kMapGroup);
 
         require(rt.load(path), "load .map");
+        require(world.registry().valid(resident),
+                "loading a map does not evict entities already in the world");
         int meshLoads = 0;
         rt.resolveMeshes([&](const std::string&) { ++meshLoads; return eng::MeshHandle{42}; });
         require(meshLoads == 1, "resolveMeshes called once per MeshRenderer");
 
         const int beforeBodies = physics.bodyCount();
         rt.buildAll();
-        require(backend.nodes >= 2, "buildAll created render nodes");
+        // One node: the floor. The spawn marker and the resident have a
+        // position and nothing to draw, and no longer cost a renderer node --
+        // the rule that makes a single shared world affordable.
+        require(backend.nodes == 1, "only entities with a visual get a node");
         require(physics.bodyCount() == beforeBodies + 1, "buildAll created the collider body");
 
         glm::vec3 sp = rt.playerSpawn();
         require(sp == glm::vec3(3, 1, -2), "playerSpawn returns the marker position");
 
-        rt.step(1.0f / 60.0f);
+        physics.update(1.0f / 60.0f);
+        world.sync();
 
         std::ifstream source(path, std::ios::binary);
         std::vector<char> truncated{std::istreambuf_iterator<char>(source),
@@ -93,6 +111,26 @@ int main()
         require(rt.playerSpawn() == glm::vec3(3, 1, -2),
                 "failed replacement preserves registry state");
         std::remove(corrupt.c_str());
+
+        // A second load merges rather than replacing, so the level accumulates
+        // -- what a map streamed in beside an existing one has to do.
+        require(rt.load(path), "a map can be merged into a populated world");
+        int spawns = 0;
+        for (auto e : world.registry().view<PlayerSpawn>()) { (void)e; ++spawns; }
+        require(spawns == 2, "the second load added its own entities");
+
+        // A transition destroys exactly the map's entities. The resident was
+        // created outside the group and survives -- the whole reason groups
+        // exist, since it stands for the player.
+        const std::size_t removed = world.destroyGroup(kMapGroup);
+        require(removed == 4, "destroyGroup removes both merged batches");
+        require(world.registry().valid(resident),
+                "an ungrouped entity survives a level teardown");
+        require(world.destroyGroup(0) == 0,
+                "group 0 is refused: it would take the survivors too");
+        world.sync();
+        require(backend.nodes == 0, "the group's nodes went with it");
+        require(physics.bodyCount() == 0, "and so did its bodies");
     }
     require(backend.nodes == 0, "runtime teardown destroys all renderer nodes");
     require(physics.bodyCount() == 0, "runtime teardown destroys all physics bodies");

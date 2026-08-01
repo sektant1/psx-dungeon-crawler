@@ -82,8 +82,8 @@ sampled while it is written. It needs a depth copy target first.
 
 ## Adding a texture
 
-1. Drop `ember.png` into `engine/assets/particles/textures/`.
-2. Optionally add overrides to `engine/assets/particles/textures.toml`:
+1. Drop `ember.png` into `assets/particles/textures/`.
+2. Optionally add overrides to `assets/particles/textures.toml`:
 
 ```toml
 [texture.ember]
@@ -101,7 +101,7 @@ would be a cost for content the level never spawns. `ParticleMaterials::scan`
 therefore only parses; `materialFor()` builds. A hot-reload rebuilds whatever
 had already been built and leaves the rest unbuilt.
 
-Every `*.toml` **directly in `engine/assets/particles/`** contributes texture
+Every `*.toml` **directly in `assets/particles/`** contributes texture
 entries, not just `textures.toml`. That is what lets a generated import land in
 its own file (`sprite_sheets.toml`) without being pasted into the hand-authored
 one and lost the next time the importer runs. Files are parsed in name order, so
@@ -151,10 +151,10 @@ quad — which looks like art, not like a bug.
 
 ### Importing an effect pack
 
-`tools/import_sprite_sheets.py` turns the packs under `art/sprites/shaders`
+`tools/import_sprite_sheets.py` turns the packs under `assets/sprites/shaders`
 into 304 named animations across 71 sheets (~6 MB), writing
-`engine/assets/particles/textures/sheets/*.png` and the generated
-`engine/assets/particles/sprite_sheets.toml`. Re-run it rather than editing
+`assets/particles/textures/sheets/*.png` and the generated
+`assets/particles/sprite_sheets.toml`. Re-run it rather than editing
 either; per-entry overrides belong in `textures.toml`.
 
 It drops the colour variants on purpose. These packs repeat every animation
@@ -193,7 +193,7 @@ into a line in the boot log. Ogre's own shaderless built-ins (`BaseWhite`,
 
 ## Adding an effect
 
-Append to `game/assets/particles.toml`:
+Append to `assets/config/particles.toml`:
 
 ```toml
 [[effect]]
@@ -249,7 +249,7 @@ by whoever owns the TOML.
 
 ## Blood
 
-`game/src/BloodSystem.cpp` reads `game/assets/blood.toml` and is the only thing
+`game/src/BloodSystem.cpp` reads `assets/config/blood.toml` and is the only thing
 that maps "something was hurt" onto effects and marks. Adding a creature type is
 a `[[profile]]` block; adding a kind of mark is a `[[decal]]` block.
 
@@ -313,7 +313,7 @@ through `collide = "decal"`.
 ## Editor preview
 
 The material staging scene has two modes, chosen by
-`engine/assets/material_preview.toml`:
+`assets/config/material_preview.toml`:
 
 ```toml
 quad = ["Engine/Particles/*", "Particles/Auto/*", "Editor/FireIcon"]

@@ -2,6 +2,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -38,6 +39,36 @@ glm::mat4 authorTransformMatrix(const XformAuthor& transform)
     return glm::translate(glm::mat4(1.0f), transform.position) *
            glm::mat4_cast(authorOrientation(transform.rotationDegrees)) *
            glm::scale(glm::mat4(1.0f), transform.scale);
+}
+
+WorldTransform composeTransform(const WorldTransform& parent,
+                                const XformAuthor& local)
+{
+    WorldTransform out;
+    out.orientation = parent.orientation * authorOrientation(local.rotationDegrees);
+    out.scale = parent.scale * local.scale;
+    out.position =
+        parent.position + parent.orientation * (parent.scale * local.position);
+    return out;
+}
+
+XformAuthor localFromWorld(const WorldTransform& parent,
+                           const WorldTransform& world)
+{
+    // A zero on any axis would divide the child's offset away; a level can
+    // carry one (validate reports scale.zero) and this must not produce a NaN
+    // that spreads into the file.
+    glm::vec3 divisor = parent.scale;
+    for (int axis = 0; axis < 3; ++axis)
+        if (std::abs(divisor[axis]) < 1e-6f)
+            divisor[axis] = divisor[axis] < 0.0f ? -1e-6f : 1e-6f;
+
+    const glm::quat inverse = glm::inverse(parent.orientation);
+    XformAuthor local;
+    local.position = (inverse * (world.position - parent.position)) / divisor;
+    local.rotationDegrees = authorRotationDegrees(inverse * world.orientation);
+    local.scale = world.scale / divisor;
+    return local;
 }
 
 void SceneDocument::rebuildIndex() const
@@ -84,6 +115,83 @@ bool SceneDocument::remove(std::string_view authorId)
             touch();
             return true;
         }
+    }
+    return false;
+}
+
+WorldTransform SceneDocument::worldTransform(std::string_view authorId) const
+{
+    const Entity* entity = find(authorId);
+    if (!entity)
+        return {};
+
+    // Walked to the root first, then composed downward. Recursing on the parent
+    // would be the same result, but a cycle would recurse until the stack ran
+    // out -- and a document with a cycle is one an author has to be able to
+    // open in order to fix.
+    std::vector<const Entity*> chain;
+    std::vector<std::string> seen;
+    for (const Entity* at = entity; at != nullptr;) {
+        if (std::find(seen.begin(), seen.end(), at->id) != seen.end())
+            break; // the loop closes here: treat this link as the world
+        seen.push_back(at->id);
+        chain.push_back(at);
+        at = at->parent.empty() ? nullptr : find(at->parent);
+    }
+
+    WorldTransform world;
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it)
+        world = composeTransform(world, (*it)->transform);
+    return world;
+}
+
+std::vector<const Entity*>
+SceneDocument::childrenOf(std::string_view authorId) const
+{
+    std::vector<const Entity*> children;
+    for (const Entity& entity : entities)
+        if (entity.parent == authorId)
+            children.push_back(&entity);
+    return children;
+}
+
+std::vector<AuthorId> SceneDocument::descendantsOf(std::string_view authorId) const
+{
+    std::vector<AuthorId> out;
+    std::vector<AuthorId> pending{AuthorId(authorId)};
+    std::vector<AuthorId> seen{AuthorId(authorId)};
+    while (!pending.empty()) {
+        const AuthorId at = pending.back();
+        pending.pop_back();
+        for (const Entity* child : childrenOf(at)) {
+            if (std::find(seen.begin(), seen.end(), child->id) != seen.end())
+                continue;
+            seen.push_back(child->id);
+            out.push_back(child->id);
+            pending.push_back(child->id);
+        }
+    }
+    return out;
+}
+
+bool SceneDocument::wouldCycle(std::string_view child,
+                               std::string_view parent) const
+{
+    if (parent.empty())
+        return false; // unparenting always terminates
+    if (child == parent)
+        return true;
+    // Walking up from the proposed parent is cheaper than listing every
+    // descendant of the child, and it is bounded by the entity count even when
+    // the document already contains a loop.
+    std::vector<std::string> seen;
+    for (const Entity* at = find(parent); at != nullptr;) {
+        if (at->id == child)
+            return true;
+        if (std::find(seen.begin(), seen.end(), at->id) != seen.end())
+            return true; // already looping: refuse to add to it
+        seen.push_back(at->id);
+        at = at->parent.empty() ? nullptr : find(at->parent);
     }
     return false;
 }

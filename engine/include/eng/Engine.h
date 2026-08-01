@@ -1,6 +1,8 @@
 #pragma once
+#include <eng/Clock.h>
 #include <eng/Config.h>
 #include <eng/Input.h>
+#include <eng/Profiler.h>
 #include <eng/RenderPresetInfo.h>
 #include <eng/Renderer.h>
 #include <eng/StepClock.h>
@@ -26,7 +28,7 @@ public:
     // Brings the content root up (eng::assets::init + mount(mountSet)), loads
     // the TOML config (window.title/width/height + [bindings]) through the
     // resolver, creates the window and starts the renderer on the mounted
-    // packs. `configPath` is a LOGICAL path -- "game.toml", not a filename on
+    // packs. `configPath` is a LOGICAL path -- "config/game.toml", not a filename on
     // disk -- and an empty one means "engine defaults".
     // `renderPreset` is the starting render profile (0 = let PSX_RENDER_PRESET
     // decide, then the engine default). The applied id is readable afterwards
@@ -91,6 +93,30 @@ public:
     StepClock& stepClock() { return mStepClock; }
     const StepClock& stepClock() const { return mStepClock; }
 
+    // Two timelines (see eng::Clock). tick() advances both with the same
+    // measured frame delta; what they do with it is what separates them.
+    //
+    //   gameClock()  scalable and pausable. Simulation reads this, and so does
+    //                anything whose motion should stop when the world stops:
+    //                gameplay timers, cooldowns, AI, VFX that belong to the
+    //                world. runApplication() drives the fixed-step loop from it,
+    //                so `time.pause` freezes physics without touching the loop.
+    //   realClock()  never pauses, never scales. The debug camera, the console,
+    //                the frame limiter and anything that must keep moving over a
+    //                frozen world read this one.
+    //
+    // Both rebase when the loading phase ends, for the reason StepClock does.
+    Clock& gameClock() { return mGameClock; }
+    const Clock& gameClock() const { return mGameClock; }
+    Clock& realClock() { return mRealClock; }
+    const Clock& realClock() const { return mRealClock; }
+
+    // In-game hierarchical profiler. runApplication() opens a scope per loop
+    // phase; a game nests its own scopes inside those with ENG_PROFILE. Reading
+    // it costs nothing when nobody annotates anything.
+    Profiler& profiler() { return mProfiler; }
+    const Profiler& profiler() const { return mProfiler; }
+
     // System registry (SPEngine-style). Additive: the existing tick()/
     // renderFrame() loop is unchanged; a game opts in by registering systems
     // and calling updateSystems(dt) from its loop.
@@ -115,6 +141,9 @@ private:
     Input mInput;
     Renderer mRenderer;
     StepClock mStepClock;
+    Clock mGameClock;
+    Clock mRealClock;
+    Profiler mProfiler;
     int mRenderPreset = kDefaultRenderPreset;
     bool mClose = false;
     std::vector<System::StrongPtr> mSystems;

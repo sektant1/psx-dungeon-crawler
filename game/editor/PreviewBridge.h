@@ -3,8 +3,7 @@
 #include "SceneDocument.h"
 
 #include <eng/Handles.h>
-#include <eng/ecs/Scene.h>
-#include <eng/ecs/SceneSync.h>
+#include <eng/ecs/World.h>
 
 #include <memory>
 #include <string>
@@ -59,6 +58,14 @@ public:
     // Same storey/whole-preview visibility decision used by rendering. Picking
     // must not select geometry hidden by the ceiling cut.
     bool entityVisible(const game::content::AuthorId& id) const;
+
+    // Entities the author has switched off in the outliner. Held here rather
+    // than asked for per node so the decision stays with the rest of the
+    // visibility rules -- the ceiling cut and the whole-preview toggle already
+    // live here, and three places deciding what is drawn is how one of them
+    // ends up disagreeing.
+    void setHiddenEntities(eng::Renderer& renderer,
+                           const std::vector<game::content::AuthorId>& hidden);
 
     // Null when the entity has no visual (a marker, or the document moved on).
     const eng::NodeHandle* nodeFor(const game::content::AuthorId& id) const;

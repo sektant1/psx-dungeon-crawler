@@ -108,7 +108,27 @@ public:
     // `preferred` is the smallest virtual resolution the layout is authored
     // against; the canvas picks the largest integer magnification that still
     // fits it, then reports the true virtual size (usually wider).
+    //
+    // Draws over the whole window, on imgui's foreground list: that is what a
+    // game HUD is. Use beginTarget() to put the same canvas inside a panel.
     void begin(glm::vec2 displayPixels, glm::ivec2 preferred = {640, 480});
+
+    // The same canvas, drawn into a rectangle of somebody else's window.
+    //
+    // Exists because a canvas that can only paint the whole window at the
+    // window's own origin can never be previewed, embedded or composited -- and
+    // the editor's job is to show the HUD *beside* the thing it is being
+    // authored against, at a virtual resolution the author picks rather than
+    // the one the window happens to give.
+    //
+    //   originPixels  screen position of virtual (0,0)
+    //   scale         integer magnification, >= 1
+    //   virtualSize   how many virtual pixels the surface is; layouts anchor to
+    //                 its corners exactly as they anchor to the window's
+    //   target        the draw list to paint onto (a window's, so it clips and
+    //                 z-orders with the panel). Null means the foreground list.
+    void beginTarget(glm::vec2 originPixels, glm::ivec2 virtualSize, int scale,
+                     ImDrawList* target);
 
     glm::ivec2 size() const { return mVirtual; }
     int scale() const { return mScale; }
@@ -163,7 +183,11 @@ private:
     UiStyleSheet mStyle;
     glm::ivec2 mVirtual{320, 240};
     glm::vec2 mDisplay{0.0f};
+    glm::vec2 mOrigin{0.0f};
     int mScale = 1;
+    // Null is imgui's foreground list, which is what a game HUD wants; a panel
+    // passes its own so the canvas clips and z-orders with it.
+    ImDrawList* mTarget = nullptr;
 };
 
 } // namespace eng::ui

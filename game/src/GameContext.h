@@ -19,7 +19,7 @@ struct GameContext {
     eng::Physics& physics;
     eng::Input& input;
     // No asset root here any more: a system that needs content asks
-    // game::assetPath("weapons.toml") (GameAssets.h) and lets the resolver
+    // game::assetPath("config/weapons.toml") (GameAssets.h) and lets the resolver
     // walk the mount list. Threading a root through the context made every
     // system that touches a file also a system that knows where the tree is.
     // Damage channels + schools of magic, from magic.toml. Systems that

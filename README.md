@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/media/logo.png" alt="PSX Retro Game Engine" width="360">
+<img src="assets/logo.png" alt="PSX Retro Game Engine" width="360">
 
 # psx-dungeon-crawler
 
@@ -13,7 +13,7 @@
 [![CMake](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
-<img src="docs/media/preview.gif" alt="Portal room, running live" width="720">
+<img src="assets/preview.gif" alt="Portal room, running live" width="720">
 
 </div>
 
@@ -32,6 +32,8 @@ make run                 # the game
 make editor SCENE=x.scn  # placement editor, F5 to playtest
                          #   entities & components: docs/scene-editor-entities.md
 make cook SCENE=x.scn    # .scn -> .map, same cooker CI uses
+make scene SCENE=x.scn   # cook and play it; a scene with a camera plays as a
+                         #   shot: docs/authoring-shots.md
 make demo                # shader sample, see docs/psx-demo.md
 make sim                 # headless combat/physics harness
 make test                # ctest suite
@@ -83,7 +85,7 @@ make test                # ctest suite
 | `Mouse 1` | fire selected magical weapon |
 | `1` `2` `3` `X` | select weapon, or cycle weapon |
 | `B` `V` `G` | dodge, deflect, kick |
-| | rebind in `game/assets/game.toml` |
+| | rebind in `assets/config/game.toml` |
 
 ## Recipes
 

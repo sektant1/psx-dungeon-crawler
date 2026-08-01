@@ -120,6 +120,63 @@ int main()
     tree = buildOutliner(document, catalog, filtered);
     require(tree.groups.empty() && tree.shown == 0, "a miss lists nothing");
 
+    // --- composed objects ---------------------------------------------------
+    // Parenting is what makes a chandelier and its candles one thing. The panel
+    // has to show that as a tree, and it must not let the prefab grouping --
+    // which exists to collapse a hundred identical walls -- swallow it.
+    {
+        SceneDocument composed;
+        composed.add(piece("chandelier_0001", "kit.prop_chandelier"));
+        for (int i = 1; i <= 3; ++i) {
+            Entity candle =
+                piece("candle_000" + std::to_string(i), "kit.prop_candle");
+            candle.parent = "chandelier_0001";
+            composed.add(candle);
+        }
+        // A loose candle of the same prefab, standing on its own.
+        composed.add(piece("candle_0009", "kit.prop_candle"));
+
+        OutlinerTree hierarchy = buildOutliner(composed, catalog, OutlinerOptions{});
+        const OutlinerGroup* object = group(hierarchy, "chandelier_0001");
+        require(object && object->composed,
+                "the composed object gets a group of its own, keyed by its root");
+        require(object->nodes.size() == 1,
+                "holding one node -- the root");
+        require(object->nodes.front().children.size() == 3,
+                "with its children nested under it, rather than collapsed into "
+                "a 'kit.prop_candle (3)' row somewhere else in the panel");
+        require(groupIds(*object).size() == 4,
+                "and acting on the group reaches the whole chain");
+
+        const OutlinerGroup* loose = group(hierarchy, "kit.prop_candle");
+        require(loose && loose->nodes.size() == 1,
+                "the unparented candle still groups by prefab -- being part of "
+                "an object is what moves an entity out of that grouping, not "
+                "sharing a prefab with one that is");
+        require(hierarchy.shown == 5, "every entity is accounted for");
+    }
+
+    // --- filtering a composed object keeps it whole -------------------------
+    {
+        SceneDocument composed;
+        composed.add(piece("rig_0001", "kit.prop_rig"));
+        Entity lamp = piece("lamp_0001", "kit.prop_lamp");
+        lamp.parent = "rig_0001";
+        composed.add(lamp);
+
+        OutlinerOptions hunt;
+        hunt.filter = "lamp";
+        const OutlinerTree found = buildOutliner(composed, catalog, hunt);
+        require(found.groups.size() == 1 && found.shown == 2,
+                "matching a child keeps the whole object: half a chandelier is "
+                "not a shorter list, it is a broken one");
+
+        hunt.filter = "nothing";
+        const OutlinerTree empty = buildOutliner(composed, catalog, hunt);
+        require(empty.groups.empty() && empty.hidden == 2,
+                "and a miss drops it whole, counted whole");
+    }
+
     // --- kinds --------------------------------------------------------------
     require(std::string(entityKind(enemy, catalog)) == "enemy",
             "gameplay wins over geometry in the kind tag");

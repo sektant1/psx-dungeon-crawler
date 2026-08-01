@@ -1,11 +1,12 @@
 #include "MapRuntime.h"
 
-#include "MapSerializer.h"
-#include <eng/ecs/MeshSource.h>
 #include "GameComponents.h"
+#include "MapSerializer.h"
 
-#include <eng/Physics.h>
+#include <eng/Log.h>
+#include <eng/ecs/ComponentRegistry.h>
 #include <eng/ecs/Components.h>
+#include <eng/ecs/components/MeshSource.h>
 
 namespace game {
 
@@ -25,29 +26,34 @@ void materialiseTriggers(entt::registry& reg)
 }
 } // namespace
 
-MapRuntime::MapRuntime(eng::ecs::SceneBackend& backend, eng::Physics& physics)
-    : mSceneSync(mScene, backend), mPhysicsSync(mScene.registry(), physics),
-      mPhysics(physics)
-{}
+MapRuntime::MapRuntime(eng::ecs::World& world, uint32_t group)
+    : mWorld(world), mGroup(group)
+{
+}
 
 bool MapRuntime::load(const std::string& path)
 {
-    entt::registry replacement;
-    if (!mapio::readMap(path, replacement, mapio::coreRegistry()))
+    // Parse into a scratch registry first, then merge. Reading straight into
+    // the live world would leave a half-decoded map behind on a malformed file,
+    // and -- now that the world is shared -- the old `registry = std::move(...)`
+    // would have thrown away every entity the rest of the game had spawned.
+    entt::registry parsed;
+    if (!mapio::readMap(path, parsed, mapio::coreRegistry()))
         return false;
 
-    entt::registry& reg = mScene.registry();
-    mPhysicsSync.clear();
-    mSceneSync.clear();
-    reg = std::move(replacement);
-    for (auto e : reg.view<eng::ecs::Transform>())
-        reg.emplace_or_replace<eng::ecs::Dirty>(e);
+    entt::registry& reg = mWorld.registry();
+    // copyEntities tags each copy Dirty; this used to dirty every entity in the
+    // world instead, which also re-resolved the player and everything the last
+    // level left standing.
+    const std::size_t added =
+        eng::ecs::copyEntities(reg, parsed, mapio::coreRegistry(), mGroup);
+    eng::log::info("Map: '%s' merged %zu entities", path.c_str(), added);
     return true;
 }
 
 void MapRuntime::resolveMeshes(const LoadMeshFn& loadFn)
 {
-    entt::registry& reg = mScene.registry();
+    entt::registry& reg = mWorld.registry();
     auto view = reg.view<eng::ecs::MeshRenderer>();
     for (auto e : view) {
         if (const auto* src = reg.try_get<eng::ecs::MeshSource>(e)) {
@@ -58,22 +64,13 @@ void MapRuntime::resolveMeshes(const LoadMeshFn& loadFn)
 
 void MapRuntime::buildAll()
 {
-    mSceneSync.sync();
-    materialiseTriggers(mScene.registry());
-    mPhysicsSync.sync();
-}
-
-void MapRuntime::step(float dt)
-{
-    mPhysics.update(dt);
-    mSceneSync.sync();
-    materialiseTriggers(mScene.registry());
-    mPhysicsSync.sync();
+    materialiseTriggers(mWorld.registry());
+    mWorld.sync();
 }
 
 glm::vec3 MapRuntime::playerSpawn() const
 {
-    const entt::registry& reg = mScene.registry();
+    const entt::registry& reg = mWorld.registry();
     auto view = reg.view<const PlayerSpawn>();
     for (auto e : view) {
         if (const auto* world = reg.try_get<eng::ecs::WorldTransform>(e))
@@ -86,7 +83,7 @@ glm::vec3 MapRuntime::playerSpawn() const
 
 glm::vec3 MapRuntime::levelExit() const
 {
-    const entt::registry& reg = mScene.registry();
+    const entt::registry& reg = mWorld.registry();
     for (const auto entity : reg.view<const Exit>()) {
         if (const auto* transform = reg.try_get<eng::ecs::Transform>(entity))
             return transform->position;
@@ -96,7 +93,7 @@ glm::vec3 MapRuntime::levelExit() const
 
 float MapRuntime::exitYawDegrees() const
 {
-    const entt::registry& reg = mScene.registry();
+    const entt::registry& reg = mWorld.registry();
     for (const auto entity : reg.view<const Exit>())
         return reg.get<const Exit>(entity).yawDegrees;
     return 0.0f;
@@ -106,7 +103,7 @@ std::vector<ScenePlacement> MapRuntime::placements(
     const std::string& prefix) const
 {
     std::vector<ScenePlacement> result;
-    const entt::registry& reg = mScene.registry();
+    const entt::registry& reg = mWorld.registry();
     for (const auto entity : reg.view<const SceneMarker,
                                       const eng::ecs::Transform>()) {
         const auto& marker = reg.get<const SceneMarker>(entity);
@@ -116,6 +113,51 @@ std::vector<ScenePlacement> MapRuntime::placements(
         result.push_back({marker.type, transform.position, transform.rotation});
     }
     return result;
+}
+
+namespace {
+
+// Shared shape of the two component-to-placement queries below.
+template <typename Component, typename Name>
+std::vector<ScenePlacement> componentPlacements(const entt::registry& reg,
+                                                const char* prefix, Name name)
+{
+    std::vector<ScenePlacement> result;
+    for (const auto entity : reg.view<const Component,
+                                      const eng::ecs::Transform>()) {
+        const std::string& id = name(reg.get<const Component>(entity));
+        if (id.empty())
+            continue;
+        const auto& transform = reg.get<const eng::ecs::Transform>(entity);
+        result.push_back(
+            {prefix + id, transform.position, transform.rotation});
+    }
+    return result;
+}
+
+} // namespace
+
+std::vector<ScenePlacement> MapRuntime::enemySpawnPlacements() const
+{
+    return componentPlacements<EnemySpawn>(
+        mWorld.registry(), "enemy.",
+        [](const EnemySpawn& spawn) -> const std::string& { return spawn.type; });
+}
+
+std::string MapRuntime::palette() const
+{
+    // The first one found. The cooker writes at most one, and a map that
+    // somehow carries two has a level design problem, not a runtime one.
+    for (const auto entity : mWorld.registry().view<const SceneEnvironment>())
+        return mWorld.registry().get<const SceneEnvironment>(entity).palette;
+    return {};
+}
+
+std::vector<ScenePlacement> MapRuntime::pickupPlacements() const
+{
+    return componentPlacements<Pickup>(
+        mWorld.registry(), "pickup.",
+        [](const Pickup& pickup) -> const std::string& { return pickup.type; });
 }
 
 } // namespace game

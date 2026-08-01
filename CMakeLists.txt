@@ -112,7 +112,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Dependencies.cmake)
 #   eng_framework  ECS scene, scene sync, controllers
 #   eng_systems    renderer, physics, audio, particles  (owns Ogre/Jolt/SDL)
 #   eng_platform   window, input, config
-#   eng_core       log, io, math/geometry, events, profiling
+#   eng_core       log, io, math/geometry, events, clocks, string ids, profiling
 #
 # The split exists to make a layering violation a *link* error rather than a
 # review comment: eng_core cannot call the renderer because it does not link it.
@@ -145,6 +145,8 @@ add_library(
   eng_core STATIC
   engine/src/core/Log.cpp
   engine/src/core/Object.cpp
+  engine/src/core/StringId.cpp
+  engine/src/core/Clock.cpp
   engine/src/core/AssetRoot.cpp
   engine/src/io/ByteStream.cpp
   engine/src/io/FileSystem.cpp
@@ -248,10 +250,11 @@ target_compile_definitions(
           OGRE_MEDIA_DIR="${ENG_OGRE_MEDIA_DIR}")
 
 add_library(
-  eng_framework STATIC engine/src/ecs/Scene.cpp engine/src/ecs/SceneSync.cpp
+  eng_framework STATIC engine/src/ecs/World.cpp engine/src/ecs/SceneSync.cpp
                        engine/src/ecs/PhysicsSync.cpp
                        engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
+                       engine/src/ecs/Systems.cpp
                        engine/src/controllers/FpsController.cpp
                        engine/src/debug/DebugTools.cpp
                        engine/src/debug/SurfacePanels.cpp
@@ -305,7 +308,7 @@ if(ENABLE_PCH)
   target_precompile_headers(eng PRIVATE <imgui.h> <glm/glm.hpp>)
 endif()
 
-# Shared PSX demo scene, data-driven from samples/common/assets.
+# Shared PSX demo scene, data-driven from assets/game.
 add_library(demo_scene STATIC samples/common/DemoScene.cpp)
 target_include_directories(
   demo_scene
@@ -313,7 +316,7 @@ target_include_directories(
   PRIVATE third_party)
 target_link_libraries(demo_scene PUBLIC eng)
 # No DEMO_SCENE_TOML: DemoScene::load has always taken the path as an argument,
-# and its one caller (the game) now asks the resolver for "demo_scene.toml".
+# and its one caller (the game) now asks the resolver for "config/demo_scene.toml".
 # The file is declared as the `common` pack in assets/assets.toml until the
 # file move folds it into `game`.
 eng_target_hardening(demo_scene)
@@ -386,16 +389,41 @@ add_executable(
   game/editor/main.cpp
   game/editor/EditorApp.cpp
   game/editor/EditorCamera.cpp
+  game/editor/EditorIcons.cpp
+  game/editor/EditorSettings.cpp
+  game/editor/EntityGizmos.cpp
+  game/editor/GameVocabulary.cpp
+  game/editor/MaterialCatalog.cpp
+  game/editor/Clipboard.cpp
+  game/editor/CommandPalette.cpp
   game/editor/Commands.cpp
+  game/editor/ConfirmDialog.cpp
+  game/editor/SceneBrowser.cpp
+  game/editor/ViewportOverlay.cpp
   game/editor/ComponentInspector.cpp
   game/editor/EntityComponents.cpp
+  game/editor/OutlinerPanel.cpp
   game/editor/OutlinerTree.cpp
   game/editor/PaintSlot.cpp
+  game/editor/ViewportGrid.cpp
   game/editor/Picker.cpp
+  game/editor/PickTarget.cpp
   game/editor/PreviewBridge.cpp
+  game/editor/UiStage.cpp
+  # The game's palette loader, shared rather than approximated: the editor's
+  # light switch answers a question about the shipped look, and an editor that
+  # answers it with its own numbers is an editor that lies about the level.
+  game/src/RenderPalette.cpp
+  # The game's HUD, likewise: the 2D viewport draws the shipped class against a
+  # dialled-in state. A preview that reimplements the HUD tells you about the
+  # preview.
+  game/src/ui/GameHud.cpp
+  game/src/ui/GameHudStyle.cpp
+  game/src/HudModel.cpp
   game/editor/RunGame.cpp)
-target_include_directories(scene_editor PRIVATE game/editor engine/src
-                                                third_party)
+target_include_directories(scene_editor PRIVATE game/editor game/src engine/src
+                                                third_party
+                             engine/include)
 target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui)
 # No asset defines: the editor mounts the `editor` set and resolves logical
 # paths like every other app. Where it needs a directory rather than a file --
@@ -415,7 +443,6 @@ add_executable(
   game/src/main.cpp
   game/src/DungeonMap.cpp
   game/src/DungeonGen.cpp
-  game/src/GameScene.cpp
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
   game/src/BloodSystem.cpp
@@ -590,20 +617,41 @@ if(BUILD_TESTING)
   target_link_libraries(scene_registry_tests PRIVATE glm::glm)
   add_test(NAME scene_registry_tests COMMAND scene_registry_tests)
 
+  add_executable(component_reflect_tests
+                 engine/tests/ComponentReflectTests.cpp
+                 engine/src/ecs/ComponentRegistry.cpp
+                 engine/src/io/ByteStream.cpp)
+  target_include_directories(component_reflect_tests
+                             PRIVATE engine/include third_party)
+  target_link_libraries(component_reflect_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME component_reflect COMMAND component_reflect_tests)
+
   add_executable(scene_tests engine/tests/SceneTests.cpp
-                             engine/src/ecs/Scene.cpp)
+                             engine/src/ecs/World.cpp)
   target_include_directories(scene_tests PRIVATE engine/include engine/src
                                                  third_party/imgui)
   target_link_libraries(scene_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME scene_tests COMMAND scene_tests)
 
   add_executable(
-    scene_sync_tests engine/tests/SceneSyncTests.cpp engine/src/ecs/Scene.cpp
-                     engine/src/ecs/SceneSync.cpp)
+    scene_sync_tests engine/tests/SceneSyncTests.cpp engine/src/ecs/World.cpp
+                     engine/src/ecs/SceneSync.cpp
+                     # SceneSync pushes shader blocks through their field
+                     # tables, which live here.
+                     engine/src/ecs/ComponentRegistry.cpp
+                     engine/src/io/ByteStream.cpp)
   target_include_directories(scene_sync_tests PRIVATE engine/include engine/src
                                                       third_party/imgui)
   target_link_libraries(scene_sync_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME scene_sync_tests COMMAND scene_sync_tests)
+
+  add_executable(ecs_systems_tests engine/tests/EcsSystemsTests.cpp
+                                   engine/src/ecs/World.cpp
+                                   engine/src/ecs/Systems.cpp)
+  target_include_directories(ecs_systems_tests PRIVATE engine/include engine/src
+                                                       third_party/imgui)
+  target_link_libraries(ecs_systems_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME ecs_systems COMMAND ecs_systems_tests)
 
   add_executable(rhi_contract_tests engine/tests/RhiContractTests.cpp)
   target_link_libraries(rhi_contract_tests PRIVATE eng_rhi)
@@ -838,9 +886,22 @@ if(BUILD_TESTING)
   add_test(NAME trace COMMAND trace_tests)
 
   add_executable(profiler_tests engine/tests/ProfilerTests.cpp
-                                engine/src/diagnostics/Profiler.cpp)
+                                engine/src/diagnostics/Profiler.cpp
+                                engine/src/core/StringId.cpp
+                                engine/src/core/Log.cpp)
   target_include_directories(profiler_tests PRIVATE engine/include)
   add_test(NAME profiler COMMAND profiler_tests)
+
+  add_executable(string_id_tests engine/tests/StringIdTests.cpp
+                                 engine/src/core/StringId.cpp
+                                 engine/src/core/Log.cpp)
+  target_include_directories(string_id_tests PRIVATE engine/include)
+  add_test(NAME string_id COMMAND string_id_tests)
+
+  add_executable(clock_tests engine/tests/ClockTests.cpp
+                             engine/src/core/Clock.cpp)
+  target_include_directories(clock_tests PRIVATE engine/include)
+  add_test(NAME clock COMMAND clock_tests)
 
   add_executable(frame_capture_tests engine/tests/FrameCaptureTests.cpp
                                      engine/src/render/FrameCapture.cpp)
@@ -931,7 +992,8 @@ if(BUILD_TESTING)
   # the enter/leave round trip are all assertable without a window.
   add_executable(editor_camera_eye_tests game/tests/EditorCameraEyeTests.cpp
                                          game/editor/EditorCamera.cpp)
-  target_include_directories(editor_camera_eye_tests PRIVATE game/editor)
+  target_include_directories(editor_camera_eye_tests PRIVATE game/editor
+                             engine/include)
   target_link_libraries(editor_camera_eye_tests PRIVATE eng)
   add_test(NAME editor_camera_eye COMMAND editor_camera_eye_tests)
 
@@ -1020,7 +1082,7 @@ if(BUILD_TESTING)
   add_test(NAME map_runtime COMMAND map_runtime_tests)
 
   # --- authoring pipeline (.scn -> IR -> .map) --------------------------------
-  # These run against the REAL game/assets/kit.toml and the real shipped scene:
+  # These run against the REAL assets/game/kit.toml and the real shipped scene:
   # the point is to catch content drift, not to test a fixture.
   add_executable(kit_catalog_tests game/tests/KitCatalogTests.cpp)
   target_link_libraries(kit_catalog_tests PRIVATE game_content eng_ecs_headless)
@@ -1030,7 +1092,8 @@ if(BUILD_TESTING)
                                       game/editor/Commands.cpp
                                       game/content/SceneDocument.cpp)
   target_include_directories(editor_command_tests PRIVATE game/editor
-                                                          game/content)
+                                                          game/content
+                                             engine/include)
   target_link_libraries(editor_command_tests PRIVATE glm::glm)
   add_test(NAME editor_command COMMAND editor_command_tests)
 
@@ -1038,40 +1101,146 @@ if(BUILD_TESTING)
                                         game/editor/EntityComponents.cpp
                                         game/content/SceneDocument.cpp)
   target_include_directories(editor_component_tests PRIVATE game/editor
-                                                            game/content)
+                                                            game/content
+                                             engine/include)
   target_link_libraries(editor_component_tests PRIVATE glm::glm)
   add_test(NAME editor_component COMMAND editor_component_tests)
 
   add_executable(editor_outliner_tests game/tests/EditorOutlinerTests.cpp
                                        game/editor/OutlinerTree.cpp
                                        game/editor/EntityComponents.cpp)
-  target_include_directories(editor_outliner_tests PRIVATE game/editor)
+  target_include_directories(editor_outliner_tests PRIVATE game/editor
+                                             engine/include)
   target_link_libraries(editor_outliner_tests PRIVATE game_content
                                                       eng_ecs_headless)
   add_test(NAME editor_outliner COMMAND editor_outliner_tests)
 
+  add_executable(
+    editor_outliner_panel_tests game/tests/EditorOutlinerPanelTests.cpp
+                                game/editor/OutlinerPanel.cpp
+                                game/editor/EditorIcons.cpp)
+  target_include_directories(editor_outliner_panel_tests
+                             PRIVATE game/editor game/content
+                             engine/include)
+  target_link_libraries(editor_outliner_panel_tests PRIVATE eng_imgui glm::glm)
+  add_test(NAME editor_outliner_panel COMMAND editor_outliner_panel_tests)
+
+  add_executable(editor_material_catalog_tests
+                 game/tests/EditorMaterialCatalogTests.cpp
+                 game/editor/MaterialCatalog.cpp)
+  target_include_directories(editor_material_catalog_tests PRIVATE game/editor
+                             engine/include)
+  add_test(NAME editor_material_catalog COMMAND editor_material_catalog_tests
+           ${CMAKE_SOURCE_DIR}/assets/materials)
+
+  add_executable(editor_vocabulary_tests game/tests/EditorVocabularyTests.cpp
+                                         game/editor/GameVocabulary.cpp)
+  target_include_directories(editor_vocabulary_tests PRIVATE game/editor
+                             engine/include)
+  add_test(NAME editor_vocabulary COMMAND editor_vocabulary_tests
+           ${CMAKE_SOURCE_DIR}/assets/config/enemies.toml)
+
+  add_executable(editor_viewport_overlay_tests
+                 game/tests/EditorViewportOverlayTests.cpp
+                 game/editor/ViewportOverlay.cpp)
+  target_include_directories(editor_viewport_overlay_tests PRIVATE game/editor
+                             engine/include)
+  target_link_libraries(editor_viewport_overlay_tests PRIVATE eng_imgui)
+  add_test(NAME editor_viewport_overlay COMMAND editor_viewport_overlay_tests)
+
+  add_executable(editor_scene_browser_tests
+                 game/tests/EditorSceneBrowserTests.cpp
+                 game/editor/SceneBrowser.cpp)
+  target_include_directories(editor_scene_browser_tests PRIVATE game/editor
+                                             engine/include)
+  add_test(NAME editor_scene_browser COMMAND editor_scene_browser_tests)
+
+  add_executable(editor_settings_tests game/tests/EditorSettingsTests.cpp
+                                       game/editor/EditorSettings.cpp
+                                       game/editor/RunGame.cpp)
+  target_include_directories(editor_settings_tests PRIVATE game/editor
+                             engine/include)
+  add_test(NAME editor_settings COMMAND editor_settings_tests)
+
+  add_executable(
+    editor_entity_gizmo_tests game/tests/EditorEntityGizmoTests.cpp
+                              game/editor/EntityGizmos.cpp game/editor/Picker.cpp)
+  target_include_directories(editor_entity_gizmo_tests PRIVATE game/editor
+                                                               game/content
+                             engine/include)
+  target_link_libraries(editor_entity_gizmo_tests PRIVATE game_content eng_imgui
+                                                          glm::glm)
+  add_test(NAME editor_entity_gizmo COMMAND editor_entity_gizmo_tests)
+
+  add_executable(editor_clipboard_tests game/tests/EditorClipboardTests.cpp
+                                        game/editor/Clipboard.cpp)
+  target_include_directories(editor_clipboard_tests PRIVATE game/editor
+                                                            game/content
+                                             engine/include)
+  target_link_libraries(editor_clipboard_tests PRIVATE game_content glm::glm)
+  add_test(NAME editor_clipboard COMMAND editor_clipboard_tests)
+
+  add_executable(
+    editor_command_palette_tests game/tests/EditorCommandPaletteTests.cpp
+                                 game/editor/CommandPalette.cpp)
+  target_include_directories(editor_command_palette_tests PRIVATE game/editor
+                             engine/include)
+  target_link_libraries(editor_command_palette_tests PRIVATE eng_imgui)
+  add_test(NAME editor_command_palette COMMAND editor_command_palette_tests)
+
+  add_executable(editor_viewport_grid_tests
+                 game/tests/EditorViewportGridTests.cpp
+                 game/editor/ViewportGrid.cpp)
+  target_include_directories(editor_viewport_grid_tests PRIVATE game/editor
+                             engine/include)
+  add_test(NAME editor_viewport_grid COMMAND editor_viewport_grid_tests)
+
   add_executable(editor_paint_slot_tests game/tests/EditorPaintSlotTests.cpp
                                          game/editor/PaintSlot.cpp)
   target_include_directories(editor_paint_slot_tests PRIVATE game/editor
-                                                             game/content)
+                                                             game/content
+                             engine/include)
   target_link_libraries(editor_paint_slot_tests PRIVATE glm::glm)
   add_test(NAME editor_paint_slot COMMAND editor_paint_slot_tests)
 
+  add_executable(editor_ui_stage_tests
+                 game/tests/EditorUiStageTests.cpp
+                 game/editor/UiStage.cpp
+                 game/src/HudModel.cpp)
+  target_include_directories(editor_ui_stage_tests
+                             PRIVATE game/editor game/src third_party
+                             engine/include)
+  target_link_libraries(editor_ui_stage_tests PRIVATE eng game_content
+                                                      eng_imgui glm::glm)
+  add_test(NAME editor_ui_stage COMMAND editor_ui_stage_tests)
+
+  add_executable(editor_pick_target_tests
+                 game/tests/EditorPickTargetTests.cpp
+                 game/editor/PickTarget.cpp)
+  target_include_directories(editor_pick_target_tests PRIVATE game/editor
+                                                              game/content
+                                             engine/include)
+  target_link_libraries(editor_pick_target_tests PRIVATE game_content glm::glm)
+  add_test(NAME editor_pick_target COMMAND editor_pick_target_tests)
+
   add_executable(editor_picker_tests game/tests/EditorPickerTests.cpp
                                      game/editor/Picker.cpp)
-  target_include_directories(editor_picker_tests PRIVATE game/editor)
+  target_include_directories(editor_picker_tests PRIVATE game/editor
+                             engine/include)
   target_link_libraries(editor_picker_tests PRIVATE glm::glm)
   add_test(NAME editor_picker COMMAND editor_picker_tests)
 
   add_executable(editor_camera_tests game/tests/EditorCameraTests.cpp
                                      game/editor/EditorCamera.cpp)
-  target_include_directories(editor_camera_tests PRIVATE game/editor)
+  target_include_directories(editor_camera_tests PRIVATE game/editor
+                             engine/include)
   target_link_libraries(editor_camera_tests PRIVATE glm::glm)
   add_test(NAME editor_camera COMMAND editor_camera_tests)
 
   add_executable(editor_camera_fly_tests game/tests/EditorCameraFlyTests.cpp
                                          game/editor/EditorCamera.cpp)
-  target_include_directories(editor_camera_fly_tests PRIVATE game/editor)
+  target_include_directories(editor_camera_fly_tests PRIVATE game/editor
+                             engine/include)
   target_link_libraries(editor_camera_fly_tests PRIVATE glm::glm)
   add_test(NAME editor_camera_fly COMMAND editor_camera_fly_tests)
 
@@ -1092,6 +1261,18 @@ if(BUILD_TESTING)
   target_link_libraries(scene_validate_tests PRIVATE game_content
                                                      eng_ecs_headless)
   add_test(NAME scene_validate COMMAND scene_validate_tests)
+
+  add_executable(scene_environment_tests game/tests/SceneEnvironmentTests.cpp)
+  target_include_directories(scene_environment_tests PRIVATE game/src
+                                             engine/include)
+  target_link_libraries(scene_environment_tests PRIVATE game_content
+                                                        eng_ecs_headless)
+  add_test(NAME scene_environment COMMAND scene_environment_tests)
+
+  add_executable(scene_hierarchy_tests game/tests/SceneHierarchyTests.cpp)
+  target_link_libraries(scene_hierarchy_tests PRIVATE game_content
+                                                      eng_ecs_headless)
+  add_test(NAME scene_hierarchy COMMAND scene_hierarchy_tests)
 
   add_executable(scene_roundtrip_tests game/tests/SceneRoundTripTests.cpp)
   target_link_libraries(scene_roundtrip_tests PRIVATE game_content
@@ -1141,9 +1322,11 @@ if(BUILD_TESTING)
   target_include_directories(scene_template_tests PRIVATE game/tests)
   target_include_directories(room_builder_tests PRIVATE game/tests)
   target_include_directories(scene_validate_tests PRIVATE game/tests)
-  target_include_directories(scene_roundtrip_tests PRIVATE game/tests)
+  target_include_directories(scene_roundtrip_tests PRIVATE game/tests
+                                             engine/include)
   target_include_directories(schema_sync_tests PRIVATE game/tests)
-  target_include_directories(cook_parity_tests PRIVATE game/tests)
+  target_include_directories(cook_parity_tests PRIVATE game/tests
+                                             engine/include)
 endif()
 
 # API documentation is optional so normal builds do not require Doxygen.

@@ -43,7 +43,7 @@ def mount_sets() -> dict[str, list[Path]]:
     ResourceManager::add throws rather than warns -- which is what makes this
     the check that lets `demo` sit on top of `game`.
 
-    Every root comes from the manifest now. samples/common/assets used to be
+    Every root comes from the manifest now. assets/game used to be
     appended here by hand because DEMO_SCENE_TOML reached it outside the
     resolver; it is the declared `common` pack since P2.
     """
@@ -66,6 +66,29 @@ QUOTED_RE = re.compile(r'"([^"]*)"')
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tga", ".dds", ".bmp"}
 
+# Pipeline INPUTS, not content: archives, .blend files and the raw effect/model
+# packs they extract to. They sit under assets/ so the artist finds them next to
+# the thing they produce, but nothing loads them and they are not registered
+# with Ogre -- so their basenames cannot collide with anything, and linting them
+# only produces noise (the dungeon pack ships the same texture names the game
+# already committed, extracted, under textures/).
+SKIP_DIRS = {"source"}
+
+# The manifest describes the tree, it is not content in it. It also declares
+# `[formats] mesh = [..., ".obj"]`, which the mesh-reference regex would
+# otherwise read as a reference to a file literally named ".obj".
+SKIP_FILES = {"assets.toml"}
+
+
+def skipped(path: Path, root: Path) -> bool:
+    try:
+        parts = path.relative_to(root).parts
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    return parts[0] in SKIP_DIRS or (len(parts) == 1 and parts[0] in SKIP_FILES)
+
 
 def collect(roots: list[Path]):
     textures: dict[str, list[Path]] = defaultdict(list)
@@ -77,7 +100,7 @@ def collect(roots: list[Path]):
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not path.is_file():
+            if not path.is_file() or skipped(path, root):
                 continue
             if path.suffix.lower() in IMAGE_SUFFIXES:
                 textures[path.name].append(path)
@@ -113,6 +136,8 @@ def lint(roots: list[Path]) -> tuple[list[str], str]:
         if not root.is_dir():
             continue
         for mat in sorted(root.rglob("*.material")):
+            if skipped(mat, root):
+                continue
             text = mat.read_text(errors="replace")
             for tex in TEXTURE_RE.findall(text):
                 if tex not in textures:
@@ -126,6 +151,8 @@ def lint(roots: list[Path]) -> tuple[list[str], str]:
         if not root.is_dir():
             continue
         for doc in sorted(root.rglob("*.toml")):
+            if skipped(doc, root):
+                continue
             text = doc.read_text(errors="replace")
             for obj in OBJ_RE.findall(text):
                 if Path(obj).name not in meshes:

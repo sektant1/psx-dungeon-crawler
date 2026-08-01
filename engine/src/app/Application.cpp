@@ -95,15 +95,39 @@ int runApplication(Application& app, int argc, char** argv)
     float accumulator = 0.0f;
     uint64_t frame = 0;
 
+    Profiler& prof = engine.profiler();
+    // PSX_PROFILE=N dumps the frame's timing hierarchy every N frames (any
+    // non-numeric value means 120). The console's `profile` command is the same
+    // data on demand; this is the version that works over ssh, in a capture run,
+    // or when the thing being profiled is the UI.
+    int profileEvery = 0;
+    if (const char* pp = std::getenv("PSX_PROFILE")) {
+        profileEvery = std::atoi(pp);
+        if (profileEvery <= 0)
+            profileEvery = 120;
+    }
+
     while (!engine.shouldClose()) {
-        const float dt = engine.tick();
+        const float realDt = engine.tick();
+        // Simulation runs on the game timeline, not the wall clock: pause and
+        // slow-motion are then a property of the clock rather than something
+        // every system has to check. Presentation reads the same delta, so a
+        // paused world is genuinely still; anything that must keep moving over
+        // it (debug camera, UI) reads f.realDt.
+        const float dt = engine.gameClock().delta();
+
+        prof.beginFrame();
 
         // alpha is only known after the fixed loop has drained, so the context
         // is rebuilt for the phases that can actually use it.
-        FrameContext f{engine, dt, 1.0f, frame};
-        app.onFrameBegin(f);
+        FrameContext f{engine, dt, 1.0f, frame, realDt};
+        {
+            ENG_PROFILE(prof, "frame begin");
+            app.onFrameBegin(f);
+        }
 
         if (fixed) {
+            ENG_PROFILE(prof, "fixed step");
             accumulator += dt;
             int steps = 0;
             while (accumulator >= cfg.fixedDt && steps++ < cfg.maxFixedSteps) {
@@ -117,18 +141,29 @@ int runApplication(Application& app, int argc, char** argv)
             f.alpha = accumulator / cfg.fixedDt;
         }
 
-        app.onUpdate(f);
+        {
+            ENG_PROFILE(prof, "update");
+            app.onUpdate(f);
+        }
 
         if (cfg.imgui) {
-            engine.beginImGuiFrame(dt);
+            ENG_PROFILE(prof, "gui");
+            // Real delta: imgui animates its own widgets, and a paused game
+            // should not freeze the console you paused it from.
+            engine.beginImGuiFrame(realDt);
             app.onGui(f);
         }
 
         const auto renderStart = std::chrono::steady_clock::now();
-        engine.renderFrame(dt);
+        {
+            ENG_PROFILE(prof, "render");
+            engine.renderFrame(realDt);
+        }
         app.onFrameRendered(std::chrono::duration<float, std::milli>(
                                 std::chrono::steady_clock::now() - renderStart)
                                 .count());
+        prof.endFrame();
+        prof.logTreeEvery(profileEvery);
         ++frame;
     }
 

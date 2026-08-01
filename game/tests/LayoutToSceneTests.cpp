@@ -2,7 +2,7 @@
 #include "../src/DungeonAssemblyGeometry.h"
 
 #include "GameComponents.h"
-#include <eng/ecs/MeshSource.h>
+#include <eng/ecs/components/MeshSource.h>
 
 #include "../DungeonGen.h"
 

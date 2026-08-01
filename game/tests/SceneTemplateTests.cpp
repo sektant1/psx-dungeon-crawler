@@ -28,7 +28,7 @@ int main()
     game::test::mountGameAssets();
     KitCatalog catalog;
     std::string error;
-    require(KitCatalog::load(game::test::asset("kit.toml"), catalog, error), error);
+    require(KitCatalog::load(game::test::asset("config/kit.toml"), catalog, error), error);
     const GridConfig grid = GridConfig::fromCatalog(catalog);
 
     for (const SceneTemplate which :

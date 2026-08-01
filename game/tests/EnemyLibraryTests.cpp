@@ -248,11 +248,11 @@ id = "chill"
     // chain at build time instead of at "why does this enemy not resist fire".
     {
         EnemyLibrary lib;
-        check(lib.load(game::test::asset("enemies.toml")), "shipped enemies.toml loads");
+        check(lib.load(game::test::asset("config/enemies.toml")), "shipped enemies.toml loads");
         check(lib.size() >= 8, "shipped table defines the full roster");
 
         CombatVocabulary vocab;
-        check(vocab.load(game::test::asset("magic.toml")), "shipped magic.toml loads");
+        check(vocab.load(game::test::asset("config/magic.toml")), "shipped magic.toml loads");
         for (const std::string& id : lib.ids()) {
             const auto def = lib.find(id);
             if (!def)

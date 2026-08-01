@@ -699,10 +699,14 @@ void Physics::applyImpulse(BodyHandle h, glm::vec3 impulse, glm::vec3 atPoint) {
     BodyRec& rec = mImpl->bodies[h.id];
     if (!rec.alive) return;
     BodyInterface& bi = mImpl->system.GetBodyInterface();
+    // Activate FIRST. Jolt drops an impulse aimed at a sleeping body, so
+    // activating afterwards woke it with nothing applied -- which is a knockback
+    // that does nothing to a prop that had settled, and everything to one that
+    // happened to still be moving. The order is the whole fix.
+    bi.ActivateBody(rec.id);
     bi.AddImpulse(rec.id,
                   JPH::Vec3(impulse.x, impulse.y, impulse.z),
                   JPH::RVec3(atPoint.x, atPoint.y, atPoint.z));
-    bi.ActivateBody(rec.id);
 }
 
 void Physics::setBodyKinematic(BodyHandle h, bool kinematic) {

@@ -1,126 +1,72 @@
-# The content manifest. Packs are mounted in the order an app names them;
-# the first mount that resolves a logical path wins.
+# The content manifest.
 #
-# NOTHING HAS MOVED YET. Every `dir` still points *out* of this directory at
-# the tree it describes ("../engine/assets", "../game/assets", ...) so that the
-# resolver could be introduced and ported to without touching a single asset
-# file. The "../" prefixes disappear in P1/P2, when each tree is `git mv`d to
-# assets/<pack> and `dir` becomes just the pack name. The `editor` pack (P3)
-# does not exist yet: editor content still lives inside the game and engine
-# trees, so the `editor` mount set below is the game set until then.
+# ONE tree, organised by asset TYPE. There is no engine/game/editor/demo split
+# in here: every application mounts this same content and can reach all of it.
+# Which app an asset happens to be used by is a property of the code that names
+# it, not of where the file lives.
 #
-# The `demo` pack IS deduplicated (P4): it holds only what is genuinely
-# demo-specific.
+#   config/       TOML the game and tools read by name
+#   materials/    Ogre .material scripts
+#   meshes/       .obj geometry (kit/, props/, and loose primitives)
+#   textures/     .png, by subject (dungeon/, props/, prototype/, surfaces/, vfx/)
+#   shaders/      GLSL
+#   programs/     Ogre .program declarations binding the GLSL
+#   compositors/  Ogre .compositor scripts
+#   particles/    particle texture atlases + the sheet/flipbook descriptions
+#   fonts/        bitmap + TTF
+#   ui/           UI data (hint text)
+#   scenes/       .scn sources and cooked .map
+#   schemas/      JSON Schema for the editor's scene format
+#   templates/    authoring templates, never loaded at runtime
+#   source/       pipeline INPUTS: archives, .blend, raw sprite packs. Not
+#                 loaded by anything; gitignored by extension.
 schema = 1
 
 [[pack]]
-id = "engine"
-dir = "../engine/assets"
-# Directories registered with Ogre's flat resource group. Anything not listed
-# is data the engine reads by path (meshes, configs) and must NOT be a
-# resource location -- that is what keeps authoring debris out of the group.
+id = "content"
+dir = "."
+# The directories registered with Ogre's flat resource group. Anything not
+# listed is data read by explicit path (meshes, config, scenes), and must NOT
+# be a resource location -- that is what keeps authoring debris and source art
+# out of the group.
+#
+# particles/textures/sheets is load-bearing: sprite_sheets.toml names a bare
+# filename ("bullet16.png") and ParticleMaterials binds it straight to a
+# texture unit, so Ogre has to find it by basename. Without it the 304
+# sheet-backed particle textures all fall back to PINKY.
 resources = [
     "materials",
     "programs",
     "shaders",
     "compositors",
-    "textures",
     "fonts",
     "ui",
-    "particles/textures",
-    # The bought effect packs, carved into flipbook windows by
-    # particles/sprite_sheets.toml. Those entries name a bare filename
-    # ("bullet16.png") and ParticleMaterials binds it straight to a texture
-    # unit, so Ogre has to be able to find it by basename like any other
-    # texture. Without this the 304 sheet-backed particle textures all fall
-    # back to PINKY.
-    "particles/textures/sheets",
-]
-
-[[pack]]
-id = "game"
-dir = "../game/assets"
-resources = [
-    "materials",
     "textures",
     "textures/dungeon",
     "textures/props",
     "textures/prototype",
     "textures/surfaces",
     "textures/vfx",
+    "particles/textures",
+    "particles/textures/sheets",
 ]
 
-# One file: samples/common/assets/demo_scene.toml, the lighting/crystal dressing
-# the *game* loads into every procedural level (LiveLevel.cpp). Despite living
-# under samples/ it is not sample content -- psx_demo builds its own
-# ShowcaseScene and never reads it -- and it was reached through the last
-# surviving asset macro, DEMO_SCENE_TOML.
-#
-# It is game content and P2's file move absorbs it into assets/game/. Until
-# that move it cannot literally be *in* the game pack, because a pack has one
-# `dir` and the file is in a different tree. So it is mounted directly beneath
-# the game pack instead, which resolves identically and lets the call sites be
-# written the way they will stay: assets::resolve("demo_scene.toml").
-#
-# This pack is temporary by construction. When the file moves into the game
-# pack, delete this entry and its three [mounts] references; no C++ changes.
-[[pack]]
-id = "common"
-dir = "../samples/common/assets"
-
-# The showcase's deltas and nothing else: four materials that exist only for
-# the sample, and six particle effects. Its 59 byte-identical copies of game
-# content were deleted in P4 and it mounts the game pack instead. `materials`
-# is the only resource dir left -- the demo ships no textures of its own.
-[[pack]]
-id = "demo"
-dir = "../samples/psx-demo/assets"
-resources = [
-    "materials",
-]
-
-# Mount sets, highest priority first. An app names one.
-#
-# `demo` mounts `game` (D2). It could not until P4: the demo tree was a 95%
-# copy of the game tree, and Ogre does not merely warn about a duplicate
-# material name -- ResourceManager::add throws ItemIdentityException and the
-# app aborts during script parsing ("Material with the name <X> already
-# exists"). With the copies deleted and the one real collision renamed (the
-# showcase's portal, now Demo/Portal/Down, against the game's
-# Game/Vfx/PortalDown) the demo now stands on top of the game pack and reads
-# the originals. If this exception ever comes back, a duplicate has been
-# reintroduced -- find it, do not unmount `game`.
+# Every app mounts the same single pack. The sets are kept as distinct names so
+# an app can still be given its own overlay later without touching call sites.
 [mounts]
-game = ["game", "common", "engine"]
-editor = ["game", "common", "engine"]
-demo = ["demo", "game", "common", "engine"]
+game = ["content"]
+editor = ["content"]
+demo = ["content"]
 
 # D9: how a logical id becomes a file. First hit wins, so a cooked or upgraded
-# asset supersedes its source with no data edit. Declared here from P0 so the
-# manifest is the one place the question is answered; the resolver starts
-# reading it in P9.
+# asset supersedes its source with no data edit. Declared here so the manifest
+# is the one place the question is answered; the resolver starts reading it in
+# phase P9.
 [formats]
 mesh = [".mesh", ".glb", ".gltf", ".obj"]
 texture = [".png"]
 
-# D14: materials hidden from Renderer::materialNames() -- the editor's material
-# picker and the debug swatch list. A manifest flag, not a name prefix.
-#
-# Two prefixes used to do this job. "__" hid the drag-preview ghost and the
-# material-preview rig's staging sprite; "Sprite/" hid the four templates
-# Renderer::createSpriteMaterial clones per sprite clip (the code comment there
-# called them "per-clip generated", which was wrong -- the clones are named
-# sprite_material_N and were never matched by that filter). Both made the name
-# carry a behaviour, so neither namespace could be renamed to the derived
-# standard without changing what the editor shows. These are exact names: a
-# rename that forgets this list makes a material *appear* in the picker, which
-# is visible, rather than disappear, which is not.
+# D14: materials hidden from Renderer::materialNames() -- a manifest flag, not
+# a "__" name prefix.
 [materials]
-internal = [
-    "Editor/PlacementGhost",
-    "Engine/Psx/PreviewSprite",
-    "Engine/Sprite/Opaque",
-    "Engine/Sprite/Alpha",
-    "Engine/Sprite/Additive",
-    "Engine/Sprite/Overlay",
-]
+internal = ["Editor/PlacementGhost", "Engine/Psx/PreviewSprite"]

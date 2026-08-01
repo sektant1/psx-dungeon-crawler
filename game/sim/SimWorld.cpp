@@ -12,8 +12,8 @@ World::World()
     // sim_main mounts the game content set before constructing a World; an
     // unresolved table leaves the built-in defaults in place, which is what
     // this already did when the file was missing.
-    mVocabulary.load(eng::assets::resolve("magic.toml").string());
-    mCombat.init(eng::assets::resolve("weapons.toml").string(), mVocabulary);
+    mVocabulary.load(eng::assets::resolve("config/magic.toml").string());
+    mCombat.init(eng::assets::resolve("config/weapons.toml").string(), mVocabulary);
 }
 
 World::~World()

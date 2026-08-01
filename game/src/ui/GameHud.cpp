@@ -305,23 +305,43 @@ void GameHud::drawRegionNotice(const glm::ivec4& keepClear,
                  withAlpha(pal.edge, alpha));
 }
 
-void GameHud::draw(const HudSnapshot& snapshot,
-                   const eng::ui::TooltipContent& tooltip, float dt,
-                   bool visible) {
-    // Timers decay even while hidden: coming back from a menu should not
-    // replay a weapon flash the player already saw.
+// Everything that is true of a frame whether the HUD is drawn or not: the
+// animation timers. Split out because the two entry points below share it and
+// neither is allowed to skip it -- a timer that only advances while visible
+// replays a weapon flash the player already saw when they close a menu.
+bool GameHud::beginFrame(const HudSnapshot& snapshot, float dt, bool visible) {
     mWeaponFlash = std::max(0.0f, mWeaponFlash - dt * 2.5f);
     mRegionNotice = std::max(0.0f, mRegionNotice - dt);
     if (snapshot.weapon != mLastWeapon) {
         mLastWeapon = snapshot.weapon;
         mWeaponFlash = mReducedMotion ? 0.0f : 1.0f;
     }
-
     if (!mCanvas.ready() || !visible || !snapshot.valid) {
         mTooltip.update({}, dt);
         mBanner.update({}, dt);
-        return;
+        return false;
     }
+    return true;
+}
+
+void GameHud::drawInto(const HudSnapshot& snapshot,
+                       const eng::ui::TooltipContent& tooltip, float dt,
+                       glm::vec2 originPixels, glm::ivec2 virtualSize,
+                       int scale, ImDrawList* target) {
+    if (!beginFrame(snapshot, dt, true))
+        return;
+    // The same layout, on a surface somebody else sized. This is what makes the
+    // editor's 2D viewport the real HUD rather than a drawing of one: the
+    // canvas moves, the layout code does not know it moved.
+    mCanvas.beginTarget(originPixels, virtualSize, scale, target);
+    paint(snapshot, tooltip, dt);
+}
+
+void GameHud::draw(const HudSnapshot& snapshot,
+                   const eng::ui::TooltipContent& tooltip, float dt,
+                   bool visible) {
+    if (!beginFrame(snapshot, dt, visible))
+        return;
 
     const ImVec2 display = ImGui::GetIO().DisplaySize;
     // hud.scale is honoured by re-basing the *preferred* resolution, not by
@@ -334,7 +354,14 @@ void GameHud::draw(const HudSnapshot& snapshot,
     const glm::ivec2 preferred{int(std::lround(640.0f / mUserScale)),
                                int(std::lround(480.0f / mUserScale))};
     mCanvas.begin({display.x, display.y}, preferred);
+    paint(snapshot, tooltip, dt);
+}
 
+// The layout, against whatever surface the canvas is currently on. Nothing in
+// here knows where that surface is: every coordinate is virtual pixels within
+// mCanvas.size(), which is why the same code fills a window and fills a panel.
+void GameHud::paint(const HudSnapshot& snapshot,
+                    const eng::ui::TooltipContent& tooltip, float dt) {
     const GameHudViewportStyle viewport =
         resolveGameHudViewportStyle(mStyle, mCanvas.size());
     const int line = mCanvas.lineHeight();

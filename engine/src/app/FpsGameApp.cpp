@@ -4,8 +4,10 @@
 #include <eng/render/Warmup.h>
 #include <eng/Log.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <eng/Renderer.h>
 #include <eng/controllers/FpsController.h>
 
@@ -140,6 +142,67 @@ void FpsGameApp::startSystems(Engine& engine)
                         [this](const DebugConsole::Args&) {
                             mImpl->console.toggle();
                         });
+
+    // --- the game timeline (eng::Clock) ----------------------------------
+    // The three controls the book's abstract-timeline section exists for. They
+    // act on the *game* clock only: the loop, the renderer and this console
+    // keep running off the real clock, which is what makes a frozen world
+    // inspectable instead of just stopped.
+    dev.registerCommand(
+        "time.scale", "game-time multiplier (0.1 = slow motion, 2 = fast)",
+        [this, &engine](const DebugConsole::Args& a) {
+            if (a.size() > 1)
+                engine.gameClock().setScale(float(std::atof(a[1].c_str())));
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "time.scale = %.3f",
+                          double(engine.gameClock().scale()));
+            mImpl->dev.print(log::Level::Info, "time", buf);
+        });
+    dev.registerCommand("time.pause", "freeze game time (the view stays live)",
+                        [this, &engine](const DebugConsole::Args&) {
+                            engine.gameClock().togglePause();
+                            mImpl->dev.print(log::Level::Info, "time",
+                                             engine.gameClock().paused()
+                                                 ? "paused"
+                                                 : "running");
+                        });
+    dev.registerCommand(
+        "time.step", "advance one frame of game time while paused",
+        [&engine](const DebugConsole::Args&) {
+            engine.gameClock().setPaused(true);
+            engine.gameClock().requestSingleStep();
+        });
+
+    // --- the in-game profiler (eng::Profiler) -----------------------------
+    dev.registerCommand(
+        "profile", "print last frame's timing hierarchy",
+        [this, &engine](const DebugConsole::Args&) {
+            const Profiler& p = engine.profiler();
+            const double total = p.frameMs();
+            char buf[256];
+            for (int i : p.preorder()) {
+                const Profiler::Node& n = p.nodes()[std::size_t(i)];
+                std::snprintf(buf, sizeof(buf),
+                              "%*s%-*s %7.3f ms  self %7.3f  %5.1f%%  x%d",
+                              n.depth * 2, "", std::max(24 - n.depth * 2, 1),
+                              n.name, n.ms, p.selfMs(i),
+                              total > 0.0 ? n.ms / total * 100.0 : 0.0, n.calls);
+                mImpl->dev.print(log::Level::Info, "profile", buf);
+            }
+        });
+    dev.registerCommand(
+        "profile.csv", "write last frame's timing hierarchy to a .csv path",
+        [this, &engine](const DebugConsole::Args& a) {
+            const std::string path = a.size() > 1 ? a[1] : "profile.csv";
+            std::ofstream out(path);
+            if (!out) {
+                mImpl->dev.print(log::Level::Error, "profile",
+                                 "cannot write " + path);
+                return;
+            }
+            out << engine.profiler().toCsv();
+            mImpl->dev.print(log::Level::Info, "profile", "wrote " + path);
+        });
 }
 
 bool FpsGameApp::onStart(Engine& engine)

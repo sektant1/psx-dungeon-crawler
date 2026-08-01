@@ -19,8 +19,8 @@ Ray screenRay(glm::vec2 ndc, glm::vec3 camPos, glm::quat camOrient,
 // Y inversion and aspect here prevents every editor tool from growing a subtly
 // different picker.
 Ray viewportRay(glm::vec2 screenPoint, glm::vec2 viewportOrigin,
-                glm::vec2 viewportSize, glm::vec3 camPos,
-                glm::quat camOrient, float vFovRad);
+                glm::vec2 viewportSize, glm::vec3 camPos, glm::quat camOrient,
+                float vFovRad);
 
 // World point -> screen pixel in the same viewport rect. False for points
 // behind the camera.
@@ -33,5 +33,12 @@ bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit);
 // Where a ray meets a horizontal plane at height `level`. False when the ray is
 // parallel to it or points away -- the placement tool needs the difference.
 bool rayPlaneY(const Ray& r, float level, glm::vec3& hit);
+
+// The work-plane point under the cursor, always. When the ray misses the plane
+// -- which is most of the time once the camera looks anywhere near the horizon
+// -- it falls back to a point `fallbackDistance` along the ray, flattened onto
+// the plane. The placement ghost has to be *somewhere*: vanishing whenever the
+// view tips up is what makes the Place tool feel broken.
+glm::vec3 workPlanePoint(const Ray& r, float level, float fallbackDistance);
 
 } // namespace ed

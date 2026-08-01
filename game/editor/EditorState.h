@@ -88,6 +88,52 @@ struct EditorState {
     {
         return selection.empty() ? nullptr : &selection.front();
     }
+
+    // --- per-entity session state -------------------------------------------
+    // Hidden and locked are the editor's, not the document's: they are how an
+    // author gets a ceiling out of the way or stops clicking the floor while
+    // dressing a room, and none of it belongs in a file two people share.
+    //
+    // Hidden entities are not drawn and not pickable. Locked ones are drawn and
+    // not pickable -- which is the whole point, since the thing you keep
+    // catching by accident is usually the thing you most need to see.
+    std::vector<game::content::AuthorId> hidden;
+    std::vector<game::content::AuthorId> locked;
+
+    static bool listed(const std::vector<game::content::AuthorId>& list,
+                       const game::content::AuthorId& id)
+    {
+        for (const auto& entry : list)
+            if (entry == id) return true;
+        return false;
+    }
+    static void toggleIn(std::vector<game::content::AuthorId>& list,
+                         const game::content::AuthorId& id, bool on)
+    {
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            if (list[i] != id) continue;
+            if (!on) list.erase(list.begin() + std::ptrdiff_t(i));
+            return;
+        }
+        if (on) list.push_back(id);
+    }
+
+    bool isHidden(const game::content::AuthorId& id) const
+    {
+        return listed(hidden, id);
+    }
+    bool isLocked(const game::content::AuthorId& id) const
+    {
+        return listed(locked, id);
+    }
+    void setHidden(const game::content::AuthorId& id, bool on)
+    {
+        toggleIn(hidden, id, on);
+    }
+    void setLocked(const game::content::AuthorId& id, bool on)
+    {
+        toggleIn(locked, id, on);
+    }
 };
 
 } // namespace ed

@@ -116,7 +116,7 @@ void SurfacePanels::install(DebugTools& tools)
 }
 
 // ------------------------------------------------------------------ Portal --
-// Live tuning for the portal membrane shader (engine/assets/shaders/
+// Live tuning for the portal membrane shader (assets/engine/shaders/
 // portal.frag over surface_common.glsl). The swirl changes under the cursor;
 // nothing is cached engine-side and nothing needs a rebuild. The Copy button
 // emits the block to paste back into the app's .material file -- that file, not

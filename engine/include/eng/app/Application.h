@@ -12,7 +12,7 @@ namespace eng {
 // is a window: nothing in it may touch the renderer.
 struct AppConfig
 {
-    // A LOGICAL path, resolved against the mounted packs -- "game.toml", not a
+    // A LOGICAL path, resolved against the mounted packs -- "config/game.toml", not a
     // directory plus a filename. The app no longer knows where its content
     // lives on disk; assets.toml does.
     std::string configPath;
@@ -55,9 +55,16 @@ struct AppConfig
 struct FrameContext
 {
     Engine& engine;
-    float dt;    // wall-clock delta for this frame, already spike-clamped
+    // Game-time delta: the spike-clamped wall delta after the game clock's
+    // scale and pause (eng::Clock). Zero on a paused frame, which is what makes
+    // pause and slow-motion work without any system opting in. Simulation and
+    // presentation both read this.
+    float dt;
     float alpha; // fixed-step interpolation alpha in [0,1); 1 with no fixed loop
     uint64_t frame; // frames rendered so far (0 on the first one)
+    // Unscaled wall delta. For the few things that must keep moving while the
+    // world is frozen: debug camera, UI animation, profiling readouts.
+    float realDt = 0.0f;
 };
 
 // The entrypoint contract: an app is a set of ordered callbacks, and

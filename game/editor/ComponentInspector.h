@@ -1,6 +1,7 @@
 #pragma once
 #include "EntityComponents.h"
 #include "KitCatalog.h"
+#include "MaterialCatalog.h"
 
 #include <string>
 #include <vector>
@@ -18,6 +19,20 @@ struct InspectorContext {
     const game::content::KitCatalog* catalog = nullptr;
     // Material ids offered as an override on a mesh. Owned by the editor.
     const std::vector<std::string>* materialNames = nullptr;
+    // The vocabularies the game itself defines: enemy ids from enemies.toml,
+    // pickup ids, and the marker prefixes the runtime looks up.
+    //
+    // These were free-text fields, which meant the editor let you author
+    // "gobling" and told you nothing -- the misspelling surfaced as an enemy
+    // that never spawned, in the game, some minutes later. An id you can only
+    // get right by having read a TOML is not authorable.
+    const std::vector<std::string>* enemyIds = nullptr;
+    const std::vector<std::string>* pickupIds = nullptr;
+    // What the classified catalogue says about the material offered here, and
+    // what this entity's mesh can take. Null leaves the combo unfiltered, which
+    // is what it always was.
+    const std::vector<MaterialInfo>* materials = nullptr;
+    MeshKind meshKind = MeshKind::Unknown;
 
     // Set by the drawers, read by the caller: `edited` means the document must
     // be touched so the preview follows the drag, `closed` means the widget was

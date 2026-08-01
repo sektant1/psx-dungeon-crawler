@@ -16,7 +16,7 @@
 // was baked into the binary in ~15 places.
 //
 // Now a caller names the content and eng::assets walks the mount list. The
-// paths are flat -- "enemies.toml", "meshes/props" -- because that is the
+// paths are flat -- "config/enemies.toml", "meshes/props" -- because that is the
 // shape of the game pack today; regrouping them under config/ is the file
 // move's business, not this header's.
 namespace game {

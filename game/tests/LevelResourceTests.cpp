@@ -7,7 +7,7 @@ static void require(bool c, const char* m){ if(!c){ std::cerr<<"LevelResourceTes
 
 int main(){
     game::test::mountGameAssets();
-    const std::string showroom = game::test::asset("showroom.toml");
+    const std::string showroom = game::test::asset("config/showroom.toml");
 
     // Direct: LevelResource loads the default showroom into a valid layout.
     LevelResource lr("showroom", showroom);

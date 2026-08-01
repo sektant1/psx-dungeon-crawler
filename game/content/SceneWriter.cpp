@@ -52,6 +52,10 @@ Json writeEntity(const Entity& entity)
     out["id"] = entity.id;
     if (!entity.name.empty() && entity.name != entity.id)
         out["name"] = entity.name;
+    // Omitted when there is none, so every scene authored before hierarchies
+    // existed still writes byte-identical to what it was read from.
+    if (!entity.parent.empty())
+        out["parent"] = entity.parent;
     if (!entity.prefab.empty())
         out["prefab"] = entity.prefab;
     if (!entity.material.empty())
@@ -103,7 +107,108 @@ Json writeEntity(const Entity& entity)
             node["range"] = canonical(light.range);
         if (light.castShadows)
             node["cast_shadows"] = true;
+        if (light.animation) {
+            Json animation = Json::object();
+            switch (light.animation->mode) {
+            case LightAnimAuthor::Mode::Steady: animation["mode"] = "steady"; break;
+            case LightAnimAuthor::Mode::Flicker: animation["mode"] = "flicker"; break;
+            case LightAnimAuthor::Mode::Pulse: animation["mode"] = "pulse"; break;
+            }
+            animation["speed"] = canonical(light.animation->speed);
+            animation["amount"] = canonical(light.animation->amount);
+            if (canonical(light.animation->phase) != 0.0f)
+                animation["phase"] = canonical(light.animation->phase);
+            node["animation"] = std::move(animation);
+        }
         out["light"] = std::move(node);
+    }
+    if (entity.camera) {
+        const CameraAuthor& camera = *entity.camera;
+        Json node = Json::object();
+        node["fov_degrees"] = canonical(camera.fovDegrees);
+        // Clip planes and priority written only when they are not the default:
+        // a scene full of `"near_clip": 0.05` is noise in every diff, and the
+        // parser fills the defaults back in.
+        if (canonical(camera.nearClip) != canonical(CameraAuthor{}.nearClip))
+            node["near_clip"] = canonical(camera.nearClip);
+        if (canonical(camera.farClip) != canonical(CameraAuthor{}.farClip))
+            node["far_clip"] = canonical(camera.farClip);
+        if (camera.priority != 0)
+            node["priority"] = camera.priority;
+        if (!camera.active)
+            node["active"] = false;
+        out["camera"] = std::move(node);
+    }
+    if (entity.spin) {
+        const SpinAuthor& spin = *entity.spin;
+        Json node = Json::object();
+        if (!nearlyEqual(spin.axis, SpinAuthor{}.axis))
+            node["axis"] = vec3(spin.axis);
+        node["degrees_per_second"] = canonical(spin.degreesPerSecond);
+        out["spin"] = std::move(node);
+    }
+    if (entity.portal) {
+        const PortalAuthor& portal = *entity.portal;
+        const PortalAuthor defaults;
+        Json node = Json::object();
+        const eng::FieldSpan fields = eng::fieldsOf<PortalAuthor>();
+        for (int i = 0; i < fields.count; ++i) {
+            const eng::Field& f = fields.data[i];
+            const void* now = eng::fieldPtr(&portal, f);
+            const void* was = eng::fieldPtr(&defaults, f);
+            switch (f.type) {
+            case eng::FieldType::Float: {
+                const float v = *static_cast<const float*>(now);
+                if (v != *static_cast<const float*>(was))
+                    node[f.name] = canonical(v);
+                break;
+            }
+            case eng::FieldType::Vec3:
+            case eng::FieldType::Colour: {
+                const glm::vec3& v = *static_cast<const glm::vec3*>(now);
+                if (!nearlyEqual(v, *static_cast<const glm::vec3*>(was)))
+                    node[f.name] = vec3(v);
+                break;
+            }
+            case eng::FieldType::Bool: {
+                const bool v = *static_cast<const bool*>(now);
+                if (v != *static_cast<const bool*>(was))
+                    node[f.name] = v;
+                break;
+            }
+            case eng::FieldType::Int: {
+                const int v = *static_cast<const int*>(now);
+                if (v != *static_cast<const int*>(was))
+                    node[f.name] = v;
+                break;
+            }
+            case eng::FieldType::String:
+            case eng::FieldType::Quat:
+                break; // not authorable in this block
+            }
+        }
+        out["portal"] = std::move(node);
+    }
+    if (entity.shader) {
+        const ShaderAuthor& shader = *entity.shader;
+        const ShaderAuthor defaults;
+        Json node = Json::object();
+        // Only what differs from the default. A scene file that spells out six
+        // uniforms on every entity is one nobody reads, and the diff of a
+        // one-value change would be six lines.
+        if (!nearlyEqual(shader.tint, defaults.tint))
+            node["tint"] = vec3(shader.tint);
+        if (shader.opacity != defaults.opacity)
+            node["opacity"] = canonical(shader.opacity);
+        if (!nearlyEqual(shader.rimColour, defaults.rimColour))
+            node["rim_colour"] = vec3(shader.rimColour);
+        if (shader.rimStrength != defaults.rimStrength)
+            node["rim_strength"] = canonical(shader.rimStrength);
+        if (shader.rimPower != defaults.rimPower)
+            node["rim_power"] = canonical(shader.rimPower);
+        if (shader.alphaScissor != defaults.alphaScissor)
+            node["alpha_scissor"] = canonical(shader.alphaScissor);
+        out["shader"] = std::move(node);
     }
     if (entity.playerSpawn)
         out["player_spawn"] = true;
@@ -145,6 +250,10 @@ std::string serializeSceneSource(const SceneDocument& document)
     root["format"] = "psx-dungeon-scene";
     root["version"] = 2;
     root["id"] = document.id;
+    // Omitted when unset, so every scene written before levels could carry a
+    // palette still round-trips byte for byte.
+    if (!document.palette.empty())
+        root["palette"] = document.palette;
     Json entities = Json::array();
     for (const Entity* entity : sorted)
         entities.push_back(writeEntity(*entity));

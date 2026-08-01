@@ -28,7 +28,7 @@ enum class StagePreview {
 // Which materials get which rig. There is no material catalog in this project --
 // Renderer::materialNames() enumerates Ogre's material manager directly -- so the
 // metadata cannot hang off a catalog entry and lives in its own tiny file,
-// engine/assets/material_preview.toml. Anything unlisted is a sphere, which is
+// assets/engine/material_preview.toml. Anything unlisted is a sphere, which is
 // why adding this file cannot change how any of the ~95 existing materials look.
 class StagePreviewCatalog
 {

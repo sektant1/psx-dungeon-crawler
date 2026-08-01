@@ -110,7 +110,7 @@ public:
     {
         eng::AppConfig cfg;
         cfg.mountSet = "demo";
-        cfg.configPath = "demo.toml";
+        cfg.configPath = "config/demo.toml";
         cfg.fixedDt = 0.0f;
         // The console, the tuning panel and the placard all live in the imgui
         // frame. Without this the runner never opens one and every debug
@@ -142,7 +142,7 @@ public:
         // a library loaded afterwards leaves every emitter in the showcase
         // dead. That is exactly what had happened -- assets/particles.toml was
         // authored for this scene and never loaded by anything.
-        mParticles.load(r, eng::assets::resolve("particles.toml").string());
+        mParticles.load(r, eng::assets::resolve("config/particles.toml").string());
 
         // ------------------------------------------------------------- scene
         // ---

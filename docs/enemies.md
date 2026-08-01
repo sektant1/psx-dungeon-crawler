@@ -1,6 +1,6 @@
 # Enemies
 
-Enemies are data. Adding one is adding a table to `game/assets/enemies.toml`;
+Enemies are data. Adding one is adding a table to `assets/config/enemies.toml`;
 there is no C++ to write, no factory to register with, and no `switch` on enemy
 type anywhere in the codebase.
 
@@ -101,7 +101,7 @@ recovery     = 0.4
 
 Then place it, either as a level marker named `enemy.bone_thrall` (optionally
 `enemy.bone_thrall.ambush` to use a pacing preset), or as a `[[spawn]]` entry
-in `game/assets/spawners.toml`.
+in `assets/config/spawners.toml`.
 
 Two rules that catch people out:
 

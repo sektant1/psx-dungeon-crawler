@@ -23,7 +23,7 @@ class BitmapFont {
 public:
     ~BitmapFont();
 
-    // `definition` is the TOML filename inside engine/assets/fonts, e.g.
+    // `definition` is the TOML filename inside assets/engine/fonts, e.g.
     // "ui_regular.toml". Both it and the PNG resolve through Ogre's resource
     // group, so no path handling is needed at the call site.
     bool load(const std::string& definition);

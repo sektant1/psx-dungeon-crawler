@@ -27,7 +27,7 @@ its material staging mode (`make material`) isolates one material on one sphere.
 ## What you are looking at
 
 Every frame goes through `PSX/Stylized`
-(`engine/assets/compositors/psx.compositor`). The render targets, in order:
+(`assets/compositors/psx.compositor`). The render targets, in order:
 
 | Target | Size | What it holds |
 |---|---|---|
@@ -52,7 +52,7 @@ Two things surprise people:
 ## Reading the world pass
 
 Geometry is drawn by the `PSX_VS_*` / `PSX_FS_*` program family
-(`engine/assets/programs/psx.program`), compiled into variants by preprocessor
+(`assets/programs/psx.program`), compiled into variants by preprocessor
 define: `LIT`, `METAL`, `NO_TEXTURE`, `ALPHA_BLEND`, `ALPHA_SCISSOR`,
 `LIGHT_VOLUME`, `BLEND_ADD`, `RIM`. In a capture, the variant is the fastest way
 to tell what a draw *is*: a `NO_TEXTURE` draw with `ALPHA_BLEND` is VFX, a plain

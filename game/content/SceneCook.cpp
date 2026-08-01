@@ -5,7 +5,7 @@
 #include "scene/ComponentRegistry.h"
 
 #include <eng/ecs/Components.h>
-#include <eng/ecs/MeshSource.h>
+#include <eng/ecs/components/MeshSource.h>
 
 #include <algorithm>
 #include <cmath>
@@ -57,6 +57,30 @@ bool implicitCollider(const KitPiece& piece, const KitCatalog& catalog,
     return false;
 }
 
+// Whether anything above this entity moves at runtime.
+//
+// Baking a hierarchy into world transforms is exact *while the chain is
+// static*, which every authored level was until components could animate one.
+// A camera hanging off a spinning pivot baked flat is a camera that does not
+// orbit -- and the failure is silent, because the scene still loads and still
+// draws. So a live chain keeps its links and its local transforms, and
+// everything else cooks flat exactly as it did before.
+bool ancestorAnimated(const SceneDocument& document, const Entity& entity)
+{
+    std::vector<std::string> seen{entity.id};
+    for (const Entity* at = entity.parent.empty() ? nullptr
+                                                  : document.find(entity.parent);
+         at != nullptr;) {
+        if (std::find(seen.begin(), seen.end(), at->id) != seen.end())
+            break; // a cycle: validate() reports it, this must not hang
+        seen.push_back(at->id);
+        if (at->spin)
+            return true;
+        at = at->parent.empty() ? nullptr : document.find(at->parent);
+    }
+    return false;
+}
+
 } // namespace
 
 bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
@@ -77,14 +101,29 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
               [](const Entity* a, const Entity* b) { return a->id < b->id; });
 
     entt::registry built;
+    // Parallel to `ordered`: the entity each authored id became, for the link
+    // pass at the end.
+    std::vector<entt::entity> ids;
+    ids.reserve(ordered.size());
     for (const Entity* source : ordered) {
         const Entity& authored = *source;
+        // Resolved through the parent chain here, once, and never again: the
+        // runtime map is a flat list of world transforms, so hierarchies are an
+        // authoring convenience the cooker spends. An entity with no parent --
+        // which is every entity in every scene authored before hierarchies
+        // existed -- resolves to its own transform, byte for byte.
+        const WorldTransform world = document.worldTransform(authored.id);
+        // ...unless something above it moves, in which case the link is the
+        // point and the transform stays local (see ancestorAnimated).
+        const bool live = ancestorAnimated(document, authored);
         eng::ecs::Transform transform;
-        transform.position = authored.transform.position;
-        transform.rotation = authorOrientation(authored.transform.rotationDegrees);
-        transform.scale = authored.transform.scale;
+        transform.position = live ? authored.transform.position : world.position;
+        transform.rotation = live ? authorOrientation(authored.transform.rotationDegrees)
+                                  : world.orientation;
+        transform.scale = live ? authored.transform.scale : world.scale;
 
         const entt::entity entity = built.create();
+        ids.push_back(entity);
         if (authorToEntity)
             authorToEntity->emplace(authored.id, entity);
         built.emplace<eng::ecs::Name>(
@@ -101,7 +140,7 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             }
             // The kit is authored on a 20-unit grid and imported at `scale`;
             // the authored scale multiplies that rather than replacing it.
-            transform.scale *= catalog.scale();
+            transform.scale *= piece->meshScale(catalog.scale());
             built.emplace<eng::ecs::MeshSource>(
                 entity, eng::ecs::MeshSource{piece->meshPath});
             eng::ecs::MeshRenderer renderer;
@@ -140,6 +179,47 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             light.castShadows = authored.light->castShadows;
             built.emplace<eng::ecs::LightRef>(entity,
                                               eng::ecs::LightRef{light, {}});
+            if (const auto& animation = authored.light->animation) {
+                eng::ecs::LightAnimation out;
+                switch (animation->mode) {
+                case LightAnimAuthor::Mode::Steady:
+                    out.mode = eng::ecs::LightAnimation::Steady;
+                    break;
+                case LightAnimAuthor::Mode::Flicker:
+                    out.mode = eng::ecs::LightAnimation::Flicker;
+                    break;
+                case LightAnimAuthor::Mode::Pulse:
+                    out.mode = eng::ecs::LightAnimation::Pulse;
+                    break;
+                }
+                out.speed = animation->speed;
+                out.amount = animation->amount;
+                out.phase = animation->phase;
+                built.emplace<eng::ecs::LightAnimation>(entity, out);
+            }
+        }
+
+        if (authored.portal)
+            built.emplace<eng::ecs::PortalParams>(entity, *authored.portal);
+        if (authored.shader) {
+            const game::content::ShaderAuthor& sh = *authored.shader;
+            built.emplace<eng::ecs::ShaderParams>(
+                entity, eng::ecs::ShaderParams{sh.tint, sh.opacity,
+                                               sh.rimColour, sh.rimStrength,
+                                               sh.rimPower, sh.alphaScissor});
+        }
+        if (authored.camera) {
+            built.emplace<eng::ecs::Camera>(
+                entity, eng::ecs::Camera{authored.camera->fovDegrees,
+                                         authored.camera->nearClip,
+                                         authored.camera->farClip,
+                                         authored.camera->priority,
+                                         authored.camera->active});
+        }
+        if (authored.spin) {
+            built.emplace<eng::ecs::Spin>(
+                entity, eng::ecs::Spin{authored.spin->axis,
+                                       authored.spin->degreesPerSecond});
         }
 
         // A collider is a child entity rather than a component on the visual:
@@ -150,11 +230,11 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             built.emplace<eng::ecs::Name>(
                 collider, eng::ecs::Name{authored.id + ".collision"});
             eng::ecs::Transform colliderTransform;
+            // The visual's world transform, not its authored one: a torch
+            // parented to a wall must collide where it is drawn.
             colliderTransform.position =
-                authored.transform.position +
-                authorOrientation(authored.transform.rotationDegrees) * offset;
-            colliderTransform.rotation =
-                authorOrientation(authored.transform.rotationDegrees);
+                world.position + world.orientation * offset;
+            colliderTransform.rotation = world.orientation;
             built.emplace<eng::ecs::Transform>(collider, colliderTransform);
             built.emplace<game::Collider>(
                 collider, game::Collider{eng::ShapeKind::Box, halfExtents,
@@ -172,6 +252,40 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             if (implicitCollider(*piece, catalog, halfExtents, offset))
                 emitCollider(halfExtents, offset);
         }
+    }
+
+    // The links, once every entity exists: a child sorted before its parent has
+    // nothing to point at during the first pass. Only live chains get one --
+    // everything else was baked flat above, and giving it a parent as well
+    // would compose the same transform twice.
+    {
+        std::unordered_map<AuthorId, entt::entity> byAuthor;
+        for (std::size_t i = 0; i < ordered.size(); ++i)
+            byAuthor.emplace(ordered[i]->id, ids[i]);
+        for (std::size_t i = 0; i < ordered.size(); ++i) {
+            const Entity& authored = *ordered[i];
+            if (authored.parent.empty() || !ancestorAnimated(document, authored))
+                continue;
+            const auto parent = byAuthor.find(authored.parent);
+            if (parent == byAuthor.end())
+                continue; // validate() reports a parent that is not in the file
+            built.emplace<eng::ecs::Parent>(
+                ids[i], eng::ecs::Parent{parent->second});
+            built.get_or_emplace<eng::ecs::Children>(parent->second)
+                .value.push_back(ids[i]);
+        }
+    }
+
+    // The level's own look, on an entity of its own. A .map is a flat list of
+    // entities, so a fact about the whole level needs a carrier; one is written
+    // only when the scene states a palette, which keeps every scene authored
+    // before this cook byte-identical.
+    if (!document.palette.empty()) {
+        const entt::entity environment = built.create();
+        built.emplace<eng::ecs::Name>(environment,
+                                      eng::ecs::Name{"scene.environment"});
+        built.emplace<game::SceneEnvironment>(
+            environment, game::SceneEnvironment{document.palette});
     }
 
     out = std::move(built);

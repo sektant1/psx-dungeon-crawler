@@ -68,6 +68,11 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("Trace.h", "core"),
     ("Profiler.h", "core"),
     ("StepClock.h", "core"),
+    # A 64-bit hash of a string_view and an intern table: <cstdint>,
+    # <string_view> and <functional>, no renderer and no window. It is included
+    # by src/core, which the catch-all below would make an upward include.
+    ("StringId.h", "core"),
+    ("Clock.h", "core"),  # <cstdint> and a tick count
     # Plain data plus callbacks: std::function and strings, no renderer, which
     # is what lets it be unit-tested without a window. Only the catch-all below
     # would otherwise file it under systems.

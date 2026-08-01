@@ -8,7 +8,7 @@
 namespace eng::prototype {
 
 // Engine-owned diagnostic render assets. They ship as files beside this engine
-// (engine/assets/textures, regenerate-prototypes.sh), so every application gets
+// (assets/engine/textures, regenerate-prototypes.sh), so every application gets
 // reliable fallbacks without shipping app assets.
 inline constexpr const char* kSurfaceTexture = "EnginePrototypeSurface.png";
 inline constexpr const char* kSpriteTexture = "EnginePrototypeSprite.png";

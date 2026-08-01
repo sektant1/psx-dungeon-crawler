@@ -14,7 +14,7 @@ namespace eng {
 // Commands.h never appeared and why no hint text could be reviewed or
 // translated in one place.
 //
-// Hint text is data: engine/assets/ui/hints.toml maps dotted ids to a title
+// Hint text is data: assets/engine/ui/hints.toml maps dotted ids to a title
 // and a body. An id with no entry falls back to the literal passed at the call
 // site, so migrating a site is a one-line change that cannot regress.
 namespace imguihint {

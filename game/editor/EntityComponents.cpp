@@ -48,6 +48,31 @@ const std::vector<ComponentType>& table()
          },
          [](Entity& e) { e.light.reset(); }, always},
 
+        {"shader", "Shader", "per-entity tint, rim light and cutout",
+         [](const Entity& e) { return e.shader.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // Added at the engine defaults, which render exactly as the entity
+             // did without it. Adding a component must never change what is on
+             // screen before the author touches a slider -- otherwise every
+             // "what does this do" costs an undo.
+             e.shader = game::content::ShaderAuthor{};
+         },
+         [](Entity& e) { e.shader.reset(); }, always},
+
+        {"camera", "Camera", "a point of view the scene can be played from",
+         [](const Entity& e) { return e.camera.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.camera = game::content::CameraAuthor{};
+         },
+         [](Entity& e) { e.camera.reset(); }, always},
+
+        {"spin", "Spin", "turns forever -- and turns whatever hangs under it",
+         [](const Entity& e) { return e.spin.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.spin = game::content::SpinAuthor{};
+         },
+         [](Entity& e) { e.spin.reset(); }, always},
+
         {"player_spawn", "Player Spawn", "where the player starts the level",
          [](const Entity& e) { return e.playerSpawn; },
          [](Entity& e, const ComponentDefaults&) { e.playerSpawn = true; },

@@ -128,7 +128,7 @@ int main()
     game::test::mountGameAssets();
     KitCatalog catalog;
     std::string error;
-    require(KitCatalog::load(game::test::asset("kit.toml"), catalog, error), error);
+    require(KitCatalog::load(game::test::asset("config/kit.toml"), catalog, error), error);
     gCatalog = &catalog;
 
     // --- the happy path ----------------------------------------------------

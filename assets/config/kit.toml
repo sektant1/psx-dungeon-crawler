@@ -1,0 +1,734 @@
+# The modular dungeon kit: what each piece is, how big it is, and where it can
+# connect. The generator picks pieces by role and the assembler places them;
+# neither has any of this compiled in.
+#
+# UNITS. Pieces are authored on a 20-unit grid and imported at `scale`, so one
+# cell is 20 * 0.2 = 4 m -- the cell_size the level documents already use. All
+# sizes below are in *kit units* (pre-scale), straight off the meshes, so this
+# file can be checked against the source art without doing arithmetic.
+#
+# ORIGIN. Every architectural piece is centred on X/Z with its base at Y=0, so
+# a placement is just the cell centre. The handful that are not are called out
+# with `pivot` below.
+#
+# SOCKETS. What a piece occupies and what may connect to it:
+#   floor    lies flat in a cell, occupies no volume
+#   wall     stands on one cell edge, blocks movement across it
+#   fill     occupies the whole cell volume (solid)
+#   opening  stands on a cell edge and is passable (arch, doorway)
+#   prop     free-standing inside a cell, does not constrain the grid
+# `span` is how many cells the piece covers along its length; pieces wider than
+# one cell may only be placed where that many cells are free.
+
+[kit]
+scale = 0.2       # kit units -> metres
+cell_size = 20.0  # kit units per cell; 4 m after scale
+mesh_dir = "meshes/kit"
+
+# --- floors ------------------------------------------------------------------
+
+[[piece]]
+id = "floor"
+role = "floor"
+mesh = "Floor_Tiles.obj"
+material = "Game/Kit/Dungeon"
+socket = "floor"
+size = [20.0, 0.0, 20.0]
+
+[[piece]]
+id = "floor_hexagon"
+role = "floor_feature" # ceremonial floor: shrines, boss arenas
+mesh = "Hexagon.obj"
+material = "Game/Kit/Stone"
+socket = "floor"
+size = [34.64, 8.0, 40.0]
+span = 2
+
+# --- walls -------------------------------------------------------------------
+# Wall_01 is the default. The rest are dressing the generator swaps in for
+# variety, and they are interchangeable: same footprint, same sockets.
+
+[[piece]]
+id = "wall"
+role = "wall"
+mesh = "Wall_01.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [20.0, 20.0, 5.0]
+
+[[piece]]
+id = "wall_thick"
+role = "wall"
+mesh = "Wall_02.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [20.0, 20.0, 9.0]
+
+[[piece]]
+id = "wall_ruin"
+role = "wall_damaged" # broken-through walls: ruined wings, collapsed routes
+mesh = "Wall_Ruin.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [19.0, 20.0, 5.0]
+
+[[piece]]
+id = "wall_half"
+role = "wall_half" # half-width; pairs with a doorway or a corner
+mesh = "Wall_Half.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [10.0, 20.0, 5.0]
+
+[[piece]]
+id = "wall_skull"
+role = "wall_feature" # ossuary dressing; reads as a landmark
+mesh = "Skull_Wall.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [20.0, 20.0, 5.0]
+
+[[piece]]
+id = "wall_skull_half"
+role = "wall_feature"
+mesh = "Skull_Wall_Half.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [10.0, 20.0, 5.0]
+
+[[piece]]
+id = "wall_window"
+role = "wall_window" # sightline into the next room; two-sided
+mesh = "Windowed_Wall_01.obj"
+material = "Game/Kit/DungeonTwoSided"
+socket = "wall"
+size = [20.0, 20.0, 5.6]
+
+[[piece]]
+id = "wall_window_wide"
+role = "wall_window"
+mesh = "Windowed_Wall_02.obj"
+material = "Game/Kit/DungeonTwoSided"
+socket = "wall"
+size = [20.0, 20.0, 7.4]
+
+# Transition pieces: the corridor changes width across them, so they connect a
+# wide run to a narrow one and are not interchangeable with a plain wall.
+[[piece]]
+id = "wall_expanding"
+role = "wall_transition"
+mesh = "Wall_Expanding.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [20.0, 20.0, 10.0]
+
+[[piece]]
+id = "wall_narrowing"
+role = "wall_transition"
+mesh = "Wall_Narrowing.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [20.0, 20.0, 10.0]
+
+# Low walls: waist height, so they read as a barrier without blocking sight.
+[[piece]]
+id = "wall_border"
+role = "wall_low"
+mesh = "Wall_Border_01.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [20.0, 10.0, 5.0]
+
+[[piece]]
+id = "wall_border_alt"
+role = "wall_low"
+mesh = "Wall_Border_02.obj"
+material = "Game/Kit/Dungeon"
+socket = "wall"
+size = [20.0, 10.0, 5.0]
+
+# --- solids ------------------------------------------------------------------
+
+[[piece]]
+id = "block"
+role = "fill"
+mesh = "Block.obj"
+material = "Game/Kit/Dungeon"
+socket = "fill"
+size = [20.0, 20.0, 20.0]
+
+[[piece]]
+id = "block_half"
+role = "fill_low" # a step up: the kit's cheapest verticality
+mesh = "Block_Half.obj"
+material = "Game/Kit/Dungeon"
+socket = "fill"
+size = [20.0, 10.0, 20.0]
+
+[[piece]]
+id = "block_arch"
+role = "opening" # a solid cell with a passage cut through it
+mesh = "Block_Arch.obj"
+material = "Game/Kit/Dungeon"
+socket = "opening"
+size = [20.0, 20.0, 20.0]
+
+# --- openings ----------------------------------------------------------------
+
+[[piece]]
+id = "arch"
+role = "opening"
+mesh = "Arch.obj"
+material = "Game/Kit/Dungeon"
+socket = "opening"
+size = [20.02, 12.0, 4.0]
+pivot = "y_offset" # spans Y 4.81..16.81: it is the head of the opening, not a
+                   # full wall, and sits above the floor
+y_offset = 4.81
+
+[[piece]]
+id = "arch_fence"
+role = "opening_barred" # passable to sight, not to the player
+mesh = "Arch_Fence.obj"
+material = "Game/Kit/DungeonTwoSided"
+socket = "opening"
+size = [16.0, 10.7, 0.93]
+y_offset = 4.84
+
+[[piece]]
+id = "arch_roof"
+role = "ceiling_vault"
+mesh = "Arch_Roof.obj"
+material = "Game/Kit/Stone"
+socket = "prop"
+size = [20.0, 10.5, 20.0]
+y_offset = 5.52
+
+[[piece]]
+id = "door_frame"
+role = "door_frame"
+mesh = "Door_Frame_01.obj"
+material = "Game/Kit/Dungeon"
+socket = "opening"
+size = [20.0, 20.0, 5.0]
+
+[[piece]]
+id = "door_frame_wide"
+role = "door_frame"
+mesh = "Door_Frame_02.obj"
+material = "Game/Kit/Dungeon"
+socket = "opening"
+size = [20.0, 20.0, 7.4]
+
+# Door leaves hang inside a frame; they are props of the frame, not grid pieces.
+[[piece]]
+id = "door"
+role = "door_leaf"
+mesh = "Door_01.obj"
+material = "Game/Kit/Doors"
+socket = "prop"
+size = [10.0, 15.0, 2.0]
+
+[[piece]]
+id = "door_alt"
+role = "door_leaf"
+mesh = "Door_02.obj"
+material = "Game/Kit/Doors"
+socket = "prop"
+size = [10.0, 15.0, 2.0]
+
+[[piece]]
+id = "door_barred"
+role = "door_leaf"
+mesh = "Door_03.obj"
+material = "Game/Kit/Doors"
+socket = "prop"
+size = [10.0, 15.0, 1.25]
+
+# --- stairs ------------------------------------------------------------------
+# All three rise 10 units -- exactly one Block_Half -- so a staircase and a
+# half-height block are interchangeable ways to gain the same storey.
+
+[[piece]]
+id = "stairs"
+role = "stairs"
+mesh = "Stairs.obj"
+material = "Game/Kit/Dungeon"
+socket = "floor"
+size = [20.0, 10.0, 20.0]
+rise = 10.0
+
+[[piece]]
+id = "stairs_wide"
+role = "stairs"
+mesh = "Stairs_Wide.obj"
+material = "Game/Kit/Dungeon"
+socket = "floor"
+size = [20.0, 10.0, 40.0]
+span = 2
+rise = 10.0
+
+[[piece]]
+id = "stairs_ultrawide"
+role = "stairs"
+mesh = "Stairs_Ultrawide.obj"
+material = "Game/Kit/Dungeon"
+socket = "floor"
+size = [20.0, 10.0, 60.0]
+span = 3
+rise = 10.0
+
+# --- pillars -----------------------------------------------------------------
+
+[[piece]]
+id = "pillar"
+role = "pillar"
+mesh = "Pillar.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [5.65, 30.2, 5.65]
+
+[[piece]]
+id = "pillar_broken"
+role = "pillar_ruined"
+mesh = "Pillar_Collapsed_01.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [5.65, 9.7, 5.65]
+
+[[piece]]
+id = "pillar_fallen"
+role = "pillar_ruined" # lying on its side; reads as rubble to vault or hide behind
+mesh = "Pillar_Collapsed_02.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [14.2, 3.46, 4.0]
+
+# --- props -------------------------------------------------------------------
+
+[[piece]]
+id = "barrel"
+role = "prop_container"
+mesh = "Barrel.obj"
+material = "Game/Kit/Containers"
+socket = "prop"
+size = [7.62, 8.0, 8.8]
+y_offset = -4.0 # authored around its centre, not its base
+
+[[piece]]
+id = "box"
+role = "prop_container"
+mesh = "Box.obj"
+material = "Game/Kit/Containers"
+socket = "prop"
+size = [8.0, 8.0, 8.0]
+y_offset = -4.0
+
+[[piece]]
+id = "chest"
+role = "prop_chest" # base and lid are separate meshes so the lid can animate
+mesh = "Chest_Base.obj"
+lid_mesh = "Chest_Lid.obj"
+material = "Game/Kit/Containers"
+socket = "prop"
+size = [10.0, 4.5, 8.5]
+
+[[piece]]
+id = "candle"
+role = "prop_light"
+mesh = "Candle_01.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [1.91, 3.08, 2.2]
+
+[[piece]]
+id = "candle_cluster"
+role = "prop_light"
+mesh = "Candle_02.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [3.31, 3.69, 2.72]
+
+[[piece]]
+id = "candle_stub"
+role = "prop_light"
+mesh = "Candle_03.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [1.91, 2.18, 2.2]
+
+[[piece]]
+id = "chandelier"
+role = "prop_light_hanging"
+mesh = "Chandelier.obj"
+material = "Game/Kit/Metal"
+socket = "prop"
+size = [17.36, 14.5, 20.0]
+y_offset = -13.0 # hangs from its top: the origin is the ceiling mount
+
+[[piece]]
+id = "chain"
+role = "prop_hanging"
+mesh = "Chain.obj"
+material = "Game/Kit/Metal"
+socket = "prop"
+size = [1.0, 10.0, 1.0]
+
+[[piece]]
+id = "table"
+role = "prop_furniture"
+mesh = "Wall_Table.obj"
+material = "Game/Kit/Wood"
+socket = "prop"
+size = [20.0, 8.89, 10.89]
+y_offset = -5.0
+
+[[piece]]
+id = "wall_decor"
+role = "prop_wall" # sconce-sized; mounts on a wall face
+mesh = "Wall_Decor_01.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [4.33, 5.63, 1.6]
+y_offset = -4.38
+
+[[piece]]
+id = "debris"
+role = "prop_rubble"
+mesh = "Debris.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [11.4, 2.02, 11.4]
+
+[[piece]]
+id = "spikes"
+role = "prop_hazard"
+mesh = "Spikes.obj"
+material = "Game/Kit/Dungeon"
+socket = "prop"
+size = [14.0, 8.0, 18.0]
+
+# --- set dressing: props authored in metres -----------------------------------
+# Everything above is kit art on the 20-unit grid. What follows is the prop set
+# under meshes/props, which is authored at world scale, so each piece says
+# `import_scale = 1.0` and states its size in METRES -- measured off the .obj
+# vertex bounds, the same way the kit sizes were.
+#
+# They were already in the game (the dungeon generator dresses rooms from
+# dungeon_props.toml) but not in this catalogue, so the editor could not place
+# one by hand. Multi-part props are listed part by part: each half is its own
+# piece, stacked at the same spot, because the catalogue places one mesh with
+# one material and the parts wear different ones.
+
+# Authored in Blender and converted with tools/blend_to_obj.py, which is where
+# the size below came from -- it prints the line, in metres, in the axis order
+# the engine sees. Measuring a converted mesh by hand afterwards is how a piece
+# ends up with a footprint that disagrees with its art.
+# The portal, as placeable parts. It used to be one C++ factory
+# (createPortalProp) that built pillars, a lintel, a backing panel, a membrane,
+# a light and a particle effect from a marker -- so a level could have exactly
+# the portal that function makes, and the editor could not show or change it.
+# As pieces, a portal is entities: place the surround from the kit's own arch
+# and pillars, drop the membrane in the opening, and give it a PortalParams to
+# tune. Two portals in one level can then differ.
+[[piece]]
+id = "portal_membrane"
+role = "prop_vfx"
+mesh = "meshes/props/portal_membrane.obj"
+material = "Game/Vfx/PortalDown"
+socket = "prop"
+import_scale = 1.0
+size = [2.8, 2.5, 0.14]
+
+[[piece]]
+id = "portal_membrane_up"
+role = "prop_vfx" # the ascending portal: same slab, the other palette
+mesh = "meshes/props/portal_membrane.obj"
+material = "Game/Vfx/PortalUp"
+socket = "prop"
+import_scale = 1.0
+size = [2.8, 2.5, 0.14]
+
+[[piece]]
+id = "prop_raccoon_head"
+role = "prop_decor"
+mesh = "meshes/props/prop_raccoon_head.obj"
+material = "Game/PropVertexColour"
+socket = "prop"
+import_scale = 1.0
+size = [2.3300, 1.7527, 2.0703]
+
+[[piece]]
+id = "prop_barrel"
+role = "prop_container"
+mesh = "meshes/props/prop_barrel_p0.obj"
+material = "Game/PropPlanks"
+socket = "prop"
+import_scale = 1.0
+size = [1.32, 1.387, 1.32]
+
+[[piece]]
+id = "prop_barrel_bands"
+role = "prop_container" # part 1 of the barrel: the metal hoops
+mesh = "meshes/props/prop_barrel_p1.obj"
+material = "Game/PropBauerhaus"
+socket = "prop"
+import_scale = 1.0
+size = [1.334, 1.367, 1.334]
+
+[[piece]]
+id = "prop_barrel_open"
+role = "prop_container"
+mesh = "meshes/props/prop_barrel_open_p0.obj"
+material = "Game/PropPlanksTwoSided"
+socket = "prop"
+import_scale = 1.0
+size = [1.32, 1.387, 1.32]
+
+[[piece]]
+id = "prop_barrel_open_bands"
+role = "prop_container"
+mesh = "meshes/props/prop_barrel_open_p1.obj"
+material = "Game/PropBauerhausTwoSided"
+socket = "prop"
+import_scale = 1.0
+size = [1.334, 1.367, 1.334]
+
+[[piece]]
+id = "prop_crate"
+role = "prop_container"
+mesh = "meshes/props/prop_crate.obj"
+material = "Game/PropMarket"
+socket = "prop"
+import_scale = 1.0
+size = [0.468, 0.244, 0.735]
+
+[[piece]]
+id = "prop_chest"
+role = "prop_container"
+mesh = "meshes/props/prop_chest.obj"
+material = "Game/PropChest"
+socket = "prop"
+import_scale = 1.0
+# Authored around its own centre rather than standing on it, so half of it is
+# below y=0 until the offset lifts it.
+size = [0.202, 0.159, 0.16]
+y_offset = -0.08
+pivot = "centred"
+
+[[piece]]
+id = "prop_vase"
+role = "prop_container"
+mesh = "meshes/props/prop_vase_p0.obj"
+material = "Game/PropTerracotta"
+socket = "prop"
+import_scale = 1.0
+size = [0.84, 0.996, 0.84]
+
+[[piece]]
+id = "prop_vase_lid"
+role = "prop_container" # part 1: the wooden cover, authored at the rim height
+mesh = "meshes/props/prop_vase_p1.obj"
+material = "Game/PropPlanks"
+socket = "prop"
+import_scale = 1.0
+size = [0.576, 0.085, 0.576]
+y_offset = 0.954
+pivot = "rim"
+
+[[piece]]
+id = "prop_jutesack"
+role = "prop_container"
+mesh = "meshes/props/prop_jutesack.obj"
+material = "Game/PropJute"
+socket = "prop"
+import_scale = 1.0
+size = [0.756, 0.828, 0.458]
+
+[[piece]]
+id = "prop_haybale"
+role = "prop_dressing"
+mesh = "meshes/props/prop_haybale.obj"
+material = "Game/PropHay"
+socket = "prop"
+import_scale = 1.0
+size = [1.353, 0.794, 1.8]
+
+[[piece]]
+id = "prop_table"
+role = "prop_furniture"
+mesh = "meshes/props/prop_table_p0.obj"
+material = "Game/PropWood"
+socket = "prop"
+import_scale = 1.0
+# The legs hang below the origin: this half is authored from the table top
+# down, which is why the offset is the whole of its height.
+size = [2.095, 0.877, 2.0]
+y_offset = -0.876
+pivot = "table_top"
+
+[[piece]]
+id = "prop_table_top"
+role = "prop_furniture" # part 1: the boards
+mesh = "meshes/props/prop_table_p1.obj"
+material = "Game/PropMarket"
+socket = "prop"
+import_scale = 1.0
+size = [2.08, 0.57, 1.963]
+y_offset = -0.058
+
+[[piece]]
+id = "prop_lamp"
+role = "prop_light"
+mesh = "meshes/props/prop_lamp.obj"
+material = "Game/PropLamp"
+socket = "prop"
+import_scale = 1.0
+size = [0.452, 0.743, 0.452]
+y_offset = -0.288
+pivot = "hangs"
+
+[[piece]]
+id = "prop_torch"
+role = "prop_light"
+mesh = "meshes/props/prop_torch.obj"
+material = "Game/PropWood"
+socket = "prop"
+import_scale = 1.0
+size = [0.249, 0.55, 0.176]
+
+[[piece]]
+id = "prop_beam"
+role = "prop_structure"
+mesh = "meshes/props/prop_beam.obj"
+material = "Game/PropWood"
+socket = "prop"
+import_scale = 1.0
+size = [0.225, 2.0, 0.2]
+
+[[piece]]
+id = "prop_beam_corner"
+role = "prop_structure"
+mesh = "meshes/props/prop_beam_corner.obj"
+material = "Game/PropWood"
+socket = "prop"
+import_scale = 1.0
+size = [1.102, 3.098, 1.113]
+
+[[piece]]
+id = "prop_door"
+role = "prop_structure"
+mesh = "meshes/props/prop_door.obj"
+material = "Game/PropWood"
+socket = "prop"
+import_scale = 1.0
+size = [1.228, 2.174, 0.288]
+
+# --- items: small enough to read as loot rather than furniture ----------------
+
+[[piece]]
+id = "item_sword"
+role = "prop_item"
+mesh = "meshes/props/prop_sword.obj"
+material = "Game/PropWeapon"
+socket = "prop"
+import_scale = 1.0
+# The hero sword of the boss arena: authored huge and half below its origin.
+size = [5.445, 19.32, 1.367]
+y_offset = -2.3
+pivot = "blade"
+
+[[piece]]
+id = "item_shield"
+role = "prop_item"
+mesh = "meshes/props/prop_shield.obj"
+material = "Game/PropWeapon"
+socket = "prop"
+import_scale = 1.0
+size = [8.0, 13.2, 1.295]
+y_offset = -7.1
+pivot = "centred"
+
+[[piece]]
+id = "item_bread"
+role = "prop_item"
+mesh = "meshes/props/prop_bread.obj"
+material = "Game/PropMarketMisc"
+socket = "prop"
+import_scale = 1.0
+size = [0.355, 0.208, 0.521]
+y_offset = -0.031
+pivot = "centred"
+
+[[piece]]
+id = "item_pumpkin"
+role = "prop_item"
+mesh = "meshes/props/prop_pumpkin.obj"
+material = "Game/PropMarketMisc"
+socket = "prop"
+import_scale = 1.0
+size = [0.271, 0.231, 0.313]
+y_offset = -0.081
+pivot = "centred"
+
+# --- landmarks ----------------------------------------------------------------
+# The crystal set and the light shaft, from meshes/. They are what a room uses
+# as a focal point, and the showcase scene already builds with them.
+
+[[piece]]
+id = "crystal_ground"
+role = "prop_landmark"
+mesh = "meshes/crystal_ground.obj"
+material = "Game/Demo/CrystalGround"
+socket = "prop"
+import_scale = 1.0
+size = [3.005, 0.954, 2.98]
+
+[[piece]]
+id = "crystal_spire_tall"
+role = "prop_landmark"
+mesh = "meshes/crystal_spire1.obj"
+material = "Game/Demo/CrystalSpire"
+socket = "prop"
+import_scale = 1.0
+size = [1.732, 2.845, 1.732]
+y_offset = 0.234
+
+[[piece]]
+id = "crystal_spire_squat"
+role = "prop_landmark"
+mesh = "meshes/crystal_spire2.obj"
+material = "Game/Demo/CrystalSpire"
+socket = "prop"
+import_scale = 1.0
+size = [1.732, 2.099, 1.732]
+y_offset = 0.285
+
+[[piece]]
+id = "crystal_spire_mid"
+role = "prop_landmark"
+mesh = "meshes/crystal_spire3.obj"
+material = "Game/Demo/CrystalSpire"
+socket = "prop"
+import_scale = 1.0
+size = [1.732, 2.487, 1.732]
+y_offset = 0.296
+
+[[piece]]
+id = "crystal_spire_low"
+role = "prop_landmark"
+mesh = "meshes/crystal_spire4.obj"
+material = "Game/Demo/CrystalSpire"
+socket = "prop"
+import_scale = 1.0
+size = [1.732, 1.835, 1.732]
+y_offset = 0.259
+
+[[piece]]
+id = "light_shaft"
+role = "prop_effect" # a god-ray cone; decorative, never collides
+mesh = "meshes/light_shaft.obj"
+material = "Game/Demo/LightShaft"
+socket = "prop"
+import_scale = 1.0
+size = [4.717, 3.0, 4.717]

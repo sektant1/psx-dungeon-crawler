@@ -71,6 +71,18 @@ struct Renderer::Impl {
     std::unordered_map<Ogre::SubEntity*, std::string> savedMaterials;
     ModelMaterialFallbackWarnings missingMaterialWarnings;
     EnchantmentBookkeeping<Ogre::SubEntity*, Ogre::SceneNode*> enchantments;
+    // Per-subentity material clones made for ShaderParams, and the shared
+    // material each one was cloned from. Kept so the clone is made once and
+    // reused for every later push, and so clearing puts the shared one back
+    // instead of leaving the entity on an orphaned copy.
+    struct ShaderClone {
+        std::string baseMaterial;
+        std::string cloneMaterial;
+    };
+    std::unordered_map<Ogre::SubEntity*, ShaderClone> shaderClones;
+    // "<material>/<uniform>" already reported as unsupported, so the warning is
+    // one line per material rather than one per frame.
+    std::set<std::string> shaderParamWarned;
 
     void restoreEnchantment(Ogre::SubEntity* sub)
     {
@@ -639,6 +651,16 @@ void Renderer::destroyNode(NodeHandle node)
         n->detachObject(o);
         // Pool-owned particle systems recycle themselves; only detach them.
         if (o->getMovableType() == "ParticleSystem") continue;
+        // The camera is owned by the render core, not by whatever node it
+        // happens to be riding: there is exactly one, and destroying a node it
+        // is attached to must not take it with it. Detaching is the whole job.
+        //
+        // Without this, any teardown of the node the camera sat on freed the
+        // camera itself, and the next attachCamera() dereferenced it -- which
+        // is a segfault inside Ogre with no hint of where it came from. The
+        // editor hit it on every preview rebuild once scenes could author a
+        // camera; the game hit it on level transitions.
+        if (o->getMovableType() == "Camera") continue;
         if (o->getMovableType() == "Light")
             for (auto& lp : mImpl->lights) if (lp == o) lp = nullptr;
         sm->destroyMovableObject(o); // handles Light/Entity/etc.
@@ -1310,6 +1332,193 @@ void applyMaterialParam(const std::string& materialName,
 }
 } // namespace
 
+namespace {
+
+// Sets a named constant on whichever program of a pass declares it.
+//
+// Silent when neither does, on purpose: the PSX family compiles into variants
+// (`PSX_FS_Lit`, `PSX_FS_LitMetal`, the unlit pair) and they do not all declare
+// every uniform. A material on the unlit variant has no `rimColour`, and that
+// is a material choice rather than a caller error -- erroring here would make
+// every entity with a rim value log once per frame for a scene that renders
+// exactly as intended.
+template <typename T>
+bool setPassConstant(Ogre::Pass* pass, const char* name, const T& value)
+{
+    bool found = false;
+    if (pass->hasFragmentProgram()) {
+        auto params = pass->getFragmentProgramParameters();
+        if (params && params->_findNamedConstantDefinition(name)) {
+            params->setNamedConstant(name, value);
+            found = true;
+        }
+    }
+    if (pass->hasVertexProgram()) {
+        auto params = pass->getVertexProgramParameters();
+        if (params && params->_findNamedConstantDefinition(name)) {
+            params->setNamedConstant(name, value);
+            found = true;
+        }
+    }
+    return found;
+}
+
+} // namespace
+
+// Runs `visit` over every pass of every subentity of `node`, on a material this
+// node owns privately -- cloning it on first use and reusing the clone after.
+//
+// The clone is the whole point of a per-entity uniform: Ogre materials are
+// shared by name, so setting a constant on `Game/Kit/Dungeon` sets it on all
+// hundred and sixty walls. Shared by both push paths below, so an entity that
+// carries a portal block and a tint gets one private material, not two.
+// A free function rather than a member: its signature names Ogre::Pass, and
+// Renderer.h is a public header that must not drag Ogre into every consumer --
+// eng_systems is the only layer allowed to see it.
+template <typename Clones, typename Saved, typename NextName, typename Visit>
+void forEachPrivatePass(Ogre::SceneNode* n, Clones& shaderClones, Saved& savedMaterials,
+                        NextName nextName, Visit visit)
+{
+    if (!n)
+        return;
+    auto& materials = Ogre::MaterialManager::getSingleton();
+
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i) {
+        auto* entity = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i));
+        if (!entity)
+            continue;
+        for (Ogre::SubEntity* sub : entity->getSubEntities()) {
+            auto existing = shaderClones.find(sub);
+            Ogre::MaterialPtr clone;
+            if (existing != shaderClones.end())
+                clone = materials.getByName(existing->second.cloneMaterial);
+            if (!clone) {
+                // First push for this subentity: take a private copy of
+                // whatever it currently wears. savedMaterials is consulted
+                // first because a node in the editor's material staging holds
+                // its real material there rather than on the subentity.
+                auto saved = savedMaterials.find(sub);
+                const std::string baseName =
+                    saved != savedMaterials.end()
+                        ? saved->second
+                        : sub->getMaterialName();
+                Ogre::MaterialPtr base = materials.getByName(baseName);
+                if (!base)
+                    continue;
+                clone = base->clone(nextName("shaderparams"));
+                shaderClones[sub] = {baseName, clone->getName()};
+                if (saved != savedMaterials.end())
+                    saved->second = clone->getName();
+                else
+                    sub->setMaterialName(clone->getName());
+            }
+            const std::string& base = shaderClones[sub].baseMaterial;
+            for (unsigned short t = 0; t < clone->getNumTechniques(); ++t) {
+                Ogre::Technique* tech = clone->getTechnique(t);
+                for (unsigned short pi = 0; pi < tech->getNumPasses(); ++pi)
+                    visit(tech->getPass(pi), base);
+            }
+            clone->load();
+        }
+    }
+}
+
+void Renderer::setNodeShaderParams(NodeHandle node, const ShaderUniforms& p)
+{
+    forEachPrivatePass(mImpl->node(node, "shader params"), mImpl->shaderClones,
+                       mImpl->savedMaterials,
+                       [this](const char* p) { return mImpl->nextName(p); },
+                       [&](Ogre::Pass* pass, const std::string&) {
+        setPassConstant(pass, "modulateColor",
+                        Ogre::Vector4(p.tint.r, p.tint.g, p.tint.b, p.opacity));
+        setPassConstant(pass, "rimColour",
+                        Ogre::Vector4(p.rimColour.r, p.rimColour.g,
+                                      p.rimColour.b, p.rimStrength));
+        setPassConstant(pass, "rimPower", p.rimPower);
+        setPassConstant(pass, "alphaScissor", p.alphaScissor);
+    });
+    mImpl->core.markPostChainDirty();
+}
+
+void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
+{
+    if (!block.valid())
+        return;
+    forEachPrivatePass(mImpl->node(node, "shader block"), mImpl->shaderClones,
+                       mImpl->savedMaterials,
+                       [this](const char* p) { return mImpl->nextName(p); },
+                       [&](Ogre::Pass* pass, const std::string&) {
+        for (int i = 0; i < block.fields.count; ++i) {
+            const Field& f = block.fields.data[i];
+            const void* at = fieldPtr(block.instance, f);
+            switch (f.type) {
+            case FieldType::Bool:
+                // A bool uniform is a float in GLSL 330 for this family: there
+                // is no bool in the default_params syntax, and a shader that
+                // wants a switch reads `x >= 0.5`.
+                setPassConstant(pass, f.name,
+                                *static_cast<const bool*>(at) ? 1.0f : 0.0f);
+                break;
+            case FieldType::Int:
+                setPassConstant(pass, f.name,
+                                float(*static_cast<const int*>(at)));
+                break;
+            case FieldType::Float:
+                setPassConstant(pass, f.name, *static_cast<const float*>(at));
+                break;
+            case FieldType::Vec3:
+            case FieldType::Colour: {
+                const glm::vec3& v = *static_cast<const glm::vec3*>(at);
+                // As a float4 with w = 1: every colour uniform in this engine's
+                // shaders is a vec4, and a vec3 constant set on one is a
+                // size mismatch Ogre reports at runtime.
+                setPassConstant(pass, f.name, Ogre::Vector4(v.r, v.g, v.b, 1.0f));
+                break;
+            }
+            case FieldType::Quat: {
+                const glm::quat& q = *static_cast<const glm::quat*>(at);
+                setPassConstant(pass, f.name, Ogre::Vector4(q.x, q.y, q.z, q.w));
+                break;
+            }
+            case FieldType::String:
+                // Not a uniform. A string field on a shader block names a
+                // texture or a profile, which is the material's business, not
+                // a constant's -- skipped rather than reported, so a block may
+                // carry one for the inspector's sake.
+                break;
+            }
+        }
+    });
+    mImpl->core.markPostChainDirty();
+}
+
+void Renderer::clearNodeShaderParams(NodeHandle node)
+{
+    Ogre::SceneNode* n = mImpl->node(node, "clearNodeShaderParams");
+    if (!n)
+        return;
+    auto& materials = Ogre::MaterialManager::getSingleton();
+    for (size_t i = 0; i < n->numAttachedObjects(); ++i) {
+        auto* entity = dynamic_cast<Ogre::Entity*>(n->getAttachedObject(i));
+        if (!entity)
+            continue;
+        for (Ogre::SubEntity* sub : entity->getSubEntities()) {
+            const auto found = mImpl->shaderClones.find(sub);
+            if (found == mImpl->shaderClones.end())
+                continue;
+            auto saved = mImpl->savedMaterials.find(sub);
+            if (saved != mImpl->savedMaterials.end())
+                saved->second = found->second.baseMaterial;
+            else
+                sub->setMaterialName(found->second.baseMaterial);
+            if (materials.getByName(found->second.cloneMaterial))
+                materials.remove(found->second.cloneMaterial);
+            mImpl->shaderClones.erase(found);
+        }
+    }
+    mImpl->core.markPostChainDirty();
+}
+
 void Renderer::setMaterialParam(const std::string& m, const std::string& p, float v)
 {
     applyMaterialParam(m, p, [&](auto& params) { params->setNamedConstant(p, v); });
@@ -1611,7 +1820,7 @@ void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
     if (lines.empty())
         return;
     // Engine/Psx/DebugLines: unlit, per-vertex colour, depth_write off (declared in
-    // engine/assets/materials/psx.material + debug_lines.frag).
+    // assets/engine/materials/psx.material + debug_lines.frag).
     const std::string matName = "Engine/Psx/DebugLines";
     mImpl->debugLines->begin(matName, Ogre::RenderOperation::OT_LINE_LIST);
     for (const auto& l : lines) {

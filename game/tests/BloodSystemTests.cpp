@@ -58,7 +58,7 @@ int main()
     {
         game::BloodDefinitions defs;
         const std::string path =
-            game::test::asset("blood.toml");
+            game::test::asset("config/blood.toml");
         require(game::parseBloodDefinitions(path, defs),
                 "the shipped blood.toml no longer parses");
 

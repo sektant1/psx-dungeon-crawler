@@ -4,21 +4,35 @@ build-cpm/
 build-debug/
 build-asan/
 compile_commands.json
+# Runtime logs. Ogre writes ogre.log beside the working directory; the editor
+# writes its playtest capture under artifacts/ with the other generated files.
 ogre.log
+artifacts/
 .agents/
 .codex/
 .claude/
 .opencode/
 .goose/
 
-# Pipeline source art: archives, .blend/.fbx source files, and raw effect
-# packs under art/. These are inputs to the asset pipeline, not build inputs
-# -- the meshes and textures the game actually loads are committed, extracted,
-# under assets/. 110 MB of these archives once lived in history and made a
-# fresh clone ~800 MB; keep all of art/ out. The README's preview clip and
-# logo media live under docs/media/ instead, outside this rule, and stay
-# committed.
-art/
+# Pipeline source art living alongside the content packs: archives and DCC
+# files are *inputs* to the asset pipeline, not build inputs -- what the game
+# loads is the extracted mesh/texture committed under assets/<pack>/. 110 MB of
+# these archives once lived in history and made a fresh clone ~800 MB, so they
+# are ignored by extension wherever they land. The rules are extension-scoped
+# on purpose: the packs hold .png/.obj/.toml/.material/.frag and are never
+# touched by them.
+assets/**/*.zip
+assets/**/*.rar
+assets/**/*.7z
+assets/**/*.blend
+assets/**/*.blend1
+assets/**/*.fbx
+assets/*.webm
+# Screen captures are local scratch; the two the README embeds are committed.
+assets/*.mp4
+assets/*.gif
+!assets/preview.mp4
+!assets/preview.gif
 docs/superpowers/
 
 # Vendored SDK
@@ -30,5 +44,6 @@ imgui.ini
 __pycache__/
 *.pyc
 
-# Generated visual-test screenshots, metrics, logs, and RenderDoc captures
-artifacts/visual/
+# Periodic backups the editor writes beside a scene. Recovery material for one
+# machine; the scene itself is the committed artefact.
+*.autosave.scn

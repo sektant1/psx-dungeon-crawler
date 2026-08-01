@@ -21,7 +21,7 @@ static bool nearly(float a, float b) { return std::fabs(a - b) < 1e-2f; }
 int main() {
     game::test::mountGameAssets();
     CombatVocabulary vocab;
-    check(vocab.load(game::test::asset("magic.toml")),
+    check(vocab.load(game::test::asset("config/magic.toml")),
           "magic.toml failed to load");
 
     const DamageTypeId slash = vocab.damageType("slash");

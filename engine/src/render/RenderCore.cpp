@@ -123,7 +123,7 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
                    "will be missing");
     for (const std::filesystem::path& dir : resourceDirs)
         rgm.addResourceLocation(dir.string(), "FileSystem", "General");
-    // The prototype textures ship as real files in engine/assets/textures, so
+    // The prototype textures ship as real files in assets/engine/textures, so
     // the material scripts' texture units resolve like any other texture. They
     // used to be createManual'd here before this call, which made the script
     // compiler compare its own declaration against the manual texture and

@@ -135,7 +135,7 @@ const char* baseMaterialFor(eng::ParticleBlend blend)
 }
 
 // One material per texture, copied from the scripted sprite material in
-// engine/assets/materials/particles.material with only the texture swapped.
+// assets/engine/materials/particles.material with only the texture swapped.
 //
 // It is a COPY of a program-backed material, not a pass built from scratch.
 // A hand-built pass has no vertex or fragment program, and the instanced
@@ -223,7 +223,7 @@ std::string ParticleMaterials::defaultRoot()
     // editor pack that happened to carry a `particles/` folder must not be able
     // to take the whole directory over by outranking the engine in the mount
     // order.
-    return assets::resolve("engine/particles").string();
+    return assets::resolve("particles").string();
 }
 
 void ParticleMaterials::load(const std::string& root)

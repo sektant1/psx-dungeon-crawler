@@ -31,7 +31,7 @@ PSX_TUNE=1 PSX_CONSOLE=1 ./build/psx_demo  # open the panels on frame 1
 | `` ` `` | developer console |
 | `Esc` | quit |
 
-Bindings live in `samples/psx-demo/assets/demo.toml`; the camera is not a
+Bindings live in `assets/demo/demo.toml`; the camera is not a
 character controller, so mouse input is read unclamped and ungrabbed and gated
 on `Engine::imguiWants{Mouse,Keyboard}` — dragging a slider must not also fly
 the camera, and typing `restart` in the console must not restart four times.
@@ -94,14 +94,14 @@ holds all four, and `Tab` walks every render profile under them.
 
 The sample draws the game's kit atlases, stylized surfaces and liquid profiles —
 the *same* materials the dungeon is built from, not copies of them. It used to
-ship a mirror of `game/assets/materials/{kit,fantasy_surfaces,liquids,props}.material`
+ship a mirror of `assets/materials/{kit,fantasy_surfaces,liquids,props}.material`
 plus their textures, because Ogre only ever had one app's asset roots
 registered. It no longer does: the demo mounts the **game pack** underneath its
 own (`assets/assets.toml`, `[mounts] demo = ["demo", "game", "engine"]`), so
 `Kit/Dungeon`, `Fantasy/CarvedStone`, `Fantasy/Lava` and the prop profiles
 resolve to the originals and cannot drift out of step.
 
-What is left in `samples/psx-demo/assets` is only what is genuinely the demo's:
+What is left in `assets/demo` is only what is genuinely the demo's:
 four materials in `materials/showcase.material` (the pink crystal pair and the
 two showcase stones), `materials/portal.material`, and six particle effects. Adding
 a copy of a game material back would not merely duplicate it — Ogre's
@@ -109,7 +109,7 @@ a copy of a game material back would not merely duplicate it — Ogre's
 the demo would abort during script parsing.
 
 `Demo/PortalDown` is the one material that genuinely differs. The game's
-`Game/PortalDown` (`game/assets/materials/vfx.material`) and the showcase's tune
+`Game/PortalDown` (`assets/materials/vfx.material`) and the showcase's tune
 the same `PixelVfx/PortalFS` to different ends, so the showcase's is named for
 its pack.
 

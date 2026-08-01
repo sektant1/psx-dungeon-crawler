@@ -33,8 +33,8 @@ int main()
 
     // --- screen ray ---------------------------------------------------------
     {
-        const Ray centre = screenRay({0.0f, 0.0f}, {0.0f, 0.0f, 10.0f}, identity,
-                                     fov, 16.0f / 9.0f);
+        const Ray centre = screenRay({0.0f, 0.0f}, {0.0f, 0.0f, 10.0f},
+                                     identity, fov, 16.0f / 9.0f);
         require(nearly(centre.dir.x, 0.0f) && nearly(centre.dir.y, 0.0f),
                 "a ray through the middle of the screen has no lateral tilt");
         require(centre.dir.z < 0.0f, "and points where the camera looks");
@@ -67,14 +67,14 @@ int main()
         require(topRight.dir.x > 0.0f && topRight.dir.y > 0.0f,
                 "viewport pixels map right and invert screen Y");
 
-        const glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 10.0f),
-                                           glm::vec3(0.0f),
-                                           glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::mat4 view =
+            glm::lookAt(glm::vec3(0.0f, 0.0f, 10.0f), glm::vec3(0.0f),
+                        glm::vec3(0.0f, 1.0f, 0.0f));
         const glm::mat4 projection =
             glm::perspective(fov, size.x / size.y, 0.05f, 100.0f);
         glm::vec2 projected;
-        require(projectToViewport(glm::vec3(0.0f), projection * view,
-                                  origin, size, projected),
+        require(projectToViewport(glm::vec3(0.0f), projection * view, origin,
+                                  size, projected),
                 "point in front of camera projects into viewport");
         require(nearly(projected.x, origin.x + size.x * 0.5f) &&
                     nearly(projected.y, origin.y + size.y * 0.5f),
@@ -130,6 +130,29 @@ int main()
                 "a ray pointing away from the plane does not hit it");
         ray.dir = {1.0f, 0.0f, 0.0f};
         require(!rayPlaneY(ray, 0.0f, hit), "nor one parallel to it");
+    }
+
+    // --- the work-plane point always exists --------------------------------
+    {
+        Ray ray;
+        ray.origin = {0.0f, 10.0f, 0.0f};
+        ray.dir = glm::normalize(glm::vec3{0.0f, -1.0f, -1.0f});
+        const glm::vec3 onPlane = workPlanePoint(ray, 0.0f, 12.0f);
+        require(nearly(onPlane.y, 0.0f) && nearly(onPlane.z, -10.0f),
+                "a ray that meets the plane gives the same point as rayPlaneY");
+
+        // Above the horizon: the ghost still has to land somewhere sensible.
+        ray.dir = glm::normalize(glm::vec3{0.0f, 0.5f, -1.0f});
+        const glm::vec3 fallback = workPlanePoint(ray, 0.0f, 12.0f);
+        require(nearly(fallback.y, 0.0f), "the fallback sits on the plane");
+        require(fallback.z < -5.0f,
+                "out along the direction the cursor is pointing");
+
+        ray.dir = {0.0f, 1.0f, 0.0f};
+        const glm::vec3 straightUp = workPlanePoint(ray, 2.0f, 12.0f);
+        require(nearly(straightUp.y, 2.0f) && nearly(straightUp.x, 0.0f) &&
+                    nearly(straightUp.z, 0.0f),
+                "straight up collapses to the point under the camera");
     }
 
     std::cout << "EditorPickerTests: ok\n";

@@ -18,7 +18,7 @@ inline constexpr const char* ToxicBubbles = "engine.toxic_bubbles";
 inline constexpr const char* PortalWisps = "engine.portal_wisps";
 
 // Sprite-flipbook presets, as opposed to every preset above, which draws a
-// procedural shape from engine/assets/shaders/particle.frag. These are the
+// procedural shape from assets/engine/shaders/particle.frag. These are the
 // worked examples of the animated-sheet path: each names a strip out of the
 // import in assets/particles/sprite_sheets.toml, so what they demonstrate is
 // the whole route from an effect pack on disk to something on screen. Copy one

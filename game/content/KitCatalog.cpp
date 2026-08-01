@@ -92,7 +92,13 @@ bool KitCatalog::load(const std::string& tomlPath, KitCatalog& out,
             return false;
         }
         entry.id = "kit." + id;
-        entry.meshPath = catalog.mMeshDir + "/" + mesh;
+        // A bare filename lives in the kit's mesh dir; a path with a separator
+        // is pack-relative, which is how the prop and set-dressing meshes join
+        // the catalogue without a second one.
+        entry.meshPath = mesh.find('/') == std::string::npos
+                             ? catalog.mMeshDir + "/" + mesh
+                             : mesh;
+        entry.importScale = float((*piece)["import_scale"].value_or(0.0));
 
         const std::string socket =
             (*piece)["socket"].value_or(std::string("prop"));

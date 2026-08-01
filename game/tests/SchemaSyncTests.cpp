@@ -71,7 +71,11 @@ int main()
     entity.transform.scale = {2.0f, 2.0f, 2.0f};
     entity.cell = CellPlacement{3, 4, CellPlacement::Edge::North, 2, 1, 4.0f};
     entity.collider = ColliderAuthor{{1.0f, 2.0f, 1.0f}, {0.0f, 1.0f, 0.0f}};
-    entity.light = LightAuthor{LightAuthor::Type::Point, {1, 1, 1}, 8.0f, true};
+    entity.light = LightAuthor{LightAuthor::Type::Point, {1, 1, 1}, 8.0f, true,
+                               LightAnimAuthor{LightAnimAuthor::Mode::Flicker,
+                                               7.0f, 0.35f, 1.5f}};
+    entity.camera = CameraAuthor{52.0f, 0.1f, 120.0f, 10, false};
+    entity.spin = SpinAuthor{{0.0f, 1.0f, 0.0f}, 42.0f};
     entity.exitYawDegrees = 90.0f;
     entity.marker = "boss.spawn";
     entity.enemySpawn = "goblin";
@@ -90,6 +94,10 @@ int main()
     checkObject(emitted["cell"], defs["cell"], "a cell");
     checkObject(emitted["collider"], defs["collider"], "a collider");
     checkObject(emitted["light"], defs["light"], "a light");
+    checkObject(emitted["light"]["animation"], defs["light"]["properties"]["animation"],
+                "a light animation");
+    checkObject(emitted["camera"], defs["camera"], "a camera");
+    checkObject(emitted["spin"], defs["spin"], "a spin");
     checkObject(emitted["trigger"], defs["trigger"], "a trigger");
     checkObject(emitted["exit"], defs["entity"]["properties"]["exit"], "an exit");
 

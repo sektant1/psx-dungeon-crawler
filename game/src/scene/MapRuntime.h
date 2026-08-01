@@ -1,9 +1,6 @@
 #pragma once
 
-#include <eng/ecs/PhysicsSync.h>
-#include <eng/ecs/Scene.h>
-#include <eng/ecs/SceneSync.h>
-#include <eng/Handles.h>
+#include <eng/ecs/World.h>
 
 #include <entt/entt.hpp>
 #include <functional>
@@ -11,9 +8,6 @@
 #include <glm/gtc/quaternion.hpp>
 #include <string>
 #include <vector>
-
-namespace eng { class Physics; }
-namespace eng::ecs { class SceneBackend; }
 
 namespace game {
 
@@ -23,27 +17,57 @@ struct ScenePlacement {
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
+// Reads a cooked .map into the level's world and answers the authored queries
+// the game asks of it (where the player starts, where the exit is, what was
+// placed).
+//
+// It does NOT own a world any more. A level has exactly one (see eng::ecs::
+// World), and this used to be a second: the authored entities lived in here,
+// the gameplay actors somewhere else, and the combatants in a third registry,
+// so no view could see a whole level. Load merges into the world it is given.
 class MapRuntime {
 public:
-    MapRuntime(eng::ecs::SceneBackend& backend, eng::Physics& physics);
+    // `group` is stamped on every entity this map contributes, so a level
+    // transition destroys exactly the map's entities and leaves the player and
+    // anything else persistent alone (eng::ecs::World::destroyGroup).
+    MapRuntime(eng::ecs::World& world, uint32_t group);
 
+    // Merges the cooked map's entities into the world. Returns false and adds
+    // nothing if the file is missing or malformed.
     bool load(const std::string& path);
     using LoadMeshFn = std::function<eng::MeshHandle(const std::string& path)>;
     void resolveMeshes(const LoadMeshFn& loadFn);
+    // Turn authored Triggers into sensor colliders, then reconcile the world.
     void buildAll();
-    void step(float dt);
     glm::vec3 playerSpawn() const;
     glm::vec3 levelExit() const;
     float exitYawDegrees() const;
     std::vector<ScenePlacement> placements(const std::string& prefix = {}) const;
 
-    entt::registry& registry() { return mScene.registry(); }
+    // Authored EnemySpawn components, reported in the same shape as a marker so
+    // one encounter path consumes both.
+    //
+    // The editor's catalogue offers "enemy spawn", which writes this component;
+    // the spawner only ever read markers named "enemy.<id>". So the button
+    // placed something the game silently ignored -- the entity was in the file,
+    // in the outliner and in the cooked map, and no enemy ever appeared.
+    // `type` comes back already prefixed ("enemy.goblin") so the two sources
+    // are indistinguishable downstream.
+    std::vector<ScenePlacement> enemySpawnPlacements() const;
+
+    // Authored Pickup components, likewise: type is "pickup.<id>".
+    std::vector<ScenePlacement> pickupPlacements() const;
+
+    // The palette the level asks to be lit and graded with, or empty for the
+    // game's default.
+    std::string palette() const;
+
+    entt::registry& registry() { return mWorld.registry(); }
+    const entt::registry& registry() const { return mWorld.registry(); }
 
 private:
-    eng::ecs::Scene mScene;
-    eng::ecs::SceneSync mSceneSync;
-    eng::ecs::PhysicsSync mPhysicsSync;
-    eng::Physics& mPhysics;
+    eng::ecs::World& mWorld;
+    uint32_t mGroup = 0;
 };
 
 } // namespace game

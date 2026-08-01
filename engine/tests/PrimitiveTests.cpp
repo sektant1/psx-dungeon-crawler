@@ -578,7 +578,7 @@ void test_repository_has_no_obsolete_round_frame_or_authored_arch()
                 "obsolete showcase shape branch remains");
     }
     require(!std::filesystem::exists(std::string(PROJECT_SOURCE_DIR) +
-                                     "/game/assets/meshes/props/" +
+                                     "/assets/game/meshes/props/" +
                                      authoredAsset),
             "authored portal arch asset still exists");
 }

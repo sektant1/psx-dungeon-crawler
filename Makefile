@@ -8,7 +8,7 @@
 # Run options are plain make variables mapped to the game's PSX_* env vars, e.g.
 #   make run SEED=42 PRESET=ps1            # seed + render preset
 #   make run MAP=level.map                 # play an authored .map
-#   make run SHOWROOM=game/assets/showroom.toml
+#   make run SHOWROOM=assets/config/showroom.toml
 #   make run COLLIDERS=1 WIREFRAME=1       # debug overlays
 #   make screenshot SHOT=/tmp/x.png FRAME=200
 #   make sim SCRIPT=game/sim/scripts/smoke.txt
@@ -95,8 +95,9 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
         build-editor build-cook editor cook scene material \
         run game demo mapgen sim test asan bench screenshot visual-test \
+        editor-selftest \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
-        debug debug-run clean help
+        asset debug debug-run clean help
 
 all: build
 
@@ -173,7 +174,7 @@ demo: build-demo
 # The placement editor. SCENE= opens a specific .scn; with none it opens the
 # shipped showroom scene.
 #   make editor
-#   make editor SCENE=game/assets/scenes/ritual_boss_showroom.scn
+#   make editor SCENE=assets/scenes/ritual_boss_showroom.scn
 #   make material                  open straight into the material staging scene
 editor: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./scene_editor $(if $(SCENE),$(abspath $(SCENE)),)
@@ -184,7 +185,7 @@ material: build-editor
 
 # Cook an authored .scn into a runtime .map -- the same cooker the editor calls
 # in-process, which is what makes the two produce identical bytes.
-#   make cook SCENE=game/assets/scenes/ritual_boss_showroom.scn
+#   make cook SCENE=assets/scenes/ritual_boss_showroom.scn
 #   make cook SCENE=... OUT=/tmp/level.map
 #   make cook SCENE=... VALIDATE=1        report issues, write nothing
 cook: build-cook
@@ -192,7 +193,7 @@ ifndef SCENE
 	$(error set SCENE=<file.scn> (optional OUT=<file.map>, VALIDATE=1))
 endif
 	./$(BUILD_DIR)/scene_cook $(abspath $(SCENE)) \
-	    --kit $(abspath game/assets/kit.toml) \
+	    --kit $(abspath assets/config/kit.toml) \
 	    $(if $(VALIDATE),--validate-only,--out $(if $(OUT),$(abspath $(OUT)),$(abspath $(basename $(SCENE)).map)))
 
 # Cook a scene and immediately play it: the editor's F5, from the shell.
@@ -202,6 +203,20 @@ ifndef SCENE
 endif
 	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/scene.map
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game scene.map
+
+# Blender -> engine. The front of the asset pipeline, which had no target:
+#   make asset BLEND=assets/source/models/Raccoon_Head.blend LIST=1
+#   make asset BLEND=... OBJECT=Mapache NAME=prop_raccoon_head
+# Prints the `size = [...]` line a kit.toml entry needs, so the next step is a
+# paste rather than a measurement. See docs/assets-pipeline.md.
+asset:
+ifndef BLEND
+	$(error set BLEND=<file.blend>)
+endif
+	$(PYTHON) tools/blend_to_obj.py $(BLEND) $(if $(OUT),$(OUT),assets/meshes/props) \
+	    $(if $(OBJECT),--object $(OBJECT),) $(if $(NAME),--name $(NAME),) \
+	    $(if $(SCALE),--scale $(SCALE),) $(if $(LIST),--list,) \
+	    $(if $(NO_BAKE),--no-bake-colours,)
 
 # Generate a .map from a BSP seed: make mapgen SEED=7 OUT=out.map
 mapgen: build-mapgen
@@ -246,6 +261,14 @@ VISUAL_ARGS = --frame $(if $(FRAME),$(FRAME),90) \
 	--display-mode $(if $(DISPLAY_MODE),$(DISPLAY_MODE),auto) \
 	$(if $(PRESET),--preset $(PRESET),) \
 	$(if $(MAP),--map $(MAP),)
+
+# Drives the editor through the edits that only a mouse could reach -- removing
+# a component, deleting an entity, unparenting one -- one per frame, with the
+# entity selected a frame earlier so the gizmo, inspector and outliner have all
+# drawn it. Every one of those was reported as a crash and none of them was
+# reproducible from a test until this existed.
+editor-selftest: build-editor
+	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_EDITOR_SELFTEST=1 ./scene_editor
 
 visual-test: build-game
 	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
@@ -342,9 +365,11 @@ help:
 	@echo "  make material       editor, opened in the material staging scene"
 	@echo "  make cook SCENE=    cook a .scn to a .map (OUT=, VALIDATE=1)"
 	@echo "  make scene SCENE=   cook a .scn and play it immediately"
+	@echo "  make asset BLEND=   .blend -> engine .obj (LIST=1, OBJECT=, NAME=, SCALE=)"
 	@echo "  make mapgen         generate a .map (SEED=, OUT=)"
 	@echo "  make sim            headless action-simulation harness (SCRIPT=)"
 	@echo "  make test           build + run the ctest suite"
+	@echo "  make editor-selftest  drive the editor through the edits a mouse makes"
 	@echo "  make asan           ASan+UBSan+Leak build of game + game_sim"
 	@echo "  make bench          frame-time percentiles (BENCH=<frames>)"
 	@echo "  make screenshot     deterministic capture (SHOT=<path> FRAME=)"

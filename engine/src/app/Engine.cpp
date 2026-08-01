@@ -232,6 +232,10 @@ float Engine::tick()
     // One advance per frame, on every path, so quantised time cannot desync from
     // real time (a missed advance would strand every stepped channel).
     mStepClock.advance(dt);
+    // Both abstract timelines advance from the same measured delta; the game
+    // clock is the one that scale/pause act on, so it is what simulation reads.
+    mRealClock.update(dt);
+    mGameClock.update(dt);
     return dt;
 }
 
@@ -365,6 +369,11 @@ void Engine::setLoadingPhase(bool loading)
         // pinned to frame 300 still landed on a different viewmodel pose run to
         // run. Same boundary, same rebase.
         mStepClock.rewind();
+        // Same argument for the abstract timelines: gameplay starts at t=0
+        // regardless of how many frames the load took, so anything keyed off
+        // absolute game time is reproducible across runs.
+        mGameClock.reset();
+        mRealClock.reset();
     }
 }
 

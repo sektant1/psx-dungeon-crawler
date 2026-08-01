@@ -98,7 +98,7 @@ void install()
     // *writes*, and on a first run there is no file for resolve() to find. If
     // the engine pack is not mounted -- a headless or misconfigured start --
     // persistence simply stays off rather than guessing at a path.
-    const std::filesystem::path enginePack = assets::packDir("engine");
+    const std::filesystem::path enginePack = assets::packDir("content");
     if (enginePack.empty()) {
         log::warn("ImGuiLayout: the engine pack is not mounted; layout "
                   "persistence is off");

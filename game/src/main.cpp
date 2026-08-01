@@ -25,7 +25,6 @@
 #include "GameContext.h"
 #include "ui/GameHud.h"
 #include "ui/TooltipBuilder.h"
-#include "GameScene.h"
 #include "HudModel.h"
 #include "InteractionSystem.h"
 #include "PlayerSystem.h"
@@ -80,6 +79,13 @@ public:
             const std::string arg = argv[i] ? argv[i] : "";
             if (arg == "--scene" && i + 1 < argc)
                 mScene = argv[i + 1];
+            // A cooked map plays as the level itself, inside the full game --
+            // enemies, combat, HUD, portals. LiveLevel::rebuildAuthored was
+            // written for exactly this and had no caller, so the editor's F5
+            // went to a stripped walk loop instead and every authored encounter
+            // silently did nothing.
+            if (arg.size() > 4 && arg.compare(arg.size() - 4, 4, ".map") == 0)
+                mAuthoredMap = arg;
         }
         mRecording = eng::GifRecorder::optionsFromArgs(argc, argv);
         eng::AppConfig cfg;
@@ -88,7 +94,7 @@ public:
         // console still switches profiles live; this only picks the start.
         cfg.renderPreset = eng::renderPresetFromArgs(argc, argv);
         cfg.mountSet = "game";
-        cfg.configPath = "game.toml";
+        cfg.configPath = "config/game.toml";
         cfg.fixedDt = kFixedDt;
         cfg.maxFixedSteps = 5;
         cfg.imgui = true;
@@ -191,11 +197,18 @@ private:
     game::EnemySystem mEnemies;
     game::EnemySpawner mSpawner;
 
+    // The game's one ECS world, and the renderer view driven from it. It
+    // outlives every level: the player and anything else persistent live here
+    // ungrouped, while a level's own entities carry kLevelGroup and are
+    // destroyed by group on a transition.
+    std::optional<eng::ecs::RendererSceneBackend> mBackend;
+    eng::ecs::World mWorld;
     LiveLevel mLevel;
     game::PlayerSystem mPlayerSys;
     game::GameHud mHud;
     bool mPortalPreviewMode = false;
     std::string mScene;                                  // --scene
+    std::string mAuthoredMap; // a cooked .map named on the command line
     std::optional<eng::RecordingOptions> mRecording;     // --record
     eng::Content mLevelContent;
     std::string mShowroomPath;
@@ -243,7 +256,7 @@ void DungeonApp::onLoadGame(eng::Engine& engine, eng::LoadPlan& plan)
     // so the very first missing asset already reads as what it was meant to be.
     plan.add("Reading prototypes", [this, &r] {
         eng::prototype::PrototypeCatalog prototypes;
-        game::loadPrototypeCatalog(game::assetPath("prototypes.toml"), prototypes);
+        game::loadPrototypeCatalog(game::assetPath("config/prototypes.toml"), prototypes);
         r.setPrototypeCatalog(std::move(prototypes));
     });
 
@@ -251,7 +264,7 @@ void DungeonApp::onLoadGame(eng::Engine& engine, eng::LoadPlan& plan)
     // one, and owned here because the level builder, the viewmodels and the
     // combat model all resolve names through the same table.
     plan.add("Binding the schools of magic", [this] {
-        if (!mVocabulary.load(game::assetPath("magic.toml")))
+        if (!mVocabulary.load(game::assetPath("config/magic.toml")))
             eng::log::error("magic.toml failed to load; combat names resolve "
                             "to nothing and weapons fall back to the first "
                             "channel");
@@ -259,7 +272,7 @@ void DungeonApp::onLoadGame(eng::Engine& engine, eng::LoadPlan& plan)
 
     plan.add("Kindling particle effects",
              [this, &r] {
-                 mParticles.load(r, game::assetPath("particles.toml"));
+                 mParticles.load(r, game::assetPath("config/particles.toml"));
              },
              2.0f);
 }
@@ -290,7 +303,7 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // Player controller + three data-authored magical ranged weapons.
     mPlayerSys.setTuning(mSpeed, mSens);
     mPlayerSys.controller().setDashTuning(mDashTuning);
-    mPlayerSys.loadWeapons(game::assetPath("weapons.toml"));
+    mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
     mHud.initialise();
     mHud.configure(cfg);
     mPortalPreviewMode = std::getenv("PSX_SHOWCASE_PORTAL") != nullptr ||
@@ -302,7 +315,15 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     const char* showroomOverride = std::getenv("PSX_SHOWROOM_MAP");
     mShowroomPath =
         showroomOverride ? showroomOverride
-                         : game::assetPath("showroom.toml");
+                         : game::assetPath("config/showroom.toml");
+
+    // The world comes up before the first level goes into it. Explicit
+    // attach-then-sync ordering rather than a constructor: both views need
+    // their subsystem alive first, and the order they reconcile in is engine
+    // policy (eng::ecs::World).
+    mBackend.emplace(engine.renderer());
+    mWorld.attachRenderer(*mBackend);
+    mWorld.attachPhysics(physics());
 
     enterLevel(engine, false); // depth 0, spawn at entry
 
@@ -394,15 +415,22 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     mSpawner.clear();
     teardownDummy();
     bool loaded = false;
-    if (mDepth == 0) {
+    if (!mAuthoredMap.empty()) {
+        // An authored level replaces the whole progression: there is one map,
+        // and descending is not a thing it does. Every depth loads it, so an
+        // exit taken during a playtest returns to the level being worked on
+        // rather than into a generated dungeon.
+        loaded = mLevel.rebuildAuthored(mWorld, r, physics(), mVocabulary, mAuthoredMap,
+                                        mDepth);
+    } else if (mDepth == 0) {
         if (LevelResource* showroom =
                 mLevelContent.load<LevelResource>("showroom", mShowroomPath)) {
-            loaded = mLevel.rebuildLayout(r, physics(), mVocabulary,
+            loaded = mLevel.rebuildLayout(mWorld, r, physics(), mVocabulary,
                                           showroom->layout(), mDepth);
         }
         // load() already logged on failure; leaves `loaded` false.
     } else {
-        loaded = mLevel.rebuild(r, physics(), mVocabulary,
+        loaded = mLevel.rebuild(mWorld, r, physics(), mVocabulary,
                                 mSeeds[size_t(mDepth)], mDepth);
     }
     if (!loaded) {
@@ -429,10 +457,10 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // Encounters. Markers named "enemy.<id>[.<preset>]" in the level are the
     // authored placements; spawners.toml carries the presets and the standalone
     // spawn points. Both feed one spawner, so a level author can use either.
-    mSpawner.loadFromToml(game::assetPath("spawners.toml"));
+    mSpawner.loadFromToml(game::assetPath("config/spawners.toml"));
     {
         std::vector<game::EnemySpawner::Marker> markers;
-        for (const game::ScenePlacement& p : mLevel.markerPlacements("enemy.")) {
+        for (const game::ScenePlacement& p : mLevel.enemyPlacements()) {
             game::EnemySpawner::Marker m;
             m.type = p.type;
             m.position = p.position;
@@ -600,7 +628,7 @@ glm::vec3 DungeonApp::playerFeet() const
 // and hit reactions go back to the enemy that took the hit.
 void DungeonApp::wireEnemies()
 {
-    if (!mEnemyLibrary.load(game::assetPath("enemies.toml"))) {
+    if (!mEnemyLibrary.load(game::assetPath("config/enemies.toml"))) {
         eng::log::error("enemies.toml failed to load; no enemy can spawn");
         return;
     }
@@ -799,7 +827,7 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // drift, and it re-bases correctly if the rate is changed live.
     {
         const auto timed = stats().time(PhaseWorld);
-        mLevel.update(r, steps.time(eng::StepChannel::World));
+        mLevel.update(r, steps.time(eng::StepChannel::World), f.dt);
         mLevel.updateVisibility(r, player.eyePosition());
     }
 
@@ -992,6 +1020,10 @@ void DungeonApp::onStopGame(eng::Engine&)
     mLevel.clearPhysics();
     if (mCtx)
         mCombat.clear(*mCtx);
+    // Nodes and bodies go before the renderer and the physics world they came
+    // from; the registry itself outlives both.
+    mWorld.detachAll();
+    mBackend.reset();
 }
 
 } // namespace
@@ -1007,12 +1039,37 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    // `game <file.map>`: play an authored editor scene instead of the procedural
-    // dungeon. Its own Application, so it brings up its own engine + physics.
+    // Which loop plays a `.map`, and why the scene itself decides.
+    //
+    //   the full game     the map is a level: enemies, weapons, HUD, the FPS
+    //                     player. "Does this room work" is a question about
+    //                     those, which is why it is the default.
+    //   the scene loop    the map is a *shot* or a blockout: no combat, and an
+    //                     authored Camera drives the view.
+    //
+    // The scene loop used to require `--walk`, which meant an authored camera
+    // was silently ignored unless you knew to pass a flag whose name says the
+    // opposite of what it does -- so the last step of "model -> material ->
+    // scene -> camera -> run it" failed with no message at all.
+    //
+    // Now a map that authored a camera picks the scene loop by itself. That is
+    // the honest signal: placing a camera in a scene *is* saying "look through
+    // this", and nothing else in the game does. `--walk` still forces the scene
+    // loop for a map with no camera (a blockout you only want to walk), and
+    // `--play` forces the full game for one that has one.
+    bool forceScene = false;
+    bool forceGame = false;
+    std::string mapArg;
     for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
+        const std::string arg = argv[i] ? argv[i] : "";
+        forceScene = forceScene || arg == "--walk" || arg == "--scene";
+        forceGame = forceGame || arg == "--play";
         if (arg.size() > 4 && arg.substr(arg.size() - 4) == ".map")
-            return game::runMap(arg);
+            mapArg = arg;
+    }
+    if (!mapArg.empty() && !forceGame &&
+        (forceScene || game::mapHasCamera(mapArg))) {
+        return game::runMap(mapArg, argc, argv);
     }
 
     DungeonApp app;

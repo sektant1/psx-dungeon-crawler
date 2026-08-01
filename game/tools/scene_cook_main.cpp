@@ -80,7 +80,7 @@ int main(int argc, char** argv)
         }
     }
     if (kit.empty() && mounted)
-        kit = eng::assets::resolve("kit.toml").string();
+        kit = eng::assets::resolve("config/kit.toml").string();
     // The mesh-on-disk check needs a directory to join pack-relative mesh
     // paths onto. That is the game pack itself; the old heuristic only
     // happened to agree because kit.toml sits at the tree's root.

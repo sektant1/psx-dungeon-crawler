@@ -45,12 +45,25 @@ void UiCanvas::begin(glm::vec2 displayPixels, glm::ivec2 preferred) {
     // The virtual surface covers the whole window: layouts anchor to real
     // corners instead of living inside a letterboxed box.
     mVirtual = {int(displayPixels.x) / mScale, int(displayPixels.y) / mScale};
+    mOrigin = {0.0f, 0.0f};
+    mTarget = nullptr;
 }
 
-ImDrawList* UiCanvas::list() const { return ImGui::GetForegroundDrawList(); }
+void UiCanvas::beginTarget(glm::vec2 originPixels, glm::ivec2 virtualSize,
+                           int scale, ImDrawList* target) {
+    mScale = std::clamp(scale, 1, 8);
+    mVirtual = {std::max(virtualSize.x, 1), std::max(virtualSize.y, 1)};
+    mDisplay = {float(mVirtual.x * mScale), float(mVirtual.y * mScale)};
+    mOrigin = originPixels;
+    mTarget = target;
+}
+
+ImDrawList* UiCanvas::list() const {
+    return mTarget ? mTarget : ImGui::GetForegroundDrawList();
+}
 
 glm::vec2 UiCanvas::toScreen(glm::ivec2 at) const {
-    return {float(at.x * mScale), float(at.y * mScale)};
+    return {mOrigin.x + float(at.x * mScale), mOrigin.y + float(at.y * mScale)};
 }
 
 void UiCanvas::rect(glm::ivec2 at, glm::ivec2 size, unsigned int colour) const {

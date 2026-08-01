@@ -30,7 +30,7 @@ int main()
     using namespace game;
 
     PlayerWeaponLibrary library;
-    require(library.load(game::test::asset("weapons.toml")),
+    require(library.load(game::test::asset("config/weapons.toml")),
             "shipped player weapons did not load");
     require(library.defs().size() == 3,
             "shipped loadout must contain exactly three MVP weapons");

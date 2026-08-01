@@ -129,12 +129,29 @@ Per app:
 
 | App | Commands |
 |---|---|
-| any `FpsGameApp` | `quit`, `r.preset`, `stats`, `colliders`, `perf`, `tune` |
+| any `FpsGameApp` | `quit`, `r.preset`, `stats`, `colliders`, `perf`, `tune`, `time.scale`, `time.pause`, `time.step`, `profile`, `profile.csv` |
 | scene_editor | `quit`, `cook`, `play`, `frame`, `scene`, `save` |
 | psx_demo | `quit`, `pause`, `restart`, `tune`, `perf`, `hud`, `r.preset`, `cam.*`, `demo.*` |
 
 Parsing and dispatch never touch imgui, which is what makes
 `game/tests/DebugConsoleTests.cpp` a headless test.
+
+### Time and profiling
+
+`time.*` acts on the engine's **game** clock only (`eng::Clock`, see
+[engine-foundations.md](engine-foundations.md)). The loop, the renderer and the
+console itself run off the real clock, so a paused world is still inspectable:
+
+```
+time.pause          freeze the simulation; the camera and UI keep running
+time.step           advance exactly one 1/60 s step while paused
+time.scale 0.15     slow motion; 2 fast-forwards; 0 is another way to freeze
+profile             last frame's timing hierarchy, self time and call counts
+profile.csv out.csv the same tree as a spreadsheet
+```
+
+`PSX_PROFILE=<n>` prints that tree to the log every *n* frames with no UI at
+all — the version that works over ssh or inside a capture run.
 
 ## Adding it to a new app
 
@@ -180,11 +197,11 @@ system it edits, so no slider value, render profile or gameplay state can end up
 in the file.
 
 It exists so an arrangement can be *shipped*: drag the panels where you want
-them, quit, commit `engine/assets/ui/debug_layout_<app>.ini`.
+them, quit, commit `assets/ui/debug_layout_<app>.ini`.
 
 | | |
 |---|---|
-| Path | `engine/assets/ui/debug_layout_<game\|psx_demo\|scene_editor>.ini` |
+| Path | `assets/ui/debug_layout_<game\|psx_demo\|scene_editor>.ini` |
 | Named after | the running executable — not the window title, which carries a build tag |
 | Saved | on imgui's timer, and again on shutdown so the last minutes of a session are not lost |
 

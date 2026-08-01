@@ -181,7 +181,7 @@ bool readPacks(const toml::table& manifest, const fs::path& root,
             return false;
         }
 
-        // Normalised so the P0 manifest's "../engine/assets" hops -- which
+        // Normalised so the P0 manifest's "../assets/engine" hops -- which
         // disappear in P1/P2 -- do not leak into every logged path.
         std::error_code ec;
         pack.dir = fs::weakly_canonical(root / dir, ec);

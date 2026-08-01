@@ -1,0 +1,1146 @@
+# Particle effects for the game.
+#
+# Every key below is optional and falls back to the default in
+# ParticleEffectDesc, so an existing effect never has to be touched when a new
+# key is added. Beyond the presentation keys used throughout this file:
+#
+#   texture       = "ember"                 # PNG stem under particles/textures/,
+#                                           # preferred over `material`
+#   render_mode   = "sprite" | "voxel"      # billboard, or instanced cube
+#   drag          = 0.0                     # linear velocity damping, per second
+#   collide       = "none"|"die"|"bounce"|"decal"
+#   restitution   = 0.35                    # bounce: normal velocity retained
+#   friction      = 0.20                    # bounce: tangential velocity lost
+#   decal_profile = "blood_small"           # decal: which mark to leave
+#
+# Collision is opt-in and globally budgeted: asking for it buys best effort,
+# not a guarantee, so a large burst degrades in accuracy rather than framerate.
+
+# Spell VFX ---------------------------------------------------------------
+[[effect]]
+name = "spell_muzzle"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+base_width = 0.18
+base_height = 0.18
+quota = 32
+loop = false
+burst_count = 20
+acceleration = [0.0, -2.5, 0.0]
+rotation_jitter_deg = 140
+scale_jitter = 0.18
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 60
+ttl_min = 0.10
+ttl_max = 0.18
+velocity_min = 0.6
+velocity_max = 1.2
+start_colour = [1.0, 0.97, 0.72, 1.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.35
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.15
+
+[[effect]]
+name = "fireball_trail"
+visual_role = "gameplay"
+material = "Engine/Psx/Fire"
+base_width = 0.16
+base_height = 0.16
+quota = 96
+loop = true
+scale_jitter = 0.1
+acceleration = [0.0, 0.35, 0.0]
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 55
+emission_rate = 150
+ttl_min = 0.35
+ttl_max = 0.65
+velocity_min = 0.05
+velocity_max = 0.30
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.45, 0.08, 0.80]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [1.0, 0.70, 0.22, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.30
+
+[[effect]]
+name = "fireball_impact"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+base_width = 0.16
+base_height = 0.16
+quota = 64
+loop = false
+burst_count = 40
+acceleration = [0.0, -3.5, 0.0]
+rotation_jitter_deg = 180
+scale_jitter = 0.25
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.20
+ttl_max = 0.35
+velocity_min = 0.8
+velocity_max = 2.0
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.30, 0.04, 0.9]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [1.0, 0.60, 0.12, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.15
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.20
+
+[[effect]]
+name = "beam_core"
+visual_role = "critical"
+material = "Game/Spells/BeamCore"
+base_width = 0.12
+base_height = 0.12
+quota = 24
+loop = false
+burst_count = 16
+[[effect.emitter]]
+direction = [0,0,-1]
+angle = 3
+ttl_min = 0.08
+ttl_max = 0.12
+velocity_min = 4.0
+velocity_max = 6.0
+start_colour = [0.85, 1.0, 1.0, 1.0]
+
+[[effect]]
+name = "beam_impact"
+visual_role = "feedback"
+material = "Game/Spells/BeamImpact"
+base_width = 0.10
+base_height = 0.10
+quota = 48
+loop = false
+burst_count = 32
+acceleration = [0.0, -1.2, 0.0]
+rotation_jitter_deg = 160
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.15
+ttl_max = 0.25
+velocity_min = 0.6
+velocity_max = 1.6
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.20, 0.85, 1.0, 0.9]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.60, 1.0, 1.0, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.12
+
+# Torch / flame -----------------------------------------------------------
+[[effect]]
+name = "torch_fire"
+visual_role = "ambient"
+material = "Engine/Psx/Fire"
+base_width = 0.14
+base_height = 0.16
+quota = 20
+loop = true
+rotation_jitter_deg = 90
+acceleration = [0.0, 0.30, 0.0]
+scale_jitter = 0.14
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 16
+emission_rate = 12
+ttl_min = 0.24
+ttl_max = 0.46
+velocity_min = 0.20
+velocity_max = 0.42
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.82, 0.38, 0.88]
+[[effect.colour_ramp]]
+t = 0.65
+rgba = [1.0, 0.42, 0.10, 0.56]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.55, 0.07, 0.02, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.05
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.28
+
+[[effect]]
+name = "torch_glow"
+visual_role = "ambient"
+material = "Engine/Psx/Fire"
+base_width = 0.20
+base_height = 0.22
+quota = 6
+loop = true
+acceleration = [0.0, 0.18, 0.0]
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 7
+emission_rate = 4
+ttl_min = 0.18
+ttl_max = 0.30
+velocity_min = 0.08
+velocity_max = 0.18
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.68, 0.22, 0.32]
+[[effect.colour_ramp]]
+t = 0.55
+rgba = [1.0, 0.30, 0.06, 0.20]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.45, 0.03, 0.01, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.15
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.45
+
+[[effect]]
+name = "torch_ash"
+visual_role = "ambient"
+material = "Game/AshParticle"
+base_width = 0.09
+base_height = 0.09
+quota = 24
+loop = true
+rotation_jitter_deg = 120
+acceleration = [0.06, 0.12, 0.02]
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 18
+emission_rate = 4
+ttl_min = 0.9
+ttl_max = 1.6
+velocity_min = 0.45
+velocity_max = 0.7
+start_colour = [1.0, 0.45, 0.15, 1.0]
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 30
+emission_rate = 3
+ttl_min = 1.4
+ttl_max = 2.5
+velocity_min = 0.25
+velocity_max = 0.45
+start_colour = [0.30, 0.34, 0.28, 0.8]
+
+[[effect]]
+name = "fire_smoke"
+visual_role = "ambient"
+material = "Engine/Psx/Smoke"
+base_width = 0.13
+base_height = 0.13
+quota = 12
+loop = true
+rotation_jitter_deg = 35
+acceleration = [0.025, 0.10, 0.015]
+scale_jitter = 0.22
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 20
+emission_rate = 2.5
+ttl_min = 0.85
+ttl_max = 1.55
+velocity_min = 0.14
+velocity_max = 0.28
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.20, 0.19, 0.22, 0.22]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.34, 0.32, 0.36, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.65
+[[effect.size_ramp]]
+t = 1.0
+scale = 2.15
+
+# Impact debris -----------------------------------------------------------
+
+# Sparks thrown off a spell hitting stone. They exist to demonstrate bouncing:
+# the read is a handful of embers skittering along the floor after the flash has
+# already gone, which is what sells the impact as having happened *somewhere*
+# rather than in mid-air. Heavy gravity plus drag keeps them from sliding away
+# for longer than the eye wants to follow.
+[[effect]]
+name = "spark_bounce"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+render_mode = "sprite"
+base_width = 0.05
+base_height = 0.05
+quota = 48
+loop = false
+burst_count = 24
+acceleration = [0.0, -9.0, 0.0]
+drag = 0.9
+rotation_jitter_deg = 180
+scale_jitter = 0.3
+collide = "bounce"
+# Low restitution with high friction: two small hops, then rest. A springier
+# spark reads as rubber.
+restitution = 0.3
+friction = 0.45
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 110
+ttl_min = 0.5
+ttl_max = 0.9
+velocity_min = 1.6
+velocity_max = 3.4
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.85, 0.45, 1.0]
+[[effect.colour_ramp]]
+t = 0.6
+rgba = [1.0, 0.35, 0.06, 0.9]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.4, 0.05, 0.01, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.4
+
+# Chunks knocked out of a wall or a floor. Voxel mode, because a rotating cube
+# with flat per-face tones reads as solid debris at this resolution while a
+# billboard of the same size reads as a smudge. Larger and slower than the
+# sparks so the two layers do not compete.
+[[effect]]
+name = "stone_debris"
+visual_role = "feedback"
+material = "Game/AshParticle"
+render_mode = "voxel"
+base_width = 0.07
+base_height = 0.07
+quota = 32
+loop = false
+burst_count = 14
+acceleration = [0.0, -11.0, 0.0]
+drag = 0.35
+rotation_jitter_deg = 180
+scale_jitter = 0.45
+collide = "bounce"
+restitution = 0.22
+friction = 0.6
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 70
+ttl_min = 0.9
+ttl_max = 1.5
+velocity_min = 1.2
+velocity_max = 2.8
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.52, 0.49, 0.45, 1.0]
+[[effect.colour_ramp]]
+t = 0.8
+rgba = [0.38, 0.35, 0.33, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.30, 0.28, 0.26, 0.0]
+
+# Scene sparkles ----------------------------------------------------------
+[[effect]]
+name = "sparkles"
+visual_role = "ambient"
+material = "Game/Demo/Sparkle"
+base_width = 0.3
+base_height = 0.3
+quota = 32
+loop = true
+acceleration = [0.0, -0.12, 0.0]
+rotation_jitter_deg = 90
+scale_jitter = 0.12
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+emission_rate = 8
+ttl_min = 1.0
+ttl_max = 1.0
+velocity_min = 2.0
+velocity_max = 2.0
+start_colour = [1.0, 1.0, 1.0, 1.0]
+
+# Blood ------------------------------------------------------------------
+# Referenced by blood.toml profiles, not spawned by name from C++. The spray
+# and the gibs deliberately differ in render mode: fine spatter reads better as
+# a sprite, while chunks read better as solid voxels that catch the light.
+
+[[effect]]
+name = "blood_spray"
+visual_role = "feedback"
+# A texture stem, NOT the fire atlas: Engine/Psx/Fire is a 4x4 flipbook of
+# flame frames, so blood wearing it came out orange and animated. blood_drop is
+# a plain round droplet, and the ramp below is then the only thing that decides
+# what colour blood is.
+texture = "blood_drop"
+render_mode = "sprite"
+base_width = 0.075
+base_height = 0.075
+quota = 96
+loop = false
+burst_count = 34
+acceleration = [0.0, -11.0, 0.0]
+drag = 0.5
+rotation_jitter_deg = 180
+# Wide on purpose: every droplet a different size, heading and speed, so a hit
+# reads as a burst rather than as one stamp played twice.
+scale_jitter = 0.8
+# Droplets mark whatever they land on. Without this the spray vanishes in
+# mid-air and the hit leaves nothing behind.
+collide = "decal"
+decal_profile = "blood_splat"
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 95
+ttl_min = 0.30
+ttl_max = 1.05
+velocity_min = 1.6
+velocity_max = 6.5
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.85, 0.06, 0.05, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.40, 0.02, 0.02, 1.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.7
+
+[[effect]]
+name = "blood_gibs"
+visual_role = "feedback"
+# Solid voxel material: the voxel shader has no texture at all, it shades six
+# fixed face tones off the instance colour, so a chunk is exactly as red as the
+# ramp says. The darkest face is 0.42 of it -- which is why the ramp starts
+# bright rather than at the colour blood "is".
+material = "Engine/Particles/VoxelSolid"
+render_mode = "voxel"
+base_width = 0.11
+base_height = 0.11
+quota = 64
+loop = false
+burst_count = 20
+acceleration = [0.0, -14.0, 0.0]
+drag = 0.25
+rotation_jitter_deg = 180
+scale_jitter = 0.85
+# Heavier than the spray and barely bouncy: chunks land and stay.
+collide = "bounce"
+restitution = 0.16
+friction = 0.7
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 1.4
+ttl_max = 3.0
+velocity_min = 1.4
+velocity_max = 5.4
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.72, 0.06, 0.05, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.34, 0.03, 0.03, 1.0]
+
+[[effect]]
+name = "blood_drip"
+visual_role = "ambient"
+texture = "blood_drop"
+render_mode = "sprite"
+base_width = 0.05
+base_height = 0.07
+quota = 32
+loop = true
+acceleration = [0.0, -12.0, 0.0]
+scale_jitter = 0.6
+collide = "decal"
+decal_profile = "blood_splat_small"
+[[effect.emitter]]
+direction = [0,-1,0]
+angle = 22
+emission_rate = 7
+ttl_min = 0.6
+ttl_max = 1.1
+velocity_min = 0.1
+velocity_max = 0.6
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.70, 0.05, 0.04, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.38, 0.02, 0.02, 1.0]
+
+# Player weapon language ---------------------------------------------------
+# Loud on purpose: these are the player's own shots, and they are the one
+# thing on screen allowed to blow out. Start colours run past 1.0 so the
+# bloom pass catches them -- the threshold is 0.62 in the dungeon profile.
+
+[[effect]]
+name = "vesper_muzzle"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+base_width = 0.088
+base_height = 0.088
+quota = 48
+loop = false
+burst_count = 20
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,0,-1]
+angle = 35
+ttl_min = 0.06
+ttl_max = 0.11
+velocity_min = 0.675
+velocity_max = 1.890
+start_colour = [1.48, 0.80, 1.90, 0.95]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.1
+
+[[effect]]
+name = "vesper_trail"
+visual_role = "gameplay"
+material = "Engine/Psx/Fire"
+base_width = 0.045
+base_height = 0.088
+quota = 56
+loop = true
+drag = 2.0
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+emission_rate = 115
+ttl_min = 0.08
+ttl_max = 0.15
+velocity_min = 0.027
+velocity_max = 0.108
+start_colour = [1.37, 0.57, 1.90, 0.72]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.15
+
+[[effect]]
+name = "vesper_impact"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+render_mode = "voxel"
+base_width = 0.056
+base_height = 0.056
+quota = 56
+loop = false
+burst_count = 27
+acceleration = [0.0, -5.0, 0.0]
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.12
+ttl_max = 0.22
+velocity_min = 1.080
+velocity_max = 2.700
+start_colour = [1.37, 0.66, 1.90, 1.00]
+
+[[effect]]
+name = "eidolon_muzzle"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+render_mode = "voxel"
+base_width = 0.128
+base_height = 0.128
+quota = 72
+loop = false
+burst_count = 41
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,0,-1]
+angle = 55
+ttl_min = 0.10
+ttl_max = 0.20
+velocity_min = 1.350
+velocity_max = 3.780
+start_colour = [0.80, 1.67, 1.90, 1.00]
+
+[[effect]]
+name = "eidolon_trail"
+visual_role = "gameplay"
+material = "Engine/Psx/Fire"
+base_width = 0.072
+base_height = 0.128
+quota = 48
+loop = true
+drag = 1.5
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+emission_rate = 77
+ttl_min = 0.12
+ttl_max = 0.22
+velocity_min = 0.027
+velocity_max = 0.135
+start_colour = [0.61, 1.61, 1.90, 0.65]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.2
+
+[[effect]]
+name = "eidolon_impact"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+render_mode = "voxel"
+base_width = 0.104
+base_height = 0.104
+quota = 112
+loop = false
+burst_count = 58
+acceleration = [0.0, -7.0, 0.0]
+rotation_jitter_deg = 180
+scale_jitter = 0.25
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.18
+ttl_max = 0.36
+velocity_min = 1.890
+velocity_max = 5.130
+start_colour = [0.91, 1.75, 1.90, 1.00]
+
+[[effect]]
+name = "talon_muzzle"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+base_width = 0.112
+base_height = 0.072
+quota = 56
+loop = false
+burst_count = 31
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,0,-1]
+angle = 45
+ttl_min = 0.055
+ttl_max = 0.10
+velocity_min = 1.080
+velocity_max = 2.970
+start_colour = [1.90, 0.46, 0.10, 1.00]
+
+[[effect]]
+name = "talon_trail"
+visual_role = "gameplay"
+material = "Engine/Psx/Fire"
+render_mode = "voxel"
+base_width = 0.040
+base_height = 0.040
+quota = 64
+loop = true
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+emission_rate = 141
+ttl_min = 0.08
+ttl_max = 0.14
+velocity_min = 0.054
+velocity_max = 0.216
+start_colour = [1.90, 0.34, 0.06, 0.88]
+
+[[effect]]
+name = "talon_impact"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+base_width = 0.088
+base_height = 0.088
+quota = 84
+loop = false
+burst_count = 41
+acceleration = [0.0, -3.0, 0.0]
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.10
+ttl_max = 0.22
+velocity_min = 1.350
+velocity_max = 3.780
+start_colour = [1.90, 0.38, 0.04, 1.00]
+
+[[effect]]
+name = "weapon_hit_confirm"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+base_width = 0.035
+base_height = 0.035
+quota = 20
+loop = false
+burst_count = 12
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.055
+ttl_max = 0.09
+velocity_min = 1.2
+velocity_max = 2.2
+start_colour = [1.0, 0.95, 0.72, 1.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.2
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.05
+
+[[effect]]
+name = "enemy_overhead_telegraph"
+visual_role = "critical"
+material = "Engine/Psx/Fire"
+render_mode = "voxel"
+base_width = 0.08
+base_height = 0.12
+quota = 28
+loop = false
+burst_count = 22
+acceleration = [0.0, -1.5, 0.0]
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 20
+ttl_min = 0.28
+ttl_max = 0.42
+velocity_min = 0.7
+velocity_max = 1.4
+start_colour = [1.0, 0.72, 0.12, 1.0]
+
+[[effect]]
+name = "enemy_sweep_telegraph"
+visual_role = "critical"
+material = "Engine/Psx/Fire"
+base_width = 0.075
+base_height = 0.045
+quota = 36
+loop = false
+burst_count = 30
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [1,0,0]
+angle = 165
+ttl_min = 0.26
+ttl_max = 0.40
+velocity_min = 0.8
+velocity_max = 1.8
+start_colour = [1.0, 0.22, 0.04, 0.95]
+
+[[effect]]
+name = "enemy_pyre_telegraph"
+visual_role = "critical"
+material = "Engine/Psx/Fire"
+render_mode = "voxel"
+base_width = 0.09
+base_height = 0.09
+quota = 48
+loop = false
+burst_count = 38
+acceleration = [0.0, 1.8, 0.0]
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.30
+ttl_max = 0.48
+velocity_min = 0.3
+velocity_max = 1.1
+start_colour = [1.0, 0.08, 0.015, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.22, 0.01, 0.005, 0.0]
+
+[[effect]]
+name = "enemy_death_burst"
+visual_role = "feedback"
+material = "Engine/Psx/Fire"
+render_mode = "voxel"
+base_width = 0.09
+base_height = 0.09
+quota = 72
+loop = false
+burst_count = 44
+acceleration = [0.0, -11.0, 0.0]
+drag = 0.35
+rotation_jitter_deg = 180
+scale_jitter = 0.45
+collide = "bounce"
+restitution = 0.22
+friction = 0.65
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 70
+ttl_min = 0.7
+ttl_max = 1.6
+velocity_min = 2.0
+velocity_max = 5.8
+start_colour = [0.72, 0.24, 0.95, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.16, 0.03, 0.22, 0.0]
+
+[[effect]]
+name = "enemy_attack_telegraph"
+visual_role = "critical"
+material = "Engine/Psx/Fire"
+base_width = 0.10
+base_height = 0.10
+quota = 36
+loop = false
+burst_count = 28
+rotation_jitter_deg = 180
+[[effect.emitter]]
+direction = [0,1,0]
+angle = 180
+ttl_min = 0.24
+ttl_max = 0.42
+velocity_min = 0.35
+velocity_max = 0.9
+start_colour = [1.0, 0.16, 0.04, 0.95]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.25
+[[effect.size_ramp]]
+t = 0.45
+scale = 1.35
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.05
+
+
+# --- Showcase-only effects (were assets/demo/particles.toml) ------------
+#
+# Authored for this scene specifically rather than borrowed from the game's
+# combat set: the showcase is a slow turntable seen from a fixed distance, so
+# everything here is tuned for a continuous silhouette read at ~5 m rather than
+# for a burst that has to register in a fraction of a second.
+#
+# All of them use the engine's procedural VFX materials, so the scene ships no
+# particle textures of its own. They could instead name `texture = "<stem>"` to
+# pick up a generated material from particles/textures/, which is the preferred
+# route once a scene ships art.
+#
+# The optional keys none of these effects need, listed here so the schema is
+# discoverable from the file that uses it: `render_mode` ("sprite" | "voxel"),
+# `drag`, `collide` ("none" | "die" | "bounce" | "decal") with `restitution`,
+# `friction`, and `decal_profile`. The showcase is a turntable with no floor to
+# hit, so every effect here stays uncollided.
+
+# --- crystal shrine ---------------------------------------------------------
+
+# Motes lifting off the crystal cluster. The slow rise plus the long tail is
+# what reads as "arcane" rather than as smoke: fire particles accelerate and
+# die, these drift and fade.
+[[effect]]
+name = "crystal_motes"
+visual_role = "ambient"
+material = "Engine/Psx/ArcaneMote"
+base_width = 0.085
+base_height = 0.085
+quota = 90
+loop = true
+# Barely any gravity: the drift should look like buoyancy, not a lob.
+acceleration = [0.0, 0.55, 0.0]
+rotation_jitter_deg = 180
+scale_jitter = 0.35
+[[effect.emitter]]
+emission_rate = 14
+shape = "box"
+box_size = [1.1, 0.15, 1.1]
+direction = [0, 1, 0]
+angle = 26
+ttl_min = 2.2
+ttl_max = 3.6
+velocity_min = 0.20
+velocity_max = 0.55
+# Hot pink at birth, cooling to violet: the colour shift over life is what
+# stops a mote field reading as a flat sheet of dots.
+start_colour = [1.0, 0.36, 0.78, 0.0]
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.42, 0.86, 0.0]
+[[effect.colour_ramp]]
+t = 0.18
+rgba = [1.0, 0.55, 0.92, 0.95]
+[[effect.colour_ramp]]
+t = 0.7
+rgba = [0.72, 0.34, 0.98, 0.65]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.45, 0.22, 0.85, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.25
+[[effect.size_ramp]]
+t = 0.25
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.4
+
+# A tight, brighter core right at the crystal bases, so the effect has a source
+# instead of appearing out of empty air.
+[[effect]]
+name = "crystal_core"
+visual_role = "ambient"
+material = "Engine/Psx/ArcaneMote"
+base_width = 0.16
+base_height = 0.16
+quota = 40
+loop = true
+acceleration = [0.0, 0.3, 0.0]
+rotation_jitter_deg = 120
+scale_jitter = 0.2
+[[effect.emitter]]
+emission_rate = 7
+shape = "box"
+box_size = [0.5, 0.1, 0.5]
+direction = [0, 1, 0]
+angle = 18
+ttl_min = 0.9
+ttl_max = 1.6
+velocity_min = 0.15
+velocity_max = 0.35
+start_colour = [1.0, 0.72, 0.95, 0.0]
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.80, 0.98, 0.0]
+[[effect.colour_ramp]]
+t = 0.3
+rgba = [1.0, 0.62, 0.93, 1.0]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.85, 0.30, 0.80, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 1.2
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.2
+
+# --- portal -----------------------------------------------------------------
+
+# Wisps pulled INTO the portal rather than thrown out of it: negative-ish drift
+# toward the plane sells it as a way through instead of as a bonfire.
+[[effect]]
+name = "portal_draw"
+visual_role = "ambient"
+material = "Engine/Psx/PortalWisp"
+base_width = 0.13
+base_height = 0.13
+quota = 110
+loop = true
+acceleration = [0.0, 0.4, 0.0]
+rotation_jitter_deg = 200
+scale_jitter = 0.3
+[[effect.emitter]]
+emission_rate = 20
+shape = "box"
+box_size = [1.5, 1.9, 0.25]
+direction = [0, 1, 0]
+angle = 45
+ttl_min = 1.1
+ttl_max = 2.0
+velocity_min = 0.25
+velocity_max = 0.8
+start_colour = [0.35, 1.0, 0.42, 0.0]
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.55, 1.0, 0.55, 0.0]
+[[effect.colour_ramp]]
+t = 0.2
+rgba = [0.42, 1.0, 0.38, 0.9]
+[[effect.colour_ramp]]
+t = 0.75
+rgba = [0.18, 0.85, 0.30, 0.6]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.08, 0.45, 0.16, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.3
+[[effect.size_ramp]]
+t = 0.35
+scale = 1.15
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.25
+
+# Embers shedding off the portal's frame: warm against the green, so the stone
+# reads as separate from the magic rather than lit by it.
+[[effect]]
+name = "portal_embers"
+visual_role = "ambient"
+material = "Engine/Psx/Fire"
+base_width = 0.07
+base_height = 0.07
+quota = 36
+loop = true
+acceleration = [0.0, 0.9, 0.0]
+rotation_jitter_deg = 160
+scale_jitter = 0.4
+[[effect.emitter]]
+emission_rate = 5
+shape = "box"
+box_size = [1.7, 0.2, 0.3]
+direction = [0, 1, 0]
+angle = 30
+ttl_min = 1.4
+ttl_max = 2.4
+velocity_min = 0.3
+velocity_max = 0.7
+start_colour = [1.0, 0.62, 0.22, 0.0]
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.75, 0.35, 0.0]
+[[effect.colour_ramp]]
+t = 0.25
+rgba = [1.0, 0.55, 0.18, 0.85]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.55, 0.16, 0.05, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.8
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.15
+
+# --- treasure ---------------------------------------------------------------
+
+# Gold dust around the levitating chest. Emitted in a flat disc so it reads as
+# an aura the chest sits inside, not as a plume coming off it.
+[[effect]]
+name = "treasure_dust"
+visual_role = "ambient"
+material = "Engine/Psx/ArcaneMote"
+base_width = 0.075
+base_height = 0.075
+quota = 70
+loop = true
+# Slight downward drift: gold is heavy, and it separates this from the crystal
+# motes rising a few metres away.
+acceleration = [0.0, -0.22, 0.0]
+rotation_jitter_deg = 200
+scale_jitter = 0.3
+[[effect.emitter]]
+emission_rate = 12
+shape = "box"
+box_size = [0.85, 0.5, 0.85]
+direction = [0, 1, 0]
+angle = 80
+ttl_min = 1.6
+ttl_max = 2.8
+velocity_min = 0.12
+velocity_max = 0.42
+start_colour = [1.0, 0.85, 0.45, 0.0]
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [1.0, 0.92, 0.62, 0.0]
+[[effect.colour_ramp]]
+t = 0.2
+rgba = [1.0, 0.80, 0.38, 1.0]
+[[effect.colour_ramp]]
+t = 0.8
+rgba = [0.95, 0.58, 0.20, 0.55]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.6, 0.35, 0.10, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.3
+[[effect.size_ramp]]
+t = 0.3
+scale = 1.0
+[[effect.size_ramp]]
+t = 1.0
+scale = 0.35
+
+# --- atmosphere -------------------------------------------------------------
+
+# Slow dust falling through the whole scene. Cheap, and it is what makes the
+# volume read as a room with air in it rather than as objects on a stage.
+[[effect]]
+name = "hall_dust"
+visual_role = "ambient"
+material = "Engine/Psx/Smoke"
+base_width = 0.05
+base_height = 0.05
+quota = 120
+loop = true
+acceleration = [0.05, -0.12, 0.0]
+rotation_jitter_deg = 90
+scale_jitter = 0.5
+[[effect.emitter]]
+emission_rate = 16
+shape = "box"
+box_size = [7.0, 0.4, 7.0]
+direction = [0, -1, 0]
+angle = 20
+ttl_min = 5.0
+ttl_max = 8.0
+velocity_min = 0.05
+velocity_max = 0.18
+start_colour = [0.62, 0.66, 0.78, 0.0]
+[[effect.colour_ramp]]
+t = 0.0
+rgba = [0.62, 0.66, 0.78, 0.0]
+[[effect.colour_ramp]]
+t = 0.3
+rgba = [0.58, 0.62, 0.75, 0.30]
+[[effect.colour_ramp]]
+t = 1.0
+rgba = [0.5, 0.54, 0.68, 0.0]
+[[effect.size_ramp]]
+t = 0.0
+scale = 0.6
+[[effect.size_ramp]]
+t = 1.0
+scale = 1.3

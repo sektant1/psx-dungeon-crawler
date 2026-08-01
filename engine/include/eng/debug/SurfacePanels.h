@@ -30,7 +30,7 @@ class Renderer;
 // ships with so the first touch of a slider does not snap the look elsewhere.
 
 // One portal material's knobs, mirroring the defaults in
-// engine/assets/programs/vfx.program.
+// assets/engine/programs/vfx.program.
 struct PortalTuning {
     glm::vec4 dark{0.06f, 0.30f, 0.05f, 1.0f};
     glm::vec4 mid{0.16f, 1.05f, 0.07f, 1.0f};

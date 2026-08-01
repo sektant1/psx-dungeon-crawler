@@ -1,5 +1,6 @@
 #include "SceneValidate.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <map>
@@ -153,6 +154,30 @@ std::vector<Issue> validate(const SceneDocument& document,
         if (entity.exitYawDegrees) {
             ++exits;
             if (!exitEntity) exitEntity = &entity;
+        }
+
+        // A broken parent chain is silent in the viewport -- worldTransform()
+        // resolves the entity as if the missing link were the world, so it
+        // simply sits somewhere else than the author meant -- which is exactly
+        // why it has to be reported here.
+        if (!entity.parent.empty()) {
+            if (entity.parent == entity.id) {
+                add(issues, Severity::Error, "parent.self",
+                    "entity is its own parent", entity.id, QuickFix::ClearParent);
+            } else if (!document.contains(entity.parent)) {
+                add(issues, Severity::Error, "parent.missing",
+                    "parent '" + entity.parent + "' is not in this scene",
+                    entity.id, QuickFix::ClearParent);
+            } else {
+                const std::vector<AuthorId> below =
+                    document.descendantsOf(entity.id);
+                if (std::find(below.begin(), below.end(), entity.parent) !=
+                    below.end()) {
+                    add(issues, Severity::Error, "parent.cycle",
+                        "parent chain loops through '" + entity.parent + "'",
+                        entity.id, QuickFix::ClearParent);
+                }
+            }
         }
 
         if (!finite(entity.transform.position) ||
@@ -570,6 +595,19 @@ bool applyQuickFix(SceneDocument& document, const KitCatalog& catalog,
         entity->transform = XformAuthor{};
         document.touch();
         return true;
+    case QuickFix::ClearParent: {
+        if (entity->parent.empty()) return false;
+        // The entity keeps the place it was drawn in: its transform was local
+        // to a parent, and dropping the link without baking the chain would
+        // teleport it somewhere the author never put it.
+        const WorldTransform world = document.worldTransform(entity->id);
+        entity->parent.clear();
+        entity->transform.position = world.position;
+        entity->transform.rotationDegrees = authorRotationDegrees(world.orientation);
+        entity->transform.scale = world.scale;
+        document.touch();
+        return true;
+    }
     default:
         return false;
     }

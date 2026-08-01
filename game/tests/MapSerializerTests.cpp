@@ -1,6 +1,6 @@
 #include "GameComponents.h"
 #include "MapSerializer.h"
-#include <eng/ecs/MeshSource.h>
+#include <eng/ecs/components/MeshSource.h>
 
 #include <eng/ecs/Components.h>
 

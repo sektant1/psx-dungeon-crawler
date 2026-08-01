@@ -45,7 +45,7 @@ int main()
     game::test::mountGameAssets();
     const std::string ritual =
         game::test::asset("scenes/ritual_boss_showroom.scn");
-    const std::string kit = game::test::asset("kit.toml");
+    const std::string kit = game::test::asset("config/kit.toml");
     const std::string outDir = COOK_PARITY_OUT_DIR;
     const std::string inProcess = outDir + "/parity_inprocess.map";
     const std::string viaCli = outDir + "/parity_cli.map";

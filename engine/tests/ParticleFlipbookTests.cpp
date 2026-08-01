@@ -149,9 +149,9 @@ int main()
     }
 
     // --- the three files that must agree on the uniform names ---------------
-    const std::string vert = read("engine/assets/shaders/particle_sprite.vert");
+    const std::string vert = read("assets/shaders/particle_sprite.vert");
     const std::string material =
-        read("engine/assets/materials/particles.material");
+        read("assets/materials/particles.material");
     const std::string builder =
         read("engine/src/particles/ParticleMaterials.cpp");
     for (const char* name :
@@ -170,9 +170,9 @@ int main()
 
     // --- the generated import is present and well formed --------------------
     const std::string sheets =
-        read("engine/assets/particles/sprite_sheets.toml");
+        read("assets/particles/sprite_sheets.toml");
     require(!sheets.empty(),
-            "engine/assets/particles/sprite_sheets.toml is missing; run "
+            "assets/particles/sprite_sheets.toml is missing; run "
             "tools/import_sprite_sheets.py");
     requireText(sheets, "sheet = ", "an imported entry must name its sheet");
     requireText(sheets, "origin_row", "an imported entry must name its row");

@@ -27,5 +27,53 @@ void RendererSceneBackend::setLightColour(LightHandle l, glm::vec3 c)
 {
     mR.setLightColour(l, c);
 }
+void RendererSceneBackend::setNodeMaterial(NodeHandle n, const std::string& m)
+{
+    mR.setNodeMaterial(n, m);
+}
+void RendererSceneBackend::setNodeShaderParams(NodeHandle n,
+                                               const ShaderParams& p)
+{
+    mR.setNodeShaderParams(n, p);
+}
+void RendererSceneBackend::clearNodeShaderParams(NodeHandle n)
+{
+    mR.clearNodeShaderParams(n);
+}
+void RendererSceneBackend::setNodeShaderBlock(NodeHandle n,
+                                              const ShaderBlock& block)
+{
+    mR.setNodeShaderBlock(n, block);
+}
+void RendererSceneBackend::setNodeVisible(NodeHandle n, bool show)
+{
+    mR.setNodeVisible(n, show);
+}
+void RendererSceneBackend::setCameraNode(NodeHandle n)
+{
+    mR.attachCamera(n);
+}
+void RendererSceneBackend::setCameraLens(float fovDegrees, float nearClip,
+                                         float farClip)
+{
+    mR.setCameraFov(fovDegrees);
+    mR.setCameraClip(nearClip, farClip);
+}
+ParticlesHandle RendererSceneBackend::attachParticles(NodeHandle n,
+                                                      const std::string& effect,
+                                                      glm::vec3 localOffset)
+{
+    // By name, not by id: the component stores what the author typed, and an
+    // effect that is not in the library yet must not be an error here -- the
+    // renderer already returns an invalid handle for an unknown name, which
+    // SceneSync treats as "not attached yet" and retries next frame.
+    return mR.spawnParticles(effect, n, localOffset);
+}
+void RendererSceneBackend::detachParticles(ParticlesHandle h)
+{
+    // stop, not despawn: particles already in flight finish their lives instead
+    // of vanishing mid-air when the emitter is removed.
+    mR.stopParticles(h);
+}
 
 } // namespace eng::ecs

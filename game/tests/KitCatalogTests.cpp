@@ -1,5 +1,5 @@
 // The kit catalogue is the vocabulary the editor places and the cooker
-// resolves, so these assertions are against the REAL game/assets/kit.toml, not
+// resolves, so these assertions are against the REAL assets/game/kit.toml, not
 // a fixture: if an artist renames a piece or changes the cell size, this test
 // is where the build says so.
 
@@ -28,7 +28,7 @@ int main()
     game::test::mountGameAssets();
     KitCatalog catalog;
     std::string error;
-    require(KitCatalog::load(game::test::asset("kit.toml"), catalog, error),
+    require(KitCatalog::load(game::test::asset("config/kit.toml"), catalog, error),
             ("kit.toml loads: " + error).c_str());
 
     // The unit contract every placement depends on: 20 kit units at 0.2 = 4 m.

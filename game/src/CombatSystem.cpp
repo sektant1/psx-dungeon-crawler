@@ -16,12 +16,12 @@ void CombatSystem::init(GameContext& ctx)
     reloadPresentation(ctx);
     // Damage model: weapon table (weapons.toml overlays built-in defaults).
     // The channel names it uses are resolved against the world's vocabulary.
-    mDirector.init(assetPath("weapons.toml"), ctx.vocabulary);
+    mDirector.init(assetPath("config/weapons.toml"), ctx.vocabulary);
 }
 
 void CombatSystem::reloadPresentation(GameContext& ctx)
 {
-    mBlood.load(ctx.renderer, assetPath("blood.toml"));
+    mBlood.load(ctx.renderer, assetPath("config/blood.toml"));
 }
 
 void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,

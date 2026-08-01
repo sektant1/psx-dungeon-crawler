@@ -37,9 +37,9 @@ void requireText(const std::string& text, const char* expected,
 
 int main()
 {
-    const std::string programs = read("engine/assets/programs/psx.program");
-    const std::string materials = read("engine/assets/materials/psx.material");
-    const std::string shader = read("engine/assets/shaders/particle.frag");
+    const std::string programs = read("assets/programs/psx.program");
+    const std::string materials = read("assets/materials/psx.material");
+    const std::string shader = read("assets/shaders/particle.frag");
     const std::string runtime = read("engine/src/particles/Particles.cpp");
     const std::string presets =
         read("engine/src/particles/ParticlePresets.cpp");
@@ -140,7 +140,7 @@ int main()
                 "r.spawnParticles(style.particles, arch)",
                 "portal wisps are not centered on the portal membrane");
 
-    const std::string showcase = read("game/assets/showroom_exhibits.toml");
+    const std::string showcase = read("assets/config/showroom_exhibits.toml");
     for (const char* id : {"fire_particles", "smoke_particles",
                            "rain_volume"}) {
         const std::string altar = exhibit(showcase, id);

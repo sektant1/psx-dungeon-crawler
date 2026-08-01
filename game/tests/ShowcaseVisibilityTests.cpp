@@ -64,14 +64,14 @@ int main()
             "an exhibit without an authored range must remain available");
 
     const std::string path =
-        game::test::asset("showroom_exhibits.toml");
+        game::test::asset("config/showroom_exhibits.toml");
     const toml::parse_result parsed = toml::parse_file(path);
     require(bool(parsed), "showroom exhibit TOML must parse");
     const toml::array* exhibits = parsed.table()["exhibit"].as_array();
     require(exhibits != nullptr, "showroom must contain exhibits");
 
     const toml::parse_result showroom = toml::parse_file(
-        game::test::asset("showroom.toml"));
+        game::test::asset("config/showroom.toml"));
     require(bool(showroom), "showroom TOML must parse");
     const toml::array* rowNodes = showroom.table()["dungeon"]["rows"].as_array();
     require(rowNodes != nullptr, "showroom must contain dungeon rows");
@@ -159,7 +159,7 @@ int main()
         "arrival_path", "reliquary_path", "proving_path"};
     require(ids == requiredIds, "showroom must retain every feature exhibit");
 
-    const toml::parse_result demo = toml::parse_file(game::test::asset("demo_scene.toml"));
+    const toml::parse_result demo = toml::parse_file(game::test::asset("config/demo_scene.toml"));
     require(bool(demo), "shared crystal scene must parse");
     const toml::table* crystals = demo.table()["crystals"].as_table();
     require(crystals && (*crystals)["spire"].as_array() &&

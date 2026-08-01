@@ -214,11 +214,11 @@ int main()
     }
 
     const std::string vertex =
-        read("engine/assets/shaders/enchantment.vert");
+        read("assets/shaders/enchantment.vert");
     const std::string fragment =
-        read("engine/assets/shaders/enchantment.frag");
+        read("assets/shaders/enchantment.frag");
     const std::string program =
-        read("engine/assets/programs/enchantment.program");
+        read("assets/programs/enchantment.program");
     const std::string renderer = read("engine/src/render/Renderer.cpp");
 
     requireText(vertex, "in vec3 normal",

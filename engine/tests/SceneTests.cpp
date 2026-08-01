@@ -1,4 +1,4 @@
-#include <eng/ecs/Scene.h>
+#include <eng/ecs/World.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -10,7 +10,7 @@ static void require(bool c, const char* m) {
 }
 
 int main() {
-    Scene scene;
+    World scene;
 
     const entt::entity a = scene.create("alpha");
     const entt::entity b = scene.create();
@@ -28,7 +28,7 @@ int main() {
 
     // destroy() removes the entity from its parent's Children list.
     {
-        Scene s2;
+        World s2;
         auto p = s2.create("parent");
         auto c = s2.create("child");
         s2.registry().emplace<Children>(p, std::vector<entt::entity>{c});
@@ -41,20 +41,76 @@ int main() {
 
     // destroy() orphans the entity's children (keeps them alive).
     {
-        Scene s3;
+        World s3;
         auto p = s3.create("parent");
         auto c = s3.create("child");
-        s3.registry().emplace<Children>(p, std::vector<entt::entity>{c});
-        s3.registry().emplace<Parent>(c, p);
+        s3.setParent(c, p);
+        s3.updateWorldTransforms(); // both clean
         s3.destroy(p);
         require(!s3.registry().valid(p), "parent destroyed");
         require(s3.registry().valid(c), "child survives");
         require(s3.registry().get<Parent>(c).value == entt::null,
                 "child orphaned");
+        // The orphan's world transform still has the dead parent's baked in,
+        // and nothing else will ever ask for it to be recomputed.
+        require(s3.registry().all_of<Dirty>(c),
+                "an orphan is re-dirtied so its world transform stops lying");
+    }
+
+    // destroyHierarchy() takes the subtree: a rig is one object.
+    {
+        World sh;
+        auto root = sh.create("root");
+        auto mid = sh.create("mid");
+        auto leaf = sh.create("leaf");
+        auto bystander = sh.create("bystander");
+        sh.setParent(mid, root);
+        sh.setParent(leaf, mid);
+        sh.destroyHierarchy(root);
+        require(!sh.registry().valid(root) && !sh.registry().valid(mid) &&
+                    !sh.registry().valid(leaf),
+                "the whole subtree is destroyed");
+        require(sh.registry().valid(bystander), "and nothing else is");
+        sh.destroyHierarchy(root); // already gone
+        require(sh.registry().valid(bystander), "destroying twice is safe");
+    }
+
+    // A parent that never went through create() -- what a deserialised map is
+    // made of -- has neither Dirty nor a WorldTransform. Resolving a child of
+    // one used to read a component that was not there.
+    {
+        World sd;
+        entt::registry& reg = sd.registry();
+        const entt::entity group = reg.create();
+        reg.emplace<Transform>(group, Transform{glm::vec3(4.0f, 0.0f, 0.0f),
+                                                glm::quat(1, 0, 0, 0),
+                                                glm::vec3(1.0f)});
+        const entt::entity child = reg.create();
+        reg.emplace<Transform>(child, Transform{glm::vec3(1.0f, 0.0f, 0.0f),
+                                                glm::quat(1, 0, 0, 0),
+                                                glm::vec3(1.0f)});
+        sd.setParent(child, group); // dirties the child only
+        sd.updateWorldTransforms();
+        require(reg.all_of<WorldTransform>(group),
+                "an unresolved parent is resolved on demand");
+        require(reg.get<WorldTransform>(child).matrix[3][0] == 5.0f,
+                "and the child composes against it");
+    }
+
+    // An entity with no Transform at all (the add/remove menu can take one off)
+    // must not take the resolve pass down with it.
+    {
+        World sn;
+        entt::registry& reg = sn.registry();
+        const entt::entity bare = sn.create("bare");
+        reg.remove<Transform>(bare);
+        sn.updateWorldTransforms();
+        require(reg.get<WorldTransform>(bare).matrix == glm::mat4(1.0f),
+                "a transformless entity resolves to identity");
     }
 
     // --- transforms ---
-    Scene s2t;
+    World s2t;
     const entt::entity root = s2t.create("root");
     Transform rt;
     rt.position = {10.0f, 0.0f, 0.0f};
@@ -68,7 +124,7 @@ int main() {
     require(wm[3][1] == 0.0f && wm[3][2] == 0.0f, "world translation Y/Z zero");
 
     // --- hierarchy ---
-    Scene s3h;
+    World s3h;
     const entt::entity parent = s3h.create("parent");
     const entt::entity child = s3h.create("child");
     Transform pt; pt.position = {5.0f, 0.0f, 0.0f};
@@ -92,7 +148,7 @@ int main() {
     require(cw2[3][0] == 2.0f && cw2[3][1] == 3.0f, "child follows parent");
 
     // --- unparent ---
-    Scene su;
+    World su;
     const entt::entity up = su.create("up_parent");
     const entt::entity uc = su.create("up_child");
     su.setParent(uc, up);
@@ -103,7 +159,7 @@ int main() {
             "child removed from old parent on unparent");
 
     // --- 3-level dirty propagation chain ---
-    Scene sc;
+    World sc;
     const entt::entity gp = sc.create("gp");
     const entt::entity pa = sc.create("pa");
     const entt::entity ch2 = sc.create("ch");
@@ -123,7 +179,7 @@ int main() {
             "grandchild follows grandparent (10+2+4)");
 
     // --- cycle guard: setParent that would form a cycle is rejected ---
-    Scene scy;
+    World scy;
     const entt::entity x = scy.create("x");
     const entt::entity y = scy.create("y");
     scy.setParent(y, x);          // y under x

@@ -171,7 +171,7 @@ glm::quat facing(glm::vec3 subject, glm::vec3 eye)
 // being true the moment the editor ran against anything but the source tree.
 std::string previewCatalogPath()
 {
-    return assets::resolve("engine/material_preview.toml").string();
+    return assets::resolve("config/material_preview.toml").string();
 }
 
 // A one-key schema does not justify pulling toml++ into the editor target,

@@ -3,7 +3,7 @@
 #include "GameCollision.h"
 
 #include "GameComponents.h"
-#include <eng/ecs/MeshSource.h>
+#include <eng/ecs/components/MeshSource.h>
 
 #include "../DungeonGen.h"
 
@@ -89,7 +89,7 @@ bool layoutToScene(const gen::Layout& layout, const SceneGenOptions& opts,
     const glm::vec3 origin{-(anchor.col + 0.5f) * cell, 0.0f,
                            -(anchor.row + 0.5f) * cell};
 
-    // Kit pieces are authored on a 20-unit grid (see game/assets/kit.toml),
+    // Kit pieces are authored on a 20-unit grid (see assets/game/kit.toml),
     // centred on X/Z with their base at Y=0. DungeonMap bakes that into the
     // mesh at load; here there is no renderer, so the same conversion rides on
     // the entity's Transform scale instead.

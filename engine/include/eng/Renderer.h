@@ -1,6 +1,8 @@
 #pragma once
 #include <eng/Handles.h>
 #include <eng/LightDesc.h>
+#include <eng/ShaderBlock.h>
+#include <eng/ShaderUniforms.h>
 #include <eng/particles/DecalSystem.h>
 #include <eng/particles/ParticleCollider.h>
 #include <eng/particles/ParticleEffectDesc.h>
@@ -255,6 +257,37 @@ public:
                           const std::string& paramName, glm::vec3 value);
     void setMaterialParam(const std::string& materialName,
                           const std::string& paramName, glm::vec4 value);
+
+    // Per-node shader uniforms: give this node's meshes their own copy of the
+    // material they wear, and set the PSX family's per-entity uniforms on it
+    // (see eng::ecs::ShaderParams for what each one drives).
+    //
+    // A named material is shared -- `Game/Kit/Dungeon` is one object a hundred
+    // and sixty walls point at -- so setMaterialParam below tints all of them.
+    // This clones instead, which costs a material and breaks this node out of
+    // its batch. That is the right trade for the handful of hero objects that
+    // want it and the wrong one for a level, which is why it is opt-in per
+    // node and never applied by default.
+    //
+    // The clone is made once per subentity and reused, so calling this every
+    // frame with an animated value costs constant sets, not clones. Reverted by
+    // clearNodeShaderParams(), which puts the shared material back.
+    void setNodeShaderParams(NodeHandle node, const ShaderUniforms& params);
+    void clearNodeShaderParams(NodeHandle node);
+
+    // The general form: push an arbitrary block of uniforms onto this node's
+    // private material, taking each uniform's name, type and address from the
+    // block's own field table (see eng/ShaderBlock.h).
+    //
+    // This is what lets a shader have a component without the renderer knowing
+    // the shader exists. `setNodeShaderParams` above is the same mechanism with
+    // the PSX family's six knobs hard-coded, kept because those six are
+    // universal and worth a typed call.
+    //
+    // Shares the clone with setNodeShaderParams -- one private material per
+    // subentity, however many blocks are pushed onto it -- so an entity may
+    // carry both a portal block and the universal tint.
+    void setNodeShaderBlock(NodeHandle node, const ShaderBlock& block);
 
     // Sets a float param on EVERY loaded material that declares it, in both
     // vertex and fragment program params (emulates a Godot global uniform).

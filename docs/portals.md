@@ -132,10 +132,10 @@ cached engine-side and no rebuild is involved.
 - **Push all** re-sends the whole panel, for when a material was reloaded under
   it.
 - **Copy as material params** puts the block on the clipboard. Paste it into
-  `game/assets/materials/vfx.material` — *that* file is where a tuned portal is
+  `assets/materials/vfx.material` — *that* file is where a tuned portal is
   kept; the panel is only where it is found.
 
-The defaults live in `engine/assets/programs/vfx.program` (and its art-free twin
+The defaults live in `assets/programs/vfx.program` (and its art-free twin
 `prototype_vfx.program`). A material profile overrides only what makes it a
 profile: `Game/PortalDown` is fel-green and flows inward, `Game/PortalUp` is
 arcane-blue and runs outward and counter-rotating, so the pair reads as
@@ -186,7 +186,7 @@ button — bloom belongs to the render profile, not to a material.
 The **Dressing** section edits the live prop rather than the material: the light
 the portal throws into the room (`Renderer::setLightColour` / `setLightRange`)
 and the particle effect drifting in front of it, picked from every effect in
-`game/assets/particles.toml`. Switching the effect despawns the portal's
+`assets/config/particles.toml`. Switching the effect despawns the portal's
 instance and spawns one of the new definition on the same node, because an
 effect is a definition and the portal holds one instance of it. That selection
 lives only for the session; the prop's shipped values are `PortalPropStyle`
@@ -207,7 +207,7 @@ one arm.
 
 ## Adding a portal profile
 
-No shader work. Copy a `material` block in `game/assets/materials/vfx.material`,
+No shader work. Copy a `material` block in `assets/materials/vfx.material`,
 rename it, change the palette and the flow, and point a `PortalPropStyle` at the
 new name:
 
@@ -234,7 +234,7 @@ material Game/PortalVoid
 
 Two rules the material has to keep: `filtering none` (the flow texture is
 pixel art) and `tex_address_mode wrap` (both sampling axes wrap). Add the
-matching art-free profile to `engine/assets/materials/prototype_vfx.material` if
+matching art-free profile to `assets/materials/prototype_vfx.material` if
 the portal should still read when the textures are missing.
 
 ## Verifying

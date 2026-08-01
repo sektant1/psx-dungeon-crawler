@@ -14,7 +14,7 @@ Two halves of one refactor:
   naming rule. Dropping a `.glb` next to a `.obj` must change nothing above the
   importer.
 
-Related: `ARCHITECTURE.md` (layering), `ASSETS_PIPELINE.md` (authoring
+Related: `ARCHITECTURE.md` (layering), `docs/assets-pipeline.md` (authoring
 checklist), `tools/assetlint.py` (content gate).
 
 ---
@@ -693,7 +693,7 @@ Detail and options: `docs/design/2026-07-31-mesh-importer-plan.md`.
 
 **P11 — Install + docs.** `install()` rules; verify a staged install runs from
 outside the source tree with no `PSX_ASSET_ROOT` set. Rewrite the content
-sections of `ARCHITECTURE.md` and `ASSETS_PIPELINE.md`; add
+sections of `ARCHITECTURE.md` and `docs/assets-pipeline.md`; add
 `docs/asset-system.md`: root discovery, packs, mount order, the three data
 tiers, the naming rule, adding a pack, adding an asset, **adding a format**
 (the `MeshImporter` walkthrough).

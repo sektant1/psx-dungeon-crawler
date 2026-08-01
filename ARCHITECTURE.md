@@ -1,7 +1,7 @@
 # Architecture
 
 How the code is layered, and what enforces the layering. For *what the game is*
-see `AGENTS.md`; for asset authoring see `ASSETS_PIPELINE.md`.
+see `AGENTS.md`; for asset authoring see `docs/assets-pipeline.md`.
 
 ## Layers
 
@@ -12,10 +12,10 @@ dependency that points upward is a **link error**, not a review comment.
 |---|---|---|
 | `game` (exe) | combat, dungeon generation, player, bosses, items, UI | `eng` |
 | `eng` | application lifetime (`Engine`), the facade consumers link | `eng_framework` |
-| `eng_framework` | ECS scene, scene sync, controllers | `eng_systems` |
+| `eng_framework` | the ECS world, its components and reconcilers, controllers | `eng_systems` |
 | `eng_systems` | renderer, physics, audio, particles — the only layer that sees Ogre/Jolt/SDL/miniaudio | `eng_platform` |
 | `eng_platform` | window, input, config | `eng_core` |
-| `eng_core` | log, io, geometry, events, profiling, step clock | glm only |
+| `eng_core` | log, io, geometry, events, profiling, clocks, string ids | glm only |
 
 `eng` is the only target an application names. Everything else arrives
 transitively.
@@ -35,6 +35,32 @@ a layer and fails on an upward include. It runs as the `layering` ctest.
 Splitting the include root per layer is deliberately *not* done yet — it would
 move ~60 headers for an enforcement guarantee the lint already provides.
 
+### Foundations in `eng_core`
+
+Three facilities everything above is allowed to assume, documented in
+[docs/engine-foundations.md](docs/engine-foundations.md):
+
+- **`eng::Clock`** — the game timeline, separate from the wall clock. Simulation
+  reads `FrameContext::dt` (scalable, pausable); anything that must keep moving
+  over a frozen world reads `FrameContext::realDt`.
+- **`eng::StringId`** — 64-bit hashed names, `constexpr` from a literal, so an id
+  compares in a cycle and can be a `case` label.
+- **`eng::Profiler`** — hierarchical in-game timings with self time and call
+  counts. `runApplication()` annotates the loop phases; a game nests its own.
+
+### The ECS
+
+One `eng::ecs::World` per simulated world: one registry, one hierarchy, and the
+reconcilers that drive the renderer and physics from it. Components are one file
+each under `eng/ecs/components/` and carry field reflection, so adding one is a
+header plus one registration line — the `.map` payload, the inspector and the
+add-component menu all read the same table. See [docs/ecs.md](docs/ecs.md).
+
+The camera is one of those components, which is what makes a shot authored
+rather than coded: an orbiting camera is a `Camera` parented to a pivot with a
+`Spin`. See [docs/authoring-shots.md](docs/authoring-shots.md) for the workflow
+and how a scene becomes a GIF.
+
 ## Content checks
 
 A missing mesh or material does not crash this engine: `eng::prototype` draws a
@@ -44,8 +70,36 @@ time — it turns a typo into a scene that quietly looks wrong. `tools/assetlint
 each application's asset tree and fails on a dangling one, a duplicate material
 name, or two textures sharing a basename (Ogre's lookup is flat).
 
-Uniqueness is checked per application: `game` and `psx-demo` never have their
-asset roots registered at the same time, so both may define `Game/Demo/Floor`.
+## Content root
+
+All shipped content lives under one root, `assets/`, split into **packs**:
+
+```
+assets/
+  assets.toml     the manifest: packs, mount sets, resource dirs
+  engine/         engine-owned: shaders, programs, materials, fonts, particles
+  game/           the game: materials, meshes, textures, scenes, config TOMLs
+  demo/           the sample's deltas only -- 4 files
+```
+
+`eng::assets` (in `eng_core`) discovers the root at runtime, reads the
+manifest, and resolves a *logical* path — `assets::resolve("enemies.toml")` —
+against the mounted packs in order. No application bakes an asset path into its
+binary any more, and `RenderCore` registers exactly the directories the manifest
+declares rather than walking the tree.
+
+**Every app mounts every pack**, so `game`, `scene_editor` and `psx_demo` all
+reach the same content. Mount *order* (`game > demo > engine`, with an app's own
+pack on top) only decides who wins if two packs answer to the same logical path.
+
+That makes material names globally unique by necessity, which is why they are
+`Pack/<defining .material file stem>/Name` — a rule `assetlint` checks, so it
+cannot drift. Ogre resolves both material names and file basenames flatly, and
+a duplicate material name is not a warning: `ResourceManager::add` throws and
+the app aborts during script parsing.
+
+Source art (`.zip`, `.rar`, `.blend`) sits under `assets/` beside the packs and
+is gitignored by extension — it is a pipeline input, not a build input.
 
 ## Running the checks
 
