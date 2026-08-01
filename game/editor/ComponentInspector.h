@@ -19,6 +19,9 @@ struct InspectorContext {
     const game::content::KitCatalog* catalog = nullptr;
     // Material ids offered as an override on a mesh. Owned by the editor.
     const std::vector<std::string>* materialNames = nullptr;
+    // Effect names from the particle library, so the Particles component picks
+    // from what exists instead of taking a string nobody validates.
+    const std::vector<std::string>* particleEffects = nullptr;
     // The vocabularies the game itself defines: enemy ids from enemies.toml,
     // pickup ids, and the marker prefixes the runtime looks up.
     //

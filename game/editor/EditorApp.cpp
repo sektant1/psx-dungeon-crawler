@@ -3748,6 +3748,13 @@ void EditorApp::drawInspector()
     context.pickupIds = &mPickupIds;
     context.materials = &materialCatalog();
     context.meshKind = selectionMeshKind();
+    // Rebuilt each frame from the live library: the Particles panel can add and
+    // rename effects, and a stale list would offer a name that no longer
+    // resolves -- which plays nothing, silently.
+    mParticleEffectNames.clear();
+    for (const eng::ParticleEffectDesc& d : mParticles.descs())
+        mParticleEffectNames.push_back(d.name);
+    context.particleEffects = &mParticleEffectNames;
 
     drawEntityIdentity(*entity, context);
 
@@ -3755,10 +3762,28 @@ void EditorApp::drawInspector()
     // registry. The panel has no idea what a light or a trigger is: adding a
     // component type means one entry in EntityComponents.cpp and one drawer in
     // ComponentInspector.cpp, and this loop picks it up.
+    // Grouped and always in the same order (ComponentGroup): appearance,
+    // physical, gameplay, placement. Before, sections came out in table order,
+    // so "where is the material" depended on which entity was selected -- and
+    // the answer to a fixed question moving around the screen is what makes a
+    // panel unscannable.
     const ComponentType* removeRequested = nullptr;
+    ComponentGroup band = ComponentGroup::Placement;
+    bool first = true;
     for (const ComponentType* type : componentsOf(*entity)) {
+        if (first || type->group != band) {
+            band = type->group;
+            first = false;
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s", componentGroupName(band));
+        }
         ImGui::PushID(type->id);
-        ImGui::SeparatorText(type->label);
+        // Collapsible, and open by default: a dense entity was one long scroll
+        // with no way to fold away the part being ignored, and the parts an
+        // author is not editing are most of it.
+        const bool open = ImGui::CollapsingHeader(
+            type->label, ImGuiTreeNodeFlags_DefaultOpen |
+                             ImGuiTreeNodeFlags_AllowOverlap);
         if (type->remove) {
             // Right-aligned so the sections read as a column of headers rather
             // than a column of buttons.
@@ -3767,14 +3792,25 @@ void EditorApp::drawInspector()
             if (ImGui::SmallButton("x"))
                 removeRequested = type;
             if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("remove %s", type->label);
+                ImGui::SetTooltip("remove %s from the selection", type->label);
         }
-        drawComponentBody(*type, *entity, context);
+        if (open) {
+            ImGui::Indent(8.0f);
+            drawComponentBody(*type, *entity, context);
+            ImGui::Unindent(8.0f);
+        }
         ImGui::PopID();
     }
 
-    ImGui::Separator();
-    if (ImGui::Button("Add Component", ImVec2(-1.0f, 0.0f)))
+    ImGui::Spacing();
+    // Ctrl+A over the panel is the keyboard route to the same popup: adding a
+    // component is the most repeated action here and it was a mouse trip to a
+    // button at the bottom of an arbitrarily long list.
+    const bool addShortcut =
+        ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A);
+    if (ImGui::Button("Add Component   (Ctrl+A)", ImVec2(-1.0f, 0.0f)) ||
+        addShortcut)
         ImGui::OpenPopup("##addcomponent");
     if (ImGui::BeginPopup("##addcomponent")) {
         ImGui::SetNextItemWidth(220.0f);
@@ -3786,11 +3822,22 @@ void EditorApp::drawInspector()
         const ComponentDefaults defaults = componentDefaults();
         const std::string filter = mAddComponentFilter;
         int offered = 0;
+        ComponentGroup menuBand = ComponentGroup::Placement;
+        bool menuFirst = true;
         for (const ComponentType* type : missingComponents(*entity)) {
             if (!filter.empty() &&
                 std::string(type->label).find(filter) == std::string::npos &&
                 std::string(type->id).find(filter) == std::string::npos)
                 continue;
+            // Same bands as the panel below it, so the menu is a map of where
+            // the thing you are adding will appear.
+            if (menuFirst || type->group != menuBand) {
+                menuBand = type->group;
+                menuFirst = false;
+                if (offered > 0)
+                    ImGui::Separator();
+                ImGui::TextDisabled("%s", componentGroupName(menuBand));
+            }
             ++offered;
             const bool ready = !type->addable || type->addable(defaults);
             if (ImGui::MenuItem(type->label, nullptr, false, ready)) {
@@ -3993,6 +4040,35 @@ void EditorApp::drawMaterialPanel()
         mStage.buildThumbnail(renderer, 256);
         mMaterialNames = renderer.materialNames();
         std::sort(mMaterialNames.begin(), mMaterialNames.end());
+    }
+
+    // The preview follows the selection. Selecting a wall and looking at a
+    // sphere wearing something else is the panel answering a question nobody
+    // asked -- and it made "what is this pillar wearing" a trip through the
+    // material list to find the name first.
+    //
+    // Only when the selection *changes*, so clicking a name in the list below
+    // still previews that name: the author is then asking about the material,
+    // not about the entity.
+    const AuthorId* previewOf = mState.primary();
+    const std::string selectedId = previewOf ? *previewOf : std::string();
+    if (selectedId != mPreviewedEntity) {
+        mPreviewedEntity = selectedId;
+        if (const Entity* e = previewOf ? mState.document.find(*previewOf)
+                                        : nullptr) {
+            // The entity's override, else what its kit piece wears. An entity
+            // with neither has nothing to say and the swatch keeps its last
+            // subject rather than blanking.
+            std::string worn = e->material;
+            if (worn.empty()) {
+                if (const KitPiece* piece = mState.catalog.find(e->prefab))
+                    worn = piece->material;
+            }
+            if (!worn.empty()) {
+                mSelectedMaterial = worn;
+                mStage.setThumbnailMaterial(renderer, worn);
+            }
+        }
     }
 
     // --- preview -----------------------------------------------------------

@@ -45,6 +45,9 @@ enum class GizmoKind {
     // the volume it will see is a framing decision an author can make by
     // looking at it.
     Camera,
+    // The ring an entity travels. Drawn on the entity's own mark, because the
+    // ring is a property of its motion rather than a thing of its own.
+    Orbit,
     Collider,
 };
 
@@ -82,6 +85,13 @@ struct GizmoMark {
     // the information. A room of light spheres buries the level; one camera
     // frustum is the shot.
     bool volumeAlways = false;
+    // An orbit ring, in the entity's own frame. Zero radius means the mark has
+    // none. Like the camera's fov, the numbers behind it -- a centre, a radius,
+    // an inclination -- cannot be judged as numbers; the circle they cut
+    // through the room is the decision itself.
+    float orbitRadius = 0.0f;
+    glm::vec3 orbitCentre{0.0f};
+    glm::vec3 orbitAxis{0.0f, 1.0f, 0.0f};
 };
 
 // Every mark the document implies. An entity can produce more than one -- a

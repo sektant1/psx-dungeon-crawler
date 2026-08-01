@@ -432,6 +432,11 @@ private:
     // the frame it is honoured. Set when the selection came from anywhere but
     // the panel -- a viewport pick, a command, an undo.
     game::content::AuthorId mOutlinerReveal;
+    // Whose material the swatch is currently showing, so the preview follows a
+    // change of selection without overriding a click in the material list.
+    game::content::AuthorId mPreviewedEntity;
+    // Effect names for the Particles component's combo, refreshed per frame.
+    std::vector<std::string> mParticleEffectNames;
     char mAddComponentFilter[64] = {};
     bool mThumbAutoSpin = true;
     bool mCycleMaterials = false;

@@ -337,6 +337,12 @@
         },
         "portal": {
           "$ref": "#/$defs/portal"
+        },
+        "orbit": {
+          "$ref": "#/$defs/orbit"
+        },
+        "particles": {
+          "$ref": "#/$defs/particles"
         }
       }
     },
@@ -381,6 +387,64 @@
       "type": "object",
       "description": "The portal shader's uniforms, on this entity. Keys are the uniform names -- see eng::ecs::PortalParams. Every one optional; omitted means the material's own default.",
       "additionalProperties": true
+    },
+    "orbit": {
+      "description": "Travel around a point, without a pivot entity. Spin turns a thing where it stands; this moves it along a ring. The centre is in the entity's own frame -- its parent's, or the world when it has none.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "centre": {
+          "$ref": "#/$defs/vec3"
+        },
+        "axis": {
+          "$ref": "#/$defs/vec3"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0
+        },
+        "degrees_per_second": {
+          "type": "number"
+        },
+        "phase_degrees": {
+          "description": "Where on the ring it starts. Two entities on one ring with the same rate and no phase occupy the same point forever.",
+          "type": "number"
+        },
+        "height": {
+          "description": "Along the axis from the centre: the ring's height above what it circles.",
+          "type": "number"
+        },
+        "facing": {
+          "description": "free keeps the authored rotation (and leaves it to Spin); centre looks at what it circles; travel looks along the direction of motion.",
+          "enum": [
+            "free",
+            "centre",
+            "travel"
+          ]
+        }
+      }
+    },
+    "particles": {
+      "type": "object",
+      "description": "A particle effect playing from this entity. Keys are the fields of eng::ecs::ParticleEmitter.",
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "type": "string",
+          "description": "a name from the particle library; empty plays nothing"
+        },
+        "offset": {
+          "$ref": "#/$defs/vec3"
+        },
+        "playing": {
+          "type": "boolean"
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 16
+        }
+      }
     }
   }
 }

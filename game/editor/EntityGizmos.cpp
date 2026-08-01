@@ -87,6 +87,25 @@ std::vector<GizmoMark> collectGizmoMarks(const game::content::SceneDocument& doc
                 mark.radius = entity.light->range;
             }
         }
+        if (entity.orbit) {
+            // On the entity's own mark rather than a mark of its own: the ring
+            // is a property of this entity's motion, and a separate mark would
+            // be a second thing to click for one decision.
+            const game::content::OrbitAuthor& orbit = *entity.orbit;
+            GizmoMark& mark = push(GizmoKind::Orbit);
+            mark.orbitRadius = orbit.radius;
+            mark.orbitAxis = orbit.axis;
+            // The centre is authored in the entity's own frame, so it has to be
+            // composed the same way the entity's position was -- otherwise the
+            // ring of anything inside a rig is drawn at the world origin.
+            mark.orbitCentre = world.position - entity.transform.position +
+                               orbit.centre;
+            mark.world = mark.orbitCentre;
+            mark.volumeAlways = true;
+            mark.label = labelFor(entity) + "  r " +
+                         std::to_string(int(orbit.radius * 10.0f + 0.5f) / 10.0f)
+                             .substr(0, 4);
+        }
         if (entity.camera) {
             GizmoMark& mark = push(GizmoKind::Camera);
             mark.fovDegrees = entity.camera->fovDegrees;
@@ -149,6 +168,8 @@ GizmoLook gizmoLook(GizmoKind kind)
         return {0xFF73E0FA, "sun"};
     case GizmoKind::Camera:
         return {0xFFEFE0B0, "camera"};
+    case GizmoKind::Orbit:
+        return {0xFFB0D8FF, "orbit"};
     case GizmoKind::Collider:
         return {0xFF8F8F8F, "collider"};
     }
@@ -353,6 +374,40 @@ void drawCameraBody(ImDrawList* list, ImVec2 centre, unsigned colour,
     }
 }
 
+// The ring an orbiting entity travels, with a tick at the centre it circles.
+//
+// The same argument as the camera frustum: "radius 5.4" is a number nobody can
+// judge, and the circle it cuts next to the walls it has to stay inside is the
+// decision. The centre tick matters as much -- an orbit whose centre drifted
+// off the subject looks, from a still frame, exactly like one that did not.
+void drawOrbitRing(ImDrawList* list, const GizmoOverlay& overlay,
+                   const GizmoMark& mark, unsigned colour, bool active)
+{
+    const float length = glm::length(mark.orbitAxis);
+    if (length <= 0.0f)
+        return;
+    const glm::vec3 axis = mark.orbitAxis / length;
+    // The same basis the system builds, for the same reason: the ring drawn
+    // here and the path walked at runtime must be the one circle.
+    const glm::vec3 seed = std::abs(axis.x) > 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                                   : glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 u = glm::normalize(glm::cross(seed, axis));
+    const glm::vec3 v = glm::cross(axis, u);
+    drawCircle(list, overlay, mark.orbitCentre, mark.orbitRadius, u, v, colour,
+               active ? 2.0f : 1.0f);
+
+    // The centre, as a cross rather than a dot: a dot on a busy floor reads as
+    // a speck of texture.
+    ImVec2 centre;
+    if (!project(overlay, mark.orbitCentre, centre))
+        return;
+    const float arm = active ? 6.0f : 4.0f;
+    list->AddLine(ImVec2(centre.x - arm, centre.y),
+                  ImVec2(centre.x + arm, centre.y), colour, 1.5f);
+    list->AddLine(ImVec2(centre.x, centre.y - arm),
+                  ImVec2(centre.x, centre.y + arm), colour, 1.5f);
+}
+
 // The bulb: a filled core with two haloes around it, in the light's own colour.
 //
 // A light is the one entity whose mark should look like what it does. This is
@@ -413,6 +468,10 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
         // A frustum is drawn at rest, unlike a light's reach: a scene has one
         // or two cameras and each one IS a decision about what is on screen,
         // where a room has eight lamps whose spheres would bury it.
+        if (overlay.volumes && mark.orbitRadius > 0.0f &&
+            (active || mark.volumeAlways))
+            drawOrbitRing(list, overlay, mark,
+                          active ? colour : fade(colour, 0.55f), active);
         if (overlay.volumes && mark.fovDegrees > 0.0f &&
             (active || mark.volumeAlways))
             drawFrustum(list, overlay, mark, active ? colour : fade(colour, 0.7f),

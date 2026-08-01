@@ -359,6 +359,62 @@ bool parseSpin(const Json& source, SpinAuthor& out, const std::string& location,
     return true;
 }
 
+bool parseOrbit(const Json& source, OrbitAuthor& out,
+                const std::string& location, std::string& error)
+{
+    if (!source.is_object()) {
+        error = location + " must be an object";
+        return false;
+    }
+    if (source.contains("centre") && !readVec3(source["centre"], out.centre)) {
+        error = location + "/centre must be three finite numbers";
+        return false;
+    }
+    if (source.contains("axis") && !readVec3(source["axis"], out.axis)) {
+        error = location + "/axis must be three finite numbers";
+        return false;
+    }
+    const auto number = [&](const char* key, float& value) {
+        if (!source.contains(key))
+            return true;
+        if (!source[key].is_number()) {
+            error = location + "/" + key + " must be a number";
+            return false;
+        }
+        value = source[key].get<float>();
+        return std::isfinite(value)
+                   ? true
+                   : (error = location + "/" + key + " must be finite", false);
+    };
+    if (!number("radius", out.radius) ||
+        !number("degrees_per_second", out.degreesPerSecond) ||
+        !number("phase_degrees", out.phaseDegrees) ||
+        !number("height", out.height))
+        return false;
+
+    const std::string facing = source.value("facing", std::string("free"));
+    if (facing == "free")
+        out.facing = OrbitAuthor::Facing::Free;
+    else if (facing == "centre")
+        out.facing = OrbitAuthor::Facing::Centre;
+    else if (facing == "travel")
+        out.facing = OrbitAuthor::Facing::Travel;
+    else {
+        error = location + "/facing must be 'free', 'centre' or 'travel'";
+        return false;
+    }
+
+    if (out.radius < 0.0f) {
+        error = location + "/radius must not be negative";
+        return false;
+    }
+    if (glm::length(out.axis) <= 0.0f) {
+        error = location + "/axis must not be zero";
+        return false;
+    }
+    return true;
+}
+
 bool parseCollider(const Json& source, ColliderAuthor& out,
                    const std::string& location, std::string& error)
 {
@@ -464,6 +520,19 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         if (!parseSpin(source["spin"], spin, location + "/spin", error))
             return false;
         out.spin = spin;
+    }
+    if (source.contains("orbit")) {
+        OrbitAuthor orbit;
+        if (!parseOrbit(source["orbit"], orbit, location + "/orbit", error))
+            return false;
+        out.orbit = orbit;
+    }
+    if (source.contains("particles")) {
+        ParticleAuthor particles;
+        if (!parseFields(source["particles"], eng::fieldsOf<ParticleAuthor>(),
+                         &particles, location + "/particles", error))
+            return false;
+        out.particles = particles;
     }
     if (source.contains("portal")) {
         PortalAuthor portal;

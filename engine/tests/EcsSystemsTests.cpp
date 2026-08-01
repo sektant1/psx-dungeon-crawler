@@ -136,6 +136,88 @@ int main()
                 "Steady leaves the authored colour alone");
     }
 
+    // --- Orbit: a ring around a point, with no pivot entity ----------------
+    {
+        World world;
+        const entt::entity moon = world.create("moon");
+        Orbit orbit;
+        orbit.centre = {10.0f, 0.0f, 0.0f};
+        orbit.radius = 4.0f;
+        orbit.degreesPerSecond = 90.0f; // a lap every four seconds
+        world.registry().emplace<Orbit>(moon, orbit);
+
+        orbitSystem(world, 0.0f);
+        const glm::vec3 start = world.registry().get<Transform>(moon).position;
+        require(std::abs(glm::length(start - orbit.centre) - orbit.radius) < 1e-4f,
+                "it sits on the ring from the first tick, not at the centre");
+        require(std::abs(start.y - orbit.centre.y) < 1e-4f,
+                "a +Y axis puts the ring in the XZ plane");
+
+        // A quarter lap: a quarter of the way round, still on the ring.
+        orbitSystem(world, 1.0f);
+        const glm::vec3 quarter = world.registry().get<Transform>(moon).position;
+        require(std::abs(glm::length(quarter - orbit.centre) - orbit.radius) < 1e-4f,
+                "the radius is held all the way round");
+        require(glm::length(quarter - start) > 1.0f, "and it actually moved");
+
+        // A full lap returns it to where it started. The property that says the
+        // angle is being accumulated rather than drifting.
+        orbitSystem(world, 3.0f);
+        const glm::vec3 lap = world.registry().get<Transform>(moon).position;
+        require(glm::length(lap - start) < 1e-3f, "a full lap closes the ring");
+
+        // Height lifts the ring along the axis without moving what it circles.
+        world.registry().get<Orbit>(moon).height = 3.0f;
+        orbitSystem(world, 0.0f);
+        require(std::abs(world.registry().get<Transform>(moon).position.y -
+                         (orbit.centre.y + 3.0f)) < 1e-4f,
+                "height raises the ring, and only the ring");
+
+        // A zero axis is a disabled orbit, not a NaN position.
+        const entt::entity broken = world.create("broken");
+        world.registry().emplace<Orbit>(broken, Orbit{{}, glm::vec3(0.0f), 5.0f});
+        orbitSystem(world, 1.0f);
+        require(world.registry().get<Transform>(broken).position == glm::vec3(0.0f),
+                "a zero axis leaves the entity alone");
+    }
+
+    // --- Orbit facing, and how it shares an entity with Spin ---------------
+    {
+        World world;
+        const entt::entity camera = world.create("camera");
+        Orbit orbit;
+        orbit.radius = 5.0f;
+        orbit.degreesPerSecond = 45.0f;
+        orbit.facing = Orbit::Centre;
+        world.registry().emplace<Orbit>(camera, orbit);
+
+        orbitSystem(world, 0.7f);
+        const Transform& t = world.registry().get<Transform>(camera);
+        // -Z forward: the camera's forward must point back at what it circles.
+        const glm::vec3 forward = t.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+        const glm::vec3 toCentre = glm::normalize(orbit.centre - t.position);
+        require(glm::dot(forward, toCentre) > 0.999f,
+                "facing Centre aims the entity at what it circles -- which is "
+                "what a camera parented to a pivot used to get by accident");
+
+        // Free leaves the rotation to whatever else owns it. That is the whole
+        // reason a moon can carry Orbit and Spin at once.
+        World moonWorld;
+        const entt::entity moon = moonWorld.create("moon");
+        Orbit free;
+        free.radius = 4.0f;
+        free.degreesPerSecond = 30.0f;
+        moonWorld.registry().emplace<Orbit>(moon, free);
+        moonWorld.registry().emplace<Spin>(moon, Spin{{0.0f, 1.0f, 0.0f}, 180.0f});
+        tickComponentSystems(moonWorld, 0.5f);
+        const Transform& m = moonWorld.registry().get<Transform>(moon);
+        require(std::abs(glm::length(m.position - free.centre) - free.radius) < 1e-4f,
+                "Orbit still placed it on the ring");
+        require(std::abs(glm::degrees(glm::angle(m.rotation)) - 90.0f) < 0.1f,
+                "and Spin still owns its rotation -- the order in "
+                "tickComponentSystems is what makes both true at once");
+    }
+
     // --- the whole tick runs on a world that has none of them --------------
     {
         World world;

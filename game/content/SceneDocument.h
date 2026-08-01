@@ -1,4 +1,5 @@
 #pragma once
+#include <eng/ecs/components/ParticleEmitter.h>
 #include <eng/ecs/components/PortalParams.h>
 
 #include <glm/glm.hpp>
@@ -129,6 +130,24 @@ struct CameraAuthor {
     bool active = true; // a parked alternate framing, kept but not used
 };
 
+// Travel around a point. Cooks to eng::ecs::Orbit, whose header is where the
+// rules live; this is only what the file carries.
+//
+// `Spin` turns a thing where it stands; this moves it along a ring, and it
+// needs no pivot entity to do it. The pivot rig is still what a *group* uses --
+// a parent is how several things share one motion -- but a single orbiting
+// camera, moon or drone is one component on one entity.
+struct OrbitAuthor {
+    enum class Facing { Free, Centre, Travel };
+    glm::vec3 centre{0.0f}; // in the entity's own frame: its parent's, or world
+    glm::vec3 axis{0.0f, 1.0f, 0.0f};
+    float radius = 5.0f;
+    float degreesPerSecond = 30.0f;
+    float phaseDegrees = 0.0f;
+    float height = 0.0f;
+    Facing facing = Facing::Free;
+};
+
 // Constant rotation, in degrees per second about a local axis. Cooks to
 // eng::ecs::Spin.
 //
@@ -154,6 +173,15 @@ struct ShaderAuthor {
 // struct rather than a translation of it, and the cook is a field-by-field copy
 // with nothing to get wrong in between.
 using PortalAuthor = eng::ecs::PortalParams;
+
+// A particle effect playing from this entity. The same mirror-not-translate
+// trick: the authored type IS the component, so the cook is a copy and the
+// accepted .scn keys are the component's own fields.
+//
+// This is what makes "give that torch smoke" inspector work. It used to be the
+// Particles dock or nothing, and the dock spawns an effect into the *level* --
+// a runtime act nothing saves, so an authored scene could not carry one.
+using ParticleAuthor = eng::ecs::ParticleEmitter;
 
 struct SpinAuthor {
     glm::vec3 axis{0.0f, 1.0f, 0.0f};
@@ -186,8 +214,10 @@ struct Entity {
     std::optional<LightAuthor> light;
     std::optional<CameraAuthor> camera;
     std::optional<SpinAuthor> spin;
+    std::optional<OrbitAuthor> orbit;
     std::optional<ShaderAuthor> shader;
     std::optional<PortalAuthor> portal;
+    std::optional<ParticleAuthor> particles;
     std::optional<float> exitYawDegrees;
     std::optional<std::string> marker;
     std::optional<std::string> enemySpawn; // enemy type id

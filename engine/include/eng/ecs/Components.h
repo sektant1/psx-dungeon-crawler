@@ -30,6 +30,7 @@
 #include <eng/ecs/components/EntityGroup.h>
 #include <eng/ecs/components/Lifetime.h>
 #include <eng/ecs/components/Name.h>
+#include <eng/ecs/components/Orbit.h>
 #include <eng/ecs/components/Parent.h>
 #include <eng/ecs/components/Spin.h>
 #include <eng/ecs/components/Transform.h>

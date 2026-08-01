@@ -95,7 +95,7 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
         build-editor build-cook editor cook scene material \
         run game demo mapgen sim test asan bench screenshot visual-test \
-        editor-selftest \
+        editor-selftest clip clip-mp4 look new-clip \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
         asset debug debug-run clean help
 
@@ -203,6 +203,82 @@ ifndef SCENE
 endif
 	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/scene.map
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game scene.map
+
+# --- clips ------------------------------------------------------------------
+# A scene that authors a Camera plays itself, which makes it the one thing in
+# this project that can be filmed without a hand on the mouse. These wrap that.
+#
+#   make clip SCENE=assets/scenes/spin_portal.scn
+#   make clip SCENE=... SECONDS=6 WIDTH=480 OUT=docs/media/teaser
+#   make clip SCENE=... MP4=1              also encode an .mp4 beside the .gif
+#
+# Cooks first, so the clip is always of what the .scn currently says. Recording
+# pins the simulation timestep, so the same scene films identically on a fast
+# machine and a slow one.
+CLIP_SECONDS ?= 10
+CLIP_FPS     ?= 20
+CLIP_WIDTH   ?= 320
+# Warm-up frames dropped before the first capture: the level is fully built by
+# then, so a load hitch is not baked into the clip's timing.
+CLIP_START   ?= 60
+CLIP_FRAMES  := $(shell expr $(CLIP_SECONDS) \* $(CLIP_FPS))
+CLIP_OUT      = $(if $(OUT),$(OUT),docs/media/$(basename $(notdir $(SCENE))))
+CLIP_DIR      = $(BUILD_DIR)/clip-frames
+
+clip: build-cook build-game
+ifndef SCENE
+	$(error set SCENE=<file.scn> (optional OUT=<path-without-extension>, SECONDS=, FPS=, WIDTH=, MP4=1))
+endif
+	@mkdir -p $(dir $(CLIP_OUT))
+	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/clip.map
+	@rm -rf $(CLIP_DIR)
+	cd $(BUILD_DIR) && env $(RUN_ENV) ./game clip.map \
+	    --record $(abspath $(CLIP_OUT)).gif \
+	    --record-frames $(CLIP_FRAMES) --record-fps $(CLIP_FPS) \
+	    --record-start $(CLIP_START) --record-width $(CLIP_WIDTH) \
+	    --record-keep-frames --record-frame-dir clip-frames
+	$(if $(MP4),$(MAKE) clip-mp4 OUT=$(CLIP_OUT),)
+	@echo "wrote $(CLIP_OUT).gif ($(CLIP_SECONDS)s at $(CLIP_FPS) fps)"
+
+# Re-encodes the frames the last `make clip` kept, so a second format costs no
+# second run of the game. Nearest-neighbour scaling: bilinear turns a
+# low-resolution retro image into mush.
+clip-mp4:
+	ffmpeg -y -loglevel error -framerate $(CLIP_FPS) \
+	    -i $(CLIP_DIR)/frame_%05d.png -c:v libx264 -pix_fmt yuv420p -crf 20 \
+	    -vf "scale=720:-2:flags=neighbor" $(CLIP_OUT).mp4
+	@echo "wrote $(CLIP_OUT).mp4"
+
+# One frame of a scene, for a look rather than a clip. The fast loop while
+# framing a shot: edit the .scn, run this, read the PNG.
+#   make look SCENE=assets/scenes/spin_portal.scn
+#   make look SCENE=... FRAME=400 SHOT=/tmp/x.png
+look: build-cook build-game
+ifndef SCENE
+	$(error set SCENE=<file.scn> (optional FRAME=<n>, SHOT=<path.png>))
+endif
+	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/clip.map
+	cd $(BUILD_DIR) && env $(RUN_ENV) \
+	    PSX_SCREENSHOT=$(if $(SHOT),$(abspath $(SHOT)),$(abspath $(BUILD_DIR))/look.png) \
+	    PSX_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game clip.map
+	@echo "wrote $(if $(SHOT),$(SHOT),$(BUILD_DIR)/look.png)"
+
+# Start a new shot from the one that works: copies the example scene under a new
+# name and opens it. Beats an empty document, because a shot is mostly lighting
+# and framing and those are the parts nobody wants to re-derive.
+#   make new-clip NAME=my_teaser
+new-clip: build-editor
+ifndef NAME
+	$(error set NAME=<scene-name>)
+endif
+	@test ! -f assets/scenes/$(NAME).scn || \
+	    (echo "assets/scenes/$(NAME).scn already exists" && false)
+	@$(PYTHON) -c "import json,sys; \
+d=json.load(open('assets/scenes/spin_portal.scn')); \
+d['id']='scene.$(NAME)'; \
+json.dump(d, open('assets/scenes/$(NAME).scn','w'), indent=2)"
+	@echo "created assets/scenes/$(NAME).scn from spin_portal"
+	$(MAKE) editor SCENE=assets/scenes/$(NAME).scn
 
 # Blender -> engine. The front of the asset pipeline, which had no target:
 #   make asset BLEND=assets/source/models/Raccoon_Head.blend LIST=1
@@ -365,6 +441,9 @@ help:
 	@echo "  make material       editor, opened in the material staging scene"
 	@echo "  make cook SCENE=    cook a .scn to a .map (OUT=, VALIDATE=1)"
 	@echo "  make scene SCENE=   cook a .scn and play it immediately"
+	@echo "  make look SCENE=    cook + one screenshot (FRAME=, SHOT=)"
+	@echo "  make clip SCENE=    cook + record a GIF (SECONDS=, FPS=, WIDTH=, OUT=, MP4=1)"
+	@echo "  make new-clip NAME= start a new shot from the example scene"
 	@echo "  make asset BLEND=   .blend -> engine .obj (LIST=1, OBJECT=, NAME=, SCALE=)"
 	@echo "  make mapgen         generate a .map (SEED=, OUT=)"
 	@echo "  make sim            headless action-simulation harness (SCRIPT=)"

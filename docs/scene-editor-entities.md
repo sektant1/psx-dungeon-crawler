@@ -495,11 +495,12 @@ moment they mean anything.
 
 `assets/scenes/spin_portal.scn` -- what `make editor` shows with no `SCENE=`.
 
-A *shot* rather than a level: a spinning crystal in a lit room, a portal behind
-it, and a camera parented to a slowly turning pivot. It opens in under a second
-and every component that animates is visible at once -- **Spin** on two pivots,
-**Camera** on two framings (one parked), a pulsing key light and four torches
-flickering out of phase. It is also the thing to copy when making a clip; see
+A *shot* rather than a level: two props turning at their own rates in a small
+lit room, a portal behind them, and a camera orbiting on a pivot. 36 entities in
+a 12 x 12 m room -- it opens in under a second, and every component that
+animates is visible at once: **Spin** on each prop *and* on the camera pivot,
+**Camera** on two framings (one parked), **Shader** rim lights, a pulsing key
+light and four torches flickering out of phase. It is also the thing to copy when making a clip; see
 [`docs/authoring-shots.md`](authoring-shots.md).
 
 A scene with an active camera plays *itself*: the player controller stands down
@@ -568,6 +569,26 @@ part by part, because a catalogue entry places one mesh with one material.
 runtime builds the membrane, the kit surround, the wisps and the light around
 that entity (`createPortalProp`). The Catalog's gameplay section calls the
 button `exit / portal` for that reason.
+
+## Editing what a mouse reaches
+
+`make editor-selftest` runs the editor through the edits that used to be
+reachable only by clicking -- remove a component, remove the mesh, unparent,
+delete an entity, delete one with children -- one per frame, with the entity
+selected a frame *earlier* so the gizmo, the inspector section and the outliner
+row have all drawn it before the edit lands.
+
+It exists because four separate crash reports were all "I clicked x and it
+died", and none of them could be reproduced from a test. The one it caught:
+a scene that authors a `Camera` made the *preview* attach the renderer's camera
+to a preview node, and the next rebuild destroyed that node -- taking the
+engine's only camera with it, because `destroyNode` destroyed every attached
+movable. Two fixes, both in the engine: `destroyNode` now detaches the camera
+instead of destroying it (it belongs to the render core, not to a node), and a
+world that is being *looked at* rather than *through* is attached with
+`drivesCamera = false`.
+
+It is a `make` target rather than a ctest because it needs a GL context.
 
 ## The component table
 
@@ -691,6 +712,7 @@ Tests:
 | `editor_command_palette` | ranking: what you half-remembered is the first row |
 | `editor_scene_browser` | listing, recent scenes, autosave paths and staleness |
 | `editor_settings` | the autosave clock, a hand-edited settings file, and the environment F5 launches with |
+| `make editor-selftest` | not ctest: drives the real editor through the edits only a mouse could reach |
 | `editor_clipboard` | fresh ids, offsets that survive the cook, composed copies |
 | `editor_viewport_overlay` | the cost readout stays readable, and its budget |
 | `scene_hierarchy` | parent chains, cycles, and the cook that flattens them |

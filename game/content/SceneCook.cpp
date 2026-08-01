@@ -65,6 +65,7 @@ bool implicitCollider(const KitPiece& piece, const KitCatalog& catalog,
 // orbit -- and the failure is silent, because the scene still loads and still
 // draws. So a live chain keeps its links and its local transforms, and
 // everything else cooks flat exactly as it did before.
+// Whether anything above this entity moves at runtime -- a Spin or an Orbit.
 bool ancestorAnimated(const SceneDocument& document, const Entity& entity)
 {
     std::vector<std::string> seen{entity.id};
@@ -74,7 +75,7 @@ bool ancestorAnimated(const SceneDocument& document, const Entity& entity)
         if (std::find(seen.begin(), seen.end(), at->id) != seen.end())
             break; // a cycle: validate() reports it, this must not hang
         seen.push_back(at->id);
-        if (at->spin)
+        if (at->spin || at->orbit)
             return true;
         at = at->parent.empty() ? nullptr : document.find(at->parent);
     }
@@ -199,6 +200,9 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             }
         }
 
+        if (authored.particles)
+            built.emplace<eng::ecs::ParticleEmitter>(entity,
+                                                     *authored.particles);
         if (authored.portal)
             built.emplace<eng::ecs::PortalParams>(entity, *authored.portal);
         if (authored.shader) {
@@ -215,6 +219,27 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                                          authored.camera->farClip,
                                          authored.camera->priority,
                                          authored.camera->active});
+        }
+        if (authored.orbit) {
+            eng::ecs::Orbit orbit;
+            orbit.centre = authored.orbit->centre;
+            orbit.axis = authored.orbit->axis;
+            orbit.radius = authored.orbit->radius;
+            orbit.degreesPerSecond = authored.orbit->degreesPerSecond;
+            orbit.phaseDegrees = authored.orbit->phaseDegrees;
+            orbit.height = authored.orbit->height;
+            switch (authored.orbit->facing) {
+            case OrbitAuthor::Facing::Free:
+                orbit.facing = eng::ecs::Orbit::Free;
+                break;
+            case OrbitAuthor::Facing::Centre:
+                orbit.facing = eng::ecs::Orbit::Centre;
+                break;
+            case OrbitAuthor::Facing::Travel:
+                orbit.facing = eng::ecs::Orbit::Travel;
+                break;
+            }
+            built.emplace<eng::ecs::Orbit>(entity, orbit);
         }
         if (authored.spin) {
             built.emplace<eng::ecs::Spin>(

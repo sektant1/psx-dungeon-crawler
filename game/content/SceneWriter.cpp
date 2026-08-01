@@ -147,6 +147,20 @@ Json writeEntity(const Entity& entity)
         node["degrees_per_second"] = canonical(spin.degreesPerSecond);
         out["spin"] = std::move(node);
     }
+    if (entity.particles) {
+        const ParticleAuthor& fx = *entity.particles;
+        const ParticleAuthor defaults;
+        Json node = Json::object();
+        if (fx.effect != defaults.effect)
+            node["effect"] = fx.effect;
+        if (!nearlyEqual(fx.offset, defaults.offset))
+            node["offset"] = vec3(fx.offset);
+        if (fx.playing != defaults.playing)
+            node["playing"] = fx.playing;
+        if (fx.scale != defaults.scale)
+            node["scale"] = canonical(fx.scale);
+        out["particles"] = std::move(node);
+    }
     if (entity.portal) {
         const PortalAuthor& portal = *entity.portal;
         const PortalAuthor defaults;
@@ -209,6 +223,28 @@ Json writeEntity(const Entity& entity)
         if (shader.alphaScissor != defaults.alphaScissor)
             node["alpha_scissor"] = canonical(shader.alphaScissor);
         out["shader"] = std::move(node);
+    }
+    if (entity.orbit) {
+        const OrbitAuthor& orbit = *entity.orbit;
+        Json node = Json::object();
+        // Defaults are omitted: a scene full of `"centre": [0,0,0]` is noise in
+        // every diff, and the parser fills them back in.
+        if (!nearlyEqual(orbit.centre, OrbitAuthor{}.centre))
+            node["centre"] = vec3(orbit.centre);
+        if (!nearlyEqual(orbit.axis, OrbitAuthor{}.axis))
+            node["axis"] = vec3(orbit.axis);
+        node["radius"] = canonical(orbit.radius);
+        node["degrees_per_second"] = canonical(orbit.degreesPerSecond);
+        if (canonical(orbit.phaseDegrees) != 0.0f)
+            node["phase_degrees"] = canonical(orbit.phaseDegrees);
+        if (canonical(orbit.height) != 0.0f)
+            node["height"] = canonical(orbit.height);
+        switch (orbit.facing) {
+        case OrbitAuthor::Facing::Free: break; // the default
+        case OrbitAuthor::Facing::Centre: node["facing"] = "centre"; break;
+        case OrbitAuthor::Facing::Travel: node["facing"] = "travel"; break;
+        }
+        out["orbit"] = std::move(node);
     }
     if (entity.playerSpawn)
         out["player_spawn"] = true;

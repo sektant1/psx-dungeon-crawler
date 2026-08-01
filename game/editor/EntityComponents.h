@@ -26,6 +26,30 @@ struct ComponentDefaults {
     std::string prefab;
 };
 
+// What an entity is made of, in the order it should always be read.
+//
+// The inspector used to show components in table order, which was the order
+// they happened to be written in -- so "where is the material" depended on the
+// entity, and two entities with the same parts read differently. A fixed
+// grouping is what makes the panel scannable: the same question is always
+// answered in the same place on the screen.
+//
+// Order is deliberate, coarse to fine:
+//   Appearance  what it looks like. First after the transform, because it is
+//               what an author is adjusting most of the time and what the
+//               separate Material/Particles docks used to hold.
+//   Physical    what it occupies and how it moves.
+//   Gameplay    what it means to the game.
+//   Placement   how it is pinned to the level's grid -- rarely touched.
+enum class ComponentGroup {
+    Appearance,
+    Physical,
+    Gameplay,
+    Placement,
+};
+
+const char* componentGroupName(ComponentGroup group);
+
 struct ComponentType {
     const char* id;    // stable key; matches the .scn field name
     const char* label; // inspector header and add-menu row
@@ -39,6 +63,10 @@ struct ComponentType {
     void (*remove)(game::content::Entity& entity);
     // Whether `add` can run right now given `defaults` -- Mesh needs a brush.
     bool (*addable)(const ComponentDefaults& defaults);
+    // Which band it is read in. Every list of components -- the inspector, the
+    // add menu, the outliner tooltip -- sorts by this, so an entity's parts are
+    // always in the same order regardless of what it happens to carry.
+    ComponentGroup group = ComponentGroup::Gameplay;
 };
 
 // The table, in the order panels should present it.

@@ -298,6 +298,25 @@ template <> FieldSpan fieldsOf<ecs::LightAnimation>()
     return {f, int(std::size(f))};
 }
 
+template <> FieldSpan fieldsOf<ecs::Orbit>()
+{
+    static const Field f[] = {
+        ENG_FIELD(ecs::Orbit, centre, FieldType::Vec3),
+        ENG_FIELD(ecs::Orbit, axis, FieldType::Vec3),
+        ENG_FIELD_RANGE(ecs::Orbit, radius, FieldType::Float, 0.0f, 200.0f),
+        ENG_FIELD_RANGE(ecs::Orbit, degreesPerSecond, FieldType::Float, -720.0f, 720.0f),
+        ENG_FIELD_RANGE(ecs::Orbit, phaseDegrees, FieldType::Float, 0.0f, 360.0f),
+        ENG_FIELD_RANGE(ecs::Orbit, height, FieldType::Float, -50.0f, 50.0f),
+        // The range is the enum: an out-of-range facing decodes to a number the
+        // system's comparisons treat as Free, which is the one failure mode
+        // that is not visible as a bug.
+        ENG_FIELD_RANGE(ecs::Orbit, facing, FieldType::Int, 0.0f, 2.0f),
+        // `travelled` is deliberately absent: it is where the entity currently
+        // is, not how it was authored, and saving it would reload mid-arc.
+    };
+    return {f, int(std::size(f))};
+}
+
 template <> FieldSpan fieldsOf<ecs::Camera>()
 {
     static const Field f[] = {
@@ -421,8 +440,9 @@ void registerEngineComponents(ComponentRegistry& reg)
     reg.add(reflectedComponent<Spin>("Spin", 20));
     reg.add(reflectedComponent<LightAnimation>("LightAnimation", 21));
     reg.add(reflectedComponent<Camera>("Camera", 22));
-    reg.add(reflectedComponent<ShaderParams>("ShaderParams", 23));
-    reg.add(reflectedComponent<PortalParams>("PortalParams", 24));
+    reg.add(reflectedComponent<Orbit>("Orbit", 23));
+    reg.add(reflectedComponent<ShaderParams>("ShaderParams", 25));
+    reg.add(reflectedComponent<PortalParams>("PortalParams", 26));
 }
 
 } // namespace ecs

@@ -3,6 +3,8 @@
 #include <eng/ecs/World.h>
 
 #include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <cmath>
 #include <vector>
@@ -34,6 +36,28 @@ float valueNoise(float t)
     return hash(cell) + (hash(cell + 1u) - hash(cell)) * smooth;
 }
 
+// The rotation that points -Z along `forward`, with `up` as the reference.
+//
+// Hand-rolled rather than glm::quatLookAt, which lives in GLM's experimental
+// gtx: enabling that for one function would turn on a header set the rest of
+// this engine has deliberately stayed off. The basis IS the rotation matrix --
+// the same identity Transform.h's decompose() relies on in reverse.
+glm::quat lookRotation(const glm::vec3& forward, const glm::vec3& up)
+{
+    // Third column, because -Z is forward in this renderer's convention.
+    const glm::vec3 z = -forward;
+    glm::vec3 reference = up;
+    // A forward parallel to `up` leaves the cross product at zero and the basis
+    // degenerate; any other reference gives the same ring with a different roll,
+    // which for a camera looking straight down is the only free choice anyway.
+    if (std::abs(glm::dot(glm::normalize(reference), z)) > 0.999f)
+        reference = std::abs(z.y) > 0.9f ? glm::vec3(0.0f, 0.0f, 1.0f)
+                                         : glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 x = glm::normalize(glm::cross(reference, z));
+    const glm::vec3 y = glm::cross(z, x);
+    return glm::normalize(glm::quat_cast(glm::mat3(x, y, z)));
+}
+
 } // namespace
 
 void spinSystem(World& world, float dt)
@@ -50,6 +74,63 @@ void spinSystem(World& world, float dt)
             t.rotation * glm::angleAxis(radians, spin.axis / length));
         // Through the World, not the component: the subtree has to be dirtied
         // or a socket could spin without anything mounted on it following.
+        world.setLocalTransform(e, t);
+    }
+}
+
+void orbitSystem(World& world, float dt)
+{
+    entt::registry& reg = world.registry();
+    for (auto e : reg.view<Orbit, Transform>()) {
+        Orbit& orbit = reg.get<Orbit>(e);
+        const float axisLength = glm::length(orbit.axis);
+        if (axisLength <= 0.0f)
+            continue; // a ring with no normal is not a ring
+        orbit.travelled += orbit.degreesPerSecond * dt;
+
+        const glm::vec3 axis = orbit.axis / axisLength;
+        // Two vectors spanning the ring's plane. Built from the axis rather
+        // than authored, so an inclined orbit needs one field and not three:
+        // any vector not parallel to the axis will do, and +X only fails when
+        // the axis IS +X, which is exactly when +Y does not.
+        const glm::vec3 seed = std::abs(axis.x) > 0.9f
+                                   ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                   : glm::vec3(1.0f, 0.0f, 0.0f);
+        const glm::vec3 u = glm::normalize(glm::cross(seed, axis));
+        const glm::vec3 v = glm::cross(axis, u);
+
+        const float angle = glm::radians(orbit.travelled + orbit.phaseDegrees);
+        const glm::vec3 offset =
+            (u * std::cos(angle) + v * std::sin(angle)) * orbit.radius;
+
+        Transform t = reg.get<Transform>(e);
+        t.position = orbit.centre + offset + axis * orbit.height;
+
+        // Facing. Free leaves the rotation exactly as it was, which is what
+        // lets Spin own it on the same entity.
+        if (orbit.facing != Orbit::Free) {
+            // Tangent to the ring, in the direction of travel -- and reversed
+            // with the rate, so a negative rate really does run the other way
+            // round rather than flying backwards.
+            const glm::vec3 tangent =
+                (u * -std::sin(angle) + v * std::cos(angle)) *
+                (orbit.degreesPerSecond < 0.0f ? -1.0f : 1.0f);
+            const glm::vec3 wanted =
+                orbit.facing == Orbit::Centre ? (t.position - orbit.centre) * -1.0f
+                                              : tangent;
+            const float length = glm::length(wanted);
+            // Degenerate only at radius zero (nothing to look away from) and
+            // for a stationary Travel (no direction to face). Both keep the
+            // authored rotation rather than producing a NaN quaternion.
+            if (length > 1e-5f) {
+                // -Z forward, +Y up: the renderer's convention, so a camera
+                // with this component frames what a camera parented to a pivot
+                // used to frame by accident.
+                t.rotation = lookRotation(wanted / length, axis);
+            }
+        }
+        // Through the World, not the component: an orbiting entity may carry a
+        // subtree, and it has to come with it.
         world.setLocalTransform(e, t);
     }
 }
@@ -106,6 +187,9 @@ void lifetimeSystem(World& world, float dt)
 void tickComponentSystems(World& world, float dt)
 {
     spinSystem(world, dt);
+    // After spin, so an entity carrying both ends the frame where Orbit puts
+    // it and turned by whichever of the two owns its facing.
+    orbitSystem(world, dt);
     lightAnimationSystem(world, dt);
     // Last: an entity in its final frame animates like any other, and anything
     // the systems above would have touched is gone before the frame's sync.

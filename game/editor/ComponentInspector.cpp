@@ -14,6 +14,7 @@ using game::content::CameraAuthor;
 using game::content::Entity;
 using game::content::KitPiece;
 using game::content::LightAuthor;
+using game::content::OrbitAuthor;
 using game::content::SpinAuthor;
 
 // Every widget goes through this: ImGui reports "being dragged" and "released"
@@ -438,6 +439,97 @@ void drawShader(Entity& entity, InspectorContext& context)
                            "opacity needs a blending material to show");
 }
 
+void drawParticles(Entity& entity, InspectorContext& context)
+{
+    game::content::ParticleAuthor& fx = *entity.particles;
+    // A combo over the library rather than a text field: an effect name that
+    // does not resolve plays nothing, silently, and the author has no way to
+    // find out which names exist.
+    if (context.particleEffects && !context.particleEffects->empty()) {
+        const std::string current = fx.effect.empty() ? "(none)" : fx.effect;
+        if (ImGui::BeginCombo("effect", current.c_str())) {
+            if (ImGui::Selectable("(none)", fx.effect.empty())) {
+                fx.effect.clear();
+                context.closed = true;
+            }
+            for (const std::string& name : *context.particleEffects) {
+                if (ImGui::Selectable(name.c_str(), name == fx.effect)) {
+                    fx.effect = name;
+                    context.closed = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+    } else {
+        stringField("effect", fx.effect, context);
+        ImGui::TextDisabled("no effect library loaded");
+    }
+    ImGui::DragFloat3("offset", &fx.offset.x, 0.02f);
+    track(context);
+    ImGui::SliderFloat("scale", &fx.scale, 0.05f, 8.0f, "%.2f");
+    track(context);
+    ImGui::Checkbox("playing", &fx.playing);
+    track(context);
+}
+
+void drawOrbit(Entity& entity, InspectorContext& context)
+{
+    OrbitAuthor& orbit = *entity.orbit;
+    ImGui::DragFloat3("centre", &orbit.centre.x, 0.05f);
+    track(context);
+    if (ImGui::Button("Centre on the origin")) {
+        orbit.centre = glm::vec3(0.0f);
+        context.track(true, true);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(in this entity's own frame)");
+
+    ImGui::DragFloat("radius", &orbit.radius, 0.05f, 0.0f, 200.0f, "%.2f m");
+    track(context);
+    ImGui::DragFloat("deg/s", &orbit.degreesPerSecond, 1.0f, -720.0f, 720.0f,
+                     "%.0f");
+    track(context);
+    // A rate an author can judge: "one turn every twelve seconds" is a decision
+    // about pacing, where "30 deg/s" is arithmetic.
+    if (orbit.degreesPerSecond != 0.0f) {
+        ImGui::TextDisabled("one lap every %.1f s",
+                            double(360.0f / std::abs(orbit.degreesPerSecond)));
+    }
+    ImGui::DragFloat("height", &orbit.height, 0.05f, -50.0f, 50.0f, "%.2f m");
+    track(context);
+    ImGui::DragFloat("phase", &orbit.phaseDegrees, 1.0f, 0.0f, 360.0f, "%.0f");
+    track(context);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("where on the ring it starts -- two things on one "
+                          "ring with no phase sit on top of each other");
+
+    ImGui::Separator();
+    ImGui::DragFloat3("axis", &orbit.axis.x, 0.02f, -1.0f, 1.0f);
+    track(context);
+    if (glm::length(orbit.axis) <= 0.0f)
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                           "a zero axis is not a ring");
+
+    int facing = int(orbit.facing);
+    if (ImGui::Combo("facing", &facing, "free\0look at centre\0look along travel\0"))
+        orbit.facing = OrbitAuthor::Facing(facing);
+    track(context);
+    switch (orbit.facing) {
+    case OrbitAuthor::Facing::Free:
+        ImGui::TextDisabled("keeps its own rotation -- add Spin and it turns\n"
+                            "on its own axis while it travels");
+        break;
+    case OrbitAuthor::Facing::Centre:
+        ImGui::TextDisabled("aimed at the centre: what a camera circling a\n"
+                            "subject wants. Overrides Spin's rotation.");
+        break;
+    case OrbitAuthor::Facing::Travel:
+        ImGui::TextDisabled("aimed along the ring, like something flying it.\n"
+                            "Overrides Spin's rotation.");
+        break;
+    }
+}
+
 struct Drawer {
     const char* id; // ComponentType::id
     void (*draw)(Entity& entity, InspectorContext& context);
@@ -450,7 +542,9 @@ constexpr Drawer kDrawers[] = {
     {"light", drawLight},
     {"camera", drawCamera},
     {"spin", drawSpin},
+    {"orbit", drawOrbit},
     {"shader", drawShader},
+    {"particles", drawParticles},
     {"player_spawn", drawPlayerSpawn},
     {"exit", drawExit},
     {"marker", drawMarker},

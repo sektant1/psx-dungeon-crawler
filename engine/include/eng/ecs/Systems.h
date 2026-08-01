@@ -21,9 +21,14 @@ class World;
 // entities spin and expire while it tried to place them.
 void lifetimeSystem(World&, float dt);
 void spinSystem(World&, float dt);
+// Runs AFTER spinSystem, and that order is the contract between the two: Spin
+// accumulates a rotation, Orbit then writes a position and -- only when it is
+// aiming the entity -- replaces that rotation. So Spin + Orbit(Free) is a moon,
+// and Orbit(Centre) is a camera whose facing Spin cannot fight over.
+void orbitSystem(World&, float dt);
 void lightAnimationSystem(World&, float dt);
 
-// All three, in the order a frame wants them: animate, then expire. Call once
+// All of them, in the order a frame wants them: animate, then expire. Call once
 // per frame before World::sync().
 void tickComponentSystems(World&, float dt);
 
