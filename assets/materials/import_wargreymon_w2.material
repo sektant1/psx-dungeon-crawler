@@ -1,0 +1,247 @@
+material Game/import_wargreymon_w2/part0
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part1
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part2
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part3
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part4
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part5
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part6
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part7
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part8
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part9
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part10
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part11
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part12
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part13
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part14
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part15
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part16
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part17
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
+material Game/import_wargreymon_w2/part18
+{
+    technique { pass {
+        vertex_program_ref PSX_VS_Lit { }
+        fragment_program_ref PSX_FS_Lit { }
+        texture_unit
+        {
+            texture import_wargreymon_w2_WarGreymonPS1_W2_Tex.png
+            filtering none
+            tex_address_mode wrap
+        }
+    } }
+}
