@@ -186,9 +186,9 @@
       "prefab": "kit.import_ac_vixen",
       "transform": {
         "position": [
-          2.063999891281128,
-          2.5,
-          -7.978400230407715
+          2.615600109100342,
+          3.8638999462127686,
+          -8.246500015258789
         ],
         "scale": [
           0.699999988079071,
@@ -197,7 +197,7 @@
         ]
       },
       "spin": {
-        "degrees_per_second": 77.0
+        "degrees_per_second": 60.0
       }
     },
     {
@@ -217,7 +217,22 @@
         ]
       },
       "spin": {
-        "degrees_per_second": 45.0
+        "degrees_per_second": 60.0
+      }
+    },
+    {
+      "id": "import_howl_0001",
+      "name": "Howl",
+      "prefab": "kit.import_howl",
+      "transform": {
+        "position": [
+          0.6136000156402588,
+          3.5,
+          -5.129000186920166
+        ]
+      },
+      "spin": {
+        "degrees_per_second": 30.0
       }
     },
     {
