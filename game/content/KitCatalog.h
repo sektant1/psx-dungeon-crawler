@@ -54,6 +54,19 @@ struct KitPiece {
     float yOffsetKit = 0.0f;
     std::string pivot; // "" = centred/base-at-zero, else the named exception
     std::vector<KitAttachment> attachments;
+    // Components an entity of this piece is meaningless without.
+    //
+    // The portal membrane is the case this exists for. Its material animates
+    // from per-entity shader parameters, so a membrane with no `portal`
+    // component is a flat violet rectangle -- and placing one from the Catalog
+    // produced exactly that, while the gameplay "portal" entry produced a
+    // working one. Two routes that look identical and are not is a trap, and
+    // the fix belongs in the piece's own definition rather than in a special
+    // case somewhere in the editor.
+    //
+    // Names index the editor's component registry (ed::findComponentType), so
+    // adding one is a line of kit.toml, not a line of C++.
+    std::vector<std::string> components;
 
     // `kitScale` is the catalogue's scale; a piece that carries its own wins.
     // Every caller passes catalog.scale() and gets the right answer either way,

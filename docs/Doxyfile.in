@@ -33,6 +33,19 @@ FULL_SIDEBAR           = YES
 DISABLE_INDEX          = NO
 GENERATE_LATEX         = NO
 
+# Same skin as docs/vulkan-impl-survival-kit. Order matters: kit.css owns the
+# palette and type scale, doxygen-kit.css maps Doxygen's markup onto them.
+# Doxygen copies both into the html output, so the generated site stays
+# self-contained. Both sheets are token-driven, so Doxygen's dark-mode toggle
+# and the reader's OS preference both work.
+HTML_EXTRA_STYLESHEET  = "@CMAKE_CURRENT_SOURCE_DIR@/docs/vulkan-impl-survival-kit/kit.css" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/doxygen-kit.css"
+# Desaturate Doxygen's own generated stylesheet so anything the overrides miss
+# reads as neutral grey instead of stock blue. HTML_COLORSTYLE needs Doxygen
+# 1.9.5+; older versions log an unknown-tag warning and are otherwise fine.
+HTML_COLORSTYLE        = LIGHT
+HTML_COLORSTYLE_SAT    = 0
+
 SOURCE_BROWSER         = YES
 INLINE_SOURCES         = NO
 REFERENCED_BY_RELATION = YES

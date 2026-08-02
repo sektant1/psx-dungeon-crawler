@@ -1,0 +1,514 @@
+/* Doxygen, wearing the survival kit's clothes.
+ *
+ * Loaded by HTML_EXTRA_STYLESHEET *after*
+ * docs/vulkan-impl-survival-kit/kit.css, which is the single source of truth
+ * for the palette and the type scale -- this file only maps Doxygen's own
+ * markup onto those tokens. Change a colour there, not here.
+ *
+ * Three parts, in order:
+ *   1. undo the generic element rules kit.css sets for its own page shell,
+ *      which would otherwise leak into Doxygen's tables and code blocks
+ *   2. hook Doxygen's dark-mode class onto the kit's dark tokens
+ *   3. restyle Doxygen's components
+ *
+ * Doxygen's own doxygen.css loads first, so anything not overridden here keeps
+ * its stock look. HTML_COLORSTYLE_SAT = 0 in the Doxyfile desaturates that
+ * stock look, so a missed corner reads as neutral grey rather than blue.
+ */
+
+/* --- 1. de-leak kit.css ---------------------------------------------------
+ * kit.css styles bare `table`, `th`, `td` and `pre` for a documentation page
+ * with a handful of hand-written tables. Doxygen emits tables for layout
+ * (prototypes, member lists, the title area), and hairline rules under every
+ * cell turn those into noise. Reset to something Doxygen-shaped; the specific
+ * tables that *should* have rules get them back in part 3. */
+
+table {
+  width: auto;
+  font-size: inherit;
+}
+
+th, td {
+  border-bottom: 0;
+  padding: 0.15rem 0.5rem 0.15rem 0;
+  vertical-align: top;
+}
+
+tbody tr:last-child td { border-bottom: 0; }
+
+pre {
+  border: 0;
+  border-left: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* kit.css constrains its own single column; Doxygen manages its own width. */
+main { max-width: none; }
+
+/* --- 2. Doxygen's dark-mode toggle ---------------------------------------
+ * Doxygen 1.9.5+ stamps `dark-mode` on <html> when the reader flips its
+ * toggle. Map it onto the same tokens kit.css defines for its own dark theme
+ * so both surfaces move together. `prefers-color-scheme` is already handled by
+ * kit.css and needs nothing here. */
+
+html.dark-mode {
+  --ground: #141112;
+  --surface: #1c1819;
+  --surface-sunk: #100e0f;
+  --rule: #302a2b;
+  --rule-strong: #4a4142;
+  --ink: #ede8e7;
+  --ink-dim: #a29797;
+  --ink-faint: #7c7171;
+  --accent: #e2564f;
+  --accent-soft: #2c1b1c;
+  color-scheme: dark;
+}
+
+/* --- 3. Doxygen components ------------------------------------------------ */
+
+body,
+#doc-content,
+div.contents,
+div.header {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+}
+
+div.header {
+  border-bottom: 1px solid var(--rule);
+  background-image: none;
+  padding: 1.25rem 1.5rem 0.75rem;
+}
+
+/* Masthead. The kit's own masthead is a heavy rule under the title with a
+ * short accent stub; reproduce that here rather than Doxygen's gradient. */
+
+#titlearea {
+  background: var(--ground);
+  border-bottom: 2px solid var(--ink);
+  padding: 1.25rem 1.5rem 1rem;
+  position: relative;
+}
+
+#titlearea::after {
+  content: "";
+  position: absolute;
+  left: 1.5rem;
+  bottom: -2px;
+  width: 5.5rem;
+  height: 2px;
+  background: var(--accent);
+}
+
+#projectname {
+  font-family: var(--sans);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+#projectnumber {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+}
+
+#projectbrief {
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+}
+
+/* Tab bar / menu. Doxygen ships this as either ul.tablist or the sm-dox menu
+ * depending on version and HTML_DYNAMIC_MENUS; style both. */
+
+#main-nav,
+#main-nav ul.tablist,
+ul.sm-dox {
+  background: var(--surface);
+  background-image: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Doxygen's own stylesheet already unbullets these; restate it so the skin
+ * does not depend on that, and so a stale doxygen.css cannot leave marker
+ * dots down the sidebar. */
+#main-nav ul.tablist,
+ul.sm-dox,
+#nav-tree ul,
+#nav-path ul,
+.navpath ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+#main-nav a,
+ul.tablist li a,
+ul.sm-dox a {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-shadow: none;
+  background-image: none;
+}
+
+ul.tablist li.current a,
+ul.sm-dox a:hover,
+#main-nav a:hover {
+  color: var(--accent);
+  background-image: none;
+  background: transparent;
+}
+
+/* Sidebar. The kit's rail: hairline separator, mono labels, quiet links. */
+
+#side-nav,
+#nav-tree {
+  background: var(--ground);
+  background-image: none;
+  border-right: 1px solid var(--rule);
+}
+
+#nav-tree .label {
+  font-family: var(--sans);
+  font-size: 0.85rem;
+}
+
+#nav-tree a {
+  color: var(--ink-dim);
+  text-decoration: none;
+}
+
+#nav-tree a:hover { color: var(--accent); }
+
+#nav-tree .selected {
+  background-image: none;
+  background: var(--accent-soft);
+  color: var(--ink);
+  text-shadow: none;
+}
+
+#nav-tree .selected a { color: var(--ink); font-weight: 600; }
+
+#nav-tree .arrow { color: var(--ink-faint); }
+
+#splitbar,
+.ui-resizable-handle {
+  background-image: none;
+  background: var(--rule);
+}
+
+#nav-path ul,
+.navpath ul {
+  background-image: none;
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+}
+
+.navpath li.navelem a,
+.navpath li.footer {
+  color: var(--ink-faint);
+  text-shadow: none;
+}
+
+/* Headings and prose, on the kit's scale. */
+
+div.contents { padding: 0 1.5rem 4rem; }
+
+.title,
+div.headertitle .title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+  color: var(--ink);
+}
+
+h2.groupheader {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: 0.35rem;
+  margin-top: 2.5rem;
+}
+
+.textblock { max-width: var(--measure); }
+
+/* Member lists. These are the tables that earn their hairlines back. */
+
+table.memberdecls { width: 100%; }
+
+.memberdecls td.memItemLeft,
+.memberdecls td.memItemRight,
+.memberdecls td.memTemplItemLeft,
+.memberdecls td.memTemplItemRight,
+.memberdecls td.memTemplParams {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  background: transparent;
+  padding-top: 0.45rem;
+  padding-bottom: 0.1rem;
+}
+
+.memberdecls td.mdescLeft,
+.memberdecls td.mdescRight {
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  background: transparent;
+  padding-bottom: 0.5rem;
+}
+
+.memberdecls td.memSeparator {
+  border-bottom: 1px solid var(--rule);
+  line-height: 0;
+  height: 0;
+}
+
+.memberdecls tr.heading h2 { margin: 1.5rem 0 0.5rem; }
+
+/* Member detail. Doxygen's stock look here is a rounded box with a gradient
+ * header; the kit uses a flat surface under a hairline instead. */
+
+.memitem {
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  box-shadow: none;
+  margin: 1.25rem 0;
+  background: var(--surface);
+}
+
+.memproto,
+.memitem .memproto {
+  background: var(--surface-sunk);
+  background-image: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+}
+
+.memname,
+.memname td {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.paramname,
+.paramname code {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-style: normal;
+}
+
+.memdoc {
+  background: var(--surface);
+  background-image: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.75rem;
+  font-size: 0.925rem;
+}
+
+.mlabel {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 0;
+  padding: 0.1rem 0.35rem;
+}
+
+/* Code. kit.css's `pre` was reset above; Doxygen uses div.fragment. */
+
+div.fragment,
+pre.fragment {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 0;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+}
+
+div.line {
+  font-family: var(--mono);
+  font-size: inherit;
+  color: var(--ink);
+}
+
+span.lineno {
+  background: var(--surface-sunk);
+  border-right: 1px solid var(--rule);
+  color: var(--ink-faint);
+}
+
+/* Syntax colours, restrained: one accent for keywords, muted for comments,
+ * everything else inherits. Loud multi-hue highlighting fights the palette. */
+span.keyword,
+span.keywordtype,
+span.keywordflow  { color: var(--accent); font-style: normal; }
+span.comment      { color: var(--ink-faint); font-style: normal; }
+span.preprocessor { color: var(--chore, var(--ink-dim)); }
+span.stringliteral,
+span.charliteral  { color: var(--ink-dim); }
+
+code, tt, .tt {
+  font-family: var(--mono);
+  background: var(--surface-sunk);
+  color: var(--ink);
+}
+
+/* Links. */
+
+a, a.el, a.elRef, a.code, a.codeRef {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover, a.el:hover, a.code:hover { text-decoration: underline; }
+
+a.anchor { color: inherit; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Note / warning / see-also blocks -- the kit's callout, top rule and all. */
+
+dl.section {
+  border-top: 2px solid var(--rule-strong);
+  border-left: 0;
+  background: var(--surface);
+  padding: 0.75rem 1rem;
+  margin: 1.25rem 0;
+}
+
+dl.section dt {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+dl.warning,
+dl.attention,
+dl.bug { border-top-color: var(--accent); }
+
+dl.warning dt,
+dl.attention dt,
+dl.bug dt { color: var(--accent); }
+
+dl.note,
+dl.remark { border-top-color: var(--hazard, var(--rule-strong)); }
+
+dl.note dt,
+dl.remark dt { color: var(--hazard, var(--ink-faint)); }
+
+/* Authored tables in markdown pages, and parameter tables. */
+
+table.doxtable,
+table.fieldtable,
+table.markdownTable {
+  width: 100%;
+  border-collapse: collapse;
+  border: 0;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 1.5rem;
+}
+
+table.doxtable th,
+table.fieldtable th,
+table.markdownTable th,
+table.markdownTable tr th {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--ink-faint);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule-strong);
+  padding: 0.5rem 0.9rem 0.5rem 0;
+}
+
+table.doxtable td,
+table.fieldtable td,
+table.markdownTable td {
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  padding: 0.55rem 0.9rem 0.55rem 0;
+  background: transparent;
+}
+
+/* Directory and file listings. */
+
+.directory tr.even { background: var(--surface); }
+.directory td.entry { font-family: var(--mono); font-size: 0.8rem; }
+.directory .levels { color: var(--ink-faint); }
+
+/* Search, tooltips, footer. */
+
+#MSearchBox,
+#MSearchField,
+#MSearchSelect {
+  background: var(--surface);
+  background-image: none;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+#MSearchResultsWindow {
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 0;
+}
+
+div.ttc {
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+address.footer,
+.footer {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  text-align: left;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+hr, hr.footer { border: 0; border-top: 1px solid var(--rule); }

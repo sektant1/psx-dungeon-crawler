@@ -10,6 +10,7 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -88,6 +89,24 @@ struct Harness {
             selection.push_back(id);
         };
         a.focus = [this] { ++focusCalls; };
+        a.isHidden = [this](const AuthorId& id) {
+            return std::find(hidden.begin(), hidden.end(), id) != hidden.end();
+        };
+        a.setHidden = [this](const AuthorId& id, bool on) {
+            hidden.erase(std::remove(hidden.begin(), hidden.end(), id),
+                         hidden.end());
+            if (on)
+                hidden.push_back(id);
+        };
+        a.isLocked = [this](const AuthorId& id) {
+            return std::find(locked.begin(), locked.end(), id) != locked.end();
+        };
+        a.setLocked = [this](const AuthorId& id, bool on) {
+            locked.erase(std::remove(locked.begin(), locked.end(), id),
+                         locked.end());
+            if (on)
+                locked.push_back(id);
+        };
         a.contextMenu = [] { ImGui::MenuItem("Delete"); };
         if (allowReparent) {
             a.reparent = [this](const AuthorId& child, const AuthorId& parent) {
@@ -97,6 +116,12 @@ struct Harness {
         return a;
     }
 
+    std::vector<AuthorId> hidden;
+    std::vector<AuthorId> locked;
+    // Where the switch column starts, sampled inside the window during draw:
+    // recomputing it from the window width in the test gets the padding wrong
+    // and aims every click just off the icons.
+    float toggleLeft = 0.0f;
     bool allowReparent = false;
     bool modifierAware = false;
     std::vector<std::pair<AuthorId, AuthorId>> reparents;
@@ -131,6 +156,14 @@ void endFrame()
 void draw(Harness& harness)
 {
     harness.rowCentres.clear();
+    // Mirrors toggleColumnLeft() in the panel, evaluated in the same window.
+    {
+        const float size = ImGui::GetFontSize();
+        const float gap = 6.0f;
+        harness.toggleLeft = ImGui::GetWindowPos().x +
+                             ImGui::GetWindowContentRegionMax().x -
+                             ImGui::GetStyle().ScrollbarSize - (size + gap) * 2.0f;
+    }
     OutlinerActions actions = harness.actions();
     const auto note = [&harness](const std::string& key) {
         const ImVec2 min = ImGui::GetItemRectMin();
@@ -192,6 +225,52 @@ void clickRow(Harness& harness, const std::string& key)
 
     const ImVec2 target = rowCentre(harness, key);
     beginFrame(target, false); // hover first: ImGui needs the row hot
+    draw(harness);
+    endFrame();
+
+    beginFrame(target, true);
+    draw(harness);
+    endFrame();
+
+    beginFrame(target, false);
+    draw(harness);
+    endFrame();
+}
+
+// Which switch on the row to aim at.
+enum class RowSwitch { Eye, Lock };
+
+// The same gesture as clickRow, but aimed at one of the two switches at the
+// right-hand end of the row rather than at its name.
+//
+// The position is resolved after the layout frame, because the row rects only
+// exist once the panel has drawn once.
+void clickSwitch(Harness& harness, const std::string& key, RowSwitch which)
+{
+    ImGui::GetIO().AddMousePosEvent(-1.0f, -1.0f);
+    ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    ImGui::GetIO().DeltaTime = 1.0f;
+    ImGui::NewFrame();
+    ImGui::Render();
+
+    beginFrame(ImVec2(-1.0f, -1.0f), false);
+    draw(harness);
+    endFrame();
+
+    const ImVec2 row = rowCentre(harness, key);
+    const float size = ImGui::GetFontSize();
+    const float gap = 6.0f;
+    const float left = harness.toggleLeft;
+    const float x = which == RowSwitch::Eye ? left + size * 0.5f
+                                            : left + size + gap + size * 0.5f;
+    const ImVec2 target(x, row.y);
+
+    // Two hover frames: the row claims the hover on the first, and the switch
+    // takes it over on the second. That handover IS the thing under test.
+    beginFrame(target, false);
+    draw(harness);
+    endFrame();
+    beginFrame(target, false);
     draw(harness);
     endFrame();
 
@@ -444,6 +523,59 @@ int main()
         require(order.between("a", "a").size() == 1, "a row against itself");
         require(order.between("a", "zz").empty(),
                 "a range against a row that is gone selects nothing");
+    }
+
+    // --- the eye and the padlock actually toggle ---------------------------
+    //
+    // Both were dead: the row spans the full width and is submitted first, so
+    // it won the hit test everywhere including under the two switches, and the
+    // InvisibleButtons behind them never saw a press. Nothing about that is
+    // visible on screen -- the icons draw, they hover, and clicking does
+    // nothing at all.
+    {
+        Harness harness;
+        harness.tree.groups.push_back(makeGroup("spawn", "spawn", {"spawn_0001"}));
+
+        clickSwitch(harness, "spawn", RowSwitch::Eye);
+        require(harness.hidden.size() == 1 && harness.hidden.front() == "spawn_0001",
+                "clicking the eye hides the row's entity");
+        // The click belongs to the switch, not to the row underneath it.
+        require(harness.selection.empty(),
+                "and does not also select the row");
+        require(harness.focusCalls == 0, "nor focus the camera on it");
+
+        clickSwitch(harness, "spawn", RowSwitch::Eye);
+        require(harness.hidden.empty(), "clicking it again shows the entity");
+
+        clickSwitch(harness, "spawn", RowSwitch::Lock);
+        require(harness.locked.size() == 1 && harness.locked.front() == "spawn_0001",
+                "the padlock locks the row's entity");
+        require(harness.selection.empty(), "without selecting it");
+
+        clickSwitch(harness, "spawn", RowSwitch::Lock);
+        require(harness.locked.empty(), "and unlocks it");
+
+        // The row itself must still select -- the overlap fix must not have
+        // handed the whole row to the switches.
+        clickRow(harness, "spawn");
+        require(harness.selection.size() == 1 &&
+                    harness.selection.front() == "spawn_0001",
+                "clicking the name still selects");
+    }
+
+    // --- a group's switches act on every entity under it --------------------
+    {
+        Harness harness;
+        harness.tree.groups.push_back(
+            makeGroup("kit.wall", "kit", {"wall_0001", "wall_0002", "wall_0003"}));
+
+        clickSwitch(harness, "kit.wall", RowSwitch::Eye);
+        require(harness.hidden.size() == 3,
+                "hiding a group hides all of it -- a group of a hundred and "
+                "sixty doors is the case this exists for");
+
+        clickSwitch(harness, "kit.wall", RowSwitch::Eye);
+        require(harness.hidden.empty(), "and shows all of it again");
     }
 
     ImGui::DestroyContext();

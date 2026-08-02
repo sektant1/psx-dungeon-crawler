@@ -98,7 +98,7 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
         run game demo mapgen sim test asan bench screenshot visual-test \
         editor-selftest clip clip-mp4 look new-clip \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
-        asset debug debug-run clean help
+        vulkan-kit asset debug debug-run clean help
 
 all: build
 
@@ -455,6 +455,19 @@ docs: configure
 		echo "Docs generated at $(BUILD_DIR)/docs/html/index.html"; \
 	fi
 
+# The Vulkan RHI implementation guide. Static HTML checked into the repo, so
+# there is nothing to build -- unlike `docs`, which runs Doxygen first.
+VULKAN_KIT = $(CURDIR)/docs/vulkan-impl-survival-kit/index.html
+
+vulkan-kit:
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open "$(VULKAN_KIT)"; \
+	elif command -v open >/dev/null 2>&1; then \
+		open "$(VULKAN_KIT)"; \
+	else \
+		echo "Open $(VULKAN_KIT) in a browser"; \
+	fi
+
 # Unoptimised build with symbols, in its own tree so the Release one survives.
 debug:
 	$(MAKE) build-app BUILD_DIR=build-debug BUILD_TYPE=Debug APP=$(APP)
@@ -499,6 +512,7 @@ help:
 	@echo "  make debug-run      run the Debug build (APP=)"
 	@echo "  make deps           install build dependencies (any distro)"
 	@echo "  make docs           generate + open API docs"
+	@echo "  make vulkan-kit     open the Vulkan RHI implementation guide"
 	@echo "  make debug          Debug build in build-debug/"
 	@echo "  make clean          remove build directories"
 	@echo ""

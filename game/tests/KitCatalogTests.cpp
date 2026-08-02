@@ -100,9 +100,16 @@ int main()
         catalog.find("kit.prop_boss_placeholder_sword");
     require(bossSword && bossSword->material == "Game/BossPlaceholderSword",
             "boss placeholder sword is independently placeable");
-    const std::vector<const KitPiece*> imported =
-        catalog.byRole("imported_model");
-    require(imported.size() == 26,
+    // Counted by prefix rather than by role. `imported_model` is the role every
+    // editor import writes, so a bare count of it asserted that nobody had
+    // imported anything else -- a test that failed the moment an author used
+    // the feature it was guarding. What it means is that *this* model kept all
+    // of its parts.
+    std::size_t modularParts = 0;
+    for (const KitPiece* piece : catalog.byRole("imported_model"))
+        if (piece->id.rfind("kit.import_modulardungeonfree", 0) == 0)
+            ++modularParts;
+    require(modularParts == 26,
             "GLB modular dungeon import exposes every mesh part");
     const KitPiece* fallback =
         catalog.find("kit.import_modulardungeonfree_p25");

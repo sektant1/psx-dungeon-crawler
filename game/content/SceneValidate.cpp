@@ -211,6 +211,22 @@ std::vector<Issue> validate(const SceneDocument& document,
                         entity.id);
                 }
             }
+            // A piece that declares required components, on an entity that
+            // does not have them. This is a warning rather than an error
+            // because the scene still cooks and runs -- it just renders wrong,
+            // which is the harder kind of bug to notice. A portal membrane
+            // without its `portal` component draws as a flat rectangle of the
+            // material's static colour, with nothing anywhere saying why.
+            if (piece) {
+                for (const std::string& component : piece->components) {
+                    if (component == "portal" && !entity.portal) {
+                        add(issues, Severity::Warning, "prefab.component_missing",
+                            "'" + entity.prefab + "' needs a portal component "
+                            "to animate; without it the membrane is flat",
+                            entity.id, QuickFix::AddPortalComponent);
+                    }
+                }
+            }
         }
 
         if (entity.cell && piece) {
@@ -595,6 +611,13 @@ bool applyQuickFix(SceneDocument& document, const KitCatalog& catalog,
         entity->transform = XformAuthor{};
         document.touch();
         return true;
+    case QuickFix::AddPortalComponent: {
+        if (entity->portal)
+            return false;
+        entity->portal = PortalAuthor{};
+        document.touch();
+        return true;
+    }
     case QuickFix::ClearParent: {
         if (entity->parent.empty()) return false;
         // The entity keeps the place it was drawn in: its transform was local

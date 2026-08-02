@@ -30,6 +30,17 @@ bool projectToViewport(glm::vec3 world, const glm::mat4& viewProjection,
 
 bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit);
 
+// The same test, plus the outward normal of the face the ray entered through.
+//
+// Placement needs the face, not just the distance: pointing at the top of a
+// crate and pointing at its side are different intentions, and the only thing
+// that tells them apart is which slab won tmin. A ray whose origin is already
+// inside the box has no entry face at all, and reports +Y -- the caller is
+// standing in the geometry, and "up" is the only answer that keeps a ghost
+// somewhere sane.
+bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit,
+             glm::vec3& normal);
+
 // Where a ray meets a horizontal plane at height `level`. False when the ray is
 // parallel to it or points away -- the placement tool needs the difference.
 bool rayPlaneY(const Ray& r, float level, glm::vec3& hit);

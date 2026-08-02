@@ -6,6 +6,28 @@
   "palette": "cozy_lair",
   "entities": [
     {
+      "id": "camera_main",
+      "name": "Static Inspection Camera",
+      "transform": {
+        "position": [
+          0.0,
+          1.4500000476837158,
+          3.25
+        ],
+        "rotation_degrees": [
+          -10.0,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 69.5,
+        "near_clip": 0.10000000149011612,
+        "far_clip": 24.0,
+        "priority": 10
+      }
+    },
+    {
       "id": "floor_0001",
       "prefab": "kit.floor",
       "transform": {
@@ -50,11 +72,179 @@
       }
     },
     {
+      "id": "import_mechademonlord_p0_0001",
+      "prefab": "kit.import_mechademonlord_p0",
+      "transform": {
+        "position": [
+          -0.010499999858438969,
+          0.4603999853134155,
+          -1.2697999477386475
+        ]
+      },
+      "spin": {
+        "degrees_per_second": 20.0
+      }
+    },
+    {
+      "id": "import_mechademonlord_p1_0001",
+      "parent": "import_mechademonlord_p0_0001",
+      "prefab": "kit.import_mechademonlord_p1",
+      "transform": {
+        "position": [
+          -0.00039999998989515007,
+          0.9661999940872192,
+          0.1890999972820282
+        ]
+      }
+    },
+    {
+      "id": "pillar_broken_0001",
+      "prefab": "kit.pillar_broken",
+      "transform": {
+        "position": [
+          -2.922100067138672,
+          0.0,
+          -2.9161999225616455
+        ]
+      }
+    },
+    {
+      "id": "pillar_fallen_0001",
+      "prefab": "kit.pillar_fallen",
+      "transform": {
+        "position": [
+          -1.9408999681472778,
+          0.0,
+          -0.2718000113964081
+        ],
+        "rotation_degrees": [
+          0.0,
+          298.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "player_start",
+      "name": "Player Start",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          2.700000047683716
+        ]
+      },
+      "player_spawn": true
+    },
+    {
+      "id": "stage_fill",
+      "name": "Cold Fill",
+      "transform": {
+        "position": [
+          1.7000000476837158,
+          1.5,
+          1.5
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.9617000222206116,
+          4.590000152587891,
+          0.43709999322891235
+        ],
+        "range": 8.5
+      }
+    },
+    {
+      "id": "stage_key",
+      "name": "Warm Key",
+      "transform": {
+        "position": [
+          -1.5,
+          2.5,
+          1.7999999523162842
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.5499999523162842,
+          0.7200000286102295,
+          0.3799999952316284
+        ],
+        "range": 5.5
+      }
+    },
+    {
+      "id": "stage_rim",
+      "name": "Scarlet Rim",
+      "transform": {
+        "position": [
+          0.0,
+          2.200000047683716,
+          -1.5
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "range": 4.199999809265137
+      }
+    },
+    {
+      "id": "wall_east_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_east_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
       "id": "wall_north_0001",
       "prefab": "kit.wall",
       "transform": {
         "position": [
           -2.0,
+          0.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_north_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          2.0,
           0.0,
           -4.0
         ]
@@ -68,17 +258,6 @@
           -2.0,
           0.0,
           4.0
-        ]
-      }
-    },
-    {
-      "id": "wall_north_0002",
-      "prefab": "kit.wall",
-      "transform": {
-        "position": [
-          2.0,
-          0.0,
-          -4.0
         ]
       }
     },
@@ -110,22 +289,6 @@
       }
     },
     {
-      "id": "wall_east_0001",
-      "prefab": "kit.wall",
-      "transform": {
-        "position": [
-          4.0,
-          0.0,
-          -2.0
-        ],
-        "rotation_degrees": [
-          0.0,
-          90.0,
-          0.0
-        ]
-      }
-    },
-    {
       "id": "wall_west_0002",
       "prefab": "kit.wall",
       "transform": {
@@ -140,177 +303,6 @@
           0.0
         ]
       }
-    },
-    {
-      "id": "wall_east_0002",
-      "prefab": "kit.wall",
-      "transform": {
-        "position": [
-          4.0,
-          0.0,
-          2.0
-        ],
-        "rotation_degrees": [
-          0.0,
-          90.0,
-          0.0
-        ]
-      }
-    },
-    {
-      "id": "subject_pivot",
-      "name": "Imported Boss Reference Pivot",
-      "spin": {
-        "axis": [
-          0.0,
-          1.0,
-          0.0
-        ],
-        "degrees_per_second": 12.0
-      }
-    },
-    {
-      "id": "subject",
-      "name": "Imported Boss Reference",
-      "parent": "subject_pivot",
-      "prefab": "kit.prop_boss_placeholder",
-      "transform": {
-        "position": [
-          -0.1138306310714341,
-          0.02,
-          -0.0
-        ],
-        "rotation_degrees": [
-          0.0,
-          -20.0,
-          0.0
-        ]
-      },
-      "shader": {
-        "rim_colour": [
-          1.0,
-          0.36,
-          0.18
-        ],
-        "rim_strength": 0.55,
-        "rim_power": 3.2
-      }
-    },
-    {
-      "id": "portal",
-      "name": "Tech Backdrop",
-      "prefab": "kit.portal_membrane",
-      "transform": {
-        "position": [
-          0.0,
-          0.0,
-          -3.6
-        ],
-        "scale": [
-          0.86,
-          0.86,
-          0.86
-        ]
-      },
-      "cast_shadows": false,
-      "exit": {
-        "yaw_degrees": 0.0
-      },
-      "portal": {}
-    },
-    {
-      "id": "stage_key",
-      "name": "Warm Key",
-      "transform": {
-        "position": [
-          -1.5,
-          2.5,
-          1.8
-        ]
-      },
-      "light": {
-        "type": "point",
-        "colour": [
-          1.55,
-          0.72,
-          0.38
-        ],
-        "range": 5.5
-      }
-    },
-    {
-      "id": "stage_fill",
-      "name": "Cold Fill",
-      "transform": {
-        "position": [
-          1.7,
-          1.5,
-          1.5
-        ]
-      },
-      "light": {
-        "type": "point",
-        "colour": [
-          0.3,
-          0.42,
-          0.78
-        ],
-        "range": 4.5
-      }
-    },
-    {
-      "id": "stage_rim",
-      "name": "Scarlet Rim",
-      "transform": {
-        "position": [
-          0.0,
-          2.2,
-          -1.5
-        ]
-      },
-      "light": {
-        "type": "point",
-        "colour": [
-          1.2,
-          0.24,
-          0.14
-        ],
-        "range": 4.2
-      }
-    },
-    {
-      "id": "camera_main",
-      "name": "Static Inspection Camera",
-      "transform": {
-        "position": [
-          0.0,
-          1.45,
-          3.25
-        ],
-        "rotation_degrees": [
-          -10.0,
-          0.0,
-          0.0
-        ]
-      },
-      "camera": {
-        "fov_degrees": 50.0,
-        "near_clip": 0.1,
-        "far_clip": 24.0,
-        "priority": 10
-      }
-    },
-    {
-      "id": "player_start",
-      "name": "Player Start",
-      "transform": {
-        "position": [
-          0.0,
-          0.0,
-          2.7
-        ]
-      },
-      "player_spawn": true
     }
   ]
 }

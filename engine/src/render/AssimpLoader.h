@@ -22,6 +22,10 @@ struct ImportedModelVertex {
 struct ImportedModelSubmesh {
     std::string name;
     std::string sourceMaterial;
+    // Base-colour texture as the source file names it: relative to the model,
+    // absolute, or "*N" for an embedded one. Empty when the material has none.
+    // Never opened here -- it is for converters deciding what to copy.
+    std::string sourceTexture;
     std::vector<ImportedModelVertex> vertices;
     std::vector<uint32_t> indices;
 };

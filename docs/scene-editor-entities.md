@@ -89,10 +89,82 @@ The tree is rebuilt when the document revision or the panel's options change,
 not per frame: it walks and sorts every entity, and the panel is open while the
 gizmo is being dragged.
 
-## Placing: strokes and slots
+## Placing: the brush
+
+The Place tool holds a **brush** (`ed::Brush`, `game/editor/EntityComponents.h`)
+-- either a kit piece or a gameplay kind, plus the quarter turn it will land at.
+
+That it can be either is the point. A light and a wall are the same gesture to
+an author: point at the level, click. They used to be two different ones,
+because a light has no mesh to name -- kit pieces painted under the cursor while
+lights, spawns and triggers appeared at the *centre of the screen* from a button
+and had to be dragged into place. Selecting anything in the Catalog now arms the
+brush.
+
+The directional light is the one exception, and stays a button: it is a
+scene-wide key light that is aimed rather than positioned, so painting a row of
+them down a corridor is not a thing anyone means to do.
+
+| Input | Effect |
+|---|---|
+| wheel (or `,` / `.`) | rotate the brush a quarter turn |
+| drag | paint -- one piece per slot crossed |
+| Shift+drag | erase what the cursor crosses |
+| Alt+click | eyedropper -- adopt the piece under the cursor, rotation included |
+| Ctrl (held) | ignore geometry, place on the work plane |
+| Escape (during a Room drag) | cancel the rectangle |
+
+Rotation is the brush's own state. It was previously a field on the app that
+three call sites read and *nothing* ever wrote: the Catalog displayed `rot 0
+deg` forever, and the only way to turn a piece was to place it, select it and
+use the gizmo.
+
+## Height comes from what you point at
+
+Placement resolves through `resolvePlacement`
+(`game/editor/BrushPlacement.h`), and the work plane is no longer the only
+source of height -- it is the fallback for when the cursor is over nothing.
+
+```
+mouse -> mouseRay()
+      |- Ctrl held? ---------------------> work plane            (override)
+      `- raycastDocument()
+            |- hit  -> surface point + face normal
+            `- miss -> work plane                                (as before)
+      -> snap XZ to the grid (or nearestWallSlot for Wall/Opening)
+      -> apply the brush's quarter turn
+```
+
+Two rules, because the two cases genuinely differ:
+
+- **architecture** (`Floor`, `Wall`, `Fill`, `Opening`) stacks on the **top** of
+  whatever was pointed at, so pointing anywhere on a wall's face still lands the
+  next wall squarely on top of it rather than partway down the side;
+- **dressing** (`Prop`, and the meshless gameplay entities) lands **exactly
+  where the cursor touched**, so a torch goes where you point it on a wall.
+
+XZ still comes from the grid in both cases: the surface decides height, not
+footprint, which keeps every kit piece on cells the runtime can represent. Y is
+never snapped to the grid step -- the height was taken from a surface precisely
+so the thing would rest on it, and rounding that is how a barrel ends up
+hovering over the table it was dropped on.
+
+The ghost is **green on the work plane and amber on a surface**, with a stalk
+down to the plane when it is off it. The two land in different places and used
+to be indistinguishable until after the click.
+
+`raycastDocument` (`game/editor/DocumentRaycast.h`) is the same traversal
+viewport picking uses, so a click and the thing a ghost would rest on can never
+disagree. A running stroke excludes its own pieces, so a row of floor tiles
+painted in one drag all land on the same surface instead of climbing the one
+before it.
+
+## Strokes and slots
 
 The Place tool paints. It drops a piece **every frame the button is held**, so
 dragging across a room fills it, and a whole drag closes as one undo entry.
+Shift makes the stroke subtract instead; erasing keeps the same shape, one
+target per slot, applied live and closed as a single undo entry.
 
 What keeps that from stacking a pile in one spot is the slot
 (`game/editor/PaintSlot.h`): a stroke remembers the slots it has filled and

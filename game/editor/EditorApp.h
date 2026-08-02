@@ -1,12 +1,16 @@
 #pragma once
+#include "BrushPlacement.h"
 #include "Clipboard.h"
 #include "CommandPalette.h"
 #include "Commands.h"
 #include "ConfirmDialog.h"
+#include "DocumentRaycast.h"
 #include "EditorIcons.h"
+#include "FileBrowser.h"
 #include "EntityGizmos.h"
 #include "GameVocabulary.h"
 #include "MaterialCatalog.h"
+#include "ModelImportPipeline.h"
 #include "RenderPalette.h"
 #include "ViewportOverlay.h"
 #include "SceneBrowser.h"
@@ -29,6 +33,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace ed {
@@ -137,7 +142,10 @@ private:
     void newScene(game::content::SceneTemplate which);
     void drawSaveAsPopup();
     void drawImportModelPopup();
-    bool importGlbModel(const std::string& path);
+    // Converts a source model into kit pieces and drops them into the scene.
+    // Any format this build of Assimp reads; the conversion itself lives in
+    // ModelImportPipeline, which has no editor state and can be tested.
+    bool importModel(const std::string& path);
     // Opening an existing scene: the dialog, and the one path everything else
     // (recent list, palette, console) goes through so the unsaved-work prompt
     // can never be skipped.
@@ -216,35 +224,33 @@ private:
     static constexpr std::size_t kConfirmDeleteAbove = 8;
     void duplicateSelection();
     Ray mouseRay() const;
+    // What the cursor is over, honouring hidden, locked and -- while a stroke
+    // is running -- the pieces that stroke has already laid down. Placement
+    // reads it for height; erase and the eyedropper read it for a target.
+    DocumentHit hoveredEntity(bool ignoreStroke = false) const;
     // Placement: the ghost under the cursor, and committing it.
-    bool hoveredPlacement(game::content::CellPlacement& cell,
-                          game::content::XformAuthor& transform) const;
-    void placeAt(const game::content::CellPlacement& cell,
-                 const game::content::XformAuthor& transform);
+    Placement hoveredPlacement() const;
+    void placeAt(const Placement& placement);
     void drawPlacementGhost();
+    // Shift+drag: the inverse stroke. Shares the whole shape of painting --
+    // one target per slot, applied live, closed as a single undo entry.
+    void eraseAt(const DocumentHit& hit);
+    void finishStroke();
+    // Alt+click: adopt what the cursor is over as the brush, so a room can be
+    // extended without hunting its pieces down in the Catalog.
+    void pickBrushFrom(const DocumentHit& hit);
     // Room tool: drag a rectangle of cells, get a finished room.
     bool hoveredCell(int& col, int& row) const;
     void drawRoomPreview(const eng::FrameContext& f);
     void commitRoom();
-    // Gameplay entities are created straight in front of the camera rather
-    // than placed with the kit brush. Portal is the one visible compound: its
-    // mesh, shader parameters and exit meaning belong to one entity.
-    enum class Gameplay {
-        // A transform and nothing else, to hang other entities from. Composing
-        // a room's dressing needs a parent that is not itself a barrel: without
-        // one, "move all of this" means picking one prop to be the root and
-        // then being unable to delete it without taking the rest.
-        Group,
-        PlayerSpawn,
-        Portal,
-        Exit,
-        Marker,
-        EnemySpawn,
-        Pickup,
-        Trigger,
-        PointLight,
-        DirectionalLight,
-    };
+    // Portal is the one visible compound: its mesh, shader parameters and exit
+    // meaning belong to one entity.
+    //
+    // Built but not added, so the brush and the one remaining button produce
+    // identical entities: the component registry's defaults, one code path.
+    game::content::Entity
+    makeGameplayEntity(Gameplay kind,
+                       const game::content::XformAuthor& transform) const;
     void addGameplayEntity(Gameplay kind);
     glm::vec3 viewFocusPoint() const;
     void updateGridLines(eng::Renderer& renderer);
@@ -318,13 +324,17 @@ private:
     // level actually guides the eye.
     bool mGameLighting = false;
 
-    // Place tool: painting drops one piece per cell/edge the cursor crosses,
-    // and the whole drag closes as one undo entry.
-    bool mPainting = false;
-    std::vector<std::string> mPaintedSlots;
-    std::vector<Command> mPaintParts;
-    std::vector<game::content::AuthorId> mPaintedIds;
-    int mBrushYawQuarters = 0;
+    // Place tool: a stroke drops one piece per cell/edge the cursor crosses (or
+    // removes one per entity it crosses, held with Shift), and the whole drag
+    // closes as one undo entry.
+    //
+    // A set rather than a vector: the scan is per placement per frame, so a
+    // drag across a large room was quadratic in the pieces it had already laid.
+    enum class Stroke { None, Paint, Erase };
+    Stroke mStroke = Stroke::None;
+    std::unordered_set<std::string> mStrokeSlots;
+    std::vector<Command> mStrokeParts;
+    std::vector<game::content::AuthorId> mStrokeIds;
     // Room drag: the cell the drag started on, and whether one is in progress.
     bool mRoomDragging = false;
     int mRoomStartCol = 0, mRoomStartRow = 0;
@@ -386,7 +396,18 @@ private:
     bool mContinueDiscardAfterSave = false;
     char mSaveAsPath[512] = {};
     bool mImportModelOpen = false;
-    char mImportModelPath[512] = {};
+    // The model picker. The path is chosen from a listing rather than typed:
+    // the one GLB in this repository is four directories deep with spaces in
+    // two of them, which made the old text field a spelling test.
+    std::string mImportModelPath;
+    std::string mImportScanRoot; // assets/source, resolved in onStart
+    std::string mImportDir;      // where "browse folders" currently is
+    bool mImportBrowsing = false;
+    char mImportFilter[64] = {};
+    // What the last import could not do -- a texture that was not beside the
+    // model, an embedded one it declined to guess at. Shown in the Status
+    // panel, because "the prop is untextured" needs its reason next to it.
+    std::vector<std::string> mImportWarnings;
     // Set when a discard is waiting on the prompt; consumed by performDiscard.
     bool mDiscardOpen = false;
     Discard mDiscardWhat = Discard::Quit;

@@ -20,6 +20,53 @@ make scene SCENE=assets/scenes/spin_portal.scn      # cook and play
 
 Five commands and two text edits. What follows is why each one is there.
 
+## Or: import it in the editor
+
+For a model that already exists as a file -- something bought, downloaded, or
+exported from someone else's tool -- **Scene > Import model...** does the whole
+of steps 1 to 3 in one dialog.
+
+It accepts **every format this build of Assimp reads** (`.glb`, `.gltf`, `.fbx`,
+`.obj`, `.dae`, `.blend`, ...), asked of the engine rather than hardcoded, so
+the list cannot drift from what the loader actually supports. There is no path
+to type: the dialog scans `assets/source` recursively and lists what it finds by
+path, with a filter, and a folder browser for reaching a download outside the
+tree.
+
+What the import writes, into the game pack:
+
+```
+meshes/props/import_<slug>[_pN].obj    one per submesh
+textures/import_<slug>_<name>.png      textures copied from beside the model
+materials/import_<slug>.material       one PSX material per texture
+config/kit.toml                        a marked block of [[piece]] entries
+```
+
+The pieces are then in the Catalog, and the model itself is dropped into the
+scene at the camera -- multi-part models under a group so they move as one.
+
+Three things worth knowing:
+
+- **Reimporting replaces.** The kit block is delimited with
+  `# BEGIN editor import: <slug>`, so fixing a model in Blender and importing it
+  again replaces its pieces rather than leaving a second dead copy.
+- **Textures must be beside the model.** An `.mtl` naming `386.png` is resolved
+  against the *model's* directory. Textures **embedded** in the file are not
+  extracted -- the engine's loader treats them as metadata only -- and the
+  import says so in the Status panel rather than silently producing an
+  untextured prop. Assign a material in the Material panel for those.
+- **Geometry only.** Skins and animation are not imported.
+
+The conversion is `ed::importModelToKit`
+(`game/editor/ModelImportPipeline.h`), running in process on the engine's own
+Assimp importer. It replaced a Python script invoked through `std::system` that
+carried a second glTF parser, read one format, and reported failure as "see
+terminal output".
+
+The Blender path below is still the one to use when you own the source file:
+`make asset` gives you control over the object, the scale and the name, and
+leaves nothing to guess at.
+
 ## 1. Blender → the engine
 
 ```sh

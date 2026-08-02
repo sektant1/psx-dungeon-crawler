@@ -15,6 +15,10 @@ See `docs/design/2026-07-29-rhi-and-module-contracts.md` for the staging.
 
 ## Writing a backend
 
+For Vulkan specifically, `docs/vulkan-impl-survival-kit/index.html` is the
+staged plan, the reading list, and the register of things in this engine that
+will bite — read it before step 1.
+
 1. Implement `eng::rhi::Device` and `eng::rhi::CommandList` in your directory.
 2. Fill in `capabilities()` honestly -- the renderer above degrades on what it
    reports, and `maxSimultaneousLights` in particular must be at least 16 or

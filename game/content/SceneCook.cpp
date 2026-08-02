@@ -86,11 +86,14 @@ bool ancestorAnimated(const SceneDocument& document, const Entity& entity)
 
 bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                    entt::registry& out, std::string& error,
-                   std::unordered_map<AuthorId, entt::entity>* authorToEntity)
+                   std::unordered_map<AuthorId, entt::entity>* authorToEntity,
+                   std::vector<AuthorId>* unresolved)
 {
     error.clear();
     if (authorToEntity)
         authorToEntity->clear();
+    if (unresolved)
+        unresolved->clear();
 
     // Author-id order, not document order: two documents with the same content
     // in a different order must cook to the same bytes.
@@ -133,12 +136,20 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
 
         const KitPiece* piece =
             authored.prefab.empty() ? nullptr : catalog.find(authored.prefab);
-        if (!authored.prefab.empty()) {
-            if (!piece) {
-                error = "entity '" + authored.id + "' has unresolved prefab '" +
-                        authored.prefab + "'";
-                return false;
-            }
+        if (!authored.prefab.empty() && !piece && !unresolved) {
+            error = "entity '" + authored.id + "' has unresolved prefab '" +
+                    authored.prefab + "'";
+            return false;
+        }
+        if (!authored.prefab.empty() && !piece) {
+            // Recorded and carried past, for the preview. The entity is kept
+            // rather than dropped: destroying it here would leave a dangling
+            // handle in `ids`, which the parent-link pass below indexes by
+            // position -- and the author still needs the row in the outliner to
+            // select the thing and fix its prefab.
+            unresolved->push_back(authored.id);
+        }
+        else if (!authored.prefab.empty()) {
             // The kit is authored on a 20-unit grid and imported at `scale`;
             // the authored scale multiplies that rather than replacing it.
             transform.scale *= piece->meshScale(catalog.scale());

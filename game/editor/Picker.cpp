@@ -40,29 +40,53 @@ bool projectToViewport(glm::vec3 world, const glm::mat4& viewProjection,
     return true;
 }
 
-bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit)
+bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit,
+             glm::vec3& normal)
 {
     float tmin = 0.0f;
     float tmax = 1e30f;
+    // Which slab produced tmin, and whether the ray came in through that axis's
+    // min face (outward normal -1) or its max face (+1).
+    int axis = -1;
+    float sign = 1.0f;
     for (int i = 0; i < 3; ++i) {
         const float o = r.origin[i], d = r.dir[i];
         if (std::fabs(d) < 1e-8f) {
             if (o < mn[i] || o > mx[i])
                 return false;
+            continue;
         }
-        else {
-            float t1 = (mn[i] - o) / d;
-            float t2 = (mx[i] - o) / d;
-            if (t1 > t2)
-                std::swap(t1, t2);
-            tmin = std::max(tmin, t1);
-            tmax = std::min(tmax, t2);
-            if (tmin > tmax)
-                return false;
+        float t1 = (mn[i] - o) / d;
+        float t2 = (mx[i] - o) / d;
+        // Pointing up the axis enters through the min face; pointing down it
+        // enters through the max face, which is what the swap detects.
+        float faceSign = -1.0f;
+        if (t1 > t2) {
+            std::swap(t1, t2);
+            faceSign = 1.0f;
         }
+        if (t1 > tmin) {
+            tmin = t1;
+            axis = i;
+            sign = faceSign;
+        }
+        tmax = std::min(tmax, t2);
+        if (tmin > tmax)
+            return false;
     }
     tHit = tmin;
+    normal = glm::vec3(0.0f);
+    if (axis < 0)
+        normal.y = 1.0f; // origin inside the box: no entry face
+    else
+        normal[axis] = sign;
     return true;
+}
+
+bool rayAabb(const Ray& r, glm::vec3 mn, glm::vec3 mx, float& tHit)
+{
+    glm::vec3 ignored;
+    return rayAabb(r, mn, mx, tHit, ignored);
 }
 
 bool rayPlaneY(const Ray& r, float level, glm::vec3& hit)

@@ -269,6 +269,27 @@ bool Renderer::loadMaterialScript(const std::string& path)
     return false;
 }
 
+void Renderer::refreshAssetIndex()
+{
+    auto& rgm = Ogre::ResourceGroupManager::getSingleton();
+    // Removing and re-adding is what rebuilds the archive's index; there is no
+    // narrower "rescan" in Ogre's API. The locations are the same ones
+    // RenderCore registered, asked for the same way, so the two cannot drift.
+    for (const std::filesystem::path& dir : assets::resourceDirs()) {
+        try {
+            rgm.removeResourceLocation(dir.string(), "General");
+        } catch (const Ogre::Exception&) {
+            // Not registered yet: adding it below is then the whole job.
+        }
+        try {
+            rgm.addResourceLocation(dir.string(), "FileSystem", "General");
+        } catch (const Ogre::Exception& error) {
+            log::error("Renderer: cannot re-index '%s': %s", dir.string().c_str(),
+                       error.what());
+        }
+    }
+}
+
 MeshHandle Renderer::loadMesh(const std::string& path)
 {
     return loadMesh(path, ModelImportOptions{});

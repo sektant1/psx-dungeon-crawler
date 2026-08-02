@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building the backend — Vulkan Implementation Survival Kit</title>
+<meta name="description" content="Dependency choices, CMake wiring, file layout, and a method-by-method map from the eng::rhi::Device contract to the Vulkan calls behind it.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="kit.css">
+<script src="kit.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="shell">
+
+<aside class="rail">
+  <div class="rail-inner">
+    <a class="kit-mark" href="index.html"><strong>Vulkan</strong>Implementation<br>Survival Kit</a>
+    <nav aria-label="Kit contents">
+      <div class="rail-group">
+        <h2>The kit</h2>
+        <a href="index.html">Orientation &amp; plan</a>
+        <a href="learning-path.html">Learning path</a>
+        <a href="implementation.html" aria-current="page">Building the backend</a>
+        <a href="hazards.html">Engine-specific hazards</a>
+      </div>
+      <div class="rail-group">
+        <h2>In this page</h2>
+        <a href="#seam">Rules of the seam</a>
+        <a href="#deps">Dependencies</a>
+        <a href="#cmake">CMake wiring</a>
+        <a href="#layout">File layout</a>
+        <a href="#mapping">Contract → Vulkan map</a>
+        <a href="#frame">The frame loop</a>
+        <a href="#lifetime">Handles &amp; deletion</a>
+        <a href="#descriptors">Descriptors</a>
+        <a href="#shaders">Shaders &amp; SPIR-V</a>
+        <a href="#proving">Proving it works</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle>
+      Theme: <span class="mode">auto</span>
+    </button>
+  </div>
+</aside>
+
+<div class="page">
+<main id="content">
+
+<header class="masthead">
+  <p class="eyebrow">Kit / 03</p>
+  <h1>Building <code>eng::rhi::vulkan</code></h1>
+  <p class="standfirst">Dependency choices, CMake wiring, a file layout, and a method-by-method map
+  from the contract you have to the Vulkan you'll write.</p>
+</header>
+
+<h2 id="seam"><a class="num" href="#seam">§1</a>Rules of the seam</h2>
+
+<p>Three constraints define this work. They are already true in the repo, and every design decision
+below follows from them.</p>
+
+<ul>
+  <li><strong>No Vulkan type crosses <span class="path">engine/include/eng/rhi/</span>.</strong>
+  <code>Types.h</code> says so in its own header comment, and it is what lets the rest of the engine
+  compile untouched while you work.</li>
+  <li><strong><code>eng_rhi</code> cannot see the renderer.</strong> It sits beside
+  <code>eng_platform</code> deliberately (<span class="path">CMakeLists.txt:177-189</span>). Do not
+  reach for <code>RenderCore</code>, OGRE, or anything in <code>eng_systems</code>.</li>
+  <li><strong>The backend must fail loudly and return null</strong> when it cannot run — that is the
+  documented behaviour of <code>createDevice</code>, and it is what keeps
+  <code>rhi_contract_tests</code> green on machines without a GPU.</li>
+</ul>
+
+<h2 id="deps"><a class="num" href="#deps">§2</a>Dependencies: what to let someone else write</h2>
+
+<p>Yes to vk-bootstrap. The boilerplate it removes — instance creation, layer and extension juggling,
+physical device selection with feature requirements, queue family lookup, swapchain construction — is
+several hundred lines that teach you the shape of the API exactly once and then become a maintenance
+tax forever. It is a build-time-only dependency confined to two <code>.cpp</code> files, so it never
+appears in a header and can be removed later without touching anything above it. The one caveat:
+read what it does before you use it, or you will not understand your own device's feature set.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Library</th><th>Verdict</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>vk-bootstrap</b><br><span class="path">charles-lunarg/vk-bootstrap</span></td>
+      <td class="nw">Take it</td>
+      <td>Instance/device/swapchain setup. Kills ~600 lines with zero architectural commitment. Its
+      <code>SwapchainBuilder</code> also handles the recreate path you would otherwise get wrong.</td>
+    </tr>
+    <tr>
+      <td><b>VMA</b><br><span class="path">GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator</span></td>
+      <td class="nw">Take it</td>
+      <td>Non-negotiable. Manual <code>VkDeviceMemory</code> sub-allocation is a project in itself, and
+      getting it wrong shows up as fragmentation and out-of-memory on other people's GPUs, not
+      yours.</td>
+    </tr>
+    <tr>
+      <td><b>volk</b><br><span class="path">zeux/volk</span></td>
+      <td class="nw">Skip for now</td>
+      <td>Meta-loader for function pointers. Real benefit (avoids loader dispatch overhead) but it is a
+      micro-optimisation at this stage and it complicates every call site. Add it after the frame loop
+      is stable — it is a mechanical change. Note OGRE vendors its own copy inside its Vulkan RS, which
+      you are not building, so there is no conflict either way.</td>
+    </tr>
+    <tr>
+      <td><b>glslang</b> / <b>shaderc</b></td>
+      <td class="nw">CLI only</td>
+      <td>Compile GLSL → SPIR-V <em>offline</em> in the asset pipeline. <code>ShaderDesc::code</code>
+      takes bytes, so runtime compilation buys nothing but startup cost and a heavy link. Already
+      installed here at 16.3.0.</td>
+    </tr>
+    <tr>
+      <td><b>SDL2</b></td>
+      <td class="nw">Already in the build</td>
+      <td>Use <code>SDL_Vulkan_GetInstanceExtensions</code> and <code>SDL_Vulkan_CreateSurface</code>
+      rather than platform surface code — <code>DeviceDesc</code> already carries
+      <code>platformWindow</code> as an <code>SDL_Window*</code> for exactly this.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="cmake"><a class="num" href="#cmake">§3</a>CMake wiring</h2>
+
+<p>Keep Vulkan optional so a machine without the SDK still builds the engine — the backend returning
+null is a supported state.</p>
+
+<pre><code># cmake/Dependencies.cmake — near the other CPM entries.
+# Pin real release tags; verify against upstream before committing.
+find_package(Vulkan QUIET)
+if(Vulkan_FOUND)
+    CPMAddPackage(
+        NAME vk-bootstrap
+        GITHUB_REPOSITORY charles-lunarg/vk-bootstrap
+        GIT_TAG v1.3.302          # check upstream tags
+        OPTIONS "VK_BOOTSTRAP_TEST OFF"
+    )
+    CPMAddPackage(
+        NAME VulkanMemoryAllocator
+        GITHUB_REPOSITORY GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+        GIT_TAG v3.1.0            # check upstream tags
+        DOWNLOAD_ONLY YES         # header-only; we compile the impl
+    )
+    add_library(eng_vma INTERFACE)
+    target_include_directories(eng_vma INTERFACE
+        "${VulkanMemoryAllocator_SOURCE_DIR}/include")
+endif()</code></pre>
+
+<pre><code># CMakeLists.txt — extend the existing eng_rhi target (currently :183-189).
+option(ENG_RHI_VULKAN "Build the Vulkan RHI backend" ${Vulkan_FOUND})
+
+add_library(eng_rhi STATIC
+  engine/src/rhi/Registry.cpp
+  engine/src/rhi/null/NullDevice.cpp
+  engine/src/rhi/gl/GLDevice.cpp
+  engine/src/rhi/vulkan/VulkanDevice.cpp)
+
+if(ENG_RHI_VULKAN)
+  target_sources(eng_rhi PRIVATE
+    engine/src/rhi/vulkan/VulkanContext.cpp
+    engine/src/rhi/vulkan/VulkanSwapchain.cpp
+    engine/src/rhi/vulkan/VulkanResources.cpp
+    engine/src/rhi/vulkan/VulkanCommandList.cpp
+    engine/src/rhi/vulkan/VulkanPipeline.cpp
+    engine/src/rhi/vulkan/VulkanFormats.cpp
+    engine/src/rhi/vulkan/VmaImpl.cpp)  # VMA_IMPLEMENTATION alone
+  target_link_libraries(eng_rhi PRIVATE
+    Vulkan::Vulkan vk-bootstrap::vk-bootstrap eng_vma SDL2::SDL2)
+  target_compile_definitions(eng_rhi PRIVATE ENG_RHI_VULKAN=1)
+endif()</code></pre>
+
+<p>Everything Vulkan is <code>PRIVATE</code>. <code>VulkanDevice.cpp</code> keeps compiling
+unconditionally and returns null when <code>ENG_RHI_VULKAN</code> is undefined, which is the same
+contract it honours today — so <code>rhi_contract_tests</code> passes either way.</p>
+
+<div class="callout quiet">
+  <span class="label">Build discipline</span>
+  <p>Adding CPM packages re-runs <em>configure</em>, not a rebuild — OGRE's object files survive. Build
+  the one target: <code>cmake --build build --target eng_rhi -j8</code>. Never
+  <code>rm -rf build</code>.</p>
+</div>
+
+<h2 id="layout"><a class="num" href="#layout">§4</a>File layout</h2>
+
+<p>One concern per file, matching how the null backend is organised.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>File</th><th>Holds</th></tr></thead>
+  <tbody>
+    <tr><td><code>VulkanDevice.{h,cpp}</code></td><td>The <code>Device</code> implementation and <code>createDevice</code>. Thin — it delegates.</td></tr>
+    <tr><td><code>VulkanContext.{h,cpp}</code></td><td>Instance, physical device, logical device, queues, VMA allocator, debug messenger. Built with vk-bootstrap.</td></tr>
+    <tr><td><code>VulkanSwapchain.{h,cpp}</code></td><td>Swapchain, images, views, acquire/present, recreation on resize and <code>VK_ERROR_OUT_OF_DATE_KHR</code>.</td></tr>
+    <tr><td><code>VulkanResources.{h,cpp}</code></td><td>The generational handle tables and the buffer/texture/sampler/shader records behind them.</td></tr>
+    <tr><td><code>VulkanCommandList.{h,cpp}</code></td><td><code>CommandList</code> implementation: state tracking, binding, draws, debug labels.</td></tr>
+    <tr><td><code>VulkanPipeline.{h,cpp}</code></td><td><code>PipelineDesc</code> → <code>VkPipeline</code>, plus a hash-keyed cache and the pipeline layout / descriptor set layouts.</td></tr>
+    <tr><td><code>VulkanFormats.{h,cpp}</code></td><td>Every enum mapping in one place: <code>Format</code>, <code>BlendMode</code>, <code>CompareOp</code>, <code>CullMode</code>, <code>VertexFormat</code>, <code>FilterMode</code>, <code>AddressMode</code>, topology.</td></tr>
+    <tr><td><code>VmaImpl.cpp</code></td><td>Nothing but <code>#define VMA_IMPLEMENTATION</code> and the include. Keeps VMA's warnings out of your files.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="mapping"><a class="num" href="#mapping">§5</a>Contract → Vulkan map</h2>
+
+<p>The whole job, in one table. Work down it.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Contract method</th><th>What it does in Vulkan</th></tr></thead>
+  <tbody>
+    <tr><td><code>createDevice</code></td><td><code>vkb::InstanceBuilder</code> (validation gated on <code>DeviceDesc::enableValidation</code>) → surface from SDL → <code>vkb::PhysicalDeviceSelector</code> requiring Vulkan 1.3 with <code>dynamicRendering</code> and <code>synchronization2</code> → <code>vkb::DeviceBuilder</code> → <code>vmaCreateAllocator</code>. Return null with a logged reason on any failure.</td></tr>
+    <tr><td><code>capabilities()</code></td><td>From <code>VkPhysicalDeviceProperties</code>: <code>deviceName</code>, <code>maxImageDimension2D</code>, <code>maxColorAttachments</code>. <code>maxSimultaneousLights</code> is not a device limit — it is how many lights your descriptor layout can bind, and the contract test requires ≥ 16 because <code>psx_lighting.glsl</code> does.</td></tr>
+    <tr><td><code>beginFrame</code></td><td>Wait the frame fence → <code>vkAcquireNextImageKHR</code> → reset the frame's command pool → run its deletion queue → begin the command buffer. Return <code>false</code> on <code>OUT_OF_DATE</code>/<code>SUBOPTIMAL</code> after kicking recreation.</td></tr>
+    <tr><td><code>endFrame</code></td><td>Transition the swapchain image to <code>PRESENT_SRC</code> → end and submit with acquire/render semaphores and the frame fence → <code>vkQueuePresentKHR</code> → advance the frame index.</td></tr>
+    <tr><td><code>resizeSwapchain</code></td><td><code>vkDeviceWaitIdle</code>, destroy views, rebuild via <code>vkb::SwapchainBuilder</code> with the old swapchain passed in.</td></tr>
+    <tr><td><code>beginPass</code></td><td><code>vkCmdBeginRendering</code> with <code>VkRenderingAttachmentInfo</code> per <code>ColourAttachment</code> (<code>clear</code> → <code>LOAD_OP_CLEAR</code> vs <code>LOAD_OP_LOAD</code>). Transition each attachment to <code>COLOR_ATTACHMENT_OPTIMAL</code> first — an invalid handle means the swapchain image.</td></tr>
+    <tr><td><code>endPass</code></td><td><code>vkCmdEndRendering</code>, plus the barrier that makes each colour target readable if a later pass samples it. The PSX chain does exactly that, repeatedly.</td></tr>
+    <tr><td><code>createBuffer</code></td><td><code>vmaCreateBuffer</code>. <code>BufferUsage::Dynamic</code> → <code>HOST_VISIBLE|HOST_COHERENT</code> with persistent mapping; everything else <code>DEVICE_LOCAL</code> + a staging copy for <code>initialData</code>.</td></tr>
+    <tr><td><code>updateBuffer</code></td><td>Dynamic: <code>memcpy</code> into the mapped ring (the contract says this must not stall — so sub-allocate per frame, never overwrite in place). Static: staging buffer + <code>vkCmdCopyBuffer</code> + barrier.</td></tr>
+    <tr><td><code>createTexture</code> / <code>updateTexture</code></td><td><code>vmaCreateImage</code>, staging buffer, <code>UNDEFINED → TRANSFER_DST</code>, <code>vkCmdCopyBufferToImage</code>, <code>→ SHADER_READ_ONLY_OPTIMAL</code>. Track the current layout per image; you will need it in <code>beginPass</code>.</td></tr>
+    <tr><td><code>createSampler</code></td><td>Direct mapping. <code>FilterMode::Nearest</code> is the default and the PSX look depends on it — do not "helpfully" enable linear or anisotropy.</td></tr>
+    <tr><td><code>createShader</code></td><td><code>vkCreateShaderModule</code> over <code>ShaderDesc::code</code>. Validate the SPIR-V magic number (<code>0x07230203</code>) and reject GLSL text with a clear message — the contract explicitly requires failing at creation, not at first draw.</td></tr>
+    <tr><td><code>createPipeline</code></td><td>The big one. <code>VkGraphicsPipelineCreateInfo</code> with <code>VkPipelineRenderingCreateInfo</code> fed from <code>colourFormats</code>/<code>depthFormat</code>, viewport and scissor as dynamic state, blend from the four <code>BlendMode</code> values.</td></tr>
+    <tr><td><code>bindPipeline</code>/<code>setViewport</code>/<code>setScissor</code></td><td><code>vkCmdBindPipeline</code>, <code>vkCmdSetViewport</code>, <code>vkCmdSetScissor</code>. See Hazards §1 on the negative-height viewport.</td></tr>
+    <tr><td><code>bindVertexBuffer</code>/<code>bindIndexBuffer</code></td><td><code>vkCmdBindVertexBuffers</code>, <code>vkCmdBindIndexBuffer</code> with <code>INDEX_TYPE_UINT32</code> — the contract mandates 32-bit indices.</td></tr>
+    <tr><td><code>bindUniformBuffer</code>/<code>bindTexture</code></td><td>Descriptor writes. See <a href="#descriptors">§8</a> — this is a design decision, not a translation.</td></tr>
+    <tr><td><code>pushConstants</code></td><td><code>vkCmdPushConstants</code>. Real push constants; the 128-byte budget in the contract is the guaranteed minimum <code>maxPushConstantsSize</code>.</td></tr>
+    <tr><td><code>draw</code>/<code>drawIndexed</code></td><td><code>vkCmdDraw</code>/<code>vkCmdDrawIndexed</code>, after flushing any pending descriptor binds.</td></tr>
+    <tr><td><code>pushDebugGroup</code>/<code>popDebugGroup</code></td><td><code>vkCmdBeginDebugUtilsLabelEXT</code>/<code>End</code>. Do this early — named regions are what make a RenderDoc capture legible, and <span class="path">docs/debugging-renderdoc.md</span> assumes they exist.</td></tr>
+    <tr><td><code>waitIdle</code></td><td><code>vkDeviceWaitIdle</code>, then drain every deletion queue.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="frame"><a class="num" href="#frame">§6</a>The frame loop</h2>
+
+<p>Two frames in flight. Everything per-frame lives in one struct, which is what makes the lifetime
+question answerable.</p>
+
+<pre><code>// Sketch. Two is the right number here: enough to overlap CPU and GPU,
+// few enough that the dynamic-buffer ring stays small.
+struct FrameContext {
+    VkCommandPool     pool;        // reset whole, never per-buffer
+    VkCommandBuffer   cmd;
+    VkSemaphore       acquired;    // swapchain image ready
+    VkSemaphore       rendered;    // safe to present
+    VkFence           inFlight;    // CPU waits on this before reuse
+    DescriptorArena   descriptors; // reset each frame, see §8
+    RingBuffer        uniforms;    // host-visible, sub-allocated per bind
+    std::vector&lt;PendingDelete&gt; graveyard;
+};</code></pre>
+
+<p><code>beginFrame</code> waits on <code>inFlight</code>, and <em>that wait is the moment</em> when
+everything the frame owned two frames ago is provably dead: reset the pool, reset the descriptor
+arena, and drain the graveyard. No reference counting, no ambiguity.</p>
+
+<h2 id="lifetime"><a class="num" href="#lifetime">§7</a>Handles and deletion</h2>
+
+<p>Take the generational <code>Table&lt;Handle, Record&gt;</code> from
+<span class="path">engine/src/rhi/null/NullDevice.cpp:15-73</span> more or less verbatim. It already
+implements what the contract demands — 1-based ids, generation bump on destroy, stale-handle detection
+that logs instead of dereferencing — and using the same structure means a bug reproduces identically
+on the null backend, where it is trivial to debug.</p>
+
+<p>The one change Vulkan forces: <code>destroy*</code> cannot destroy. The GPU may still be reading the
+resource. So <code>destroyBuffer</code> bumps the generation immediately — callers must see the handle
+go stale <em>now</em> — and pushes the actual <code>vmaDestroyBuffer</code> onto the current frame's
+graveyard, executed two frames later.</p>
+
+<pre><code>void VulkanDevice::destroyBuffer(BufferHandle h)
+{
+    BufferRec* rec = mBuffers.get(h, "buffer");
+    if (!rec)
+        return;                       // already logged by the table
+    mFrames[mFrameIndex].graveyard.push_back(
+        [buf = rec-&gt;buffer, alloc = rec-&gt;allocation, this] {
+            vmaDestroyBuffer(mAllocator, buf, alloc);
+        });
+    mBuffers.destroy(h, "buffer");    // generation bumps here
+}</code></pre>
+
+<h2 id="descriptors"><a class="num" href="#descriptors">§8</a>Descriptors</h2>
+
+<p><code>bindTexture(slot, …)</code> and <code>bindUniformBuffer(slot, …)</code> read like GL binding
+points, and that mismatch is the single largest design gap between the contract and Vulkan. Three
+strategies, in ascending order of effort:</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Strategy</th><th>Cost</th><th>When</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>Per-draw sets from a per-frame pool.</b> One <code>VkDescriptorSetLayout</code> with a
+      fixed slot count (say 8 UBOs + 16 samplers), allocate and write a set per draw, reset the pool
+      each frame.</td>
+      <td>Simplest. Wasteful, but a PSX-resolution frame is not descriptor-bound.</td>
+      <td><b>Start here.</b> It maps to the contract literally and gets you drawing.</td>
+    </tr>
+    <tr>
+      <td><b>Hash and cache.</b> Same layout, but hash the binding state and reuse sets across draws
+      and frames.</td>
+      <td>An afternoon on top of the above.</td>
+      <td>When a capture shows descriptor writes in the profile.</td>
+    </tr>
+    <tr>
+      <td><b>Bindless.</b> One large descriptor array, indices via push constants.</td>
+      <td>Real design work; changes how shaders are written.</td>
+      <td>Not now. It contradicts the current shader set and buys nothing at this scale.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>Whichever you pick, the 16-sampler figure is not arbitrary: <code>capabilities()</code> must report
+<code>maxSimultaneousLights &gt;= 16</code>, and <code>RenderCore</code> already forces
+<code>setMaxSimultaneousLights(16)</code> on every pass because <code>psx_lighting.glsl</code> binds
+16 light slots. Whatever layout you design has to carry that many.</p>
+
+<h2 id="shaders"><a class="num" href="#shaders">§9</a>Shaders and SPIR-V</h2>
+
+<p><code>ShaderDesc::code</code> is bytes, and for Vulkan those bytes are SPIR-V. That makes shader
+compilation an <em>asset pipeline step</em>, which is the right place for it: the engine already cooks
+scenes (<code>make cook</code>), and shaders join that pattern rather than inventing a new one.</p>
+
+<pre><code># The offline step. glslangValidator 16.3.0 is already installed.
+glslangValidator -V --target-env vulkan1.3 \
+    -DLIT -DMETAL \
+    -o build/shaders/psx_lit_metal.frag.spv \
+    assets/shaders/psx.frag</code></pre>
+
+<p>Two things follow immediately, and both are covered in <a href="hazards.html#shaders">Hazards §2</a>:
+the <code>-D</code> variant explosion in <code>psx.program</code> wants specialization constants
+instead, and GLSL 330's default-block uniforms are illegal in SPIR-V. Do not start this until
+stage 5 — get a triangle with a hand-written Vulkan-GLSL shader working first, so that when the
+port misbehaves you know the backend underneath it is sound.</p>
+
+<h2 id="proving"><a class="num" href="#proving">§10</a>Proving it works</h2>
+
+<h3>The contract test, headless</h3>
+
+<p><span class="path">engine/tests/RhiContractTests.cpp:111-114</span> builds a <code>DeviceDesc</code>
+with <code>width=640, height=360</code> and <em>no window</em> — <code>nativeWindowHandle</code> is 0
+and <code>platformWindow</code> is null. Two valid responses:</p>
+
+<ul>
+  <li>Return null with a logged reason. The test prints <code>vulkan: not available</code> and passes.
+  Correct, and worthless as coverage.</li>
+  <li>Detect the missing window and create a headless device. This machine's Vulkan instance
+  advertises <code>VK_EXT_headless_surface</code>, so the full create/draw/destroy sequence — every
+  resource path, the deletion queue, <code>waitIdle</code> — runs in CI with no display.</li>
+</ul>
+
+<p>Do the first to unblock stage 2, then the second at the end of stage 3. The second is what stops
+the backend from silently rotting.</p>
+
+<h3>The sample app</h3>
+
+<p>Add <code>rhi_triangle</code> under <span class="path">samples/</span>, alongside
+<code>psx-demo</code>. It owns its own SDL window created with <code>SDL_WINDOW_VULKAN</code>, which is
+why it must be a separate binary from <code>game</code> — see
+<a href="hazards.html#windowing">Hazards §4</a>. Give it the engine's screenshot hook
+(<code>PSX_SCREENSHOT</code> / <code>PSX_SCREENSHOT_FRAME</code>) on the first day; it is how every
+later stage gets verified without a human looking at a window.</p>
+
+<div class="callout">
+  <span class="label">The checks that catch things early</span>
+  <ul>
+    <li><code>ctest -R rhi_contract</code> — the sequence completes on Vulkan.</li>
+    <li>Validation layers silent for a 10,000-frame run of <code>rhi_triangle</code>, including a
+    window resize and a minimise/restore.</li>
+    <li><code>make renderdoc APP=rhi_triangle</code> — a capture opens and the debug labels from
+    <code>pushDebugGroup</code> are legible.</li>
+    <li>No leaked handles at shutdown: log <code>liveCount()</code> per table in the destructor, the
+    way the null backend already can.</li>
+  </ul>
+</div>
+
+<nav class="pagenav" aria-label="Kit pages">
+  <a href="learning-path.html">← Learning path</a>
+  <a href="hazards.html">Engine-specific hazards →</a>
+</nav>
+
+</main>
+</div>
+</div>
+</body>
+</html>

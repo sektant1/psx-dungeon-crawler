@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning path — Vulkan Implementation Survival Kit</title>
+<meta name="description" content="An ordered Vulkan curriculum with stop conditions, what to skip because vk-bootstrap and VMA already do it, and where each chapter lands in eng::rhi.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="kit.css">
+<script src="kit.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="shell">
+
+<aside class="rail">
+  <div class="rail-inner">
+    <a class="kit-mark" href="index.html"><strong>Vulkan</strong>Implementation<br>Survival Kit</a>
+    <nav aria-label="Kit contents">
+      <div class="rail-group">
+        <h2>The kit</h2>
+        <a href="index.html">Orientation &amp; plan</a>
+        <a href="learning-path.html" aria-current="page">Learning path</a>
+        <a href="implementation.html">Building the backend</a>
+        <a href="hazards.html">Engine-specific hazards</a>
+      </div>
+      <div class="rail-group">
+        <h2>In this page</h2>
+        <a href="#schools">Two schools</a>
+        <a href="#core">Core curriculum</a>
+        <a href="#sync">Synchronization</a>
+        <a href="#map">Tutorial → contract map</a>
+        <a href="#reference">Reference shelf</a>
+        <a href="#watch">Read other people's engines</a>
+        <a href="#toolchain">Toolchain on this box</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle>
+      Theme: <span class="mode">auto</span>
+    </button>
+  </div>
+</aside>
+
+<div class="page">
+<main id="content">
+
+<header class="masthead">
+  <p class="eyebrow">Kit / 02</p>
+  <h1>Learning Vulkan without losing a month</h1>
+  <p class="standfirst">An ordered curriculum, what to skip because a library already does it, and
+  where every chapter lands in <code>eng::rhi</code>.</p>
+</header>
+
+<div class="callout quiet">
+  <span class="label">On these links</span>
+  <p>Written from knowledge, not fetched — check anything that 404s against
+  <a href="https://www.vulkan.org/learn">vulkan.org/learn</a>, which aggregates the current canonical
+  locations. Khronos has been consolidating everything under <code>docs.vulkan.org</code>, so a dead
+  link usually has a live twin there.</p>
+</div>
+
+<h2 id="schools"><a class="num" href="#schools">§1</a>Two schools, and which one you want</h2>
+
+<p>Vulkan teaching material splits into two traditions, and picking wrong costs you weeks.</p>
+
+<p><strong>vulkan-tutorial</strong> teaches the API bottom-up: every struct, every field, in one long
+<code>main.cpp</code>. It is the best explanation of <em>what the objects are</em> and the worst model
+for <em>how to structure an engine</em> — its resource handling is deliberately naive and its final
+program is unshippable by design.</p>
+
+<p><strong>vkguide</strong> teaches engine-shaped Vulkan: modern from the start (dynamic rendering,
+sync2, VMA, descriptor abstractions, a deletion queue), organised as systems rather than a script.
+Its architecture is much closer to what <code>Device.h</code> asks for.</p>
+
+<p>Do both, in that order, and treat the first as vocabulary and the second as grammar. Skimming
+vkguide before you have typed vulkan-tutorial's triangle produces the illusion of understanding;
+doing vulkan-tutorial and stopping produces a backend you have to rewrite.</p>
+
+<h2 id="core"><a class="num" href="#core">§2</a>Core curriculum</h2>
+
+<p>Each row has a stop condition. Move on when you can answer it — not when you finish reading.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Order</th><th>Resource</th><th>Time</th><th>Stop when you can…</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><b>Vulkan in 30 minutes</b> — baldurk (the RenderDoc author)<br>
+        <span class="path">renderdoc.org/vulkan-in-30-minutes.html</span></td>
+      <td class="nw">1 hr</td>
+      <td>…sketch the object graph: instance → physical device → device → queue → command pool →
+      command buffer, and where swapchain and descriptors hang off it.</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><b>Understanding Vulkan Objects</b> — GPUOpen<br>
+        <span class="path">gpuopen.com/learn/understanding-vulkan-objects/</span></td>
+      <td class="nw">1 hr</td>
+      <td>…read the poster diagram without looking anything up. Print it.</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><b>vulkan-tutorial</b>, chapters through "Drawing a triangle"<br>
+        <span class="path">vulkan-tutorial.com</span> (Khronos-maintained fork at
+        <span class="path">docs.vulkan.org/tutorial/latest/</span>)</td>
+      <td class="nw">2–3 days</td>
+      <td>…explain why the frame needs two semaphores and a fence, and what happens if you drop each
+      one.</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><b>vulkan-tutorial</b>, vertex/uniform/texture/depth chapters</td>
+      <td class="nw">2 days</td>
+      <td>…describe the staging-buffer upload path and the two image layout transitions it needs.</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><b>vkguide</b>, chapters 0–3<br><span class="path">vkguide.dev</span></td>
+      <td class="nw">3–4 days</td>
+      <td>…justify a deletion queue, a descriptor allocator, and why dynamic rendering replaces
+      <code>VkRenderPass</code> here.</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><b>Writing an efficient Vulkan renderer</b> — Arseny Kapoulkine<br>
+        <span class="path">zeux.io/2020/02/27/writing-an-efficient-vulkan-renderer/</span></td>
+      <td class="nw">2 hrs</td>
+      <td>…name the three memory types you will allocate from and what goes in each. Re-read this one
+      every few months; it gets deeper as you do.</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><b>Khronos Vulkan Guide</b> — selected chapters<br>
+        <span class="path">docs.vulkan.org/guide/latest/</span></td>
+      <td class="nw">as needed</td>
+      <td>…this is the "why is it like this" companion to the spec. Read the dynamic rendering,
+      synchronization2, and memory chapters before designing anything.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="sync"><a class="num" href="#sync">§3</a>Synchronization: the part no library removes</h2>
+
+<p>vk-bootstrap removes setup. VMA removes allocation. Nothing removes synchronization, and it is
+where a renderer is actually won or lost. Give it a dedicated pass rather than absorbing it
+incidentally.</p>
+
+<ul class="links">
+  <li>
+    <a href="https://themaister.net/blog/2019/08/14/yet-another-blog-explaining-vulkan-synchronization/">Yet another blog explaining Vulkan synchronization</a>
+    <span class="url">themaister.net/blog/2019/08/14/yet-another-blog-explaining-vulkan-synchronization/</span>
+    <span class="note">Hans-Kristian Arntzen. The single best explanation of execution vs. memory
+    dependencies. If you only read one thing here, read this — twice.</span>
+  </li>
+  <li>
+    <a href="https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples">Khronos Synchronization Examples</a>
+    <span class="url">github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples</span>
+    <span class="note">A cookbook of correct barriers for the exact situations you will hit: staging
+    upload, render-target → sampled, swapchain present. Copy from here, don't improvise.</span>
+  </li>
+  <li>
+    <a href="https://www.khronos.org/blog/understanding-vulkan-synchronization">Understanding Vulkan Synchronization</a>
+    <span class="url">khronos.org/blog/understanding-vulkan-synchronization</span>
+    <span class="note">Official companion to <code>VK_KHR_synchronization2</code>, which is what you
+    should target — the sync2 barrier structs are meaningfully harder to get wrong.</span>
+  </li>
+</ul>
+
+<div class="callout">
+  <span class="label">The rule that saves you</span>
+  <p>Every validation-layer message about synchronization is a real bug, including the ones that
+  appear on a frame that looks correct. Enable <code>VK_LAYER_KHRONOS_validation</code> with the
+  synchronization validation feature switched on, and route its callback into <code>eng::log</code> at
+  error level so it lands in the same console as everything else. The engine already treats a missing
+  material as a loud error rather than a silent fallback — hold the GPU to the same standard.</p>
+</div>
+
+<h2 id="map"><a class="num" href="#map">§4</a>Tutorial chapter → contract map</h2>
+
+<p>What each block of learning is <em>for</em>, in terms of this repo. The right-hand column is the
+reason to skip things: vk-bootstrap and VMA cover them, and re-deriving them by hand buys nothing.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Topic</th><th>Lands in</th><th>Write by hand?</th></tr></thead>
+  <tbody>
+    <tr><td>Instance, layers, extensions</td><td><code>createDevice</code></td><td>No — vk-bootstrap</td></tr>
+    <tr><td>Physical device selection, queue families</td><td><code>createDevice</code>, <code>capabilities()</code></td><td>No — vk-bootstrap, but read its selection criteria</td></tr>
+    <tr><td>Logical device, queues</td><td>Device context</td><td>No — vk-bootstrap</td></tr>
+    <tr><td>Swapchain, image views</td><td><code>beginFrame</code>, <code>endFrame</code>, <code>resizeSwapchain</code>, <code>swapchainFormat</code></td><td>Half — vk-bootstrap builds it; recreation logic is yours</td></tr>
+    <tr><td>Render passes &amp; framebuffers</td><td><code>beginPass</code>/<code>endPass</code></td><td><b>Skip entirely</b> — use dynamic rendering; <code>RenderPassDesc</code> is per-frame by design</td></tr>
+    <tr><td>Graphics pipeline, shader modules</td><td><code>createPipeline</code>, <code>createShader</code></td><td>Yes — this is core work</td></tr>
+    <tr><td>Fixed-function state</td><td><code>PipelineDesc</code> mapping tables</td><td>Yes — mechanical but yours</td></tr>
+    <tr><td>Command buffers, pools</td><td><code>CommandList</code>, per-frame pools</td><td>Yes</td></tr>
+    <tr><td>Frames in flight, semaphores, fences</td><td><code>beginFrame</code>/<code>endFrame</code></td><td>Yes — and this is the one to understand cold</td></tr>
+    <tr><td>Vertex &amp; index buffers</td><td><code>createBuffer</code>, <code>bindVertexBuffer</code></td><td>Yes, but allocate through VMA</td></tr>
+    <tr><td>Memory allocation, memory types</td><td>Everything</td><td>No — VMA. Read the concepts, use the library.</td></tr>
+    <tr><td>Uniform buffers, descriptor layouts/pools/sets</td><td><code>bindUniformBuffer</code>, <code>bindTexture</code></td><td>Yes — design this before stage 3</td></tr>
+    <tr><td>Push constants</td><td><code>pushConstants</code></td><td>Yes — trivial, and the contract already budgets 128 bytes</td></tr>
+    <tr><td>Texture images, samplers, layout transitions</td><td><code>createTexture</code>, <code>updateTexture</code>, <code>createSampler</code></td><td>Yes</td></tr>
+    <tr><td>Depth buffering</td><td><code>DepthAttachment</code>, <code>DepthState</code></td><td>Yes — and see Hazards §1 on the 0..1 range</td></tr>
+    <tr><td>Mipmaps, multisampling</td><td>—</td><td>Skip. The PSX look uses nearest filtering and no MSAA.</td></tr>
+    <tr><td>Model loading (tinyobj)</td><td>—</td><td>Skip. <code>eng_model_import</code> already exists and is renderer-independent.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="reference"><a class="num" href="#reference">§5</a>Reference shelf</h2>
+
+<ul class="links">
+  <li>
+    <a href="https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html">The Vulkan specification</a>
+    <span class="url">registry.khronos.org/vulkan/specs/latest/html/vkspec.html · mirror: docs.vulkan.org/spec/latest/</span>
+    <span class="note">Not for learning — for settling arguments. Every struct's "Valid Usage" list is
+    exactly what the validation layer checks, so when a layer message is cryptic, find the VUID it
+    names in the spec and read the clause.</span>
+  </li>
+  <li>
+    <a href="../vulkan11-reference-guide.pdf">Vulkan 1.1 quick reference guide</a> <em>— already in this repo</em>
+    <span class="url">docs/vulkan11-reference-guide.pdf</span>
+    <span class="note">The fold-out card. Still the fastest way to look up a struct's shape. Caveat: it
+    predates dynamic rendering and sync2, both of which you are targeting — trust it for core objects,
+    not for the modern frame loop.</span>
+  </li>
+  <li>
+    <a href="../opengl46-quick-reference-card.pdf">OpenGL 4.6 quick reference card</a> <em>— also in this repo</em>
+    <span class="url">docs/opengl46-quick-reference-card.pdf</span>
+    <span class="note">Useful in the other direction: the existing shaders and the GL3Plus path are
+    what you are reproducing, so this is the reference for the behaviour you must match.</span>
+  </li>
+  <li>
+    <a href="https://vulkan.gpuinfo.org/">vulkan.gpuinfo.org</a>
+    <span class="url">vulkan.gpuinfo.org</span>
+    <span class="note">Before you rely on a format, limit or extension, check what fraction of real
+    hardware reports it. Answers "can I just require Vulkan 1.3?" with data.</span>
+  </li>
+  <li>
+    <a href="https://vulkan.lunarg.com/doc/sdk">LunarG SDK documentation</a>
+    <span class="url">vulkan.lunarg.com/doc/sdk</span>
+    <span class="note">Validation layer configuration, <code>vkconfig</code>, and the layer settings
+    file. Read the validation layer page once so you know which extra checks exist (sync validation,
+    best practices, GPU-assisted) and how to switch them on.</span>
+  </li>
+</ul>
+
+<h2 id="watch"><a class="num" href="#watch">§6</a>Read other people's engines</h2>
+
+<p>At some point the remaining questions are architectural — "where does <em>that</em> live?" — and the
+answer comes from reading a real renderer rather than a tutorial.</p>
+
+<ul class="links">
+  <li>
+    <a href="https://github.com/zeux/niagara">zeux/niagara</a>
+    <span class="url">github.com/zeux/niagara</span>
+    <span class="note">A Vulkan renderer built from scratch on video, with the commit history to match.
+    Small enough to read in an evening. The closest thing to watching an expert make the decisions you
+    are about to make.</span>
+  </li>
+  <li>
+    <a href="https://github.com/KhronosGroup/Vulkan-Samples">KhronosGroup/Vulkan-Samples</a>
+    <span class="url">github.com/KhronosGroup/Vulkan-Samples</span>
+    <span class="note">Official, and unusually well documented — each sample has a README explaining
+    the technique, not just the code. The dynamic rendering and descriptor indexing samples are the
+    relevant ones here.</span>
+  </li>
+  <li>
+    <a href="https://github.com/SaschaWillems/Vulkan">SaschaWillems/Vulkan</a>
+    <span class="url">github.com/SaschaWillems/Vulkan</span>
+    <span class="note">The reference collection: ~100 focused examples. Use it as a lookup — "how does
+    anyone do X" — rather than reading front to back.</span>
+  </li>
+</ul>
+
+<h2 id="toolchain"><a class="num" href="#toolchain">§7</a>Toolchain, as it stands on this machine</h2>
+
+<p>Checked, not assumed — the prerequisites are already installed:</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Component</th><th>Found</th><th>Needed for</th></tr></thead>
+  <tbody>
+    <tr><td>Vulkan loader + headers</td><td>1.4.350</td><td>Everything. Target <b>Vulkan 1.3 core</b> — dynamic rendering and sync2 are core there, no extension juggling.</td></tr>
+    <tr><td><code>glslang</code></td><td>16.3.0 (<code>/usr/lib/libglslang.so</code>)</td><td>GLSL → SPIR-V. Use the <code>glslangValidator</code> CLI offline rather than linking it.</td></tr>
+    <tr><td><code>VK_EXT_headless_surface</code></td><td>advertised by the instance</td><td>Running <code>rhi_contract_tests</code> against Vulkan with no window — see Building the backend §10.</td></tr>
+    <tr><td>RenderDoc</td><td>wired into the Makefile</td><td><code>make renderdoc APP=…</code> works with Vulkan. See <span class="path">docs/debugging-renderdoc.md</span>.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Still worth installing if absent: <code>vulkan-validationlayers</code>, <code>vulkan-tools</code>
+(for <code>vkcube</code> and <code>vulkaninfo</code>), and <code>spirv-tools</code> (for
+<code>spirv-dis</code>, which is how you check what a shader actually compiled to when the image is
+wrong but nothing errors).</p>
+
+<nav class="pagenav" aria-label="Kit pages">
+  <a href="index.html">← Orientation</a>
+  <a href="implementation.html">Building the backend →</a>
+</nav>
+
+</main>
+</div>
+</div>
+</body>
+</html>

@@ -27,6 +27,10 @@ enum class QuickFix {
     // loop. Deleting it would be the other option and it is the wrong one: the
     // entity is fine, only the link is broken.
     ClearParent,
+    // Gives an entity the component its kit piece says it needs. The scene
+    // already has the right mesh in the right place; only the component that
+    // drives it is missing, so replacing the entity would be the wrong fix.
+    AddPortalComponent,
 };
 
 struct Issue {

@@ -394,13 +394,17 @@ eng_target_hardening(game_content)
 add_executable(
   scene_editor
   game/editor/main.cpp
+  game/editor/BrushPlacement.cpp
+  game/editor/DocumentRaycast.cpp
   game/editor/EditorApp.cpp
   game/editor/EditorCamera.cpp
   game/editor/EditorIcons.cpp
   game/editor/EditorSettings.cpp
   game/editor/EntityGizmos.cpp
+  game/editor/FileBrowser.cpp
   game/editor/GameVocabulary.cpp
   game/editor/MaterialCatalog.cpp
+  game/editor/ModelImportPipeline.cpp
   game/editor/Clipboard.cpp
   game/editor/CommandPalette.cpp
   game/editor/Commands.cpp
@@ -432,6 +436,7 @@ target_include_directories(scene_editor PRIVATE game/editor game/src engine/src
                                                 third_party
                              engine/include)
 target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui
+                                             eng_model_import
                                              nlohmann_json::nlohmann_json)
 # No asset defines: the editor mounts the `editor` set and resolves logical
 # paths like every other app. Where it needs a directory rather than a file --
@@ -1203,6 +1208,47 @@ if(BUILD_TESTING)
   target_link_libraries(editor_entity_gizmo_tests PRIVATE game_content eng_imgui
                                                           glm::glm)
   add_test(NAME editor_entity_gizmo COMMAND editor_entity_gizmo_tests)
+
+  add_executable(
+    editor_document_raycast_tests game/tests/EditorDocumentRaycastTests.cpp
+                                  game/editor/DocumentRaycast.cpp
+                                  game/editor/Picker.cpp)
+  target_include_directories(editor_document_raycast_tests
+                             PRIVATE game/editor game/content engine/include)
+  target_link_libraries(editor_document_raycast_tests PRIVATE game_content
+                                                              glm::glm)
+  add_test(NAME editor_document_raycast COMMAND editor_document_raycast_tests)
+
+  add_executable(
+    editor_placement_tests game/tests/EditorPlacementTests.cpp
+                           game/editor/BrushPlacement.cpp
+                           game/editor/DocumentRaycast.cpp
+                           game/editor/Picker.cpp)
+  target_include_directories(editor_placement_tests PRIVATE game/editor
+                                                            game/content
+                                                            game/tests
+                             engine/include)
+  target_link_libraries(editor_placement_tests PRIVATE game_content
+                                                       eng_ecs_headless
+                                                       glm::glm)
+  add_test(NAME editor_placement COMMAND editor_placement_tests)
+
+  add_executable(
+    editor_model_import_tests game/tests/EditorModelImportTests.cpp
+                              game/editor/ModelImportPipeline.cpp
+                              game/editor/FileBrowser.cpp)
+  target_include_directories(editor_model_import_tests PRIVATE game/editor
+                             engine/include engine/src)
+  target_link_libraries(editor_model_import_tests PRIVATE eng_model_import
+                                                          glm::glm)
+  target_compile_definitions(
+    editor_model_import_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME editor_model_import COMMAND editor_model_import_tests)
+
+  add_executable(editor_file_browser_tests game/tests/EditorFileBrowserTests.cpp
+                                           game/editor/FileBrowser.cpp)
+  target_include_directories(editor_file_browser_tests PRIVATE game/editor)
+  add_test(NAME editor_file_browser COMMAND editor_file_browser_tests)
 
   add_executable(editor_clipboard_tests game/tests/EditorClipboardTests.cpp
                                         game/editor/Clipboard.cpp)

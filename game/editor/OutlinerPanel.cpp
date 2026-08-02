@@ -207,13 +207,33 @@ void drawGroupCount(std::size_t count)
 // `ids` is what the switch acts on: one entity for a leaf, the whole lot for a
 // group row. A group of a hundred and sixty doors could not be hidden at all
 // before -- only its members, one at a time, after opening it.
-void drawRowToggles(const std::vector<game::content::AuthorId>& ids,
+// True when the pointer is over the switch column on the row being drawn.
+//
+// The row and the switches resolve a click on *different frames*: a row reports
+// IsItemClicked() when the button goes down, an InvisibleButton fires when it
+// comes back up. So a return value from drawRowToggles cannot suppress the
+// row's click -- by the time the switch fires, the row has already selected.
+//
+// The column is reserved instead, which is what the layout already assumes:
+// drawKindLabel clips names at exactly this line so they cannot reach the
+// switches. A click past it belongs to the switches, on any frame.
+bool pointerInToggleColumn(const OutlinerActions& actions)
+{
+    if (!(actions.isHidden && actions.setHidden) &&
+        !(actions.isLocked && actions.setLocked))
+        return false; // no switches drawn: the whole row is the row's
+    return ImGui::GetMousePos().x >= toggleColumnLeft();
+}
+
+// Returns true when a switch took this frame's click. Used together with the
+// column test above: this covers the release frame, that one the press.
+bool drawRowToggles(const std::vector<game::content::AuthorId>& ids,
                     const char* scope, const OutlinerActions& actions)
 {
     const bool hasVisibility = actions.isHidden && actions.setHidden;
     const bool hasLock = actions.isLocked && actions.setLocked;
     if ((!hasVisibility && !hasLock) || ids.empty())
-        return;
+        return false;
 
     const float gap = 6.0f;
     ImGui::SameLine();
@@ -232,6 +252,7 @@ void drawRowToggles(const std::vector<game::content::AuthorId>& ids,
     };
     const bool many = ids.size() > 1;
 
+    bool consumed = false;
     ImGui::PushID(scope);
     if (hasVisibility) {
         const bool hidden = all(actions.isHidden);
@@ -239,9 +260,11 @@ void drawRowToggles(const std::vector<game::content::AuthorId>& ids,
                        many ? (hidden ? "all hidden -- click to show them"
                                       : "click to hide every entity in here")
                             : (hidden ? "hidden -- click to show"
-                                      : "visible -- click to hide")))
+                                      : "visible -- click to hide"))) {
             for (const game::content::AuthorId& id : ids)
                 actions.setHidden(id, !hidden);
+            consumed = true;
+        }
         ImGui::SameLine(0.0f, gap);
     }
     if (hasLock) {
@@ -250,11 +273,14 @@ void drawRowToggles(const std::vector<game::content::AuthorId>& ids,
                        many ? (locked ? "all locked -- click to unlock them"
                                       : "click to lock every entity in here")
                             : (locked ? "locked -- cannot be picked in the viewport"
-                                      : "unlocked -- click to stop picking it")))
+                                      : "unlocked -- click to stop picking it"))) {
             for (const game::content::AuthorId& id : ids)
                 actions.setLocked(id, !locked);
+            consumed = true;
+        }
     }
     ImGui::PopID();
+    return consumed;
 }
 
 // The payload id is fixed so a drag started on any row can be dropped on any
@@ -321,9 +347,14 @@ void drawComposedNode(const OutlinerNode& node, const OutlinerActions& actions,
     orders.out.ids.push_back(node.id);
     const bool selected = actions.isSelected(node.id);
 
+    // AllowOverlap is not cosmetic: the row spans the full width, and the eye
+    // and padlock are drawn *after* it at the right-hand end. Without this the
+    // row wins the hit test for the whole span, the toggles' InvisibleButtons
+    // never see a click, and both switches are simply dead.
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth |
                                ImGuiTreeNodeFlags_OpenOnArrow |
                                ImGuiTreeNodeFlags_OpenOnDoubleClick |
+                               ImGuiTreeNodeFlags_AllowOverlap |
                                ImGuiTreeNodeFlags_DefaultOpen;
     if (selected)
         flags |= ImGuiTreeNodeFlags_Selected;
@@ -344,11 +375,14 @@ void drawComposedNode(const OutlinerNode& node, const OutlinerActions& actions,
     drawKindLabel(node.kind, node.label,
                   actions.isHidden && actions.isHidden(node.id));
     drawComponentBadge(node.components);
-    drawRowToggles({node.id}, node.id.c_str(), actions);
+    // A click that a switch took is not a click on the row: flipping the eye
+    // must not also select, and must not focus the camera on a double press.
+    const bool toggled = drawRowToggles({node.id}, node.id.c_str(), actions) ||
+                         pointerInToggleColumn(actions);
 
-    if (input.clicked)
+    if (input.clicked && !toggled)
         applyClick(node.id, input.mode, actions, orders.previous);
-    if (input.doubleClicked)
+    if (input.doubleClicked && !toggled)
         actions.focus();
     if (menuOpen) {
         if (!selected)
@@ -422,9 +456,12 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
         for (const OutlinerNode& node : group.nodes)
             allSelected = allSelected && actions.isSelected(node.id);
 
+        // AllowOverlap for the same reason as the node rows above: the group's
+        // own eye and padlock sit inside this row's span.
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth |
                                    ImGuiTreeNodeFlags_OpenOnArrow |
-                                   ImGuiTreeNodeFlags_OpenOnDoubleClick;
+                                   ImGuiTreeNodeFlags_OpenOnDoubleClick |
+                                   ImGuiTreeNodeFlags_AllowOverlap;
         if (allSelected)
             flags |= ImGuiTreeNodeFlags_Selected;
         // A single entity is a leaf: no arrow, and the row IS the entity.
@@ -472,16 +509,18 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                       labelRight);
         if (!single)
             drawGroupCount(group.nodes.size());
+        bool toggled = false;
         if (single) {
             drawComponentBadge(group.nodes.front().components);
-            drawRowToggles({group.nodes.front().id},
-                           group.nodes.front().id.c_str(), actions);
+            toggled = drawRowToggles({group.nodes.front().id},
+                                     group.nodes.front().id.c_str(), actions);
         } else {
             // The group's own switches, acting on every entity under it.
-            drawRowToggles(groupIds(group), group.key.c_str(), actions);
+            toggled = drawRowToggles(groupIds(group), group.key.c_str(), actions);
         }
+        toggled = toggled || pointerInToggleColumn(actions);
 
-        if (input.clicked) {
+        if (input.clicked && !toggled) {
             // Clicking a group selects everything in it, which is what makes
             // "give all forty pillars a collider" one action. A leaf selects
             // the one entity it stands for.
@@ -491,7 +530,7 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
             else
                 actions.selectGroup(group, input.mode != SelectMode::Replace);
         }
-        if (input.doubleClicked)
+        if (input.doubleClicked && !toggled)
             actions.focus();
         if (menuOpen) {
             // Right-click acts on the row under the cursor, selecting it first
@@ -509,7 +548,9 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                 orders.out.ids.push_back(node.id);
                 const bool selected = actions.isSelected(node.id);
                 const bool pressed = ImGui::Selectable(
-                    "##row", selected, ImGuiSelectableFlags_AllowDoubleClick);
+                    "##row", selected,
+                    ImGuiSelectableFlags_AllowDoubleClick |
+                        ImGuiSelectableFlags_AllowOverlap);
                 const SelectMode mode = ImGui::GetIO().KeyShift ? SelectMode::Range
                                         : ImGui::GetIO().KeyCtrl
                                             ? SelectMode::Toggle
@@ -526,11 +567,13 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                 drawKindLabel(node.kind, node.label,
                               actions.isHidden && actions.isHidden(node.id));
                 drawComponentBadge(node.components);
-                drawRowToggles({node.id}, node.id.c_str(), actions);
+                const bool toggled =
+                    drawRowToggles({node.id}, node.id.c_str(), actions) ||
+                    pointerInToggleColumn(actions);
 
-                if (pressed)
+                if (pressed && !toggled)
                     applyClick(node.id, mode, actions, orders.previous);
-                if (doubleClicked)
+                if (doubleClicked && !toggled)
                     actions.focus();
                 if (menuOpen) {
                     if (!selected)

@@ -270,6 +270,19 @@ public:
     // this after writing a GLB's base-colour texture material so new geometry
     // does not require an editor restart before it renders correctly.
     bool loadMaterialScript(const std::string& path);
+    // Re-index the mounted resource directories.
+    //
+    // Ogre builds a FileSystem archive's file list once, at
+    // initialiseAllResourceGroups(), so a file written *after* start-up does
+    // not exist as far as a texture unit is concerned. Nothing reports this:
+    // the material parses, the texture silently resolves to nothing, and the
+    // model renders untextured.
+    //
+    // That is exactly what an in-editor model import does -- copy a PNG in,
+    // then load a material naming it -- so it must re-index between the two.
+    // Already-loaded resources are untouched; this only refreshes what the
+    // archives know is on disk.
+    void refreshAssetIndex();
     void setMaterialParam(const std::string& materialName,
                           const std::string& paramName, float value);
     void setMaterialParam(const std::string& materialName,

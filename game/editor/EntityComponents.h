@@ -26,6 +26,71 @@ struct ComponentDefaults {
     std::string prefab;
 };
 
+// The entities the game defines that are not kit pieces.
+//
+// Lives here rather than inside EditorApp because the Place tool's brush names
+// one, and the brush is editor *state*: an enum nested in the app class meant
+// every consumer of it had to include the whole application header.
+enum class Gameplay {
+    // A transform and nothing else, to hang other entities from. Composing a
+    // room's dressing needs a parent that is not itself a barrel: without one,
+    // "move all of this" means picking one prop to be the root and then being
+    // unable to delete it without taking the rest.
+    Group,
+    PlayerSpawn,
+    Portal,
+    Exit,
+    Marker,
+    EnemySpawn,
+    Pickup,
+    Trigger,
+    PointLight,
+    DirectionalLight,
+};
+
+// The author-facing name, for the Catalog list, the brush readout and the undo
+// label. One table, so those three can never disagree about what a thing is
+// called.
+const char* gameplayName(Gameplay kind);
+
+// Whether the Place tool can paint this kind under the cursor.
+//
+// False for the directional light alone: it is a scene-wide key light that is
+// aimed rather than positioned, and painting a row of them down a corridor is
+// not a thing anyone means to do. It stays a one-shot button.
+bool gameplayIsPaintable(Gameplay kind);
+
+// Every paintable kind, in the order the Catalog lists them.
+const std::vector<Gameplay>& paintableGameplay();
+
+// What the Place tool will drop next.
+//
+// A variant rather than a prefab string, because a light and a wall are the
+// same gesture to the author -- point at the level, click -- and were two
+// different ones in the editor purely because a light has no mesh to name. The
+// yaw lives here too: it is a property of the thing about to be placed, and as
+// a stray member on the app it was writable by nobody and read by three
+// callers.
+struct Brush {
+    enum class Kind { Piece, Gameplay };
+
+    Kind kind = Kind::Piece;
+    std::string prefab;                    // Kind::Piece -- a kit.toml id
+    Gameplay gameplay = Gameplay::Marker;  // Kind::Gameplay
+    int yawQuarters = 0;                   // quarter turns about Y
+
+    bool empty() const
+    {
+        return kind == Kind::Piece && prefab.empty();
+    }
+    // Quarter turns wrap; there is no "past three quarters".
+    void rotate(int quarters)
+    {
+        yawQuarters = ((yawQuarters + quarters) % 4 + 4) % 4;
+    }
+    float yawDegrees() const { return float(yawQuarters) * 90.0f; }
+};
+
 // What an entity is made of, in the order it should always be read.
 //
 // The inspector used to show components in table order, which was the order

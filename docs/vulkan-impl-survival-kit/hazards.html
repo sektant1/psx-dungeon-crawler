@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engine-specific hazards — Vulkan Implementation Survival Kit</title>
+<meta name="description" content="Clip space, the 41-shader SPIR-V port, the PSX compositor chain, windowing beside OGRE, and the bugs this engine will actually hand you.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="kit.css">
+<script src="kit.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="shell">
+
+<aside class="rail">
+  <div class="rail-inner">
+    <a class="kit-mark" href="index.html"><strong>Vulkan</strong>Implementation<br>Survival Kit</a>
+    <nav aria-label="Kit contents">
+      <div class="rail-group">
+        <h2>The kit</h2>
+        <a href="index.html">Orientation &amp; plan</a>
+        <a href="learning-path.html">Learning path</a>
+        <a href="implementation.html">Building the backend</a>
+        <a href="hazards.html" aria-current="page">Engine-specific hazards</a>
+      </div>
+      <div class="rail-group">
+        <h2>In this page</h2>
+        <a href="#clip">Clip space &amp; depth</a>
+        <a href="#shaders">The shader port</a>
+        <a href="#psx">The PSX chain</a>
+        <a href="#windowing">Windowing &amp; coexistence</a>
+        <a href="#shadows">Shadows</a>
+        <a href="#sync">Bugs you will hit</a>
+        <a href="#hygiene">Build &amp; capture hygiene</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle>
+      Theme: <span class="mode">auto</span>
+    </button>
+  </div>
+</aside>
+
+<div class="page">
+<main id="content">
+
+<header class="masthead">
+  <p class="eyebrow">Kit / 04</p>
+  <h1>Where this engine specifically will bite</h1>
+  <p class="standfirst">Generic Vulkan advice stops being useful the moment it meets a shipped art
+  direction, 41 GLSL 330 shaders and a window that OGRE already owns.</p>
+</header>
+
+<h2 id="clip"><a class="num" href="#clip">§1</a>Clip space, depth, and the frozen image</h2>
+
+<p>CLAUDE.md states the rule plainly: the PSX look is a shipped result, no change may alter the
+rendered image, and <code>make visual-test</code> is how that is proven. Vulkan's coordinate
+conventions differ from OpenGL's in two ways that both produce a plausible-looking but wrong frame.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Convention</th><th>OpenGL (today)</th><th>Vulkan</th><th>Symptom if ignored</th></tr></thead>
+  <tbody>
+    <tr><td>Clip-space Y</td><td class="nw">+Y up</td><td class="nw">+Y down</td><td>The world renders upside down — a bug this repo has already had once</td></tr>
+    <tr><td>NDC depth range</td><td class="nw">−1 … 1</td><td class="nw">0 … 1</td><td>Half the depth precision, wrong depth test near the camera, and broken depth metadata</td></tr>
+    <tr><td>Texture origin</td><td class="nw">bottom-left</td><td class="nw">top-left</td><td>Flipped sampling in the post chain, which reads its own render targets</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The clean fix for Y is a <strong>negative-height viewport</strong> — set
+<code>VkViewport::y = height</code> and <code>height = -height</code> — which flips the framebuffer
+without touching a single projection matrix or shader. It has been core since Vulkan 1.1 and it is
+what you want here precisely because the alternative (flipping the projection) would change the
+winding order and force you to invert <code>CullMode</code> everywhere.</p>
+
+<p>Depth is not so easily hidden. Build projection matrices for the 0..1 range directly. Watch
+<code>psx.frag</code> in particular: it consumes the camera far-clip distance as depth metadata, which
+is also why <code>RenderCore</code> deliberately disables OGRE's infinite far plane
+(<span class="path">engine/src/render/RenderCore.cpp</span>, the <code>setShadowUseInfiniteFarPlane</code>
+comment). That value has to stay meaningful through the port.</p>
+
+<div class="callout">
+  <span class="label">How to prove the image did not move</span>
+  <p>Do not eyeball it. Render the same scene through both paths and diff:
+  <code>PSX_SCREENSHOT=/tmp/gl.png PSX_SCREENSHOT_FRAME=120 ./build/game</code> against the equivalent
+  Vulkan capture, then compare against <span class="path">docs/baselines/</span>. A frame that is
+  vertically mirrored looks <em>fine</em> in a dungeon corridor until you notice the floor is the
+  ceiling.</p>
+</div>
+
+<h2 id="shaders"><a class="num" href="#shaders">§2</a>The shader port</h2>
+
+<p>41 files in <span class="path">assets/shaders/</span>, all <code>#version 330 core</code>, with 111
+default-block <code>uniform</code> declarations and zero explicit bindings. SPIR-V permits none of
+that. This is the single largest mechanical task in the whole migration.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>What you have</th><th>What SPIR-V needs</th></tr></thead>
+  <tbody>
+    <tr><td><code>#version 330 core</code></td><td><code>#version 450</code> (or 460)</td></tr>
+    <tr><td><code>uniform float affineAmount;</code> — 111 of these</td><td>Packed into <code>layout(set=0, binding=0) uniform Params { … }</code> blocks, with std140 layout rules you must respect on the C++ side too</td></tr>
+    <tr><td><code>uniform sampler2D tex;</code></td><td><code>layout(set=0, binding=N) uniform sampler2D tex;</code> — every sampler needs an explicit binding</td></tr>
+    <tr><td>Implicit <code>in</code>/<code>out</code> locations</td><td><code>layout(location=N)</code> on every varying, matched across stages</td></tr>
+    <tr><td>OGRE auto-params (<code>world_view_proj_matrix</code>, <code>far_clip_distance</code>, light arrays)</td><td>You supply these. They become fields in your own per-frame / per-object UBOs — which is engine work above the RHI, not backend work.</td></tr>
+    <tr><td><code>preprocessor_defines</code> variants in <code>*.program</code> (LIT, METAL, NO_TEXTURE, ALPHA_BLEND, ALPHA_SCISSOR, LIGHT_VOLUME, BLEND_ADD)</td><td>Either N compiled <code>.spv</code> permutations or SPIR-V <b>specialization constants</b>. Prefer specialization constants: one module, variants resolved at pipeline creation, no combinatorial file explosion.</td></tr>
+    <tr><td><code>#include</code>-style shared files (<code>psx_lighting.glsl</code>, <code>surface_common.glsl</code>, <code>scroll_common.glsl</code>, <code>prototype_noise.glsl</code>, <code>portal_pattern.glsl</code>)</td><td><code>glslangValidator</code> handles includes with <code>-I</code>; keep the files as they are.</td></tr>
+    <tr><td><code>noperspective</code> / <code>smooth</code> interpolation qualifiers — load-bearing for the affine-UV PSX warp</td><td>Supported unchanged. Do not "clean these up".</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two warnings from experience already recorded in CLAUDE.md, both of which change shape under
+Vulkan and get <em>better</em>: a material that renders blank is usually a GLSL compile error logged at
+startup, not a GPU fault; and in GLSL 330 <code>const</code> needs a compile-time-constant initialiser.
+Offline SPIR-V compilation turns both of those from runtime mysteries into build failures. That is a
+real argument for doing the compile step early.</p>
+
+<h2 id="psx"><a class="num" href="#psx">§3</a>The PSX chain is the actual product</h2>
+
+<p><span class="path">assets/compositors/psx.compositor</span> is not decoration — it is the game's
+identity, and reproducing it is the hardest correctness target in the project.</p>
+
+<ul>
+  <li><strong>The world renders at a third of the window.</strong> The pixelation is a genuinely
+  low-resolution framebuffer, not a shader effect. Tiny draw calls in the <code>mrt</code> pass are
+  correct. Your render targets must be sized from that internal resolution, not the swapchain.</li>
+  <li><strong>MRT.</strong> The main pass writes multiple attachments. <code>RenderPassDesc::colour</code>
+  is already a vector and <code>DeviceCapabilities::maxColourAttachments</code> already exists —
+  report it honestly from <code>VkPhysicalDeviceLimits::maxColorAttachments</code>.</li>
+  <li><strong>The post passes</strong> — <code>bloom_bright</code>, <code>bloom_blur</code>,
+  <code>bloom_composite</code>, <code>dither</code>, <code>pixel_stylize</code>,
+  <code>hardware_resolve</code> — each read the previous pass's output. Every one of those reads is a
+  layout transition and a barrier you owe. This is where synchronization stops being theory.</li>
+  <li><strong>HDR intermediates.</strong> <code>Format::RGBA16Float</code> exists in the contract for
+  the bloom targets. Check <code>VK_FORMAT_R16G16B16A16_SFLOAT</code> supports both
+  <code>COLOR_ATTACHMENT</code> and <code>SAMPLED</code> usage on the device before assuming it.</li>
+  <li><strong>Nearest everywhere.</strong> <code>FilterMode::Nearest</code> is the default in
+  <code>SamplerDesc</code> and the header says why: "Nearest is not a fallback here: the PSX look
+  depends on unfiltered texels."</li>
+</ul>
+
+<h2 id="windowing"><a class="num" href="#windowing">§4</a>Windowing, and living beside OGRE</h2>
+
+<p><span class="path">engine/src/platform/Platform.cpp</span> pins <code>SDL_VIDEODRIVER=x11</code> and
+hands OGRE an X11 window id, because OGRE's GL3Plus window rejects a Wayland surface. A Vulkan surface
+wants a window created with <code>SDL_WINDOW_VULKAN</code>. One window cannot be both.</p>
+
+<p>So do not try to add a <code>--render-backend=vulkan</code> flag to <code>game</code> during the
+transition. Build <code>rhi_triangle</code> as its own binary with its own window, and let the two
+paths coexist as separate executables until the engine layer above the RHI is ready to switch
+wholesale. That is also what the design doc's staging assumes.</p>
+
+<p>Silver lining: the X11 pin exists <em>only</em> because of OGRE's GL window. Vulkan speaks Wayland
+natively through <code>SDL_Vulkan_CreateSurface</code>, so the new path can drop the XWayland
+workaround — and with it the frame-pacing caveat noted in
+<span class="path">assets/config/game.toml</span>.</p>
+
+<h2 id="shadows"><a class="num" href="#shadows">§5</a>Shadows: do not port what is there</h2>
+
+<p>The current renderer uses <code>SHADOWTYPE_STENCIL_MODULATIVE</code> — hard-edged stencil shadow
+volumes, chosen because they are period-correct and need no extra shader plumbing. The design doc
+already measured them at ~2ms of a 10ms fullscreen frame, scaling with mesh complexity, and concluded
+the replacement should be shadow maps.</p>
+
+<p>Treat that as settled. Reimplementing stencil volumes on top of a hand-written Vulkan backend would
+be days of work to reproduce a technique you have already decided to retire — and it is the one part
+of the frame where "matches the old image exactly" is explicitly <em>not</em> the goal.</p>
+
+<h2 id="sync"><a class="num" href="#sync">§6</a>The bugs you will actually hit</h2>
+
+<p>In roughly the order they show up. All five are validation-layer-detectable, which is the argument
+for keeping the layers on.</p>
+
+<div class="register">
+
+  <div class="entry">
+    <span class="chip hazard">Hazard</span>
+    <div>
+      <h3>Black frame, no errors</h3>
+      <p>Usually the swapchain image never left <code>UNDEFINED</code>, or you cleared and then
+      rendered into a different attachment. Check the layout transitions in <code>beginPass</code>
+      before suspecting the shader.</p>
+      <p class="evidence">A black screenshot in this repo is <em>also</em> often just an unfocused or
+      offscreen window — confirm against a known-good binary before chasing it.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip hazard">Hazard</span>
+    <div>
+      <h3>Correct for two frames, then garbage</h3>
+      <p>Classic frames-in-flight bug: a per-frame resource is being written by the CPU while the GPU
+      still reads frame N−2. The <code>inFlight</code> fence wait is either missing or in the wrong
+      place.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip hazard">Hazard</span>
+    <div>
+      <h3>Texture is transparent, or shows the previous frame</h3>
+      <p>A staging upload without the barrier between <code>vkCmdCopyBufferToImage</code> and the
+      shader read. The Khronos synchronization-examples wiki has this exact case written out — copy
+      it rather than reasoning it through.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip blocker">Blocker</span>
+    <div>
+      <h3>Crash on window resize</h3>
+      <p><code>VK_ERROR_OUT_OF_DATE_KHR</code> handled in <code>vkQueuePresentKHR</code> but not in
+      <code>vkAcquireNextImageKHR</code>, or a swapchain destroyed while its images are still in
+      flight. The contract's <code>beginFrame</code> returning <code>false</code> is exactly this
+      path — and <code>rhi_contract_tests</code> calls <code>resizeSwapchain</code> mid-sequence on
+      purpose.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip blocker">Blocker</span>
+    <div>
+      <h3>Works here, fails on other hardware</h3>
+      <p>Nearly always a missing barrier that your GPU's scheduling happens to hide, or an assumed
+      format/limit. Turn on synchronization validation, and check formats against
+      <code>vkGetPhysicalDeviceFormatProperties</code> rather than hoping.</p>
+    </div>
+  </div>
+
+</div>
+
+<h2 id="hygiene"><a class="num" href="#hygiene">§7</a>Build and capture hygiene</h2>
+
+<ul>
+  <li><strong>RenderDoc already works.</strong> <code>make renderdoc APP=…</code> takes any
+  <code>eng::Application</code>, and RenderDoc's Vulkan support is first-class — better than its GL
+  support, in fact. Read <span class="path">docs/debugging-renderdoc.md</span> before opening a
+  capture; it maps the compositor's render targets and names the failures that look like GPU problems
+  and are not.</li>
+  <li><strong>Debug labels are not optional.</strong> Implement <code>pushDebugGroup</code> on day one.
+  A capture of an unlabelled frame is a wall of <code>vkCmdDraw</code>.</li>
+  <li><strong>Object names too.</strong> <code>debugName</code> is on every descriptor in
+  <code>Types.h</code>. Feed them to <code>vkSetDebugUtilsObjectNameEXT</code> and every validation
+  message and RenderDoc row becomes readable.</li>
+  <li><strong>Never clean-build.</strong> OGRE is compiled from source; a killed link corrupts the
+  tree. <code>cmake -S . -B build</code> regenerates makefiles without discarding objects.</li>
+  <li><strong>Do not touch the GL path to make the Vulkan path easier.</strong> Every stage in the plan
+  ends with <code>make run</code> still working. If a change to <code>RenderCore</code> or a shader
+  is required to progress the backend, the plan has been left behind.</li>
+</ul>
+
+<nav class="pagenav" aria-label="Kit pages">
+  <a href="implementation.html">← Building the backend</a>
+  <a href="index.html">Back to orientation →</a>
+</nav>
+
+</main>
+</div>
+</div>
+</body>
+</html>

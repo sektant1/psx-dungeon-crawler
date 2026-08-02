@@ -62,21 +62,6 @@ constexpr int kGridRadius = 16; // cells drawn either side of the camera
 // the piece does not sit in the camera's face.
 constexpr float kGhostFallbackDistance = 12.0f;
 
-std::string shellQuote(const std::string& value)
-{
-#ifdef _WIN32
-    std::string out = "\"";
-    for (const char c : value)
-        out += c == '"' ? "\\\"" : std::string(1, c);
-    return out + "\"";
-#else
-    std::string out = "'";
-    for (const char c : value)
-        out += c == '\'' ? "'\\''" : std::string(1, c);
-    return out + "'";
-#endif
-}
-
 constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoCollapse;
 
 // The one place the editor decides how wide its view is. Walk mode deliberately
@@ -89,32 +74,8 @@ float viewportFovDeg(const EditorCamera& camera)
     return camera.activeFovDeg();
 }
 
-// The world box of a local one, under a resolved transform.
-//
-// It takes a WorldTransform rather than the authored one because a parented
-// entity's authored transform is local: framing and picking both have to agree
-// with what the viewport draws, and the viewport draws the cooked chain.
-void transformedBounds(const WorldTransform& transform, const glm::vec3& localMin,
-                       const glm::vec3& localMax, glm::vec3& worldMin,
-                       glm::vec3& worldMax)
-{
-    const glm::mat4 matrix =
-        glm::translate(glm::mat4(1.0f), transform.position) *
-        glm::mat4_cast(transform.orientation) *
-        glm::scale(glm::mat4(1.0f), transform.scale);
-    worldMin = glm::vec3(1e9f);
-    worldMax = glm::vec3(-1e9f);
-    for (int corner = 0; corner < 8; ++corner) {
-        const glm::vec3 local{
-            (corner & 1) ? localMax.x : localMin.x,
-            (corner & 2) ? localMax.y : localMin.y,
-            (corner & 4) ? localMax.z : localMin.z,
-        };
-        const glm::vec3 world = glm::vec3(matrix * glm::vec4(local, 1.0f));
-        worldMin = glm::min(worldMin, world);
-        worldMax = glm::max(worldMax, world);
-    }
-}
+// transformedBounds lives in DocumentRaycast.h now: picking, framing and
+// placement all need it, and placement needs the ray test it feeds.
 
 glm::quat orientationFromMatrix(const glm::mat4& matrix, const glm::vec3& scale)
 {
@@ -172,6 +133,10 @@ void EditorApp::onLoad(eng::Engine& engine, eng::LoadPlan& plan)
     // tree moves, which APP_ASSET_DIR did not.
     mState.assetRoot = eng::assets::packDir("content").string();
     mState.kitPath = eng::assets::resolve("config/kit.toml").string();
+    // Where the model picker looks first. assets/source is the unbuilt art --
+    // .glb, .blend, .fbx -- as opposed to the pack, which holds what the cooker
+    // has already turned into engine OBJ parts.
+    mImportScanRoot = (eng::assets::project() / "assets" / "source").string();
     if (mPendingScene.empty())
         mPendingScene =
             eng::assets::resolve(std::string("scenes/") + kDefaultScene)
@@ -306,7 +271,7 @@ bool EditorApp::onStart(eng::Engine& engine)
                        "autosave";
     }
     if (const char* import = std::getenv("PSX_EDITOR_IMPORT_MODEL"))
-        importGlbModel(import);
+        importModel(import);
     // Verification hook: start in the staging scene so a screenshot run can
     // capture it without driving the UI.
     if (std::getenv("PSX_EDITOR_MATERIAL"))
@@ -389,7 +354,8 @@ bool EditorApp::onStart(eng::Engine& engine)
     // the placement ghost -- which otherwise needs a click in the Catalog.
     if (const char* brush = std::getenv("PSX_EDITOR_BRUSH")) {
         if (mState.catalog.find(brush)) {
-            mState.brushPrefab = brush;
+            mState.brush.kind = Brush::Kind::Piece;
+            mState.brush.prefab = brush;
             mState.tool = Tool::Place;
         }
     }
@@ -1173,7 +1139,7 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
     // focus, rotate, grid steps -- and delete.
     if (!ImGui::GetIO().WantCaptureKeyboard && !mFlying) {
         const bool interactionActive =
-            mGizmoDragging || mPainting || mRoomDragging ||
+            mGizmoDragging || mStroke != Stroke::None || mRoomDragging ||
             ImGui::IsMouseDown(ImGuiMouseButton_Left);
         if (!interactionActive && input.wasPressed("focus"))
             frameSelectionOrAll();
@@ -1187,6 +1153,10 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
             mState.gridState.coarser();
         if (!interactionActive && input.wasPressed("grid_finer"))
             mState.gridState.finer();
+        if (!interactionActive && input.wasPressed("brush_rotate_cw"))
+            mState.brush.rotate(1);
+        if (!interactionActive && input.wasPressed("brush_rotate_ccw"))
+            mState.brush.rotate(-1);
         if (!interactionActive && input.wasPressed("toggle_snap"))
             mState.gridState.snap = !mState.gridState.snap;
         if (!interactionActive && input.wasPressed("level_up"))
@@ -1243,7 +1213,9 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
     // editor outright is how an afternoon of blockout gets thrown away by
     // reflex.
     if (input.wasPressed("quit")) {
-        if (mGizmoDragging || mPainting || mRoomDragging) {
+        // The Room tool handles its own Escape inside the viewport, so a drag
+        // in progress has already been cancelled by the time this runs.
+        if (mGizmoDragging || mStroke != Stroke::None) {
             mStatus =
                 "finish or release the active edit before leaving the tool";
         }
@@ -1628,7 +1600,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
         for (const KitPiece* piece : mState.catalog.byRole(role)) {
             add(std::string("Place ") + piece->id, "place", "", true,
                 [this, id = piece->id] {
-                    mState.brushPrefab = id;
+                    mState.brush.kind = Brush::Kind::Piece;
+                    mState.brush.prefab = id;
                     mState.tool = Tool::Place;
                 },
                 role);
@@ -1771,11 +1744,12 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
         }
         if (ImGui::MenuItem("Open...", "Ctrl+O"))
             mOpenSceneOpen = true;
-        if (ImGui::MenuItem("Import model (.glb)...")) {
+        if (ImGui::MenuItem("Import model...")) {
             mImportModelOpen = true;
-            std::snprintf(mImportModelPath, sizeof(mImportModelPath), "%s",
-                          (eng::assets::project() / "assets" / "source" /
-                           "models" / "model.glb").string().c_str());
+            // Nothing preselected: the dialog lists what is actually there now,
+            // where it used to prefill a path to a file that never existed.
+            mImportModelPath.clear();
+            mImportFilter[0] = '\0';
         }
         if (ImGui::BeginMenu("Open recent", !mRecent.paths().empty())) {
             for (const std::string& path : mRecent.paths()) {
@@ -2147,45 +2121,53 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
                         mRoomDragging = true;
                 }
             }
-            if (mRoomDragging && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            // Escape abandons the drag. Without it the only way out of a
+            // rectangle started by accident was to finish it and undo, and a
+            // room is the most expensive thing in the editor to commit.
+            if (mRoomDragging && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                mRoomDragging = false;
+                mStatus = "room cancelled";
+            }
+            else if (mRoomDragging &&
+                     !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 mRoomDragging = false;
                 commitRoom();
             }
         }
         else if (mState.tool == Tool::Place) {
+            const ImGuiIO& io = ImGui::GetIO();
             drawPlacementGhost();
             if (mViewportHovered && !mFlying) {
+                // Wheel rotates the brush. The one gesture here that needs no
+                // click, so it works while lining a piece up rather than only
+                // after committing to one.
+                if (io.MouseWheel != 0.0f && !io.KeyCtrl)
+                    mState.brush.rotate(io.MouseWheel > 0.0f ? 1 : -1);
+
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                    mPainting = true;
-                    mPaintedSlots.clear();
-                    mPaintParts.clear();
+                    if (io.KeyAlt) {
+                        // Sample, not a stroke: the eyedropper changes the
+                        // brush and places nothing.
+                        pickBrushFrom(hoveredEntity());
+                    }
+                    else {
+                        mStroke = io.KeyShift ? Stroke::Erase : Stroke::Paint;
+                        mStrokeSlots.clear();
+                        mStrokeParts.clear();
+                        mStrokeIds.clear();
+                    }
                 }
-                if (mPainting && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                    CellPlacement cell;
-                    XformAuthor transform;
-                    if (hoveredPlacement(cell, transform))
-                        placeAt(cell, transform);
-                }
-            }
-            if (mPainting && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                mPainting = false;
-                if (!mPaintParts.empty()) {
-                    // The stroke was applied straight to the document so the
-                    // ghost had something to follow. Roll that back and let the
-                    // command apply it properly: the end state is identical,
-                    // and now the entry has a real apply for redo instead of a
-                    // no-op that would lose the pieces.
-                    const std::string label =
-                        "place " + std::to_string(mPaintParts.size()) + " x " +
-                        mState.brushPrefab;
-                    for (const AuthorId& id : mPaintedIds)
-                        mState.document.remove(id);
-                    runCommand(makeComposite(label, std::move(mPaintParts)));
-                    mPaintParts.clear();
-                    mPaintedIds.clear();
-                    mPreview->invalidate();
+                if (mStroke != Stroke::None &&
+                    ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    if (mStroke == Stroke::Erase)
+                        eraseAt(hoveredEntity());
+                    else
+                        placeAt(hoveredPlacement());
                 }
             }
+            if (mStroke != Stroke::None &&
+                !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                finishStroke();
         }
         else {
             // Gizmo before picking: a click that lands on a handle is a drag,
@@ -2295,49 +2277,15 @@ void EditorApp::handleViewportPicking(const eng::FrameContext& f)
         return;
     }
 
-    const Ray ray = mouseRay();
-
-    // Tested against catalogue bounds rather than the loaded meshes: an entity
-    // has to be selectable even before its mesh is on disk, which is exactly
-    // when the author most needs to click it and see why.
-    const AuthorId* hit = nullptr;
-    float bestT = 1e30f;
-    float bestVolume = 1e30f;
-    for (const Entity& entity : mState.document.entities) {
-        if (!mPreview->entityVisible(entity.id))
-            continue;
-        // Hidden is not there; locked is there and not clickable. Locking the
-        // floor is how a room gets dressed without picking it forty times.
-        if (mState.isHidden(entity.id) || mState.isLocked(entity.id))
-            continue;
-        glm::vec3 localMin(-0.5f), localMax(0.5f);
-        if (const KitPiece* piece = mState.catalog.find(entity.prefab))
-            piece->localBoundsMeters(mState.catalog.scale(), localMin,
-                                     localMax);
-        glm::vec3 min, max;
-        transformedBounds(mState.document.worldTransform(entity.id), localMin,
-                          localMax, min, max);
-        float t = 0.0f;
-        if (!rayAabb(ray, min, max, t))
-            continue;
-        const glm::vec3 size = max - min;
-        const float volume = size.x * size.y * size.z;
-        // Ties go to the smaller box, so clicking a barrel inside a room does
-        // not select the room.
-        if (t < bestT - 1e-3f ||
-            (std::fabs(t - bestT) <= 1e-3f && volume < bestVolume)) {
-            bestT = t;
-            bestVolume = volume;
-            hit = &entity.id;
-        }
-    }
-
-    if (!hit) {
+    // The same traversal the placement ghost uses to find its surface, so a
+    // click and the thing a ghost would rest on can never disagree.
+    const DocumentHit hit = hoveredEntity();
+    if (!hit.valid) {
         if (!ImGui::GetIO().KeyShift)
             mState.selection.clear();
         return;
     }
-    selectAndReveal(resolvePick(*hit), ImGui::GetIO().KeyShift);
+    selectAndReveal(resolvePick(hit.id), ImGui::GetIO().KeyShift);
 }
 
 // A viewport hit is a mesh; this is the entity that click means. The rule lives
@@ -2637,87 +2585,179 @@ Ray EditorApp::mouseRay() const
                        glm::radians(mState.camera.activeFovDeg()));
 }
 
-bool EditorApp::hoveredPlacement(CellPlacement& cell,
-                                 XformAuthor& transform) const
+DocumentHit EditorApp::hoveredEntity(bool ignoreStroke) const
 {
-    if (mState.brushPrefab.empty() || mViewportW < 8.0f)
-        return false;
-    const KitPiece* piece = mState.catalog.find(mState.brushPrefab);
-    if (!piece)
-        return false;
-
-    // Always resolves to a point: a ghost that vanishes whenever the camera
-    // tips towards the horizon is the single most confusing thing about a
-    // placement tool, and the ray misses the work plane constantly.
+    if (mViewportW < 8.0f)
+        return DocumentHit{};
     const Ray ray = mouseRay();
-    glm::vec3 hit = workPlanePoint(ray, mState.gridState.level,
-                                   kGhostFallbackDistance);
-
-    cell = CellPlacement{};
-    cell.level = mState.gridState.level;
-    cell.span = piece->span;
-    cell.yawQuarters = mBrushYawQuarters;
-
-    if (socketUsesGrid(piece->socket)) {
-        if (piece->socket == Socket::Wall || piece->socket == Socket::Opening) {
-            // Snapped to the nearest grid LINE, so the ghost stays put along
-            // the length of a wall instead of flipping edges mid-stroke.
-            nearestWallSlot(mState.grid, hit, cell.col, cell.row, cell.edge);
-        }
-        else {
-            pointToCell(mState.grid, hit, cell.col, cell.row);
-        }
-        transform =
-            placementToTransform(mState.grid, mState.catalog, *piece, cell);
-    }
-    else {
-        // Props are free, so the grid subdivision is only an aid here.
-        if (mState.gridState.snap) {
-            const float step = mState.gridState.step();
-            hit.x = std::round(hit.x / step) * step;
-            hit.z = std::round(hit.z / step) * step;
-        }
-        transform = XformAuthor{};
-        transform.position = hit;
-        transform.position.y += piece->yOffsetMeters(mState.catalog.scale());
-        transform.rotationDegrees.y = float(mBrushYawQuarters) * 90.0f;
-    }
-    return true;
+    return raycastDocument(
+        mState.document, mState.catalog, ray, [&](const AuthorId& id) {
+            // Hidden is not there; locked is there and not targetable. Locking
+            // the floor is how a room gets dressed without picking it forty
+            // times -- and, now, without every prop in the stroke landing on
+            // the last prop of the stroke.
+            if (mState.isHidden(id) || mState.isLocked(id))
+                return false;
+            if (!mPreview->entityVisible(id))
+                return false;
+            if (ignoreStroke)
+                for (const AuthorId& painted : mStrokeIds)
+                    if (painted == id)
+                        return false;
+            return true;
+        });
 }
 
-void EditorApp::placeAt(const CellPlacement& cell, const XformAuthor& transform)
+Placement EditorApp::hoveredPlacement() const
 {
-    const KitPiece* piece = mState.catalog.find(mState.brushPrefab);
-    if (!piece)
+    if (mState.brush.empty() || mViewportW < 8.0f)
+        return Placement{};
+
+    PlacementQuery query;
+    query.ray = mouseRay();
+    query.workPlaneLevel = mState.gridState.level;
+    query.snapXZ = mState.gridState.snap;
+    query.step = mState.gridState.step();
+    query.forceWorkPlane = ImGui::GetIO().KeyCtrl;
+    query.fallbackDistance = kGhostFallbackDistance;
+    // The stroke's own pieces are excluded: a row of floor tiles painted in one
+    // drag must all land on the same surface, not climb the one before it.
+    query.surface = hoveredEntity(true);
+
+    return resolvePlacement(mState.grid, mState.catalog, mState.brush, query);
+}
+
+void EditorApp::placeAt(const Placement& placement)
+{
+    if (!placement.valid)
         return;
 
-    // One piece per slot per stroke: a stroke places every frame the button is
+    const KitPiece* piece = mState.brush.kind == Brush::Kind::Piece
+                                ? mState.catalog.find(mState.brush.prefab)
+                                : nullptr;
+    const bool grids = piece && socketUsesGrid(piece->socket);
+
+    // One entity per slot per stroke: a stroke places every frame the button is
     // held, so without this a click that lasts a second drops sixty props.
-    // Grid pieces key on their cell; a free prop keys on where it landed.
+    // Grid pieces key on their cell; anything free keys on where it landed.
     const std::string slot =
-        socketUsesGrid(piece->socket)
-            ? gridPaintSlot(cell)
-            : freePaintSlot(transform.position, mState.gridState.snap
-                                                    ? mState.gridState.step()
+        grids ? gridPaintSlot(placement.cell)
+              : freePaintSlot(placement.transform.position,
+                              mState.gridState.snap ? mState.gridState.step()
                                                     : kFreePaintSpacing);
-    for (const std::string& painted : mPaintedSlots)
-        if (painted == slot)
-            return;
-    mPaintedSlots.push_back(slot);
+    if (!mStrokeSlots.insert(slot).second)
+        return;
 
     Entity entity;
-    entity.id = mState.document.allocateId(mState.brushPrefab);
-    entity.name = entity.id;
-    entity.prefab = mState.brushPrefab;
-    entity.transform = transform;
-    if (socketUsesGrid(piece->socket))
-        entity.cell = cell;
+    if (mState.brush.kind == Brush::Kind::Gameplay) {
+        entity = makeGameplayEntity(mState.brush.gameplay, placement.transform);
+    }
+    else {
+        entity.id = mState.document.allocateId(mState.brush.prefab);
+        entity.name = entity.id;
+        entity.prefab = mState.brush.prefab;
+        entity.transform = placement.transform;
+        if (grids)
+            entity.cell = placement.cell;
+        // Components the piece declares it cannot work without, through the
+        // same registry the inspector's Add Component uses. This is what stops
+        // a portal membrane placed from the Catalog being a dead rectangle
+        // while the identical-looking gameplay entry produces a live one.
+        if (piece)
+            for (const std::string& component : piece->components)
+                if (const ComponentType* type = findComponentType(component))
+                    type->add(entity, componentDefaults());
+    }
 
     // Applied immediately so the next hover sees it; the command is recorded
     // and pushed as one composite when the drag ends.
     mState.document.add(entity);
-    mPaintedIds.push_back(entity.id);
-    mPaintParts.push_back(makeCreateEntity(entity));
+    mStrokeIds.push_back(entity.id);
+    mStrokeParts.push_back(makeCreateEntity(entity));
+}
+
+void EditorApp::eraseAt(const DocumentHit& hit)
+{
+    if (!hit.valid)
+        return;
+    // The entity's id is its own slot: crossing it twice in one drag is one
+    // removal, and the document has already lost it by the second crossing.
+    if (!mStrokeSlots.insert(hit.id).second)
+        return;
+    if (!mState.document.find(hit.id))
+        return;
+
+    mStrokeParts.push_back(makeDeleteEntity(mState.document, hit.id));
+    mState.document.remove(hit.id);
+    // A removed entity cannot stay selected: the gizmo would draw against a
+    // transform nothing owns.
+    for (std::size_t i = 0; i < mState.selection.size(); ++i) {
+        if (mState.selection[i] == hit.id) {
+            mState.selection.erase(mState.selection.begin() +
+                                   std::ptrdiff_t(i));
+            break;
+        }
+    }
+}
+
+void EditorApp::finishStroke()
+{
+    const Stroke stroke = mStroke;
+    mStroke = Stroke::None;
+    mStrokeSlots.clear();
+    if (mStrokeParts.empty()) {
+        mStrokeIds.clear();
+        return;
+    }
+
+    // The stroke was applied straight to the document so the ghost had
+    // something to follow. Roll that back and let the command apply it
+    // properly: the end state is identical, and now the entry has a real apply
+    // for redo instead of a no-op that would lose the pieces.
+    const std::size_t count = mStrokeParts.size();
+    std::string label;
+    if (stroke == Stroke::Erase) {
+        label = "erase " + std::to_string(count) +
+                (count == 1 ? " entity" : " entities");
+        // Put back what the live stroke took, newest first, so the composite
+        // below is what actually performs the deletion.
+        for (std::size_t i = count; i-- > 0;)
+            mStrokeParts[i].revert(mState.document);
+    }
+    else {
+        label = "place " + std::to_string(count) + " x " +
+                (mState.brush.kind == Brush::Kind::Gameplay
+                     ? std::string(gameplayName(mState.brush.gameplay))
+                     : mState.brush.prefab);
+        for (const AuthorId& id : mStrokeIds)
+            mState.document.remove(id);
+    }
+
+    runCommand(makeComposite(label, std::move(mStrokeParts)));
+    mStrokeParts.clear();
+    mStrokeIds.clear();
+    mPreview->invalidate();
+}
+
+void EditorApp::pickBrushFrom(const DocumentHit& hit)
+{
+    if (!hit.valid)
+        return;
+    const Entity* entity = mState.document.find(hit.id);
+    if (!entity)
+        return;
+
+    if (!entity->prefab.empty() && mState.catalog.find(entity->prefab)) {
+        mState.brush.kind = Brush::Kind::Piece;
+        mState.brush.prefab = entity->prefab;
+        // The rotation comes with it: picking up a wall and laying more of them
+        // means laying them the same way round.
+        if (entity->cell)
+            mState.brush.yawQuarters = entity->cell->yawQuarters;
+        mStatus = "brush: " + entity->prefab;
+        return;
+    }
+    mStatus = entity->id + " has no kit piece to pick up";
 }
 
 void EditorApp::drawPlacementGhost()
@@ -2727,26 +2767,32 @@ void EditorApp::drawPlacementGhost()
         return;
     }
 
-    CellPlacement cell;
-    XformAuthor transform;
-    if (!hoveredPlacement(cell, transform)) {
-        mPreview->hidePlacementGhost();
-        return;
-    }
-    const KitPiece* piece = mState.catalog.find(mState.brushPrefab);
-    if (!piece) {
+    const Placement placement = hoveredPlacement();
+    if (!placement.valid) {
         mPreview->hidePlacementGhost();
         return;
     }
 
-    mPreview->showPlacementGhost(*piece, transform, mState.catalog.scale());
+    // A gameplay brush has no mesh to preview, so it gets a unit box: enough to
+    // show where the thing will land and which way it is turned, which is all a
+    // light or a spawn has to show.
+    glm::vec3 localMin(-0.5f), localMax(0.5f);
+    const KitPiece* piece = mState.brush.kind == Brush::Kind::Piece
+                                ? mState.catalog.find(mState.brush.prefab)
+                                : nullptr;
+    if (piece) {
+        mPreview->showPlacementGhost(*piece, placement.transform,
+                                     mState.catalog.scale());
+        piece->localBoundsMeters(mState.catalog.scale(), localMin, localMax);
+    }
+    else {
+        mPreview->hidePlacementGhost();
+    }
 
     // The ghost is a wire box in screen space rather than a translucent mesh:
     // it needs no material, cannot be picked, and reads clearly against any
     // geometry behind it.
-    glm::vec3 localMin, localMax;
-    piece->localBoundsMeters(mState.catalog.scale(), localMin, localMax);
-    const glm::mat4 worldMatrix = authorTransformMatrix(transform);
+    const glm::mat4 worldMatrix = authorTransformMatrix(placement.transform);
 
     glm::mat4 view, projection;
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
@@ -2776,11 +2822,31 @@ void EditorApp::drawPlacementGhost()
                                           {4, 5}, {5, 6}, {6, 7}, {7, 4},
                                           {0, 4}, {1, 5}, {2, 6}, {3, 7}};
     ImDrawList* draw = ImGui::GetWindowDrawList();
-    const ImU32 colour = IM_COL32(120, 220, 160, 200);
+    // Green when the height came from the work plane, amber when it came from
+    // geometry under the cursor. The two land in different places and used to
+    // be indistinguishable until after the click.
+    const ImU32 colour = placement.onSurface ? IM_COL32(250, 200, 110, 220)
+                                             : IM_COL32(120, 220, 160, 200);
     for (const auto& edge : kEdges) {
         ImVec2 a, b;
         if (project(corners[edge[0]], a) && project(corners[edge[1]], b))
             draw->AddLine(a, b, colour, 1.5f);
+    }
+
+    // A stalk down to the work plane whenever the piece is off it, so the
+    // author can see how high the thing is floating rather than inferring it
+    // from perspective alone.
+    const glm::vec3 base = placement.transform.position;
+    if (std::fabs(base.y - mState.gridState.level) > 1e-3f) {
+        glm::vec2 top, foot;
+        if (projectToViewport(base, viewProjection, {mViewportX, mViewportY},
+                              {mViewportW, mViewportH}, top) &&
+            projectToViewport({base.x, mState.gridState.level, base.z},
+                              viewProjection, {mViewportX, mViewportY},
+                              {mViewportW, mViewportH}, foot)) {
+            draw->AddLine(ImVec2(top.x, top.y), ImVec2(foot.x, foot.y),
+                          IM_COL32(250, 200, 110, 110), 1.0f);
+        }
     }
 }
 
@@ -3556,7 +3622,9 @@ void EditorApp::drawSelectionContextMenu()
 ComponentDefaults EditorApp::componentDefaults() const
 {
     ComponentDefaults defaults;
-    defaults.prefab = mState.brushPrefab;
+    defaults.prefab = mState.brush.kind == Brush::Kind::Piece
+                          ? mState.brush.prefab
+                          : std::string();
     return defaults;
 }
 
@@ -3621,17 +3689,11 @@ glm::vec3 EditorApp::viewFocusPoint() const
     return ray.origin + ray.dir * 8.0f;
 }
 
-void EditorApp::addGameplayEntity(Gameplay kind)
+Entity EditorApp::makeGameplayEntity(Gameplay kind,
+                                     const XformAuthor& transform) const
 {
     Entity entity;
-    entity.transform.position = viewFocusPoint();
-    if (mState.gridState.snap) {
-        const float step = mState.gridState.step();
-        entity.transform.position.x =
-            std::round(entity.transform.position.x / step) * step;
-        entity.transform.position.z =
-            std::round(entity.transform.position.z / step) * step;
-    }
+    entity.transform = transform;
 
     // The component's own defaults come from the registry, so "New > Light" and
     // "Add Component > Light" produce the same thing. Only the id stem and the
@@ -3649,12 +3711,12 @@ void EditorApp::addGameplayEntity(Gameplay kind)
         component = "player_spawn";
         break;
     case Gameplay::Portal:
-        if (!mState.catalog.find("kit.portal_membrane")) {
-            mStatus = "kit.portal_membrane is missing from the Catalog";
-            return;
-        }
         stem = "portal";
-        entity.prefab = "kit.portal_membrane";
+        // Left unset when the kit has no membrane, which the validator then
+        // reports as a missing prefab. Refusing to build the entity at all was
+        // the old behaviour and it lost the author's click silently.
+        if (mState.catalog.find("kit.portal_membrane"))
+            entity.prefab = "kit.portal_membrane";
         entity.portal = PortalAuthor{};
         entity.exitYawDegrees = 0.0f;
         entity.castShadows = false;
@@ -3691,6 +3753,10 @@ void EditorApp::addGameplayEntity(Gameplay kind)
     if (const ComponentType* type = findComponentType(component))
         type->add(entity, componentDefaults());
 
+    // A light placed on the floor lights the floor. Lifting it is what makes a
+    // freshly dropped one do anything visible -- and now that placement follows
+    // the cursor onto geometry, the lift is measured from whatever it landed
+    // on rather than from the work plane.
     if (kind == Gameplay::PointLight)
         entity.transform.position.y += 3.0f;
     if (kind == Gameplay::DirectionalLight) {
@@ -3704,7 +3770,22 @@ void EditorApp::addGameplayEntity(Gameplay kind)
     }
     entity.id = mState.document.allocateId(stem);
     entity.name = entity.id;
+    return entity;
+}
 
+// The one-shot path, still used by the directional light and the command
+// palette: build it in front of the camera and select it.
+void EditorApp::addGameplayEntity(Gameplay kind)
+{
+    XformAuthor transform;
+    transform.position = viewFocusPoint();
+    if (mState.gridState.snap) {
+        const float step = mState.gridState.step();
+        transform.position.x = std::round(transform.position.x / step) * step;
+        transform.position.z = std::round(transform.position.z / step) * step;
+    }
+
+    const Entity entity = makeGameplayEntity(kind, transform);
     runCommand(makeCreateEntity(entity));
     selectAndReveal(entity.id, false);
     mPreview->invalidate();
@@ -3717,33 +3798,40 @@ void EditorApp::drawCatalog()
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputTextWithHint("##filter", "filter", mCatalogFilter,
                                  sizeof(mCatalogFilter));
-        ImGui::TextDisabled("brush: %s", mState.brushPrefab.empty()
-                                             ? "(none)"
-                                             : mState.brushPrefab.c_str());
+        const std::string brushLabel =
+            mState.brush.kind == Brush::Kind::Gameplay
+                ? gameplayName(mState.brush.gameplay)
+                : (mState.brush.prefab.empty() ? "(none)"
+                                               : mState.brush.prefab);
+        ImGui::TextDisabled("brush: %s", brushLabel.c_str());
         ImGui::SameLine();
-        ImGui::TextDisabled("| rot %d deg", mBrushYawQuarters * 90);
+        // Wheel is the gesture; the readout is here because the number is only
+        // legible once something is already selected.
+        ImGui::TextDisabled("| rot %d deg (wheel)",
+                            mState.brush.yawQuarters * 90);
         ImGui::Separator();
 
         // Gameplay entities are authored here too: they are part of the level's
-        // vocabulary even though they have no mesh.
+        // vocabulary even though they have no mesh, and selecting one arms the
+        // Place tool exactly as selecting a wall does.
         if (ImGui::CollapsingHeader("gameplay",
                                     ImGuiTreeNodeFlags_DefaultOpen)) {
-            const auto button = [&](const char* label, Gameplay kind) {
-                if (ImGui::Button(label, ImVec2(-1.0f, 0.0f)))
-                    addGameplayEntity(kind);
-            };
-            button("group (empty node)", Gameplay::Group);
-            button("player spawn", Gameplay::PlayerSpawn);
-            // Portal is visible and tunable in the editor. Exit marker remains
-            // available for levels that intentionally use runtime fallback art.
-            button("portal", Gameplay::Portal);
-            button("exit marker", Gameplay::Exit);
-            button("marker", Gameplay::Marker);
-            button("enemy spawn", Gameplay::EnemySpawn);
-            button("pickup", Gameplay::Pickup);
-            button("trigger volume", Gameplay::Trigger);
-            button("point light", Gameplay::PointLight);
-            button("directional light", Gameplay::DirectionalLight);
+            for (const Gameplay kind : paintableGameplay()) {
+                const bool active =
+                    mState.brush.kind == Brush::Kind::Gameplay &&
+                    mState.brush.gameplay == kind;
+                if (ImGui::Selectable(gameplayName(kind), active)) {
+                    mState.brush.kind = Brush::Kind::Gameplay;
+                    mState.brush.gameplay = kind;
+                    mState.tool = Tool::Place;
+                }
+            }
+            // The one exception: a key light is aimed rather than positioned,
+            // so painting a row of them down a corridor is not a thing anyone
+            // means to do. It stays a button.
+            if (ImGui::Button("directional light (one-shot)",
+                              ImVec2(-1.0f, 0.0f)))
+                addGameplayEntity(Gameplay::DirectionalLight);
             ImGui::Spacing();
             // Through the component registry, like every other add: the same
             // defaults, the whole selection, one undo entry. This used to be a
@@ -3778,11 +3866,14 @@ void EditorApp::drawCatalog()
                         filter.empty() ? 0 : ImGuiTreeNodeFlags_DefaultOpen))
                     continue;
                 for (const KitPiece* piece : shown) {
-                    const bool active = mState.brushPrefab == piece->id;
+                    const bool active =
+                        mState.brush.kind == Brush::Kind::Piece &&
+                        mState.brush.prefab == piece->id;
                     // Strip the "kit." for display; the id still carries it.
                     const char* label = piece->id.c_str() + 4;
                     if (ImGui::Selectable(label, active)) {
-                        mState.brushPrefab = piece->id;
+                        mState.brush.kind = Brush::Kind::Piece;
+                        mState.brush.prefab = piece->id;
                         mState.tool = Tool::Place;
                     }
                     // Per-piece detail is inherently dynamic, so it goes
@@ -5037,6 +5128,16 @@ void EditorApp::drawHelp()
         {"[ / ]", "coarser / finer grid subdivision"},
         {"PgUp / PgDn / Home", "raise, lower, reset the work plane"},
     };
+    // The Place tool's modifiers, which are the least discoverable thing in the
+    // editor: nothing on screen suggests that Shift subtracts.
+    static const Row kPlace[] = {
+        {"wheel  (or , / .)", "rotate the brush a quarter turn"},
+        {"drag", "paint -- one piece per cell crossed"},
+        {"Shift+drag", "erase what the cursor crosses"},
+        {"Alt+click", "eyedropper -- adopt the piece under the cursor"},
+        {"Ctrl (held)", "ignore geometry, place on the work plane"},
+        {"Esc (room drag)", "cancel the rectangle"},
+    };
     static const Row kEdit[] = {
         {"Ctrl+Z / Ctrl+Y", "undo / redo"},
         {"Ctrl+C / Ctrl+X", "copy / cut selection"},
@@ -5058,6 +5159,7 @@ void EditorApp::drawHelp()
     };
     section("navigate", kNavigate, IM_ARRAYSIZE(kNavigate));
     section("tools", kTools, IM_ARRAYSIZE(kTools));
+    section("place tool", kPlace, IM_ARRAYSIZE(kPlace));
     section("edit", kEdit, IM_ARRAYSIZE(kEdit));
     section("scene", kScene, IM_ARRAYSIZE(kScene));
 
@@ -5107,50 +5209,29 @@ void EditorApp::drawSaveAsPopup()
         performDiscard();
 }
 
-bool EditorApp::importGlbModel(const std::string& source)
+bool EditorApp::importModel(const std::string& source)
 {
     const std::filesystem::path path = std::filesystem::absolute(source);
-    if (path.extension() != ".glb" || !std::filesystem::is_regular_file(path)) {
-        mStatus = "model import needs an existing .glb file";
+
+    // In process, through the engine's own Assimp importer. This used to shell
+    // out to tools/editor_import_glb.py -- a second GLTF parser that read one
+    // format, reported failure as "see terminal output", and could not be
+    // tested without a subprocess.
+    const ModelImportResult imported =
+        importModelToKit(path.string(), mState.assetRoot);
+    if (!imported.ok) {
+        mStatus = "model import failed: " + imported.error;
         return false;
     }
 
-    const std::filesystem::path artifactDir =
-        eng::assets::project() / "artifacts" / "editor";
-    std::error_code ec;
-    std::filesystem::create_directories(artifactDir, ec);
-    if (ec) {
-        mStatus = "cannot create model-import artifact directory: " +
-                  ec.message();
-        return false;
-    }
-    const std::filesystem::path manifest = artifactDir / "model_import.json";
-    const std::filesystem::path importer =
-        eng::assets::project() / "tools" / "editor_import_glb.py";
-    const std::string command =
-        "python3 " + shellQuote(importer.string()) + " " +
-        shellQuote(path.string()) + " " + shellQuote(mState.assetRoot) + " " +
-        shellQuote(manifest.string());
-    if (std::system(command.c_str()) != 0) {
-        mStatus = "GLB import failed; see terminal output";
-        return false;
-    }
-
-    nlohmann::json imported;
-    try {
-        std::ifstream input(manifest);
-        if (!input)
-            throw std::runtime_error("import manifest was not written");
-        input >> imported;
-    } catch (const std::exception& error) {
-        mStatus = std::string("cannot read model import result: ") + error.what();
-        return false;
-    }
-
-    const std::string materialScript =
-        imported.value("material_script", std::string());
-    if (!materialScript.empty() &&
-        !mEngine->renderer().loadMaterialScript(materialScript)) {
+    // Before the material script, always: the textures were written to disk a
+    // moment ago, and Ogre indexed its resource locations at start-up. Without
+    // this the material parses cleanly and every texture unit in it resolves to
+    // nothing, so the model arrives in the prototype surface with no error
+    // anywhere to explain it.
+    mEngine->renderer().refreshAssetIndex();
+    if (!imported.materialScript.empty() &&
+        !mEngine->renderer().loadMaterialScript(imported.materialScript)) {
         mStatus = "model converted, but generated material did not load";
         return false;
     }
@@ -5164,17 +5245,12 @@ bool EditorApp::importGlbModel(const std::string& source)
     mState.catalog = std::move(catalog);
     mState.grid = GridConfig::fromCatalog(mState.catalog);
 
-    const nlohmann::json& modelParts = imported["parts"];
-    if (!modelParts.is_array() || modelParts.empty()) {
-        mStatus = "GLB import produced no placeable mesh parts";
-        return false;
-    }
-
     std::vector<Command> commands;
     std::vector<AuthorId> created;
     AuthorId parent;
     const glm::vec3 position = viewFocusPoint();
-    if (modelParts.size() > 1) {
+    // A multi-part model gets a group to hang from, so it moves as one thing.
+    if (imported.parts.size() > 1) {
         Entity group;
         group.id = mState.document.allocateId("imported_model");
         group.name = path.stem().string();
@@ -5184,27 +5260,20 @@ bool EditorApp::importGlbModel(const std::string& source)
         commands.push_back(makeCreateEntity(std::move(group)));
     }
 
-    for (const nlohmann::json& modelPart : modelParts) {
-        const std::string prefab = modelPart.value("prefab", std::string());
-        if (!mState.catalog.find(prefab)) {
+    for (const ImportedPart& part : imported.parts) {
+        if (!mState.catalog.find(part.prefab)) {
             mStatus = "imported prefab is missing from reloaded Catalog: " +
-                      prefab;
+                      part.prefab;
             return false;
         }
         Entity entity;
-        entity.id = mState.document.allocateId(prefab);
-        entity.name = modelPart.value("name", entity.id);
-        entity.prefab = prefab;
+        entity.id = mState.document.allocateId(part.prefab);
+        entity.name = part.name.empty() ? entity.id : part.name;
+        entity.prefab = part.prefab;
         entity.parent = parent;
         entity.castShadows = true;
-        glm::vec3 offset{0.0f};
-        if (modelPart.contains("offset") && modelPart["offset"].is_array() &&
-            modelPart["offset"].size() == 3) {
-            offset = {modelPart["offset"][0].get<float>(),
-                      modelPart["offset"][1].get<float>(),
-                      modelPart["offset"][2].get<float>()};
-        }
-        entity.transform.position = parent.empty() ? position + offset : offset;
+        entity.transform.position =
+            parent.empty() ? position + part.offset : part.offset;
         created.push_back(entity.id);
         commands.push_back(makeCreateEntity(std::move(entity)));
     }
@@ -5219,8 +5288,18 @@ bool EditorApp::importGlbModel(const std::string& source)
     std::sort(mMaterialNames.begin(), mMaterialNames.end());
     mMaterialCatalog.clear();
     mMaterialCatalogLoaded = false;
+
     mStatus = "imported " + path.filename().string() + " as " +
-              std::to_string(modelParts.size()) + " mesh part(s)";
+              std::to_string(imported.parts.size()) + " mesh part(s)";
+    if (!imported.textures.empty())
+        mStatus += ", " + std::to_string(imported.textures.size()) +
+                   " texture(s)";
+    // Warnings are the difference between "it looks wrong" and "it looks wrong
+    // BECAUSE the texture was not beside the model".
+    mImportWarnings = imported.warnings;
+    if (!mImportWarnings.empty())
+        mStatus += " (" + std::to_string(mImportWarnings.size()) +
+                   " warning(s) -- see Status)";
     return true;
 }
 
@@ -5239,16 +5318,105 @@ void EditorApp::drawImportModelPopup()
                        "colours and base-colour textures are baked into engine "
                        "OBJ parts. Skins and animation are not imported.");
     ImGui::Spacing();
-    ImGui::SetNextItemWidth(580.0f);
-    const bool entered = ImGui::InputText(
-        "##glbpath", mImportModelPath, sizeof(mImportModelPath),
-        ImGuiInputTextFlags_EnterReturnsTrue);
-    if (entered || ImGui::Button("Import", ImVec2(120.0f, 0.0f))) {
-        if (importGlbModel(mImportModelPath))
+
+    // Every format this engine's Assimp build can read, asked of the engine
+    // rather than listed here: a hardcoded list is one that silently disagrees
+    // with the loader the moment Assimp is rebuilt with different options.
+    static const std::vector<std::string> kModelExtensions =
+        eng::Renderer::supportedModelExtensions();
+
+    // Two ways in, because source art arrives two ways. The scan finds what is
+    // already filed in the project however deep it sits; browsing reaches a
+    // download that has not been filed yet.
+    if (ImGui::RadioButton("search the project", !mImportBrowsing))
+        mImportBrowsing = false;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("browse folders", mImportBrowsing))
+        mImportBrowsing = true;
+
+    std::vector<FileEntry> entries;
+    bool truncated = false;
+    if (mImportBrowsing) {
+        if (mImportDir.empty())
+            mImportDir = mImportScanRoot;
+        ImGui::TextDisabled("%s", mImportDir.c_str());
+        const std::string parent = parentDirectory(mImportDir);
+        ImGui::BeginDisabled(parent.empty());
+        if (ImGui::SmallButton("up"))
+            mImportDir = parent;
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::SmallButton("project"))
+            mImportDir = mImportScanRoot;
+        ImGui::SameLine();
+        if (ImGui::SmallButton("home"))
+            if (const char* home = std::getenv("HOME"))
+                mImportDir = home;
+        entries = listDirectory(mImportDir, kModelExtensions);
+    }
+    else {
+        ImGui::TextDisabled("%s", mImportScanRoot.c_str());
+        const ScanResult scan = findFiles(mImportScanRoot, kModelExtensions);
+        entries = scan.files;
+        truncated = scan.truncated;
+    }
+
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##modelfilter", "filter", mImportFilter,
+                             sizeof(mImportFilter));
+    entries = filterFiles(entries, mImportFilter);
+
+    if (ImGui::BeginChild("##models", ImVec2(0.0f, 260.0f),
+                          ImGuiChildFlags_Borders)) {
+        if (entries.empty()) {
+            ImGui::TextDisabled(mImportFilter[0]
+                                    ? "nothing matches"
+                                    : "no .glb files here");
+        }
+        for (const FileEntry& entry : entries) {
+            ImGui::PushID(entry.path.c_str());
+            if (entry.directory) {
+                if (ImGui::Selectable((entry.label + "/").c_str(), false,
+                                      ImGuiSelectableFlags_AllowDoubleClick) &&
+                    ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    mImportDir = entry.path;
+                    mImportFilter[0] = '\0';
+                }
+            }
+            else {
+                const bool chosen = mImportModelPath == entry.path;
+                if (ImGui::Selectable(entry.label.c_str(), chosen,
+                                      ImGuiSelectableFlags_AllowDoubleClick)) {
+                    mImportModelPath = entry.path;
+                    // Double-click imports: the gesture everyone already tries.
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+                        importModel(mImportModelPath))
+                        ImGui::CloseCurrentPopup();
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", entry.path.c_str());
+            }
+            ImGui::PopID();
+        }
+        if (truncated)
+            ImGui::TextDisabled("(list truncated -- filter, or browse folders)");
+    }
+    ImGui::EndChild();
+
+    ImGui::TextDisabled(
+        "%s", mImportModelPath.empty()
+                  ? "select a model, or double-click to import it"
+                  : mImportModelPath.c_str());
+
+    ImGui::BeginDisabled(mImportModelPath.empty());
+    if (ImGui::Button("Import", ImVec2(120.0f, 0.0f))) {
+        if (importModel(mImportModelPath))
             ImGui::CloseCurrentPopup();
     }
+    ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)))
+    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
         ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
 }
@@ -5260,6 +5428,15 @@ void EditorApp::drawStatusBar()
         if (!mPreview->lastError().empty()) {
             ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "preview: %s",
                                mPreview->lastError().c_str());
+        }
+        // An import that half-worked says which half. Dismissable, because it
+        // is about one past action rather than the current state.
+        if (!mImportWarnings.empty()) {
+            for (const std::string& warning : mImportWarnings)
+                ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.35f, 1.0f),
+                                   "import: %s", warning.c_str());
+            if (ImGui::SmallButton("dismiss import warnings"))
+                mImportWarnings.clear();
         }
         ImGui::Text(
             "%s%s | cook: %s | undo: %s",

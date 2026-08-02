@@ -14,6 +14,42 @@ bool always(const ComponentDefaults&)
     return true;
 }
 
+} // namespace
+
+const char* gameplayName(Gameplay kind)
+{
+    switch (kind) {
+    case Gameplay::Group:            return "group";
+    case Gameplay::PlayerSpawn:      return "player spawn";
+    case Gameplay::Portal:           return "portal";
+    case Gameplay::Exit:             return "exit marker";
+    case Gameplay::Marker:           return "marker";
+    case Gameplay::EnemySpawn:       return "enemy spawn";
+    case Gameplay::Pickup:           return "pickup";
+    case Gameplay::Trigger:          return "trigger volume";
+    case Gameplay::PointLight:       return "point light";
+    case Gameplay::DirectionalLight: return "directional light";
+    }
+    return "entity";
+}
+
+bool gameplayIsPaintable(Gameplay kind)
+{
+    return kind != Gameplay::DirectionalLight;
+}
+
+const std::vector<Gameplay>& paintableGameplay()
+{
+    static const std::vector<Gameplay> kKinds = {
+        Gameplay::Group,     Gameplay::PlayerSpawn, Gameplay::Portal,
+        Gameplay::Exit,      Gameplay::Marker,      Gameplay::EnemySpawn,
+        Gameplay::Pickup,    Gameplay::Trigger,     Gameplay::PointLight,
+    };
+    return kKinds;
+}
+
+namespace {
+
 // The defaults a freshly added component gets. They are the values the editor
 // used to hardcode inside addGameplayEntity; keeping them here is what makes
 // "add a light to this wall" and "create a light entity" produce the same

@@ -25,6 +25,11 @@ tool_room = "E"
 grid_coarser = "["
 grid_finer = "]"
 toggle_snap = "G"
+# Quarter turns for the Place tool's brush. The mouse wheel does this too and is
+# the gesture worth learning -- it needs no click, so a piece can be turned
+# while it is being lined up. These are here for keyboard-only work.
+brush_rotate_cw = "."
+brush_rotate_ccw = ","
 level_up = "PageUp"
 level_down = "PageDown"
 level_reset = "Home"

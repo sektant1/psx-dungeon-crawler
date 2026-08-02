@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vulkan Implementation Survival Kit</title>
+<meta name="description" content="How to learn Vulkan and land a working eng::rhi::Device backend in the psx-dungeon-crawler engine: the plan, what already exists, and what will cost you time.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="kit.css">
+<script src="kit.js"></script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to content</a>
+<div class="shell">
+
+<aside class="rail">
+  <div class="rail-inner">
+    <a class="kit-mark" href="index.html"><strong>Vulkan</strong>Implementation<br>Survival Kit</a>
+    <nav aria-label="Kit contents">
+      <div class="rail-group">
+        <h2>The kit</h2>
+        <a href="index.html" aria-current="page">Orientation &amp; plan</a>
+        <a href="learning-path.html">Learning path</a>
+        <a href="implementation.html">Building the backend</a>
+        <a href="hazards.html">Engine-specific hazards</a>
+      </div>
+      <div class="rail-group">
+        <h2>In this page</h2>
+        <a href="#thesis">The thesis</a>
+        <a href="#today">What already exists</a>
+        <a href="#register">Challenge register</a>
+        <a href="#stages">Stage plan</a>
+        <a href="#rules">House rules</a>
+      </div>
+      <div class="rail-group">
+        <h2>Repo</h2>
+        <a href="../design/2026-07-29-rhi-and-module-contracts.md">RHI design doc</a>
+        <a href="../debugging-renderdoc.md">RenderDoc notes</a>
+        <a href="../vulkan11-reference-guide.pdf">Vulkan quick ref (PDF)</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle>
+      Theme: <span class="mode">auto</span>
+    </button>
+  </div>
+</aside>
+
+<div class="page">
+<main id="content">
+
+<header class="masthead">
+  <p class="eyebrow">Kit / 01 <span class="sep">·</span> psx-dungeon-crawler / engine/src/rhi/vulkan</p>
+  <h1>Vulkan Implementation Survival Kit</h1>
+  <p class="standfirst">How to learn Vulkan and land a working <code>eng::rhi::Device</code> backend in this
+  engine — what to read, in what order, what to let a library do for you, and the specific places
+  this codebase will fight you.</p>
+</header>
+
+<h2 id="thesis"><a class="num" href="#thesis">§1</a>The thesis</h2>
+
+<p>There are two ways to get Vulkan into this project, and only one of them is worth doing.</p>
+
+<p><strong>The trap</strong> is flipping OGRE from <code>RenderSystem_GL3Plus</code> to
+<code>RenderSystem_Vulkan</code>. It looks like a build-flag change. It is not: OGRE's Vulkan render
+system accepts only SPIR-V, has no hardware-stencil capability, and cannot host this engine's
+ImGui path. You would rewrite all 41 shaders <em>to OGRE's SPIR-V conventions</em>, lose the debug
+UI and the shadows, and still own no Vulkan code at the end. Then you would rewrite the shaders a
+second time when OGRE leaves.</p>
+
+<p><strong>The path</strong> is the one <span class="path">docs/design/2026-07-29-rhi-and-module-contracts.md</span>
+already committed to: implement <code>eng::rhi::Device</code> in <span class="path">engine/src/rhi/vulkan/</span>
+against the contract that exists today, prove it with a triangle and the contract test, and let the
+renderer migrate onto it milestone by milestone while OGRE keeps drawing the game. Nothing above the
+RHI knows which backend is live, so nothing above it breaks while you learn.</p>
+
+<div class="callout">
+  <span class="label">Why the trap is a trap — measured, not guessed</span>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>What breaks</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>All shaders. OGRE's Vulkan RS reports language <code>"spirv"</code> only; GLSL must go
+        through <code>Plugin_GLSLang</code> at <code>#version 460</code> under
+        <code>EShMsgSpvRules</code>, which forbids default-block uniforms.</td>
+        <td><code>OgreVulkanProgram.cpp:115</code>, <code>OgreGLSLang.cpp:424</code> — against 41
+        files of <code>#version 330 core</code> with 111 bare <code>uniform</code> declarations and
+        zero explicit bindings</td>
+      </tr>
+      <tr>
+        <td>ImGui. <code>RenderCore</code> drives the vendored docking-branch ImGui through
+        <code>imgui_impl_opengl3</code> inside an OGRE <code>RenderTargetListener</code>. No GL
+        context under Vulkan, and OGRE's own <code>ImGuiOverlay</code> is already disabled for an
+        ABI clash.</td>
+        <td><code>RenderCore.cpp:254,306,320</code>; <code>cmake/Dependencies.cmake:216-222</code></td>
+      </tr>
+      <tr>
+        <td>Stencil shadows. The Vulkan RS never sets <code>RSC_HWSTENCIL</code>, so
+        <code>setShadowTechnique</code> logs a warning and forces <code>SHADOWTYPE_NONE</code>.</td>
+        <td><code>OgreVulkanRenderSystem.cpp:562</code>, <code>OgreSceneManager.cpp:2506</code></td>
+      </tr>
+      <tr>
+        <td>Raw GL in the UI layer — the bitmap font reaches through to the texture's GL id.</td>
+        <td><code>engine/src/ui/BitmapFont.cpp:30-36</code></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p>None of that work carries forward. Everything in this kit does.</p>
+</div>
+
+<h2 id="today"><a class="num" href="#today">§2</a>What already exists</h2>
+
+<p>More than you'd expect. The seam was cut before the backend was written, which means the shape of
+the job is already fixed and you are filling in a known interface rather than inventing one.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Asset</th><th>Where</th><th>State</th></tr></thead>
+  <tbody>
+    <tr><td>Device / CommandList contract</td><td><span class="path">engine/include/eng/rhi/Device.h</span></td><td>126 lines, complete, names no graphics API</td></tr>
+    <tr><td>Descriptors and enums</td><td><span class="path">engine/include/eng/rhi/Types.h</span></td><td>212 lines — formats, usages, pipeline and pass descs</td></tr>
+    <tr><td>Reference implementation</td><td><span class="path">engine/src/rhi/null/NullDevice.cpp</span></td><td>282 lines. Strict validator. <strong>Read this first.</strong></td></tr>
+    <tr><td>Backend selection</td><td><span class="path">engine/src/rhi/Registry.cpp</span></td><td>Working; <code>createDevice(BackendKind::Vulkan, …)</code> already routes</td></tr>
+    <tr><td>Vulkan slot</td><td><span class="path">engine/src/rhi/vulkan/VulkanDevice.{h,cpp}</span></td><td>14-line skeleton that logs and returns null</td></tr>
+    <tr><td>Contract test</td><td><span class="path">engine/tests/RhiContractTests.cpp</span></td><td>141 lines. Runs against every backend that reports creatable.</td></tr>
+    <tr><td>Build target</td><td><code>eng_rhi</code>, <span class="path">CMakeLists.txt:183-189</span></td><td>Static lib, deliberately cannot see the renderer</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Three details in that contract were written with Vulkan in mind, and they save you real design
+work:</p>
+
+<ul>
+  <li><code>RenderPassDesc</code> is described <em>per frame</em>, never cached — so you can use
+  dynamic rendering and skip <code>VkRenderPass</code>/<code>VkFramebuffer</code> objects entirely.</li>
+  <li><code>PipelineDesc</code> already carries <code>colourFormats</code> and <code>depthFormat</code>,
+  which is exactly what <code>VkPipelineRenderingCreateInfo</code> needs.</li>
+  <li><code>pushConstants</code> documents a 128-byte budget and the null backend
+  <em>enforces</em> it (<code>NullDevice.cpp:89</code>), so it maps to real push constants with no
+  emulation.</li>
+</ul>
+
+<h2 id="register"><a class="num" href="#register">§3</a>Challenge register</h2>
+
+<p>Everything that will actually cost you time, rated by what it does to the schedule.
+<span class="chip blocker">Blocker</span> stops a stage until solved.
+<span class="chip hazard">Hazard</span> produces a wrong image or a heisenbug rather than an error.
+<span class="chip chore">Chore</span> is bounded, boring, and must not be underestimated.</p>
+
+<div class="register">
+
+  <div class="entry">
+    <span class="chip blocker">Blocker</span>
+    <div>
+      <h3>Vulkan's learning cliff is front-loaded</h3>
+      <p>~1,000 lines before a triangle: instance, physical device, queue families, logical device,
+      swapchain, image views, pipeline, command pool, sync objects. None of it is conceptual — it is
+      structure you must have typed once to reason about.</p>
+      <p class="evidence">Mitigation: vk-bootstrap + VMA delete ~60% of it. See Building the backend §2.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip blocker">Blocker</span>
+    <div>
+      <h3>Synchronization is the actual subject</h3>
+      <p>Barriers, layout transitions, queue submits, fences, semaphores. Get it wrong and you get a
+      correct-looking frame on your GPU and a corrupt one on someone else's. This is the part no
+      library removes.</p>
+      <p class="evidence">Budget a full day on this alone. Learning path §3.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip blocker">Blocker</span>
+    <div>
+      <h3>Shaders must become SPIR-V</h3>
+      <p>41 GLSL 330 files, 111 default-block <code>uniform</code> declarations, no explicit
+      bindings, and preprocessor variants driven from <code>.program</code> scripts.
+      <code>ShaderDesc::code</code> takes SPIR-V bytes, so this needs a compile step in the asset
+      pipeline, not a runtime string.</p>
+      <p class="evidence">assets/shaders/*, assets/programs/*.program. Hazards §2.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip hazard">Hazard</span>
+    <div>
+      <h3>The image is frozen</h3>
+      <p>CLAUDE.md: the PSX look is a shipped result and <code>make visual-test</code> proves no
+      change alters it. Vulkan's Y-down clip space and 0..1 depth range mean your first correct-looking
+      frame will still be upside down or depth-inverted relative to the baselines.</p>
+      <p class="evidence">docs/baselines/, make visual-test. Hazards §1.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip hazard">Hazard</span>
+    <div>
+      <h3>Two windowing paths cannot share one window</h3>
+      <p><code>Platform</code> pins SDL to X11 and hands OGRE an X11 window id. A Vulkan surface wants
+      <code>SDL_WINDOW_VULKAN</code> on its own window. During the transition the two backends need
+      separate windows — which is an argument for a standalone sample app, not a flag on
+      <code>game</code>.</p>
+      <p class="evidence">engine/src/platform/Platform.cpp:28-51. Hazards §4.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip hazard">Hazard</span>
+    <div>
+      <h3>Resource lifetime is now yours</h3>
+      <p><code>destroyBuffer</code> cannot free anything the GPU may still be reading. Without a
+      deletion queue keyed to frames-in-flight, you get use-after-free that only reproduces under
+      load.</p>
+      <p class="evidence">Building the backend §7.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip chore">Chore</span>
+    <div>
+      <h3>Descriptor sets have no analogue in your GL mental model</h3>
+      <p><code>bindTexture(slot, …)</code> and <code>bindUniformBuffer(slot, …)</code> look like GL
+      binding points and are not. You need a per-frame descriptor allocation strategy before the
+      second draw call, not after.</p>
+      <p class="evidence">Building the backend §8.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip chore">Chore</span>
+    <div>
+      <h3>Format and state mapping tables</h3>
+      <p>Nine <code>Format</code> values, four blend modes, eight compare ops, five vertex formats.
+      Mechanical, tedious, and the source of a whole class of silent wrong-image bugs when one entry
+      is off.</p>
+      <p class="evidence">Types.h. Write it as one table with a static_assert on the enum count.</p>
+    </div>
+  </div>
+
+  <div class="entry">
+    <span class="chip chore">Chore</span>
+    <div>
+      <h3>The build must not be disturbed</h3>
+      <p>OGRE is compiled from source and a clean build costs many minutes. New CPM dependencies
+      trigger a reconfigure, which is fine; <code>rm -rf build</code> is not.</p>
+      <p class="evidence">CLAUDE.md, "Never clean-build".</p>
+    </div>
+  </div>
+
+</div>
+
+<h2 id="stages"><a class="num" href="#stages">§4</a>Stage plan</h2>
+
+<p>Six stages, each ending in something you can run. The order is chosen so that every stage's proof
+is mechanical — you never have to squint at a frame and wonder.</p>
+
+<div class="stage">
+  <div class="stage-head"><span class="idx">0</span><h3>Read, don't type</h3><span class="est">½ day</span></div>
+  <p>Read <span class="path">engine/src/rhi/null/NullDevice.cpp</span> end to end, then
+  <span class="path">Device.h</span>, then <span class="path">RhiContractTests.cpp</span>. You are
+  implementing that exact sequence. Then read baldurk's <a href="learning-path.html#core">Vulkan
+  in 30 minutes</a> for the object graph.</p>
+  <p class="proof"><b>Proof</b>You can name, from memory, which Vulkan object each of the six handle
+  types in <code>Types.h</code> will wrap.</p>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="idx">1</span><h3>A triangle outside the engine</h3><span class="est">2–4 days</span></div>
+  <p>Follow vulkan-tutorial or vkguide in a scratch directory with vk-bootstrap. Do not try to satisfy
+  the RHI yet. The goal is that the object graph stops being abstract.</p>
+  <p class="proof"><b>Proof</b>A window with a spinning textured quad, zero validation-layer messages.</p>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="idx">2</span><h3>Device creation and capabilities</h3><span class="est">1–2 days</span></div>
+  <p>In-repo. <code>createDevice</code> returns a real device; <code>capabilities()</code> is filled
+  honestly; everything else asserts. Wire CPM deps and the CMake target. Handle the no-window case:
+  the contract test passes <code>nativeWindowHandle = 0</code>, so either return null cleanly or use
+  <code>VK_EXT_headless_surface</code> (this machine advertises it).</p>
+  <p class="proof"><b>Proof</b><code>ctest -R rhi_contract</code> prints <code>vulkan: …</code> instead
+  of <code>not available</code>, and <code>maxSimultaneousLights &gt;= 16</code>.</p>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="idx">3</span><h3>Resources and the contract test</h3><span class="est">3–5 days</span></div>
+  <p>Handle tables (steal the generational <code>Table&lt;&gt;</code> from NullDevice), buffers via VMA,
+  textures with staging uploads and layout transitions, samplers, shaders from SPIR-V, pipelines.</p>
+  <p class="proof"><b>Proof</b><code>rhi_contract_tests</code> completes the full sequence on Vulkan
+  with a clean validation log.</p>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="idx">4</span><h3>A frame that draws</h3><span class="est">3–5 days</span></div>
+  <p>Swapchain, frames in flight, dynamic rendering, the command list, the deletion queue, resize.
+  Add a tiny <code>rhi_triangle</code> sample app under <span class="path">samples/</span> with its own
+  SDL window — this is the thing you will debug against for months.</p>
+  <p class="proof"><b>Proof</b><code>rhi_triangle</code> runs for 10,000 frames, survives window
+  resize, exits clean under validation, and captures in RenderDoc.</p>
+</div>
+
+<div class="stage">
+  <div class="stage-head"><span class="idx">5</span><h3>Port one PSX shader</h3><span class="est">2–4 days</span></div>
+  <p>Take <code>psx.vert</code>/<code>psx.frag</code> to Vulkan GLSL — uniform blocks, explicit
+  bindings, specialization constants in place of the preprocessor variants — and add the offline
+  SPIR-V compile step. One shader teaches you what the other 40 will cost.</p>
+  <p class="proof"><b>Proof</b>The sample draws a PSX-shaded mesh; screenshot compared against the
+  same mesh under the OGRE path.</p>
+</div>
+
+<div class="callout quiet">
+  <span class="label">What comes after</span>
+  <p>Stage 5 is the end of <em>this</em> kit. From there the design doc's M2–M5 take over: the engine
+  scene layer, materials, render graph, then cutover. The backend is the easy half; OGRE's
+  <code>SceneManager</code>, <code>MaterialManager</code> and <code>CompositorManager</code> are the
+  expensive half. Don't let a working triangle convince you otherwise.</p>
+</div>
+
+<h2 id="rules"><a class="num" href="#rules">§5</a>House rules that apply to this work</h2>
+
+<ul>
+  <li><strong>Never clean-build.</strong> <code>cmake -S . -B build</code> regenerates makefiles
+  without discarding objects. Killing a build mid-link corrupts the tree.</li>
+  <li><strong>Validation layers on in debug, always.</strong> A validation error you scrolled past is
+  the bug you will spend Saturday on. Make the backend log them through <code>eng::log</code> and
+  treat any message as a build failure in tests.</li>
+  <li><strong>Verify on screen.</strong> The engine has a deterministic capture hook
+  (<code>PSX_SCREENSHOT</code> / <code>PSX_SCREENSHOT_FRAME</code>). Give the RHI sample the same one
+  on day one — three real bugs in this repo were invisible to the compiler and obvious in a PNG.</li>
+  <li><strong>Nothing above the RHI changes.</strong> If a stage requires editing
+  <code>RenderCore</code>, you have left the plan.</li>
+  <li><strong>No Vulkan type in <span class="path">engine/include/</span>.</strong> That rule is what
+  makes the whole approach safe; <code>eng_rhi</code> must keep compiling for callers who never link
+  Vulkan.</li>
+</ul>
+
+<nav class="pagenav" aria-label="Kit pages">
+  <span>Start here</span>
+  <a href="learning-path.html">Learning path →</a>
+</nav>
+
+</main>
+</div>
+</div>
+</body>
+</html>

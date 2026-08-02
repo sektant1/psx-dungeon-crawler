@@ -5,6 +5,7 @@
 #include <entt/entt.hpp>
 
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 namespace game::content {
@@ -19,10 +20,21 @@ namespace game::content {
 // `authorToEntity`, when given, receives the id -> entity mapping the editor
 // needs to highlight a selection. The cooker passes null: a .map has no author
 // ids in it, by design.
+// `unresolved`, when given, changes what an entity naming a prefab the kit does
+// not have *means*: instead of failing the build, that one entity is skipped,
+// its id recorded, and the rest is built.
+//
+// The two callers genuinely want opposite things. A cook must refuse -- a map
+// that ships with a dangling prefab is a hole in the level. The editor's
+// preview must not: an author who deletes a kit piece, or opens a scene made
+// against a newer kit, still has to be able to see and fix their level. It used
+// to get an empty viewport, because a single bad prefab abandoned the registry
+// mid-build and every other entity in the scene went with it.
 bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                    entt::registry& out, std::string& error,
                    std::unordered_map<AuthorId, entt::entity>* authorToEntity =
-                       nullptr);
+                       nullptr,
+                   std::vector<AuthorId>* unresolved = nullptr);
 
 // The whole cook: IR -> registry -> binary .map, written atomically by
 // mapio::writeMap. The one function both scene_cook and the editor call; there

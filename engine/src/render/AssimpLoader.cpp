@@ -228,6 +228,34 @@ std::string materialName(const aiScene& scene, unsigned index)
     return "material_" + std::to_string(index);
 }
 
+// The base-colour texture a material names, exactly as authored -- usually
+// relative to the model ("386.png" from an .mtl's map_Kd), sometimes absolute,
+// and "*0" for one embedded in the file.
+//
+// Reported rather than resolved or loaded: this loader deliberately does not
+// read image data (embedded textures stay metadata, see importStaticModel), but
+// a converter writing an engine material needs to know which file to copy, and
+// only Assimp knows how each format spells that.
+std::string materialTexture(const aiScene& scene, unsigned index)
+{
+    if (index >= scene.mNumMaterials)
+        return {};
+    const aiMaterial& material = *scene.mMaterials[index];
+    // BASE_COLOR is the glTF/PBR spelling, DIFFUSE the OBJ/FBX one. Both, in
+    // that order, so a PBR asset does not fall through to a legacy slot that
+    // happens to hold something else.
+    const aiTextureType types[] = {aiTextureType_BASE_COLOR,
+                                   aiTextureType_DIFFUSE};
+    for (const aiTextureType type : types) {
+        aiString path;
+        if (material.GetTextureCount(type) > 0 &&
+            material.GetTexture(type, 0, &path) == AI_SUCCESS &&
+            path.length > 0)
+            return path.C_Str();
+    }
+    return {};
+}
+
 struct ImportContext {
     const aiScene& scene;
     const ModelImportOptions& options;
@@ -423,6 +451,7 @@ void appendMeshInstance(ImportContext& context, const aiMesh& source,
     if (submesh.name.empty())
         submesh.name = "mesh_" + std::to_string(sourceMeshIndex);
     submesh.sourceMaterial = materialName(context.scene, source.mMaterialIndex);
+    submesh.sourceTexture = materialTexture(context.scene, source.mMaterialIndex);
     submesh.vertices.reserve(source.mNumVertices);
     for (unsigned index = 0; index < source.mNumVertices; ++index) {
         if (!used[index]) {

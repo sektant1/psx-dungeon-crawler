@@ -13,6 +13,12 @@
       "skillPath": "skills/disciplines/camera-systems/SKILL.md",
       "computedHash": "e055f1558463ff68c7875c4930bbb3f40fe1f3c26b5e109f368e425ee6d17a28"
     },
+    "card-game": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/genres/card-game/SKILL.md",
+      "computedHash": "ed64e20a0eaa91a38953d9a09aae6ef6e70cf72a1e0c66026d653b15dde413c3"
+    },
     "cavecrew": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
@@ -127,6 +133,12 @@
       "skillPath": "skills/disciplines/physics-tuning/SKILL.md",
       "computedHash": "ea6313644e4da8f977cb2e36d9623f7feaa45d47f3557c6d021d82c53f489187"
     },
+    "platformer": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/genres/platformer/SKILL.md",
+      "computedHash": "0f9d80262d297ecb8cb079ff79fa4d8ee2f9c90e280b7e703316067dc6deaf0b"
+    },
     "procedural-gen": {
       "source": "gamedev-skills/awesome-gamedev-agent-skills",
       "sourceType": "github",
@@ -138,6 +150,12 @@
       "sourceType": "github",
       "skillPath": "skills/workflows/prototype-fast/SKILL.md",
       "computedHash": "e77e5bdc10922fada86634a820a5fe220237357807e593004b3ab78c3ad8fa07"
+    },
+    "puzzle": {
+      "source": "gamedev-skills/awesome-gamedev-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/genres/puzzle/SKILL.md",
+      "computedHash": "373e040c38c5835c5d43c1081fd60e07f137625ce51834052a876f830587c83b"
     },
     "roguelike": {
       "source": "gamedev-skills/awesome-gamedev-agent-skills",

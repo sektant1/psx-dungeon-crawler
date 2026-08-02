@@ -439,6 +439,9 @@ material = "Game/Vfx/PortalDown"
 socket = "prop"
 import_scale = 1.0
 size = [2.8, 2.5, 0.14]
+# The membrane animates from per-entity shader parameters; without the
+# portal component it is a flat rectangle of the material's static colour.
+components = ["portal"]
 
 [[piece]]
 id = "portal_membrane_up"
@@ -448,6 +451,9 @@ material = "Game/Vfx/PortalUp"
 socket = "prop"
 import_scale = 1.0
 size = [2.8, 2.5, 0.14]
+# The membrane animates from per-entity shader parameters; without the
+# portal component it is a flat rectangle of the material's static colour.
+components = ["portal"]
 
 [[piece]]
 id = "prop_raccoon_head"
@@ -998,3 +1004,24 @@ import_scale = 1.0
 size = [2.0000, 2.0000, 2.0000]
 
 # END editor import: modulardungeonfree
+
+# BEGIN editor import: mechademonlord
+[[piece]]
+id = "import_mechademonlord_p0"
+role = "imported_model"
+mesh = "meshes/props/import_mechademonlord_p0.obj"
+material = "Game/import_mechademonlord/part0"
+socket = "prop"
+import_scale = 1.0
+size = [1.1500, 1.8770, 1.3970]
+
+[[piece]]
+id = "import_mechademonlord_p1"
+role = "imported_model"
+mesh = "meshes/props/import_mechademonlord_p1.obj"
+material = "Game/import_mechademonlord/part1"
+socket = "prop"
+import_scale = 1.0
+size = [1.5560, 1.6600, 0.5750]
+
+# END editor import: mechademonlord

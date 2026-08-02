@@ -120,6 +120,18 @@ bool KitCatalog::load(const std::string& tomlPath, KitCatalog& out,
         entry.span = int((*piece)["span"].value_or(1));
         entry.yOffsetKit = float((*piece)["y_offset"].value_or(0.0));
         entry.pivot = (*piece)["pivot"].value_or(std::string());
+        if (const toml::array* components = (*piece)["components"].as_array()) {
+            for (const toml::node& componentNode : *components) {
+                const std::optional<std::string> name =
+                    componentNode.value<std::string>();
+                if (!name || name->empty()) {
+                    error = tomlPath + ": piece '" + id +
+                            "' components must be component-type names";
+                    return false;
+                }
+                entry.components.push_back(*name);
+            }
+        }
         if (const toml::array* attachments = (*piece)["attachments"].as_array()) {
             for (const toml::node& attachmentNode : *attachments) {
                 const toml::table* attachment = attachmentNode.as_table();

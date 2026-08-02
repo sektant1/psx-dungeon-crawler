@@ -1,5 +1,6 @@
 #pragma once
 #include "EditorCamera.h"
+#include "EntityComponents.h"
 #include "GridMath.h"
 #include "RoomBuilder.h"
 #include "KitCatalog.h"
@@ -28,10 +29,19 @@ struct GridState {
     static constexpr int kSubdivisionCount = 4;
 
     float step() const { return kSubdivisions[subdivision]; }
-    void finer() { subdivision = (subdivision + 1) % kSubdivisionCount; }
+    // Clamped, not wrapped. These used to be modular, so pressing "finer" at
+    // the finest step silently jumped back to the coarsest -- the author's next
+    // placement then landed metres from where the last one did, and nothing on
+    // screen had visibly changed except a number they were not looking at.
+    void finer()
+    {
+        if (subdivision + 1 < kSubdivisionCount)
+            ++subdivision;
+    }
     void coarser()
     {
-        subdivision = (subdivision + kSubdivisionCount - 1) % kSubdivisionCount;
+        if (subdivision > 0)
+            --subdivision;
     }
 };
 
@@ -58,8 +68,8 @@ struct EditorState {
     EditorCamera camera;
 
     std::vector<game::content::AuthorId> selection;
-    // The prefab the Place tool will drop next.
-    std::string brushPrefab;
+    // What the Place tool will drop next, and which way up.
+    Brush brush;
     // What the Room tool builds. Held here rather than passed around so the
     // toolbar can offer a crypt-walled room as easily as a plain one.
     game::content::RoomSpec roomSpec;

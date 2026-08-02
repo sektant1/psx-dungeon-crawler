@@ -129,11 +129,23 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
     for (const game::content::Entity& entity : document.entities)
         mImpl->authorToHeight[entity.id] = entity.transform.position.y;
     entt::registry& registry = mImpl->world.registry();
+    // Unresolved prefabs are reported, not fatal. Passing this vector is what
+    // makes that true: without it buildRegistry abandons the registry on the
+    // first bad prefab, and the whole level -- every wall, floor and light --
+    // vanished from the viewport because one entity named a piece the kit no
+    // longer had. The message below was the only clue, and it reads like a
+    // note about one entity.
+    std::vector<game::content::AuthorId> unresolved;
     if (!game::content::buildRegistry(document, catalog, registry, mError,
-                                      &mImpl->authorToEntity)) {
-        // A document with an unresolved prefab still has to be editable, so
-        // this is a message in the UI, not a fatal error.
+                                      &mImpl->authorToEntity, &unresolved)) {
         return;
+    }
+    if (!unresolved.empty()) {
+        mError = std::to_string(unresolved.size()) +
+                 (unresolved.size() == 1 ? " entity has" : " entities have") +
+                 " an unresolved prefab (" + unresolved.front() +
+                 (unresolved.size() > 1 ? ", ..." : "") +
+                 ") -- shown as empty, everything else is drawn";
     }
 
     // MeshSource (a relative path) -> a loaded mesh handle. Same resolution the
