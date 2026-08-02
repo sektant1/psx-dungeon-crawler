@@ -346,6 +346,11 @@ bool apply(const std::string& id)
                            [&](const Entry& e) { return e.id == id; });
     if (it == r.end() || !it->fn)
         return false;
+    // A theme describes the complete style, not a delta from whichever theme
+    // happened to run before it. Resetting geometry as well as colours makes
+    // hot-swapping deterministic (one_dark after hud_reliquary used to inherit
+    // square tabs and tight padding, while one_dark at startup did not).
+    ImGui::GetStyle() = ImGuiStyle{};
     it->fn();
     currentId() = id;
     return true;

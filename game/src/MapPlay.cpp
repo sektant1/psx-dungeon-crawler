@@ -6,6 +6,7 @@
 
 #include "GameAssets.h"
 #include "GameCollision.h"
+#include "ParticleCollider.h"
 #include "SceneFactory.h"
 #include "scene/GameComponents.h"
 #include "scene/MapRuntime.h"
@@ -18,6 +19,7 @@
 #include <eng/RenderPresetInfo.h>
 #include <eng/Renderer.h>
 #include <eng/render/GifRecorder.h>
+#include <eng/particles/ParticleLibrary.h>
 #include <eng/app/FpsGameApp.h>
 #include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
@@ -131,12 +133,28 @@ protected:
 
     eng::FpsController* playerController() override { return &mPlayer; }
 
+    void onLoadGame(eng::Engine& engine, eng::LoadPlan& plan) override
+    {
+        eng::Renderer& renderer = engine.renderer();
+        plan.add("Kindling particle effects", [this, &renderer] {
+            mParticlesReady = mParticles.load(
+                renderer, game::assetPath("config/particles.toml"));
+        });
+    }
+
     bool onStartGame(eng::Engine& engine) override
     {
+        if (!mParticlesReady) {
+            eng::log::error("MapPlay: config/particles.toml failed to load");
+            exitCode = 1;
+            return false;
+        }
         eng::Renderer& r = engine.renderer();
         mBackend.emplace(r);
         mWorld.attachRenderer(*mBackend);
         mWorld.attachPhysics(physics());
+        mParticleCollider.emplace(physics(), eng::kAllLayers);
+        r.setParticleCollider(&*mParticleCollider);
         // One map, no transitions: everything it contributes lives as long as
         // the app does, so no lifetime group is needed.
         mRuntime.emplace(mWorld, 0u);
@@ -249,12 +267,14 @@ protected:
             mPlayer.present(r);
     }
 
-    void onStopGame(eng::Engine&) override
+    void onStopGame(eng::Engine& engine) override
     {
+        engine.renderer().setParticleCollider(nullptr);
         mRuntime.reset();
         // Nodes and bodies die before the renderer and the physics world do.
         mWorld.detachAll();
         mBackend.reset();
+        mParticleCollider.reset();
     }
 
 private:
@@ -262,6 +282,9 @@ private:
     std::optional<eng::ecs::RendererSceneBackend> mBackend;
     eng::ecs::World mWorld;
     std::optional<MapRuntime> mRuntime;
+    eng::ParticleLibrary mParticles;
+    std::optional<game::JoltParticleCollider> mParticleCollider;
+    bool mParticlesReady = false;
     eng::FpsController mPlayer;
     std::optional<eng::RecordingOptions> mRecording; // --record
     // The scene owns the camera: set once at load, because a camera appearing

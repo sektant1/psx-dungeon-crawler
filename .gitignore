@@ -3,6 +3,7 @@ build/
 build-cpm/
 build-debug/
 build-asan/
+build-vulkan*/
 compile_commands.json
 # Runtime logs. Ogre writes ogre.log beside the working directory; the editor
 # writes its playtest capture under artifacts/ with the other generated files.

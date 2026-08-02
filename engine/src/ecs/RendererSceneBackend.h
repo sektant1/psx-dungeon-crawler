@@ -32,7 +32,8 @@ public:
     void setCameraNode(NodeHandle) override;
     void setCameraLens(float fovDegrees, float nearClip, float farClip) override;
     ParticlesHandle attachParticles(NodeHandle, const std::string& effect,
-                                    glm::vec3 localOffset) override;
+                                    glm::vec3 localOffset,
+                                    const ParticleSpawnOptions& options) override;
     void detachParticles(ParticlesHandle) override;
 
 private:

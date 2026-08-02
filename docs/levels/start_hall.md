@@ -136,5 +136,5 @@ PSX_EDITOR_WALK=1 PSX_SCREENSHOT=/tmp/eye.png PSX_SCREENSHOT_FRAME=260 \
 
 The `.scn` is the artifact; edit it in the editor. The script exists because the
 grid arithmetic (cell centres, the half-thickness wall inset, the `y_offset`
-exceptions) mirrors `game/content/GridMath.cpp`, and the cooker's validator is
+exceptions) mirrors `editor/src/content/GridMath.cpp`, and the cooker's validator is
 what proves the two still agree.

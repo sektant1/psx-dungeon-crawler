@@ -13,7 +13,7 @@ dependency that points upward is a **link error**, not a review comment.
 | `game` (exe) | combat, dungeon generation, player, bosses, items, UI | `eng` |
 | `eng` | application lifetime (`Engine`), the facade consumers link | `eng_framework` |
 | `eng_framework` | the ECS world, its components and reconcilers, controllers | `eng_systems` |
-| `eng_systems` | renderer, physics, audio, particles — the only layer that sees Ogre/Jolt/SDL/miniaudio | `eng_platform` |
+| `eng_systems` | renderer, physics, audio, particles — the only layer that sees Vulkan/Jolt/SDL/miniaudio | `eng_platform` |
 | `eng_platform` | window, input, config | `eng_core` |
 | `eng_core` | log, io, geometry, events, profiling, clocks, string ids | glm only |
 

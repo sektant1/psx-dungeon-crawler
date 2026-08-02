@@ -1,6 +1,7 @@
 #pragma once
 #include <eng/Handles.h>
 #include <eng/LightDesc.h> // eng::LightDesc
+#include <eng/particles/ParticleEffectDesc.h>
 #include <eng/ShaderBlock.h>
 #include <eng/ecs/components/ShaderParams.h>
 
@@ -75,10 +76,12 @@ public:
     // Start `effect` on this node and return its handle; an unknown name or an
     // unsupported backend returns an invalid one (ParticleEmitter).
     virtual ParticlesHandle attachParticles(NodeHandle, const std::string& effect,
-                                            glm::vec3 localOffset)
+                                             glm::vec3 localOffset,
+                                             const ParticleSpawnOptions& options)
     {
         (void)effect;
         (void)localOffset;
+        (void)options;
         return {};
     }
     // Stop emitting and release. Live particles are allowed to finish.

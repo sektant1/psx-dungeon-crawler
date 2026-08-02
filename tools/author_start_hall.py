@@ -13,7 +13,7 @@ decision about which side of the rubble you take.
 
 The scene file is the artifact -- edit it in the editor from here on. This script
 is kept because the *layout* is arithmetic (cell centres, the half-thickness wall
-inset, the y_offset exceptions), it mirrors game/content/GridMath.cpp, and the
+inset, the y_offset exceptions), it mirrors editor/src/content/GridMath.cpp, and the
 cooker's validator proves the two still agree: a mismatch surfaces as
 cell.transform_drift. The design rationale is docs/levels/start_hall.md.
 """

@@ -82,7 +82,8 @@ std::vector<std::string> ids() {
 
 bool hover(const std::string& id, const char* fallback) {
     if (!ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
-                              ImGuiHoveredFlags_AllowWhenDisabled))
+                              ImGuiHoveredFlags_AllowWhenDisabled) &&
+        !ImGui::IsItemFocused())
         return false;
     if (const Hint* hint = id.empty() ? nullptr : find(id)) {
         draw(hint->title.c_str(), hint->body.c_str());
@@ -96,12 +97,17 @@ bool hover(const std::string& id, const char* fallback) {
 }
 
 void marker(const std::string& id, const char* fallback) {
-    ImGui::TextDisabled("(?)");
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
+    ImGui::SmallButton("?");
+    ImGui::PopStyleColor(2);
     hover(id, fallback);
 }
 
 void showText(const char* title, const char* body) {
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort) ||
+        ImGui::IsItemFocused())
         draw(title, body);
 }
 

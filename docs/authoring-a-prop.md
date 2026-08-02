@@ -58,7 +58,7 @@ Three things worth knowing:
 - **Geometry only.** Skins and animation are not imported.
 
 The conversion is `ed::importModelToKit`
-(`game/editor/ModelImportPipeline.h`), running in process on the engine's own
+(`editor/include/editor/assets/ModelImportPipeline.h`), running in process on the engine's own
 Assimp importer. It replaced a Python script invoked through `std::system` that
 carried a second glTF parser, read one format, and reported failure as "see
 terminal output".

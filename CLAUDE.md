@@ -6,7 +6,7 @@ You are working inside my existing custom C++ 3D game engine.
 
 The engine currently uses technologies such as:
 - C++
-- OGRE3D
+- Vulkan 1.3 + RHI
 - EnTT
 - Jolt Physics
 - ImGui

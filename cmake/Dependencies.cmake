@@ -22,6 +22,42 @@
 
 include(${CMAKE_CURRENT_LIST_DIR}/CPM.cmake)
 
+# --- Vulkan RHI (strictly opt-in) --------------------------------------------
+# The loader remains a runtime/system discovery; only headers and helper
+# libraries are pinned and fetched. Defining Vulkan::Headers before
+# find_package(Vulkan) makes vk-bootstrap compile against the exact header pin
+# without replacing or vendoring the loader.
+if(ENG_RHI_VULKAN)
+    CPMAddPackage(
+        NAME VulkanHeaders
+        GITHUB_REPOSITORY KhronosGroup/Vulkan-Headers
+        GIT_TAG v1.4.357
+        DOWNLOAD_ONLY YES
+    )
+    add_library(eng_vulkan_headers INTERFACE)
+    add_library(Vulkan::Headers ALIAS eng_vulkan_headers)
+    target_include_directories(
+        eng_vulkan_headers INTERFACE "${VulkanHeaders_SOURCE_DIR}/include")
+
+    find_package(Vulkan 1.3 REQUIRED)
+
+    CPMAddPackage(
+        NAME vk-bootstrap
+        GITHUB_REPOSITORY charles-lunarg/vk-bootstrap
+        GIT_TAG v1.4.357
+        OPTIONS "VK_BOOTSTRAP_TEST OFF" "VK_BOOTSTRAP_INSTALL OFF"
+    )
+    CPMAddPackage(
+        NAME VulkanMemoryAllocator
+        GITHUB_REPOSITORY GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+        GIT_TAG v3.4.0
+        DOWNLOAD_ONLY YES
+    )
+    add_library(eng_vma INTERFACE)
+    target_include_directories(
+        eng_vma INTERFACE "${VulkanMemoryAllocator_SOURCE_DIR}/include")
+endif()
+
 # --- glm ---------------------------------------------------------------------
 cpmaddpackage(NAME glm GITHUB_REPOSITORY g-truc/glm GIT_TAG 1.0.1)
 
@@ -178,10 +214,12 @@ target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 
 # --- OGRE 14 (renderer, built from source) -----------------------------------
 # The single heavy dependency. First configure fetches + builds OGRE and its
-# bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. We build
+# bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. Upstream
+# also bootstraps Bullet unconditionally, so the patch below removes that unused
+# download/build; this project uses Jolt and keeps OgreBullet disabled. We build
 # ONLY what the engine loads at runtime: GL3Plus RS, ParticleFX, STBI codec,
 # and the imgui-enabled Overlay. Everything else (samples, tools, other RS,
-# RTSS, terrain/paging/bullet/assimp) is off to keep the tree lean.
+# RTSS, terrain/paging/assimp) is off to keep the tree lean.
 CPMAddPackage(
     NAME OGRE
     GITHUB_REPOSITORY OGRECave/ogre
@@ -195,6 +233,7 @@ CPMAddPackage(
     PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-imgui-overlay-fresh-buffer.patch"
             "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-stbi-alloc-mismatch.patch"
             "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-cmake16-macrolog.patch"
+            "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-no-unused-bullet.patch"
     OPTIONS
         "OGRE_BUILD_DEPENDENCIES ON"
         "OGRE_STATIC OFF"

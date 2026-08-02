@@ -21,6 +21,11 @@ struct RecordingBackend : SceneBackend {
     uint32_t nextNode = 1;
     uint32_t nextLight = 1;
     int creates = 0, destroys = 0, meshes = 0, lights = 0;
+    uint32_t nextParticles = 1;
+    int particleAttaches = 0, particleDetaches = 0;
+    std::string particleEffect;
+    glm::vec3 particleOffset{0.0f};
+    ParticleSpawnOptions particleOptions;
     std::vector<glm::vec3> positions;
 
     NodeHandle createNode(NodeHandle, glm::vec3, const std::string&) override {
@@ -52,6 +57,16 @@ struct RecordingBackend : SceneBackend {
         ++lensPushes;
         lastFov = fov;
     }
+    ParticlesHandle attachParticles(NodeHandle, const std::string& effect,
+                                    glm::vec3 offset,
+                                    const ParticleSpawnOptions& options) override {
+        ++particleAttaches;
+        particleEffect = effect;
+        particleOffset = offset;
+        particleOptions = options;
+        return ParticlesHandle{nextParticles++};
+    }
+    void detachParticles(ParticlesHandle) override { ++particleDetaches; }
 };
 
 int main() {
@@ -262,6 +277,53 @@ int main() {
         sync8.sync();
         require(b8.lastFov == 90.0f,
                 "deactivating it hands the shot back, without deleting it");
+    }
+
+    // --- particle authored state reaches and refreshes the backend ---------
+    {
+        World particles;
+        RecordingBackend bp;
+        SceneSync syncParticles(particles, bp);
+        const entt::entity dust = particles.create("dust");
+        ParticleEmitter emitter;
+        emitter.effect = "treasure_dust";
+        emitter.offset = {1.0f, 2.0f, 3.0f};
+        emitter.scale = 2.5f;
+        particles.registry().emplace<ParticleEmitter>(dust, emitter);
+
+        syncParticles.sync();
+        require(bp.particleAttaches == 1,
+                "a particle-only entity materialises and attaches");
+        require(bp.particleEffect == "treasure_dust" &&
+                    bp.particleOffset == glm::vec3(1.0f, 2.0f, 3.0f),
+                "effect and local offset reach the backend");
+        require(bp.particleOptions.sizeScale == 2.5f,
+                "authored particle size scale reaches the spawn options");
+        syncParticles.sync();
+        require(bp.particleAttaches == 1 && bp.particleDetaches == 0,
+                "unchanged particles are not restarted each frame");
+
+        particles.registry().get<ParticleEmitter>(dust).scale = 0.5f;
+        syncParticles.sync();
+        require(bp.particleAttaches == 2 && bp.particleDetaches == 1 &&
+                    bp.particleOptions.sizeScale == 0.5f,
+                "editing scale restarts once with the new options");
+
+        particles.registry().get<ParticleEmitter>(dust).playing = false;
+        syncParticles.sync();
+        require(bp.particleAttaches == 2 && bp.particleDetaches == 2,
+                "disabling autostart detaches the live emitter");
+
+        particles.registry().get<ParticleEmitter>(dust).playing = true;
+        syncParticles.sync();
+        require(bp.particleAttaches == 3,
+                "re-enabling autostart attaches it again");
+        syncParticles.clear();
+        require(!particles.registry().all_of<ParticlesRef>(dust),
+                "clearing a renderer view forgets its particle handle");
+        syncParticles.sync();
+        require(bp.particleAttaches == 4,
+                "reattaching a renderer view starts authored particles again");
     }
 
     std::cout << "SceneSyncTests OK\n";

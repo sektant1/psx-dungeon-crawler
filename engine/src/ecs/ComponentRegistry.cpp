@@ -252,7 +252,7 @@ template <> FieldSpan fieldsOf<ecs::ParticleEmitter>()
         ENG_FIELD(ecs::ParticleEmitter, effect, FieldType::String),
         ENG_FIELD(ecs::ParticleEmitter, offset, FieldType::Vec3),
         ENG_FIELD(ecs::ParticleEmitter, playing, FieldType::Bool),
-        ENG_FIELD_RANGE(ecs::ParticleEmitter, scale, FieldType::Float, 0.05f, 8.0f),
+        ENG_FIELD_RANGE(ecs::ParticleEmitter, scale, FieldType::Float, 0.01f, 16.0f),
     };
     return {f, int(std::size(f))};
 }

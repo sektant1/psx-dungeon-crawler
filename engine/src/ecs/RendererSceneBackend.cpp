@@ -60,14 +60,15 @@ void RendererSceneBackend::setCameraLens(float fovDegrees, float nearClip,
     mR.setCameraClip(nearClip, farClip);
 }
 ParticlesHandle RendererSceneBackend::attachParticles(NodeHandle n,
-                                                      const std::string& effect,
-                                                      glm::vec3 localOffset)
+                                                       const std::string& effect,
+                                                       glm::vec3 localOffset,
+                                                       const ParticleSpawnOptions& options)
 {
     // By name, not by id: the component stores what the author typed, and an
     // effect that is not in the library yet must not be an error here -- the
     // renderer already returns an invalid handle for an unknown name, which
     // SceneSync treats as "not attached yet" and retries next frame.
-    return mR.spawnParticles(effect, n, localOffset);
+    return mR.spawnParticles(effect, n, localOffset, options);
 }
 void RendererSceneBackend::detachParticles(ParticlesHandle h)
 {

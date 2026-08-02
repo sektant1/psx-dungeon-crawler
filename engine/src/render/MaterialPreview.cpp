@@ -46,25 +46,6 @@ constexpr float kThumbQuadSize = 1.0f;
 constexpr glm::vec3 kThumbOrigin{0.0f, -1000.0f, 0.0f};
 constexpr glm::vec3 kThumbCameraOffset{0.0f, 0.28f, 1.5f};
 
-// Rotation taking direction `from` onto direction `to`, both assumed unit
-// length. Written out rather than pulled from glm's gtx extensions so this file
-// keeps to the same glm surface the rest of the editor uses.
-glm::quat rotationBetween(glm::vec3 from, glm::vec3 to)
-{
-    const float d = glm::dot(from, to);
-    if (d > 0.99999f)
-        return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-    if (d < -0.99999f) {
-        // Antiparallel: any axis perpendicular to `from` is a valid 180 turn.
-        glm::vec3 axis = glm::cross(glm::vec3(0, 0, 1), from);
-        if (glm::dot(axis, axis) < 1e-6f)
-            axis = glm::cross(glm::vec3(1, 0, 0), from);
-        return glm::angleAxis(3.14159265f, glm::normalize(axis));
-    }
-    const glm::vec3 axis = glm::cross(from, to);
-    return glm::normalize(glm::quat(1.0f + d, axis.x, axis.y, axis.z));
-}
-
 // Materials whose vertex program reads a per-instance stream. These cannot be
 // drawn on a plain mesh at all: particle.vert takes the world position, size,
 // colour and flipbook frame as vertex attributes the batch binds per instance
@@ -161,7 +142,19 @@ glm::quat facing(glm::vec3 subject, glm::vec3 eye)
     const float len = glm::length(dir);
     if (len < 1e-5f)
         return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-    return rotationBetween(glm::vec3(0, 1, 0), dir / len);
+    const glm::vec3 normal = dir / len;
+    // Matching only the normal leaves roll unconstrained. The shortest-arc
+    // quaternion then presents an icon as a diamond at the studio camera's
+    // three-quarter angle. Build the whole plane basis instead: local +Y faces
+    // the eye and local +Z remains screen-up.
+    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f) -
+                   normal * glm::dot(glm::vec3(0.0f, 1.0f, 0.0f), normal);
+    if (glm::dot(up, up) < 1e-6f)
+        up = glm::vec3(0.0f, 0.0f, 1.0f);
+    else
+        up = glm::normalize(up);
+    const glm::vec3 right = glm::normalize(glm::cross(normal, up));
+    return glm::normalize(glm::quat_cast(glm::mat3(right, normal, up)));
 }
 
 // The preview catalog is an *engine* asset, so the lookup is pack-qualified:
@@ -252,6 +245,27 @@ StagePreview StagePreviewCatalog::modeFor(const std::string& material) const
     for (const std::string& pattern : mQuadPatterns) {
         if (matches(pattern, material))
             return StagePreview::Quad;
+    }
+
+    // Names are not reliable metadata. Game/Spells/FireballImpact and
+    // Engine/Particles/SpriteAdditive use the same instanced shader but only
+    // one happens to match the hand-authored prefix list. Inspect the loaded
+    // program so newly added animated/instanced materials get a useful preview
+    // without another catalog edit.
+    Ogre::MaterialPtr mat =
+        Ogre::MaterialManager::getSingleton().getByName(material);
+    if (mat && mat->getTechnique(0) && mat->getTechnique(0)->getPass(0)) {
+        const Ogre::Pass* pass = mat->getTechnique(0)->getPass(0);
+        if (pass->hasVertexProgram()) {
+            const std::string& vs = pass->getVertexProgramName();
+            const auto starts = [&vs](const char* prefix) {
+                return vs.rfind(prefix, 0) == 0;
+            };
+            if (starts("Particle") || starts("Particles/") ||
+                starts("Sprite/") || starts("Decals/") ||
+                starts("PixelVfx/"))
+                return StagePreview::Quad;
+        }
     }
     return StagePreview::Sphere;
 }
@@ -461,6 +475,14 @@ void MaterialPreview::spinThumbnail(Renderer& renderer, float radians)
     if (mThumbSubject.valid() && mThumbMode == StagePreview::Sphere)
         renderer.setOrientation(mThumbSubject,
                                 glm::angleAxis(radians, glm::vec3(0, 1, 0)));
+}
+
+void MaterialPreview::setThumbnailVisible(Renderer& renderer, bool visible)
+{
+    if (mThumbSubject.valid())
+        renderer.setNodeVisible(mThumbSubject, visible);
+    for (const NodeHandle node : mThumbLightNodes)
+        renderer.setNodeVisible(node, visible);
 }
 
 void MaterialPreview::applyEnvironment(Renderer& renderer) const

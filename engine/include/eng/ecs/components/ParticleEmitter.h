@@ -15,8 +15,8 @@ namespace eng::ecs {
 struct ParticleEmitter {
     std::string effect;     // library name; empty plays nothing
     glm::vec3 offset{0.0f}; // local offset from the entity's node
-    bool playing = true;    // false attaches nothing until it is set
-    float scale = 1.0f;
+    bool playing = true;    // autostart when the scene materialises
+    float scale = 1.0f;     // particle billboard size multiplier
 };
 
 } // namespace eng::ecs

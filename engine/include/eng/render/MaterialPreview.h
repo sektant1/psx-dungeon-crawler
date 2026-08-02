@@ -125,6 +125,10 @@ public:
     void buildThumbnail(Renderer& renderer, int size);
     void setThumbnailMaterial(Renderer& renderer, const std::string& material);
     const std::string& thumbnailMaterial() const { return mThumbMaterial; }
+    StagePreview thumbnailPreviewMode() const { return mThumbMode; }
+    // The thumbnail target is shared by editor asset tabs. Particles hide the
+    // material subject and draw a thumbnail-only emitter into the same square.
+    void setThumbnailVisible(Renderer& renderer, bool visible);
     void spinThumbnail(Renderer& renderer, float radians);
     float thumbnailSpin() const { return mThumbSpin; }
     bool thumbnailBuilt() const { return mThumbSubject.valid(); }

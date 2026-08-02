@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="PSX Retro Game Engine" width="360">
+<img src="assets/logo.png" alt="Vulkan Retro 3D Engine" width="800">
 
-# PSX Retro Game Engine
+# Vulkan Retro 3D Engine
 
-**First-person PSX-style dungeon crawler. Plus C++20 engine written to run it.**
+**Low resolution. Full control.**
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
-[![OGRE 14](https://img.shields.io/badge/OGRE-14-2f6f4f)](https://www.ogre3d.org/)
+[![Vulkan 1.3](https://img.shields.io/badge/Vulkan-1.3-A41E22?logo=vulkan&logoColor=white)](https://www.vulkan.org/)
 [![Jolt Physics](https://img.shields.io/badge/physics-Jolt-8a4fbe)](https://github.com/jrouwe/JoltPhysics)
 [![EnTT](https://img.shields.io/badge/ECS-EnTT-9a3f3f)](https://github.com/skypjack/entt)
 [![CMake](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
@@ -15,128 +15,108 @@
 
 </div>
 
-## Samples
+## What It Is
 
-<p align="center"><img src="docs/media/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
+Vulkan Retro 3D Engine is a C++20 game engine for low-resolution 3D games.
 
-<p align="center"><img src="assets/preview.gif" alt="Portal room running in game" width="900"></p>
+Vulkan 1.3 drives the renderer. The engine owns the frame, the scene pipeline, physics integration, content tools and runtime. Retro rendering is not a filter bolted onto somebody else's engine.
 
-<p align="center"><img src="docs/media/engine-demo.gif" alt="Default engine demo running" width="900"></p>
+PS1 is the main reference, not a hardware compatibility target. Render profiles can push toward N64, PS2, GameCube, late-1990s PC or a cleaner modern low-resolution style.
 
-<p align="center"><img src="docs/media/engine-demo-debug-ui.gif" alt="Engine demo running with Debug UI" width="900"></p>
+The goal is not to compete with general-purpose engines by feature count. The goal is to make this kind of game properly, keep the machinery visible and make every frame explainable in RenderDoc.
+
+## Core
+
+- Vulkan 1.3 renderer and explicit RHI
+- Low-resolution internal rendering
+- Vertex snapping and affine-style texture warping
+- Dithering, color quantization, fog and palette control
+- EnTT scene and gameplay layer
+- Jolt physics
+- SDL2 platform and input layer
+- Fixed-step simulation
+- Seeded generation and reproducible captures
+- Scene editor, material tools and immediate playtesting
+- Shared scene cooker for editor and runtime
+- Debug UI, profiling and RenderDoc capture support
+
+This is active engine development, not a stable SDK. APIs and content formats can change.
+
+## Footage
+
+<p align="center"><img src="assets/preview.gif" alt="Portal room running in the engine" width="900"></p>
+
+<p align="center"><img src="docs/media/engine-demo.gif" alt="Engine rendering demo" width="900"></p>
+
+<p align="center"><img src="docs/media/engine-demo-debug-ui.gif" alt="Engine debug UI" width="900"></p>
 
 <p align="center"><img src="docs/media/scene-editor.gif" alt="Scene editor" width="900"></p>
 
-## Quick start
+<p align="center"><img src="docs/media/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
+
+## Build
 
 ```sh
-make deps      # toolchain + SDL2 + glm + OGRE, first build is slow
-make run       # build and play
-make help      # full target and option reference
+make deps
+make run
 ```
 
-## Targets
+The first build compiles the dependencies. It will take longer than later builds.
 
 ```sh
-make run                 # the game
-make editor SCENE=x.scn  # placement editor, F5 to playtest
-                         #   entities & components: docs/scene-editor-entities.md
-make cook SCENE=x.scn    # .scn -> .map, same cooker CI uses
-make scene SCENE=x.scn   # cook and play it; a scene with a camera plays as a
-                         #   shot: docs/authoring-shots.md
-make demo                # shader sample, see docs/psx-demo.md
-make sim                 # headless combat/physics harness
-make test                # ctest suite
+make editor SCENE=path/to/scene.scn  # edit, then press F5 to playtest
+make scene SCENE=path/to/scene.scn   # cook and run a scene
+make prefab-viewer                   # inspect a model
+make demo                            # run the renderer demo
+make test                            # run the test suite
+make help                            # show every target and option
 ```
 
-## Command line
+Choose a render profile:
 
 ```sh
-./game level.map                    # play a cooked map
-./game --scene portal               # portal showcase pose, sim frozen
-./game --render-preset ps1          # era:   ps1 ps2 gamecube n64
-                                    # style: pixel-3d modern-ps1 dungeon
-                                    # mood:  psx-horror fire-dimension poison-swamp
-./game --record clip.gif --record-frames 60 --record-fps 20 \
-       --record-start 120 --record-width 480
+make run PRESET=ps1
+make run PRESET=n64
+make run PRESET=pixel-3d
+make run PRESET=modern-ps1
 ```
 
-- `--record` also takes `--record-loops`, `--record-frame-dir`,
-  `--record-keep-frames`. Needs `ffmpeg`.
-- Recording pins the frame delta to `1/fps`. Clip is reproducible.
-- Preset precedence: `--render-preset` > `PSX_RENDER_PRESET` > `dungeon`.
-- What each profile emulates, and how to add one: [`docs/render-presets.md`](docs/render-presets.md).
+The complete profile reference is in [`docs/render-presets.md`](docs/render-presets.md).
 
-## Environment
+## Content Pipeline
 
-| Variable | What it does | `make` |
-|---|---|---|
-| `PSX_GEN_SEED` | world seed | `SEED=` |
-| `PSX_RENDER_PRESET` | starting render preset | `PRESET=` |
-| `PSX_SHOWROOM_MAP` | override the depth-zero showroom TOML | `SHOWROOM=` |
-| `PSX_SCREENSHOT` / `PSX_SCREENSHOT_FRAME` | write a PNG at frame N, exit | `SHOT=` / `FRAME=` |
-| `PSX_BENCH_FRAMES` | frame-time percentiles, exit | `BENCH=` |
-| `PSX_FIXED_DT` | fixed frame delta, no capture | `FIXED_DT=` |
-| `PSX_SHOW_COLLIDERS` / `PSX_WIREFRAME` | debug overlays | `COLLIDERS=` / `WIREFRAME=` |
-| `PSX_PROFILE` | per-phase frame timings | `PROFILE=` |
-| `PSX_GEN_DUMP=<seed>` | print that seed's grid, exit | |
-| `PSX_DEBUG_UI` / `PSX_FULLSCREEN` | tuning panel open / fullscreen | |
-| `PSX_CONSOLE` | dev console open on frame 1 | |
-| `PSX_IMGUI_THEME` | imgui theme id (`dougbinks_dark`, `one_dark`, `dark`, `light`, `classic`) | |
+```text
+.scn source
+    |
+    | scene cooker
+    v
+.map runtime data
+    |
+    v
+game
+```
 
-## Keys
+`.scn` files are authored and committed. `.map` files are derived output. The editor and command-line tools use the same cooker.
 
-| Key | Action |
+## Project Layout
+
+| Path | Contents |
 |---|---|
-| `F1` `F2` `F3` `F4` `F5` | tuning panel, wireframe, colliders, frame times, playtest |
-| `` ` `` | dev console (log + commands) |
-| `WASD` `Space` `Shift` `Ctrl` `C` | move, jump, sprint, crouch, slide |
-| `E` | interact |
-| `Mouse 1` | fire selected magical weapon |
-| `1` `2` `3` `X` | select weapon, or cycle weapon |
-| `B` `V` `G` | dodge, deflect, kick |
-| | rebind in `assets/config/game.toml` |
-
-## Recipes
-
-```sh
-# deterministic capture, same pixels run to run
-make screenshot SHOT=/tmp/shot.png FRAME=200
-
-# reproduce a dungeon
-PSX_GEN_DUMP=42 ./game && make run SEED=42
-
-# iterate a layout without rebuilding
-make run SHOWROOM=/tmp/showroom.toml
-
-# frame cost, first 60 frames dropped as warm-up
-make bench BENCH=300
-
-# GPU and native debugging, APP=game|scene_editor|psx_demo
-make renderdoc APP=game FRAME=200
-make gdb APP=game BATCH=1
-make perf APP=game BENCH=600
-```
-
-See [`docs/debugging-renderdoc.md`](docs/debugging-renderdoc.md).
-
-## Content
-
-```
-   .scn  (JSON, authored, committed)
-     |
-     |   scene_cook  ->  the ONE cooker; editor calls same function
-     v
-   .map  (binary, derived, never edited by hand)
-     |
-     v
-   game <level>.map
-```
+| [`engine/`](engine/) | Core, platform, rendering, physics and scene systems |
+| [`editor/`](editor/) | Scene editor and content tools |
+| [`game/`](game/) | Runtime testbed and engine integration |
+| [`assets/`](assets/) | Scenes, shaders, materials and configuration |
+| [`docs/`](docs/) | Architecture, renderer and authoring docs |
 
 ## Rules
 
-1. Third-party libraries never leak. Game code includes `eng/*.h` and GLM.
-2. EnTT registry is truth. Renderer is a view.
-3. Content is TOML and components, not hardcoded.
-4. Fixed-step sim, pinnable RNG, reproducible captures.
-5. The image is frozen. `make visual-test` proves it.
+1. Vulkan 1.3 owns rendering.
+2. Third-party APIs stay behind engine boundaries.
+3. The EnTT registry is scene truth. The renderer is a view.
+4. Simulation uses a fixed step. Randomness is seedable.
+5. Captures are reproducible. Visual changes are testable.
+6. Debug tools ship early. Black boxes do not.
+
+## License
+
+Released under the [GNU GPL v3](LICENSE).

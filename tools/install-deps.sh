@@ -1,18 +1,11 @@
 #!/bin/sh
-# Installs everything needed to build the project, on any major distro:
-#   toolchain (gcc/cmake/make/git/pkg-config), SDL2, glm, and OGRE >= 14
-#   (with the Overlay component the debug UI needs).
+# Installs the system toolchain and platform headers needed to configure the
+# project. CMake/CPM fetches pinned source dependencies, including the temporary
+# OGRE renderer and Jolt physics; this script must not install a second OGRE or
+# pull OGRE's unused bundled Bullet dependency.
 #
-# OGRE: the distro package is used when it exists at version >= 14
-# (Arch, recent Fedora); otherwise OGRE is built from source and installed
-# to /usr/local. Override the tag with OGRE_VERSION=vX.Y.Z.
-#
-# Usage: make deps   (or ./scripts/install-deps.sh)
+# Usage: make deps   (or ./tools/install-deps.sh)
 set -eu
-
-OGRE_VERSION="${OGRE_VERSION:-v14.5.2}"
-OGRE_BUILD_DIR="${OGRE_BUILD_DIR:-/tmp/ogre-src-build}"
-JOBS="${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 
 if [ "$(id -u)" = 0 ]; then
     SUDO=""
@@ -37,8 +30,8 @@ fi
 echo "==> package manager: $PM"
 
 # ------------------------------------------------- base deps (per distro)
-# Includes the X11/GL/freetype dev headers an OGRE source build needs, so
-# the fallback path below works everywhere. ninja/ccache/mold are build-speed
+# Includes the X11/GL/freetype headers the current OGRE path needs until the RHI
+# renderer replaces it. ninja/ccache/mold are build-speed
 # tools the CMake configure step picks up automatically when present: ninja for
 # scheduling, ccache for repeat compiles, mold for link time.
 case "$PM" in
@@ -78,60 +71,4 @@ brew)
     ;;
 esac
 
-# --------------------------------------------------------- OGRE >= 14 check
-have_ogre() {
-    pkg-config --atleast-version=14 OGRE 2>/dev/null && return 0
-    # Some installs ship CMake config but no .pc file; probe with CMake.
-    tmp=$(mktemp -d)
-    trap 'rm -rf "$tmp"' EXIT
-    cat > "$tmp/CMakeLists.txt" <<'EOF'
-cmake_minimum_required(VERSION 3.16)
-project(probe NONE)
-find_package(OGRE 14 REQUIRED)
-EOF
-    cmake -S "$tmp" -B "$tmp/b" >/dev/null 2>&1
-}
-
-if have_ogre; then
-    echo "==> OGRE >= 14 already installed"
-    exit 0
-fi
-
-# Try the distro package first where a >= 14 build is known to exist.
-case "$PM" in
-pacman) $SUDO pacman -S --needed --noconfirm ogre || true ;;
-dnf)    $SUDO dnf install -y ogre-devel || true ;;
-esac
-
-if have_ogre; then
-    echo "==> OGRE >= 14 installed from distro package"
-    exit 0
-fi
-
-# ------------------------------------------------- OGRE from source fallback
-echo "==> no OGRE >= 14 package; building $OGRE_VERSION from source"
-if [ ! -d "$OGRE_BUILD_DIR/.git" ]; then
-    git clone --depth 1 --branch "$OGRE_VERSION" \
-        https://github.com/OGRECave/ogre.git "$OGRE_BUILD_DIR"
-fi
-cmake -S "$OGRE_BUILD_DIR" -B "$OGRE_BUILD_DIR/build" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DOGRE_BUILD_RENDERSYSTEM_GL3PLUS=ON \
-    -DOGRE_BUILD_COMPONENT_OVERLAY=ON \
-    -DOGRE_BUILD_COMPONENT_OVERLAY_IMGUI=ON \
-    -DOGRE_BUILD_COMPONENT_BITES=OFF \
-    -DOGRE_BUILD_SAMPLES=OFF \
-    -DOGRE_BUILD_TOOLS=OFF \
-    -DOGRE_INSTALL_SAMPLES=OFF \
-    -DOGRE_BUILD_DEPENDENCIES=ON
-cmake --build "$OGRE_BUILD_DIR/build" -j"$JOBS"
-$SUDO cmake --install "$OGRE_BUILD_DIR/build"
-# Refresh the dynamic linker cache so libOgre*.so in /usr/local resolve.
-command -v ldconfig >/dev/null 2>&1 && $SUDO ldconfig || true
-
-if have_ogre; then
-    echo "==> OGRE $OGRE_VERSION built and installed"
-else
-    echo "error: OGRE install finished but find_package(OGRE 14) still fails" >&2
-    exit 1
-fi
+echo "==> system prerequisites installed; CMake will fetch pinned dependencies"

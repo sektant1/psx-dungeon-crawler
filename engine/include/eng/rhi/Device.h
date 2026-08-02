@@ -22,11 +22,15 @@ public:
     virtual void setViewport(const Viewport&) = 0;
     virtual void setScissor(const Rect&) = 0;
 
-    virtual void bindVertexBuffer(uint32_t binding, BufferHandle, uint64_t offset = 0) = 0;
-    // 32-bit indices; the engine's meshes exceed 65k vertices in batched form.
-    virtual void bindIndexBuffer(BufferHandle, uint64_t offset = 0) = 0;
-    virtual void bindUniformBuffer(uint32_t slot, BufferHandle, uint64_t offset = 0,
-                                   uint64_t size = 0) = 0;
+    virtual void bindVertexBuffer(uint32_t binding, BufferHandle,
+                                  uint64_t offset = 0) = 0;
+    virtual void bindIndexBuffer(BufferHandle, uint64_t offset = 0,
+                                 IndexType type = IndexType::UInt32) = 0;
+    // Fixed descriptor ABI: uniform slot N is set 0/binding N in Vulkan;
+    // texture slot N is set 1/binding N. Other backends expose the same slots
+    // without exposing backend-specific descriptor types.
+    virtual void bindUniformBuffer(uint32_t slot, BufferHandle,
+                                   uint64_t offset = 0, uint64_t size = 0) = 0;
     virtual void bindTexture(uint32_t slot, TextureHandle, SamplerHandle) = 0;
     // Small per-draw constants. Backends that lack push constants emulate with
     // a ring-buffered uniform block; keep this well under 128 bytes.
@@ -77,15 +81,21 @@ public:
     virtual BufferHandle createBuffer(const BufferDesc&) = 0;
     virtual void destroyBuffer(BufferHandle) = 0;
     // Writes `size` bytes at `offset`. For BufferUsage::Dynamic this is the
-    // per-frame update path and must not stall; for static buffers a backend
-    // may stage internally.
+    // per-frame update path and must not stall. Static-buffer writes are
+    // blocking and valid only outside beginFrame/endFrame.
     virtual void updateBuffer(BufferHandle, const void* data, uint64_t size,
                               uint64_t offset = 0) = 0;
 
     virtual TextureHandle createTexture(const TextureDesc&) = 0;
     virtual void destroyTexture(TextureHandle) = 0;
+    // Texture writes are blocking and valid only outside beginFrame/endFrame.
     virtual void updateTexture(TextureHandle, const void* data, uint64_t size,
                                uint32_t mipLevel = 0) = 0;
+    // Blocking, tightly packed readback for textures created with Readback.
+    // Valid only outside beginFrame/endFrame; swapchain images are not handles
+    // and cannot be read through this method.
+    virtual void readTexture(TextureHandle, void* destination, uint64_t size,
+                             uint32_t mipLevel = 0) = 0;
 
     virtual SamplerHandle createSampler(const SamplerDesc&) = 0;
     virtual void destroySampler(SamplerHandle) = 0;

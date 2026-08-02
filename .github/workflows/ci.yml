@@ -68,3 +68,49 @@ jobs:
           name: screenshot
           path: /tmp/frame.png
           if-no-files-found: warn
+
+  vulkan-rhi:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build ccache mold \
+            git pkg-config libsdl2-dev libglm-dev libgl1-mesa-dev \
+            libfreetype-dev libx11-dev libxrandr-dev zlib1g-dev libpugixml-dev \
+            libvulkan-dev mesa-vulkan-drivers vulkan-validationlayers \
+            glslang-tools spirv-tools xvfb
+
+      - name: Cache dependency sources
+        uses: actions/cache@v4
+        with:
+          path: .cache/cpm
+          key: cpm-vulkan-${{ hashFiles('cmake/Dependencies.cmake') }}
+
+      - name: Cache compiler output
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-vulkan-${{ github.sha }}
+          restore-keys: ccache-vulkan-
+
+      - name: Configure Vulkan RHI
+        run: |
+          cmake -B build-vulkan -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENG_RHI_VULKAN=ON \
+            -DBUILD_TESTING=ON
+
+      - name: Build Vulkan RHI tests
+        run: |
+          cmake --build build-vulkan -j"$(nproc)" \
+            --target rhi_contract_tests rhi_vulkan_smoke
+
+      - name: Test Vulkan RHI with lavapipe
+        run: |
+          xvfb-run -a env \
+            VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
+            ctest --test-dir build-vulkan --output-on-failure \
+              -R '^(rhi_contract|rhi_vulkan_smoke)$'

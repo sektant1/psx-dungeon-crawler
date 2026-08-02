@@ -38,6 +38,10 @@ void SceneSync::clear()
     }
     mTracked.clear();
     mPushThisFrame.clear();
+    // Node destruction reclaims renderer-side particle instances. The applied
+    // handles must be forgotten too or a later renderer attachment sees a
+    // numerically valid stale handle and never starts the emitter again.
+    reg.clear<ParticlesRef>();
     // The shot this world was driving is gone with its nodes. Forgetting it
     // here is what makes the next sync() re-attach and re-push rather than
     // compare against an entity id from a registry that no longer exists.
@@ -193,13 +197,22 @@ void SceneSync::sync()
         const ParticleEmitter& em = reg.get<ParticleEmitter>(e);
         ParticlesRef& ref = reg.get_or_emplace<ParticlesRef>(e);
         const bool wants = em.playing && !em.effect.empty();
-        if (wants && !ref.handle.valid()) {
-            ref.handle = mBackend.attachParticles(reg.get<NodeRef>(e).handle,
-                                                  em.effect, em.offset);
-        } else if (!wants && ref.handle.valid()) {
+        const bool changed = ref.effect != em.effect || ref.offset != em.offset ||
+                             ref.scale != em.scale;
+        if (ref.handle.valid() && (!wants || changed)) {
             mBackend.detachParticles(ref.handle);
             ref.handle = {};
         }
+        if (wants && !ref.handle.valid()) {
+            ParticleSpawnOptions options;
+            options.sizeScale = em.scale;
+            ref.handle = mBackend.attachParticles(reg.get<NodeRef>(e).handle,
+                                                   em.effect, em.offset,
+                                                   options);
+        }
+        ref.effect = em.effect;
+        ref.offset = em.offset;
+        ref.scale = em.scale;
     }
     // An emitter removed from an entity that is still alive: the entity keeps
     // its node, so the destroyed-entity pass below would never see it.

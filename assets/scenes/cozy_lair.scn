@@ -15,7 +15,7 @@
           3.25
         ],
         "rotation_degrees": [
-          -10.0,
+          8.0,
           0.0,
           0.0
         ]
@@ -77,8 +77,13 @@
       "transform": {
         "position": [
           -0.010499999858438969,
-          0.4603999853134155,
+          0.5730000138282776,
           -1.2697999477386475
+        ],
+        "scale": [
+          1.600000023841858,
+          1.600000023841858,
+          1.600000023841858
         ]
       },
       "spin": {
@@ -98,13 +103,43 @@
       }
     },
     {
+      "id": "marker_0001",
+      "transform": {
+        "position": [
+          0.062199998646974564,
+          0.8246999979019165,
+          -0.7113000154495239
+        ]
+      },
+      "particles": {
+        "effect": "treasure_dust"
+      },
+      "marker": "group.name"
+    },
+    {
+      "id": "marker_0002",
+      "transform": {
+        "position": [
+          0.0,
+          2.0536000728607178,
+          0.0
+        ]
+      },
+      "marker": "group.name"
+    },
+    {
       "id": "pillar_broken_0001",
       "prefab": "kit.pillar_broken",
       "transform": {
         "position": [
-          -2.922100067138672,
+          -2.7818000316619873,
           0.0,
           -2.9161999225616455
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
         ]
       }
     },
@@ -197,6 +232,122 @@
       }
     },
     {
+      "id": "wall_0001",
+      "name": "wall_north_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0002",
+      "name": "wall_north_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -2.0,
+          8.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0003",
+      "name": "wall_west_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          8.0,
+          -2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0004",
+      "name": "wall_east_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          8.0,
+          -2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0005",
+      "name": "wall_east_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          4.0,
+          -2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0006",
+      "name": "wall_north_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          2.0,
+          8.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0007",
+      "name": "wall_west_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          4.0,
+          -2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0008",
+      "name": "wall_north_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -2.0,
+          4.0,
+          -4.0
+        ]
+      }
+    },
+    {
       "id": "wall_east_0001",
       "prefab": "kit.wall",
       "transform": {
@@ -245,7 +396,7 @@
       "transform": {
         "position": [
           2.0,
-          0.0,
+          4.0,
           -4.0
         ]
       }

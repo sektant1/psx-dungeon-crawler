@@ -23,7 +23,7 @@ Outliner (left)                Inspector (right)
 
 ## The tree
 
-`buildOutliner` (`game/editor/OutlinerTree.h`) groups the document:
+`buildOutliner` (`editor/include/editor/scene/OutlinerTree.h`) groups the document:
 
 - entities with a prefab group by **prefab id** -- forty `kit.wall` pieces that
   differ only by id become one row with a count;
@@ -73,7 +73,7 @@ Deleting, duplicating, copying and cutting all take descendants with them
 *duplicated* root rather than the original -- otherwise moving the copy would
 leave its candles behind on the first chandelier.
 
-The rows live in `game/editor/OutlinerPanel.cpp`, apart from the app, so
+The rows live in `editor/src/ui/OutlinerPanel.cpp`, apart from the app, so
 `editor_outliner_panel_tests` can drive ImGui headless and actually press them.
 That test exists because of a real bug: the panel queried `IsItemClicked()`
 *after* drawing the kind tag beside the row, and those queries answer for the
@@ -91,7 +91,7 @@ gizmo is being dragged.
 
 ## Placing: the brush
 
-The Place tool holds a **brush** (`ed::Brush`, `game/editor/EntityComponents.h`)
+The Place tool holds a **brush** (`ed::Brush`, `editor/include/editor/scene/EntityComponents.h`)
 -- either a kit piece or a gameplay kind, plus the quarter turn it will land at.
 
 That it can be either is the point. A light and a wall are the same gesture to
@@ -122,7 +122,7 @@ use the gizmo.
 ## Height comes from what you point at
 
 Placement resolves through `resolvePlacement`
-(`game/editor/BrushPlacement.h`), and the work plane is no longer the only
+(`editor/include/editor/scene/BrushPlacement.h`), and the work plane is no longer the only
 source of height -- it is the fallback for when the cursor is over nothing.
 
 ```
@@ -153,7 +153,7 @@ The ghost is **green on the work plane and amber on a surface**, with a stalk
 down to the plane when it is off it. The two land in different places and used
 to be indistinguishable until after the click.
 
-`raycastDocument` (`game/editor/DocumentRaycast.h`) is the same traversal
+`raycastDocument` (`editor/include/editor/scene/DocumentRaycast.h`) is the same traversal
 viewport picking uses, so a click and the thing a ghost would rest on can never
 disagree. A running stroke excludes its own pieces, so a row of floor tiles
 painted in one drag all land on the same surface instead of climbing the one
@@ -167,7 +167,7 @@ Shift makes the stroke subtract instead; erasing keeps the same shape, one
 target per slot, applied live and closed as a single undo entry.
 
 What keeps that from stacking a pile in one spot is the slot
-(`game/editor/PaintSlot.h`): a stroke remembers the slots it has filled and
+(`editor/include/editor/scene/PaintSlot.h`): a stroke remembers the slots it has filled and
 skips them. A grid piece's slot is its cell, edge and work plane. A free prop
 has no cell, so its slot is its **position, quantized** -- to the grid step when
 snapping is on, to `kFreePaintSpacing` (0.5 m) when it is off.
@@ -180,7 +180,7 @@ spot still gives two props.
 ### The ghost always has a place to be
 
 The piece under the cursor is drawn wherever the cursor points, always. The
-work-plane point comes from `workPlanePoint` (`game/editor/Picker.h`), which
+work-plane point comes from `workPlanePoint` (`editor/include/editor/scene/Picker.h`), which
 falls back to a point out along the ray when the ray misses the plane -- which
 is most of the time once the camera looks anywhere near the horizon. A ghost
 that blinks out whenever the view tips up is the most confusing thing a
@@ -188,7 +188,7 @@ placement tool can do.
 
 ### The grid follows the camera up
 
-`gridViewFor` (`game/editor/ViewportGrid.h`) coarsens the drawn work plane with
+`gridViewFor` (`editor/include/editor/viewport/ViewportGrid.h`) coarsens the drawn work plane with
 the camera's height above it, always by a power of two, so every line stays a
 line a piece could snap to. Framed on a whole dungeon two hundred metres up, the
 old fixed patch of sixteen cells was a postage stamp floating under the view.
@@ -338,7 +338,7 @@ Rows carry an **icon** for their kind rather than a padded word. The kind used
 to be seven characters before every name, which at the width this panel docks to
 was a quarter of the row spent saying something a shape says instantly.
 
-The icons are drawn with `ImDrawList` (`game/editor/EditorIcons.h`), not typed
+The icons are drawn with `ImDrawList` (`editor/include/editor/ui/EditorIcons.h`), not typed
 from a glyph font: a dozen shapes made of circles and polylines stay sharp at
 any size, tint per row, and add no asset the pipeline has to know about.
 
@@ -440,7 +440,7 @@ the author finds out by looking at the result. So:
 
 The third rule is what makes adjusting one candle two clicks rather than a
 modifier nobody remembers, and it is how Unity, Godot and Unreal all behave.
-The rule is `resolvePickTarget` in `game/editor/PickTarget.h` -- a pure function
+The rule is `resolvePickTarget` in `editor/include/editor/scene/PickTarget.h` -- a pure function
 with a test, because "which entity did that click mean" is not something a
 screenshot can check.
 
@@ -482,7 +482,7 @@ it at states and resolutions the window never produces:
 The scale is always an integer: the canvas is a bitmap font on a pixel grid, and
 a fractional scale is how a retro HUD gets soft edges and uneven letter spacing.
 
-The state → HUD-input mapping is `game/editor/UiStage.h`, pure and tested. The
+The state → HUD-input mapping is `editor/include/editor/ui/UiStage.h`, pure and tested. The
 interesting failures live in that gap (a resource that reads full when it is
 empty, a status count past the array) and none of them show in a screenshot.
 
@@ -640,7 +640,7 @@ starting point for a level.
 
 `tools/author_start_hall.py` re-derives it. Grid placement is arithmetic --
 cell centres, the half-thickness wall inset, the `y_offset` exceptions -- and
-that arithmetic lives in `game/content/GridMath.cpp`; the script mirrors it and
+that arithmetic lives in `editor/src/content/GridMath.cpp`; the script mirrors it and
 the cooker's validator is what proves the two still agree:
 
 ```sh
@@ -704,7 +704,7 @@ It is a `make` target rather than a ctest because it needs a GL context.
 
 ## The component table
 
-`game/editor/EntityComponents.h` is the single description of what a component
+`editor/include/editor/scene/EntityComponents.h` is the single description of what a component
 is. It is ImGui-free and covered by `editor_component_tests`:
 
 ```cpp
@@ -719,7 +719,7 @@ struct ComponentType {
 };
 ```
 
-The widgets live in `game/editor/ComponentInspector.cpp`, keyed by the same
+The widgets live in `editor/src/ui/ComponentInspector.cpp`, keyed by the same
 `id`. The split is deliberate: the half that answers "what does this entity
 have" stays testable headless, and the half that draws it stays out of the
 document.
@@ -779,7 +779,7 @@ Two entries, no panel changes.
 
 1. Add the field to `game::content::Entity` and to `SceneWriter` /
    `SceneSource` / `SceneCook`, the way every existing component does it.
-2. Add a `ComponentType` to the table in `game/editor/EntityComponents.cpp`:
+2. Add a `ComponentType` to the table in `editor/src/scene/EntityComponents.cpp`:
 
 ```cpp
 {"sound", "Sound Emitter", "loops a sound at this point",
@@ -788,7 +788,7 @@ Two entries, no panel changes.
  [](Entity& e) { e.sound.reset(); }, always},
 ```
 
-3. Add its widgets to `kDrawers` in `game/editor/ComponentInspector.cpp`:
+3. Add its widgets to `kDrawers` in `editor/src/ui/ComponentInspector.cpp`:
 
 ```cpp
 void drawSound(Entity& e, InspectorContext& c) { stringField("event", e.sound->event, c); }

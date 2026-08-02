@@ -10,6 +10,8 @@
 
 #include <eng/rhi/Device.h>
 
+#include <algorithm>
+#include <array>
 #include <cstdio>
 #include <vector>
 
@@ -33,7 +35,15 @@ static void exerciseDevice(Device& device, const char* name)
     // silently truncate the per-renderable light list.
     check(caps.maxSimultaneousLights >= 16,
           "backend reports fewer than the 16 light slots the PSX path binds");
-    check(caps.maxTextureSize >= 2048, "backend reports an unusably small texture limit");
+    check(caps.maxTextureSize >= 2048,
+          "backend reports an unusably small texture limit");
+    check(caps.maxUniformBufferBindings >= 1,
+          "backend reports no uniform-buffer bindings");
+    check(caps.maxTextureBindings >= 1, "backend reports no texture bindings");
+    check(caps.uniformBufferOffsetAlignment >= 1,
+          "backend reports an invalid uniform-buffer alignment");
+    check(caps.maxUniformBufferRange >= 16,
+          "backend reports an unusably small uniform-buffer range");
 
     // --- resource round-trip ---
     const std::vector<float> vertices(3 * 8, 0.0f);
@@ -44,14 +54,27 @@ static void exerciseDevice(Device& device, const char* name)
     vb.debugName = "contract.vertices";
     const BufferHandle vbuf = device.createBuffer(vb);
     check(vbuf.valid(), "createBuffer returned an invalid handle");
+    const std::array<uint16_t, 3> indices{0, 1, 2};
+    BufferDesc ib;
+    ib.size = sizeof(indices);
+    ib.usage = BufferUsage::Index;
+    ib.initialData = indices.data();
+    ib.debugName = "contract.indices";
+    const BufferHandle ibuf = device.createBuffer(ib);
+    check(ibuf.valid(), "createBuffer returned an invalid index handle");
 
     TextureDesc td;
     td.width = td.height = 32;
-    td.format = Format::RGBA8Unorm;
-    td.usage = TextureUsage::Sampled;
+    td.format = Format::BGRA8Srgb;
+    td.usage = TextureUsage::Sampled | TextureUsage::Readback;
     td.debugName = "contract.texture";
     const TextureHandle tex = device.createTexture(td);
     check(tex.valid(), "createTexture returned an invalid handle");
+    std::vector<uint8_t> readback(32u * 32u * 4u, 0xff);
+    device.readTexture(tex, readback.data(), readback.size());
+    check(std::all_of(readback.begin(), readback.end(),
+                      [](uint8_t byte) { return byte == 0; }),
+          "null-compatible readTexture was not deterministic");
 
     const SamplerHandle sampler = device.createSampler({});
     check(sampler.valid(), "createSampler returned an invalid handle");
@@ -79,13 +102,14 @@ static void exerciseDevice(Device& device, const char* name)
     // --- one frame, one pass, one draw ---
     if (device.beginFrame()) {
         RenderPassDesc pass;
-        pass.colour.push_back({});  // the swapchain image
+        pass.colour.push_back({}); // the swapchain image
         pass.debugName = "contract.pass";
         CommandList& cmd = device.beginPass(pass);
         cmd.pushDebugGroup("contract");
         cmd.bindPipeline(pipeline);
         cmd.setViewport({0.0f, 0.0f, 640.0f, 360.0f, 0.0f, 1.0f});
         cmd.bindVertexBuffer(0, vbuf);
+        cmd.bindIndexBuffer(ibuf, 0, IndexType::UInt16);
         cmd.bindTexture(0, tex, sampler);
         cmd.draw(3);
         cmd.popDebugGroup();
@@ -102,6 +126,7 @@ static void exerciseDevice(Device& device, const char* name)
     device.destroyShader(vs);
     device.destroySampler(sampler);
     device.destroyTexture(tex);
+    device.destroyBuffer(ibuf);
     device.destroyBuffer(vbuf);
 
     std::printf("  %s: contract sequence completed\n", name);
@@ -115,11 +140,13 @@ int main()
     desc.vsync = false;
 
     int created = 0;
-    for (BackendKind kind : {BackendKind::Null, BackendKind::OpenGL, BackendKind::Vulkan}) {
+    for (BackendKind kind :
+         {BackendKind::Null, BackendKind::OpenGL, BackendKind::Vulkan}) {
         const char* name = backendName(kind);
         std::unique_ptr<Device> device = createDevice(kind, desc);
         if (!device) {
-            std::printf("  %s: not available (skeleton or unsupported)\n", name);
+            std::printf("  %s: not available (skeleton or unsupported)\n",
+                        name);
             continue;
         }
         ++created;
@@ -130,7 +157,8 @@ int main()
     check(created >= 1, "no backend could be created, not even null");
 
     BackendKind parsed = BackendKind::Null;
-    check(backendKindFromName("vulkan", parsed) && parsed == BackendKind::Vulkan,
+    check(backendKindFromName("vulkan", parsed) &&
+              parsed == BackendKind::Vulkan,
           "backendKindFromName failed on a known name");
     check(!backendKindFromName("directx", parsed),
           "backendKindFromName accepted an unknown name");

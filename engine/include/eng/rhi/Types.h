@@ -39,6 +39,7 @@ enum class Format {
     RGBA8Unorm,
     RGBA8Srgb,
     BGRA8Unorm,
+    BGRA8Srgb,
     R8Unorm,
     RG16Float,
     RGBA16Float,
@@ -68,6 +69,7 @@ enum class TextureUsage : uint32_t {
     Sampled      = 1u << 0,
     RenderTarget = 1u << 1,
     DepthStencil = 1u << 2,
+    Readback = 1u << 3,
 };
 constexpr TextureUsage operator|(TextureUsage a, TextureUsage b)
 {
@@ -79,6 +81,7 @@ constexpr bool any(TextureUsage mask, TextureUsage bit)
 }
 
 enum class ShaderStage { Vertex, Fragment, Compute };
+enum class IndexType { UInt16, UInt32 };
 enum class PrimitiveTopology { TriangleList, TriangleStrip, LineList };
 enum class CullMode { None, Front, Back };
 enum class CompareOp { Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always };
@@ -204,6 +207,10 @@ struct DeviceCapabilities {
     uint32_t maxTextureSize = 0;
     uint32_t maxColourAttachments = 1;
     uint32_t maxSimultaneousLights = 0; // psx_lighting.glsl wants 16
+    uint32_t maxUniformBufferBindings = 0;
+    uint32_t maxTextureBindings = 0;
+    uint64_t uniformBufferOffsetAlignment = 1;
+    uint64_t maxUniformBufferRange = 0;
     bool supportsCompute = false;
     bool supportsAnisotropicFiltering = false;
     bool supportsSrgbFramebuffer = false;

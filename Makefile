@@ -161,7 +161,7 @@ build-app: configure
 # Detects pacman/apt/dnf/zypper/apk/brew; installs toolchain + SDL2 + glm,
 # then OGRE >= 14 (distro package where available, source build otherwise).
 deps:
-	./scripts/install-deps.sh
+	./tools/install-deps.sh
 
 # ---- run -------------------------------------------------------------------
 # `run` is the primary entry point; `game` is a back-compat alias.

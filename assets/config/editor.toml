@@ -6,7 +6,7 @@ vsync = true
 
 # Viewport navigation, TrenchBroom-style: hold the right mouse button to fly,
 # and the usual WASD + Q/E while it is held. These names are what
-# game/editor/EditorApp.cpp asks Input for.
+# editor/src/app/EditorApp.cpp asks Input for.
 [bindings]
 quit = "Escape"
 fly_forward = "W"
@@ -20,8 +20,11 @@ fly_fast = "Left Shift"
 # Tools and grid. Single letters, deliberately: the editor mutes them while a
 # text field has keyboard focus.
 tool_select = "Q"
-tool_place = "W"
-tool_room = "E"
+tool_place = "P"
+tool_room = "B"
+gizmo_move = "W"
+gizmo_rotate = "E"
+gizmo_scale = "R"
 grid_coarser = "["
 grid_finer = "]"
 toggle_snap = "G"
@@ -33,9 +36,6 @@ brush_rotate_ccw = ","
 level_up = "PageUp"
 level_down = "PageDown"
 level_reset = "Home"
-# Cycles the gizmo through translate -> rotate -> scale. Named for what it does:
-# it was called "rotate", which is one of the three things it is not.
-gizmo_cycle = "R"
 # Local vs world axes. Kit pieces are authored on quarter turns, so a wall at 90
 # degrees needs its own frame to nudge along.
 gizmo_space = "X"
