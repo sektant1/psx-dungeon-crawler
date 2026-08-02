@@ -54,6 +54,9 @@ This is active engine development, not a stable SDK. APIs and content formats ca
 
 <p align="center"><img src="docs/media/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
 
+<p align="center"><img src="docs/media/ac_vexian.gif" alt="Model viewer turntable" width="600"></p>
+
+
 ## Build
 
 ```sh
