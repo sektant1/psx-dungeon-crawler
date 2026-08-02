@@ -7,7 +7,11 @@
 
 #include "platform/InputImpl.h"
 #include "platform/Platform.h"
+#if defined(ENG_RENDERER_RHI)
+#include "render/rhi/RenderCore.h"
+#else
 #include "render/RenderCore.h"
+#endif
 #include "render/RenderPresets.h"
 
 #include <imgui.h>

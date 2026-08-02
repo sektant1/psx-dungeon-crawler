@@ -1025,3 +1025,27 @@ import_scale = 1.0
 size = [1.5560, 1.6600, 0.5750]
 
 # END editor import: mechademonlord
+
+# BEGIN editor import: ac_vixen
+[[piece]]
+id = "import_ac_vixen"
+role = "imported_model"
+mesh = "meshes/props/import_ac_vixen.obj"
+material = "Game/import_ac_vixen/part0"
+socket = "prop"
+import_scale = 1.0
+size = [6.2852, 8.1566, 4.4229]
+
+# END editor import: ac_vixen
+
+# BEGIN editor import: corsair
+[[piece]]
+id = "import_corsair"
+role = "imported_model"
+mesh = "meshes/props/import_corsair.obj"
+material = "Game/import_corsair/part0"
+socket = "prop"
+import_scale = 1.0
+size = [0.7283, 1.2947, 0.8954]
+
+# END editor import: corsair

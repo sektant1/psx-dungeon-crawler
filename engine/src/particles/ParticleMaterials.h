@@ -1,8 +1,9 @@
 #pragma once
+#include "ParticleTextureCatalog.h"
+
 #include <eng/particles/ParticleTypes.h>
 
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -31,14 +32,16 @@ public:
     // asset root's particles/ folder, which RenderCore has already registered
     // as an Ogre resource location, so the PNGs resolve by leaf name without
     // any extra plumbing. The path is a build-time define, never a literal.
-    static std::string defaultRoot();
+    static std::string defaultRoot() {
+        return ParticleTextureCatalog::defaultRoot();
+    }
 
     // Scans `root`/textures for *.png and parses every *.toml directly in
     // `root`. Safe to call before any effect loads. Materials themselves are
     // NOT created here: a pack can declare hundreds of strips, and paying an
     // Ogre material for every one of them at boot would be a startup cost for
     // content the level never spawns. They are built on first use instead.
-    void load(const std::string& root = defaultRoot());
+    void load(const std::string& root = ParticleTextureCatalog::defaultRoot());
 
     // Re-runs the scan against the root last passed to load(), picking up new
     // files and edited overrides. Materials already built are rebuilt in place
@@ -58,18 +61,20 @@ public:
     std::string materialFor(const std::string& stem);
 
     // Stable ordering (directory scan order is not), for editor listings.
-    const std::vector<ParticleTextureDesc>& all() const { return mDescs; }
+    const std::vector<ParticleTextureDesc>& all() const {
+        return mCatalog.all();
+    }
 
 private:
-    void scan();
     // Creates or refreshes the Ogre material for one texture and records it as
     // built. Idempotent.
     void build(const ParticleTextureDesc& desc);
+    // Rebuilds only what a previous scan had already materialised, so a
+    // several-hundred-entry pack stays off the boot path.
+    void rebuildBuilt();
 
-    std::string mRoot;
-    bool mLoaded = false;
-    std::vector<ParticleTextureDesc> mDescs;
-    std::unordered_map<std::string, size_t> mByStem;
+    // The scan/parse half, shared with the RHI backend.
+    ParticleTextureCatalog mCatalog;
     std::unordered_set<std::string> mBuilt;
 };
 

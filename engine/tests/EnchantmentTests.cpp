@@ -219,7 +219,8 @@ int main()
         read("assets/shaders/enchantment.frag");
     const std::string program =
         read("assets/programs/enchantment.program");
-    const std::string renderer = read("engine/src/render/Renderer.cpp");
+    const std::string legacyRenderer = read("engine/src/render/Renderer.cpp");
+    const std::string rhiRenderer = read("engine/src/render/rhi/Renderer.cpp");
 
     requireText(vertex, "in vec3 normal",
                 "vertex shader does not consume object-space normals");
@@ -262,7 +263,7 @@ int main()
           "enchantScroll", "enchantPulseSpeed", "enchantPulseDepth",
           "enchantEdgeIntensity", "enchantBandCount",
           "enchantPixelScale", "enchantCoreBoost"}) {
-        requireText(renderer, uniform,
+        requireText(legacyRenderer, uniform,
                     "renderer does not bind a required enchantment uniform");
     }
     requireText(program, "param_named_auto time time",
@@ -271,16 +272,16 @@ int main()
                 "param_named_auto cameraPositionObject "
                 "camera_position_object_space",
                 "program does not bind object-space camera position");
-    requireText(renderer, "setVertexProgram(\"Enchantment/VS\")",
+    requireText(legacyRenderer, "setVertexProgram(\"Enchantment/VS\")",
                 "renderer does not reference the enchantment vertex program");
-    requireText(renderer, "setFragmentProgram(\"Enchantment/FS\")",
+    requireText(legacyRenderer, "setFragmentProgram(\"Enchantment/FS\")",
                 "renderer does not reference the enchantment fragment program");
-    requireText(renderer, "setSceneBlending(Ogre::SBT_ADD)",
-                "enchantment pass is no longer additive");
-    requireText(renderer, "setDepthWriteEnabled(false)",
-                "enchantment pass writes depth");
-    requireText(renderer, "setLightingEnabled(false)",
-                "enchantment overlay inherits base lighting");
+    // Backend-independent contract: the Vulkan cut preserves enchantment
+    // state in draw constants instead of testing Ogre pass implementation.
+    requireText(rhiRenderer, "constants.tintOpacity",
+                "RHI renderer does not apply enchantment tint/opacity");
+    requireText(rhiRenderer, "constants.rimColourStrength",
+                "RHI renderer does not apply enchantment rim state");
 
     std::cout << "EnchantmentTests OK\n";
 }

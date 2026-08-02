@@ -232,8 +232,17 @@ PipelineHandle VulkanDevice::createPipeline(const PipelineDesc& desc)
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterization.polygonMode = VK_POLYGON_MODE_FILL;
     rasterization.cullMode = toVkCullMode(desc.cull);
-    // Negative-height viewports preserve GL orientation; this winding matches it.
-    rasterization.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    // VulkanCommandList::setViewport submits a negative-height viewport, the
+    // maintenance1 idiom that makes Vulkan rasterize with GL's orientation. It
+    // flips the image *and* the winding together, so GL's convention carries
+    // over unchanged and front faces stay counter-clockwise. Naming CLOCKWISE
+    // here inverted culling: the faces the camera should see were discarded and
+    // the ones facing away were drawn, which left interiors (dungeon ceilings)
+    // missing and lit surfaces black, because a back face's normal points away
+    // from the lights. Callers must still not flip clip-space Y -- that would
+    // cancel the viewport flip and reverse this again; the Vulkan-vs-GL texture
+    // V origin is corrected in the composite blits instead.
+    rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterization.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo multisample{};
     multisample.sType =

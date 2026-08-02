@@ -1,10 +1,12 @@
 #include <eng/render/MaterialPreview.h>
 
+#if !defined(ENG_RENDERER_RHI)
 #include <OgreMaterial.h>
 #include <OgreMaterialManager.h>
 #include <OgrePass.h>
 #include <OgreTechnique.h>
 #include <OgreTextureUnitState.h>
+#endif
 
 #include <eng/LightDesc.h>
 #include <eng/Log.h>
@@ -55,6 +57,10 @@ constexpr glm::vec3 kThumbCameraOffset{0.0f, 0.28f, 1.5f};
 // which was two of the three patterns it existed to serve.
 bool needsInstanceStream(const std::string& material)
 {
+#if defined(ENG_RENDERER_RHI)
+    (void)material;
+    return false;
+#else
     Ogre::MaterialPtr mat =
         Ogre::MaterialManager::getSingleton().getByName(material);
     if (!mat || !mat->getTechnique(0) || !mat->getTechnique(0)->getPass(0))
@@ -65,6 +71,7 @@ bool needsInstanceStream(const std::string& material)
     const std::string& vs = pass->getVertexProgramName();
     return vs == "Particle_VS" || vs == "Particles/SpriteVS" ||
            vs == "Particles/VoxelVS" || vs == "Decals/QuadVS";
+#endif
 }
 
 // A preview stand-in for one of those: the same texture and blend on the
@@ -74,6 +81,9 @@ bool needsInstanceStream(const std::string& material)
 // icon.
 std::string instancedPreviewMaterial(const std::string& material)
 {
+#if defined(ENG_RENDERER_RHI)
+    return material;
+#else
     auto& mm = Ogre::MaterialManager::getSingleton();
     const std::string name = "__Preview/Quad/" + material;
     if (mm.getByName(name))
@@ -117,6 +127,7 @@ std::string instancedPreviewMaterial(const std::string& material)
         carry("atlasFps", "spriteFps");
     }
     return name;
+#endif
 }
 
 // A plane primitive lies in XZ with its front face pointing +Y, so a quad that
@@ -252,6 +263,7 @@ StagePreview StagePreviewCatalog::modeFor(const std::string& material) const
     // one happens to match the hand-authored prefix list. Inspect the loaded
     // program so newly added animated/instanced materials get a useful preview
     // without another catalog edit.
+#if !defined(ENG_RENDERER_RHI)
     Ogre::MaterialPtr mat =
         Ogre::MaterialManager::getSingleton().getByName(material);
     if (mat && mat->getTechnique(0) && mat->getTechnique(0)->getPass(0)) {
@@ -267,6 +279,7 @@ StagePreview StagePreviewCatalog::modeFor(const std::string& material) const
                 return StagePreview::Quad;
         }
     }
+#endif
     return StagePreview::Sphere;
 }
 

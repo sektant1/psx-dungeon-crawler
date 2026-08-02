@@ -6,8 +6,8 @@
 
 namespace eng {
 
-// Internal SDL window wrapper. No SDL_WINDOW_OPENGL: Ogre GL3Plus creates
-// its own GL context against the raw native handle.
+// Internal SDL window wrapper. The selected renderer determines whether this
+// is an external native window for OGRE or an SDL Vulkan surface.
 class Platform
 {
 public:

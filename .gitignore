@@ -1,6 +1,7 @@
 # Build output
 build/
 build-cpm/
+build-rhi/
 build-debug/
 build-asan/
 build-vulkan*/

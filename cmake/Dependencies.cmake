@@ -69,22 +69,46 @@ CPMAddPackage(
     GIT_TAG v3.13.2
 )
 
+# --- stb image I/O -----------------------------------------------------------
+# Header-only PNG decoder/writer for the engine-owned renderer. This pin is
+# independent of OGRE's Codec_STBI and is available in an OGRE-free build.
+CPMAddPackage(
+    NAME stb
+    GITHUB_REPOSITORY nothings/stb
+    GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20
+    DOWNLOAD_ONLY YES
+)
+add_library(eng_stb INTERFACE)
+target_include_directories(eng_stb INTERFACE "${stb_SOURCE_DIR}")
+
 # --- SDL2 --------------------------------------------------------------------
 # Shared by default so we don't statically pull SDL's system backends into our
 # binaries; the build tree ships the .so next to the executables.
+set(_eng_sdl_options
+    "SDL2_DISABLE_INSTALL ON"
+    "SDL_TEST OFF"
+    "SDL_SHARED ON"
+    "SDL_STATIC OFF"
+    # SDL 2.30.11's pipewire backend does not compile against newer system
+    # PipeWire headers (pw_node_enum_params signature drift). We only need
+    # SDL for windowing/input; audio still negotiates ALSA/PulseAudio.
+    "SDL_PIPEWIRE OFF")
+if(ENG_RENDERER STREQUAL "RHI")
+    # RHI uses SDL only for events, a native Vulkan surface and drawable-size
+    # queries. These optional modules otherwise pull GL/EGL implementation
+    # sources into the platform library; KMSDRM and offscreen depend on EGL.
+    list(APPEND _eng_sdl_options
+         "SDL_RENDER OFF"
+         "SDL_OPENGL OFF"
+         "SDL_OPENGLES OFF"
+         "SDL_KMSDRM OFF"
+         "SDL_OFFSCREEN OFF")
+endif()
 CPMAddPackage(
     NAME SDL2
     GITHUB_REPOSITORY libsdl-org/SDL
     GIT_TAG release-2.30.11
-    OPTIONS
-        "SDL2_DISABLE_INSTALL ON"
-        "SDL_TEST OFF"
-        "SDL_SHARED ON"
-        "SDL_STATIC OFF"
-        # SDL 2.30.11's pipewire backend does not compile against newer system
-        # PipeWire headers (pw_node_enum_params signature drift). We only need
-        # SDL for windowing/input; audio still negotiates ALSA/PulseAudio.
-        "SDL_PIPEWIRE OFF"
+    OPTIONS ${_eng_sdl_options}
 )
 
 # --- Jolt Physics ------------------------------------------------------------
@@ -212,7 +236,7 @@ CPMAddPackage(
 add_library(eng_imguizmo INTERFACE)
 target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 
-# --- OGRE 14 (renderer, built from source) -----------------------------------
+# --- OGRE 14 (fallback renderer, built from source) --------------------------
 # The single heavy dependency. First configure fetches + builds OGRE and its
 # bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. Upstream
 # also bootstraps Bullet unconditionally, so the patch below removes that unused
@@ -220,6 +244,7 @@ target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 # ONLY what the engine loads at runtime: GL3Plus RS, ParticleFX, STBI codec,
 # and the imgui-enabled Overlay. Everything else (samples, tools, other RS,
 # RTSS, terrain/paging/assimp) is off to keep the tree lean.
+if(ENG_RENDERER STREQUAL "OGRE")
 CPMAddPackage(
     NAME OGRE
     GITHUB_REPOSITORY OGRECave/ogre
@@ -427,3 +452,4 @@ add_subdirectory("${OGRE_SOURCE_DIR}" "${OGRE_BINARY_DIR}" EXCLUDE_FROM_ALL)
 # their output directory (all land together) via a generator expression.
 set(ENG_OGRE_PLUGIN_DIR "$<TARGET_FILE_DIR:RenderSystem_GL3Plus>")
 set(ENG_OGRE_MEDIA_DIR "${OGRE_SOURCE_DIR}/Media")
+endif()

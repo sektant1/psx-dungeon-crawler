@@ -161,6 +161,12 @@ bool VulkanDevice::initializeContext()
     required13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     required13.dynamicRendering = VK_TRUE;
     required13.synchronization2 = VK_TRUE;
+    // glslang lowers `discard` to OpDemoteToHelperInvocation when targeting
+    // vulkan1.3, so any shader with alpha scissor needs this enabled or
+    // vkCreateShaderModule trips VUID-VkShaderModuleCreateInfo-pCode-08740.
+    // Core in 1.3 and required of every conformant 1.3 device, so asking for it
+    // does not narrow selection.
+    required13.shaderDemoteToHelperInvocation = VK_TRUE;
 
     vkb::PhysicalDeviceSelector selector(mContext.instance, mContext.surface);
     auto physicalResult = selector.set_minimum_version(1, 3)
@@ -363,8 +369,17 @@ bool VulkanDevice::recreateSwapchain()
     vkb::SwapchainBuilder builder(
         mContext.physical.physical_device, mContext.device.device,
         mContext.surface, mContext.graphicsFamily, mContext.presentFamily);
+    // UNORM, deliberately. This renderer carries sRGB-*encoded* 8-bit values
+    // end to end: the scene shader finishes on toSrgb(), the stylize/grade/
+    // dither passes are ports of compositor shaders that operate on that
+    // encoded colour, and ImGui writes sRGB vertex colours. An _SRGB swapchain
+    // treats a fragment output as linear and encodes it again on write, so the
+    // whole composite -- world *and* HUD -- reached the screen a second gamma
+    // too bright. With UNORM the present blit is the plain copy it is meant to
+    // be. (The offscreen readback behind writeScreenshot samples finalColour,
+    // before this step, which is why screenshots never showed the difference.)
     const VkFormat preferredFormat = mSwapchain.rhiFormat == Format::Unknown
-                                         ? VK_FORMAT_B8G8R8A8_SRGB
+                                         ? VK_FORMAT_B8G8R8A8_UNORM
                                          : toVkFormat(mSwapchain.rhiFormat);
     builder
         .set_desired_extent(static_cast<uint32_t>(drawableWidth),
@@ -372,11 +387,11 @@ bool VulkanDevice::recreateSwapchain()
         .set_desired_format(
             {preferredFormat, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
         .add_fallback_format(
-            {VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-        .add_fallback_format(
             {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
         .add_fallback_format(
             {VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+        .add_fallback_format(
+            {VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
         .add_fallback_format(
             {VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
         .set_desired_min_image_count(3)
@@ -407,6 +422,10 @@ bool VulkanDevice::recreateSwapchain()
         vkb::destroy_swapchain(newHandle);
         return false;
     }
+    if (newFormat == Format::RGBA8Srgb || newFormat == Format::BGRA8Srgb)
+        log::warn("rhi(vulkan): swapchain fell back to an sRGB format; the "
+                  "present blit carries already-encoded colour, so the frame "
+                  "will reach the screen one gamma too bright");
     if (mSwapchain.rhiFormat != Format::Unknown &&
         mSwapchain.rhiFormat != newFormat) {
         log::error("rhi(vulkan): swapchain format changed during resize; "

@@ -3,18 +3,22 @@
 
 #include <eng/Log.h>
 
+#if !defined(ENG_RENDERER_RHI)
 #include <SDL2/SDL_syswm.h>
+#endif
 
 namespace eng {
 
 bool Platform::init(const std::string& title, int width, int height)
 {
+#if !defined(ENG_RENDERER_RHI)
     // Ogre's GL3Plus render window is created against an X11 handle, so SDL
     // must run on X11 (XWayland). Under a native-Wayland session the x11
     // union member of SDL_SysWMinfo aliases the wl_surface pointer, which
     // Ogre rejects ("Invalid parentWindowHandle") before the first frame.
     // Respect an explicit user override; otherwise pin the driver.
     SDL_setenv("SDL_VIDEODRIVER", "x11", 0 /* no overwrite */);
+#endif
     // Stable window class/app-id so tiling compositors (Hyprland) can target the
     // window with a float rule instead of tiling it (which resizes the render
     // surface). Set before SDL_Init; honours a user override. X11 name is
@@ -25,14 +29,21 @@ bool Platform::init(const std::string& title, int width, int height)
         log::error("Platform: SDL_Init failed: %s", SDL_GetError());
         return false;
     }
+    Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI |
+                   (std::getenv("PSX_FULLSCREEN")
+                        ? SDL_WINDOW_FULLSCREEN_DESKTOP
+                        : 0);
+#if defined(ENG_RENDERER_RHI)
+    flags |= SDL_WINDOW_VULKAN;
+#endif
     mWindow = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
                                SDL_WINDOWPOS_CENTERED, width, height,
-                               SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI |
-                               (std::getenv("PSX_FULLSCREEN") ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
+                               flags);
     if (!mWindow) {
         log::error("Platform: SDL_CreateWindow failed: %s", SDL_GetError());
         return false;
     }
+#if !defined(ENG_RENDERER_RHI)
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);
     if (!SDL_GetWindowWMInfo(mWindow, &wmInfo)) {
@@ -54,6 +65,7 @@ bool Platform::init(const std::string& title, int width, int height)
         log::error("Platform: no X11 window handle (run with SDL_VIDEODRIVER=x11)");
         return false;
     }
+#endif
     return true;
 }
 

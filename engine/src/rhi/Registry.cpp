@@ -2,7 +2,9 @@
 
 #include <eng/Log.h>
 
+#if !defined(ENG_RENDERER_RHI)
 #include "gl/GLDevice.h"
+#endif
 #include "null/NullDevice.h"
 #include "vulkan/VulkanDevice.h"
 
@@ -30,7 +32,13 @@ std::unique_ptr<Device> createDevice(BackendKind kind, const DeviceDesc& desc)
 {
     switch (kind) {
     case BackendKind::Null:   return null::createDevice(desc);
-    case BackendKind::OpenGL: return gl::createDevice(desc);
+    case BackendKind::OpenGL:
+#if !defined(ENG_RENDERER_RHI)
+        return gl::createDevice(desc);
+#else
+        log::error("rhi: OpenGL is unavailable in the Vulkan-only RHI build");
+        return nullptr;
+#endif
     case BackendKind::Vulkan: return vulkan::createDevice(desc);
     }
     log::error("rhi: unknown backend kind %d", int(kind));
