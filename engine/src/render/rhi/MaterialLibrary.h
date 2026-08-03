@@ -15,8 +15,45 @@ namespace eng::rhi_renderer {
 using MaterialValue =
     std::variant<float, glm::vec2, glm::vec3, glm::vec4>;
 
+// Which shader family draws this material. Named outright in the material file
+// rather than recovered by substring-matching a program name, which is what the
+// Ogre-era format forced: a renamed program silently changed how a material
+// drew, and a new material had to be *named* correctly to be routed at all.
+enum class MaterialShader {
+    Lit,            // the default surface: textured, lit, fogged
+    LitUntextured,  // vertex colour and tint only
+    LitMetal,       // view-space matcap
+    Unlit,
+    UnlitMetal,
+    UnlitLightVolume,
+    SurfaceLiquid,
+    SurfaceLava,
+    SurfacePortal,
+    ParticleTextured,
+    ParticleAtlas,
+    ParticleFlame,
+    ParticleSmoke,
+    ParticleRain,
+    ParticleBlock,
+    ParticleMote,
+    ParticleShard,
+    ParticleBubble,
+    ParticleWisp,
+    ParticleVoxel,
+    // Compositor tuning carriers. The passes are fixed in the renderer; these
+    // only hold the numbers the palette drives them with.
+    Post,
+    // Not drawn through the scene pipeline: sprites, wire, decals, editor gizmos.
+    Other,
+};
+
+// Text id -> family, for the material parser. Unknown ids fall back to Lit and
+// are reported, so a typo shows up at load rather than as a wrongly drawn mesh.
+MaterialShader materialShaderFromName(const std::string& id, bool& known);
+
 struct Material {
     std::string name;
+    MaterialShader shader = MaterialShader::Lit;
     std::string textureName;
     RenderCore::TextureBinding texture;
     rhi::FilterMode filter = rhi::FilterMode::Nearest;
@@ -28,10 +65,8 @@ struct Material {
     // The legacy PSX_FS_Dungeon variant (DUNGEON_NO_HIGHLIGHT): keeps outlines
     // and creases, but suppresses the stylize highlight wash over stone.
     bool noHighlight = false;
-    // The fragment_program_ref this pass named. Ogre compiles one program per
-    // look; the RHI backend needs the name to pick the equivalent runtime mode
-    // (particle variants especially, which are otherwise indistinguishable).
-    std::string fragmentProgram;
+    // Line-filled polygons, for the wireframe debug material.
+    bool wireframe = false;
     std::unordered_map<std::string, MaterialValue> params;
 
     glm::vec4 modulate() const;
@@ -42,7 +77,7 @@ struct Material {
 class MaterialLibrary {
 public:
     bool loadAll(RenderCore& core);
-    bool loadScript(RenderCore& core, const std::filesystem::path& path);
+    bool loadFile(RenderCore& core, const std::filesystem::path& path);
     void refreshTextures(RenderCore& core);
 
     const Material* find(const std::string& name) const;
@@ -54,8 +89,7 @@ public:
              MaterialValue value);
 
 private:
-    bool parse(RenderCore& core, const std::filesystem::path& path,
-               const std::string& source);
+    bool parse(RenderCore& core, const std::filesystem::path& path);
     void uploadTexture(RenderCore& core, Material& material);
     std::filesystem::path texturePath(const std::string& name) const;
 

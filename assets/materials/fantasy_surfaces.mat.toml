@@ -1,0 +1,37 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (fantasy_surfaces.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/FantasySurfaces/CarvedStone"]
+shader = "lit"
+texture = "tiny_cobble_01.png"
+
+[material."Game/FantasySurfaces/CarvedStone".params]
+uvScale = [2.0, 2.0]
+modulateColor = [0.72, 0.68, 0.78, 1.0]
+
+[material."Game/FantasySurfaces/WarmDungeonStone"]
+shader = "lit"
+texture = "tiny_brick_02.png"
+
+[material."Game/FantasySurfaces/WarmDungeonStone".params]
+uvScale = [2.5, 2.5]
+modulateColor = [0.82, 0.63, 0.46, 1.0]
+
+[material."Game/FantasySurfaces/DarkIron"]
+shader = "lit.metal"
+texture = "metal-tex.png"
+
+[material."Game/FantasySurfaces/DarkIron".params]
+modulateColor = [0.28, 0.31, 0.40, 1.0]
+
+[material."Game/FantasySurfaces/AgedWood"]
+shader = "lit"
+texture = "tiny_wood_03.png"
+
+[material."Game/FantasySurfaces/AgedWood".params]
+uvScale = [1.5, 1.5]
+modulateColor = [0.72, 0.45, 0.25, 1.0]

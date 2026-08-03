@@ -1,0 +1,18 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (decals.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Engine/Decals/Alpha"]
+shader = "decal"
+address = "clamp"
+blend = "alpha"
+depth_write = false
+
+[material."Engine/Decals/Additive"]
+shader = "decal"
+address = "clamp"
+blend = "additive"
+depth_write = false

@@ -4,11 +4,12 @@
 #include <eng/assets/AssetRoot.h>
 #include <eng/render/PrototypeAssets.h>
 
+#define TOML_EXCEPTIONS 0
+#include <tomlplusplus/toml.hpp>
+
 #include <algorithm>
 #include <array>
-#include <cctype>
-#include <fstream>
-#include <sstream>
+#include <string>
 
 namespace eng::rhi_renderer {
 namespace {
@@ -25,98 +26,110 @@ T valueOr(const std::unordered_map<std::string, MaterialValue>& values,
     return fallback;
 }
 
-std::vector<std::string> tokenize(const std::string& source)
+// Material files are TOML like the rest of the project's data. Values are read
+// defensively: a missing or wrongly typed key takes the default rather than
+// failing the load, because one bad material must not cost a level all of them.
+std::string stringOr(const toml::table& table, const char* key,
+                     std::string fallback)
 {
-    std::vector<std::string> tokens;
-    std::string current;
-    bool comment = false;
-    bool quoted = false;
-    const auto flush = [&] {
-        if (!current.empty()) {
-            tokens.push_back(current);
-            current.clear();
-        }
-    };
-    for (size_t i = 0; i < source.size(); ++i) {
-        const char c = source[i];
-        if (comment) {
-            if (c == '\n')
-                comment = false;
-            continue;
-        }
-        if (!quoted && c == '/' && i + 1 < source.size() &&
-            source[i + 1] == '/') {
-            flush();
-            comment = true;
-            ++i;
-            continue;
-        }
-        if (c == '"') {
-            if (quoted) {
-                flush();
-                quoted = false;
-            } else {
-                flush();
-                quoted = true;
-            }
-            continue;
-        }
-        if (!quoted && (std::isspace(static_cast<unsigned char>(c)) ||
-                        c == '{' || c == '}')) {
-            flush();
-            if (c == '{' || c == '}')
-                tokens.emplace_back(1, c);
-            continue;
-        }
-        current.push_back(c);
-    }
-    flush();
-    return tokens;
+    return table[key].value_or(std::move(fallback));
 }
 
-bool parseFloat(const std::string& text, float& value)
+rhi::FilterMode filterFromName(const std::string& id)
 {
-    try {
-        size_t consumed = 0;
-        value = std::stof(text, &consumed);
-        return consumed == text.size() && std::isfinite(value);
-    } catch (...) {
+    return id == "linear" ? rhi::FilterMode::Linear : rhi::FilterMode::Nearest;
+}
+
+rhi::AddressMode addressFromName(const std::string& id)
+{
+    if (id == "clamp") return rhi::AddressMode::ClampToEdge;
+    if (id == "mirror") return rhi::AddressMode::MirrorRepeat;
+    return rhi::AddressMode::Repeat;
+}
+
+rhi::CullMode cullFromName(const std::string& id)
+{
+    if (id == "none") return rhi::CullMode::None;
+    if (id == "front") return rhi::CullMode::Front;
+    return rhi::CullMode::Back;
+}
+
+rhi::BlendMode blendFromName(const std::string& id)
+{
+    if (id == "alpha") return rhi::BlendMode::AlphaBlend;
+    if (id == "additive") return rhi::BlendMode::Additive;
+    return rhi::BlendMode::Opaque;
+}
+
+// A parameter is one number or a short vector of them, which covers everything
+// the shaders take. Anything else is skipped with a warning.
+bool readParam(const toml::node& node, MaterialValue& out)
+{
+    if (const auto scalar = node.value<double>()) {
+        out = float(*scalar);
+        return true;
+    }
+    const toml::array* array = node.as_array();
+    if (!array)
         return false;
+    float values[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    const size_t count = array->size();
+    if (count < 2 || count > 4)
+        return false;
+    for (size_t i = 0; i < count; ++i) {
+        const auto scalar = (*array)[i].value<double>();
+        if (!scalar)
+            return false;
+        values[i] = float(*scalar);
     }
-}
-
-int componentCount(const std::string& type)
-{
-    if (type == "float" || type == "int") return 1;
-    if (type == "float2") return 2;
-    if (type == "float3") return 3;
-    if (type == "float4") return 4;
-    return 0;
-}
-
-MaterialValue makeValue(const std::array<float, 4>& values, int count)
-{
-    switch (count) {
-    case 1: return values[0];
-    case 2: return glm::vec2(values[0], values[1]);
-    case 3: return glm::vec3(values[0], values[1], values[2]);
-    default: return glm::vec4(values[0], values[1], values[2], values[3]);
-    }
+    if (count == 2) out = glm::vec2(values[0], values[1]);
+    else if (count == 3) out = glm::vec3(values[0], values[1], values[2]);
+    else out = glm::vec4(values[0], values[1], values[2], values[3]);
+    return true;
 }
 
 } // namespace
 
-glm::vec4 Material::modulate() const
+MaterialShader materialShaderFromName(const std::string& id, bool& known)
 {
-    return valueOr(params, "modulateColor", glm::vec4(1.0f));
-}
-glm::vec2 Material::uvScale() const
-{
-    return valueOr(params, "uvScale", glm::vec2(1.0f));
-}
-glm::vec2 Material::uvOffset() const
-{
-    return valueOr(params, "uvOffset", glm::vec2(0.0f));
+    struct Entry { const char* id; MaterialShader shader; };
+    static const Entry kShaders[] = {
+        {"lit", MaterialShader::Lit},
+        {"lit.untextured", MaterialShader::LitUntextured},
+        {"lit.metal", MaterialShader::LitMetal},
+        {"unlit", MaterialShader::Unlit},
+        {"unlit.metal", MaterialShader::UnlitMetal},
+        {"unlit.light_volume", MaterialShader::UnlitLightVolume},
+        {"surface.liquid", MaterialShader::SurfaceLiquid},
+        {"surface.lava", MaterialShader::SurfaceLava},
+        {"surface.portal", MaterialShader::SurfacePortal},
+        {"particle.textured", MaterialShader::ParticleTextured},
+        {"particle.atlas", MaterialShader::ParticleAtlas},
+        {"particle.flame", MaterialShader::ParticleFlame},
+        {"particle.smoke", MaterialShader::ParticleSmoke},
+        {"particle.rain", MaterialShader::ParticleRain},
+        {"particle.block", MaterialShader::ParticleBlock},
+        {"particle.mote", MaterialShader::ParticleMote},
+        {"particle.shard", MaterialShader::ParticleShard},
+        {"particle.bubble", MaterialShader::ParticleBubble},
+        {"particle.wisp", MaterialShader::ParticleWisp},
+        {"particle.voxel", MaterialShader::ParticleVoxel},
+        {"sprite", MaterialShader::Other},
+        {"wire", MaterialShader::Other},
+        {"decal", MaterialShader::Other},
+        {"debug_lines", MaterialShader::Other},
+        {"editor.checkerboard", MaterialShader::Other},
+        {"editor.icon", MaterialShader::Other},
+        {"editor.ghost", MaterialShader::Other},
+    };
+    known = true;
+    for (const Entry& entry : kShaders)
+        if (id == entry.id)
+            return entry.shader;
+    if (id.rfind("post.", 0) == 0)
+        return MaterialShader::Post;
+    known = false;
+    return MaterialShader::Lit;
 }
 
 bool MaterialLibrary::loadAll(RenderCore& core)
@@ -133,7 +146,10 @@ bool MaterialLibrary::loadAll(RenderCore& core)
     for (const std::filesystem::path& directory : mResourceDirs) {
         for (std::filesystem::directory_iterator it(directory, error), end;
              !error && it != end; it.increment(error)) {
-            if (it->is_regular_file() && it->path().extension() == ".material")
+            if (it->is_regular_file() &&
+                it->path().string().size() > 9 &&
+                it->path().string().compare(it->path().string().size() - 9, 9,
+                                            ".mat.toml") == 0)
                 scripts.push_back(it->path());
         }
         error.clear();
@@ -141,7 +157,7 @@ bool MaterialLibrary::loadAll(RenderCore& core)
     std::sort(scripts.begin(), scripts.end());
     bool okay = true;
     for (const std::filesystem::path& script : scripts)
-        okay = loadScript(core, script) && okay;
+        okay = loadFile(core, script) && okay;
 
     if (!find(prototype::kSurfaceMaterial)) {
         Material fallback;
@@ -149,136 +165,85 @@ bool MaterialLibrary::loadAll(RenderCore& core)
         fallback.texture = core.fallbackTexture();
         mMaterials.emplace(fallback.name, std::move(fallback));
     }
-    log::info("RHI renderer: parsed %zu legacy material definitions",
-              mMaterials.size());
+    log::info("RHI renderer: %zu materials", mMaterials.size());
     return okay;
 }
 
-bool MaterialLibrary::loadScript(RenderCore& core,
-                                 const std::filesystem::path& path)
+bool MaterialLibrary::loadFile(RenderCore& core,
+                               const std::filesystem::path& path)
 {
-    std::ifstream input(path);
-    if (!input) {
-        log::error("RHI renderer: cannot open material script '%s'",
+    return parse(core, path);
+}
+
+bool MaterialLibrary::parse(RenderCore& core, const std::filesystem::path& path)
+{
+    const toml::parse_result parsed = toml::parse_file(path.string());
+    if (!parsed) {
+        log::error("RHI renderer: cannot parse material file '%s': %s",
+                   path.string().c_str(),
+                   std::string(parsed.error().description()).c_str());
+        return false;
+    }
+    const toml::table* materials = parsed.table()["material"].as_table();
+    if (!materials) {
+        log::error("RHI renderer: '%s' declares no [material] table",
                    path.string().c_str());
         return false;
     }
-    std::ostringstream source;
-    source << input.rdbuf();
-    return parse(core, path, source.str());
-}
 
-bool MaterialLibrary::parse(RenderCore& core, const std::filesystem::path& path,
-                            const std::string& source)
-{
-    const std::vector<std::string> tokens = tokenize(source);
     bool okay = true;
-    for (size_t i = 0; i < tokens.size();) {
-        if (tokens[i] != "material") {
-            ++i;
+    for (const auto& [key, node] : *materials) {
+        const toml::table* entry = node.as_table();
+        if (!entry) {
+            log::error("RHI renderer: material '%s' is not a table",
+                       std::string(key.str()).c_str());
+            okay = false;
             continue;
         }
-        if (i + 2 >= tokens.size() || tokens[i + 2] != "{") {
-            log::error("RHI renderer: malformed material declaration in '%s'",
-                       path.string().c_str());
-            return false;
-        }
         Material material;
-        material.name = tokens[i + 1];
-        i += 3;
-        int depth = 1;
-        std::vector<std::string> body;
-        while (i < tokens.size() && depth > 0) {
-            if (tokens[i] == "{") {
-                ++depth;
-            } else if (tokens[i] == "}") {
-                --depth;
-                if (depth == 0) {
-                    ++i;
-                    break;
-                }
-            }
-            if (depth > 0)
-                body.push_back(tokens[i]);
-            ++i;
-        }
-        if (depth != 0) {
-            log::error("RHI renderer: material '%s' in '%s' has unbalanced braces",
-                       material.name.c_str(), path.string().c_str());
-            return false;
+        material.name = std::string(key.str());
+
+        bool knownShader = true;
+        material.shader =
+            materialShaderFromName(stringOr(*entry, "shader", "lit"),
+                                   knownShader);
+        if (!knownShader) {
+            log::warn("RHI renderer: material '%s' names an unknown shader "
+                      "'%s'; drawing it lit",
+                      material.name.c_str(),
+                      stringOr(*entry, "shader", "lit").c_str());
+            okay = false;
         }
 
-        for (size_t p = 0; p < body.size(); ++p) {
-            const std::string& token = body[p];
-            if (token == "texture" && p + 1 < body.size() &&
-                body[p + 1] != "{") {
-                material.textureName = body[++p];
-            } else if (token == "filtering" && p + 1 < body.size()) {
-                const std::string& mode = body[++p];
-                material.filter = (mode == "none" || mode == "point")
-                                      ? rhi::FilterMode::Nearest
-                                      : rhi::FilterMode::Linear;
-            } else if (token == "tex_address_mode" && p + 1 < body.size()) {
-                const std::string& mode = body[++p];
-                material.address = mode == "clamp"
-                                       ? rhi::AddressMode::ClampToEdge
-                                       : mode == "mirror"
-                                             ? rhi::AddressMode::MirrorRepeat
-                                             : rhi::AddressMode::Repeat;
-            } else if (token == "fragment_program_ref" && p + 1 < body.size()) {
-                // Compile-time variant in Ogre; here the program name selects a
-                // runtime mode instead (and the dungeon variant becomes a flag
-                // the scene shader encodes into the MRT depth sign).
-                material.fragmentProgram = body[++p];
-                material.noHighlight =
-                    material.fragmentProgram.find("Dungeon") != std::string::npos;
-            } else if (token == "cull_hardware" && p + 1 < body.size()) {
-                const std::string& mode = body[++p];
-                material.cull = mode == "none" ? rhi::CullMode::None
-                               : mode == "anticlockwise" ? rhi::CullMode::Front
-                                                          : rhi::CullMode::Back;
-            } else if (token == "scene_blend" && p + 1 < body.size()) {
-                const std::string mode = body[++p];
-                material.blend = mode == "alpha_blend"
-                                     ? rhi::BlendMode::AlphaBlend
-                                     : mode == "add" || mode == "src_alpha"
-                                           ? rhi::BlendMode::Additive
-                                           : rhi::BlendMode::Opaque;
-            } else if (token == "depth_check" && p + 1 < body.size()) {
-                material.depthTest = body[++p] != "off";
-            } else if (token == "depth_write" && p + 1 < body.size()) {
-                material.depthWrite = body[++p] != "off";
-            } else if (token == "param_named" && p + 2 < body.size()) {
-                const std::string name = body[++p];
-                const std::string type = body[++p];
-                const int count = componentCount(type);
-                if (count == 0 || p + size_t(count) >= body.size()) {
-                    log::error("RHI renderer: material '%s' has malformed param '%s'",
-                               material.name.c_str(), name.c_str());
-                    okay = false;
-                    continue;
-                }
-                std::array<float, 4> values{};
-                bool valid = true;
-                for (int component = 0; component < count; ++component)
-                    valid = parseFloat(body[++p], values[component]) && valid;
-                if (!valid) {
-                    log::error("RHI renderer: material '%s' param '%s' is not finite numeric data",
-                               material.name.c_str(), name.c_str());
-                    okay = false;
-                } else {
-                    material.params[name] = makeValue(values, count);
-                }
+        material.textureName = stringOr(*entry, "texture", "");
+        material.filter = filterFromName(stringOr(*entry, "filter", "nearest"));
+        material.address =
+            addressFromName(stringOr(*entry, "address", "repeat"));
+        material.cull = cullFromName(stringOr(*entry, "cull", "back"));
+        material.blend = blendFromName(stringOr(*entry, "blend", "opaque"));
+        material.depthTest = (*entry)["depth_test"].value_or(true);
+        material.depthWrite = (*entry)["depth_write"].value_or(true);
+        // `highlight = false` is the stone case: outlines and creases stay,
+        // the stylize highlight wash does not.
+        material.noHighlight = !(*entry)["highlight"].value_or(true);
+        material.wireframe = stringOr(*entry, "polygon", "fill") == "line";
+
+        if (const toml::table* params = (*entry)["params"].as_table()) {
+            for (const auto& [name, value] : *params) {
+                MaterialValue parsedValue;
+                if (readParam(value, parsedValue))
+                    material.params.emplace(std::string(name.str()),
+                                            parsedValue);
+                else
+                    log::warn("RHI renderer: material '%s' parameter '%s' is "
+                              "not a number or a 2-4 element vector",
+                              material.name.c_str(),
+                              std::string(name.str()).c_str());
             }
         }
+
         uploadTexture(core, material);
-        if (material.name.empty()) {
-            log::error("RHI renderer: blank material name in '%s'",
-                       path.string().c_str());
-            okay = false;
-        } else {
-            mMaterials[material.name] = std::move(material);
-        }
+        mMaterials.insert_or_assign(material.name, std::move(material));
     }
     return okay;
 }

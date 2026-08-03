@@ -1,0 +1,61 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (spells.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/Spells/Muzzle"]
+shader = "particle.flame"
+texture = "sparkle.png"
+address = "clamp"
+cull = "none"
+blend = "additive"
+depth_write = false
+
+[material."Game/Spells/Muzzle".params]
+alphaScissor = 0.1
+
+[material."Game/Spells/FireballTrail"]
+shader = "particle.flame"
+texture = "sparkle.png"
+address = "clamp"
+cull = "none"
+blend = "additive"
+depth_write = false
+
+[material."Game/Spells/FireballTrail".params]
+alphaScissor = 0.1
+
+[material."Game/Spells/FireballImpact"]
+shader = "particle.flame"
+texture = "sparkle.png"
+address = "clamp"
+cull = "none"
+blend = "additive"
+depth_write = false
+
+[material."Game/Spells/FireballImpact".params]
+alphaScissor = 0.1
+
+[material."Game/Spells/BeamCore"]
+shader = "particle.block"
+texture = "sparkle.png"
+address = "clamp"
+cull = "none"
+blend = "additive"
+depth_write = false
+
+[material."Game/Spells/BeamCore".params]
+alphaScissor = 0.1
+
+[material."Game/Spells/BeamImpact"]
+shader = "particle.block"
+texture = "sparkle.png"
+address = "clamp"
+cull = "none"
+blend = "additive"
+depth_write = false
+
+[material."Game/Spells/BeamImpact".params]
+alphaScissor = 0.1

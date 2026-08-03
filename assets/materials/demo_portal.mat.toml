@@ -1,0 +1,40 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (demo_portal.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Demo/Portal/Down"]
+shader = "surface.portal"
+texture = "slime_stylized.png"
+cull = "none"
+depth_write = true
+# Stone: keeps outlines and creases, refuses the stylize highlight wash.
+highlight = false
+
+[material."Demo/Portal/Down".params]
+surfaceDark = [0.076, 0.000, 0.535, 1.0]
+surfaceMid = [0.858, 0.000, 1.000, 1.0]
+surfaceBright = [0.540, 0.000, 1.000, 1.0]
+surfaceCore = [0.566, 0.000, 1.000, 1.0]
+surfaceStepFps = 11.0
+portalFlowSpeed = 0.159
+portalSwirlSpeed = 0.521
+portalTwist = -0.355
+portalArms = 1
+surfaceTexelSize = 0.0240
+surfacePixelGrid = 39
+portalDepthScale = 1.466
+portalParallax = 0.350
+portalFieldWeight = 0.450
+portalCoreRadius = 0.227
+portalCoreBoost = 0.417
+portalRimRadius = 0.600
+portalRimWidth = 0.106
+portalRimIntensity = 0.000
+portalEdgeFade = 0.000
+surfaceDither = 0.863
+surfaceEdgeGlow = 1.882
+surfaceEdgeFlow = 3.000
+surfaceBrightness = 1.039

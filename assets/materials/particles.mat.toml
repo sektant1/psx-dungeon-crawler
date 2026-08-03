@@ -1,0 +1,30 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (particles.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Engine/Particles/SpriteAlpha"]
+shader = "particle.textured"
+address = "clamp"
+cull = "none"
+blend = "alpha"
+depth_write = false
+
+[material."Engine/Particles/SpriteAdditive"]
+shader = "particle.textured"
+address = "clamp"
+cull = "none"
+blend = "additive"
+depth_write = false
+
+[material."Engine/Particles/VoxelSolid"]
+shader = "particle.voxel"
+depth_write = true
+
+[material."Engine/Particles/VoxelAdditive"]
+shader = "particle.voxel"
+cull = "none"
+blend = "additive"
+depth_write = false

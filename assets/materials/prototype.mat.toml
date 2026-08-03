@@ -1,0 +1,43 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (prototype.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/Prototype/Floor"]
+shader = "lit"
+texture = "proto_light_06.png"
+
+[material."Game/Prototype/Floor".params]
+uvScale = [16.0, 16.0]
+modulateColor = [0.72, 0.78, 0.76, 1.0]
+
+[material."Game/Prototype/Arrow"]
+shader = "lit"
+texture = "proto_dark_05.png"
+
+[material."Game/Prototype/Bolt"]
+shader = "lit"
+texture = "proto_light_03.png"
+
+[material."Game/Prototype/ProjectileVesper"]
+shader = "lit"
+texture = "proto_purple_10.png"
+
+[material."Game/Prototype/ProjectileVesper".params]
+modulateColor = [0.72, 0.42, 1.35, 1.0]
+
+[material."Game/Prototype/ProjectileEidolon"]
+shader = "lit"
+texture = "proto_light_03.png"
+
+[material."Game/Prototype/ProjectileEidolon".params]
+modulateColor = [0.55, 1.10, 1.40, 1.0]
+
+[material."Game/Prototype/ProjectileTalon"]
+shader = "lit"
+texture = "proto_orange_07.png"
+
+[material."Game/Prototype/ProjectileTalon".params]
+modulateColor = [1.40, 0.30, 0.12, 1.0]
