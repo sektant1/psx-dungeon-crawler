@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/media/branding/logo.png" alt="PSX Game Engine" width="900">
+<img src="docs/media/branding/logo.jpg" alt="Raven Engine" width="900">
 
 
 # PSX Game Engine
