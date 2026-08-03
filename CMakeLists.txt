@@ -1258,7 +1258,7 @@ if(BUILD_TESTING)
                  editor/tests/EditorMaterialCatalogTests.cpp
                  editor/src/assets/MaterialCatalog.cpp)
   target_include_directories(editor_material_catalog_tests PRIVATE editor/include
-                             engine/include)
+                             engine/include third_party)
   add_test(NAME editor_material_catalog COMMAND editor_material_catalog_tests
            ${CMAKE_SOURCE_DIR}/assets/materials)
 

@@ -68,44 +68,38 @@ enum class ParticleMode : uint32_t {
     Textured = 0, Atlas, Flame, Smoke, Rain, Block, Mote, Shard, Bubble, Wisp
 };
 
-ParticleMode particleModeFor(const std::string& fragmentProgram)
+ParticleMode particleModeFor(rhi_renderer::MaterialShader shader)
 {
-    struct Entry { const char* program; ParticleMode mode; };
-    static const Entry kModes[] = {
-        {"AtlasParticle_FS", ParticleMode::Atlas},
-        {"FireParticle_FS", ParticleMode::Flame},
-        {"SmokeParticle_FS", ParticleMode::Smoke},
-        {"RainParticle_FS", ParticleMode::Rain},
-        {"BlockParticle_FS", ParticleMode::Block},
-        {"MoteParticle_FS", ParticleMode::Mote},
-        {"ShardParticle_FS", ParticleMode::Shard},
-        {"BubbleParticle_FS", ParticleMode::Bubble},
-        {"WispParticle_FS", ParticleMode::Wisp},
-    };
-    for (const Entry& entry : kModes)
-        if (fragmentProgram == entry.program)
-            return entry.mode;
-    return ParticleMode::Textured;
+    using S = rhi_renderer::MaterialShader;
+    switch (shader) {
+        case S::ParticleAtlas:  return ParticleMode::Atlas;
+        case S::ParticleFlame:  return ParticleMode::Flame;
+        case S::ParticleSmoke:  return ParticleMode::Smoke;
+        case S::ParticleRain:   return ParticleMode::Rain;
+        case S::ParticleBlock:  return ParticleMode::Block;
+        case S::ParticleMote:   return ParticleMode::Mote;
+        case S::ParticleShard:  return ParticleMode::Shard;
+        case S::ParticleBubble: return ParticleMode::Bubble;
+        case S::ParticleWisp:   return ParticleMode::Wisp;
+        default:                return ParticleMode::Textured;
+    }
 }
 
 // The stylised scrolling-surface profiles. Keep in sync with the mode switch in
 // assets/shaders/vulkan/surface.frag.
 enum class SurfaceMode : uint32_t { None = 0, Liquid, Lava, Portal };
 
-SurfaceMode surfaceModeFor(const std::string& fragmentProgram)
+SurfaceMode surfaceModeFor(rhi_renderer::MaterialShader shader)
 {
-    if (fragmentProgram == "PixelVfx/LiquidFS")
-        return SurfaceMode::Liquid;
-    if (fragmentProgram == "PixelVfx/LavaFS")
-        return SurfaceMode::Lava;
-    // Both the authored (textured flow) and prototype (procedural) portals are
-    // one profile: they differ only in where surfaceField comes from, and this
+    using S = rhi_renderer::MaterialShader;
+    if (shader == S::SurfaceLiquid) return SurfaceMode::Liquid;
+    if (shader == S::SurfaceLava)   return SurfaceMode::Lava;
+    // The authored (textured flow) and prototype (procedural) portals are one
+    // profile: they differ only in where surfaceField comes from, and this
     // backend samples a texture either way.
-    if (fragmentProgram.find("Portal") != std::string::npos)
-        return SurfaceMode::Portal;
+    if (shader == S::SurfacePortal) return SurfaceMode::Portal;
     return SurfaceMode::None;
 }
-
 // The half of a surface profile's parameters that does not fit the push range
 // once the model matrix is in it. Per material rather than per draw, uploaded
 // once per frame for the one surface being drawn.
@@ -1083,7 +1077,7 @@ struct Renderer::Impl {
             // through a different fragment stage; everything else about the
             // draw -- vertex layout, blend, depth, culling -- is unchanged.
             const SurfaceMode surfaceMode =
-                surfaceModeFor(material.fragmentProgram);
+                surfaceModeFor(material.shader);
             const bool isSurface = surfaceMode != SurfaceMode::None;
             const rhi::PipelineHandle pipeline =
                 isSurface
@@ -1377,7 +1371,7 @@ struct Renderer::Impl {
                          "a particle effect names an unknown material");
                 return;
             }
-            effect.mode = particleModeFor(material->fragmentProgram);
+            effect.mode = particleModeFor(material->shader);
             effect.blend = material->blend == rhi::BlendMode::Additive
                                ? ParticleBlend::Additive
                                : ParticleBlend::Alpha;
@@ -2574,7 +2568,7 @@ glm::mat4 Renderer::cameraViewProj() const
 
 bool Renderer::loadMaterialScript(const std::string& path)
 {
-    return mImpl->materials.loadScript(mImpl->core, path);
+    return mImpl->materials.loadFile(mImpl->core, path);
 }
 void Renderer::refreshAssetIndex() { mImpl->materials.refreshTextures(mImpl->core); }
 void Renderer::setMaterialParam(const std::string& material,

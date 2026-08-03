@@ -1,0 +1,20 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (boss_placeholder.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/BossPlaceholder"]
+shader = "lit"
+texture = "boss_placeholder_base_color.png"
+filter = "nearest"
+address = "clamp"
+cull = "none"
+
+[material."Game/BossPlaceholderSword"]
+shader = "lit"
+texture = "boss_placeholder_sword_base_color.png"
+filter = "nearest"
+address = "clamp"
+cull = "none"

@@ -1,0 +1,42 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (enemy.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/Enemy/Red"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+address = "clamp"
+
+[material."Game/Enemy/Red".params]
+modulateColor = [0.78, 0.14, 0.12, 1.0]
+
+[material."Game/Enemy/RedDark"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+address = "clamp"
+
+[material."Game/Enemy/RedDark".params]
+modulateColor = [0.42, 0.07, 0.07, 1.0]
+
+[material."Game/Enemy/RedPale"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+address = "clamp"
+
+[material."Game/Enemy/RedPale".params]
+modulateColor = [0.92, 0.42, 0.38, 1.0]
+
+[material."Game/Enemy/RedElite"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+address = "clamp"
+
+[material."Game/Enemy/RedElite".params]
+modulateColor = [1.0, 0.10, 0.06, 1.0]

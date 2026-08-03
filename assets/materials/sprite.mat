@@ -1,0 +1,37 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (sprite.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Engine/Sprite/Opaque"]
+shader = "sprite"
+filter = "nearest"
+address = "repeat"
+cull = "none"
+depth_write = true
+
+[material."Engine/Sprite/Alpha"]
+shader = "sprite"
+filter = "nearest"
+address = "repeat"
+cull = "none"
+blend = "alpha"
+depth_write = false
+
+[material."Engine/Sprite/Additive"]
+shader = "sprite"
+filter = "nearest"
+address = "repeat"
+cull = "none"
+blend = "additive"
+depth_write = false
+
+[material."Engine/Sprite/Overlay"]
+shader = "sprite"
+filter = "nearest"
+address = "repeat"
+cull = "none"
+depth_test = false
+depth_write = false

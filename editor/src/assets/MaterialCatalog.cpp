@@ -1,5 +1,8 @@
 #include <editor/assets/MaterialCatalog.h>
 
+#define TOML_EXCEPTIONS 0
+#include <tomlplusplus/toml.hpp>
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -38,33 +41,30 @@ bool startsWith(const std::string& text, const char* prefix)
     return text.rfind(prefix, 0) == 0;
 }
 
-// Everything the classifier needs is in the vertex program: it is what binds
-// the mesh's vertex streams, so it is what decides which meshes can supply
-// them. The fragment program and the sampler only refine the answer.
+// The material states its shader family, so classification is a mapping rather
+// than an inference. It used to be read off the Ogre vertex program's name --
+// the thing that bound the vertex streams -- which meant renaming a program
+// silently reclassified every material using it.
 MaterialClass classify(const MaterialInfo& info)
 {
-    const std::string& vs = info.vertexProgram;
-    if (vs.empty())
+    const std::string& shader = info.shader;
+    if (shader.empty())
         return MaterialClass::Unknown;
-
-    // Full-screen passes: the compositor supplies the quad and the source
-    // texture. Nothing about them survives being put on an entity.
-    if (startsWith(vs, "Dither_VS"))
+    if (startsWith(shader, "post."))
         return MaterialClass::PostProcess;
-    // Instanced: the vertex shader reads a per-instance stream. A static mesh
-    // has none, so the draw produces nothing -- the failure this repo has
-    // already chased twice.
-    if (startsWith(vs, "Particle") || startsWith(vs, "Particles/"))
+    // Instanced: the vertex stage reads a per-instance stream, so a static mesh
+    // supplies nothing and the draw produces nothing.
+    if (startsWith(shader, "particle."))
         return MaterialClass::Particle;
-    if (startsWith(vs, "Sprite/") || startsWith(vs, "Decals/"))
+    if (shader == "sprite" || shader == "decal" || shader == "wire" ||
+        shader == "debug_lines")
         return MaterialClass::Sprite;
-    // Liquids and portals: the flow is computed from 0..1 surface UVs.
-    if (startsWith(vs, "PixelVfx/"))
+    // Liquids and portals: the field is computed from 0..1 surface UVs.
+    if (startsWith(shader, "surface."))
         return MaterialClass::VfxSurface;
-    if (startsWith(vs, "Editor_"))
+    if (startsWith(shader, "editor."))
         return MaterialClass::EditorOnly;
-
-    if (startsWith(vs, "PSX_VS_")) {
+    if (startsWith(shader, "lit") || startsWith(shader, "unlit")) {
         // An atlas is a clamped sheet: the UVs must land inside a region of it.
         // Wrapping textures tile, so they sit on anything.
         return info.clamped ? MaterialClass::Atlas : MaterialClass::Surface;
@@ -92,72 +92,34 @@ const char* materialClassName(MaterialClass klass)
 std::vector<MaterialInfo> parseMaterialScript(const std::string& path)
 {
     std::vector<MaterialInfo> materials;
-    std::ifstream in(path);
-    if (!in)
+    const toml::parse_result parsed = toml::parse_file(path);
+    if (!parsed)
+        return materials;
+    const toml::table* table = parsed.table()["material"].as_table();
+    if (!table)
         return materials;
 
-    MaterialInfo current;
-    bool inMaterial = false;
-    int depth = 0;
-    std::string line;
-    while (std::getline(in, line)) {
-        // Comments first: several scripts carry a `// psx_lit.gdshader` note
-        // after the material name, and one mentions `texture_unit` in prose.
-        if (const std::size_t comment = line.find("//");
-            comment != std::string::npos)
-            line = line.substr(0, comment);
-        const std::string text = trim(line);
-        if (text.empty())
+    for (const auto& [key, node] : *table) {
+        const toml::table* entry = node.as_table();
+        if (!entry)
             continue;
-
-        if (!inMaterial) {
-            if (!startsWith(text, "material "))
-                continue;
-            current = MaterialInfo{};
-            current.name = tokenAfter(text, "material ");
-            if (current.name.empty())
-                continue;
-            inMaterial = true;
-            depth = 0;
-        }
-
-        // Brace depth, so the material ends where its block does rather than at
-        // the next `material` keyword -- which would swallow a file whose last
-        // material is unterminated.
-        depth += int(std::count(text.begin(), text.end(), '{'));
-        depth -= int(std::count(text.begin(), text.end(), '}'));
-
-        if (text.find("vertex_program_ref") != std::string::npos)
-            current.vertexProgram = tokenAfter(text, "vertex_program_ref");
-        if (text.find("fragment_program_ref") != std::string::npos)
-            current.fragmentProgram = tokenAfter(text, "fragment_program_ref");
-        // `texture <file>`, wherever it sits: the shipped scripts put it on its
-        // own line, but the compact `texture_unit { texture x.png ... }` form
-        // is equally valid Ogre and appears in hand-written ones. The trailing
-        // space is what keeps this from matching `texture_unit` itself.
-        if (startsWith(text, "texture ") ||
-            text.find(" texture ") != std::string::npos) {
-            if (const std::string file = tokenAfter(text, "texture ");
-                !file.empty() && current.texture.empty())
-                current.texture = file;
-        }
-        if (text.find("tex_address_mode") != std::string::npos)
-            current.clamped = tokenAfter(text, "tex_address_mode") == "clamp";
-        if (text.find("cull_hardware") != std::string::npos)
-            current.twoSided = tokenAfter(text, "cull_hardware") == "none";
-
-        if (inMaterial && depth <= 0 && text.find('}') != std::string::npos) {
-            current.klass = classify(current);
-            materials.push_back(std::move(current));
-            inMaterial = false;
-        }
+        MaterialInfo info;
+        info.name = std::string(key.str());
+        info.shader = (*entry)["shader"].value_or(std::string{"lit"});
+        info.texture = (*entry)["texture"].value_or(std::string{});
+        info.clamped = (*entry)["address"].value_or(std::string{"repeat"}) ==
+                       "clamp";
+        info.twoSided =
+            (*entry)["cull"].value_or(std::string{"back"}) == "none";
+        info.klass = classify(info);
+        materials.push_back(std::move(info));
     }
-    // A script that ends mid-material still yields what it had: a partial list
-    // is more useful than an empty panel.
-    if (inMaterial && !current.name.empty()) {
-        current.klass = classify(current);
-        materials.push_back(std::move(current));
-    }
+    // Directory order is filesystem-dependent and the table above is a map, so
+    // sort: the editor's list must not reshuffle between runs.
+    std::sort(materials.begin(), materials.end(),
+              [](const MaterialInfo& a, const MaterialInfo& b) {
+                  return a.name < b.name;
+              });
     return materials;
 }
 
@@ -171,7 +133,7 @@ std::vector<MaterialInfo> loadMaterialCatalog(const std::string& directory)
          std::filesystem::directory_iterator(directory, ec)) {
         if (ec)
             break;
-        if (!file.is_regular_file() || file.path().extension() != ".material")
+        if (!file.is_regular_file() || file.path().extension() != ".mat")
             continue;
         std::vector<MaterialInfo> some = parseMaterialScript(file.path().string());
         all.insert(all.end(), std::make_move_iterator(some.begin()),

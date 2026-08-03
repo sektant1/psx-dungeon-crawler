@@ -38,7 +38,7 @@ void requireText(const std::string& text, const char* expected,
 int main()
 {
     const std::string programs = read("assets/programs/psx.program");
-    const std::string materials = read("assets/materials/psx.material");
+    const std::string materials = read("assets/materials/psx.mat");
     const std::string shader = read("assets/shaders/particle.frag");
     const std::string runtime = read("engine/src/render/rhi/Renderer.cpp");
     const std::string presets =
@@ -91,11 +91,11 @@ int main()
             "particle atlas texture unit uses parser-unsafe one-line syntax");
 
     const std::size_t rainMaterial =
-        materials.find("material Engine/Psx/Rain");
+        materials.find("[material.\"Engine/Psx/Rain\"]");
     require(rainMaterial != std::string::npos, "rain material exists");
-    require(materials.find("fragment_program_ref RainParticle_FS",
-                           rainMaterial) != std::string::npos,
-            "rain material uses its dedicated shader");
+    require(materials.find("shader = \"particle.rain\"", rainMaterial) !=
+                std::string::npos,
+            "rain material names its dedicated shader");
     require(shader.find("defined(PROCEDURAL_RAIN)") != std::string::npos,
             "particle shader implements procedural rain");
 
@@ -114,10 +114,10 @@ int main()
                     "modern pixel particle program is missing");
     }
     for (const char* materialName :
-         {"material Engine/Psx/ArcaneMote",
-          "material Engine/Psx/FrostShard",
-          "material Engine/Psx/ToxicBubble",
-          "material Engine/Psx/PortalWisp"}) {
+         {"[material.\"Engine/Psx/ArcaneMote\"]",
+          "[material.\"Engine/Psx/FrostShard\"]",
+          "[material.\"Engine/Psx/ToxicBubble\"]",
+          "[material.\"Engine/Psx/PortalWisp\"]"}) {
         requireText(materials, materialName,
                     "modern pixel particle material is missing");
     }

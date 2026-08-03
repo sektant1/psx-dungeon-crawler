@@ -5094,7 +5094,7 @@ void EditorApp::drawMaterialPanel()
                                       advice.reason.c_str());
                 } else if (!info.texture.empty()) {
                     ImGui::SetTooltip("%s  |  %s", info.texture.c_str(),
-                                      info.vertexProgram.c_str());
+                                      info.shader.c_str());
                 }
             }
             // Double-click applies straight to the selected entity: the fast

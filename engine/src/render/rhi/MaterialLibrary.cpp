@@ -90,6 +90,23 @@ bool readParam(const toml::node& node, MaterialValue& out)
 
 } // namespace
 
+// Three parameters the renderer reads on every draw, so they get accessors
+// rather than being looked up by name at each call site. Absent means neutral.
+glm::vec4 Material::modulate() const
+{
+    return valueOr(params, "modulateColor", glm::vec4(1.0f));
+}
+
+glm::vec2 Material::uvScale() const
+{
+    return valueOr(params, "uvScale", glm::vec2(1.0f));
+}
+
+glm::vec2 Material::uvOffset() const
+{
+    return valueOr(params, "uvOffset", glm::vec2(0.0f));
+}
+
 MaterialShader materialShaderFromName(const std::string& id, bool& known)
 {
     struct Entry { const char* id; MaterialShader shader; };
@@ -146,10 +163,7 @@ bool MaterialLibrary::loadAll(RenderCore& core)
     for (const std::filesystem::path& directory : mResourceDirs) {
         for (std::filesystem::directory_iterator it(directory, error), end;
              !error && it != end; it.increment(error)) {
-            if (it->is_regular_file() &&
-                it->path().string().size() > 9 &&
-                it->path().string().compare(it->path().string().size() - 9, 9,
-                                            ".mat.toml") == 0)
+            if (it->is_regular_file() && it->path().extension() == ".mat")
                 scripts.push_back(it->path());
         }
         error.clear();

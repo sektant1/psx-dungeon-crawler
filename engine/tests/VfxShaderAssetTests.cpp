@@ -37,14 +37,27 @@ std::size_t countOf(const std::string& text, const std::string& needle)
     return n;
 }
 
+// One material's text out of a .mat file: from its own [material."Name"]
+// header to the next top-level [material header. The params sub-table
+// ([material."Name".params]) is inside that span, which is what these
+// assertions read.
 std::string material(const std::string& source, const std::string& name)
 {
-    const std::string marker = "material " + name;
+    const std::string marker = "[material.\"" + name + "\"]";
     const std::size_t begin = source.find(marker);
     if (begin == std::string::npos)
         return {};
-    const std::size_t end = source.find("\nmaterial ", begin + marker.size());
-    return source.substr(begin, end - begin);
+    std::size_t end = begin + marker.size();
+    while (true) {
+        end = source.find("\n[material.", end);
+        if (end == std::string::npos)
+            return source.substr(begin);
+        // Skip this material's own sub-tables.
+        if (source.compare(end + 1, marker.size() - 1, marker, 0,
+                           marker.size() - 1) != 0)
+            return source.substr(begin, end - begin);
+        end += 2;
+    }
 }
 
 } // namespace
@@ -76,10 +89,10 @@ int main()
     // prototype content reset removed game.material/fantasy.material; the
     // shader-driven materials survived that reset deliberately.
     const std::string gameMaterials =
-        read("assets/materials/vfx.material");
+        read("assets/materials/vfx.mat");
     const std::string& fantasyMaterials = gameMaterials;
     const std::string editorMaterials =
-        read("assets/materials/editor.material");
+        read("assets/materials/editor.mat");
     const std::string placementGhost =
         read("assets/shaders/placement_ghost.frag");
 
@@ -181,50 +194,50 @@ int main()
     for (const char* name : {"Game/Vfx/PortalDown", "Game/Vfx/PortalUp"}) {
         const std::string block = material(gameMaterials, name);
         require(!block.empty(), "portal material is missing");
-        requireText(block, "vertex_program_ref PixelVfx/SurfaceVS",
-                    "portal material uses the generic sprite vertex shader");
-        requireText(block, "fragment_program_ref PixelVfx/PortalFS",
-                    "portal material uses the generic sprite fragment shader");
-        requireText(block, "depth_write on",
+        requireText(block, "shader = \"surface.portal\"",
+                    "portal material names the portal surface profile");
+        requireText(block, "shader = \"surface.portal\"",
+                    "portal material names the portal surface profile");
+        requireText(block, "depth_write = true",
                     "portal material does not write depth");
-        requireText(block, "cull_hardware none",
+        requireText(block, "cull = \"none\"",
                     "portal membrane is unexpectedly culled");
-        requireText(block, "filtering none",
+        requireText(block, "filter = \"nearest\"",
                     "portal texture is not nearest filtered");
-        requireText(block, "param_named surfaceCore",
+        requireText(block, "surfaceCore = ",
                     "portal profile does not set its own core tone");
-        requireText(block, "param_named surfaceGlowColour",
+        requireText(block, "surfaceGlowColour = ",
                     "portal profile does not state what colour it blooms");
     }
 
     for (const char* name : {"Game/Vfx/Water", "Game/Vfx/ToxicSlime"}) {
         const std::string block = material(fantasyMaterials, name);
         require(!block.empty(), "liquid material is missing");
-        requireText(block, "vertex_program_ref PixelVfx/LiquidVS",
-                    "liquid material uses the generic sprite vertex shader");
-        requireText(block, "fragment_program_ref PixelVfx/LiquidFS",
-                    "liquid material uses the generic sprite fragment shader");
-        requireText(block, "depth_write on",
+        requireText(block, "shader = \"surface.liquid\"",
+                    "liquid material names the liquid surface profile");
+        requireText(block, "shader = \"surface.liquid\"",
+                    "liquid material names the liquid surface profile");
+        requireText(block, "depth_write = true",
                     "liquid material does not write depth");
-        requireText(block, "filtering none",
+        requireText(block, "filter = \"nearest\"",
                     "liquid texture is not nearest filtered");
     }
     const std::string lava = material(fantasyMaterials, "Game/Vfx/Lava");
-    requireText(lava, "fragment_program_ref PixelVfx/LavaFS",
+    requireText(lava, "shader = \"surface.lava\"",
                 "lava still uses the generic liquid fragment shader");
-    requireText(lava, "depth_write on",
+    requireText(lava, "depth_write = true",
                 "lava material does not write depth");
-    requireText(lava, "filtering none",
+    requireText(lava, "filter = \"nearest\"",
                  "lava texture is not nearest filtered");
 
     const std::string ghost =
         material(editorMaterials, "Editor/PlacementGhost");
     require(!ghost.empty(), "placement ghost material is missing");
-    requireText(ghost, "scene_blend alpha_blend",
+    requireText(ghost, "blend = \"alpha\"",
                 "placement ghost is not transparent");
-    requireText(ghost, "depth_write off",
+    requireText(ghost, "depth_write = false",
                 "placement ghost incorrectly occludes committed geometry");
-    requireText(ghost, "fragment_program_ref Editor_FS_PlacementGhost",
+    requireText(ghost, "shader = \"editor.ghost\"",
                 "placement ghost does not use its editor shader");
     requireText(placementGhost, "ghostColour",
                 "placement ghost shader lacks tint and opacity control");

@@ -1,0 +1,143 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (vfx.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/Vfx/PortalDown"]
+shader = "surface.portal"
+texture = "slime_stylized.png"
+filter = "nearest"
+address = "repeat"
+cull = "none"
+depth_write = true
+# Stone: keeps outlines and creases, refuses the stylize highlight wash.
+highlight = false
+
+[material."Game/Vfx/PortalDown".params]
+surfaceDark = [0.076, 0.000, 0.535, 1.0]
+surfaceMid = [0.858, 0.000, 1.000, 1.0]
+surfaceBright = [0.540, 0.000, 1.000, 1.0]
+surfaceCore = [0.566, 0.000, 1.000, 1.0]
+surfaceStepFps = 11.0
+portalFlowSpeed = 0.159
+portalSwirlSpeed = 0.521
+portalTwist = -0.355
+portalArms = 1
+portalArmWidth = 0.50
+surfaceTexelSize = 0.0240
+surfacePixelGrid = 39
+portalDepthScale = 1.466
+portalParallax = 0.350
+portalFieldWeight = 0.450
+portalCoreRadius = 0.227
+portalCoreBoost = 0.417
+portalRimRadius = 0.600
+portalRimWidth = 0.106
+portalRimIntensity = 0.000
+portalEdgeFade = 0.000
+surfaceDither = 0.863
+surfaceEdgeGlow = 1.882
+surfaceEdgeFlow = 3.000
+surfaceGlowColour = [1.30, 0.10, 2.20, 1.0]
+surfaceGlowStrength = 1.05
+surfaceGlowThreshold = 0.50
+surfaceBrightness = 1.400
+
+[material."Game/Vfx/PortalUp"]
+shader = "surface.portal"
+texture = "water_stylized.png"
+filter = "nearest"
+address = "repeat"
+cull = "none"
+depth_write = true
+# Stone: keeps outlines and creases, refuses the stylize highlight wash.
+highlight = false
+
+[material."Game/Vfx/PortalUp".params]
+surfaceDark = [0.015, 0.04, 0.15, 1.0]
+surfaceMid = [0.08, 0.58, 1.10, 1.0]
+surfaceBright = [0.32, 1.15, 1.80, 1.0]
+surfaceCore = [1.05, 1.85, 2.60, 1.0]
+portalFlowSpeed = -0.26
+portalSwirlSpeed = -0.07
+surfaceGlowColour = [0.45, 1.55, 2.40, 1.0]
+surfaceGlowStrength = 1.00
+surfaceGlowThreshold = 0.50
+surfaceBrightness = 1.350
+
+[material."Game/Vfx/Lava"]
+shader = "surface.lava"
+texture = "lava_stylized.png"
+filter = "nearest"
+address = "repeat"
+depth_write = true
+# Stone: keeps outlines and creases, refuses the stylize highlight wash.
+highlight = false
+
+[material."Game/Vfx/Lava".params]
+lavaDark = [0.10, 0.003, 0.001, 1.0]
+lavaCrust = [0.42, 0.018, 0.003, 1.0]
+lavaHot = [1.70, 0.30, 0.012, 1.0]
+lavaCore = [2.15, 1.02, 0.10, 1.0]
+lavaFlowSpeed = 0.24
+
+[material."Game/Vfx/Water"]
+shader = "surface.liquid"
+texture = "water_stylized.png"
+filter = "nearest"
+address = "repeat"
+depth_write = true
+# Stone: keeps outlines and creases, refuses the stylize highlight wash.
+highlight = false
+
+[material."Game/Vfx/Water".params]
+liquidDark = [0.015, 0.07, 0.20, 1.0]
+liquidMid = [0.03, 0.42, 0.92, 1.0]
+liquidBright = [0.22, 0.92, 1.20, 1.0]
+liquidFlowA = [0.07, 0.035]
+liquidFlowB = [-0.035, 0.055]
+liquidEmission = 0.0
+
+[material."Game/Vfx/ToxicSlime"]
+shader = "surface.liquid"
+texture = "slime_stylized.png"
+filter = "nearest"
+address = "repeat"
+depth_write = true
+# Stone: keeps outlines and creases, refuses the stylize highlight wash.
+highlight = false
+
+[material."Game/Vfx/ToxicSlime".params]
+liquidDark = [0.025, 0.14, 0.015, 1.0]
+liquidMid = [0.12, 0.95, 0.025, 1.0]
+liquidBright = [0.78, 1.38, 0.08, 1.0]
+liquidFlowA = [-0.035, 0.055]
+liquidFlowB = [0.045, -0.020]
+liquidEmission = 0.20
+
+[material."Game/Vfx/FelEnergy"]
+shader = "sprite"
+texture = "slime_stylized.png"
+filter = "nearest"
+address = "repeat"
+cull = "none"
+depth_write = true
+
+[material."Game/Vfx/FelEnergy".params]
+spriteUvScale = [1.35, 1.35]
+spriteScroll = [0.28, -0.20]
+spriteTint = [0.34, 0.58, 0.16, 1.0]
+
+[material."Game/Vfx/ArcaneGlow"]
+shader = "sprite"
+texture = "glow_radial.png"
+filter = "nearest"
+address = "clamp"
+blend = "additive"
+depth_write = true
+
+[material."Game/Vfx/ArcaneGlow".params]
+spriteScroll = [0.03, -0.04]
+spriteTint = [0.35, 0.42, 1.0, 0.80]

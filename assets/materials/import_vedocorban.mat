@@ -1,0 +1,258 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (import_vedocorban.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/import_vedocorban/part1"]
+shader = "lit"
+texture = "import_vedocorban_5EB7590A478BA5AFA4728926378A8596.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part2"]
+shader = "lit"
+texture = "import_vedocorban_E1FA310CF3D7D2560E7C1AE474102A2E.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part3"]
+shader = "lit"
+texture = "import_vedocorban_25F3534C5BAF19853BCA66E5E969A9C6.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part4"]
+shader = "lit"
+texture = "import_vedocorban_BD18AB6546D64A633E2A666737B5562F.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part5"]
+shader = "lit"
+texture = "import_vedocorban_1F0CB8E30BA10A7EE4B525308D864C19.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part6"]
+shader = "lit"
+texture = "import_vedocorban_3E762DF8A782E1D075BBBE4DC74431D8.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part7"]
+shader = "lit"
+texture = "import_vedocorban_04376560FE3E4AC2668C2A06B3F5EF04.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part8"]
+shader = "lit"
+texture = "import_vedocorban_C89D56CF245CD15321E0A1AC372262D2.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part9"]
+shader = "lit"
+texture = "import_vedocorban_55E8CCDD07D939798E86A8C5F4E2676A.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part10"]
+shader = "lit"
+texture = "import_vedocorban_14E9AD8680E2B08E39D7E6FA63F2FDE6.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part11"]
+shader = "lit"
+texture = "import_vedocorban_791DC5401580821F1EACE1F726F7620F.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part12"]
+shader = "lit"
+texture = "import_vedocorban_3558B88CDB9A0EA0ACF8BC2F66E5B404.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part13"]
+shader = "lit"
+texture = "import_vedocorban_8FFBCF27BB9F4D5C1A3D65E33EE5ACC2.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part14"]
+shader = "lit"
+texture = "import_vedocorban_711213E86B2EEAB90F72E356DFCAC039.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part15"]
+shader = "lit"
+texture = "import_vedocorban_BE319CF01BCCD4F7FE5F1441696B4C79.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part16"]
+shader = "lit"
+texture = "import_vedocorban_0D7A179D072EC62B5D456B00837D7349.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part17"]
+shader = "lit"
+texture = "import_vedocorban_905023928FD5D861C6CD99F49FFC2D48.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part18"]
+shader = "lit"
+texture = "import_vedocorban_659EAACA0FA81D0DC5848F6E7914A07A.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part19"]
+shader = "lit"
+texture = "import_vedocorban_6D8AD3B44B9D1747982F0C606F91834D.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part20"]
+shader = "lit"
+texture = "import_vedocorban_E225831F0CE4E712D6FFCBE563643E4D.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part21"]
+shader = "lit"
+texture = "import_vedocorban_7EB6CAFEC69DA53E961BB3C0F289BBC5.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part22"]
+shader = "lit"
+texture = "import_vedocorban_B0AF24E789DBE3436F429AD29BC88A86.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part23"]
+shader = "lit"
+texture = "import_vedocorban_D075DB1D25B0A67188D0DEF151934D93.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part24"]
+shader = "lit"
+texture = "import_vedocorban_129C90F851A32C8CF8C9E5E44E0237E6.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part25"]
+shader = "lit"
+texture = "import_vedocorban_CF5966859159BDDEDB835FD48DC07A54.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part26"]
+shader = "lit"
+texture = "import_vedocorban_8C3E4A3B7BA1B8F2BED0E8DAC154A35E.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part27"]
+shader = "lit"
+texture = "import_vedocorban_D8533440C569D1BF978762FDE790C9C3.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part28"]
+shader = "lit"
+texture = "import_vedocorban_F647F2FF76E55C1C317265127FD4065F.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part29"]
+shader = "lit"
+texture = "import_vedocorban_6AA8C5240136261E2BB46595ECCC6706.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part30"]
+shader = "lit"
+texture = "import_vedocorban_E647227A6DE760B192A2FCE89336B375.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part31"]
+shader = "lit"
+texture = "import_vedocorban_AF9638E434B13B59DA1E83EBF44A1094.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part32"]
+shader = "lit"
+texture = "import_vedocorban_C530FBECA1979696873B616109DCF221.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part33"]
+shader = "lit"
+texture = "import_vedocorban_5206C0C46286832F56653FA8259E7C66.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part34"]
+shader = "lit"
+texture = "import_vedocorban_61C88864ECA429617A003EDF20F790C2.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part35"]
+shader = "lit"
+texture = "import_vedocorban_6215DCCD2107BD7BA030368F5A79AC47.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part36"]
+shader = "lit"
+texture = "import_vedocorban_7AC734374337D4FAD384E6BBB7CFC0E6.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part37"]
+shader = "lit"
+texture = "import_vedocorban_3ECD3440A365402E28FAA2226D39EF32.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part38"]
+shader = "lit"
+texture = "import_vedocorban_7B15EFE92D8B16D2B4CE3C1C747E01A0.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part39"]
+shader = "lit"
+texture = "import_vedocorban_B7DD9A26FE65BA65EF4514D8885212B8.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part40"]
+shader = "lit"
+texture = "import_vedocorban_C0A62FC9DA5D628A174FE1A4355FC54E.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part41"]
+shader = "lit"
+texture = "import_vedocorban_E56FDD14A07B49E6093321D906836B16.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_vedocorban/part42"]
+shader = "lit"
+texture = "import_vedocorban_DD380398D01D54D3B04006F0FA7A1559.png"
+filter = "nearest"
+address = "repeat"

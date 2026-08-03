@@ -52,64 +52,31 @@ int main(int argc, char** argv)
 
     // --- classification, one case per way a material binds a mesh -----------
     {
-        const std::string path = write(root / "mixed.material", R"(
-// A comment that says material Fake/NotReal and mentions texture_unit
-material Game/Kit/Dungeon
-{
-    technique { pass {
-        vertex_program_ref PSX_VS_Lit { }
-        fragment_program_ref PSX_FS_Dungeon { }
-        texture_unit { texture Dungeon_Map.png  tex_address_mode clamp }
-    } }
-}
+        const std::string path = write(root / "mixed.mat", R"(
+# A comment that says material Fake/NotReal
+[material."Game/Kit/Dungeon"]
+shader = "lit"
+texture = "Dungeon_Map.png"
+address = "clamp"
 
-material Game/Kit/Stone
-{
-    technique { pass {
-        vertex_program_ref PSX_VS_Lit { }
-        fragment_program_ref PSX_FS_Dungeon { }
-        texture_unit { texture TEX_Wall_03.png  tex_address_mode wrap }
-    } }
-}
+[material."Game/Kit/Stone"]
+shader = "lit"
+texture = "stone.png"
 
-material Game/Vfx/Lava
-{
-    technique { pass {
-        vertex_program_ref PixelVfx/LiquidVS { }
-        fragment_program_ref PixelVfx/LavaFS { }
-        texture_unit { texture lava.png  tex_address_mode wrap }
-    } }
-}
+[material."Game/Vfx/Lava"]
+shader = "surface.lava"
 
-material Engine/Particles/SpriteAlpha
-{
-    technique { pass {
-        vertex_program_ref Particles/SpriteVS { }
-        fragment_program_ref AtlasParticle_FS { }
-    } }
-}
+[material."Engine/Particles/SpriteAlpha"]
+shader = "particle.textured"
 
-material Engine/Psx/BloomBlurH
-{
-    technique { pass {
-        depth_check off
-        cull_hardware none
-        vertex_program_ref Dither_VS { }
-        fragment_program_ref BloomBlur_FS { }
-    } }
-}
+[material."Engine/Psx/BloomBlurH"]
+shader = "post.bloom_blur"
 
-material Editor/PlacementGhost
-{
-    technique { pass {
-        vertex_program_ref Editor_VS_Checkerboard { }
-    } }
-}
+[material."Editor/PlacementGhost"]
+shader = "editor.ghost"
 
-material Game/NoProgram
-{
-    technique { pass { } }
-}
+[material."Game/NoProgram"]
+shader = ""
 )");
         const std::vector<MaterialInfo> all = parseMaterialScript(path);
         require(all.size() == 7, "every material in the script is found");
@@ -123,10 +90,10 @@ material Game/NoProgram
                 "the same shader with a wrapping texture tiles, so it goes "
                 "anywhere");
         require(find(all, "Game/Vfx/Lava")->klass == MaterialClass::VfxSurface,
-                "a PixelVfx program is an animated surface");
+                "a surface.* shader is an animated surface");
         require(find(all, "Engine/Particles/SpriteAlpha")->klass ==
                     MaterialClass::Particle,
-                "an instanced vertex program is a particle material");
+                "a particle.* shader is a particle material");
         require(find(all, "Engine/Psx/BloomBlurH")->klass ==
                     MaterialClass::PostProcess,
                 "a compositor pass is post-process");
@@ -134,7 +101,7 @@ material Game/NoProgram
                     MaterialClass::EditorOnly,
                 "and the editor's own are its own");
         require(find(all, "Game/NoProgram")->klass == MaterialClass::Unknown,
-                "a pass with no program says nothing about what it wants");
+                "a material naming no shader says nothing about what it wants");
 
         require(find(all, "Game/Kit/Dungeon")->texture == "Dungeon_Map.png",
                 "the texture is captured, for the panel to show");
@@ -206,17 +173,13 @@ material Game/NoProgram
 
     // --- a directory, sorted, and the degenerate cases ----------------------
     {
-        write(root / "b.material",
-              "material Zebra { technique { pass { "
-              "vertex_program_ref PSX_VS_Lit { } } } }\n");
-        write(root / "a.material",
-              "material Aardvark { technique { pass { "
-              "vertex_program_ref PSX_VS_Lit { } } } }\n");
-        write(root / "notes.txt", "material NotAScript { }\n");
+        write(root / "b.mat", "[material.Zebra]\nshader = \"lit\"\n");
+        write(root / "a.mat", "[material.Aardvark]\nshader = \"lit\"\n");
+        write(root / "notes.txt", "[material.NotAScript]\nshader = \"lit\"\n");
 
         const std::vector<MaterialInfo> all =
             loadMaterialCatalog((root / "").string());
-        require(all.size() >= 2, "every .material in the directory is read");
+        require(all.size() >= 2, "every .mat in the directory is read");
         require(find(all, "NotAScript") == nullptr,
                 "and nothing else is");
         for (std::size_t i = 1; i < all.size(); ++i)
@@ -225,17 +188,15 @@ material Game/NoProgram
 
         require(loadMaterialCatalog((root / "missing").string()).empty(),
                 "a missing directory is an empty catalogue, not an error");
-        require(parseMaterialScript((root / "nope.material").string()).empty(),
-                "and so is a missing script");
+        require(parseMaterialScript((root / "nope.mat").string()).empty(),
+                "and so is a missing file");
 
-        const std::string truncated =
-            write(root / "cut.material",
-                  "material Half { technique { pass { "
-                  "vertex_program_ref PSX_VS_Lit { }\n");
-        const std::vector<MaterialInfo> partial =
-            parseMaterialScript(truncated);
-        require(partial.size() == 1 && partial[0].name == "Half",
-                "a script that ends mid-material still yields what it had");
+        // Malformed TOML yields nothing rather than a partial read: the old
+        // brace format could be salvaged line by line, a parse tree cannot.
+        const std::string broken =
+            write(root / "cut.mat", "[material.Half\nshader = \"lit\"\n");
+        require(parseMaterialScript(broken).empty(),
+                "a file that does not parse yields no materials");
     }
 
     // --- the shipped scripts ------------------------------------------------

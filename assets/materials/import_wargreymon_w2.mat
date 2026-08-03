@@ -1,0 +1,120 @@
+# Engine material definitions. Generated once from the Ogre script
+# this file replaced (import_wargreymon_w2.material); hand-edited since.
+#
+# `shader` names the engine shader family outright. It used to be
+# recovered by substring-matching an Ogre program name, which meant a
+# rename silently changed how a material drew.
+
+[material."Game/import_wargreymon_w2/part0"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part1"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part2"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part3"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part4"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part5"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part6"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part7"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part8"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part9"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part10"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part11"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part12"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part13"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part14"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part15"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part16"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part17"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_wargreymon_w2/part18"]
+shader = "lit"
+texture = "import_wargreymon_w2_WarGreymonPS1_W2_Tex.png"
+filter = "nearest"
+address = "repeat"

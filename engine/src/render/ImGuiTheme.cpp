@@ -42,7 +42,15 @@ ImVec4 lerp(const ImVec4& a, const ImVec4& b, float t)
                   std::lerp(a.z, b.z, t), std::lerp(a.w, b.w, t));
 }
 
-// One Dark: the Atom/OneDark palette, dark slate with muted blue accents.
+// AC Vixen: the engine logo's palette, which is Armored Core: Project
+// Phantasma's -- gunmetal and near-black chrome carrying one hot magenta
+// accent, and nothing else. Sampled off assets/logo.png: the greys run neutral
+// (R=G=B) rather than the blue-tinted slate this replaced, and the accent is
+// the mech's edge lighting at ~(240,172,239) with its body around (132,98,133).
+//
+// The discipline is the point. A monochrome shell means the one saturated
+// colour always reads as "this is active/selected", so the eye has a single
+// thing to track instead of competing blues, ambers and greens.
 void oneDark()
 {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -56,36 +64,43 @@ void oneDark()
 
     style.DockingSeparatorSize = 3.0f;
 
+    // The single accent. Used SPARINGLY and only where it means "this one is
+    // active": the check, the selected tab's overline, a link, the keyboard
+    // cursor. That is the trick the Vixen pulls -- the mech is entirely
+    // gunmetal except for two shoulder strips and a vent, and the logo repeats
+    // it as two thin underline strokes. Spend it on hovers and plot fills too
+    // and the restraint that makes it read is gone.
+    const ImVec4 kAccent = rgba(0xFFF0ACEF);
     ImVec4* c = style.Colors;
-    c[ImGuiCol_Text] = rgba(0xFFABB2BF);
-    c[ImGuiCol_TextDisabled] = rgba(0xFF565656);
-    c[ImGuiCol_WindowBg] = rgba(0xFF282C34);
-    c[ImGuiCol_ChildBg] = rgba(0xFF21252B);
-    c[ImGuiCol_PopupBg] = rgba(0xFF2E323A);
-    c[ImGuiCol_Border] = rgba(0xFF2E323A);
+    c[ImGuiCol_Text] = rgba(0xFFC8C8CC);
+    c[ImGuiCol_TextDisabled] = rgba(0xFF6A6A6E);
+    c[ImGuiCol_WindowBg] = rgba(0xFF232326);
+    c[ImGuiCol_ChildBg] = rgba(0xFF1B1B1E);
+    c[ImGuiCol_PopupBg] = rgba(0xFF2A2A2E);
+    c[ImGuiCol_Border] = rgba(0xFF3A3A3F);
     c[ImGuiCol_BorderShadow] = rgba(0x00000000);
     c[ImGuiCol_FrameBg] = c[ImGuiCol_ChildBg];
-    c[ImGuiCol_FrameBgHovered] = rgba(0xFF484C52);
-    c[ImGuiCol_FrameBgActive] = rgba(0xFF54575D);
+    c[ImGuiCol_FrameBgHovered] = rgba(0xFF3E3E44);
+    c[ImGuiCol_FrameBgActive] = rgba(0xFF4C4C53);
     c[ImGuiCol_TitleBg] = c[ImGuiCol_WindowBg];
     c[ImGuiCol_TitleBgActive] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_TitleBgCollapsed] = rgba(0x8221252B);
+    c[ImGuiCol_TitleBgCollapsed] = rgba(0x821B1B1E);
     c[ImGuiCol_MenuBarBg] = c[ImGuiCol_ChildBg];
     c[ImGuiCol_ScrollbarBg] = c[ImGuiCol_PopupBg];
-    c[ImGuiCol_ScrollbarGrab] = rgba(0xFF3E4249);
-    c[ImGuiCol_ScrollbarGrabHovered] = rgba(0xFF484C52);
-    c[ImGuiCol_ScrollbarGrabActive] = rgba(0xFF54575D);
-    c[ImGuiCol_CheckMark] = c[ImGuiCol_Text];
-    c[ImGuiCol_SliderGrab] = rgba(0xFF353941);
-    c[ImGuiCol_SliderGrabActive] = rgba(0xFF7A7A7A);
+    c[ImGuiCol_ScrollbarGrab] = rgba(0xFF3A3A3F);
+    c[ImGuiCol_ScrollbarGrabHovered] = rgba(0xFF4C4C53);
+    c[ImGuiCol_ScrollbarGrabActive] = rgba(0xFF6E6E75);
+    c[ImGuiCol_CheckMark] = kAccent;
+    c[ImGuiCol_SliderGrab] = rgba(0xFF33333A);
+    c[ImGuiCol_SliderGrabActive] = rgba(0xFF8A8A92);
     c[ImGuiCol_Button] = c[ImGuiCol_SliderGrab];
     c[ImGuiCol_ButtonHovered] = c[ImGuiCol_FrameBgActive];
     c[ImGuiCol_ButtonActive] = c[ImGuiCol_ScrollbarGrabActive];
     c[ImGuiCol_Header] = c[ImGuiCol_ChildBg];
-    c[ImGuiCol_HeaderHovered] = rgba(0xFF353941);
+    c[ImGuiCol_HeaderHovered] = rgba(0xFF33333A);
     c[ImGuiCol_HeaderActive] = c[ImGuiCol_FrameBgActive];
     c[ImGuiCol_Separator] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_SeparatorHovered] = rgba(0xFF3E4452);
+    c[ImGuiCol_SeparatorHovered] = rgba(0xFF4C4C53);
     c[ImGuiCol_SeparatorActive] = c[ImGuiCol_SeparatorHovered];
     c[ImGuiCol_ResizeGrip] = c[ImGuiCol_Separator];
     c[ImGuiCol_ResizeGripHovered] = c[ImGuiCol_SeparatorHovered];
@@ -93,7 +108,7 @@ void oneDark()
     c[ImGuiCol_TabHovered] = c[ImGuiCol_HeaderHovered];
     c[ImGuiCol_Tab] = c[ImGuiCol_FrameBgActive];
     c[ImGuiCol_TabSelected] = c[ImGuiCol_HeaderHovered];
-    c[ImGuiCol_TabSelectedOverline] = c[ImGuiCol_HeaderActive];
+    c[ImGuiCol_TabSelectedOverline] = kAccent;
     c[ImGuiCol_TabDimmed] = lerp(c[ImGuiCol_Tab], c[ImGuiCol_TitleBg], 0.80f);
     c[ImGuiCol_TabDimmedSelected] =
         lerp(c[ImGuiCol_TabSelected], c[ImGuiCol_TitleBg], 0.40f);
@@ -101,21 +116,21 @@ void oneDark()
     c[ImGuiCol_DockingPreview] = c[ImGuiCol_ChildBg];
     c[ImGuiCol_DockingEmptyBg] = c[ImGuiCol_WindowBg];
     c[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
-    c[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
-    c[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
-    c[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
+    c[ImGuiCol_PlotLinesHovered] = rgba(0xFF9A9AA2);
+    c[ImGuiCol_PlotHistogram] = rgba(0xFF6E6E75);
+    c[ImGuiCol_PlotHistogramHovered] = rgba(0xFF9A9AA2);
     c[ImGuiCol_TableHeaderBg] = c[ImGuiCol_ChildBg];
     c[ImGuiCol_TableBorderStrong] = c[ImGuiCol_SliderGrab];
     c[ImGuiCol_TableBorderLight] = c[ImGuiCol_FrameBgActive];
     c[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
     c[ImGuiCol_TableRowBgAlt] = ImVec4(1.00f, 1.00f, 1.00f, 0.06f);
-    c[ImGuiCol_TextLink] = rgba(0xFF3F94CE);
-    c[ImGuiCol_TextSelectedBg] = rgba(0xFF243140);
-    c[ImGuiCol_DragDropTarget] = c[ImGuiCol_Text];
-    c[ImGuiCol_NavCursor] = c[ImGuiCol_TextLink];
+    c[ImGuiCol_TextLink] = kAccent;
+    c[ImGuiCol_TextSelectedBg] = rgba(0xFF3A2C3A);
+    c[ImGuiCol_DragDropTarget] = rgba(0xFFC8C8CC);
+    c[ImGuiCol_NavCursor] = kAccent;
     c[ImGuiCol_NavWindowingHighlight] = c[ImGuiCol_Text];
     c[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-    c[ImGuiCol_ModalWindowDimBg] = rgba(0xC821252B);
+    c[ImGuiCol_ModalWindowDimBg] = rgba(0xC81B1B1E);
     // ImGuiCol_InputTextCursor / ImGuiCol_TreeLines land after imgui 1.91.9b;
     // add them here when the vendored copy is bumped.
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""One-shot: Ogre .material scripts -> engine .mat.toml.
+"""One-shot: Ogre .material scripts -> engine .mat.
 
-Run once to produce assets/materials/*.mat.toml from the Ogre scripts this
+Run once to produce assets/materials/*.mat from the Ogre scripts this
 project inherited, then deleted along with this script's reason to exist. Kept
 in tools/ so the conversion is auditable rather than a mystery diff.
 
@@ -172,8 +172,11 @@ def emit(materials, out_path, source_name):
         shader, highlight = SHADERS.get(m.get("fs", ""), ("lit", True))
         lines.append(f'[material."{m["name"]}"]')
         lines.append(f'shader = "{shader}"')
-        for key, default in (("texture", None), ("filter", "nearest"),
-                             ("address", "repeat"), ("cull", "back"),
+        # filter and address are emitted even at their defaults: nearest
+        # sampling and the wrap mode ARE this project's look, and a material
+        # that leaves them implicit reads as one nobody thought about.
+        for key, default in (("texture", None), ("filter", None),
+                             ("address", None), ("cull", "back"),
                              ("blend", "opaque")):
             if key in m and m[key] != default:
                 lines.append(f'{key} = "{m[key]}"')
@@ -203,7 +206,7 @@ def main():
     total = 0
     for script in sorted(root.glob("*.material")):
         materials = parse(script)
-        emit(materials, script.with_suffix(".mat.toml"), script.name)
+        emit(materials, script.with_suffix(".mat"), script.name)
         total += len(materials)
         print(f"{script.name}: {len(materials)}")
     print(f"total {total}")

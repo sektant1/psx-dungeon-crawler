@@ -49,8 +49,8 @@ const char* materialClassName(MaterialClass klass);
 struct MaterialInfo {
     std::string name;
     MaterialClass klass = MaterialClass::Unknown;
-    std::string vertexProgram;
-    std::string fragmentProgram;
+    // The shader family the material names, e.g. "lit", "surface.portal".
+    std::string shader;
     std::string texture;
     // True when the texture is sampled with clamp, which is what makes an
     // atlas an atlas: wrapping UVs outside 0..1 would smear the edge pixel.

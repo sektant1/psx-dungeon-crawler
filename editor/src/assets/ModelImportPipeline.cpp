@@ -215,14 +215,11 @@ fs::path resolveTexture(const fs::path& modelDir, const std::string& authored,
 std::string materialBlock(const std::string& name, const std::string& texture)
 {
     std::ostringstream out;
-    out << "material " << name << "\n{\n    technique { pass {\n"
-        << "        vertex_program_ref PSX_VS_Lit { }\n"
-        << "        fragment_program_ref PSX_FS_Lit { }\n"
-        << "        texture_unit\n        {\n"
-        << "            texture " << texture << "\n"
-        << "            filtering none\n"
-        << "            tex_address_mode wrap\n"
-        << "        }\n    } }\n}\n";
+    out << "[material.\"" << name << "\"]\n"
+        << "shader = \"lit\"\n"
+        << "texture = \"" << texture << "\"\n"
+        << "filter = \"nearest\"\n"
+        << "address = \"repeat\"\n\n";
     return out.str();
 }
 
@@ -456,7 +453,7 @@ ModelImportResult importModelToKit(const std::string& sourcePath,
 
     std::string error;
     if (materials.tellp() > 0) {
-        const fs::path scriptPath = materialDir / (prefix + ".material");
+        const fs::path scriptPath = materialDir / (prefix + ".mat");
         std::ofstream script(scriptPath);
         if (!script) {
             result.error = "cannot write " + scriptPath.string();

@@ -98,11 +98,11 @@ int main()
     require(!result.materialScript.empty(),
             "a material script was written for the textured parts");
     const std::string material = readAll(result.materialScript);
-    require(material.find("filtering none") != std::string::npos,
+    require(material.find("filter = \"nearest\"") != std::string::npos,
             "using nearest filtering -- a bilinear 64x64 PSX texture is "
             "exactly the wrong look");
-    require(material.find("PSX_FS_Lit") != std::string::npos,
-            "and the project's own shaders");
+    require(material.find("shader = \"lit\"") != std::string::npos,
+            "and the project's own lit shader");
 
     // --- catalogue ---------------------------------------------------------
     const std::string kit = readAll(root / "config" / "kit.toml");

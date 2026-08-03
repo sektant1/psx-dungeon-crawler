@@ -8,13 +8,13 @@ typo into a scene that silently looks wrong, buried in a log line. This script
 makes the same mistake fail the build.
 
 Checks:
-  1. every `texture <file>` in a .material resolves to a file in a registered
+  1. every `texture = "file"` in a .mat resolves to a file in a registered
      texture directory;
   2. every `.obj` named in a .toml exists under the owning tree's meshes/;
-  3. every material name referenced from a .toml is defined by some .material;
+  3. every material name referenced from a .toml is defined by some .mat;
   4. no material name is defined twice (Ogre rejects the duplicate, and the
      scene silently keeps the first definition);
-  5. no two texture files share a basename, and no two .material scripts do
+  5. no two texture files share a basename, and no two .mat files do
      either (Ogre's file index is as flat as its resource namespace: the
      duplicate is skipped and openResource() resolves it arbitrarily).
 
@@ -56,8 +56,10 @@ def mount_sets() -> dict[str, list[Path]]:
         for name, packs in manifest.get("mounts", {}).items()
     }
 
-MATERIAL_DEF_RE = re.compile(r"^\s*material\s+(\S+)", re.M)
-TEXTURE_RE = re.compile(r"^\s*texture\s+(\S+)", re.M)
+# Engine material files are TOML: `[material."Pack/Name"]`, one table per
+# material. The bare name form is accepted too, for names that need no quoting.
+MATERIAL_DEF_RE = re.compile(r'^\s*\[material\.(?:"([^"]+)"|([^\]\s]+))\]', re.M)
+TEXTURE_RE = re.compile(r'^\s*texture\s*=\s*"([^"]+)"', re.M)
 OBJ_RE = re.compile(r'"([^"]*\.obj)"')
 # Material references in level/catalog TOML: `material = "X"`, `materials =
 # ["X", "Y"]`. Deliberately not every string -- only the keys that name one.
@@ -106,10 +108,11 @@ def collect(roots: list[Path]):
                 textures[path.name].append(path)
             elif path.suffix == ".obj":
                 meshes.add(path.name)
-            elif path.suffix == ".material":
+            elif path.suffix == ".mat":
                 scripts[path.name].append(path)
-                for name in MATERIAL_DEF_RE.findall(path.read_text(errors="replace")):
-                    materials[name].append(path)
+                for quoted, bare in MATERIAL_DEF_RE.findall(
+                        path.read_text(errors="replace")):
+                    materials[quoted or bare].append(path)
     return textures, meshes, materials, scripts
 
 

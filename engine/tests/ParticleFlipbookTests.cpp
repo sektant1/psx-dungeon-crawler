@@ -150,18 +150,13 @@ int main()
 
     // --- the three files that must agree on the uniform names ---------------
     const std::string vert = read("assets/shaders/particle_sprite.vert");
-    const std::string material =
-        read("assets/materials/particles.material");
-    for (const char* name :
-         {"flipbookCell", "flipbookOrigin", "flipbookPerRow"}) {
-        requireText(vert, name, "particle_sprite.vert lost a flipbook uniform");
-        requireText(material, name,
-                    "particles.material lost a flipbook default");
-    }
+    // The material file no longer carries these: they were defaults on an Ogre
+    // *program* declaration, and programs are not a thing the engine has. The
+    // window itself is computed CPU-side now (FlipbookDesc), so what has to
+    // agree is the shader and the runtime, not a third copy in a material.
     // The old whole-sheet-only uniform must be gone from all three, or a
     // material could keep declaring a constant nothing writes.
-    require(vert.find("flipbookGrid") == std::string::npos &&
-                material.find("flipbookGrid") == std::string::npos,
+    require(vert.find("flipbookGrid") == std::string::npos,
             "flipbookGrid survived the move to an origin/cell window");
 
     // --- the generated import is present and well formed --------------------
