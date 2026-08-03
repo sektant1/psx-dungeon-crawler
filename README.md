@@ -1,8 +1,8 @@
 <div align="center">
 
 
-<p align="center"><img src="docs/media/branding/avatar.png" alt="Raven Engine" width="200"></p>
 <p align="center"><img src="docs/media/branding/logo.jpg" alt="Raven Engine" width="900"></p>
+<p align="center"><img src="docs/media/branding/avatar.png" alt="Raven Engine" width="200"></p>
 
 # Raven Engine
 
