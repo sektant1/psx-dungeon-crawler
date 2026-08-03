@@ -1,5 +1,5 @@
-PROJECT_NAME           = "PSX Dungeon Crawler"
-PROJECT_BRIEF          = "C++17 PSX-style dungeon crawler engine and game API"
+PROJECT_NAME           = "Raven Engine"
+PROJECT_BRIEF          = "C++20 Vulkan engine with PSX-style rendering and game API"
 PROJECT_NUMBER         = "0.1"
 
 OUTPUT_DIRECTORY       = "@DOXYGEN_OUTPUT_DIRECTORY@"

@@ -22,7 +22,7 @@ using eng::io::ByteReader;
 using eng::io::ByteWriter;
 
 namespace {
-constexpr char kMagic[8] = {'P', 'S', 'X', 'M', 'A', 'P', '\0', 0};
+constexpr char kMagic[8] = {'R', 'A', 'V', 'E', 'N', 'M', 'A', 'P'};
 constexpr uint16_t kVersion = 1;
 constexpr uint32_t kNoParent = 0xFFFFFFFFu;
 constexpr std::size_t kMaxMapBytes = 256u * 1024u * 1024u;
@@ -275,7 +275,7 @@ bool dumpMap(const std::string& path, const eng::ecs::ComponentRegistry& types)
         uint32_t v = 0; for (int i = 0; i < 4; ++i) v |= uint32_t(q[i]) << (8 * i);
         q += 4; return v;
     };
-    std::printf("PSXMAP version %u\n", unsigned(ver));
+    std::printf("RAVENMAP version %u\n", unsigned(ver));
     if (end - p < 4) return false;
     const uint32_t poolCount = rd32(p);
     if (poolCount > kMaxStrings || std::size_t(end - p) / 4 < poolCount)

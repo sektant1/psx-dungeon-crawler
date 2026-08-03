@@ -263,12 +263,12 @@ than growing a second set of them:
 
 | | Sets |
 |---|---|
-| **Play under the viewport's look** | `PSX_RENDER_PRESET` = whatever the viewport is on |
-| ...or an explicit profile | `PSX_RENDER_PRESET=<name>` |
-| **Start where the camera is** | `PSX_PLAY_FROM=x,y,z` |
-| **Open the debug console** | `PSX_DEBUG_UI` |
-| **Show colliders** | `PSX_SHOW_COLLIDERS` |
-| **Fullscreen** | `PSX_FULLSCREEN` |
+| **Play under the viewport's look** | `RAVEN_RENDER_PRESET` = whatever the viewport is on |
+| ...or an explicit profile | `RAVEN_RENDER_PRESET=<name>` |
+| **Start where the camera is** | `RAVEN_PLAY_FROM=x,y,z` |
+| **Open the debug console** | `RAVEN_DEBUG_UI` |
+| **Show colliders** | `RAVEN_SHOW_COLLIDERS` |
+| **Fullscreen** | `RAVEN_FULLSCREEN` |
 
 Linking the look to the viewport is the default, and it is the row that makes
 the other two panels honest: shader params tuned in the editor and played under
@@ -276,12 +276,12 @@ a different profile are tuned blind. Unticking it is for the deliberate
 comparison -- author under `dungeon`, check under `ps1`.
 
 The bottom line of the group prints the launch as it will happen
-(`game <scene>.map  PSX_PLAY_FROM=<camera>  PSX_RENDER_PRESET=dungeon`). A
+(`game <scene>.map  RAVEN_PLAY_FROM=<camera>  RAVEN_RENDER_PRESET=dungeon`). A
 launcher whose switches are invisible is one you end up debugging by reading
 its source.
 
 A flag the game tests by *presence* is exported as `1` or omitted, never set to
-`0`: `PSX_DEBUG_UI=0` would turn the console on. Any variable the launch sets is
+`0`: `RAVEN_DEBUG_UI=0` would turn the console on. Any variable the launch sets is
 also removed from the inherited environment rather than duplicated -- a stale
 one silently winning is a setting that appears to do nothing.
 
@@ -403,7 +403,7 @@ collapsed above it. Picking something and then hunting its row in a
 three-hundred-row list is the single most common thing an editor makes people do
 twice; `EditorApp::selectAndReveal` is the one path every non-panel selection
 goes through -- viewport pick, placement, a jump from the Issues list,
-`PSX_EDITOR_SELECT`.
+`RAVEN_EDITOR_SELECT`.
 
 ### Searching
 
@@ -805,14 +805,14 @@ everywhere else; the inspector section just says `no inspector for 'sound'`.
 A screenshot run has no mouse, so two env vars drive the panels:
 
 ```sh
-PSX_EDITOR_SELECT=crystal_0001     # an author id or index; also frames it
-PSX_EDITOR_ADD_COMPONENT=collider  # a ComponentType id, applied to the selection
-PSX_EDITOR_BRUSH=kit.prop_barrel   # arm the Place tool, so the ghost is drawn
-PSX_EDITOR_WALK=1                  # start at the player's eye, at the spawn
-PSX_EDITOR_PANEL=palette|open|help # a surface that only exists while held open
-PSX_EDITOR_PANEL=outliner|catalog|inspector|issues|ui  # bring a docked tab forward
-PSX_EDITOR_PALETTE_QUERY=cook      # open the palette with a query already typed
-PSX_SCREENSHOT=/tmp/x.png PSX_SCREENSHOT_FRAME=240 \
+RAVEN_EDITOR_SELECT=crystal_0001     # an author id or index; also frames it
+RAVEN_EDITOR_ADD_COMPONENT=collider  # a ComponentType id, applied to the selection
+RAVEN_EDITOR_BRUSH=kit.prop_barrel   # arm the Place tool, so the ghost is drawn
+RAVEN_EDITOR_WALK=1                  # start at the player's eye, at the spawn
+RAVEN_EDITOR_PANEL=palette|open|help # a surface that only exists while held open
+RAVEN_EDITOR_PANEL=outliner|catalog|inspector|issues|ui  # bring a docked tab forward
+RAVEN_EDITOR_PALETTE_QUERY=cook      # open the palette with a query already typed
+RAVEN_SCREENSHOT=/tmp/x.png RAVEN_SCREENSHOT_FRAME=240 \
   xvfb-run -a ./build/scene_editor assets/scenes/start_hall.scn
 ```
 

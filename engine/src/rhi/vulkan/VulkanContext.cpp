@@ -122,8 +122,8 @@ bool VulkanDevice::initializeContext()
     }
 
     vkb::InstanceBuilder instanceBuilder;
-    instanceBuilder.set_app_name("psx-dungeon-crawler RHI smoke")
-        .set_engine_name("eng")
+    instanceBuilder.set_app_name("Raven Engine")
+        .set_engine_name("Raven Engine")
         .require_api_version(1, 3, 0)
         .enable_extensions(extensions);
 

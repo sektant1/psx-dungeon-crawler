@@ -607,7 +607,7 @@ bool parseSceneSource(const std::string& json, const std::string& location,
     }
     try {
         const int version = root.value("version", 0);
-        if (root.value("format", std::string()) != "psx-dungeon-scene" ||
+        if (root.value("format", std::string()) != "raven-scene" ||
             (version != 1 && version != 2) ||
             root.value("id", std::string()).empty()) {
             error = location +

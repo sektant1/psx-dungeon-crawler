@@ -40,7 +40,7 @@ static bool has(const std::vector<FileEntry>& entries, const std::string& label)
 int main()
 {
     std::error_code ec;
-    const fs::path root = fs::temp_directory_path() / "psx_file_browser_tests";
+    const fs::path root = fs::temp_directory_path() / "raven_file_browser_tests";
     fs::remove_all(root, ec);
 
     // A shape like the real source tree: models filed several directories deep,

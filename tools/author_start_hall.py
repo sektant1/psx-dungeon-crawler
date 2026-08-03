@@ -311,7 +311,7 @@ add("trigger_0001", None, (6.0, 1.5, 11.6),
 add("marker_0001", None, (6.0, 0.0, 6.4), marker="hall.pinch", name="Pinch")
 add("marker_0002", None, (2.3, 0.0, 8.6), marker="hall.camp", name="Camp")
 
-doc = {"$schema": "../schemas/scene.schema.json", "format": "psx-dungeon-scene",
+doc = {"$schema": "../schemas/scene.schema.json", "format": "raven-scene",
        "version": 2, "id": "scene.start_hall",
        "entities": sorted(ents, key=lambda e: e["id"])}
 out = sys.argv[1]

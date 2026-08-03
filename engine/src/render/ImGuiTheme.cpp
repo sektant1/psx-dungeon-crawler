@@ -30,10 +30,9 @@ std::string& currentId()
 
 constexpr ImVec4 rgba(unsigned argb)
 {
-    return ImVec4(float((argb >> 16) & 0xFF) / 255.0f,
-                  float((argb >> 8) & 0xFF) / 255.0f,
-                  float(argb & 0xFF) / 255.0f,
-                  float((argb >> 24) & 0xFF) / 255.0f);
+    return ImVec4(
+        float((argb >> 16) & 0xFF) / 255.0f, float((argb >> 8) & 0xFF) / 255.0f,
+        float(argb & 0xFF) / 255.0f, float((argb >> 24) & 0xFF) / 255.0f);
 }
 
 ImVec4 lerp(const ImVec4& a, const ImVec4& b, float t)
@@ -42,22 +41,12 @@ ImVec4 lerp(const ImVec4& a, const ImVec4& b, float t)
                   std::lerp(a.z, b.z, t), std::lerp(a.w, b.w, t));
 }
 
-// AC Vixen / Project Phantasma.
+// Raven editor chrome.
 //
-// Palette sampled from the supplied engine logo:
-//   void black      #0C0D12
-//   deep gunmetal   #14151C
-//   raised gunmetal #20212A
-//   chrome edge     #5B5B66
-//   chrome text     #E6E4E6
-//   hot magenta     #F98BE8
-//   dark magenta    #BE4EA1
-//
-// The logo is almost monochrome. Magenta is reserved for selected, focused,
-// checked, or actively manipulated controls; neutral chrome handles ordinary
-// hover feedback. The low rounding and hard borders mirror the AC's faceted
-// armour rather than a soft desktop application theme.
-void acVixen()
+// Palette sampled from docs/references logo art: black void, layered gunmetal,
+// cold chrome and one red optic. Red is scarce by contract: active, selected,
+// keyboard-focused and destructive states only. Ordinary hover remains grey.
+void ravenEditor()
 {
     ImGuiStyle& style = ImGui::GetStyle();
     ImGui::StyleColorsDark(&style);
@@ -65,10 +54,10 @@ void acVixen()
     style.Alpha = 1.0f;
     style.DisabledAlpha = 0.55f;
 
-    style.WindowPadding = ImVec2(10.0f, 9.0f);
+    style.WindowPadding = ImVec2(9.0f, 8.0f);
     style.FramePadding = ImVec2(7.0f, 4.0f);
     style.CellPadding = ImVec2(7.0f, 4.0f);
-    style.ItemSpacing = ImVec2(7.0f, 6.0f);
+    style.ItemSpacing = ImVec2(7.0f, 5.0f);
     style.ItemInnerSpacing = ImVec2(6.0f, 4.0f);
     style.IndentSpacing = 18.0f;
     style.ScrollbarSize = 13.0f;
@@ -84,29 +73,36 @@ void acVixen()
 
     style.WindowRounding = 0.0f;
     style.ChildRounding = 0.0f;
-    style.FrameRounding = 1.0f;
-    style.PopupRounding = 1.0f;
-    style.ScrollbarRounding = 1.0f;
-    style.GrabRounding = 1.0f;
+    style.FrameRounding = 0.0f;
+    style.PopupRounding = 0.0f;
+    style.ScrollbarRounding = 0.0f;
+    style.GrabRounding = 0.0f;
     style.TabRounding = 0.0f;
 
     style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
     style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
     style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
 
-    const ImVec4 kVoid = rgba(0xFF0C0D12);
-    const ImVec4 kDeep = rgba(0xFF14151C);
-    const ImVec4 kPanel = rgba(0xFF191A22);
-    const ImVec4 kRaised = rgba(0xFF20212A);
-    const ImVec4 kRaisedHover = rgba(0xFF30313B);
-    const ImVec4 kEdge = rgba(0xFF555661);
-    const ImVec4 kEdgeBright = rgba(0xFF7A7B85);
-    const ImVec4 kText = rgba(0xFFE6E4E6);
-    const ImVec4 kTextDim = rgba(0xFF898891);
-    const ImVec4 kChrome = rgba(0xFFC7C6CA);
-    const ImVec4 kAccent = rgba(0xFFF98BE8);
-    const ImVec4 kAccentBody = rgba(0xFFBE4EA1);
-    const ImVec4 kAccentDark = rgba(0xFF4A2346);
+    const ImVec4 kVoid = rgba(0xFF090B0E);
+    const ImVec4 kCanvas = rgba(0xFF0D1014);
+    const ImVec4 kPanel = rgba(0xFF14191F);
+    const ImVec4 kRaised = rgba(0xFF1C2229);
+    const ImVec4 kControl = rgba(0xFF20272F);
+    const ImVec4 kHover = rgba(0xFF2B343E);
+    const ImVec4 kSelected = rgba(0xFF3A1A1E);
+    const ImVec4 kEdge = rgba(0xFF3E4853);
+    const ImVec4 kEdgeBright = rgba(0xFF64707C);
+    const ImVec4 kText = rgba(0xFFD9DEE3);
+    const ImVec4 kTextDim = rgba(0xFF98A1AA);
+    const ImVec4 kChrome = rgba(0xFFBAC2CA);
+    const ImVec4 kAccent = rgba(0xFFC63A40);
+    const ImVec4 kAccentHover = rgba(0xFFE15258);
+    const ImVec4 kAccentPressed = rgba(0xFF91292F);
+    const ImVec4 kAccentDark = rgba(0xFF451B20);
+    const ImVec4 kFocus = rgba(0xFFF06A70);
+    const ImVec4 kInfo = rgba(0xFF7296B3);
+    const ImVec4 kWarning = rgba(0xFFC79A50);
+    const ImVec4 kDanger = rgba(0xFFE36A55);
 
     const auto alpha = [](const ImVec4& color, float value) {
         return ImVec4(color.x, color.y, color.z, value);
@@ -116,62 +112,62 @@ void acVixen()
     c[ImGuiCol_Text] = kText;
     c[ImGuiCol_TextDisabled] = kTextDim;
 
-    c[ImGuiCol_WindowBg] = kDeep;
+    c[ImGuiCol_WindowBg] = kPanel;
     c[ImGuiCol_ChildBg] = kVoid;
-    c[ImGuiCol_PopupBg] = alpha(kPanel, 0.98f);
+    c[ImGuiCol_PopupBg] = alpha(kRaised, 0.98f);
 
     c[ImGuiCol_Border] = kEdge;
     c[ImGuiCol_BorderShadow] = alpha(kVoid, 0.0f);
 
-    c[ImGuiCol_FrameBg] = kPanel;
-    c[ImGuiCol_FrameBgHovered] = kRaisedHover;
+    c[ImGuiCol_FrameBg] = kControl;
+    c[ImGuiCol_FrameBgHovered] = kHover;
     c[ImGuiCol_FrameBgActive] = kAccentDark;
 
     c[ImGuiCol_TitleBg] = kVoid;
     c[ImGuiCol_TitleBgActive] = kRaised;
     c[ImGuiCol_TitleBgCollapsed] = alpha(kVoid, 0.86f);
-    c[ImGuiCol_MenuBarBg] = kPanel;
+    c[ImGuiCol_MenuBarBg] = kCanvas;
 
     c[ImGuiCol_ScrollbarBg] = kVoid;
-    c[ImGuiCol_ScrollbarGrab] = kRaised;
+    c[ImGuiCol_ScrollbarGrab] = kControl;
     c[ImGuiCol_ScrollbarGrabHovered] = kEdge;
-    c[ImGuiCol_ScrollbarGrabActive] = kAccentBody;
+    c[ImGuiCol_ScrollbarGrabActive] = kAccentPressed;
 
     c[ImGuiCol_CheckMark] = kAccent;
     c[ImGuiCol_SliderGrab] = kChrome;
-    c[ImGuiCol_SliderGrabActive] = kAccent;
+    c[ImGuiCol_SliderGrabActive] = kAccentHover;
 
-    c[ImGuiCol_Button] = kRaised;
-    c[ImGuiCol_ButtonHovered] = kRaisedHover;
+    c[ImGuiCol_Button] = kControl;
+    c[ImGuiCol_ButtonHovered] = kHover;
     c[ImGuiCol_ButtonActive] = kAccentDark;
 
-    c[ImGuiCol_Header] = kPanel;
-    c[ImGuiCol_HeaderHovered] = kRaisedHover;
-    c[ImGuiCol_HeaderActive] = kAccentDark;
+    c[ImGuiCol_Header] = kControl;
+    c[ImGuiCol_HeaderHovered] = kHover;
+    c[ImGuiCol_HeaderActive] = kSelected;
 
     c[ImGuiCol_Separator] = kEdge;
     c[ImGuiCol_SeparatorHovered] = kEdgeBright;
-    c[ImGuiCol_SeparatorActive] = kAccentBody;
+    c[ImGuiCol_SeparatorActive] = kAccent;
 
     c[ImGuiCol_ResizeGrip] = alpha(kEdge, 0.45f);
     c[ImGuiCol_ResizeGripHovered] = kEdgeBright;
-    c[ImGuiCol_ResizeGripActive] = kAccentBody;
+    c[ImGuiCol_ResizeGripActive] = kAccent;
 
-    c[ImGuiCol_Tab] = kPanel;
-    c[ImGuiCol_TabHovered] = kRaisedHover;
+    c[ImGuiCol_Tab] = kControl;
+    c[ImGuiCol_TabHovered] = kHover;
     c[ImGuiCol_TabSelected] = kRaised;
     c[ImGuiCol_TabSelectedOverline] = kAccent;
-    c[ImGuiCol_TabDimmed] = lerp(kPanel, kVoid, 0.65f);
+    c[ImGuiCol_TabDimmed] = lerp(kControl, kVoid, 0.65f);
     c[ImGuiCol_TabDimmedSelected] = lerp(kRaised, kVoid, 0.45f);
-    c[ImGuiCol_TabDimmedSelectedOverline] = alpha(kAccentBody, 0.35f);
+    c[ImGuiCol_TabDimmedSelectedOverline] = alpha(kAccentPressed, 0.35f);
 
-    c[ImGuiCol_DockingPreview] = alpha(kAccentBody, 0.45f);
+    c[ImGuiCol_DockingPreview] = alpha(kAccent, 0.45f);
     c[ImGuiCol_DockingEmptyBg] = kVoid;
 
-    c[ImGuiCol_PlotLines] = kChrome;
-    c[ImGuiCol_PlotLinesHovered] = kAccent;
-    c[ImGuiCol_PlotHistogram] = kEdgeBright;
-    c[ImGuiCol_PlotHistogramHovered] = kAccentBody;
+    c[ImGuiCol_PlotLines] = kInfo;
+    c[ImGuiCol_PlotLinesHovered] = kAccentHover;
+    c[ImGuiCol_PlotHistogram] = kWarning;
+    c[ImGuiCol_PlotHistogramHovered] = kDanger;
 
     c[ImGuiCol_TableHeaderBg] = kRaised;
     c[ImGuiCol_TableBorderStrong] = kEdge;
@@ -179,10 +175,10 @@ void acVixen()
     c[ImGuiCol_TableRowBg] = alpha(kVoid, 0.0f);
     c[ImGuiCol_TableRowBgAlt] = alpha(kText, 0.035f);
 
-    c[ImGuiCol_TextLink] = kAccent;
-    c[ImGuiCol_TextSelectedBg] = alpha(kAccentBody, 0.32f);
-    c[ImGuiCol_DragDropTarget] = kAccent;
-    c[ImGuiCol_NavCursor] = kAccent;
+    c[ImGuiCol_TextLink] = kInfo;
+    c[ImGuiCol_TextSelectedBg] = alpha(kAccent, 0.32f);
+    c[ImGuiCol_DragDropTarget] = kAccentHover;
+    c[ImGuiCol_NavCursor] = kFocus;
     c[ImGuiCol_NavWindowingHighlight] = kChrome;
     c[ImGuiCol_NavWindowingDimBg] = alpha(kVoid, 0.72f);
     c[ImGuiCol_ModalWindowDimBg] = alpha(kVoid, 0.78f);
@@ -260,7 +256,6 @@ void dougBinksDark()
     }
 }
 
-
 // The game HUD's own look, lifted onto the tool UI so the debug panels read as
 // part of the same product instead of as a default imgui window floating over
 // it.
@@ -305,16 +300,16 @@ void hudReliquary()
     style.GrabMinSize = 9.0f;
     style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
 
-    const ImVec4 ink(0.071f, 0.055f, 0.039f, 0.941f);     // black iron
+    const ImVec4 ink(0.071f, 0.055f, 0.039f, 0.941f); // black iron
     const ImVec4 inkSoft(0.114f, 0.090f, 0.071f, 0.941f);
-    const ImVec4 edge(0.420f, 0.329f, 0.200f, 1.0f);      // dim brass
+    const ImVec4 edge(0.420f, 0.329f, 0.200f, 1.0f); // dim brass
     const ImVec4 edgeBright(0.722f, 0.576f, 0.333f, 1.0f);
-    const ImVec4 text(0.910f, 0.863f, 0.753f, 1.0f);      // bone
+    const ImVec4 text(0.910f, 0.863f, 0.753f, 1.0f); // bone
     const ImVec4 textDim(0.557f, 0.506f, 0.408f, 1.0f);
-    const ImVec4 accent(0.941f, 0.725f, 0.361f, 1.0f);    // brass focus
+    const ImVec4 accent(0.941f, 0.725f, 0.361f, 1.0f); // brass focus
     const ImVec4 good(0.435f, 0.647f, 0.435f, 1.0f);
     const ImVec4 warn(0.851f, 0.643f, 0.255f, 1.0f);
-    const ImVec4 bad(0.780f, 0.290f, 0.275f, 1.0f);       // blood
+    const ImVec4 bad(0.780f, 0.290f, 0.275f, 1.0f); // blood
     const ImVec4 mystic(0.561f, 0.514f, 0.788f, 1.0f);
 
     const auto tint = [](const ImVec4& c, float alpha) {
@@ -378,10 +373,13 @@ void ensureBuiltins()
 {
     if (!registry().empty())
         return;
-    registerTheme("ac_vixen", &acVixen);
+    registerTheme("raven_editor", &ravenEditor);
+    // Persisted ids from the previous editor theme keep working, but resolve to
+    // current Raven chrome rather than preserving obsolete magenta branding.
+    registerTheme("ac_vixen", &ravenEditor);
     registerTheme("hud_reliquary", &hudReliquary);
     // Backward-compatible alias for projects that persisted the old id.
-    registerTheme("one_dark", &acVixen);
+    registerTheme("one_dark", &ravenEditor);
     registerTheme("dougbinks_dark", &dougBinksDark);
     registerTheme("dark", [] { ImGui::StyleColorsDark(); });
     registerTheme("light", [] { ImGui::StyleColorsLight(); });
@@ -421,14 +419,17 @@ bool apply(const std::string& id)
         return false;
     // A theme describes the complete style, not a delta from whichever theme
     // happened to run before it. Resetting geometry as well as colours makes
-    // hot-swapping deterministic (ac_vixen after hud_reliquary used to inherit
-    // square tabs and tight padding, while ac_vixen at startup did not).
+    // hot-swapping deterministic (raven_editor after hud_reliquary must not
+    // inherit another theme's spacing).
     ImGui::GetStyle() = ImGuiStyle{};
     it->fn();
     currentId() = id;
     return true;
 }
 
-const std::string& current() { return currentId(); }
+const std::string& current()
+{
+    return currentId();
+}
 
 } // namespace eng::imguitheme

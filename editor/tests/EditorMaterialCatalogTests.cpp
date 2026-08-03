@@ -45,7 +45,7 @@ static std::string write(const std::filesystem::path& path,
 int main(int argc, char** argv)
 {
     const std::filesystem::path root =
-        std::filesystem::temp_directory_path() / "psx_material_catalog";
+        std::filesystem::temp_directory_path() / "raven_material_catalog";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     std::filesystem::create_directories(root, ec);

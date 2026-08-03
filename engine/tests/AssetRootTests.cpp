@@ -102,8 +102,8 @@ int main()
     require(!eng::assets::init(empty.string()),
             "a root without assets.toml must fail, not throw");
 
-    setenv("PSX_ASSET_ROOT", root.c_str(), 1);
-    require(eng::assets::init(), "PSX_ASSET_ROOT names the content root");
+    setenv("RAVEN_ASSET_ROOT", root.c_str(), 1);
+    require(eng::assets::init(), "RAVEN_ASSET_ROOT names the content root");
     require(eng::assets::root() == root, "root() is the env root");
 
     // project() is what replaces the assetRoot + "/../.." climb: in a dev

@@ -28,7 +28,7 @@ static void require(bool condition, const std::string& message)
 static std::string tempFile(const char* name)
 {
     const std::filesystem::path dir =
-        std::filesystem::temp_directory_path() / "psx-editor-settings-tests";
+        std::filesystem::temp_directory_path() / "raven-editor-settings-tests";
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);
     return (dir / name).string();
@@ -103,16 +103,16 @@ int main()
         const auto has = [&env](const std::string& entry) {
             return std::find(env.begin(), env.end(), entry) != env.end();
         };
-        require(has("PSX_RENDER_PRESET=ps1"), "the profile is passed by name");
-        require(has("PSX_PLAY_FROM=1.0,2.0,3.0"), "and the start position");
-        require(has("PSX_DEBUG_UI=1"),
+        require(has("RAVEN_RENDER_PRESET=ps1"), "the profile is passed by name");
+        require(has("RAVEN_PLAY_FROM=1.0,2.0,3.0"), "and the start position");
+        require(has("RAVEN_DEBUG_UI=1"),
                 "a flag the game tests for presence is exported as 1, never "
-                "as 0 -- PSX_DEBUG_UI=0 would read as ON");
+                "as 0 -- RAVEN_DEBUG_UI=0 would read as ON");
         require(env.size() == 3, "and nothing else is exported");
 
         options.console = false;
         const std::vector<std::string> without = playtestEnvironment(options);
-        require(std::find(without.begin(), without.end(), "PSX_DEBUG_UI=0") ==
+        require(std::find(without.begin(), without.end(), "RAVEN_DEBUG_UI=0") ==
                     without.end(),
                 "turning it off omits the variable rather than setting it");
     }

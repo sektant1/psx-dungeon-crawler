@@ -1,6 +1,6 @@
-# Game Engine Design Document (GEDD)
+# Raven Engine Design Document (GEDD)
 
-_Engine implementation reference for the PSX dungeon crawler._
+_Raven Engine implementation reference for the untitled PSX dungeon crawler._
 _Companion to the player-facing [GDD.md](GDD.md). Started 2026-07-24._
 
 > **Visual freeze rule.** The PSX look (shaders / compositor / materials /
@@ -152,8 +152,8 @@ Factory`). Kept from that port: `Object`, `System`, `Content`, `ResourceCache`,
 
 ### 6.1 Runtime / loop (`eng::Engine`)
 Owns the SDL→Ogre ordering, frame clock, and the **fixed-step** simulation. Hooks
-for `PSX_SCREENSHOT` (deterministic capture) and `PSX_BENCH_FRAMES`. `tick()`
-returns a fixed `dt` under capture (`PSX_FIXED_DT`), pins `rand()`, and runs Jolt
+for `RAVEN_SCREENSHOT` (deterministic capture) and `RAVEN_BENCH_FRAMES`. `tick()`
+returns a fixed `dt` under capture (`RAVEN_FIXED_DT`), pins `rand()`, and runs Jolt
 single-threaded so captures are reproducible.
 
 ### 6.2 Renderer (`eng::Renderer`)
@@ -254,7 +254,7 @@ gen::generate / LevelDocument  →  gen::Layout (ASCII adapter)
 `layoutToScene` currently belongs to the separate `mapgen`/`.map` path; it is
 not yet the normal game's materialisation path. Converging both producers on a
 shared scene IR is required before editor preview can claim runtime parity.
-`PSX_GEN_SEED` / `PSX_GEN_DUMP` control generation. Static shell is batched;
+`RAVEN_GEN_SEED` / `RAVEN_GEN_DUMP` control generation. Static shell is batched;
 actors are per-entity in the registry.
 
 ### 7.5 Serialization (`.map`)
@@ -268,7 +268,7 @@ exists yet.
 
 ## 8. Determinism & verification
 
-The engine can't rely on pixel diffs (`PSX_SCREENSHOT` is **not** a pixel oracle —
+The engine can't rely on pixel diffs (`RAVEN_SCREENSHOT` is **not** a pixel oracle —
 `animTime` summed wall-clock `dt` → 100% pixel diff on identical binaries). The
 verification stack instead:
 
@@ -282,7 +282,7 @@ verification stack instead:
 
 **Known capture limits:** not pixel-exact (particle floor); under a tiling WM the
 compositor resizes the window so capture *resolution* varies across layouts —
-baselines only compare within one layout. Proper fix: route `PSX_SCREENSHOT`
+baselines only compare within one layout. Proper fix: route `RAVEN_SCREENSHOT`
 through a fixed-size offscreen RTT (RenderCore already has offscreen RTT).
 
 ### 8.1 Headless simulation harness (`game_sim`)
@@ -345,10 +345,10 @@ make docs     # Doxygen API reference → build/docs/html/index.html
 ```
 
 ### Env hooks
-- `PSX_SCREENSHOT=/path.png` — render N frames, save, exit (verification hook).
-- `PSX_FIXED_DT`, `srand` pin, single-thread Jolt — deterministic capture.
-- `PSX_GEN_SEED` / `PSX_GEN_DUMP` — dungeon generation control.
-- `PSX_BENCH_FRAMES` — benchmark (note: `game.toml` `vsync=true` caps to 60fps;
+- `RAVEN_SCREENSHOT=/path.png` — render N frames, save, exit (verification hook).
+- `RAVEN_FIXED_DT`, `srand` pin, single-thread Jolt — deterministic capture.
+- `RAVEN_GEN_SEED` / `RAVEN_GEN_DUMP` — dungeon generation control.
+- `RAVEN_BENCH_FRAMES` — benchmark (note: `game.toml` `vsync=true` caps to 60fps;
   set `vsync=false` to measure real GPU cost).
 
 ---

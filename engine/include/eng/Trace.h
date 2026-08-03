@@ -8,7 +8,7 @@ namespace eng {
 
 // Emits Chrome-trace ("chrome://tracing") JSON: one complete ("X") event per
 // scope with a start timestamp and duration in microseconds. RAII Scope wraps a
-// begin/end pair. Complements PSX_BENCH frame timing.
+// begin/end pair. Complements RAVEN_BENCH frame timing.
 class Trace {
 public:
     void beginSession(const std::string& path);

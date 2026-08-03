@@ -60,14 +60,14 @@ bool Platform::init(const std::string& title, int width, int height)
     // window with a float rule instead of tiling it (which resizes the render
     // surface). Set before SDL_Init; honours a user override. X11 name is
     // "<instance> <class>"; the class (2nd token) is what Hyprland matches.
-    SDL_setenv("SDL_VIDEO_X11_WMCLASS", "psx-dungeon-crawler", 0);
-    SDL_setenv("SDL_VIDEO_WAYLAND_WMCLASS", "psx-dungeon-crawler", 0);
+    SDL_setenv("SDL_VIDEO_X11_WMCLASS", "raven-engine", 0);
+    SDL_setenv("SDL_VIDEO_WAYLAND_WMCLASS", "raven-engine", 0);
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
         log::error("Platform: SDL_Init failed: %s", SDL_GetError());
         return false;
     }
     Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI |
-                   (std::getenv("PSX_FULLSCREEN")
+                   (std::getenv("RAVEN_FULLSCREEN")
                         ? SDL_WINDOW_FULLSCREEN_DESKTOP
                         : 0);
 #if defined(ENG_RENDERER_RHI)

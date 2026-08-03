@@ -2,13 +2,13 @@
 
 `eng::DebugConsole` (`engine/include/eng/debug/Console.h`) — one dockable imgui
 window with a filtered log and a command line, shared by the game, the scene
-editor and the psx demo. Toggle: `` ` `` in all three. `PSX_CONSOLE=1` opens it
+editor and the psx demo. Toggle: `` ` `` in all three. `RAVEN_CONSOLE=1` opens it
 on frame 1 (headless captures have no key to press).
 
 It is not `eng::DebugTools`. That panel tunes subsystems with sliders and needs
 a live pointer to each of them; this one only needs text, so it works before a
 scene exists and keeps working when the thing being debugged is the scene build.
-`PSX_TUNE=1` opens *that* panel on frame 1, for the same reason `PSX_CONSOLE`
+`RAVEN_TUNE=1` opens *that* panel on frame 1, for the same reason `RAVEN_CONSOLE`
 opens this one: a deterministic capture has no key to press, so it is the only
 way a screenshot can prove the sliders draw.
 
@@ -41,7 +41,7 @@ resource and would bury everything else.
 
 ```
  0.69 info Warmup             100 materials, 0 unsupported
- 0.69 WARN                    Unknown PSX_RENDER_PRESET 'bogus'; using …
+ 0.69 WARN                    Unknown RAVEN_RENDER_PRESET 'bogus'; using …
  └ bar └ time └ level └ subsystem   └ message
 ```
 
@@ -150,7 +150,7 @@ profile             last frame's timing hierarchy, self time and call counts
 profile.csv out.csv the same tree as a spreadsheet
 ```
 
-`PSX_PROFILE=<n>` prints that tree to the log every *n* frames with no UI at
+`RAVEN_PROFILE=<n>` prints that tree to the log every *n* frames with no UI at
 all — the version that works over ssh or inside a capture run.
 
 ## Adding it to a new app
@@ -210,8 +210,8 @@ Turning it off, in precedence order:
 1. `-DENG_UI_LAYOUT_PERSISTENCE=0` at build time. The engine never opens the
    file and `DebugTools` rebuilds the shipped layout every run — the behaviour
    that predates this, and what a shipping build wants.
-2. `PSX_UI_LAYOUT=0` (or `off`/`none`) for one run.
-3. `PSX_UI_LAYOUT=<path>` to redirect it — a scratch file, or one file shared by
+2. `RAVEN_UI_LAYOUT=0` (or `off`/`none`) for one run.
+3. `RAVEN_UI_LAYOUT=<path>` to redirect it — a scratch file, or one file shared by
    all three apps.
 
 Set (1) or (2) for a headless capture of the tool UI: a restored layout would
@@ -295,16 +295,14 @@ the panels reproducible. `resetLayout()` drops it mid-session.
 ## Themes
 
 `eng::imguitheme` (`engine/include/eng/render/ImGuiTheme.h`) registers named
-styles; `RenderCore` applies `hud_reliquary` at startup, or `PSX_IMGUI_THEME`.
+styles; `RenderCore` applies `raven_editor` at startup, or `RAVEN_IMGUI_THEME`.
 
-`hud_reliquary` is the game HUD's own look carried onto the tool UI, so the
-panels read as part of the same product rather than as default imgui windows
-floating over it: the "Ash Reliquary" palette (black iron, bone ink, brass
-focus, blood danger), hairline borders, and **nothing rounded** — the HUD is
-drawn as hard rectangles on a pixel grid, and one rounded tool window beside it
-breaks the read. The palette's source of truth is `makeGameHudStyleSheet()` in
-`game/src/ui/GameHudStyle.cpp`, restated as floats in the theme because the
-engine cannot include a game header; keep the two in step by hand.
+`raven_editor` uses black void, layered gunmetal, cold chrome and restrained red
+sampled from the Raven logo references. Red is reserved for active, selected,
+focused, and destructive states; normal hover stays steel grey. Hairline borders
+and zero rounding preserve the logo's faceted mechanical language. Full editor
+topology and palette tokens live in
+[Editor UI Architecture](editor-ui-architecture.md).
 
 The *font* is not matched. ImGui uses DejaVu Sans Mono; the HUD uses a bitmap
 font (`ui_regular.png`) drawn by `UiCanvas`, which is a different mechanism and

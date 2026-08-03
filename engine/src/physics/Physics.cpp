@@ -259,11 +259,11 @@ void Physics::init(const PhysicsSetup& setup) {
     // single worker is reproducible frame for frame, which is what boss-fight
     // retries and deterministic capture both need, so that is the default and
     // PhysicsSetup::multithreaded is the explicit opt-out. Capture mode
-    // (PSX_SCREENSHOT/PSX_FIXED_DT, matching Engine's fixed-timestep capture)
+    // (RAVEN_SCREENSHOT/RAVEN_FIXED_DT, matching Engine's fixed-timestep capture)
     // still forces a single worker even if the application opted in, so a
     // capture is reproducible regardless of how the game is configured.
     const bool forceDeterministic =
-        std::getenv("PSX_SCREENSHOT") || std::getenv("PSX_FIXED_DT");
+        std::getenv("RAVEN_SCREENSHOT") || std::getenv("RAVEN_FIXED_DT");
     unsigned threads = 1u;
     if (mImpl->setup.multithreaded && !forceDeterministic) {
         const unsigned hardwareThreads = std::thread::hardware_concurrency();

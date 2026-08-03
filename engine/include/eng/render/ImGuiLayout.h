@@ -23,8 +23,8 @@ namespace eng {
 //      opens the file at all and DebugTools rebuilds its shipped layout every
 //      run, which is the pre-existing behaviour and what a shipping build
 //      wants.
-//   2. PSX_UI_LAYOUT=0 (or "off"/"none") in the environment, per run.
-//   3. PSX_UI_LAYOUT=<path> to point it somewhere else -- a scratch file while
+//   2. RAVEN_UI_LAYOUT=0 (or "off"/"none") in the environment, per run.
+//   3. RAVEN_UI_LAYOUT=<path> to point it somewhere else -- a scratch file while
 //      experimenting, or a per-user path outside the source tree.
 //
 // Headless captures set (1) or (2): a restored layout would make a screenshot
@@ -62,7 +62,7 @@ bool restored();
 // but not window sets, and one file would have them dragging each other's
 // panels around. The window title is deliberately not the identity: it carries
 // a build tag, and a layout that moved when the title did would be worse than
-// none. An explicit PSX_UI_LAYOUT path overrides this and is taken literally,
+// none. An explicit RAVEN_UI_LAYOUT path overrides this and is taken literally,
 // which is what makes "point all three at one file" still possible.
 void install();
 

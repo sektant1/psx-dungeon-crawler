@@ -70,11 +70,11 @@ import sys
 BLENDER_SCRIPT = r'''
 import bpy, json, os, sys, math
 
-argv = json.loads(os.environ["PSX_BLEND_ARGS"])
+argv = json.loads(os.environ["RAVEN_BLEND_ARGS"])
 
 meshes = [o for o in bpy.data.objects if o.type == "MESH"]
 if not meshes:
-    print("PSX_ERROR no mesh objects in this .blend")
+    print("RAVEN_ERROR no mesh objects in this .blend")
     sys.exit(1)
 
 def volume(o):
@@ -84,22 +84,22 @@ def volume(o):
 if argv["list"]:
     for o in sorted(meshes, key=volume, reverse=True):
         d = o.dimensions
-        print("PSX_MESH %-24s %8.3f x %8.3f x %8.3f  (%d verts)"
+        print("RAVEN_MESH %-24s %8.3f x %8.3f x %8.3f  (%d verts)"
               % (o.name, d.x, d.y, d.z, len(o.data.vertices)))
     sys.exit(0)
 
 if argv["object"]:
     chosen = next((o for o in meshes if o.name == argv["object"]), None)
     if chosen is None:
-        print("PSX_ERROR no mesh called '%s'" % argv["object"])
-        print("PSX_ERROR available: %s" % ", ".join(o.name for o in meshes))
+        print("RAVEN_ERROR no mesh called '%s'" % argv["object"])
+        print("RAVEN_ERROR available: %s" % ", ".join(o.name for o in meshes))
         sys.exit(1)
 else:
     # The largest mesh. A studio .blend is the subject plus backdrops, and the
     # subject is usually the biggest thing that is not a wall -- a guess, which
     # is why it is always printed.
     chosen = max(meshes, key=volume)
-    print("PSX_NOTE picked the largest mesh: '%s' (--list to see the rest)"
+    print("RAVEN_NOTE picked the largest mesh: '%s' (--list to see the rest)"
           % chosen.name)
 
 # Files are often saved in Edit, Sculpt or Texture Paint mode. Selection
@@ -250,16 +250,16 @@ else:
         for tri in faces:
             f.write("f %s\n" % " ".join("%d/%d/%d" % (i, i, i) for i in tri))
 
-    print("PSX_BAKED %d materials -> vertex colours" % len(colours))
+    print("RAVEN_BAKED %d materials -> vertex colours" % len(colours))
     evaluated.to_mesh_clear()
 
 d = chosen.dimensions
 s = argv["scale"]
 # Reported in the axis order the engine will see, so the numbers can be pasted
 # straight into a kit.toml `size`.
-print("PSX_SIZE %.4f %.4f %.4f" % (d.x * s, d.z * s, d.y * s))
-print("PSX_VERTS %d" % len(chosen.data.vertices))
-print("PSX_OK %s" % out)
+print("RAVEN_SIZE %.4f %.4f %.4f" % (d.x * s, d.z * s, d.y * s))
+print("RAVEN_VERTS %d" % len(chosen.data.vertices))
+print("RAVEN_OK %s" % out)
 '''
 
 
@@ -321,7 +321,7 @@ def main() -> int:
         os.makedirs(args.outdir, exist_ok=True)
 
     env = dict(os.environ)
-    env["PSX_BLEND_ARGS"] = repr({
+    env["RAVEN_BLEND_ARGS"] = repr({
         "object": args.object,
         "out": out,
         "scale": args.scale,
@@ -337,22 +337,22 @@ def main() -> int:
 
     ok = False
     for line in (proc.stdout + proc.stderr).splitlines():
-        if line.startswith("PSX_ERROR"):
-            print(line[len("PSX_ERROR "):], file=sys.stderr)
-        elif line.startswith("PSX_MESH"):
-            print(line[len("PSX_MESH "):])
-        elif line.startswith("PSX_NOTE"):
-            print(line[len("PSX_NOTE "):])
-        elif line.startswith("PSX_SIZE"):
+        if line.startswith("RAVEN_ERROR"):
+            print(line[len("RAVEN_ERROR "):], file=sys.stderr)
+        elif line.startswith("RAVEN_MESH"):
+            print(line[len("RAVEN_MESH "):])
+        elif line.startswith("RAVEN_NOTE"):
+            print(line[len("RAVEN_NOTE "):])
+        elif line.startswith("RAVEN_SIZE"):
             x, y, z = line.split()[1:4]
             # The three numbers a kit.toml entry wants, in its own syntax, so
             # the next step is a paste rather than a measurement.
             print("size = [%s, %s, %s]   # metres, for kit.toml" % (x, y, z))
-        elif line.startswith("PSX_BAKED"):
-            print(line[len("PSX_BAKED "):])
-        elif line.startswith("PSX_VERTS"):
+        elif line.startswith("RAVEN_BAKED"):
+            print(line[len("RAVEN_BAKED "):])
+        elif line.startswith("RAVEN_VERTS"):
             print("%s vertices" % line.split()[1])
-        elif line.startswith("PSX_OK"):
+        elif line.startswith("RAVEN_OK"):
             ok = True
             print("wrote %s" % line.split(None, 1)[1])
 

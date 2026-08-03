@@ -64,8 +64,8 @@ Recommended root envelope:
 
 ```json
 {
-  "$schema": "https://psx-dungeon-crawler.invalid/schema/scene-1.schema.json",
-  "format": "psx.scene",
+  "$schema": "https://raven-engine.invalid/schema/scene-1.schema.json",
+  "format": "raven-scene",
   "version": 1,
   "id": "scene.demo.boss_crypt",
   "entities": []
@@ -105,13 +105,13 @@ Use that capability in a restricted profile:
 | Object layer `Gameplay` | prefab/entity placement through an explicit `prefab_id` property | player start, exit, chest, boss spawn |
 | Object layer `Collision` | collision-volume input, not render geometry | arena bounds / blockers |
 | Object layer `Lights` | typed light entity | torches, boss altar |
-| Object properties | validated, namespaced engine parameters | `psx.prefab_id`, `psx.encounter_id` |
+| Object properties | validated, namespaced engine parameters | `raven.prefab_id`, `raven.encounter_id` |
 
 Convert Tiled pixel coordinates to engine metres in one importer setting; flip
 the required axis once; record the chosen tile size in the import manifest. Do
 not use Tiled `name`, incremental object ID, or GID as a stable gameplay ID:
 the specification describes them as authoring-oriented or map-local. Instead,
-require a logical `psx.entity_id` only where cross-reference/stable save-game
+require a logical `raven.entity_id` only where cross-reference/stable save-game
 identity is needed, and generate a deterministic scene-local ID otherwise.
 
 For the vertical FPS demo, Tiled is most useful for top-down arena/blockout and

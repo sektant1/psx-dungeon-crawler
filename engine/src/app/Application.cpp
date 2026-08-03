@@ -25,11 +25,11 @@ bool runLoadPlan(Application& app, Engine& engine, const AppConfig& cfg)
     LoadRunner runner(std::move(plan));
     engine.setLoadingPhase(true);
 
-    // PSX_LOADING_HOLD keeps the screen up for at least N seconds after the
+    // RAVEN_LOADING_HOLD keeps the screen up for at least N seconds after the
     // work is done. Purely a development aid: a plan that finishes in 200 ms is
     // impossible to look at, let alone tune the animation against.
     float hold = 0.0f;
-    if (const char* h = std::getenv("PSX_LOADING_HOLD"))
+    if (const char* h = std::getenv("RAVEN_LOADING_HOLD"))
         hold = float(std::atof(h));
 
     float elapsed = 0.0f;
@@ -96,12 +96,12 @@ int runApplication(Application& app, int argc, char** argv)
     uint64_t frame = 0;
 
     Profiler& prof = engine.profiler();
-    // PSX_PROFILE=N dumps the frame's timing hierarchy every N frames (any
+    // RAVEN_PROFILE=N dumps the frame's timing hierarchy every N frames (any
     // non-numeric value means 120). The console's `profile` command is the same
     // data on demand; this is the version that works over ssh, in a capture run,
     // or when the thing being profiled is the UI.
     int profileEvery = 0;
-    if (const char* pp = std::getenv("PSX_PROFILE")) {
+    if (const char* pp = std::getenv("RAVEN_PROFILE")) {
         profileEvery = std::atoi(pp);
         if (profileEvery <= 0)
             profileEvery = 120;

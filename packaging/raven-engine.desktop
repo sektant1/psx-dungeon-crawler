@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Raven Engine
+Comment=Vulkan game engine with PSX and retro rendering
+Exec=raven-engine
+Icon=raven-engine
+Terminal=false
+Categories=Game;

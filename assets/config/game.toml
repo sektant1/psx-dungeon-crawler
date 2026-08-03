@@ -1,5 +1,5 @@
 [window]
-title = "Debug"
+title = "Raven Engine | Game Preview"
 width = 960
 height = 720
 # Run unsynced (vsync=true had its own overlay-scanout flicker on this

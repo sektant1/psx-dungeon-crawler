@@ -137,12 +137,13 @@ int main()
         // A loose candle of the same prefab, standing on its own.
         composed.add(piece("candle_0009", "kit.prop_candle"));
 
-        OutlinerTree hierarchy = buildOutliner(composed, catalog, OutlinerOptions{});
+        OutlinerTree hierarchy =
+            buildOutliner(composed, catalog, OutlinerOptions{});
         const OutlinerGroup* object = group(hierarchy, "chandelier_0001");
-        require(object && object->composed,
-                "the composed object gets a group of its own, keyed by its root");
-        require(object->nodes.size() == 1,
-                "holding one node -- the root");
+        require(
+            object && object->composed,
+            "the composed object gets a group of its own, keyed by its root");
+        require(object->nodes.size() == 1, "holding one node -- the root");
         require(object->nodes.front().children.size() == 3,
                 "with its children nested under it, rather than collapsed into "
                 "a 'kit.prop_candle (3)' row somewhere else in the panel");
@@ -176,6 +177,11 @@ int main()
         const OutlinerTree empty = buildOutliner(composed, catalog, hunt);
         require(empty.groups.empty() && empty.hidden == 2,
                 "and a miss drops it whole, counted whole");
+
+        hunt.filter = "kit.prop_lamp";
+        const OutlinerTree byPrefab = buildOutliner(composed, catalog, hunt);
+        require(byPrefab.groups.size() == 1 && byPrefab.shown == 2,
+                "a composed child remains searchable by prefab");
     }
 
     // --- kinds --------------------------------------------------------------

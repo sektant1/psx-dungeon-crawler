@@ -63,7 +63,7 @@ void DemoHud::draw(const Status& status, float dt)
         // One stable id for the whole run: the panel is a caption, not a
         // look-target, so changing preset must not restart its fade.
         content.id = "demo/placard";
-        content.title = "PSX ENGINE DEMO";
+        content.title = "RAVEN ENGINE DEMO";
         content.meta = counter(status.presetIndex, status.presetCount);
         content.subtitle =
             status.paused ? status.preset + " - paused" : status.preset;

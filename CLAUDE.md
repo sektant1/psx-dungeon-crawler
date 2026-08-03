@@ -93,7 +93,7 @@ A change that compiles is not a change that works. This engine has a
 deterministic capture hook, so use it:
 
 ```sh
-PSX_SCREENSHOT=/tmp/x.png PSX_SCREENSHOT_FRAME=120 timeout 120 ./build/game
+RAVEN_SCREENSHOT=/tmp/x.png RAVEN_SCREENSHOT_FRAME=120 timeout 120 ./build/game
 make screenshot SHOT=/tmp/x.png FRAME=200      # same, through the Makefile
 ```
 

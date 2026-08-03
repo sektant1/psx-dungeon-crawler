@@ -2,10 +2,11 @@
 
 #include <editor/assets/FileBrowser.h>
 
+#include <eng/assets/AssetName.h>
+
 #include <render/AssimpLoader.h>
 
 #include <algorithm>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -20,19 +21,7 @@ namespace fs = std::filesystem;
 
 std::string slugOf(std::string value)
 {
-    std::string out;
-    bool pendingSeparator = false;
-    for (const unsigned char c : value) {
-        if (std::isalnum(c)) {
-            if (pendingSeparator && !out.empty())
-                out += '_';
-            pendingSeparator = false;
-            out += char(std::tolower(c));
-        }
-        else {
-            pendingSeparator = true;
-        }
-    }
+    std::string out = eng::assets::canonicalToken(value);
     return out.empty() ? std::string("model") : out;
 }
 

@@ -65,7 +65,7 @@ Each scene holds typed logical IDs, never filenames or absolute paths:
 ```json
 {
   "$schema": "../schemas/scene.schema.json",
-  "format": "psx-dungeon-scene",
+  "format": "raven-scene",
   "version": 1,
   "id": "scene.demo.descent",
   "entities": [{

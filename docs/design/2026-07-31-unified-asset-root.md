@@ -144,8 +144,8 @@ ends up containing only what ships.
 without an upward include.
 
 **D5 — Root discovery at runtime, so builds become relocatable.**
-Order: `PSX_ASSET_ROOT` env → `<exe>/../share/psx-dungeon/assets` → `<exe>/assets`
-→ build-time `PSX_ASSET_ROOT_DEV` (source dir). The dev default keeps
+Order: `RAVEN_ASSET_ROOT` env → `<exe>/../share/raven-engine/assets` → `<exe>/assets`
+→ build-time `RAVEN_ASSET_ROOT_DEV` (source dir). The dev default keeps
 `make run` working from the build tree; the first three make an installed build
 possible for the first time.
 
@@ -397,7 +397,7 @@ Depends on `<filesystem>` + the existing TOML reader only — clean under
 | `game/editor/EditorApp.cpp`, `EditorState.h`, `PreviewBridge.cpp` | `assetRoot` → resolver; `assetRoot + "/../../playtest.log"` → `assets::project() / "playtest.log"` |
 | `samples/psx-demo/src/main.cpp`, `ShowcaseScene.cpp` | mount set `"demo"`; `samples/common/DemoScene.cpp` loses `DEMO_SCENE_TOML` |
 | `game/tools/scene_cook_main.cpp` | `assetRootFor(kitPath)` heuristic deleted — the cooker mounts `"game"` like everything else |
-| `CMakeLists.txt` | delete `ENG_ASSET_DIR`, `APP_ASSET_DIR`, `DEMO_SCENE_TOML`, `KIT_TOML`, `ASSET_ROOT`, `RITUAL_SCN`, `SCENE_SCHEMA` (~20 sites); add one `PSX_ASSET_ROOT_DEV`; add `install()` for `assets/` → `share/psx-dungeon/assets` |
+| `CMakeLists.txt` | delete `ENG_ASSET_DIR`, `APP_ASSET_DIR`, `DEMO_SCENE_TOML`, `KIT_TOML`, `ASSET_ROOT`, `RITUAL_SCN`, `SCENE_SCHEMA` (~20 sites); add one `RAVEN_ASSET_ROOT_DEV`; add `install()` for `assets/` → `share/raven-engine/assets` |
 | `engine/tests/*`, `game/tests/*` | `PROJECT_SOURCE_DIR + "/engine/assets/..."` → `assets::resolve("engine/shaders/...")` (9 test files) |
 | `tools/assetlint.py` | read `assets/assets.toml`; lint one mount set at a time; also assert no cross-pack collision *within* a set |
 | `tools/import_sprite_sheets.py`, `gen_particle_textures.py`, `gen_font_atlas.py`, `regenerate-prototypes.sh` | output paths → `assets/engine/...` |
@@ -692,7 +692,7 @@ exhibits, and add a capture that actually renders them before starting.
 Detail and options: `docs/design/2026-07-31-mesh-importer-plan.md`.
 
 **P11 — Install + docs.** `install()` rules; verify a staged install runs from
-outside the source tree with no `PSX_ASSET_ROOT` set. Rewrite the content
+outside the source tree with no `RAVEN_ASSET_ROOT` set. Rewrite the content
 sections of `ARCHITECTURE.md` and `docs/assets-pipeline.md`; add
 `docs/asset-system.md`: root discovery, packs, mount order, the three data
 tiers, the naming rule, adding a pack, adding an asset, **adding a format**

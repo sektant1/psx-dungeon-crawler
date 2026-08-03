@@ -1,4 +1,4 @@
-# PSX Dungeon Crawler {#mainpage}
+# Raven Engine {#mainpage}
 
 This reference documents the public C++ engine API and the gameplay systems
 that build the procedural dungeon crawler.

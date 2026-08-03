@@ -17,8 +17,8 @@ namespace eng {
 
 // Owns lifetime and ordering: SDL window -> Ogre Root -> (frames) ->
 // Ogre Root down -> SDL window down. Also owns the frame clock and the
-// PSX_SCREENSHOT verification hook (render 90 frames by default, save PNG,
-// close). PSX_SCREENSHOT_FRAME overrides the capture frame for animation tests.
+// RAVEN_SCREENSHOT verification hook (render 90 frames by default, save PNG,
+// close). RAVEN_SCREENSHOT_FRAME overrides the capture frame for animation tests.
 class Engine
 {
 public:
@@ -30,7 +30,7 @@ public:
     // resolver, creates the window and starts the renderer on the mounted
     // packs. `configPath` is a LOGICAL path -- "config/game.toml", not a filename on
     // disk -- and an empty one means "engine defaults".
-    // `renderPreset` is the starting render profile (0 = let PSX_RENDER_PRESET
+    // `renderPreset` is the starting render profile (0 = let RAVEN_RENDER_PRESET
     // decide, then the engine default). The applied id is readable afterwards
     // so the debug console can open on the look that is actually live instead
     // of assuming the default.

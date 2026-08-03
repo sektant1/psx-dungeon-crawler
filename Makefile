@@ -5,7 +5,7 @@
 #   make run        build + run the game
 #   make help       full target + option reference
 #
-# Run options are plain make variables mapped to the game's PSX_* env vars, e.g.
+# Run options are plain make variables mapped to the game's RAVEN_* env vars, e.g.
 #   make run SEED=42 PRESET=ps1            # seed + render preset
 #   make run MAP=level.map                 # play an authored .map
 #   make run SHOWROOM=assets/config/showroom.toml
@@ -38,51 +38,51 @@ PYTHON      ?= $(shell command -v python3 2>/dev/null || echo python)
 # command line if needed.
 SDL_VIDEODRIVER ?= x11
 
-# ---- run-option -> PSX_* env mapping ---------------------------------------
+# ---- run-option -> RAVEN_* env mapping -------------------------------------
 # Each variable is only exported when the user sets it, so unset options keep
 # the game's own defaults. Add a mapping here to expose a new env var.
 RUN_ENV := SDL_VIDEODRIVER=$(SDL_VIDEODRIVER)
 ifdef SEED
-RUN_ENV += PSX_GEN_SEED=$(SEED)
+RUN_ENV += RAVEN_GEN_SEED=$(SEED)
 endif
 ifdef PRESET
-RUN_ENV += PSX_RENDER_PRESET=$(PRESET)
+RUN_ENV += RAVEN_RENDER_PRESET=$(PRESET)
 endif
 ifdef SHOT
-RUN_ENV += PSX_SCREENSHOT=$(SHOT)
+RUN_ENV += RAVEN_SCREENSHOT=$(SHOT)
 endif
 ifdef FRAME
-RUN_ENV += PSX_SCREENSHOT_FRAME=$(FRAME)
+RUN_ENV += RAVEN_SCREENSHOT_FRAME=$(FRAME)
 endif
 ifdef FIXED_DT
-RUN_ENV += PSX_FIXED_DT=$(FIXED_DT)
+RUN_ENV += RAVEN_FIXED_DT=$(FIXED_DT)
 endif
 ifdef BENCH
-RUN_ENV += PSX_BENCH_FRAMES=$(BENCH)
+RUN_ENV += RAVEN_BENCH_FRAMES=$(BENCH)
 endif
 ifdef PROFILE
-RUN_ENV += PSX_PROFILE=$(PROFILE)
+RUN_ENV += RAVEN_PROFILE=$(PROFILE)
 endif
 ifdef COLLIDERS
-RUN_ENV += PSX_SHOW_COLLIDERS=$(COLLIDERS)
+RUN_ENV += RAVEN_SHOW_COLLIDERS=$(COLLIDERS)
 endif
 ifdef WIREFRAME
-RUN_ENV += PSX_WIREFRAME=$(WIREFRAME)
+RUN_ENV += RAVEN_WIREFRAME=$(WIREFRAME)
 endif
 ifdef PORTAL
-RUN_ENV += PSX_SHOWCASE_PORTAL=$(PORTAL)
+RUN_ENV += RAVEN_SHOWCASE_PORTAL=$(PORTAL)
 endif
 ifdef SHOWROOM
-RUN_ENV += PSX_SHOWROOM_MAP=$(abspath $(SHOWROOM))
+RUN_ENV += RAVEN_SHOWROOM_MAP=$(abspath $(SHOWROOM))
 endif
 ifdef MATERIAL
-RUN_ENV += PSX_EDITOR_MATERIAL=$(MATERIAL)
+RUN_ENV += RAVEN_EDITOR_MATERIAL=$(MATERIAL)
 endif
 ifdef RENDERDOC_FRAME
-RUN_ENV += PSX_RENDERDOC_FRAME=$(RENDERDOC_FRAME)
+RUN_ENV += RAVEN_RENDERDOC_FRAME=$(RENDERDOC_FRAME)
 endif
 ifdef RENDERDOC_OUT
-RUN_ENV += PSX_RENDERDOC_CAPTURE=$(abspath $(RENDERDOC_OUT))
+RUN_ENV += RAVEN_RENDERDOC_CAPTURE=$(abspath $(RENDERDOC_OUT))
 endif
 # Positional game argument (e.g. a .map file to play).
 RUN_ARGS := $(MAP)
@@ -181,7 +181,7 @@ editor: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./scene_editor $(if $(SCENE),$(abspath $(SCENE)),)
 
 material: build-editor
-	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_EDITOR_MATERIAL=1 \
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_EDITOR_MATERIAL=1 \
 	    ./scene_editor $(if $(SCENE),$(abspath $(SCENE)),)
 
 # Cook an authored .scn into a runtime .map -- the same cooker the editor calls
@@ -237,7 +237,7 @@ prefab-viewer: build-cook build-game
 	    $(if $(SUBJECT_MATERIAL),--subject-material "$(SUBJECT_MATERIAL)",)
 	$(MAKE) cook SCENE=$(PREFAB_SCENE) OUT=$(PREFAB_MAP)
 	cd $(BUILD_DIR) && env $(RUN_ENV) \
-	    $(if $(PRESET),,PSX_RENDER_PRESET=$(VIEWER_PRESET)) \
+	    $(if $(PRESET),,RAVEN_RENDER_PRESET=$(VIEWER_PRESET)) \
 	    ./game $(abspath $(PREFAB_MAP)) $(VIEWER_FLAGS)
 
 # --- clips ------------------------------------------------------------------
@@ -295,8 +295,8 @@ ifndef SCENE
 endif
 	$(MAKE) cook SCENE=$(SCENE) OUT=$(BUILD_DIR)/clip.map
 	cd $(BUILD_DIR) && env $(RUN_ENV) \
-	    PSX_SCREENSHOT=$(if $(SHOT),$(abspath $(SHOT)),$(abspath $(BUILD_DIR))/look.png) \
-	    PSX_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game clip.map
+	    RAVEN_SCREENSHOT=$(if $(SHOT),$(abspath $(SHOT)),$(abspath $(BUILD_DIR))/look.png) \
+	    RAVEN_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game clip.map
 	@echo "wrote $(if $(SHOT),$(SHOT),$(BUILD_DIR)/look.png)"
 
 # Start a new shot from the one that works: copies the example scene under a new
@@ -353,15 +353,15 @@ asan:
 
 # Frame-time percentiles over N frames (default 300), vsync off for real cost.
 bench: build-game
-	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_BENCH_FRAMES=$(if $(BENCH),$(BENCH),300) ./game
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_BENCH_FRAMES=$(if $(BENCH),$(BENCH),300) ./game
 
 # Deterministic screenshot capture (fixed timestep). Requires SHOT=<path>.
 screenshot: build-game
 ifndef SHOT
 	$(error set SHOT=<path.png> (optional FRAME=<n>, SEED=<n>, PRESET=<name>))
 endif
-	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_SCREENSHOT=$(SHOT) \
-	    PSX_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game $(RUN_ARGS)
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_SCREENSHOT=$(SHOT) \
+	    RAVEN_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game $(RUN_ARGS)
 
 # JSON-emitting visual/GPU regression entry points. Artifacts default to
 # artifacts/visual and may be redirected with ARTIFACT_DIR=<path>.
@@ -380,7 +380,7 @@ VISUAL_ARGS = --frame $(if $(FRAME),$(FRAME),90) \
 # drawn it. Every one of those was reported as a crash and none of them was
 # reproducible from a test until this existed.
 editor-selftest: build-editor
-	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_EDITOR_SELFTEST=1 ./scene_editor
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_EDITOR_SELFTEST=1 ./scene_editor
 
 visual-test: build-game
 	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
@@ -407,8 +407,8 @@ renderdoc: build-app
 	    echo "renderdoccmd not found -- install RenderDoc, or use 'make renderdoc-capture'"; \
 	    exit 1; }
 ifdef FRAME
-	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_RENDERDOC_FRAME=$(FRAME) \
-	    PSX_RENDERDOC_CAPTURE=$(abspath $(if $(OUT),$(OUT),capture)) \
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_RENDERDOC_FRAME=$(FRAME) \
+	    RAVEN_RENDERDOC_CAPTURE=$(abspath $(if $(OUT),$(OUT),capture)) \
 	    renderdoccmd capture --wait-for-exit \
 	        --capture-file $(abspath $(if $(OUT),$(OUT),capture)) ./$(APP_TARGET) $(RUN_ARGS)
 else
@@ -432,7 +432,7 @@ gdb:
 # Slow: expect single-digit FPS, so pair it with FRAME= to exit on its own.
 valgrind:
 	$(MAKE) build-app BUILD_DIR=build-debug BUILD_TYPE=Debug APP=$(APP)
-	cd build-debug && env $(RUN_ENV) $(if $(FRAME),PSX_SCREENSHOT_FRAME=$(FRAME) PSX_SCREENSHOT=/dev/null,) \
+	cd build-debug && env $(RUN_ENV) $(if $(FRAME),RAVEN_SCREENSHOT_FRAME=$(FRAME) RAVEN_SCREENSHOT=/dev/null,) \
 	    valgrind --leak-check=full --track-origins=yes \
 	    --suppressions=$(abspath tools/valgrind.supp) \
 	    ./$(APP_TARGET) $(RUN_ARGS) 2>&1 | tee valgrind-$(APP_TARGET).log
@@ -440,7 +440,7 @@ valgrind:
 # CPU profile of a fixed number of frames. Writes perf.data next to the binary
 # and prints the hot paths; use `perf report` there for the full tree.
 perf: build-app
-	cd $(BUILD_DIR) && env $(RUN_ENV) PSX_BENCH_FRAMES=$(if $(BENCH),$(BENCH),600) \
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_BENCH_FRAMES=$(if $(BENCH),$(BENCH),600) \
 	    perf record -g --call-graph dwarf -o perf-$(APP_TARGET).data ./$(APP_TARGET) $(RUN_ARGS)
 	cd $(BUILD_DIR) && perf report -i perf-$(APP_TARGET).data --stdio | head -40
 
@@ -479,7 +479,7 @@ clean:
 	rm -rf $(BUILD_DIR) build-debug build-asan
 
 help:
-	@echo "psx-dungeon-crawler build/run CLI"
+	@echo "Raven Engine build/run CLI"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make [build]        configure + build the game"
@@ -517,10 +517,10 @@ help:
 	@echo "  make clean          remove build directories"
 	@echo ""
 	@echo "Run options (make run/demo/prefab-viewer/screenshot/bench):"
-	@echo "  SEED=<n>            world seed            (PSX_GEN_SEED)"
+	@echo "  SEED=<n>            world seed            (RAVEN_GEN_SEED)"
 	@echo "  PRESET=<name>       render preset: ps1 ps2 gamecube n64 pixel-3d"
 	@echo "                      modern-ps1 dungeon psx-horror fire-dimension"
-	@echo "                      poison-swamp          (PSX_RENDER_PRESET)"
+	@echo "                      poison-swamp          (RAVEN_RENDER_PRESET)"
 	@echo "  VIEWER_PRESET=<name> prefab-viewer default when PRESET is omitted"
 	@echo "  PREFAB=<kit.id>      subject prefab from assets/config/kit.toml"
 	@echo "  SUBJECT_SCALE=<n>    uniform scale; SUBJECT_YAW=<degrees>; SUBJECT_Y=<offset>"
@@ -529,14 +529,14 @@ help:
 	@echo "  VIEWER_FLAGS=<args>  prefab-viewer game flags; --render-preset overrides vars"
 	@echo "  MAP=<file.map>      play an authored map (positional arg)"
 	@echo "  SHOWROOM=<file>     override the editable depth-zero showroom TOML"
-	@echo "  COLLIDERS=1         collider wireframe    (PSX_SHOW_COLLIDERS)"
-	@echo "  WIREFRAME=1         mesh wireframe        (PSX_WIREFRAME)"
-	@echo "  PROFILE=1           log per-phase timings (PSX_PROFILE)"
-	@echo "  PORTAL=1            portal showcase pose  (PSX_SHOWCASE_PORTAL)"
-	@echo "  SHOT=<path> FRAME=<n>   screenshot        (PSX_SCREENSHOT*)"
-	@echo "  FIXED_DT=<s>        deterministic timestep(PSX_FIXED_DT)"
+	@echo "  COLLIDERS=1         collider wireframe    (RAVEN_SHOW_COLLIDERS)"
+	@echo "  WIREFRAME=1         mesh wireframe        (RAVEN_WIREFRAME)"
+	@echo "  PROFILE=1           log per-phase timings (RAVEN_PROFILE)"
+	@echo "  PORTAL=1            portal showcase pose  (RAVEN_SHOWCASE_PORTAL)"
+	@echo "  SHOT=<path> FRAME=<n>   screenshot        (RAVEN_SCREENSHOT*)"
+	@echo "  FIXED_DT=<s>        deterministic timestep(RAVEN_FIXED_DT)"
 	@echo ""
-	@echo "  MATERIAL=1          editor opens in material staging (PSX_EDITOR_MATERIAL)"
+	@echo "  MATERIAL=1          editor opens in material staging (RAVEN_EDITOR_MATERIAL)"
 	@echo "  SCENE=<file.scn>    scene for editor/cook targets"
 	@echo ""
 	@echo "Debug options (make renderdoc/gdb/valgrind/perf/debug-run):"

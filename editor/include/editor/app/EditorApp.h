@@ -82,11 +82,13 @@ private:
     // the panel's own options change: it walks and sorts every entity, and the
     // panel is open while the gizmo is being dragged.
     const OutlinerTree& outlinerTree();
-    void selectGroup(const OutlinerGroup& group, bool add);
+    void selectGroup(const OutlinerGroup& group, SelectMode mode);
     // Hangs `child` under `parent` (empty detaches it), keeping the place it is
     // drawn in. Refuses anything that would close a loop.
     void reparentEntity(const game::content::AuthorId& child,
                         const game::content::AuthorId& parent);
+    void reparentSelection(const game::content::AuthorId& dragged,
+                           const game::content::AuthorId& parent);
     // The same edit, built but not run, so a batch closes as one undo entry.
     // False when the move is refused or would change nothing.
     bool buildReparent(const game::content::AuthorId& child,
@@ -97,6 +99,7 @@ private:
     // Hides everything the selection does not need. Session state, not a
     // document edit -- the show-everything button is its undo.
     void isolateSelection();
+    void requestPanelFocus(const char* name);
     void focusPanelIfRequested(const char* name);
     void drawSelectionContextMenu();
     // Component editing, applied to the whole selection as one undo entry --
@@ -109,6 +112,9 @@ private:
     void drawSceneProperties();
     void setScenePalette(const std::string& palette);
     void drawStatusBar();
+    // One browser shell, three resource modes. These content functions never
+    // open their own windows, so search, tabs and sizing stay consistent.
+    void drawAssetBrowser();
     void drawCatalog();
     void drawIssues();
     void drawMaterialPanel();
@@ -179,7 +185,7 @@ private:
     void applySettings();
     void applyUiScale(float scale);
     void handleShortcuts(const eng::FrameContext& f);
-    // PSX_EDITOR_SELFTEST: run the edits the UI performs, one per frame, then
+    // RAVEN_EDITOR_SELFTEST: run the edits the UI performs, one per frame, then
     // quit. The four ways the editor was reported to crash -- deleting an
     // entity, removing a component, removing a mesh, unparenting -- are all
     // mouse gestures, which is why they were only ever reproduced by hand.
@@ -300,6 +306,7 @@ private:
     bool mViewportHovered = false;
     bool mFlying = false;
     bool mLayoutBuilt = false;
+    bool mResetLayoutRequested = false;
     // How many level cells one drawn grid cell covers right now: 1 up close, a
     // power of two once the camera pulls back. Shown in the toolbar so a coarse
     // grid never misreports the scale.
@@ -369,12 +376,11 @@ private:
     // Off by default: the catalogue is mostly materials that cannot go on an
     // entity, and offering them is how a compositor pass ends up on a wall.
     bool mShowAllMaterials = false;
-    // Frames of pending focus for the Material tab. A count rather than a
-    // flag: the docked layout re-selects its saved tab a frame after the
-    // request lands, so one request is not enough.
-    int mFocusMaterialFrames = 0;
+    // 0 placeables, 1 materials, 2 effects. Request is consumed after one tab
+    // frame and exists for screenshot hooks and entering material stage.
+    int mAssetBrowserModeRequest = -1;
     // A docked panel to bring forward for the first few frames, named by
-    // PSX_EDITOR_PANEL. Verification only: panels share tabs, and a screenshot
+    // RAVEN_EDITOR_PANEL. Verification only: panels share tabs, and a screenshot
     // run has no mouse to click one with.
     std::string mFocusPanel;
     int mFocusPanelFrames = 6;
@@ -392,7 +398,7 @@ private:
     // place and re-registers, so a change is visible in the viewport on the
     // next frame without a restart.
     eng::ParticleLibrary mParticles;
-    int mParticleSelected = -1;
+    std::string mSelectedEffect;
     char mParticleFilter[64] = {};
     std::vector<eng::ParticlesHandle> mParticlePreviews;
     float mParticlePreviewScale = 1.0f;
@@ -481,6 +487,7 @@ private:
     // The rows as the panel last drew them, which is what a Shift-click
     // resolves a range against (see OutlinerRowOrder).
     OutlinerRowOrder mOutlinerRows;
+    int mOutlinerOpenRequest = -1;
     // The 2D viewport's state and the HUD it drives. The HUD is the game's own
     // class, constructed once here, so what the panel shows is what ships.
     UiStageState mUiStage;

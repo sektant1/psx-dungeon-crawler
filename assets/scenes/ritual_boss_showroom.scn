@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/scene.schema.json",
-  "format": "psx-dungeon-scene",
+  "format": "raven-scene",
   "version": 1,
   "id": "scene.test.ritual_boss_showroom",
   "entities": [

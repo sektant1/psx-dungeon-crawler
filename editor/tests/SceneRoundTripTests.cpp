@@ -171,11 +171,11 @@ int main()
     // --- rejections --------------------------------------------------------
     SceneDocument bad;
     require(!parseSceneSource("{}", "<memory>", bad, error), "empty object fails");
-    require(!parseSceneSource(R"({"format":"psx-dungeon-scene","version":9,
+    require(!parseSceneSource(R"({"format":"raven-scene","version":9,
             "id":"x","entities":[]})",
                               "<memory>", bad, error),
             "an unknown version fails");
-    require(!parseSceneSource(R"({"format":"psx-dungeon-scene","version":2,
+    require(!parseSceneSource(R"({"format":"raven-scene","version":2,
             "id":"x","entities":[{"id":"a"},{"id":"a"}]})",
                               "<memory>", bad, error),
             "duplicate author ids fail");

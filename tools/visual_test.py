@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "psx-visual-test/v1"
+SCHEMA = "raven-visual-test/v1"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KIND_SUFFIX = {"screenshot": ".png", "benchmark": ".json", "capture": ".rdc"}
 
@@ -76,17 +76,17 @@ def deterministic_environment(
     preset: str | None,
 ) -> dict[str, str]:
     env = dict(base)
-    env.pop("PSX_FULLSCREEN", None)
+    env.pop("RAVEN_FULLSCREEN", None)
     env.update(
         {
             "SDL_VIDEODRIVER": "x11",
-            "PSX_FIXED_DT": fixed_dt,
-            "PSX_GEN_SEED": str(seed),
-            "PSX_SCREENSHOT_FRAME": str(max(1, frame)),
+            "RAVEN_FIXED_DT": fixed_dt,
+            "RAVEN_GEN_SEED": str(seed),
+            "RAVEN_SCREENSHOT_FRAME": str(max(1, frame)),
         }
     )
     if preset:
-        env["PSX_RENDER_PRESET"] = preset
+        env["RAVEN_RENDER_PRESET"] = preset
     return env
 
 
@@ -306,11 +306,11 @@ def run_visual(args: argparse.Namespace, result: VisualResult) -> None:
 
     if args.operation == "screenshot":
         output = run_dir / "screenshot.png"
-        env["PSX_SCREENSHOT"] = str(output)
+        env["RAVEN_SCREENSHOT"] = str(output)
         command = prefix + [str(game), *game_args]
     elif args.operation == "benchmark":
-        env.pop("PSX_FIXED_DT", None)
-        env["PSX_BENCH_FRAMES"] = str(args.frames)
+        env.pop("RAVEN_FIXED_DT", None)
+        env["RAVEN_BENCH_FRAMES"] = str(args.frames)
         command = prefix + [str(game), *game_args]
         output = run_dir / "benchmark.json"
     else:
@@ -319,8 +319,8 @@ def run_visual(args: argparse.Namespace, result: VisualResult) -> None:
             result.fail(VisualError("missing_renderdoc", "renderdoccmd is not installed"))
             return
         template = run_dir / "capture"
-        env["PSX_RENDERDOC_FRAME"] = str(args.frame)
-        env["PSX_RENDERDOC_CAPTURE"] = str(template)
+        env["RAVEN_RENDERDOC_FRAME"] = str(args.frame)
+        env["RAVEN_RENDERDOC_CAPTURE"] = str(template)
         command = prefix + [
             renderdoccmd,
             "capture",
@@ -340,7 +340,7 @@ def run_visual(args: argparse.Namespace, result: VisualResult) -> None:
     result.environment = {
         key: env[key]
         for key in sorted(env)
-        if key.startswith("PSX_")
+        if key.startswith("RAVEN_")
         or key in {"DISPLAY", "SDL_VIDEODRIVER", "LIBGL_ALWAYS_SOFTWARE"}
     }
     try:

@@ -114,7 +114,7 @@ add(id="player_start", name="Player Start", pos=[0.0, 0.0, 4.0],
 
 doc = collections.OrderedDict()
 doc["$schema"] = "../schemas/scene.schema.json"
-doc["format"] = "psx-dungeon-scene"
+doc["format"] = "raven-scene"
 doc["version"] = 2
 doc["id"] = "scene.spin_portal"
 doc["palette"] = "showroom"

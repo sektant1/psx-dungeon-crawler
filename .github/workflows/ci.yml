@@ -59,7 +59,7 @@ jobs:
 
       - name: Deterministic screenshot
         run: |
-          xvfb-run -a env PSX_SCREENSHOT=/tmp/frame.png PSX_SCREENSHOT_FRAME=120 \
+          xvfb-run -a env RAVEN_SCREENSHOT=/tmp/frame.png RAVEN_SCREENSHOT_FRAME=120 \
             ./build/game
 
       - uses: actions/upload-artifact@v4

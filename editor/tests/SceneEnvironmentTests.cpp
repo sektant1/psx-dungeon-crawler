@@ -104,7 +104,7 @@ int main()
         SceneDocument read;
         std::string error;
         const std::string json =
-            R"({"format":"psx-dungeon-scene","version":2,)"
+            R"({"format":"raven-scene","version":2,)"
             R"("id":"scene.x","palette":7,"entities":[]})";
         require(!parseSceneSource(json, "<test>", read, error),
                 "a non-string palette is rejected rather than silently "
@@ -118,7 +118,7 @@ int main()
         SceneDocument read;
         std::string error;
         const std::string json =
-            R"({"format":"psx-dungeon-scene","version":2,)"
+            R"({"format":"raven-scene","version":2,)"
             R"("id":"scene.x","palette":"renamed_away","entities":[]})";
         require(parseSceneSource(json, "<test>", read, error), error);
         require(read.palette == "renamed_away",

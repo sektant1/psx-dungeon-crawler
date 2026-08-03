@@ -283,7 +283,7 @@ std::string serializeSceneSource(const SceneDocument& document)
 
     Json root = Json::object();
     root["$schema"] = "../schemas/scene.schema.json";
-    root["format"] = "psx-dungeon-scene";
+    root["format"] = "raven-scene";
     root["version"] = 2;
     root["id"] = document.id;
     // Omitted when unset, so every scene written before levels could carry a

@@ -13,11 +13,11 @@ class VisualTestUnitTests(unittest.TestCase):
             {}, frame=42, fixed_dt="0.02", seed=7, preset="ps1"
         )
         self.assertEqual(env["SDL_VIDEODRIVER"], "x11")
-        self.assertEqual(env["PSX_FIXED_DT"], "0.02")
-        self.assertEqual(env["PSX_GEN_SEED"], "7")
-        self.assertEqual(env["PSX_RENDER_PRESET"], "ps1")
-        self.assertEqual(env["PSX_SCREENSHOT_FRAME"], "42")
-        self.assertNotIn("PSX_FULLSCREEN", env)
+        self.assertEqual(env["RAVEN_FIXED_DT"], "0.02")
+        self.assertEqual(env["RAVEN_GEN_SEED"], "7")
+        self.assertEqual(env["RAVEN_RENDER_PRESET"], "ps1")
+        self.assertEqual(env["RAVEN_SCREENSHOT_FRAME"], "42")
+        self.assertNotIn("RAVEN_FULLSCREEN", env)
 
     def test_parse_frame_stats_returns_named_metrics(self):
         text = "[info] FrameStats: n=120 p50=2.125ms p95=4.500ms p99=6.000ms max=8.250ms"
@@ -70,7 +70,7 @@ class VisualTestUnitTests(unittest.TestCase):
     def test_result_schema_has_stable_required_fields(self):
         result = visual_test.VisualResult(operation="probe")
         payload = result.as_dict()
-        self.assertEqual(payload["schema"], "psx-visual-test/v1")
+        self.assertEqual(payload["schema"], "raven-visual-test/v1")
         for key in (
             "status",
             "operation",

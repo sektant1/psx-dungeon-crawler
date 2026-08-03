@@ -34,7 +34,7 @@ bool near(glm::vec3 lhs, glm::vec3 rhs, float epsilon = 0.0001f)
 std::filesystem::path fixtureDir()
 {
     const std::filesystem::path path =
-        std::filesystem::temp_directory_path() / "psx_assimp_import_tests";
+        std::filesystem::temp_directory_path() / "raven_assimp_import_tests";
     std::error_code error;
     std::filesystem::remove_all(path, error);
     std::filesystem::create_directories(path);
@@ -400,7 +400,7 @@ void test_shipped_models_pass_import_gate()
 
 void test_optional_external_model()
 {
-    const char* source = std::getenv("PSX_TEST_MODEL");
+    const char* source = std::getenv("RAVEN_TEST_MODEL");
     if (!source)
         return;
     eng::ModelImportOptions options;

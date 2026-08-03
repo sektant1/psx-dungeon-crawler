@@ -59,7 +59,7 @@ int main(int argc, char** argv)
     }
 
     const std::filesystem::path root =
-        std::filesystem::temp_directory_path() / "psx_editor_vocabulary";
+        std::filesystem::temp_directory_path() / "raven_editor_vocabulary";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     std::filesystem::create_directories(root, ec);

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vulkan Implementation Survival Kit</title>
-<meta name="description" content="How to learn Vulkan and land a working eng::rhi::Device backend in the psx-dungeon-crawler engine: the plan, what already exists, and what will cost you time.">
+<meta name="description" content="How to learn Vulkan and land a working eng::rhi::Device backend in Raven Engine: the plan, what already exists, and what will cost you time.">
 <meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="kit.css">
 <script src="kit.js"></script>
@@ -49,7 +49,7 @@
 <main id="content">
 
 <header class="masthead">
-  <p class="eyebrow">Kit / 01 <span class="sep">·</span> psx-dungeon-crawler / engine/src/rhi/vulkan</p>
+  <p class="eyebrow">Kit / 01 <span class="sep">·</span> raven-engine / engine/src/rhi/vulkan</p>
   <h1>Vulkan Implementation Survival Kit</h1>
   <p class="standfirst">How to learn Vulkan and land a working <code>eng::rhi::Device</code> backend in this
   engine — what to read, in what order, what to let a library do for you, and the specific places
@@ -328,7 +328,7 @@ is mechanical — you never have to squint at a frame and wonder.</p>
   the bug you will spend Saturday on. Make the backend log them through <code>eng::log</code> and
   treat any message as a build failure in tests.</li>
   <li><strong>Verify on screen.</strong> The engine has a deterministic capture hook
-  (<code>PSX_SCREENSHOT</code> / <code>PSX_SCREENSHOT_FRAME</code>). Give the RHI sample the same one
+  (<code>RAVEN_SCREENSHOT</code> / <code>RAVEN_SCREENSHOT_FRAME</code>). Give the RHI sample the same one
   on day one — three real bugs in this repo were invisible to the compiler and obvious in a PNG.</li>
   <li><strong>Nothing above the RHI changes.</strong> If a stage requires editing
   <code>RenderCore</code>, you have left the plan.</li>

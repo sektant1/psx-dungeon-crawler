@@ -1,6 +1,6 @@
 # 3.24 for $<LINK_LIBRARY:WHOLE_ARCHIVE,...>, used to link the engine layers.
 cmake_minimum_required(VERSION 3.24)
-project(dungeon_crawler CXX)
+project(raven_engine CXX)
 
 include(CTest)
 include(CMakeDependentOption)
@@ -160,6 +160,7 @@ add_library(
   engine/src/core/StringId.cpp
   engine/src/core/Clock.cpp
   engine/src/core/AssetRoot.cpp
+  engine/src/core/AssetName.cpp
   engine/src/io/ByteStream.cpp
   engine/src/io/FileSystem.cpp
   engine/src/io/DirectoryWatcher.cpp
@@ -184,7 +185,7 @@ target_link_libraries(eng_core PUBLIC glm::glm PRIVATE eng_toml)
 # straight out of the build tree. An installed build finds its root through the
 # three runtime candidates ahead of this one and never reads it.
 target_compile_definitions(
-  eng_core PRIVATE PSX_ASSET_ROOT_DEV="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+  eng_core PRIVATE RAVEN_ASSET_ROOT_DEV="${CMAKE_CURRENT_SOURCE_DIR}/assets")
 
 # Render Hardware Interface: the graphics-backend contract and its
 # implementations. Sits beside eng_platform rather than inside eng_systems
@@ -484,6 +485,7 @@ add_executable(
   editor/src/scene/BrushPlacement.cpp
   editor/src/scene/DocumentRaycast.cpp
   editor/src/app/EditorApp.cpp
+  editor/src/ui/EditorWorkspace.cpp
   editor/src/viewport/EditorCamera.cpp
   editor/src/ui/EditorIcons.cpp
   editor/src/project/EditorSettings.cpp
@@ -1057,6 +1059,11 @@ if(BUILD_TESTING)
   target_link_libraries(asset_root_tests PRIVATE eng_core)
   add_test(NAME asset_root COMMAND asset_root_tests)
 
+  add_executable(asset_name_tests engine/tests/AssetNameTests.cpp
+                                  engine/src/core/AssetName.cpp)
+  target_include_directories(asset_name_tests PRIVATE engine/include)
+  add_test(NAME asset_name COMMAND asset_name_tests)
+
   # Config flattening is toml++ and two maps: no window, no renderer.
   add_executable(config_tests engine/tests/ConfigTests.cpp
                               engine/src/platform/Config.cpp
@@ -1278,6 +1285,15 @@ if(BUILD_TESTING)
                              engine/include)
   target_link_libraries(editor_viewport_overlay_tests PRIVATE eng_imgui)
   add_test(NAME editor_viewport_overlay COMMAND editor_viewport_overlay_tests)
+
+  add_executable(editor_workspace_tests
+                 editor/tests/EditorWorkspaceTests.cpp
+                 editor/src/ui/EditorWorkspace.cpp)
+  target_include_directories(editor_workspace_tests PRIVATE editor/include
+                                                           engine/include
+                                                           third_party)
+  target_link_libraries(editor_workspace_tests PRIVATE eng_imgui)
+  add_test(NAME editor_workspace COMMAND editor_workspace_tests)
 
   add_executable(editor_scene_browser_tests
                  editor/tests/EditorSceneBrowserTests.cpp

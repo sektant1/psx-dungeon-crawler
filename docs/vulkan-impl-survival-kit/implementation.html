@@ -362,7 +362,7 @@ the backend from silently rotting.</p>
 <code>psx-demo</code>. It owns its own SDL window created with <code>SDL_WINDOW_VULKAN</code>, which is
 why it must be a separate binary from <code>game</code> — see
 <a href="hazards.html#windowing">Hazards §4</a>. Give it the engine's screenshot hook
-(<code>PSX_SCREENSHOT</code> / <code>PSX_SCREENSHOT_FRAME</code>) on the first day; it is how every
+(<code>RAVEN_SCREENSHOT</code> / <code>RAVEN_SCREENSHOT_FRAME</code>) on the first day; it is how every
 later stage gets verified without a human looking at a window.</p>
 
 <div class="callout">

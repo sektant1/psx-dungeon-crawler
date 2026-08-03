@@ -33,11 +33,8 @@ struct Command {
     DebugConsole::Completer complete;
 };
 
-// Severity colours are the active theme's own accents (Ash Reliquary: brass
-// warn, blood error, ritual violet fatal -- see eng::imguitheme), not an
-// independent palette: a console painted in its own reds and yellows is what
-// makes a debug window look bolted on. They were One Dark values when the tool
-// UI was One Dark; keep them in step when the theme changes.
+// Severity colours follow Raven chrome: steel info, amber warning and brighter
+// red as severity rises. Labels remain mandatory; colour is only the fast path.
 constexpr ImVec4 rgb(unsigned hex, float a = 1.0f)
 {
     return ImVec4(float((hex >> 16) & 0xFF) / 255.0f,
@@ -48,12 +45,16 @@ constexpr ImVec4 rgb(unsigned hex, float a = 1.0f)
 ImVec4 levelColor(log::Level level, bool command)
 {
     if (command)
-        return rgb(0xF0B95C); // brass focus: the user's own line
+        return rgb(0xC63A40); // Raven optic: the user's active command
     switch (level) {
-    case log::Level::Warn: return rgb(0xD9A441);
-    case log::Level::Error: return rgb(0xC74A46);
-    case log::Level::Fatal: return rgb(0x8F83C9);
-    case log::Level::Info: break;
+    case log::Level::Warn:
+        return rgb(0xC79A50);
+    case log::Level::Error:
+        return rgb(0xE36A55);
+    case log::Level::Fatal:
+        return rgb(0xF06A70);
+    case log::Level::Info:
+        break;
     }
     return ImGui::GetStyleColorVec4(ImGuiCol_Text);
 }
@@ -70,10 +71,14 @@ const char* levelTag(log::Level level, bool command)
     if (command)
         return " > ";
     switch (level) {
-    case log::Level::Warn: return "WARN";
-    case log::Level::Error: return "ERR ";
-    case log::Level::Fatal: return "DEAD";
-    case log::Level::Info: break;
+    case log::Level::Warn:
+        return "WARN";
+    case log::Level::Error:
+        return "ERR ";
+    case log::Level::Fatal:
+        return "DEAD";
+    case log::Level::Info:
+        break;
     }
     return "info";
 }
@@ -204,8 +209,8 @@ LogSplit splitLogCategory(const std::string& line)
         return {{}, line};
 
     const std::size_t rest = line.find_first_not_of(' ', colon + 1);
-    return {head, rest == std::string::npos ? std::string{}
-                                            : line.substr(rest)};
+    return {head,
+            rest == std::string::npos ? std::string{} : line.substr(rest)};
 }
 
 struct DebugConsole::Impl {
@@ -347,11 +352,14 @@ int DebugConsole::Impl::textCallback(ImGuiInputTextCallbackData* data)
         std::vector<std::string> cands;
         std::size_t replaceFrom = 0;
         if (tokens.empty() || (tokens.size() == 1 && !trailingSpace)) {
-            const std::string prefix = tokens.empty() ? std::string() : tokens[0];
+            const std::string prefix =
+                tokens.empty() ? std::string() : tokens[0];
             cands = candidates(prefix);
             replaceFrom = line.size() - prefix.size();
-        } else if (Command* c = find(tokens[0]); c && c->complete) {
-            const std::string prefix = trailingSpace ? std::string() : tokens.back();
+        }
+        else if (Command* c = find(tokens[0]); c && c->complete) {
+            const std::string prefix =
+                trailingSpace ? std::string() : tokens.back();
             for (std::string& s : c->complete(tokens))
                 if (s.compare(0, prefix.size(), prefix) == 0)
                     cands.push_back(std::move(s));
@@ -367,11 +375,13 @@ int DebugConsole::Impl::textCallback(ImGuiInputTextCallbackData* data)
                 common.pop_back();
         const std::string current = line.substr(replaceFrom);
         if (common.size() > current.size()) {
-            data->DeleteChars(int(replaceFrom), data->BufTextLen - int(replaceFrom));
+            data->DeleteChars(int(replaceFrom),
+                              data->BufTextLen - int(replaceFrom));
             data->InsertChars(data->CursorPos, common.c_str());
             if (cands.size() == 1)
                 data->InsertChars(data->CursorPos, " ");
-        } else if (cands.size() > 1) {
+        }
+        else if (cands.size() > 1) {
             std::string list;
             for (const std::string& s : cands)
                 list += s + "  ";
@@ -391,13 +401,15 @@ int DebugConsole::Impl::textCallback(ImGuiInputTextCallbackData* data)
                 historyPos = int(history.size()) - 1;
             else if (historyPos > 0)
                 --historyPos;
-        } else if (data->EventKey == ImGuiKey_DownArrow) {
+        }
+        else if (data->EventKey == ImGuiKey_DownArrow) {
             if (historyPos != -1 && ++historyPos >= int(history.size()))
                 historyPos = -1;
         }
         if (prev != historyPos) {
-            const std::string line =
-                historyPos >= 0 ? history[std::size_t(historyPos)] : std::string();
+            const std::string line = historyPos >= 0
+                                         ? history[std::size_t(historyPos)]
+                                         : std::string();
             data->DeleteChars(0, data->BufTextLen);
             data->InsertChars(0, line.c_str());
         }
@@ -407,34 +419,35 @@ int DebugConsole::Impl::textCallback(ImGuiInputTextCallbackData* data)
 
 DebugConsole::DebugConsole() : mImpl(std::make_unique<Impl>())
 {
-    // PSX_CONSOLE=1 opens it on the first frame: a headless capture has no key
+    // RAVEN_CONSOLE=1 opens it on the first frame: a headless capture has no key
     // to press, and a crash during scene build has no later frame to press it
     // in either.
-    mImpl->visible = std::getenv("PSX_CONSOLE") != nullptr;
+    mImpl->visible = std::getenv("RAVEN_CONSOLE") != nullptr;
 
-    registerCommand("help", "list commands, or explain one",
-                    [this](const Args& a) {
-                        if (a.size() > 1) {
-                            if (Command* c = mImpl->find(a[1]))
-                                print(log::Level::Info, "console",
-                                      c->name + " -- " + c->help);
-                            else
-                                print(log::Level::Warn, "console",
-                                      "no such command: " + a[1]);
-                            return;
-                        }
-                        print(log::Level::Info, "console",
-                              "commands (Tab completes, Up/Down for history):");
-                        for (const Command& c : mImpl->commands)
-                            print(log::Level::Info, "console",
-                                  "  " + c.name + "  -- " + c.help);
-                    },
-                    [this](const Args&) {
-                        std::vector<std::string> out;
-                        for (const Command& c : mImpl->commands)
-                            out.push_back(c.name);
-                        return out;
-                    });
+    registerCommand(
+        "help", "list commands, or explain one",
+        [this](const Args& a) {
+            if (a.size() > 1) {
+                if (Command* c = mImpl->find(a[1]))
+                    print(log::Level::Info, "console",
+                          c->name + " -- " + c->help);
+                else
+                    print(log::Level::Warn, "console",
+                          "no such command: " + a[1]);
+                return;
+            }
+            print(log::Level::Info, "console",
+                  "commands (Tab completes, Up/Down for history):");
+            for (const Command& c : mImpl->commands)
+                print(log::Level::Info, "console",
+                      "  " + c.name + "  -- " + c.help);
+        },
+        [this](const Args&) {
+            std::vector<std::string> out;
+            for (const Command& c : mImpl->commands)
+                out.push_back(c.name);
+            return out;
+        });
     registerCommand("clear", "empty the log", [this](const Args&) { clear(); });
     registerCommand("echo", "print the rest of the line",
                     [this](const Args& a) {
@@ -526,8 +539,9 @@ void DebugConsole::registerCommand(std::string name, std::string help,
     }
     mImpl->commands.push_back(
         {std::move(name), std::move(help), std::move(fn), std::move(complete)});
-    std::sort(mImpl->commands.begin(), mImpl->commands.end(),
-              [](const Command& a, const Command& b) { return a.name < b.name; });
+    std::sort(
+        mImpl->commands.begin(), mImpl->commands.end(),
+        [](const Command& a, const Command& b) { return a.name < b.name; });
 }
 
 void DebugConsole::bindBool(std::string name, bool* value, std::string help)
@@ -538,46 +552,40 @@ void DebugConsole::bindBool(std::string name, bool* value, std::string help)
         [this, value, n](const Args& a) {
             if (a.size() > 1)
                 *value = !(a[1] == "0" || a[1] == "false" || a[1] == "off");
-            print(log::Level::Info, "cvar",
-                  n + " = " + (*value ? "1" : "0"));
+            print(log::Level::Info, "cvar", n + " = " + (*value ? "1" : "0"));
         },
-        [](const Args&) {
-            return std::vector<std::string>{"0", "1"};
-        });
+        [](const Args&) { return std::vector<std::string>{"0", "1"}; });
 }
 
 void DebugConsole::bindInt(std::string name, int* value, int lo, int hi,
                            std::string help)
 {
     const std::string n = name;
-    registerCommand(std::move(name),
-                    help.empty() ? "int" : std::move(help),
-                    [this, value, lo, hi, n](const Args& a) {
-                        if (a.size() > 1)
-                            *value = std::clamp(std::atoi(a[1].c_str()), lo, hi);
-                        print(log::Level::Info, "cvar",
-                              n + " = " + std::to_string(*value) + "  [" +
-                                  std::to_string(lo) + ".." +
-                                  std::to_string(hi) + "]");
-                    });
+    registerCommand(
+        std::move(name), help.empty() ? "int" : std::move(help),
+        [this, value, lo, hi, n](const Args& a) {
+            if (a.size() > 1)
+                *value = std::clamp(std::atoi(a[1].c_str()), lo, hi);
+            print(log::Level::Info, "cvar",
+                  n + " = " + std::to_string(*value) + "  [" +
+                      std::to_string(lo) + ".." + std::to_string(hi) + "]");
+        });
 }
 
 void DebugConsole::bindFloat(std::string name, float* value, float lo, float hi,
                              std::string help)
 {
     const std::string n = name;
-    registerCommand(std::move(name),
-                    help.empty() ? "float" : std::move(help),
-                    [this, value, lo, hi, n](const Args& a) {
-                        if (a.size() > 1)
-                            *value = std::clamp(float(std::atof(a[1].c_str())),
-                                                lo, hi);
-                        char buf[128];
-                        std::snprintf(buf, sizeof(buf), "%s = %.4g  [%.4g..%.4g]",
-                                      n.c_str(), double(*value), double(lo),
-                                      double(hi));
-                        print(log::Level::Info, "cvar", buf);
-                    });
+    registerCommand(
+        std::move(name), help.empty() ? "float" : std::move(help),
+        [this, value, lo, hi, n](const Args& a) {
+            if (a.size() > 1)
+                *value = std::clamp(float(std::atof(a[1].c_str())), lo, hi);
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "%s = %.4g  [%.4g..%.4g]",
+                          n.c_str(), double(*value), double(lo), double(hi));
+            print(log::Level::Info, "cvar", buf);
+        });
 }
 
 bool DebugConsole::execute(const std::string& line)
@@ -611,9 +619,18 @@ bool DebugConsole::execute(const std::string& line)
     return true;
 }
 
-bool DebugConsole::visible() const { return mImpl->visible; }
-void DebugConsole::setVisible(bool v) { mImpl->visible = v; }
-void DebugConsole::toggle() { mImpl->visible = !mImpl->visible; }
+bool DebugConsole::visible() const
+{
+    return mImpl->visible;
+}
+void DebugConsole::setVisible(bool v)
+{
+    mImpl->visible = v;
+}
+void DebugConsole::toggle()
+{
+    mImpl->visible = !mImpl->visible;
+}
 
 void DebugConsole::draw(const char* title)
 {
@@ -661,8 +678,9 @@ void DebugConsole::draw(const char* title)
         chipsWidth += ImGui::CalcTextSize(label).x + dot * 2.0f +
                       style.FramePadding.x * 3.0f + style.ItemSpacing.x;
     }
-    ImGui::SetNextItemWidth(std::max(
-        140.0f, ImGui::GetContentRegionAvail().x - chipsWidth - style.ItemSpacing.x));
+    ImGui::SetNextItemWidth(std::max(140.0f, ImGui::GetContentRegionAvail().x -
+                                                 chipsWidth -
+                                                 style.ItemSpacing.x));
     if (ImGui::InputTextWithHint("##filter", "filter (substring, any field)",
                                  s.filter, sizeof(s.filter)))
         s.filterDirty = true;
@@ -715,8 +733,8 @@ void DebugConsole::draw(const char* title)
     if (s.filterDirty)
         s.rebuildFilter();
 
-    const float footer = ImGui::GetFrameHeightWithSpacing() +
-                         ImGui::GetStyle().ItemSpacing.y;
+    const float footer =
+        ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
     ImGui::BeginChild("scroll", ImVec2(0.0f, -footer), ImGuiChildFlags_Borders,
                       s.wrap ? 0 : ImGuiWindowFlags_HorizontalScrollbar);
@@ -729,7 +747,8 @@ void DebugConsole::draw(const char* title)
     clipper.Begin(int(s.filtered.size()));
     while (clipper.Step()) {
         for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
-            const Entry& e = s.entries[std::size_t(s.filtered[std::size_t(row)])];
+            const Entry& e =
+                s.entries[std::size_t(s.filtered[std::size_t(row)])];
             ImGui::PushID(row);
             // The default imgui font is monospace, so fixed-width formats align
             // the metadata columns without any manual x placement -- which is
@@ -780,10 +799,11 @@ void DebugConsole::draw(const char* title)
                 ImGui::TextDisabled("%-17.17s", e.category.c_str());
                 if (!e.category.empty() && ImGui::IsItemClicked()) {
                     // Click the subsystem to isolate it. The one gesture that
-                    // turns "everything scrolled past" into "just the renderer".
-                    s.categoryFilter =
-                        s.categoryFilter == e.category ? std::string{}
-                                                       : e.category;
+                    // turns "everything scrolled past" into "just the
+                    // renderer".
+                    s.categoryFilter = s.categoryFilter == e.category
+                                           ? std::string{}
+                                           : e.category;
                     s.filterDirty = true;
                 }
                 if (!e.category.empty() && ImGui::IsItemHovered()) {
@@ -815,7 +835,8 @@ void DebugConsole::draw(const char* title)
                 if (ImGui::MenuItem("copy line"))
                     ImGui::SetClipboardText(e.text.c_str());
                 if (!e.category.empty() &&
-                    ImGui::MenuItem(("filter to [" + e.category + "]").c_str())) {
+                    ImGui::MenuItem(
+                        ("filter to [" + e.category + "]").c_str())) {
                     s.categoryFilter = e.category;
                     s.filterDirty = true;
                 }
@@ -836,19 +857,18 @@ void DebugConsole::draw(const char* title)
     ImGui::EndChild();
 
     // --- input line -----------------------------------------------------
-    const ImGuiInputTextFlags flags =
-        ImGuiInputTextFlags_EnterReturnsTrue |
-        ImGuiInputTextFlags_EscapeClearsAll |
-        ImGuiInputTextFlags_CallbackCompletion |
-        ImGuiInputTextFlags_CallbackHistory;
+    const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue |
+                                      ImGuiInputTextFlags_EscapeClearsAll |
+                                      ImGuiInputTextFlags_CallbackCompletion |
+                                      ImGuiInputTextFlags_CallbackHistory;
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     // Extra horizontal frame padding: the caret sits on top of the first glyph
     // at the default padding, which reads as a clipped letter.
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
                         ImVec2(8.0f, ImGui::GetStyle().FramePadding.y));
-    if (ImGui::InputTextWithHint("##input", "command  (Tab completes, Up/Down history)",
-                                 s.input, sizeof(s.input), flags, Impl::thunk,
-                                 &s)) {
+    if (ImGui::InputTextWithHint(
+            "##input", "command  (Tab completes, Up/Down history)", s.input,
+            sizeof(s.input), flags, Impl::thunk, &s)) {
         execute(s.input);
         s.input[0] = '\0';
         s.focusInput = true;

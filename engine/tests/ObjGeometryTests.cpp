@@ -112,7 +112,7 @@ int main()
 
     // Optional stress fixture for local source assets. CI remains hermetic;
     // developers can send a converted hero mesh through the exact CPU parser.
-    if (const char* externalPath = std::getenv("PSX_TEST_OBJ")) {
+    if (const char* externalPath = std::getenv("RAVEN_TEST_OBJ")) {
         verts.clear();
         idx.clear();
         require(ObjLoader::loadGeometry(externalPath, verts, idx),

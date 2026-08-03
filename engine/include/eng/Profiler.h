@@ -122,7 +122,7 @@ public:
     double frameMs() const;
 
     // One indented line per node to the engine log. The no-UI equivalent of the
-    // panel, and what PSX_PROFILE prints.
+    // panel, and what RAVEN_PROFILE prints.
     void logTree() const;
     // Every N frames, so a caller does not keep a static counter of its own.
     void logTreeEvery(int everyN);

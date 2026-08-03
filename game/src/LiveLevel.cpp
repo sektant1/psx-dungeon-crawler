@@ -196,7 +196,7 @@ LiveLevel buildLevel(eng::ecs::World& world, eng::Renderer& r,
             lv.upPortal = createPortalProp(r, lv.spawn, up);
         }
     }
-    if (sourceAuthored && !std::getenv("PSX_NO_SHOWCASE_LABELS")) {
+    if (sourceAuthored && !std::getenv("RAVEN_NO_SHOWCASE_LABELS")) {
         std::unordered_set<std::string> labelled;
         for (const ShowcaseExhibit& exhibit : lv.exhibits) {
             if (exhibit.label.empty() || !labelled.insert(exhibit.id).second)

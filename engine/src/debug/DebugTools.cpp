@@ -93,10 +93,10 @@ struct DebugTools::State {
 
 DebugTools::DebugTools() : mState(std::make_unique<State>())
 {
-    // PSX_TUNE=1 opens the panel on the first frame, for the same reason
-    // PSX_CONSOLE does for the console: a deterministic capture has no key to
+    // RAVEN_TUNE=1 opens the panel on the first frame, for the same reason
+    // RAVEN_CONSOLE does for the console: a deterministic capture has no key to
     // press, so this is the only way a screenshot can prove the panel draws.
-    mVisible = std::getenv("PSX_TUNE") != nullptr;
+    mVisible = std::getenv("RAVEN_TUNE") != nullptr;
 }
 DebugTools::~DebugTools() = default;
 DebugTools::DebugTools(DebugTools&&) noexcept = default;

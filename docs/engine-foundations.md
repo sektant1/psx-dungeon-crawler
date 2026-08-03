@@ -130,7 +130,7 @@ the name's `StringId`, so re-entering a scope accumulates into one node instead
 of allocating. Once a frame's shape is stable nothing allocates, which is what
 lets it stay on while you chase the spike.
 
-Read it three ways: `profile` in the console, `PSX_PROFILE=<n>` in the log, or
+Read it three ways: `profile` in the console, `RAVEN_PROFILE=<n>` in the log, or
 `profile.csv <path>` for the spreadsheet pass the book describes in §10.8.2.
 
 Two limits worth knowing:

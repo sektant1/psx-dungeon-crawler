@@ -21,7 +21,7 @@ struct RunHandle {
 //
 // `env` is a list of "KEY=VALUE" strings handed to the child on top of the
 // editor's own environment, and any inherited variable with the same key is
-// *dropped* rather than duplicated -- a stale PSX_PLAY_FROM in the editor's
+// *dropped* rather than duplicated -- a stale RAVEN_PLAY_FROM in the editor's
 // environment silently overriding the choice made here is the exact bug this
 // rule exists for, and every switch added since has the same shape.
 //
@@ -36,7 +36,7 @@ RunHandle launchGame(const std::string& gameExe, const std::string& mapPath,
 //
 // A pure function of the settings, so what F5 does is testable without
 // spawning anything. Empty values are omitted rather than exported empty: the
-// game tests for the variable's *presence* in several places, and PSX_DEBUG_UI=
+// game tests for the variable's *presence* in several places, and RAVEN_DEBUG_UI=
 // would read as "on".
 struct PlaytestEnvironment {
     std::string playFrom;    // empty for the scene's own spawn

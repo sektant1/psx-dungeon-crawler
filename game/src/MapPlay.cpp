@@ -214,19 +214,19 @@ protected:
 
         buildExitPortals(r, rt);
 
-        // PSX_PLAY_FROM=x,y,z drops the player there instead of at the scene's
+        // RAVEN_PLAY_FROM=x,y,z drops the player there instead of at the scene's
         // spawn. The editor sets it on F5 so a playtest starts at whatever the
         // author was looking at: the alternative is walking the level from the
         // entrance every time you adjust a room at the far end of it, which is
         // the single thing that makes people stop playtesting.
         glm::vec3 start = rt.playerSpawn();
-        if (const char* from = std::getenv("PSX_PLAY_FROM")) {
+        if (const char* from = std::getenv("RAVEN_PLAY_FROM")) {
             glm::vec3 parsed(0.0f);
             if (std::sscanf(from, "%f,%f,%f", &parsed.x, &parsed.y, &parsed.z) ==
                 3) {
                 start = parsed;
             } else {
-                eng::log::warn("MapPlay: PSX_PLAY_FROM is not x,y,z: %s", from);
+                eng::log::warn("MapPlay: RAVEN_PLAY_FROM is not x,y,z: %s", from);
             }
         }
         mPlayer.init(r, physics(), start, 6.0f, 0.0025f, glm::vec3(-500.0f),

@@ -8,8 +8,8 @@ debug surface below is the shared one.
 
 ```sh
 make demo                                  # or ./build/psx_demo
-PSX_RENDER_PRESET=ps1 ./build/psx_demo     # start on a specific profile
-PSX_TUNE=1 PSX_CONSOLE=1 ./build/psx_demo  # open the panels on frame 1
+RAVEN_RENDER_PRESET=ps1 ./build/psx_demo     # start on a specific profile
+RAVEN_TUNE=1 RAVEN_CONSOLE=1 ./build/psx_demo  # open the panels on frame 1
 ```
 
 ## Controls
@@ -127,7 +127,7 @@ compositor often writes a black PNG (unfocused/offscreen window). Drive it
 through a virtual display instead:
 
 ```sh
-PSX_SCREENSHOT=/tmp/demo.png PSX_SCREENSHOT_FRAME=200 \
+RAVEN_SCREENSHOT=/tmp/demo.png RAVEN_SCREENSHOT_FRAME=200 \
   xvfb-run -a -s "-screen 0 1280x900x24" ./build/psx_demo
 ```
 

@@ -43,7 +43,7 @@ struct Engine::Impl {
     float minFrameSec = 0.0f;
     // Deterministic capture: when set, tick() returns this fixed dt instead of
     // wall-clock time, so animTime/physics/particles advance identically every
-    // run and PSX_SCREENSHOT becomes a real pixel-diff regression oracle.
+    // run and RAVEN_SCREENSHOT becomes a real pixel-diff regression oracle.
     float fixedTickDt = 0.0f; // 0 = disabled (normal wall-clock timing)
     bool loading = false;     // see Engine::setLoadingPhase
 };
@@ -112,12 +112,12 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
     // Command line first (it is the explicit, per-run choice), then the
     // environment, then the engine default.
     int presetId = kDefaultRenderPreset;
-    if (const char* presetName = std::getenv("PSX_RENDER_PRESET")) {
+    if (const char* presetName = std::getenv("RAVEN_RENDER_PRESET")) {
         const int id = renderPresetFromName(presetName);
         if (id > 0)
             presetId = id;
         else
-            log::warn("Unknown PSX_RENDER_PRESET '%s'; using the default "
+            log::warn("Unknown RAVEN_RENDER_PRESET '%s'; using the default "
                       "profile instead", presetName);
     }
     if (renderPreset > 0)
@@ -150,7 +150,7 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
     }
     // Safe before any attachMesh: entities created later join the debug
     // view through the attachMesh wireframe hook.
-    if (std::getenv("PSX_WIREFRAME"))
+    if (std::getenv("RAVEN_WIREFRAME"))
         mRenderer.setWireframeDebug(true);
     if (!mInput.loadBindings(mConfig)) {
         shutdown();
@@ -164,23 +164,23 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
               mountSet.c_str(), configFile.c_str(), mConfig.bindings().size());
     log::info("Engine: render profile '%s'", renderPresetName(presetId));
 
-    const char* shot = std::getenv("PSX_SCREENSHOT");
+    const char* shot = std::getenv("RAVEN_SCREENSHOT");
     if (shot)
         mImpl->screenshotPath = shot;
     // Screenshot capture drives a fixed timestep so the frame is reproducible
-    // (default 1/60 s). PSX_FIXED_DT overrides it (e.g. to land on a specific
+    // (default 1/60 s). RAVEN_FIXED_DT overrides it (e.g. to land on a specific
     // animation phase); set it explicitly to force deterministic timing without
     // capturing.
     if (shot)
         mImpl->fixedTickDt = 1.0f / 60.0f;
-    if (const char* fdt = std::getenv("PSX_FIXED_DT")) {
+    if (const char* fdt = std::getenv("RAVEN_FIXED_DT")) {
         const float v = float(std::atof(fdt));
         if (v > 0.0f)
             mImpl->fixedTickDt = v;
     }
-    if (const char* frame = std::getenv("PSX_SCREENSHOT_FRAME"))
+    if (const char* frame = std::getenv("RAVEN_SCREENSHOT_FRAME"))
         mImpl->screenshotFrame = std::max(1, std::atoi(frame));
-    if (const char* frames = std::getenv("PSX_BENCH_FRAMES")) {
+    if (const char* frames = std::getenv("RAVEN_BENCH_FRAMES")) {
         mImpl->benchmarkFrames = std::max(1, std::atoi(frames));
         mImpl->frameSamples.reserve(size_t(mImpl->benchmarkFrames));
     }
@@ -305,10 +305,10 @@ void Engine::renderFrame(float dt, float animDt)
                           : animDt;
     mRenderer.updateParticles(adt); // recycle finished one-shot particle systems
     // Loading frames are presentation only: paint and get out before any of the
-    // capture/bench hooks can see them. PSX_CAPTURE_LOADING lifts that so the
+    // capture/bench hooks can see them. RAVEN_CAPTURE_LOADING lifts that so the
     // loading screen itself can be screenshotted -- it is the only way to see
     // it in a deterministic capture, since by design it leaves no frames behind.
-    static const bool captureLoading = std::getenv("PSX_CAPTURE_LOADING");
+    static const bool captureLoading = std::getenv("RAVEN_CAPTURE_LOADING");
     if (mImpl->loading && !captureLoading) {
         detail::coreOf(mRenderer).renderFrame(adt);
         return;

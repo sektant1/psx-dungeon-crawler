@@ -765,7 +765,7 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     desc.width = mImpl->windowWidth;
     desc.height = mImpl->windowHeight;
     desc.vsync = vsync;
-    desc.enableValidation = std::getenv("PSX_VULKAN_VALIDATION") != nullptr;
+    desc.enableValidation = std::getenv("RAVEN_VULKAN_VALIDATION") != nullptr;
     mImpl->device = rhi::createDevice(rhi::BackendKind::Vulkan, desc);
     if (!mImpl->device)
         return false;
@@ -816,9 +816,9 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
                                                         15.0f, &toolFont))
             io.FontDefault = font;
     }
-    const char* theme = std::getenv("PSX_IMGUI_THEME");
+    const char* theme = std::getenv("RAVEN_IMGUI_THEME");
     if (!theme || !imguitheme::apply(theme))
-        imguitheme::apply("ac_vixen");
+        imguitheme::apply("raven_editor");
     if (!ImGui_ImplSDL2_InitForVulkan(mImpl->window)) {
         log::error("RHI renderer: ImGui SDL2 Vulkan initialization failed");
         shutdown();

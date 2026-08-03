@@ -50,7 +50,7 @@ int main()
     // A scratch pack with only what the importer touches.
     std::error_code ec;
     const fs::path root =
-        fs::temp_directory_path() / "psx_model_import_tests";
+        fs::temp_directory_path() / "raven_model_import_tests";
     fs::remove_all(root, ec);
     fs::create_directories(root / "config", ec);
     require(!ec, "scratch asset root was created");

@@ -32,6 +32,9 @@ struct OutlinerNode {
     // Entities whose `parent` is this one, already nested. Empty for the flat
     // majority of a blockout, which is what keeps the panel cheap.
     std::vector<OutlinerNode> children;
+    // Kept for composed-object search. A child nested under a root no longer
+    // has a prefab group row whose key can satisfy the query for it.
+    std::string prefab;
 };
 
 // The entities that share a kind: one prefab id, or one gameplay kind for the

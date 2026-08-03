@@ -21,7 +21,7 @@ struct AppConfig
     // them every resource location the renderer registers.
     std::string mountSet = "game";
     // Starting render profile (eng::renderPresetFromArgs / renderPresetFromName).
-    // 0 leaves the choice to PSX_RENDER_PRESET and then kDefaultRenderPreset.
+    // 0 leaves the choice to RAVEN_RENDER_PRESET and then kDefaultRenderPreset.
     // Only the *starting* look: the debug console switches profiles at runtime.
     int renderPreset = 0;
 

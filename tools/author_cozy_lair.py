@@ -197,7 +197,7 @@ schema = os.path.relpath(os.path.abspath("assets/schemas/scene.schema.json"),
                          os.path.dirname(output))
 document = collections.OrderedDict([
     ("$schema", schema),
-    ("format", "psx-dungeon-scene"),
+    ("format", "raven-scene"),
     ("version", 2),
     ("id", "scene.test.cozy_lair"),
     ("palette", "cozy_lair"),

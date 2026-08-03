@@ -6,7 +6,7 @@ An app picks one by name and never assembles one by hand.
 
 ```sh
 ./game --render-preset ps1
-PSX_RENDER_PRESET=poison-swamp ./build/psx_demo
+RAVEN_RENDER_PRESET=poison-swamp ./build/psx_demo
 ```
 
 In the debug UI: **Render → Render Profile**. In the console: `r.preset`
@@ -121,7 +121,7 @@ mode 1, not "mode 8".
 Verify it the way the rest of this repo verifies rendering — capture and look:
 
 ```sh
-PSX_RENDER_PRESET=<name> PSX_SCREENSHOT=/tmp/x.png PSX_SCREENSHOT_FRAME=160 \
+RAVEN_RENDER_PRESET=<name> RAVEN_SCREENSHOT=/tmp/x.png RAVEN_SCREENSHOT_FRAME=160 \
   xvfb-run -a ./build/psx_demo
 ```
 

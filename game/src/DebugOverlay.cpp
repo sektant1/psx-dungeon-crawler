@@ -398,7 +398,7 @@ void DebugPanels::drawEnemiesTab()
         // Deliberately a whole round trip through the file, not an in-memory
         // snapshot: the thing worth exercising by hand is the format, and a
         // path that skips encode/decode would never catch a codec bug.
-        const std::string path = "/tmp/psx_enemies.sav";
+        const std::string path = "/tmp/raven_enemies.sav";
         if (ImGui::Button("Save encounter")) {
             enemysave::writeFile(path,
                                  enemysave::capture(*enemies, *mCur.spawner));

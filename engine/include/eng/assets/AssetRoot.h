@@ -39,10 +39,10 @@ struct Pack {
 //
 // Discovery order, first candidate *containing assets.toml* wins:
 //   1. `rootOverride`, when non-empty -- and only that one, no fallback
-//   2. $PSX_ASSET_ROOT
-//   3. <exe>/../share/psx-dungeon/assets   (an installed build)
+//   2. $RAVEN_ASSET_ROOT
+//   3. <exe>/../share/raven-engine/assets  (an installed build)
 //   4. <exe>/assets                        (a portable build)
-//   5. PSX_ASSET_ROOT_DEV                  (the source tree, set by CMake)
+//   5. RAVEN_ASSET_ROOT_DEV                (the source tree, set by CMake)
 //
 // Returns false and logs on a missing or malformed manifest. Never throws.
 bool init(const std::string& rootOverride = {});

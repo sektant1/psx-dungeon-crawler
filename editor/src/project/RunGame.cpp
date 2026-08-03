@@ -27,17 +27,17 @@ std::vector<std::string> playtestEnvironment(const PlaytestEnvironment& options)
 {
     std::vector<std::string> env;
     if (!options.playFrom.empty())
-        env.push_back("PSX_PLAY_FROM=" + options.playFrom);
+        env.push_back("RAVEN_PLAY_FROM=" + options.playFrom);
     if (!options.renderPreset.empty())
-        env.push_back("PSX_RENDER_PRESET=" + options.renderPreset);
+        env.push_back("RAVEN_RENDER_PRESET=" + options.renderPreset);
     // Presence, not value: the game tests getenv() != nullptr for these, so
     // exporting them as "0" would turn them ON.
     if (options.console)
-        env.push_back("PSX_DEBUG_UI=1");
+        env.push_back("RAVEN_DEBUG_UI=1");
     if (options.colliders)
-        env.push_back("PSX_SHOW_COLLIDERS=1");
+        env.push_back("RAVEN_SHOW_COLLIDERS=1");
     if (options.fullscreen)
-        env.push_back("PSX_FULLSCREEN=1");
+        env.push_back("RAVEN_FULLSCREEN=1");
     return env;
 }
 

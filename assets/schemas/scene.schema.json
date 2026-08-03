@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://psx-dungeon-crawler.invalid/schemas/scene.schema.json",
-  "title": "PSX Dungeon Scene",
+  "$id": "https://raven-engine.invalid/schemas/scene.schema.json",
+  "title": "Raven Engine Scene",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
       "type": "string"
     },
     "format": {
-      "const": "psx-dungeon-scene"
+      "const": "raven-scene"
     },
     "version": {
       "description": "1 shipped before the placement editor; 2 adds cell, encounters and triggers. Readers accept both, the writer emits 2.",

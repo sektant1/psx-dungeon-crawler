@@ -106,9 +106,9 @@ void install()
     }
     s.path = (enginePack / "ui" /
               ("debug_layout_" + appName() + ".ini")).string();
-    if (const char* override = std::getenv("PSX_UI_LAYOUT")) {
+    if (const char* override = std::getenv("RAVEN_UI_LAYOUT")) {
         if (isOff(override)) {
-            log::info("ImGuiLayout: persistence off (PSX_UI_LAYOUT)");
+            log::info("ImGuiLayout: persistence off (RAVEN_UI_LAYOUT)");
             s.path.clear();
             return;
         }

@@ -83,7 +83,7 @@ comment). That value has to stay meaningful through the port.</p>
 <div class="callout">
   <span class="label">How to prove the image did not move</span>
   <p>Do not eyeball it. Render the same scene through both paths and diff:
-  <code>PSX_SCREENSHOT=/tmp/gl.png PSX_SCREENSHOT_FRAME=120 ./build/game</code> against the equivalent
+  <code>RAVEN_SCREENSHOT=/tmp/gl.png RAVEN_SCREENSHOT_FRAME=120 ./build/game</code> against the equivalent
   Vulkan capture, then compare against <span class="path">docs/baselines/</span>. A frame that is
   vertically mirrored looks <em>fine</em> in a dungeon corridor until you notice the floor is the
   ceiling.</p>

@@ -51,8 +51,10 @@ struct OutlinerRowOrder {
 
 struct OutlinerActions {
     std::function<bool(const game::content::AuthorId&)> isSelected;
-    // `add` extends the selection rather than replacing it.
-    std::function<void(const OutlinerGroup&, bool add)> selectGroup;
+    // Aggregate rows honor modifiers too: Ctrl toggles the group, Shift adds
+    // it, plain click replaces. Passing the mode avoids reducing three intents
+    // to the old ambiguous `add` boolean.
+    std::function<void(const OutlinerGroup&, SelectMode)> selectGroup;
     std::function<void(const game::content::AuthorId&, bool add)> selectNode;
     // Ctrl/Shift-aware click on a single row. Null falls back to selectNode,
     // so a caller that has no anchor to track need not grow one.
@@ -82,12 +84,16 @@ struct OutlinerActions {
     std::function<void(const game::content::AuthorId&, bool)> setHidden;
     std::function<bool(const game::content::AuthorId&)> isLocked;
     std::function<void(const game::content::AuthorId&, bool)> setLocked;
+
+    // -1 keeps current state, 0 collapses every aggregate, 1 expands it. The
+    // caller sends a one-frame request from hierarchy header controls.
+    int forceOpen = -1;
 };
 
 // Draws every group and its rows into the current window. `filterActive` forces
-// the groups open, which is what a search result should do. `order` is rewritten
-// with this frame's row order and must be the same object each frame -- see
-// OutlinerRowOrder.
+// the groups open, which is what a search result should do. `order` is
+// rewritten with this frame's row order and must be the same object each frame
+// -- see OutlinerRowOrder.
 void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                       const OutlinerActions& actions, OutlinerRowOrder& order);
 

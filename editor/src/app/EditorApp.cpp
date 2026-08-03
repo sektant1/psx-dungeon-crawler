@@ -1,6 +1,7 @@
 #include <editor/app/EditorApp.h>
 
 #include <editor/ui/ComponentInspector.h>
+#include <editor/ui/EditorWorkspace.h>
 #include <editor/ui/OutlinerPanel.h>
 #include <editor/scene/PaintSlot.h>
 #include <editor/scene/Picker.h>
@@ -21,23 +22,26 @@
 #include <eng/render/Warmup.h>
 #include <eng/render/ImGuiHint.h>
 #include <eng/Renderer.h>
+#include <eng/assets/AssetName.h>
 #include <eng/assets/AssetRoot.h>
 
 #include <imgui.h>
 #include <ImGuizmo.h>
-#include <imgui_internal.h> // DockBuilder: the default panel layout
+#include <imgui_internal.h> // DockBuilderGetNode: preserve a restored workspace
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include <cmath>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <string_view>
 #include <nlohmann/json.hpp>
 
 namespace ed {
@@ -64,6 +68,20 @@ constexpr int kGridRadius = 16; // cells drawn either side of the camera
 constexpr float kGhostFallbackDistance = 12.0f;
 
 constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoCollapse;
+
+const ImVec4 kUiWarning(0.780f, 0.604f, 0.314f, 1.0f);
+const ImVec4 kUiDanger(0.890f, 0.416f, 0.333f, 1.0f);
+
+bool filterMatches(std::string_view text, std::string_view query)
+{
+    if (query.empty())
+        return true;
+    return std::search(text.begin(), text.end(), query.begin(), query.end(),
+                       [](char a, char b) {
+                           return std::tolower(static_cast<unsigned char>(a)) ==
+                                  std::tolower(static_cast<unsigned char>(b));
+                       }) != text.end();
+}
 
 // The one place the editor decides how wide its view is. Walk mode deliberately
 // uses the game's field of view rather than the editor's, because framing the
@@ -185,7 +203,7 @@ bool EditorApp::onStart(eng::Engine& engine)
     mEngine = &engine;
     eng::Renderer& renderer = engine.renderer();
 
-    if (std::getenv("PSX_EDITOR_SELFTEST"))
+    if (std::getenv("RAVEN_EDITOR_SELFTEST"))
         mSelfTestStep = 0;
 
     installConsoleCommands();
@@ -247,8 +265,9 @@ bool EditorApp::onStart(eng::Engine& engine)
 
     // Session state, not project content: it is per-machine, so it lives beside
     // the other generated artefacts rather than in the asset tree.
-    mRecentFile = (eng::assets::project() / "artifacts" / "editor" / "recent.txt")
-                      .string();
+    mRecentFile =
+        (eng::assets::project() / "artifacts" / "editor" / "recent.txt")
+            .string();
     mRecent.load(mRecentFile);
     mSettingsFile =
         (eng::assets::project() / "artifacts" / "editor" / "settings.txt")
@@ -286,30 +305,30 @@ bool EditorApp::onStart(eng::Engine& engine)
         mRecent.touch(mPendingScene);
         mRecent.save(mRecentFile);
         if (autosaveIsStale(mPendingScene, mState.assetRoot + "/scenes"))
-            mStatus += "  |  a newer autosave exists -- Scene > Recover "
+            mStatus += "  |  a newer autosave exists -- File > Recover "
                        "autosave";
     }
-    if (const char* import = std::getenv("PSX_EDITOR_IMPORT_MODEL"))
+    if (const char* import = std::getenv("RAVEN_EDITOR_IMPORT_MODEL"))
         importModel(import);
     // Verification hook: start in the staging scene so a screenshot run can
     // capture it without driving the UI.
-    if (std::getenv("PSX_EDITOR_MATERIAL"))
+    if (std::getenv("RAVEN_EDITOR_MATERIAL"))
         setMode(true);
     // Verification hook: stage one material by name. Without it a screenshot
     // run can only cycle the whole list and hope, which cannot show a specific
     // rig (the quad is only reachable through a handful of names).
-    if (const char* pick = std::getenv("PSX_EDITOR_MATERIAL_NAME")) {
+    if (const char* pick = std::getenv("RAVEN_EDITOR_MATERIAL_NAME")) {
         mSelectedMaterial = pick;
         if (mStage.built())
             mStage.setMaterial(engine.renderer(), mSelectedMaterial);
     }
     // Verification hooks: drive the two interactions a screenshot run cannot
     // click on its own.
-    if (std::getenv("PSX_EDITOR_CYCLE_MATERIALS"))
+    if (std::getenv("RAVEN_EDITOR_CYCLE_MATERIALS"))
         mCycleMaterials = true;
     // Verification hook: the surfaces that only exist while a key is held or a
     // menu is open, and that a screenshot run therefore cannot reach.
-    if (const char* panel = std::getenv("PSX_EDITOR_PANEL")) {
+    if (const char* panel = std::getenv("RAVEN_EDITOR_PANEL")) {
         const std::string which = panel;
         if (which == "palette")
             openPalette(mPalette);
@@ -323,13 +342,13 @@ bool EditorApp::onStart(eng::Engine& engine)
             // means to photograph.
             mFocusPanel = which;
     }
-    if (const char* query = std::getenv("PSX_EDITOR_PALETTE_QUERY")) {
+    if (const char* query = std::getenv("RAVEN_EDITOR_PALETTE_QUERY")) {
         openPalette(mPalette);
         std::snprintf(mPalette.query, sizeof(mPalette.query), "%s", query);
     }
     // Verification hook: build a room without a mouse, so a screenshot run can
     // show what the tool produces.
-    if (const char* room = std::getenv("PSX_EDITOR_DEMO_ROOM")) {
+    if (const char* room = std::getenv("RAVEN_EDITOR_DEMO_ROOM")) {
         mState.document = SceneDocument{};
         mState.document.id = "scene.demo_room";
         int w = 4, d = 3;
@@ -350,7 +369,7 @@ bool EditorApp::onStart(eng::Engine& engine)
             frameCamera(min, max);
         mStatus = error.empty() ? "demo room built" : error;
     }
-    if (const char* select = std::getenv("PSX_EDITOR_SELECT")) {
+    if (const char* select = std::getenv("RAVEN_EDITOR_SELECT")) {
         // An id if the document has one, otherwise an index -- a screenshot run
         // that wants "the arena gate" should not have to count entities.
         if (mState.document.contains(select))
@@ -367,11 +386,11 @@ bool EditorApp::onStart(eng::Engine& engine)
     // Verification hook: start at the player's eye, at the spawn. The only
     // view that answers a level-design question -- is the exit legible from
     // where the player wakes up -- is the one the player has.
-    if (std::getenv("PSX_EDITOR_WALK"))
+    if (std::getenv("RAVEN_EDITOR_WALK"))
         toggleWalk();
     // Verification hook: arm the Place tool with a piece, so a capture can show
     // the placement ghost -- which otherwise needs a click in the Catalog.
-    if (const char* brush = std::getenv("PSX_EDITOR_BRUSH")) {
+    if (const char* brush = std::getenv("RAVEN_EDITOR_BRUSH")) {
         if (mState.catalog.find(brush)) {
             mState.brush.kind = Brush::Kind::Piece;
             mState.brush.prefab = brush;
@@ -381,7 +400,7 @@ bool EditorApp::onStart(eng::Engine& engine)
     // Verification hook: give the selection a component without the mouse. Runs
     // the same path the inspector's Add Component does, so a capture shows what
     // an author would get.
-    if (const char* add = std::getenv("PSX_EDITOR_ADD_COMPONENT"))
+    if (const char* add = std::getenv("RAVEN_EDITOR_ADD_COMPONENT"))
         if (const ComponentType* type = findComponentType(add))
             addComponentToSelection(*type);
 
@@ -403,6 +422,11 @@ bool EditorApp::loadScene(const std::string& path)
     mState.scenePath = path;
     mState.dirty = false;
     mState.selection.clear();
+    mState.hidden.clear();
+    mState.locked.clear();
+    mSelectionAnchor.clear();
+    mOutlinerReveal.clear();
+    mOutlinerRows.ids.clear();
     if (mPreview)
         mPreview->invalidate();
 
@@ -534,9 +558,9 @@ void EditorApp::requestEffectPreview(const std::string& effect)
     // thumbnail-only so it cannot leak into the scene viewport.
     mStage.setThumbnailVisible(renderer, false);
     if (!mParticleThumbnailNode.valid())
-        mParticleThumbnailNode = renderer.createNode(
-            eng::kRootNode, glm::vec3(0.0f, -1000.0f, 0.0f),
-            "particle_catalog_thumbnail");
+        mParticleThumbnailNode =
+            renderer.createNode(eng::kRootNode, glm::vec3(0.0f, -1000.0f, 0.0f),
+                                "particle_catalog_thumbnail");
     renderer.setNodeVisible(mParticleThumbnailNode, true);
     if (mParticleThumbnail.valid())
         renderer.despawnParticles(mParticleThumbnail);
@@ -561,8 +585,8 @@ void EditorApp::finishInspectorEdit()
     // pre-edit material against the post-edit one is how the fan-out below
     // knows a material change is what just happened.
     const std::string materialBefore = mInspectorEdit.beforeMaterial();
-    std::optional<Command> command = mInspectorEdit.commit(
-        mState.document, "edit " + id);
+    std::optional<Command> command =
+        mInspectorEdit.commit(mState.document, "edit " + id);
     if (!command)
         return;
 
@@ -598,15 +622,15 @@ void EditorApp::finishInspectorEdit()
     // and this is that flush.
     if (parts.size() == 1) {
         mCommands.run(mState.document, std::move(parts.front()));
-    } else {
+    }
+    else {
         const std::size_t count = parts.size();
         mCommands.run(mState.document,
-                      makeComposite("set material on " +
-                                        std::to_string(count),
+                      makeComposite("set material on " + std::to_string(count),
                                     std::move(parts)));
         mPreview->invalidate();
-        mStatus = "applied the material to " + std::to_string(count) +
-                  " selected";
+        mStatus =
+            "applied the material to " + std::to_string(count) + " selected";
     }
     mState.dirty = !mCommands.savedStateReached();
     mCookStatus = "stale";
@@ -644,6 +668,11 @@ void EditorApp::newScene(SceneTemplate which)
     mState.document.touch();
     mState.scenePath.clear(); // Save As, not Save: this has no file yet
     mState.selection.clear();
+    mState.hidden.clear();
+    mState.locked.clear();
+    mSelectionAnchor.clear();
+    mOutlinerReveal.clear();
+    mOutlinerRows.ids.clear();
     mCommands.clear();
     mState.dirty = true;
     mCookStatus = "not cooked";
@@ -711,7 +740,7 @@ void EditorApp::performDiscard()
                     mRecent.save(mRecentFile);
                 }
                 if (autosaveIsStale(path, mState.assetRoot + "/scenes"))
-                    mStatus += "  |  a newer autosave exists -- Scene > "
+                    mStatus += "  |  a newer autosave exists -- File > "
                                "Recover autosave";
             }
             else {
@@ -745,18 +774,16 @@ void EditorApp::drawDiscardPopup()
 
     const char* verb = mDiscardWhat == Discard::Quit     ? "Quitting"
                        : mDiscardWhat == Discard::Reload ? "Reloading"
-                       : mDiscardWhat == Discard::Open
-                           ? "Opening another scene"
-                           : "Starting a new scene";
+                       : mDiscardWhat == Discard::Open ? "Opening another scene"
+                                                       : "Starting a new scene";
     ImGui::Text("%s will discard unsaved changes to", verb);
     ImGui::TextUnformatted(mState.scenePath.empty() ? "this untitled scene."
                                                     : mState.scenePath.c_str());
     ImGui::Separator();
 
-    // Save is the default: it is the only choice here that cannot lose work, so
-    // it takes Enter and the leftmost position.
-    if (ImGui::Button("Save and continue") ||
-        ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+    // Save is default and receives initial navigation focus. Enter must activate
+    // the focused button, not bypass focus and save while Cancel is selected.
+    if (ImGui::Button("Save and continue")) {
         // An untitled scene has nowhere to save to, so the discard waits while
         // Save As collects a path rather than silently failing.
         if (mState.scenePath.empty()) {
@@ -770,6 +797,8 @@ void EditorApp::drawDiscardPopup()
             performDiscard();
         }
     }
+    if (ImGui::IsWindowAppearing())
+        ImGui::SetItemDefaultFocus();
     ImGui::SameLine();
     if (ImGui::Button("Discard")) {
         ImGui::CloseCurrentPopup();
@@ -997,6 +1026,17 @@ void EditorApp::commitDelete(const std::vector<AuthorId>& ids)
         makeComposite("delete " + std::to_string(parts.size()) + " entities",
                       std::move(parts)));
     mState.selection.clear();
+    const auto deleted = [&ids](const AuthorId& id) {
+        return std::find(ids.begin(), ids.end(), id) != ids.end();
+    };
+    mState.hidden.erase(
+        std::remove_if(mState.hidden.begin(), mState.hidden.end(), deleted),
+        mState.hidden.end());
+    mState.locked.erase(
+        std::remove_if(mState.locked.begin(), mState.locked.end(), deleted),
+        mState.locked.end());
+    mSelectionAnchor.clear();
+    mOutlinerReveal.clear();
     mPreview->invalidate();
 }
 
@@ -1110,27 +1150,21 @@ void EditorApp::runSelfTest(eng::Engine& engine)
                 return entity.id;
         return {};
     };
-    const auto component = [](const char* id) {
-        return findComponentType(id);
-    };
+    const auto component = [](const char* id) { return findComponentType(id); };
 
     // Each edit is preceded by a frame that only selects, so the frame the
     // edit lands on has already drawn the gizmo, the inspector section and the
     // outliner row for that entity -- which is the state a hand-driven click
     // is always in, and the one the crash reports came from.
     struct Step {
-        const char* entity;   // id prefix to select
-        const char* action;   // "remove:<component>", "detach", "delete"
+        const char* entity; // id prefix to select
+        const char* action; // "remove:<component>", "detach", "delete"
     };
     static const Step kSteps[] = {
-        {"prop_raccoon", "remove:shader"},
-        {"prop_raccoon", "remove:mesh"},
-        {"prop_raccoon", "remove:spin"},
-        {"camera_main", "detach"},
-        {"camera_main", "remove:camera"},
-        {"prop_base", "delete"},
-        {"prop_crystal", "delete"},
-        {"light_key", "remove:light"},
+        {"prop_raccoon", "remove:shader"}, {"prop_raccoon", "remove:mesh"},
+        {"prop_raccoon", "remove:spin"},   {"camera_main", "detach"},
+        {"camera_main", "remove:camera"},  {"prop_base", "delete"},
+        {"prop_crystal", "delete"},        {"light_key", "remove:light"},
     };
     constexpr int kCount = int(sizeof(kSteps) / sizeof(kSteps[0]));
 
@@ -1152,9 +1186,11 @@ void EditorApp::runSelfTest(eng::Engine& engine)
     eng::log::info("selftest: %s on %s", action.c_str(), id.c_str());
     if (action == "detach") {
         detachSelection();
-    } else if (action == "delete") {
+    }
+    else if (action == "delete") {
         deleteSelection();
-    } else if (action.rfind("remove:", 0) == 0) {
+    }
+    else if (action.rfind("remove:", 0) == 0) {
         if (const ComponentType* type = component(action.substr(7).c_str()))
             removeComponentFromSelection(*type);
     }
@@ -1173,10 +1209,12 @@ void EditorApp::applySettings()
     if (!mEngine)
         return;
     if (!mSettings.viewportPreset.empty()) {
-        const int id = eng::renderPresetFromName(mSettings.viewportPreset.c_str());
+        const int id =
+            eng::renderPresetFromName(mSettings.viewportPreset.c_str());
         if (id > 0) {
             mEngine->setRenderPreset(id);
-        } else {
+        }
+        else {
             // Named a profile that no longer exists: say so and forget it,
             // rather than reporting it again on every launch forever.
             eng::log::warn("editor: unknown render preset '%s' in settings",
@@ -1214,7 +1252,7 @@ std::string EditorApp::playtestPresetName() const
 
 void EditorApp::captureSettings()
 {
-    // The other direction, once a frame: the View menu, the toolbar and the
+    // The other direction, once a frame: the Window menu, toolbar and
     // render-preset submenu all edit the live state directly, and a preference
     // that only persists when it was changed from the settings panel is a
     // preference the author will find reset tomorrow. One rule instead of a
@@ -1331,7 +1369,6 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
             }
         }
     }
-
 }
 
 void EditorApp::handleShortcuts(const eng::FrameContext& f)
@@ -1344,6 +1381,18 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
     // authoritative, so a fast Ctrl chord cannot leak its bare letter action.
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_P))
         openPalette(mPalette);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_1))
+        requestPanelFocus("viewport");
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_2))
+        requestPanelFocus("catalog");
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_3))
+        requestPanelFocus("outliner");
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_4))
+        requestPanelFocus("inspector");
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_5))
+        requestPanelFocus("ui");
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_6))
+        requestPanelFocus("issues");
 
     // WantCaptureKeyboard also means "an ImGui window has navigation focus";
     // in a docked editor that is almost always true, even when no field is
@@ -1440,22 +1489,28 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
     // global back must never also clear the selection or close the workspace.
     if (ImGui::IsAnyItemActive() ||
         ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId |
-                                  ImGuiPopupFlags_AnyPopupLevel))
+                                   ImGuiPopupFlags_AnyPopupLevel))
         return;
     if (mGizmoDragging || mStroke != Stroke::None || mRoomDragging) {
         mStatus = "finish or release the active edit before leaving the tool";
-    } else if (ConfirmDialog::isOpen()) {
+    }
+    else if (ConfirmDialog::isOpen()) {
         ConfirmDialog::cancel();
-    } else if (mPalette.open) {
+    }
+    else if (mPalette.open) {
         mPalette.open = false;
-    } else if (mMaterialMode) {
+    }
+    else if (mMaterialMode) {
         setMode(false);
-    } else if (!mState.selection.empty()) {
+    }
+    else if (!mState.selection.empty()) {
         finishInspectorEdit();
         mState.selection.clear();
-    } else if (mState.tool != Tool::Select) {
+    }
+    else if (mState.tool != Tool::Select) {
         mState.tool = Tool::Select;
-    } else {
+    }
+    else {
         requestDiscard(Discard::Quit);
     }
 }
@@ -1517,7 +1572,8 @@ void EditorApp::installConsoleCommands()
         },
         [this](const eng::DebugConsole::Args&) {
             std::vector<std::string> names;
-            for (const SceneEntry& entry : listScenes(mState.assetRoot + "/scenes"))
+            for (const SceneEntry& entry :
+                 listScenes(mState.assetRoot + "/scenes"))
                 names.push_back(entry.name);
             return names;
         });
@@ -1579,10 +1635,10 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
 
     int exitCode = 0;
     if (mPlaytest.running() && !pollGame(mPlaytest, exitCode)) {
-        mStatus = exitCode == 0
-                      ? "playtest finished"
-                      : "playtest exited with code " +
-                            std::to_string(exitCode) + " -- see artifacts/playtest.log";
+        mStatus = exitCode == 0 ? "playtest finished"
+                                : "playtest exited with code " +
+                                      std::to_string(exitCode) +
+                                      " -- see artifacts/playtest.log";
     }
 }
 
@@ -1686,19 +1742,21 @@ std::vector<PaletteAction> EditorApp::paletteActions()
     };
 
     // --- scene ---------------------------------------------------------------
-    for (const SceneTemplate which : {SceneTemplate::Empty, SceneTemplate::Room,
-                                      SceneTemplate::TechDemo}) {
+    for (const SceneTemplate which :
+         {SceneTemplate::Empty, SceneTemplate::Room, SceneTemplate::TechDemo}) {
         add(std::string("New scene: ") + sceneTemplateName(which), "scene", "",
             true, [this, which] { requestDiscard(Discard::NewScene, which); });
     }
     add("Open scene...", "scene", "Ctrl+O", true,
         [this] { mOpenSceneOpen = true; });
     for (const std::string& path : mRecent.paths()) {
-        add("Open " + std::filesystem::path(path).filename().string(), "scene",
+        add(
+            "Open " + std::filesystem::path(path).filename().string(), "scene",
             "", true, [this, path] { requestOpen(path); }, "recent");
     }
-    add("Save scene", "scene", "Ctrl+S", true,
-        [this] { saveScene(); }, mState.scenePath);
+    add(
+        "Save scene", "scene", "Ctrl+S", true, [this] { saveScene(); },
+        mState.scenePath);
     add("Save scene as...", "scene", "", true, [this] {
         mSaveAsOpen = true;
         std::snprintf(mSaveAsPath, sizeof(mSaveAsPath), "%s",
@@ -1708,7 +1766,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
     });
     add("Reload scene from disk", "scene", "Ctrl+R", !mState.scenePath.empty(),
         [this] { requestDiscard(Discard::Reload); });
-    add("Recover autosave", "scene", "",
+    add(
+        "Recover autosave", "scene", "",
         autosaveIsStale(mState.scenePath, mState.assetRoot + "/scenes"),
         [this] { recoverAutosave(); },
         "the backup written while the last session was unsaved");
@@ -1716,7 +1775,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
         std::string mapPath;
         cookScene(mapPath);
     });
-    add(mPlaytest.running() ? "Stop playtest" : "Run playtest", "scene", "F5",
+    add(
+        mPlaytest.running() ? "Stop playtest" : "Run playtest", "scene", "F5",
         true, [this] { runPlaytest(); },
         mPlayFromCamera ? "from the camera" : "from the player spawn");
     add(mPlayFromCamera ? "Playtest from the player spawn instead"
@@ -1737,16 +1797,19 @@ std::vector<PaletteAction> EditorApp::paletteActions()
         [this] { copySelection(false); });
     add("Cut selection", "edit", "Ctrl+X", hasSelection,
         [this] { copySelection(true); });
-    add("Paste", "edit", "Ctrl+V", !mClipboard.empty(),
+    add(
+        "Paste", "edit", "Ctrl+V", !mClipboard.empty(),
         [this] { pasteClipboard(); },
-        mClipboard.empty() ? "" : std::to_string(mClipboard.size()) + " copied");
+        mClipboard.empty() ? ""
+                           : std::to_string(mClipboard.size()) + " copied");
     add("Duplicate selection", "edit", "Ctrl+D", hasSelection,
         [this] { duplicateSelection(); });
     add("Delete selection", "edit", "Del", hasSelection,
         [this] { deleteSelection(); });
     add("Select nothing", "edit", "Esc", hasSelection,
         [this] { mState.selection.clear(); });
-    add("Parent selection to first selected", "edit", "",
+    add(
+        "Parent selection to first selected", "edit", "",
         mState.selection.size() > 1, [this] { parentSelectionToPrimary(); },
         "makes a composed object that moves as one");
     add("Detach selection from parent", "edit", "", hasSelection,
@@ -1771,7 +1834,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
         mState.tool = Tool::Select;
         mGizmoOperation = 2;
     });
-    add("Focus selection", "view", "F", true, [this] { frameSelectionOrAll(); });
+    add("Focus selection", "view", "F", true,
+        [this] { frameSelectionOrAll(); });
     add("Toggle snap to grid", "view", "G", true,
         [this] { mState.gridState.snap = !mState.gridState.snap; });
     add("Raise work plane", "view", "PageUp", true,
@@ -1782,8 +1846,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
         [this] { mState.gridState.level = 0.0f; });
     add(mGizmoLocal ? "Gizmo axes: world" : "Gizmo axes: local", "view", "X",
         true, [this] { mGizmoLocal = !mGizmoLocal; });
-    add(mState.camera.walking() ? "Leave walk camera" : "Walk the level", "view",
-        "V", true, [this] { toggleWalk(); });
+    add(mState.camera.walking() ? "Leave walk camera" : "Walk the level",
+        "view", "V", true, [this] { toggleWalk(); });
     add(mGameLighting ? "Editor lighting" : "Game lighting", "view", "", true,
         [this] {
             mGameLighting = !mGameLighting;
@@ -1794,7 +1858,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
         true, [this] { setMode(!mMaterialMode); });
     add("Console", "view", "`", true, [this] { mConsole.toggle(); });
     add("Shortcuts", "view", "F1", true, [this] { mHelpOpen = !mHelpOpen; });
-    add("Settings", "view", "", true, [this] { mSettingsOpen = !mSettingsOpen; });
+    add("Settings", "view", "", true,
+        [this] { mSettingsOpen = !mSettingsOpen; });
     // Findable by what it is for, not only by what it is called: "autosave" is
     // the word somebody types when they want this window.
     add("Autosave settings", "view", "", true,
@@ -1804,7 +1869,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
     add(mShowFrameStats ? "Hide frame stats" : "Show frame stats", "view", "",
         true, [this] { mShowFrameStats = !mShowFrameStats; });
     for (const eng::RenderPresetInfo& preset : eng::renderPresets()) {
-        add(std::string("Render preset: ") + preset.name, "view", "",
+        add(
+            std::string("Render preset: ") + preset.name, "view", "",
             mEngine != nullptr,
             [this, id = preset.id] {
                 if (mEngine)
@@ -1834,7 +1900,8 @@ std::vector<PaletteAction> EditorApp::paletteActions()
     // which role it was filed under.
     for (const std::string& role : mState.catalog.roles()) {
         for (const KitPiece* piece : mState.catalog.byRole(role)) {
-            add(std::string("Place ") + piece->id, "place", "", true,
+            add(
+                std::string("Place ") + piece->id, "place", "", true,
                 [this, id = piece->id] {
                     mState.brush.kind = Brush::Kind::Piece;
                     mState.brush.prefab = id;
@@ -1866,91 +1933,32 @@ void EditorApp::onGui(const eng::FrameContext& f)
     ImGui::PopStyleVar(3);
 
     drawMenuBar(f);
-    const ImGuiID dock = ImGui::GetID("##editor_dock");
+
+    // Reserve a persistent one-line status strip below the dockspace. Status is
+    // workspace context, not a diagnostic tab that vanishes behind Console.
+    const ImVec2 content = ImGui::GetContentRegionAvail();
+    const float statusHeight =
+        ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
+    const ImVec2 dockSize(content.x, std::max(content.y - statusHeight, 1.0f));
+
+    // v3 is an intentional workspace-schema change. Old fixed 1600x950 layouts
+    // cannot silently override the responsive rails introduced here.
+    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v3");
+    if (!mLayoutBuilt || mResetLayoutRequested) {
+        const bool missing = ImGui::DockBuilderGetNode(dock) == nullptr ||
+                             ImGui::DockBuilderGetNode(dock)->IsEmpty();
+        if (missing || mResetLayoutRequested) {
+            buildEditorWorkspace(dock, dockSize.x, dockSize.y, mAppliedUiScale);
+            if (mMaterialMode)
+                mAssetBrowserModeRequest = 1;
+        }
+        mLayoutBuilt = true;
+        mResetLayoutRequested = false;
+    }
     // No passthru: the central node is the viewport image, not a window onto
     // whatever the main camera happens to be pointing at.
-    ImGui::DockSpace(dock, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-    if (!mLayoutBuilt) {
-        mLayoutBuilt = true;
-        // Only build the default layout when imgui has no saved one, so a
-        // rearranged workspace survives a restart.
-        if (ImGui::DockBuilderGetNode(dock) == nullptr ||
-            ImGui::DockBuilderGetNode(dock)->IsEmpty()) {
-            ImGui::DockBuilderRemoveNode(dock);
-            ImGui::DockBuilderAddNode(dock, ImGuiDockNodeFlags_DockSpace);
-            ImGui::DockBuilderSetNodeSize(dock, viewport->WorkSize);
-
-            ImGuiID centre = dock;
-            const float topPixels = 54.0f * mAppliedUiScale;
-            const float bottomPixels = std::clamp(
-                viewport->WorkSize.y * 0.22f, 170.0f * mAppliedUiScale,
-                320.0f * mAppliedUiScale);
-            const float rightPixels = std::clamp(
-                viewport->WorkSize.x * 0.22f, 300.0f * mAppliedUiScale,
-                440.0f * mAppliedUiScale);
-            const float leftPixels = std::clamp(
-                viewport->WorkSize.x * 0.20f, 260.0f * mAppliedUiScale,
-                400.0f * mAppliedUiScale);
-            const float topRatio = std::clamp(
-                topPixels / std::max(viewport->WorkSize.y, 1.0f), 0.05f, 0.16f);
-            const ImGuiID top = ImGui::DockBuilderSplitNode(
-                centre, ImGuiDir_Up, topRatio, nullptr, &centre);
-            const float afterTop =
-                std::max(viewport->WorkSize.y - topPixels, 1.0f);
-            const ImGuiID bottom = ImGui::DockBuilderSplitNode(
-                centre, ImGuiDir_Down,
-                std::clamp(bottomPixels / afterTop, 0.16f, 0.42f), nullptr,
-                &centre);
-            const ImGuiID right = ImGui::DockBuilderSplitNode(
-                centre, ImGuiDir_Right,
-                std::clamp(rightPixels /
-                               std::max(viewport->WorkSize.x, 1.0f),
-                           0.16f, 0.34f),
-                nullptr, &centre);
-            const float afterRight =
-                std::max(viewport->WorkSize.x - rightPixels, 1.0f);
-            const ImGuiID left = ImGui::DockBuilderSplitNode(
-                centre, ImGuiDir_Left,
-                std::clamp(leftPixels / afterRight, 0.16f, 0.36f), nullptr,
-                &centre);
-
-            ImGui::DockBuilderDockWindow("Toolbar", top);
-            ImGui::DockBuilderDockWindow("Status", bottom);
-            // The right column is the Inspector, whole. It used to give its
-            // lower half to Material and Particles, which cost the panel that
-            // answers "what is this thing" half its height so that two panels
-            // nothing was selected in could be visible at once.
-            ImGui::DockBuilderDockWindow("Inspector", right);
-            // Material and Particles go left, beside the Catalog, because they
-            // are the same kind of thing: a library you browse and pick from.
-            // What used to need them on the right is on the entity now -- the
-            // material combo is on the Mesh component, the effect combo on the
-            // Particles component, and the swatch follows the selection -- so
-            // the right column is about the selected entity and the left column
-            // is about what exists to place on it.
-            ImGui::DockBuilderDockWindow("Outliner", left);
-            ImGui::DockBuilderDockWindow("Catalog", left);
-            ImGui::DockBuilderDockWindow("Material", left);
-            ImGui::DockBuilderDockWindow("Particles", left);
-            ImGui::DockBuilderDockWindow("Issues", bottom);
-            ImGui::DockBuilderDockWindow("Console", bottom);
-            // The 2D viewport shares the centre slot as a tab beside the 3D
-            // one: they are two views of one game, and docking the HUD off to
-            // the side would make it a widget rather than a viewport.
-            //
-            // UI first, Viewport second: the last window docked into a node is
-            // the one selected, and an editor whose subject is the 3D scene
-            // must not open on the HUD preview.
-            ImGui::DockBuilderDockWindow("UI", centre);
-            ImGui::DockBuilderDockWindow("Viewport", centre);
-            ImGui::DockBuilderFinish(dock);
-            // The builder selects the last window docked into a node, so the
-            // Outliner has to be asked for last or the left column opens on
-            // Particles. A focus asked for before DockBuilderFinish is
-            // overwritten by it; asked for here, it lands.
-            if (mMaterialMode) mFocusMaterialFrames = 4;
-        }
-    }
+    ImGui::DockSpace(dock, dockSize, ImGuiDockNodeFlags_None);
+    drawStatusBar();
     ImGui::End();
 
     if (mFocusPanelFrames > 0)
@@ -1960,13 +1968,12 @@ void EditorApp::onGui(const eng::FrameContext& f)
     drawViewport(f);
     drawUiStage();
     drawOutliner();
-    drawCatalog();
     drawInspector();
+    // Browser owns shared preview RTT when visible; draw it after Inspector so
+    // Materials/Effects mode cannot show one subject under another label.
+    drawAssetBrowser();
     drawIssues();
     mConsole.draw();
-    drawMaterialPanel();
-    drawParticlePanel();
-    drawStatusBar();
     drawHelp();
     drawSettings();
     captureSettings();
@@ -1992,7 +1999,7 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
 {
     if (!ImGui::BeginMenuBar())
         return;
-    if (ImGui::BeginMenu("Scene")) {
+    if (ImGui::BeginMenu("File")) {
         if (ImGui::BeginMenu("New")) {
             // The same templates scene_cook --template generates, so what the
             // menu builds and what ships in assets/scenes cannot diverge.
@@ -2038,9 +2045,9 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
         if (ImGui::MenuItem("Reload", "Ctrl+R", false,
                             !mState.scenePath.empty()))
             requestDiscard(Discard::Reload);
-        if (ImGui::MenuItem(
-                "Recover autosave", nullptr, false,
-                autosaveIsStale(mState.scenePath, mState.assetRoot + "/scenes")))
+        if (ImGui::MenuItem("Recover autosave", nullptr, false,
+                            autosaveIsStale(mState.scenePath,
+                                            mState.assetRoot + "/scenes")))
             recoverAutosave();
         ImGui::Separator();
         if (ImGui::MenuItem("Quit", "Esc"))
@@ -2089,14 +2096,59 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
         ImGui::Separator();
         ImGui::MenuItem("Start where the camera is", nullptr, &mPlayFromCamera);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Off: start at the scene's player spawn, which is "
-                              "how the arrival itself gets checked.");
+            ImGui::SetTooltip(
+                "Off: start at the scene's player spawn, which is "
+                "how the arrival itself gets checked.");
+        bool settingsChanged = false;
+        settingsChanged |= ImGui::MenuItem("Match viewport look", nullptr,
+                                           &mSettings.playtestMatchesViewport);
+        if (ImGui::BeginMenu("Playtest look",
+                             !mSettings.playtestMatchesViewport)) {
+            if (ImGui::MenuItem("Game default", nullptr,
+                                mSettings.playtestPreset.empty())) {
+                mSettings.playtestPreset.clear();
+                settingsChanged = true;
+            }
+            for (const eng::RenderPresetInfo& preset : eng::renderPresets()) {
+                if (ImGui::MenuItem(preset.name, nullptr,
+                                    mSettings.playtestPreset == preset.name)) {
+                    mSettings.playtestPreset = preset.name;
+                    settingsChanged = true;
+                }
+            }
+            ImGui::EndMenu();
+        }
+        settingsChanged |= ImGui::MenuItem("Open debug console", nullptr,
+                                           &mSettings.playtestConsole);
+        settingsChanged |= ImGui::MenuItem("Show colliders", nullptr,
+                                           &mSettings.playtestColliders);
+        settingsChanged |= ImGui::MenuItem("Fullscreen", nullptr,
+                                           &mSettings.playtestFullscreen);
+        if (settingsChanged)
+            commitSettings();
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("View")) {
+    if (ImGui::BeginMenu("Window")) {
         if (ImGui::MenuItem("Command palette", "Ctrl+P"))
             openPalette(mPalette);
-        ImGui::MenuItem("Shortcuts", "F1", &mHelpOpen);
+        if (ImGui::MenuItem("Reset workspace"))
+            mResetLayoutRequested = true;
+        ImGui::Separator();
+        if (ImGui::MenuItem("Scene View", "Ctrl+1"))
+            requestPanelFocus("viewport");
+        if (ImGui::MenuItem("Asset Browser", "Ctrl+2"))
+            requestPanelFocus("catalog");
+        if (ImGui::MenuItem("Hierarchy", "Ctrl+3"))
+            requestPanelFocus("outliner");
+        if (ImGui::MenuItem("Inspector", "Ctrl+4"))
+            requestPanelFocus("inspector");
+        if (ImGui::MenuItem("HUD Preview", "Ctrl+5"))
+            requestPanelFocus("ui");
+        if (ImGui::MenuItem("Problems", "Ctrl+6"))
+            requestPanelFocus("issues");
+        bool console = mConsole.visible();
+        if (ImGui::MenuItem("Console", "`", &console))
+            mConsole.setVisible(console);
         ImGui::Separator();
         // The look the game will ship with, switchable while authoring. A room
         // that reads under flat editor light and disappears under the dungeon
@@ -2119,147 +2171,212 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
         ImGui::MenuItem("Viewport grid", nullptr, &mShowGrid);
         ImGui::Separator();
         ImGui::MenuItem("Snap to grid", "G", &mState.gridState.snap);
-        bool console = mConsole.visible();
-        if (ImGui::MenuItem("Console", "`", &console))
-            mConsole.setVisible(console);
         ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Help")) {
+        ImGui::MenuItem("Keyboard shortcuts", "F1", &mHelpOpen);
+        ImGui::EndMenu();
+    }
+
+    // Quiet product signature: logo palette and hard-edged type treatment,
+    // without spending command-bar space on a decorative raster.
+    const char* raven = "RAVEN";
+    const char* editor = "// SCENE EDITOR";
+    const float brandWidth =
+        ImGui::CalcTextSize(raven).x + ImGui::CalcTextSize(editor).x + 12.0f;
+    const float brandX = ImGui::GetWindowWidth() - brandWidth - 12.0f;
+    if (brandX > ImGui::GetCursorPosX() + 24.0f) {
+        ImGui::SetCursorPosX(brandX);
+        ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), "%s",
+                           raven);
+        ImGui::SameLine(0.0f, 4.0f);
+        ImGui::TextDisabled("%s", editor);
     }
     ImGui::EndMenuBar();
 }
 
 void EditorApp::drawToolbar()
 {
-    if (ImGui::Begin("Toolbar", nullptr, kPanelFlags)) {
+    if (ImGui::Begin(workspace_window::kCommandBar, nullptr, kPanelFlags)) {
         // Keep every authoring control reachable when the centre viewport is
         // narrow. The old uninterrupted SameLine chain simply clipped its
         // right half; a horizontal tool strip is predictable desktop-editor
         // behaviour and preserves the compact one-row layout on ultrawide.
-        ImGui::SetNextWindowContentSize(ImVec2(1080.0f * mAppliedUiScale, 0.0f));
+        ImGui::SetNextWindowContentSize(
+            ImVec2(1480.0f * mAppliedUiScale, 0.0f));
         if (ImGui::BeginChild("##toolbar_scroll", ImVec2(0.0f, 0.0f),
                               ImGuiChildFlags_None,
                               ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3.0f, 4.0f));
-        ImGui::TextDisabled("MODE");
-        ImGui::SameLine();
-        if (iconButton(Icon::Select, "##tool_select",
-                       "Select mode  [Q]\nPick without transform handles",
-                       mState.tool == Tool::Select && mGizmoOperation < 0,
-                       18.0f)) {
-            mState.tool = Tool::Select;
-            mGizmoOperation = -1;
-        }
-        ImGui::SameLine();
-        if (iconButton(Icon::Place, "##tool_place",
-                       "Place mode  [P]\nPaint the current Catalog brush",
-                       mState.tool == Tool::Place, 18.0f))
-            mState.tool = Tool::Place;
-        ImGui::SameLine();
-        if (iconButton(Icon::Room, "##tool_room",
-                       "Room tool  [B]\nDrag a complete room rectangle",
-                       mState.tool == Tool::Room, 18.0f))
-            mState.tool = Tool::Room;
-
-        ImGui::SameLine();
-        ImGui::TextDisabled("|  TRANSFORM");
-        ImGui::SameLine();
-        ImGui::BeginDisabled(mMaterialMode || mGizmoDragging);
-        if (iconButton(Icon::Move, "##gizmo_move",
-                       "Move  [W]\nTranslate the selection",
-                       mState.tool == Tool::Select && mGizmoOperation == 0,
-                       18.0f)) {
-            mState.tool = Tool::Select;
-            mGizmoOperation = 0;
-        }
-        ImGui::SameLine();
-        if (iconButton(Icon::Rotate, "##gizmo_rotate",
-                       "Rotate  [E]\nRotate the selection",
-                       mState.tool == Tool::Select && mGizmoOperation == 1,
-                       18.0f)) {
-            mState.tool = Tool::Select;
-            mGizmoOperation = 1;
-        }
-        ImGui::SameLine();
-        if (iconButton(Icon::Scale, "##gizmo_scale",
-                       "Scale  [R]\nScale the selection",
-                       mState.tool == Tool::Select && mGizmoOperation == 2,
-                       18.0f)) {
-            mState.tool = Tool::Select;
-            mGizmoOperation = 2;
-        }
-        ImGui::EndDisabled();
-
-        ImGui::SameLine();
-        ImGui::TextDisabled("|");
-        ImGui::SameLine();
-        ImGui::Text("grid %.2g m", double(mState.gridState.step()));
-        if (mGridMultiple > 1) {
-            // The drawn grid coarsened with the camera's height. Say so: a line
-            // spacing that silently changes meaning is worse than no grid.
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3.0f, 4.0f));
+            ImGui::TextDisabled("SCENE");
             ImGui::SameLine();
-            ImGui::TextDisabled("(drawn x%d)", mGridMultiple);
-        }
-        ImGui::SameLine();
-        if (ImGui::SmallButton("["))
-            mState.gridState.coarser();
-        ImGui::SameLine();
-        if (ImGui::SmallButton("]"))
-            mState.gridState.finer();
-        ImGui::SameLine();
-        ImGui::Checkbox("snap", &mState.gridState.snap);
-        ImGui::SameLine();
-        ImGui::Text("| level %.1f m", double(mState.gridState.level));
-        ImGui::SameLine();
-        if (ImGui::SmallButton("-"))
-            mState.gridState.level -= mState.grid.cell;
-        ImGui::SameLine();
-        if (ImGui::SmallButton("+"))
-            mState.gridState.level += mState.grid.cell;
-        ImGui::SameLine();
-        ImGui::Checkbox("cut above", &mState.gridState.cutAboveLevel);
-        eng::imguihint::hover(
-            "editor.grid.cutabove",
-            "Hide everything above the work plane. Off, the viewport shows "
-            "every storey; the level control then only moves the grid and "
-            "what new pieces snap to.");
+            if (ImGui::Button(mPlaytest.running() ? "Stop" : "Play"))
+                runPlaytest();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("F5 -- save, cook and launch this scene");
+            ImGui::SameLine();
+            if (ImGui::Button("Cook")) {
+                std::string mapPath;
+                cookScene(mapPath);
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("F6 -- cook without launching");
+            ImGui::SameLine();
+            if (ImGui::Button("Save"))
+                saveScene();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Ctrl+S");
 
-        ImGui::SameLine();
-        ImGui::TextDisabled("|");
-        ImGui::SameLine();
-        if (mMaterialMode) {
-            ImGui::TextDisabled("stage Y rotate");
-        }
-        else {
-            if (mGizmoOperation < 0) {
-                ImGui::TextDisabled("pick only");
+            ImGui::SameLine();
+            ImGui::TextDisabled("|  HISTORY");
+            ImGui::SameLine();
+            ImGui::BeginDisabled(!mCommands.canUndo());
+            if (ImGui::Button("Undo"))
+                applyHistory(false);
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("Ctrl+Z -- %s",
+                                  mCommands.canUndo()
+                                      ? mCommands.undoLabel().c_str()
+                                      : "history empty");
+            ImGui::SameLine();
+            ImGui::BeginDisabled(!mCommands.canRedo());
+            if (ImGui::Button("Redo"))
+                applyHistory(true);
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip("Ctrl+Y -- %s",
+                                  mCommands.canRedo()
+                                      ? mCommands.redoLabel().c_str()
+                                      : "history empty");
+
+            ImGui::SameLine();
+            ImGui::TextDisabled("|  MODE");
+            ImGui::SameLine();
+            if (iconButton(Icon::Select, "##tool_select",
+                           "Select mode  [Q]\nPick without transform handles",
+                           mState.tool == Tool::Select && mGizmoOperation < 0,
+                           18.0f)) {
+                mState.tool = Tool::Select;
+                mGizmoOperation = -1;
+            }
+            ImGui::SameLine();
+            if (iconButton(Icon::Place, "##tool_place",
+                           "Place mode  [P]\nPaint the current Catalog brush",
+                           mState.tool == Tool::Place, 18.0f))
+                mState.tool = Tool::Place;
+            ImGui::SameLine();
+            if (iconButton(Icon::Room, "##tool_room",
+                           "Room tool  [B]\nDrag a complete room rectangle",
+                           mState.tool == Tool::Room, 18.0f))
+                mState.tool = Tool::Room;
+
+            ImGui::SameLine();
+            ImGui::TextDisabled("|  TRANSFORM");
+            ImGui::SameLine();
+            ImGui::BeginDisabled(mMaterialMode || mGizmoDragging);
+            if (iconButton(Icon::Move, "##gizmo_move",
+                           "Move  [W]\nTranslate the selection",
+                           mState.tool == Tool::Select && mGizmoOperation == 0,
+                           18.0f)) {
+                mState.tool = Tool::Select;
+                mGizmoOperation = 0;
+            }
+            ImGui::SameLine();
+            if (iconButton(Icon::Rotate, "##gizmo_rotate",
+                           "Rotate  [E]\nRotate the selection",
+                           mState.tool == Tool::Select && mGizmoOperation == 1,
+                           18.0f)) {
+                mState.tool = Tool::Select;
+                mGizmoOperation = 1;
+            }
+            ImGui::SameLine();
+            if (iconButton(Icon::Scale, "##gizmo_scale",
+                           "Scale  [R]\nScale the selection",
+                           mState.tool == Tool::Select && mGizmoOperation == 2,
+                           18.0f)) {
+                mState.tool = Tool::Select;
+                mGizmoOperation = 2;
+            }
+            ImGui::EndDisabled();
+
+            ImGui::SameLine();
+            ImGui::TextDisabled("|");
+            ImGui::SameLine();
+            ImGui::Text("grid %.2g m", double(mState.gridState.step()));
+            if (mGridMultiple > 1) {
+                // The drawn grid coarsened with the camera's height. Say so: a
+                // line spacing that silently changes meaning is worse than no
+                // grid.
+                ImGui::SameLine();
+                ImGui::TextDisabled("(drawn x%d)", mGridMultiple);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("["))
+                mState.gridState.coarser();
+            ImGui::SameLine();
+            if (ImGui::SmallButton("]"))
+                mState.gridState.finer();
+            ImGui::SameLine();
+            ImGui::Checkbox("snap", &mState.gridState.snap);
+            ImGui::SameLine();
+            ImGui::Text("| level %.1f m", double(mState.gridState.level));
+            ImGui::SameLine();
+            if (ImGui::SmallButton("-"))
+                mState.gridState.level -= mState.grid.cell;
+            ImGui::SameLine();
+            if (ImGui::SmallButton("+"))
+                mState.gridState.level += mState.grid.cell;
+            ImGui::SameLine();
+            ImGui::Checkbox("cut above", &mState.gridState.cutAboveLevel);
+            eng::imguihint::hover(
+                "editor.grid.cutabove",
+                "Hide everything above the work plane. Off, the viewport shows "
+                "every storey; the level control then only moves the grid and "
+                "what new pieces snap to.");
+
+            ImGui::SameLine();
+            ImGui::TextDisabled("|");
+            ImGui::SameLine();
+            if (mMaterialMode) {
+                ImGui::TextDisabled("stage Y rotate");
             }
             else {
-                const bool worldForced = mState.selection.size() > 1;
-                const bool localForced = mGizmoOperation == 2 && !worldForced;
-                const char* spaceLabel = worldForced   ? "world (multi)"
-                                         : localForced ? "local (scale)"
-                                         : mGizmoLocal ? "local (X)"
-                                                       : "world (X)";
-                ImGui::BeginDisabled(mGizmoDragging || worldForced || localForced);
-                if (ImGui::SmallButton(spaceLabel))
-                    mGizmoLocal = !mGizmoLocal;
-                ImGui::EndDisabled();
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip(worldForced
-                                          ? "Multiple objects use world axes."
-                                          : "Axes the gizmo acts along.");
+                if (mGizmoOperation < 0) {
+                    ImGui::TextDisabled("pick only");
+                }
+                else {
+                    const bool worldForced = mState.selection.size() > 1;
+                    const bool localForced =
+                        mGizmoOperation == 2 && !worldForced;
+                    const char* spaceLabel = worldForced   ? "world (multi)"
+                                             : localForced ? "local (scale)"
+                                             : mGizmoLocal ? "local (X)"
+                                                           : "world (X)";
+                    ImGui::BeginDisabled(mGizmoDragging || worldForced ||
+                                         localForced);
+                    if (ImGui::SmallButton(spaceLabel))
+                        mGizmoLocal = !mGizmoLocal;
+                    ImGui::EndDisabled();
+                    if (ImGui::IsItemHovered(
+                            ImGuiHoveredFlags_AllowWhenDisabled))
+                        ImGui::SetTooltip(
+                            worldForced ? "Multiple objects use world axes."
+                                        : "Axes the gizmo acts along.");
+                }
             }
-        }
 
-        // Framing, walking, lighting, playing and cooking used to live here as
-        // well. They are questions about what is on screen, so they moved into
-        // the strip above the viewport, next to the thing they change. Two
-        // controls for one piece of state is worse than either alone: the one
-        // you are not looking at is the one that looks stale.
-        if (mState.dirty) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.38f, 1.0f), "* unsaved");
-        }
-        ImGui::PopStyleVar();
+            // Framing, walking, lighting, playing and cooking used to live here
+            // as well. They are questions about what is on screen, so they
+            // moved into the strip above the viewport, next to the thing they
+            // change. Two controls for one piece of state is worse than either
+            // alone: the one you are not looking at is the one that looks
+            // stale.
+            if (mState.dirty) {
+                ImGui::SameLine();
+                ImGui::TextColored(kUiWarning, "* unsaved");
+            }
+            ImGui::PopStyleVar();
         }
         ImGui::EndChild();
     }
@@ -2275,24 +2392,6 @@ void EditorApp::drawToolbar()
 void EditorApp::drawViewportToolbar()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
-
-    // Play and Cook keep their words: they are verbs with consequences (one
-    // launches a process, the other writes a file), and a shape is the wrong
-    // affordance for a thing you should be sure about before clicking.
-    if (ImGui::Button(mPlaytest.running() ? "Stop" : "Play"))
-        runPlaytest();
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("F5 -- save, cook and launch the game on this scene");
-    ImGui::SameLine();
-    if (ImGui::Button("Cook")) {
-        std::string mapPath;
-        cookScene(mapPath);
-    }
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("F6 -- cook to a runtime map without playing");
-    ImGui::SameLine();
-    ImGui::TextDisabled("|");
-    ImGui::SameLine();
 
     // The view switches are icons: they are states, they are flipped
     // constantly, and four labelled checkboxes were most of the strip.
@@ -2359,13 +2458,15 @@ void EditorApp::drawViewportStats(const eng::FrameContext& f)
     mFrameStats.update(sample, 0.1f);
 
     drawFrameStats(ImGui::GetWindowDrawList(), mFrameStats.smoothed(),
-                   mFrameBudget, mViewportX, mViewportY, mViewportW, mViewportH);
+                   mFrameBudget, mViewportX, mViewportY, mViewportW,
+                   mViewportH);
 }
 
 void EditorApp::drawViewport(const eng::FrameContext& f)
 {
+    focusPanelIfRequested("viewport");
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    if (ImGui::Begin("Viewport", nullptr,
+    if (ImGui::Begin(workspace_window::kSceneView, nullptr,
                      kPanelFlags | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse)) {
         // Above the image, inside the panel: these toggles answer questions
@@ -2401,7 +2502,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             if (texture != 0) {
                 // Default uv: OGRE's render-to-texture already hands back a
                 // top-down image, so flipping V here turned the whole world
-                 // upside down.
+                // upside down.
                 ImGui::Image(static_cast<ImTextureID>(texture), size);
                 hasViewportImage = true;
             }
@@ -2410,10 +2511,11 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             }
         }
         const ImVec2 imageMax(pos.x + mViewportW, pos.y + mViewportH);
-        mViewportHovered = hasViewportImage &&
-                           ImGui::IsWindowHovered(
-                               ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
-                           ImGui::IsMouseHoveringRect(pos, imageMax, false);
+        mViewportHovered =
+            hasViewportImage &&
+            ImGui::IsWindowHovered(
+                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+            ImGui::IsMouseHoveringRect(pos, imageMax, false);
         if (mMaterialMode || mState.tool != Tool::Place || !mViewportHovered ||
             mFlying)
             mPreview->hidePlacementGhost();
@@ -2474,17 +2576,13 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
                                   pos.y + 12.0f * mAppliedUiScale);
             const ImVec2 badgeMax(badgeMin.x + textSize.x + padX * 2.0f,
                                   badgeMin.y + textSize.y + padY * 2.0f);
-            ImVec4 badgeColor =
-                ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
+            ImVec4 badgeColor = ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
             badgeColor.w = 0.94f;
             viewportDraw->AddRectFilled(badgeMin, badgeMax,
-                                        ImGui::GetColorU32(badgeColor),
-                                        4.0f * mAppliedUiScale);
+                                        ImGui::GetColorU32(badgeColor));
             viewportDraw->AddRect(badgeMin, badgeMax,
-                                  ImGui::GetColorU32(ImGuiCol_Border),
-                                  4.0f * mAppliedUiScale);
-            viewportDraw->AddText(ImVec2(badgeMin.x + padX,
-                                         badgeMin.y + padY),
+                                  ImGui::GetColorU32(ImGuiCol_Border));
+            viewportDraw->AddText(ImVec2(badgeMin.x + padX, badgeMin.y + padY),
                                   ImGui::GetColorU32(ImGuiCol_Text),
                                   mode.c_str());
         }
@@ -2653,10 +2751,10 @@ void EditorApp::handleViewportPicking(const eng::FrameContext& f)
     glm::mat4 view, projection;
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
     if (const GizmoMark* mark = pickGizmoMark(
-             entityGizmoMarks(), projection * view,
-             glm::vec2(mViewportX, mViewportY), glm::vec2(mViewportW, mViewportH),
-             glm::vec2(mouse.x, mouse.y), 12.0f, &mState.hidden,
-             &mState.locked)) {
+            entityGizmoMarks(), projection * view,
+            glm::vec2(mViewportX, mViewportY),
+            glm::vec2(mViewportW, mViewportH), glm::vec2(mouse.x, mouse.y),
+            12.0f, &mState.hidden, &mState.locked)) {
         selectAndReveal(mark->id, ImGui::GetIO().KeyShift);
         return;
     }
@@ -2697,7 +2795,7 @@ void EditorApp::finishGizmoDrag()
         parts.push_back(makeSetTransform(id, before, entity->transform));
     }
     if (!parts.empty()) {
-        const char* label = mGizmoOperation == 1 ? "rotate selection"
+        const char* label = mGizmoOperation == 1   ? "rotate selection"
                             : mGizmoOperation == 2 ? "scale selection"
                                                    : "move selection";
         // Document already holds final value, so applying this command is
@@ -2907,8 +3005,8 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
                 const glm::vec3 offset = was.position - anchor;
                 WorldTransform after;
                 after.position = anchor + spin * (offset * groupScale) + delta;
-                after.orientation = rotating ? spin * was.orientation
-                                             : was.orientation;
+                after.orientation =
+                    rotating ? spin * was.orientation : was.orientation;
                 after.scale = scaling ? was.scale * groupScale : was.scale;
                 store(*entity, frame, after);
             }
@@ -2974,22 +3072,23 @@ DocumentHit EditorApp::hoveredEntity(bool ignoreStroke) const
     if (mViewportW < 8.0f)
         return DocumentHit{};
     const Ray ray = mouseRay();
-    return raycastDocument(
-        mState.document, mState.catalog, ray, [&](const AuthorId& id) {
-            // Hidden is not there; locked is there and not targetable. Locking
-            // the floor is how a room gets dressed without picking it forty
-            // times -- and, now, without every prop in the stroke landing on
-            // the last prop of the stroke.
-            if (mState.isHidden(id) || mState.isLocked(id))
-                return false;
-            if (!mPreview->entityVisible(id))
-                return false;
-            if (ignoreStroke)
-                for (const AuthorId& painted : mStrokeIds)
-                    if (painted == id)
-                        return false;
-            return true;
-        });
+    return raycastDocument(mState.document, mState.catalog, ray,
+                           [&](const AuthorId& id) {
+                               // Hidden is not there; locked is there and not
+                               // targetable. Locking the floor is how a room
+                               // gets dressed without picking it forty times --
+                               // and, now, without every prop in the stroke
+                               // landing on the last prop of the stroke.
+                               if (mState.isHidden(id) || mState.isLocked(id))
+                                   return false;
+                               if (!mPreview->entityVisible(id))
+                                   return false;
+                               if (ignoreStroke)
+                                   for (const AuthorId& painted : mStrokeIds)
+                                       if (painted == id)
+                                           return false;
+                               return true;
+                           });
 }
 
 Placement EditorApp::hoveredPlacement() const
@@ -3122,9 +3221,8 @@ void EditorApp::finishStroke()
         const std::string subject =
             mState.brush.kind == Brush::Kind::Gameplay
                 ? std::string(gameplayName(mState.brush.gameplay))
-            : mState.brush.kind == Brush::Kind::Particles
-                ? mState.brush.effect
-                : mState.brush.prefab;
+            : mState.brush.kind == Brush::Kind::Particles ? mState.brush.effect
+                                                          : mState.brush.prefab;
         label = "place " + std::to_string(count) + " x " + subject;
         for (const AuthorId& id : mStrokeIds)
             mState.document.remove(id);
@@ -3147,8 +3245,8 @@ void EditorApp::pickBrushFrom(const DocumentHit& hit)
     if (entity->particles && !entity->particles->effect.empty()) {
         mState.brush.kind = Brush::Kind::Particles;
         mState.brush.effect = entity->particles->effect;
-        mState.brush.yawQuarters = int(std::lround(
-            entity->transform.rotationDegrees.y / 90.0f));
+        mState.brush.yawQuarters =
+            int(std::lround(entity->transform.rotationDegrees.y / 90.0f));
         mState.brush.rotate(0);
         mStatus = "particle brush: " + mState.brush.effect;
         return;
@@ -3202,8 +3300,8 @@ void EditorApp::drawPlacementGhost()
                 continue;
             repeatSeconds = particlePreviewPeriod(desc);
             const glm::vec3 artHalf(
-                std::max({desc.baseWidth, desc.baseHeight, 0.30f}) *
-                0.5f * mParticlePreviewScale);
+                std::max({desc.baseWidth, desc.baseHeight, 0.30f}) * 0.5f *
+                mParticlePreviewScale);
             localMin = -artHalf;
             localMax = artHalf;
             for (const eng::ParticleEmitterDesc& emitter : desc.emitters) {
@@ -3216,10 +3314,9 @@ void EditorApp::drawPlacementGhost()
             }
             break;
         }
-        mPreview->showParticlePlacementGhost(mState.brush.effect,
-                                             placement.transform,
-                                             mParticlePreviewScale,
-                                             repeatSeconds);
+        mPreview->showParticlePlacementGhost(
+            mState.brush.effect, placement.transform, mParticlePreviewScale,
+            repeatSeconds);
     }
     else {
         mPreview->hidePlacementGhost();
@@ -3490,15 +3587,33 @@ const OutlinerTree& EditorApp::outlinerTree()
     return mOutliner;
 }
 
-void EditorApp::selectGroup(const OutlinerGroup& group, bool add)
+void EditorApp::selectGroup(const OutlinerGroup& group, SelectMode mode)
 {
-    if (!add)
+    const std::vector<AuthorId> ids = groupIds(group);
+    const bool allSelected =
+        std::all_of(ids.begin(), ids.end(), [this](const AuthorId& id) {
+            return mState.isSelected(id);
+        });
+
+    if (mode == SelectMode::Replace)
         mState.selection.clear();
-    // The whole group, descendants included: selecting a composed object has to
-    // reach past its root, or dragging the chandelier leaves the candles.
-    for (const AuthorId& id : groupIds(group))
-        if (!mState.isSelected(id))
-            mState.selection.push_back(id);
+    if (mode == SelectMode::Toggle && allSelected) {
+        mState.selection.erase(
+            std::remove_if(mState.selection.begin(), mState.selection.end(),
+                           [&ids](const AuthorId& selected) {
+                               return std::find(ids.begin(), ids.end(),
+                                                selected) != ids.end();
+                           }),
+            mState.selection.end());
+    }
+    else {
+        // Shift adds an aggregate. A range through a collapsed prefab group has
+        // no honest row-by-row meaning; treating the group as one unit does.
+        for (const AuthorId& id : ids)
+            if (!mState.isSelected(id))
+                mState.selection.push_back(id);
+    }
+    mSelectionAnchor.clear();
 }
 
 // The edit that re-hangs one entity, without running it.
@@ -3528,8 +3643,9 @@ bool EditorApp::buildReparent(const AuthorId& child, const AuthorId& parent,
     // parent, so re-hanging it under a different one has to re-express that
     // offset -- otherwise every drag in the outliner teleports something.
     const WorldTransform world = mState.document.worldTransform(child);
-    const WorldTransform frame =
-        parent.empty() ? WorldTransform{} : mState.document.worldTransform(parent);
+    const WorldTransform frame = parent.empty()
+                                     ? WorldTransform{}
+                                     : mState.document.worldTransform(parent);
     Entity updated = *source;
     updated.parent = parent;
     updated.transform = localFromWorld(frame, world);
@@ -3539,9 +3655,8 @@ bool EditorApp::buildReparent(const AuthorId& child, const AuthorId& parent,
     if (!parent.empty())
         updated.cell.reset();
 
-    out = makeEditEntity(parent.empty()
-                             ? "detach " + child
-                             : "parent " + child + " to " + parent,
+    out = makeEditEntity(parent.empty() ? "detach " + child
+                                        : "parent " + child + " to " + parent,
                          child, *source, updated);
     return true;
 }
@@ -3553,8 +3668,55 @@ void EditorApp::reparentEntity(const AuthorId& child, const AuthorId& parent)
         return;
     runCommand(std::move(command));
     mPreview->invalidate();
-    mStatus = parent.empty() ? child + " detached"
-                             : child + " parented to " + parent;
+    mStatus =
+        parent.empty() ? child + " detached" : child + " parented to " + parent;
+}
+
+void EditorApp::reparentSelection(const AuthorId& dragged,
+                                  const AuthorId& parent)
+{
+    if (!mState.isSelected(dragged) || mState.selection.size() < 2) {
+        reparentEntity(dragged, parent);
+        return;
+    }
+    if (!parent.empty() && mState.isSelected(parent)) {
+        mStatus = "cannot parent a selection inside itself";
+        return;
+    }
+
+    std::vector<Command> parts;
+    for (const AuthorId& id : mState.selection) {
+        // Move selected roots only. Moving a selected parent and its selected
+        // child separately would flatten their relationship at the target.
+        bool ancestorSelected = false;
+        const Entity* entity = mState.document.find(id);
+        std::unordered_set<AuthorId> visited;
+        while (entity && !entity->parent.empty() &&
+               visited.insert(entity->parent).second) {
+            if (mState.isSelected(entity->parent)) {
+                ancestorSelected = true;
+                break;
+            }
+            entity = mState.document.find(entity->parent);
+        }
+        if (ancestorSelected)
+            continue;
+
+        Command command;
+        if (buildReparent(id, parent, command))
+            parts.push_back(std::move(command));
+    }
+    if (parts.empty())
+        return;
+
+    const std::size_t moved = parts.size();
+    runCommand(makeComposite(
+        parent.empty() ? "detach " + std::to_string(moved)
+                       : "parent " + std::to_string(moved) + " to " + parent,
+        std::move(parts)));
+    mPreview->invalidate();
+    mStatus = parent.empty() ? std::to_string(moved) + " detached"
+                             : std::to_string(moved) + " parented to " + parent;
 }
 
 // "These are one thing now." The first selected entity becomes the parent,
@@ -3615,8 +3777,21 @@ void EditorApp::isolateSelection()
 {
     if (mState.selection.empty())
         return;
-    const std::vector<AuthorId> keep =
+    std::vector<AuthorId> keep =
         withDescendants(mState.document, mState.selection);
+    // Preserve ancestor context too. Isolating one candle must not make its
+    // chandelier root disappear from both viewport and hierarchy.
+    for (const AuthorId& selected : mState.selection) {
+        const Entity* entity = mState.document.find(selected);
+        std::unordered_set<AuthorId> visited;
+        while (entity && !entity->parent.empty() &&
+               visited.insert(entity->parent).second) {
+            if (std::find(keep.begin(), keep.end(), entity->parent) ==
+                keep.end())
+                keep.push_back(entity->parent);
+            entity = mState.document.find(entity->parent);
+        }
+    }
 
     mState.hidden.clear();
     for (const Entity& entity : mState.document.entities) {
@@ -3628,9 +3803,21 @@ void EditorApp::isolateSelection()
               std::to_string(mState.document.entities.size());
 }
 
+void EditorApp::requestPanelFocus(const char* name)
+{
+    if (!name || !*name)
+        return;
+    if (std::strcmp(name, "console") == 0) {
+        mConsole.setVisible(true);
+        return;
+    }
+    mFocusPanel = name;
+    mFocusPanelFrames = 3;
+}
+
 // Brings a docked panel forward, for the frames after startup during which a
 // restored layout is still re-selecting its own saved tabs. Verification hook
-// (PSX_EDITOR_PANEL); does nothing in an ordinary session.
+// (RAVEN_EDITOR_PANEL); does nothing in an ordinary session.
 void EditorApp::focusPanelIfRequested(const char* name)
 {
     if (mFocusPanel.empty() || mFocusPanelFrames <= 0 || mFocusPanel != name)
@@ -3661,15 +3848,14 @@ void EditorApp::selectAndReveal(const AuthorId& id, bool toggle)
 void EditorApp::drawUiStage()
 {
     focusPanelIfRequested("ui");
-    if (!ImGui::Begin("UI", nullptr, kPanelFlags)) {
+    if (!ImGui::Begin(workspace_window::kHudPreview, nullptr, kPanelFlags)) {
         ImGui::End();
         return;
     }
     if (!mUiHudReady)
         mUiHudReady = mUiHud.initialise();
     if (!mUiHudReady) {
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                           "the HUD font atlas did not load");
+        ImGui::TextColored(kUiDanger, "the HUD font atlas did not load");
         ImGui::End();
         return;
     }
@@ -3731,14 +3917,15 @@ void EditorApp::drawUiStage()
     // Centred when it fits; scrollable at a truthful integer 1x when it does
     // not. Silent clipping made small panel sizes look like HUD failures.
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
-    const ImVec2 origin(cursor.x + std::max((available.x - extent.x) * 0.5f, 0.0f),
-                          cursor.y + std::max((available.y - extent.y) * 0.5f, 0.0f));
+    const ImVec2 origin(
+        cursor.x + std::max((available.x - extent.x) * 0.5f, 0.0f),
+        cursor.y + std::max((available.y - extent.y) * 0.5f, 0.0f));
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const ImVec2 childPos = ImGui::GetWindowPos();
     const ImVec2 childSize = ImGui::GetWindowSize();
-    draw->PushClipRect(childPos,
-                       ImVec2(childPos.x + childSize.x, childPos.y + childSize.y),
-                       true);
+    draw->PushClipRect(
+        childPos, ImVec2(childPos.x + childSize.x, childPos.y + childSize.y),
+        true);
     // A black plate under it: the HUD is drawn over a game, and judging its
     // contrast against the editor's grey chrome is judging the wrong thing.
     draw->AddRectFilled(origin,
@@ -3750,15 +3937,13 @@ void EditorApp::drawUiStage()
         // one pixel off its column is visible rather than merely wrong.
         const ImU32 line = IM_COL32(255, 255, 255, 18);
         for (int x = 16; x < virtualSize.x; x += 16)
-            draw->AddLine(ImVec2(origin.x + float(x * scale), origin.y),
-                          ImVec2(origin.x + float(x * scale),
-                                 origin.y + extent.y),
-                          line);
+            draw->AddLine(
+                ImVec2(origin.x + float(x * scale), origin.y),
+                ImVec2(origin.x + float(x * scale), origin.y + extent.y), line);
         for (int y = 16; y < virtualSize.y; y += 16)
-            draw->AddLine(ImVec2(origin.x, origin.y + float(y * scale)),
-                          ImVec2(origin.x + extent.x,
-                                 origin.y + float(y * scale)),
-                          line);
+            draw->AddLine(
+                ImVec2(origin.x, origin.y + float(y * scale)),
+                ImVec2(origin.x + extent.x, origin.y + float(y * scale)), line);
     }
 
     // The real HUD, on the real canvas, into this panel's draw list.
@@ -3769,8 +3954,8 @@ void EditorApp::drawUiStage()
         int(std::lround(float(virtualSize.x) * safeFraction)),
         int(std::lround(float(virtualSize.y) * safeFraction))};
     mUiHud.drawInto(hudSnapshotFrom(mUiStage), hudTooltipFrom(mUiStage),
-                     mUiStage.dt, {origin.x, origin.y}, virtualSize, scale, draw,
-                     safeArea);
+                    mUiStage.dt, {origin.x, origin.y}, virtualSize, scale, draw,
+                    safeArea);
 
     if (mUiStage.showSafeArea) {
         // A console HUD that ignores the safe area is legible on a monitor and
@@ -3780,28 +3965,27 @@ void EditorApp::drawUiStage()
                        origin.y + extent.y * safeFraction);
         const ImVec2 b(origin.x + extent.x * (1.0f - safeFraction),
                        origin.y + extent.y * (1.0f - safeFraction));
-        draw->AddRect(a, b, IM_COL32(240, 200, 80, 110));
+        draw->AddRect(a, b, IM_COL32(198, 58, 64, 132));
     }
     // The frame last, so it is never drawn over.
     draw->AddRect(origin, ImVec2(origin.x + extent.x, origin.y + extent.y),
-                   IM_COL32(120, 140, 160, 160));
+                  IM_COL32(120, 140, 160, 160));
     draw->PopClipRect();
     ImGui::Dummy(ImVec2(std::max(extent.x, available.x - 2.0f),
                         std::max(extent.y, available.y - 2.0f)));
     ImGui::EndChild();
 
-    ImGui::TextDisabled("%d x %d virtual   x%d   %.0f x %.0f px",
-                        virtualSize.x, virtualSize.y, scale, double(extent.x),
+    ImGui::TextDisabled("%d x %d virtual   x%d   %.0f x %.0f px", virtualSize.x,
+                        virtualSize.y, scale, double(extent.x),
                         double(extent.y));
 
     // --- the state --------------------------------------------------------
     // Two columns of sliders in the strip below, because the failures worth
-    // previewing are combinations: a long weapon name *and* three statuses *and*
-    // a tooltip, at 320x240.
+    // previewing are combinations: a long weapon name *and* three statuses
+    // *and* a tooltip, at 320x240.
     if (extent.x > available.x || extent.y > available.y) {
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.38f, 1.0f),
-                           "scroll to inspect the full canvas");
+        ImGui::TextColored(kUiWarning, "scroll to inspect the full canvas");
     }
     const int stateColumns = ImGui::GetContentRegionAvail().x >= 520.0f ? 2 : 1;
     if (ImGui::BeginTable("##uistate", stateColumns,
@@ -3826,7 +4010,8 @@ void EditorApp::drawUiStage()
         const float rightLabels = ImGui::CalcTextSize("discipline").x + 12.0f;
         ImGui::TableNextColumn();
         char weapon[64];
-        std::snprintf(weapon, sizeof(weapon), "%s", mUiStage.weaponName.c_str());
+        std::snprintf(weapon, sizeof(weapon), "%s",
+                      mUiStage.weaponName.c_str());
         ImGui::SetNextItemWidth(-rightLabels);
         if (ImGui::InputText("weapon", weapon, sizeof(weapon)))
             mUiStage.weaponName = weapon;
@@ -3845,7 +4030,8 @@ void EditorApp::drawUiStage()
             if (ImGui::InputText("title", title, sizeof(title)))
                 mUiStage.tooltipTitle = title;
             char body[128];
-            std::snprintf(body, sizeof(body), "%s", mUiStage.tooltipBody.c_str());
+            std::snprintf(body, sizeof(body), "%s",
+                          mUiStage.tooltipBody.c_str());
             ImGui::SetNextItemWidth(-rightLabels);
             if (ImGui::InputText("body", body, sizeof(body)))
                 mUiStage.tooltipBody = body;
@@ -3858,20 +4044,47 @@ void EditorApp::drawUiStage()
 void EditorApp::drawOutliner()
 {
     focusPanelIfRequested("outliner");
-    if (!ImGui::Begin("Outliner", nullptr, kPanelFlags)) {
+    if (!ImGui::Begin(workspace_window::kHierarchy, nullptr, kPanelFlags)) {
         ImGui::End();
         return;
     }
 
+    const bool focusSearch =
+        ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+        ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_F);
+    if (focusSearch)
+        ImGui::SetKeyboardFocusHere();
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##outlinerfilter", "search  (has: kind:)",
                              mOutlinerFilter, sizeof(mOutlinerFilter));
+    if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Escape))
+        mOutlinerFilter[0] = '\0';
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "free text matches name, id, kind and prefab\n"
-            "has:collider   entities carrying that component\n"
-            "kind:enemy     entities of exactly that kind\n"
-            "terms are AND-ed: has:trigger kind:wall");
+        ImGui::SetTooltip("free text matches name, id, kind and prefab\n"
+                          "has:collider   entities carrying that component\n"
+                          "kind:enemy     entities of exactly that kind\n"
+                          "terms are AND-ed: has:trigger kind:wall");
+
+    if (ImGui::Button("+ Create"))
+        ImGui::OpenPopup("##hierarchy_create");
+    if (ImGui::BeginPopup("##hierarchy_create")) {
+        if (ImGui::MenuItem("Empty group"))
+            addGameplayEntity(Gameplay::Group);
+        ImGui::Separator();
+        for (const Gameplay kind : paintableGameplay())
+            if (ImGui::MenuItem(gameplayName(kind)))
+                addGameplayEntity(kind);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Directional light"))
+            addGameplayEntity(Gameplay::DirectionalLight);
+        ImGui::EndPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Expand all"))
+        mOutlinerOpenRequest = 1;
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Collapse all"))
+        mOutlinerOpenRequest = 0;
 
     // A row of icon switches rather than a line of checkboxes and words: this
     // panel docks narrow, and the header was taking two lines of it to say
@@ -3907,7 +4120,8 @@ void EditorApp::drawOutliner()
     // until somebody adds it, and the one that makes a dense room workable.
     const bool canIsolate = !mState.selection.empty();
     if (iconButton(Icon::EyeClosed, "##isolate",
-                   "isolate the selection -- hide everything else", canIsolate) &&
+                   "isolate the selection -- hide everything else",
+                   canIsolate) &&
         canIsolate)
         isolateSelection();
 
@@ -3919,6 +4133,16 @@ void EditorApp::drawOutliner()
         ImGui::SameLine();
         ImGui::TextDisabled("| %zu hidden", mState.hidden.size());
     }
+    if (!mState.selection.empty()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark),
+                           "| %zu selected", mState.selection.size());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("clear")) {
+            mState.selection.clear();
+            mSelectionAnchor.clear();
+        }
+    }
 
     ImGui::Separator();
     if (ImGui::BeginChild("##entities")) {
@@ -3928,8 +4152,9 @@ void EditorApp::drawOutliner()
         actions.isSelected = [this](const AuthorId& id) {
             return mState.isSelected(id);
         };
-        actions.selectGroup = [this](const OutlinerGroup& group, bool add) {
-            selectGroup(group, add);
+        actions.selectGroup = [this](const OutlinerGroup& group,
+                                     SelectMode mode) {
+            selectGroup(group, mode);
         };
         actions.selectNode = [this](const AuthorId& id, bool add) {
             if (add)
@@ -3980,8 +4205,9 @@ void EditorApp::drawOutliner()
         };
         actions.focus = [this] { frameSelectionOrAll(); };
         actions.contextMenu = [this] { drawSelectionContextMenu(); };
-        actions.reparent = [this](const AuthorId& child, const AuthorId& parent) {
-            reparentEntity(child, parent);
+        actions.reparent = [this](const AuthorId& child,
+                                  const AuthorId& parent) {
+            reparentSelection(child, parent);
         };
         actions.isHidden = [this](const AuthorId& id) {
             return mState.isHidden(id);
@@ -3998,14 +4224,15 @@ void EditorApp::drawOutliner()
                 mState.setHidden(entry, on);
             if (on)
                 mState.selection.erase(
-                    std::remove_if(mState.selection.begin(),
-                                   mState.selection.end(),
-                                   [&affected](const AuthorId& selected) {
-                                       return std::find(affected.begin(),
-                                                        affected.end(), selected) !=
-                                              affected.end();
-                                   }),
+                    std::remove_if(
+                        mState.selection.begin(), mState.selection.end(),
+                        [&affected](const AuthorId& selected) {
+                            return std::find(affected.begin(), affected.end(),
+                                             selected) != affected.end();
+                        }),
                     mState.selection.end());
+            if (on)
+                mSelectionAnchor.clear();
             mPreview->invalidate();
         };
         actions.isLocked = [this](const AuthorId& id) {
@@ -4021,19 +4248,22 @@ void EditorApp::drawOutliner()
                 mState.setLocked(entry, on);
             if (on)
                 mState.selection.erase(
-                    std::remove_if(mState.selection.begin(),
-                                   mState.selection.end(),
-                                   [&affected](const AuthorId& selected) {
-                                       return std::find(affected.begin(),
-                                                        affected.end(), selected) !=
-                                              affected.end();
-                                   }),
+                    std::remove_if(
+                        mState.selection.begin(), mState.selection.end(),
+                        [&affected](const AuthorId& selected) {
+                            return std::find(affected.begin(), affected.end(),
+                                             selected) != affected.end();
+                        }),
                     mState.selection.end());
+            if (on)
+                mSelectionAnchor.clear();
         };
+        actions.forceOpen = mOutlinerOpenRequest;
         // Reveal whatever the world selected while the panel was not looking.
         actions.reveal = mOutlinerReveal;
         drawOutlinerRows(tree, !mOutlinerOptions.filter.empty(), actions,
                          mOutlinerRows);
+        mOutlinerOpenRequest = -1;
         mOutlinerReveal.clear();
     }
     ImGui::EndChild();
@@ -4053,7 +4283,10 @@ void EditorApp::drawSelectionContextMenu()
     // Parenting from the menu as well as by dragging: a drag is the fast path
     // once you know it exists, and it is not a gesture anyone discovers.
     const bool canGroup = mState.selection.size() > 1;
-    if (ImGui::MenuItem("Parent to first selected", nullptr, false, canGroup))
+    const std::string parentLabel =
+        mState.primary() ? "Parent selection to '" + *mState.primary() + "'"
+                         : std::string("Parent selection");
+    if (ImGui::MenuItem(parentLabel.c_str(), nullptr, false, canGroup))
         parentSelectionToPrimary();
     bool anyParented = false;
     for (const AuthorId& id : mState.selection)
@@ -4070,7 +4303,7 @@ void EditorApp::drawSelectionContextMenu()
             if (ImGui::MenuItem(type.label, nullptr, false, ready))
                 addComponentToSelection(type);
             if (!ready && ImGui::IsItemHovered())
-                ImGui::SetTooltip("pick a piece in the Catalog first");
+                ImGui::SetTooltip("pick a piece in Asset Browser first");
         }
         ImGui::EndMenu();
     }
@@ -4224,9 +4457,11 @@ Entity EditorApp::makeGameplayEntity(Gameplay kind,
         // and the height only keeps the gizmo out of the floor.
         entity.transform.position.y += 8.0f;
         entity.transform.rotationDegrees = {-55.0f, 30.0f, 0.0f};
-        entity.light = LightAuthor{
-            LightAuthor::Type::Directional, {0.95f, 0.93f, 0.88f}, 0.0f, true,
-            std::nullopt};
+        entity.light = LightAuthor{LightAuthor::Type::Directional,
+                                   {0.95f, 0.93f, 0.88f},
+                                   0.0f,
+                                   true,
+                                   std::nullopt};
     }
     entity.id = mState.document.allocateId(stem);
     entity.name = entity.id;
@@ -4251,150 +4486,152 @@ void EditorApp::addGameplayEntity(Gameplay kind)
     mPreview->invalidate();
 }
 
+void EditorApp::drawAssetBrowser()
+{
+    const bool requested =
+        mFocusPanelFrames > 0 &&
+        (mFocusPanel == "catalog" || mFocusPanel == "material" ||
+         mFocusPanel == "particles");
+    if (requested) {
+        ImGui::SetNextWindowFocus();
+        mAssetBrowserModeRequest = mFocusPanel == "material"    ? 1
+                                   : mFocusPanel == "particles" ? 2
+                                                                : 0;
+    }
+    if (!ImGui::Begin(workspace_window::kAssetBrowser, nullptr, kPanelFlags)) {
+        ImGui::End();
+        return;
+    }
+
+    if (mMaterialNames.empty() && mEngine) {
+        mMaterialNames = mEngine->renderer().materialNames();
+        std::sort(mMaterialNames.begin(), mMaterialNames.end());
+    }
+    std::size_t pieceCount = 0;
+    for (const std::string& role : mState.catalog.roles())
+        pieceCount += mState.catalog.byRole(role).size();
+    ImGui::TextDisabled("PROJECT ASSETS");
+    if (ImGui::GetContentRegionAvail().x >= 420.0f)
+        ImGui::SameLine();
+    ImGui::TextDisabled("%zu pieces  |  %zu materials  |  %zu effects",
+                        pieceCount, materialCatalog().size(),
+                        mParticles.descs().size());
+
+    if (ImGui::BeginTabBar("##asset_modes",
+                           ImGuiTabBarFlags_FittingPolicyScroll)) {
+        const ImGuiTabItemFlags placeFlags =
+            mAssetBrowserModeRequest == 0 ? ImGuiTabItemFlags_SetSelected : 0;
+        if (ImGui::BeginTabItem("Placeables", nullptr, placeFlags)) {
+            drawCatalog();
+            ImGui::EndTabItem();
+        }
+        const ImGuiTabItemFlags materialFlags =
+            mAssetBrowserModeRequest == 1 ? ImGuiTabItemFlags_SetSelected : 0;
+        if (ImGui::BeginTabItem("Materials", nullptr, materialFlags)) {
+            drawMaterialPanel();
+            ImGui::EndTabItem();
+        }
+        const std::string effectsLabel =
+            mParticlesDirty ? "Effects *" : "Effects";
+        const ImGuiTabItemFlags effectsFlags =
+            mAssetBrowserModeRequest == 2 ? ImGuiTabItemFlags_SetSelected : 0;
+        if (ImGui::BeginTabItem(effectsLabel.c_str(), nullptr, effectsFlags)) {
+            drawParticlePanel();
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    mAssetBrowserModeRequest = -1;
+    ImGui::End();
+}
+
 void EditorApp::drawCatalog()
 {
-    focusPanelIfRequested("catalog");
-    if (ImGui::Begin("Catalog", nullptr, kPanelFlags)) {
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint("##filter", "filter", mCatalogFilter,
-                                 sizeof(mCatalogFilter));
-        const std::string brushLabel =
-            mState.brush.kind == Brush::Kind::Gameplay
-                ? gameplayName(mState.brush.gameplay)
-            : mState.brush.kind == Brush::Kind::Particles
-                ? (mState.brush.effect.empty() ? "(no particle effect)"
-                                               : mState.brush.effect + " [fx]")
-                : (mState.brush.prefab.empty() ? "(none)"
-                                               : mState.brush.prefab);
-        ImGui::TextDisabled("brush: %s", brushLabel.c_str());
-        ImGui::SameLine();
-        // Wheel is the gesture; the readout is here because the number is only
-        // legible once something is already selected.
-        ImGui::TextDisabled("| rot %d deg (wheel)",
-                            mState.brush.yawQuarters * 90);
-        ImGui::Separator();
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##placeable_filter", "Search placeables...",
+                             mCatalogFilter, sizeof(mCatalogFilter));
+    const std::string brushLabel =
+        mState.brush.kind == Brush::Kind::Gameplay
+            ? gameplayName(mState.brush.gameplay)
+        : mState.brush.kind == Brush::Kind::Particles
+            ? (mState.brush.effect.empty() ? "(no particle effect)"
+                                           : mState.brush.effect + " [fx]")
+            : (mState.brush.prefab.empty() ? "(none)" : mState.brush.prefab);
+    ImGui::TextDisabled("brush: %s", brushLabel.c_str());
+    ImGui::SameLine();
+    // Wheel is the gesture; the readout is here because the number is only
+    // legible once something is already selected.
+    ImGui::TextDisabled("| rot %d deg (wheel)", mState.brush.yawQuarters * 90);
+    ImGui::Separator();
 
-        // Gameplay entities are authored here too: they are part of the level's
-        // vocabulary even though they have no mesh, and selecting one arms the
-        // Place tool exactly as selecting a wall does.
-        if (ImGui::CollapsingHeader("gameplay",
-                                    ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (const Gameplay kind : paintableGameplay()) {
-                const bool active =
-                    mState.brush.kind == Brush::Kind::Gameplay &&
-                    mState.brush.gameplay == kind;
-                if (ImGui::Selectable(gameplayName(kind), active)) {
-                    mState.brush.kind = Brush::Kind::Gameplay;
-                    mState.brush.gameplay = kind;
-                    mState.tool = Tool::Place;
-                }
+    // Gameplay entities are authored here too: they are part of the level's
+    // vocabulary even though they have no mesh, and selecting one arms the
+    // Place tool exactly as selecting a wall does.
+    if (ImGui::CollapsingHeader("gameplay", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (const Gameplay kind : paintableGameplay()) {
+            if (!filterMatches(gameplayName(kind), mCatalogFilter))
+                continue;
+            const bool active = mState.brush.kind == Brush::Kind::Gameplay &&
+                                mState.brush.gameplay == kind;
+            if (ImGui::Selectable(gameplayName(kind), active)) {
+                mState.brush.kind = Brush::Kind::Gameplay;
+                mState.brush.gameplay = kind;
+                mState.tool = Tool::Place;
             }
-            // The one exception: a key light is aimed rather than positioned,
-            // so painting a row of them down a corridor is not a thing anyone
-            // means to do. It stays a button.
+        }
+        // The one exception: a key light is aimed rather than positioned,
+        // so painting a row of them down a corridor is not a thing anyone
+        // means to do. It stays a button.
+        if (filterMatches("directional light", mCatalogFilter)) {
             if (ImGui::Button("directional light (one-shot)",
                               ImVec2(-1.0f, 0.0f)))
                 addGameplayEntity(Gameplay::DirectionalLight);
-            ImGui::Spacing();
-            // Through the component registry, like every other add: the same
-            // defaults, the whole selection, one undo entry. This used to be a
-            // second implementation that only touched the primary and invented
-            // its own half-extents.
-            if (ImGui::Button("add collider to selection",
-                              ImVec2(-1.0f, 0.0f))) {
-                if (const ComponentType* collider =
-                        findComponentType("collider"))
-                    addComponentToSelection(*collider);
-            }
         }
+    }
 
-        // Particle effects are scene vocabulary too. Selecting one arms the
-        // same click/drag placement tool as a prop, and the viewport shows the
-        // live effect under the cursor before anything enters the document.
-        if (ImGui::CollapsingHeader("particles",
-                                    ImGuiTreeNodeFlags_DefaultOpen)) {
-            bool any = false;
-            const std::string filter = mCatalogFilter;
-            for (std::size_t i = 0; i < mParticles.descs().size(); ++i) {
-                const eng::ParticleEffectDesc& effect = mParticles.descs()[i];
-                if (!filter.empty() && effect.name.find(filter) == std::string::npos)
-                    continue;
-                any = true;
-                const bool active =
-                    mState.brush.kind == Brush::Kind::Particles &&
-                    mState.brush.effect == effect.name;
-                ImGui::PushID(int(i));
-                if (ImGui::Selectable(effect.name.c_str(), active)) {
-                    mState.brush.kind = Brush::Kind::Particles;
-                    mState.brush.effect = effect.name;
-                    mParticleSelected = int(i);
-                    mState.tool = Tool::Place;
-                    mStatus = "particle brush: " + effect.name +
-                              " -- move over Viewport to preview, click to place";
-                }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(
-                        "%s\n%s | %zu emitter(s) | %s\nselect, then move over "
-                        "the Viewport for a live placement preview",
-                        effect.texture.empty() ? effect.material.c_str()
-                                               : effect.texture.c_str(),
-                        effect.renderMode == eng::ParticleRenderMode::Voxel
-                            ? "voxel"
-                            : "sprite",
-                        effect.emitters.size(), effect.loop ? "loop" : "burst");
-                }
-                ImGui::PopID();
+    if (ImGui::BeginChild("##pieces")) {
+        const std::string filter = mCatalogFilter;
+        // Grouped by role, which is how kit.toml is authored and how an
+        // author thinks: "I need a wall", not "I need piece 17".
+        for (const std::string& role : mState.catalog.roles()) {
+            std::vector<const KitPiece*> pieces = mState.catalog.byRole(role);
+            std::vector<const KitPiece*> shown;
+            for (const KitPiece* piece : pieces) {
+                if (filterMatches(piece->id, filter) ||
+                    filterMatches(role, filter))
+                    shown.push_back(piece);
             }
-            if (!any)
-                ImGui::TextDisabled("no particle effects match");
-        }
-
-        if (ImGui::BeginChild("##pieces")) {
-            const std::string filter = mCatalogFilter;
-            // Grouped by role, which is how kit.toml is authored and how an
-            // author thinks: "I need a wall", not "I need piece 17".
-            for (const std::string& role : mState.catalog.roles()) {
-                std::vector<const KitPiece*> pieces =
-                    mState.catalog.byRole(role);
-                std::vector<const KitPiece*> shown;
-                for (const KitPiece* piece : pieces) {
-                    if (filter.empty() ||
-                        piece->id.find(filter) != std::string::npos ||
-                        role.find(filter) != std::string::npos)
-                        shown.push_back(piece);
-                }
-                if (shown.empty())
-                    continue;
+            if (shown.empty())
+                continue;
+                const std::string roleLabel =
+                    eng::assets::friendlyAssetLabel(role) + "###" + role;
                 if (!ImGui::CollapsingHeader(
-                        role.c_str(),
+                        roleLabel.c_str(),
                         filter.empty() ? 0 : ImGuiTreeNodeFlags_DefaultOpen))
                     continue;
                 for (const KitPiece* piece : shown) {
-                    const bool active =
-                        mState.brush.kind == Brush::Kind::Piece &&
-                        mState.brush.prefab == piece->id;
-                    // Strip the "kit." for display; the id still carries it.
-                    const char* label = piece->id.c_str() + 4;
-                    if (ImGui::Selectable(label, active)) {
-                        mState.brush.kind = Brush::Kind::Piece;
-                        mState.brush.prefab = piece->id;
-                        mState.tool = Tool::Place;
-                    }
-                    // Per-piece detail is inherently dynamic, so it goes
-                    // through the ad-hoc path with the shared styling rather
-                    // than through the hint table.
-                    char detail[512];
-                    std::snprintf(detail, sizeof(detail),
-                                  "socket %s  span %d\n%s",
-                                  socketName(piece->socket), piece->span,
-                                  piece->meshPath.c_str());
-                    eng::imguihint::showText(piece->id.c_str(), detail);
+                const bool active = mState.brush.kind == Brush::Kind::Piece &&
+                                    mState.brush.prefab == piece->id;
+                    const std::string label =
+                        eng::assets::friendlyAssetLabel(piece->id) + "###" +
+                        piece->id;
+                    if (ImGui::Selectable(label.c_str(), active)) {
+                    mState.brush.kind = Brush::Kind::Piece;
+                    mState.brush.prefab = piece->id;
+                    mState.tool = Tool::Place;
                 }
+                // Per-piece detail is inherently dynamic, so it goes
+                // through the ad-hoc path with the shared styling rather
+                // than through the hint table.
+                char detail[512];
+                std::snprintf(detail, sizeof(detail), "socket %s  span %d\n%s",
+                              socketName(piece->socket), piece->span,
+                              piece->meshPath.c_str());
+                eng::imguihint::showText(piece->id.c_str(), detail);
             }
         }
-        ImGui::EndChild();
     }
-    ImGui::End();
+    ImGui::EndChild();
 }
 
 // The level's own properties: what it is called, what it costs, and the look it
@@ -4413,25 +4650,24 @@ void EditorApp::drawSceneProperties()
     // The palette is the level's, not the session's: a crypt and a cathedral
     // are not the same room with different props, and until now the format
     // could not say which one this was.
-    const std::string current =
-        mState.document.palette.empty()
-            ? std::string("(the game's default)")
-            : mState.document.palette;
+    const std::string current = mState.document.palette.empty()
+                                    ? std::string("(the game's default)")
+                                    : mState.document.palette;
     if (ImGui::BeginCombo("palette", current.c_str())) {
         if (ImGui::Selectable("(the game's default)",
                               mState.document.palette.empty()))
             setScenePalette({});
         for (const std::string& name : mPalettes) {
-            if (ImGui::Selectable(name.c_str(), name == mState.document.palette))
+            if (ImGui::Selectable(name.c_str(),
+                                  name == mState.document.palette))
                 setScenePalette(name);
         }
         ImGui::EndCombo();
     }
     if (!mState.document.palette.empty() &&
-        std::find(mPalettes.begin(), mPalettes.end(), mState.document.palette) ==
-            mPalettes.end()) {
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                           "'%s' is not in palettes.toml",
+        std::find(mPalettes.begin(), mPalettes.end(),
+                  mState.document.palette) == mPalettes.end()) {
+        ImGui::TextColored(kUiDanger, "'%s' is not in palettes.toml",
                            mState.document.palette.c_str());
     }
     ImGui::TextDisabled("turn on the viewport's light switch to see it");
@@ -4443,10 +4679,9 @@ void EditorApp::setScenePalette(const std::string& palette)
     if (mState.document.palette == palette)
         return;
     const std::string before = mState.document.palette;
-    runCommand(Command{
-        palette.empty() ? "clear palette" : "palette " + palette,
-        [palette](Doc& doc) { doc.palette = palette; },
-        [before](Doc& doc) { doc.palette = before; }});
+    runCommand(Command{palette.empty() ? "clear palette" : "palette " + palette,
+                       [palette](Doc& doc) { doc.palette = palette; },
+                       [before](Doc& doc) { doc.palette = before; }});
     if (mEngine)
         applySceneEnvironment(mEngine->renderer());
 }
@@ -4454,7 +4689,7 @@ void EditorApp::setScenePalette(const std::string& palette)
 void EditorApp::drawInspector()
 {
     focusPanelIfRequested("inspector");
-    if (!ImGui::Begin("Inspector", nullptr, kPanelFlags)) {
+    if (!ImGui::Begin(workspace_window::kInspector, nullptr, kPanelFlags)) {
         finishInspectorEdit();
         ImGui::End();
         return;
@@ -4577,14 +4812,13 @@ void EditorApp::drawInspector()
         const ComponentPresence presence =
             componentPresence(*type, selectedEntities);
         const std::string header =
-            presence.mixed()
-                ? std::string(type->label) + "  (" +
-                      std::to_string(presence.present) + "/" +
-                      std::to_string(presence.total) + ")"
-                : std::string(type->label);
+            presence.mixed() ? std::string(type->label) + "  (" +
+                                   std::to_string(presence.present) + "/" +
+                                   std::to_string(presence.total) + ")"
+                             : std::string(type->label);
         const bool open = ImGui::CollapsingHeader(
-            header.c_str(), ImGuiTreeNodeFlags_DefaultOpen |
-                                ImGuiTreeNodeFlags_AllowOverlap);
+            header.c_str(),
+            ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
         if (type->remove) {
             // Right-aligned so the sections read as a column of headers rather
             // than a column of buttons.
@@ -4677,7 +4911,7 @@ void EditorApp::drawInspector()
 void EditorApp::drawIssues()
 {
     focusPanelIfRequested("issues");
-    if (ImGui::Begin("Issues", nullptr, kPanelFlags)) {
+    if (ImGui::Begin(workspace_window::kProblems, nullptr, kPanelFlags)) {
         // Revalidated when the document changes rather than every frame: it
         // walks every entity and the panel is often open while dragging.
         if (mIssuesRevision != mState.document.revision) {
@@ -4697,34 +4931,36 @@ void EditorApp::drawIssues()
         if (ImGui::BeginChild("##issues")) {
             if (mIssues.empty())
                 ImGui::TextDisabled("No issues -- this scene can cook.");
-            if (ImGui::BeginTable(
-                    "##issue_table", 4,
-                    ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                        ImGuiTableFlags_BordersInnerV |
-                        ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("Severity",
-                                        ImGuiTableColumnFlags_WidthFixed, 76.0f);
-                ImGui::TableSetupColumn("Issue", ImGuiTableColumnFlags_WidthFixed,
-                                        116.0f);
+            if (ImGui::BeginTable("##issue_table", 4,
+                                  ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_Resizable |
+                                      ImGuiTableFlags_BordersInnerV |
+                                      ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn(
+                    "Severity", ImGuiTableColumnFlags_WidthFixed, 76.0f);
+                ImGui::TableSetupColumn(
+                    "Issue", ImGuiTableColumnFlags_WidthFixed, 116.0f);
                 ImGui::TableSetupColumn("Message",
                                         ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Action",
-                                        ImGuiTableColumnFlags_WidthFixed, 112.0f);
+                ImGui::TableSetupColumn(
+                    "Action", ImGuiTableColumnFlags_WidthFixed, 112.0f);
                 ImGui::TableHeadersRow();
                 for (std::size_t i = 0; i < mIssues.size(); ++i) {
                     const Issue issue = mIssues[i];
                     const ImVec4 colour = issue.severity == Severity::Error
-                                              ? ImVec4(1.0f, 0.45f, 0.35f, 1.0f)
-                                              : ImVec4(0.95f, 0.82f, 0.38f, 1.0f);
+                                              ? kUiDanger
+                                              : kUiWarning;
                     ImGui::PushID(int(i));
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
-                    ImGui::TextColored(colour, "%s", severityName(issue.severity));
+                    ImGui::TextColored(colour, "%s",
+                                       severityName(issue.severity));
                     ImGui::TableNextColumn();
                     const bool selected = !issue.entity.empty() &&
                                           mState.isSelected(issue.entity);
-                    if (ImGui::Selectable(issue.code.c_str(), selected,
-                                          ImGuiSelectableFlags_AllowDoubleClick) &&
+                    if (ImGui::Selectable(
+                            issue.code.c_str(), selected,
+                            ImGuiSelectableFlags_AllowDoubleClick) &&
                         !issue.entity.empty()) {
                         selectAndReveal(issue.entity, false);
                         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
@@ -4736,16 +4972,26 @@ void EditorApp::drawIssues()
                     if (issue.fix != QuickFix::None) {
                         const auto fixLabel = [](QuickFix fix) {
                             switch (fix) {
-                            case QuickFix::RemoveEntity:          return "Remove...";
-                            case QuickFix::AddPlayerSpawn:        return "Add spawn";
-                            case QuickFix::SetDefaultRange:       return "Set range";
-                            case QuickFix::SetDefaultHalfExtents: return "Set extents";
-                            case QuickFix::SnapToCell:            return "Snap to grid";
-                            case QuickFix::ResetTransform:        return "Reset transform";
-                            case QuickFix::FillCornerGap:         return "Fill gap";
-                            case QuickFix::ClearParent:           return "Detach";
-                            case QuickFix::AddPortalComponent:    return "Add portal";
-                            case QuickFix::None:                  break;
+                            case QuickFix::RemoveEntity:
+                                return "Remove...";
+                            case QuickFix::AddPlayerSpawn:
+                                return "Add spawn";
+                            case QuickFix::SetDefaultRange:
+                                return "Set range";
+                            case QuickFix::SetDefaultHalfExtents:
+                                return "Set extents";
+                            case QuickFix::SnapToCell:
+                                return "Snap to grid";
+                            case QuickFix::ResetTransform:
+                                return "Reset transform";
+                            case QuickFix::FillCornerGap:
+                                return "Fill gap";
+                            case QuickFix::ClearParent:
+                                return "Detach";
+                            case QuickFix::AddPortalComponent:
+                                return "Add portal";
+                            case QuickFix::None:
+                                break;
                             }
                             return "Apply";
                         };
@@ -4766,7 +5012,8 @@ void EditorApp::drawIssues()
                                 else
                                     runCommand(makeDeleteEntity(mState.document,
                                                                 issue.entity));
-                            } else {
+                            }
+                            else {
                                 for (const Entity& entity : after.entities)
                                     if (!mState.document.contains(entity.id))
                                         runCommand(makeCreateEntity(entity));
@@ -4799,9 +5046,8 @@ void EditorApp::setMode(bool material)
     if (mMaterialMode == material)
         return;
     mMaterialMode = material;
-    // The staging mode's own panel comes forward with it; it shares a tab with
-    // Particles and was landing behind it.
-    if (material) mFocusMaterialFrames = 4;
+    if (material)
+        mAssetBrowserModeRequest = 1;
     eng::Renderer& renderer = mEngine->renderer();
 
     if (material) {
@@ -4859,23 +5105,6 @@ void EditorApp::setMode(bool material)
 
 void EditorApp::drawMaterialPanel()
 {
-    // Material and Particles share a dock slot as tabs, and entering the
-    // staging mode has to bring this one forward or the mode switches with its
-    // own panel hidden.
-    //
-    // Asked for *before* Begin, and for a few frames. Before, because Begin
-    // returns false for a window whose tab is not selected -- so a focus call
-    // after it never runs, which is exactly the bug this had. For a few frames,
-    // because a layout restored from imgui.ini re-selects its saved tab on the
-    // frame it is applied, which is after the first request.
-    if (mFocusMaterialFrames > 0) {
-        --mFocusMaterialFrames;
-        ImGui::SetNextWindowFocus();
-    }
-    if (!ImGui::Begin("Material", nullptr, kPanelFlags)) {
-        ImGui::End();
-        return;
-    }
     eng::Renderer& renderer = mEngine->renderer();
 
     // The swatch exists in both modes. Picking a material for a wall is the
@@ -4904,8 +5133,8 @@ void EditorApp::drawMaterialPanel()
     const std::string selectedId = previewOf ? *previewOf : std::string();
     if (selectedId != mPreviewedEntity) {
         mPreviewedEntity = selectedId;
-        if (const Entity* e = previewOf ? mState.document.find(*previewOf)
-                                        : nullptr) {
+        if (const Entity* e =
+                previewOf ? mState.document.find(*previewOf) : nullptr) {
             // The entity's override, else what its kit piece wears. An entity
             // with neither has nothing to say and the swatch keeps its last
             // subject rather than blanking.
@@ -4952,7 +5181,7 @@ void EditorApp::drawMaterialPanel()
                                              ? mSelectedMaterial
                                              : mStage.thumbnailMaterial();
     ImGui::TextUnformatted(previewMaterial.empty() ? "(no material)"
-                                                    : previewMaterial.c_str());
+                                                   : previewMaterial.c_str());
     ImGui::TextDisabled("preview: %s",
                         mStage.thumbnailPreviewMode() == StagePreview::Quad
                             ? "animated quad"
@@ -4978,23 +5207,17 @@ void EditorApp::drawMaterialPanel()
         }
     }
     ImGui::BeginDisabled(!canApply);
-    if (ImGui::Button("apply to selection"))
+    if (ImGui::Button("Apply to Selection"))
         applyMaterialToSelection(mSelectedMaterial);
     ImGui::EndDisabled();
-    if (!canApply && !cannotApply.empty() && ImGui::IsItemHovered(
-            ImGuiHoveredFlags_AllowWhenDisabled))
+    if (!canApply && !cannotApply.empty() &&
+        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         ImGui::SetTooltip("Cannot apply: %s", cannotApply.c_str());
-    if (mMaterialMode) {
-        ImGui::BeginDisabled(mSelectedMaterial.empty());
-        if (ImGui::Button("show on stage"))
-            mStage.setMaterial(renderer, mSelectedMaterial);
-        ImGui::EndDisabled();
-    }
     ImGui::EndGroup();
 
     ImGui::Separator();
     bool material = mMaterialMode;
-    if (ImGui::Checkbox("staging mode", &material))
+    if (ImGui::Checkbox("Material Stage", &material))
         setMode(material);
     ImGui::SameLine();
     eng::imguihint::marker(
@@ -5027,16 +5250,17 @@ void EditorApp::drawMaterialPanel()
     // --- the list ----------------------------------------------------------
     ImGui::Separator();
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##materialfilter", "filter", mMaterialFilter,
-                             sizeof(mMaterialFilter));
+    ImGui::InputTextWithHint("##materialfilter", "Search materials...",
+                             mMaterialFilter, sizeof(mMaterialFilter));
     // Most of the shipped catalogue cannot go on an entity at all: compositor
     // passes, particle materials, sprite and decal materials. Listing them
     // beside the ones an author is choosing between is how a bloom pass ends
     // up on a wall.
     ImGui::Checkbox("show non-surface materials", &mShowAllMaterials);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("particle, sprite and compositor materials -- they "
-                          "need geometry the engine generates, not an entity's");
+        ImGui::SetTooltip(
+            "particle, sprite and compositor materials -- they "
+            "need geometry the engine generates, not an entity's");
 
     // What the selection would take, so the list can say what will happen
     // before the click rather than after the cook.
@@ -5048,7 +5272,7 @@ void EditorApp::drawMaterialPanel()
         bool first = true;
         for (const MaterialInfo& info : materialCatalog()) {
             const std::string& name = info.name;
-            if (!filter.empty() && name.find(filter) == std::string::npos)
+            if (!filterMatches(name, filter))
                 continue;
             if (!mShowAllMaterials && !isEntityMaterial(info.klass))
                 continue;
@@ -5065,13 +5289,14 @@ void EditorApp::drawMaterialPanel()
             const MaterialAdvice advice = materialFits(info.klass, targetMesh);
             const bool warn = advice.fit != Fit::Good;
             if (warn) {
-                ImGui::PushStyleColor(ImGuiCol_Text,
-                                      advice.fit == Fit::Broken
-                                          ? ImVec4(1.0f, 0.45f, 0.35f, 1.0f)
-                                          : ImVec4(0.95f, 0.82f, 0.38f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, advice.fit == Fit::Broken
+                                                         ? kUiDanger
+                                                         : kUiWarning);
             }
-            const bool picked =
-                ImGui::Selectable(name.c_str(), name == mSelectedMaterial);
+            const std::string label =
+                eng::assets::friendlyAssetLabel(name) + "###" + name;
+            const bool picked = ImGui::Selectable(
+                label.c_str(), name == mSelectedMaterial);
             if (warn)
                 ImGui::PopStyleColor();
 
@@ -5092,7 +5317,8 @@ void EditorApp::drawMaterialPanel()
                                           ? "Will not render on this selection:"
                                           : "Will render, but probably wrong:",
                                       advice.reason.c_str());
-                } else if (!info.texture.empty()) {
+                }
+                else if (!info.texture.empty()) {
                     ImGui::SetTooltip("%s  |  %s", info.texture.c_str(),
                                       info.shader.c_str());
                 }
@@ -5113,7 +5339,6 @@ void EditorApp::drawMaterialPanel()
     if (!hoveredMaterial && !mSelectedMaterial.empty() &&
         mStage.thumbnailMaterial() != mSelectedMaterial)
         mStage.setThumbnailMaterial(renderer, mSelectedMaterial);
-    ImGui::End();
 }
 
 // Everything the shipped .material scripts declare, classified. Loaded once:
@@ -5148,6 +5373,13 @@ const std::vector<MaterialInfo>& EditorApp::materialCatalog()
                                before - mMaterialCatalog.size(), before);
             }
         }
+        std::stable_sort(mMaterialCatalog.begin(), mMaterialCatalog.end(),
+                         [](const MaterialInfo& a, const MaterialInfo& b) {
+                             if (a.klass != b.klass)
+                                 return static_cast<int>(a.klass) <
+                                        static_cast<int>(b.klass);
+                             return a.name < b.name;
+                         });
         eng::log::info("Editor: %zu materials classified",
                        mMaterialCatalog.size());
     }
@@ -5186,7 +5418,8 @@ MeshKind EditorApp::selectionMeshKind()
         if (!any) {
             kind = one;
             any = true;
-        } else if (kind != one) {
+        }
+        else if (kind != one) {
             return MeshKind::Unknown;
         }
     }
@@ -5202,37 +5435,40 @@ MeshKind EditorApp::selectionMeshKind()
 // the game uses.
 void EditorApp::drawParticlePanel()
 {
-    focusPanelIfRequested("particles");
-    if (!ImGui::Begin("Particles", nullptr, kPanelFlags)) {
-        ImGui::End();
-        return;
-    }
     eng::Renderer& renderer = mEngine->renderer();
     std::vector<eng::ParticleEffectDesc>& descs = mParticles.descs();
 
     if (descs.empty()) {
         ImGui::TextDisabled("no particles.toml loaded");
-        ImGui::End();
         return;
     }
 
-    if (mParticleSelected < 0 || mParticleSelected >= int(descs.size()))
-        mParticleSelected = 0;
+    std::size_t selectedIndex = descs.size();
+    for (std::size_t i = 0; i < descs.size(); ++i)
+        if (descs[i].name == mSelectedEffect)
+            selectedIndex = i;
+    if (selectedIndex == descs.size()) {
+        selectedIndex = 0;
+        mSelectedEffect = descs.front().name;
+    }
 
     // --- catalog -----------------------------------------------------------
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##fxfilter", "filter effects", mParticleFilter,
+    ImGui::InputTextWithHint("##fxfilter", "Search effects...", mParticleFilter,
                              sizeof(mParticleFilter));
     const std::string filter = mParticleFilter;
 
     ImGui::BeginChild("##fxlist", ImVec2(0.0f, 150.0f), true);
     for (int i = 0; i < int(descs.size()); ++i) {
-        if (!filter.empty() &&
-            descs[size_t(i)].name.find(filter) == std::string::npos)
+        if (!filterMatches(descs[size_t(i)].name, filter))
             continue;
-        if (ImGui::Selectable(descs[size_t(i)].name.c_str(),
-                               mParticleSelected == i)) {
-            mParticleSelected = i;
+        const std::string label =
+            eng::assets::friendlyAssetLabel(descs[size_t(i)].name) + "###" +
+            descs[size_t(i)].name;
+        if (ImGui::Selectable(label.c_str(),
+                              mSelectedEffect == descs[size_t(i)].name)) {
+            mSelectedEffect = descs[size_t(i)].name;
+            selectedIndex = size_t(i);
         }
     }
     ImGui::EndChild();
@@ -5243,10 +5479,9 @@ void EditorApp::drawParticlePanel()
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", mParticles.path().c_str());
     if (mParticlesDirty)
-        ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.38f, 1.0f),
-                           "Unsaved particle changes");
+        ImGui::TextColored(kUiWarning, "Unsaved particle changes");
 
-    eng::ParticleEffectDesc& d = descs[size_t(mParticleSelected)];
+    eng::ParticleEffectDesc& d = descs[selectedIndex];
     bool dirty = false;
 
     const auto clearPreviews = [&] {
@@ -5277,25 +5512,25 @@ void EditorApp::drawParticlePanel()
         mStage.buildThumbnail(renderer, 256);
     mStage.setThumbnailVisible(renderer, false);
     if (!mParticleThumbnailNode.valid()) {
-        mParticleThumbnailNode = renderer.createNode(
-            eng::kRootNode, glm::vec3(0.0f, -1000.0f, 0.0f),
-            "particle_catalog_thumbnail");
+        mParticleThumbnailNode =
+            renderer.createNode(eng::kRootNode, glm::vec3(0.0f, -1000.0f, 0.0f),
+                                "particle_catalog_thumbnail");
     }
     renderer.setNodeVisible(mParticleThumbnailNode, true);
     const double now = ImGui::GetTime();
     const float period = particlePreviewPeriod(d);
-    const bool thumbnailChanged = mParticleThumbnailEffect != d.name ||
-                                  mParticleThumbnailScale !=
-                                      mParticlePreviewScale;
-    const bool thumbnailExpired = period > 0.0f &&
-                                  now >= mParticleThumbnailRestartAt;
+    const bool thumbnailChanged =
+        mParticleThumbnailEffect != d.name ||
+        mParticleThumbnailScale != mParticlePreviewScale;
+    const bool thumbnailExpired =
+        period > 0.0f && now >= mParticleThumbnailRestartAt;
     if (thumbnailChanged || !mParticleThumbnail.valid() || thumbnailExpired) {
         if (mParticleThumbnail.valid())
             renderer.despawnParticles(mParticleThumbnail);
         eng::ParticleSpawnOptions options;
         options.sizeScale = mParticlePreviewScale;
-        mParticleThumbnail = renderer.spawnParticles(
-            d.name, mParticleThumbnailNode, options);
+        mParticleThumbnail =
+            renderer.spawnParticles(d.name, mParticleThumbnailNode, options);
         renderer.setNodeThumbnailOnly(mParticleThumbnailNode, true);
         mParticleThumbnailEffect = d.name;
         mParticleThumbnailScale = mParticlePreviewScale;
@@ -5307,36 +5542,36 @@ void EditorApp::drawParticlePanel()
 
     // --- preview and placement --------------------------------------------
     const uint64_t thumbnail = renderer.materialThumbnailTextureId();
-    const float thumbSize = std::clamp(ImGui::GetContentRegionAvail().x * 0.42f,
-                                       112.0f, 160.0f);
+    const float thumbSize =
+        std::clamp(ImGui::GetContentRegionAvail().x * 0.42f, 112.0f, 160.0f);
     if (thumbnail != 0) {
         ImGui::Image(static_cast<ImTextureID>(thumbnail),
                      ImVec2(thumbSize, thumbSize));
         ImGui::SetItemTooltip("Live isolated preview. One-shot effects replay "
                               "automatically while this tab is visible.");
     }
-    ImGui::TextUnformatted(d.name.c_str());
+    ImGui::TextUnformatted(eng::assets::friendlyAssetLabel(d.name).c_str());
+    ImGui::TextDisabled("%s", d.name.c_str());
     ImGui::SameLine();
-    ImGui::TextDisabled("%s | %s | %zu emitter(s)",
-                        d.renderMode == eng::ParticleRenderMode::Voxel
-                            ? "voxel"
-                            : "sprite",
-                        d.loop ? "loop" : "burst", d.emitters.size());
+    ImGui::TextDisabled(
+        "%s | %s | %zu emitter(s)",
+        d.renderMode == eng::ParticleRenderMode::Voxel ? "voxel" : "sprite",
+        d.loop ? "loop" : "burst", d.emitters.size());
     ImGui::SetNextItemWidth(std::min(180.0f, ImGui::GetContentRegionAvail().x));
     ImGui::SliderFloat("Preview size", &mParticlePreviewScale, 0.05f, 8.0f,
                        "%.2fx");
     // Spawning at camera focus rather than world origin makes selection work
     // like the material swatch: the result is immediately in the view being
     // worked in, and selection restarts one clean preview instead of piling up.
-    if (ImGui::Button("Restart"))
+    if (ImGui::Button("Preview at Focus"))
         preview();
     ImGui::SameLine();
     ImGui::BeginDisabled(mParticlePreviews.empty());
-    if (ImGui::Button("Stop"))
+    if (ImGui::Button("Clear Preview"))
         clearPreviews();
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Use brush")) {
+    if (ImGui::Button("Use as Brush")) {
         setMode(false);
         mState.brush.kind = Brush::Kind::Particles;
         mState.brush.effect = d.name;
@@ -5348,25 +5583,25 @@ void EditorApp::drawParticlePanel()
         ImGui::SetTooltip("Places a ParticleEmitter entity; the viewport brush "
                           "shows the real live effect before the click");
 
-    if (ImGui::Button("Save TOML")) {
+    if (ImGui::Button("Save Effects")) {
         if (mParticles.save(mParticles.path())) {
             mParticlesDirty = false;
             mStatus = "saved " + mParticles.path();
-        } else {
+        }
+        else {
             mStatus = "could not write " + mParticles.path();
         }
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("focus %.1f, %.1f, %.1f",
-                        double(mState.camera.target().x),
-                        double(mState.camera.target().y),
-                        double(mState.camera.target().z));
+    ImGui::TextDisabled(
+        "focus %.1f, %.1f, %.1f", double(mState.camera.target().x),
+        double(mState.camera.target().y), double(mState.camera.target().z));
 
     ImGui::SeparatorText("appearance");
 
     // --- presentation ------------------------------------------------------
-    const char* textureLabel = d.texture.empty() ? "(material only)"
-                                                  : d.texture.c_str();
+    const char* textureLabel =
+        d.texture.empty() ? "(material only)" : d.texture.c_str();
     if (ImGui::BeginCombo("Texture", textureLabel)) {
         if (ImGui::Selectable("(material only)", d.texture.empty())) {
             d.texture.clear();
@@ -5381,9 +5616,8 @@ void EditorApp::drawParticlePanel()
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s | %d frame(s) at %.1f fps | %s",
-                                  texture.file.empty()
-                                      ? texture.stem.c_str()
-                                      : texture.file.c_str(),
+                                  texture.file.empty() ? texture.stem.c_str()
+                                                       : texture.file.c_str(),
                                   texture.flipbook.frameCount(),
                                   double(texture.flipbook.fps),
                                   texture.nearest ? "nearest" : "linear");
@@ -5401,7 +5635,8 @@ void EditorApp::drawParticlePanel()
         }
     }
     dirty |= ImGui::DragFloat("Width (m)", &d.baseWidth, 0.005f, 0.001f, 4.0f);
-    dirty |= ImGui::DragFloat("Height (m)", &d.baseHeight, 0.005f, 0.001f, 4.0f);
+    dirty |=
+        ImGui::DragFloat("Height (m)", &d.baseHeight, 0.005f, 0.001f, 4.0f);
     dirty |= ImGui::DragInt("quota", &d.quota, 1.0f, 1, 4096);
 
     int mode = int(d.renderMode);
@@ -5419,8 +5654,8 @@ void EditorApp::drawParticlePanel()
 
     ImGui::SeparatorText("motion");
     // --- motion ------------------------------------------------------------
-    dirty |= ImGui::DragFloat3("Acceleration (m/s^2)", &d.acceleration.x,
-                               0.05f);
+    dirty |=
+        ImGui::DragFloat3("Acceleration (m/s^2)", &d.acceleration.x, 0.05f);
     dirty |= ImGui::DragFloat("drag", &d.drag, 0.01f, 0.0f, 20.0f);
     dirty |= ImGui::Checkbox("loop", &d.loop);
     if (!d.loop)
@@ -5469,17 +5704,16 @@ void EditorApp::drawParticlePanel()
                                            0.001f, 32.0f);
             dirty |= ImGui::DragFloat3("position", &em.position.x, 0.02f);
             dirty |= ImGui::DragFloat3("direction", &em.direction.x, 0.02f);
-            dirty |=
-                ImGui::SliderFloat("Angle (deg)", &em.angleDegrees, 0.0f,
-                                   180.0f);
+            dirty |= ImGui::SliderFloat("Angle (deg)", &em.angleDegrees, 0.0f,
+                                        180.0f);
             if (d.loop)
                 dirty |= ImGui::DragFloat("Rate (/s)", &em.emissionRate, 1.0f,
-                                           0.0f, 4096.0f);
+                                          0.0f, 4096.0f);
             dirty |= ImGui::DragFloatRange2("TTL (s)", &em.ttlMin, &em.ttlMax,
-                                             0.01f, 0.001f, 60.0f);
+                                            0.01f, 0.001f, 60.0f);
             dirty |=
                 ImGui::DragFloatRange2("Velocity (m/s)", &em.velocityMin,
-                                        &em.velocityMax, 0.02f, 0.0f, 200.0f);
+                                       &em.velocityMax, 0.02f, 0.0f, 200.0f);
             dirty |= ImGui::ColorEdit4("start colour", &em.startColour.x);
             ImGui::PopID();
         }
@@ -5531,10 +5765,8 @@ void EditorApp::drawParticlePanel()
     // instances survive the edit and simply pick up the new description.
     if (dirty) {
         mParticlesDirty = true;
-        mParticles.reregister(renderer, size_t(mParticleSelected));
+        mParticles.reregister(renderer, selectedIndex);
     }
-
-    ImGui::End();
 }
 
 // Sets a per-entity material override on everything selected. The kit piece's
@@ -5610,7 +5842,8 @@ void EditorApp::drawOpenScenePopup()
         ImVec2(std::min(560.0f, std::max(280.0f, work.x - 32.0f)),
                std::min(420.0f, std::max(240.0f, work.y - 64.0f))),
         ImGuiCond_Appearing);
-    if (!ImGui::BeginPopupModal(kTitle, nullptr, ImGuiWindowFlags_NoSavedSettings))
+    if (!ImGui::BeginPopupModal(kTitle, nullptr,
+                                ImGuiWindowFlags_NoSavedSettings))
         return;
 
     const std::string directory = mState.assetRoot + "/scenes";
@@ -5629,7 +5862,8 @@ void EditorApp::drawOpenScenePopup()
         filterScenes(mOpenSceneEntries, mOpenFilter);
     std::string activate;
 
-    if (ImGui::BeginChild("##scenes", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()))) {
+    if (ImGui::BeginChild("##scenes",
+                          ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()))) {
         if (!mRecent.paths().empty() && mOpenFilter[0] == '\0') {
             ImGui::SeparatorText("recent");
             for (const std::string& path : mRecent.paths()) {
@@ -5638,8 +5872,7 @@ void EditorApp::drawOpenScenePopup()
                 ImGui::PushID(path.c_str());
                 const bool current = path == mState.scenePath;
                 ImGui::BeginDisabled(current);
-                if (ImGui::Selectable(name.c_str(),
-                                      mOpenSceneSelection == path,
+                if (ImGui::Selectable(name.c_str(), mOpenSceneSelection == path,
                                       ImGuiSelectableFlags_AllowDoubleClick)) {
                     mOpenSceneSelection = path;
                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
@@ -5655,7 +5888,7 @@ void EditorApp::drawOpenScenePopup()
         if (entries.empty()) {
             ImGui::TextDisabled(
                 mOpenFilter[0] ? "nothing matches"
-                               : "no scenes here yet -- Scene > New, then Save "
+                               : "no scenes here yet -- File > New, then Save "
                                  "as...");
         }
         for (const SceneEntry& entry : entries) {
@@ -5700,15 +5933,22 @@ void EditorApp::drawOpenScenePopup()
     ImGui::EndPopup();
 }
 
-// Every binding, in one place, read from the same table the editor asks Input
-// for. A shortcut nobody can find is a shortcut nobody uses, and this editor
-// has thirty.
+// Persistent preferences only. Live viewport and playtest controls have one
+// home in Window and Play; duplicating them here produced two control surfaces
+// whose displayed state could drift within one frame.
 void EditorApp::drawSettings()
 {
     if (!mSettingsOpen)
         return;
-    ImGui::SetNextWindowSize(ImVec2(560.0f, 680.0f), ImGuiCond_Appearing);
-    if (!ImGui::Begin("Settings", &mSettingsOpen)) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
+                            ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(520.0f, 560.0f), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(360.0f, 320.0f),
+        ImVec2(std::max(viewport->WorkSize.x - 32.0f, 360.0f),
+               std::max(viewport->WorkSize.y - 32.0f, 320.0f)));
+    if (!ImGui::Begin("Settings", &mSettingsOpen, ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
         return;
     }
@@ -5721,12 +5961,12 @@ void EditorApp::drawSettings()
     ImGui::SeparatorText("Autosave");
     ImGui::TextWrapped(
         "A backup of the open scene, written beside it as "
-        "<name>.autosave.scn while there is unsaved work. Scene > Recover "
+        "<name>.autosave.scn while there is unsaved work. File > Recover "
         "autosave reads it back.");
     ImGui::Spacing();
 
-    changed |= ImGui::Checkbox("Back up automatically",
-                               &mSettings.autosaveEnabled);
+    changed |=
+        ImGui::Checkbox("Back up automatically", &mSettings.autosaveEnabled);
 
     ImGui::BeginDisabled(!mSettings.autosaveEnabled);
     // Minutes in the UI, seconds in the file: an author thinks "every two
@@ -5738,7 +5978,8 @@ void EditorApp::drawSettings()
         mSettings.autosaveSeconds = minutes * 60.0f;
         changed = true;
     }
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     ImGui::TextWrapped("F5 saves the scene itself before it cooks, so a "
                        "playtest needs no backup of its own.");
     ImGui::PopStyleColor();
@@ -5748,11 +5989,14 @@ void EditorApp::drawSettings()
     // What the setting is doing right now. A backup schedule you cannot see is
     // a backup schedule you have to take on faith.
     if (!mSettings.autosaveEnabled) {
-        ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.38f, 1.0f),
+        ImGui::TextColored(kUiWarning,
                            "off -- unsaved work is not being backed up");
-    } else if (!mState.dirty) {
-        ImGui::TextDisabled("nothing unsaved; the clock starts at the next edit");
-    } else {
+    }
+    else if (!mState.dirty) {
+        ImGui::TextDisabled(
+            "nothing unsaved; the clock starts at the next edit");
+    }
+    else {
         ImGui::Text("next backup in %d:%02d", int(mAutosaveIn) / 60,
                     int(mAutosaveIn) % 60);
     }
@@ -5760,7 +6004,8 @@ void EditorApp::drawSettings()
         autosavePath(mState.scenePath, mState.assetRoot + "/scenes");
     // Wrapped, not truncated: the point of showing the path is that somebody
     // can go and find the file.
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     ImGui::TextWrapped("%s", backup.empty() ? "(no path yet)" : backup.c_str());
     ImGui::PopStyleColor();
 
@@ -5769,7 +6014,8 @@ void EditorApp::drawSettings()
         if (writeAutosave()) {
             mAutosaveIn = mSettings.autosaveSeconds;
             mStatus = "wrote " + backup;
-        } else {
+        }
+        else {
             mStatus = "backup failed -- see the log for the filesystem error";
         }
     }
@@ -5781,15 +6027,9 @@ void EditorApp::drawSettings()
         recoverAutosave();
     ImGui::EndDisabled();
 
-    // --- the viewport ------------------------------------------------------
+    // --- interface ---------------------------------------------------------
     ImGui::Spacing();
-    ImGui::SeparatorText("Viewport");
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("The same toggles as the View menu. They are here "
-                       "because they are remembered: the profile you work "
-                       "under should still be set tomorrow morning.");
-    ImGui::PopStyleColor();
+    ImGui::SeparatorText("Interface");
 
     float uiScale = mSettings.uiScale;
     if (ImGui::SliderFloat("Interface scale", &uiScale,
@@ -5801,124 +6041,17 @@ void EditorApp::drawSettings()
         changed = true;
     }
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Scales tool text and controls together. Use a larger "
-                          "value for high-resolution displays or TV viewing.");
-
-    // The render profile, by name. The preview of a per-entity ShaderParams --
-    // a rim light, a tint -- is a function of this, which is why it is the
-    // first row rather than a submenu three clicks away.
-    const int currentPreset = mEngine ? mEngine->renderPreset() : 0;
-    const char* currentName = eng::renderPresetName(currentPreset);
-    if (ImGui::BeginCombo("look", currentName)) {
-        for (const eng::RenderPresetInfo& preset : eng::renderPresets()) {
-            if (ImGui::Selectable(preset.name, preset.id == currentPreset) &&
-                mEngine) {
-                mEngine->setRenderPreset(preset.id);
-                mSettings.viewportPreset = preset.name;
-                changed = true;
-            }
-        }
-        ImGui::EndCombo();
-    }
-    if (ImGui::Checkbox("Light the scene as the game will", &mGameLighting)) {
-        mSettings.gameLighting = mGameLighting;
-        if (mEngine)
-            applySceneEnvironment(mEngine->renderer());
-        changed = true;
-    }
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("the level's own palette instead of the editor's "
-                          "flat work light -- contrast is what tells you "
-                          "whether a room reads");
-    if (ImGui::Checkbox("Entity marks", &mShowEntityGizmos))
-        changed = true;
-    ImGui::SameLine();
-    if (ImGui::Checkbox("Volumes", &mShowGizmoVolumes))
-        changed = true;
-    ImGui::SameLine();
-    if (ImGui::Checkbox("Frame stats", &mShowFrameStats))
-        changed = true;
-    if (ImGui::Checkbox("Viewport grid", &mShowGrid))
-        changed = true;
-
-    // --- playtest ----------------------------------------------------------
-    ImGui::Spacing();
-    ImGui::SeparatorText("Playtest");
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextWrapped("F5 cooks the scene and launches the game as a separate "
-                       "process. These are the switches it starts with -- each "
-                       "one is an option the game already has.");
-    ImGui::PopStyleColor();
-
-    changed |= ImGui::Checkbox("Play under the viewport's look",
-                               &mSettings.playtestMatchesViewport);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("a rim light or a tint tuned in the editor reads "
-                          "completely differently under another profile; "
-                          "matching is what makes the tuning mean something");
-    ImGui::BeginDisabled(mSettings.playtestMatchesViewport);
-    {
-        const std::string& chosen = mSettings.playtestPreset;
-        // While it is linked, the greyed combo shows what it is linked *to*.
-        // Showing the parked choice instead reads as "this is what will run",
-        // which is exactly what it is not.
-        const std::string matched = playtestPresetName();
-        const std::string shown =
-            mSettings.playtestMatchesViewport ? matched : chosen;
-        const char* label = shown.empty() ? "(the game's default)" : shown.c_str();
-        if (ImGui::BeginCombo("plays under", label)) {
-            if (ImGui::Selectable("(the game's default)", chosen.empty())) {
-                mSettings.playtestPreset.clear();
-                changed = true;
-            }
-            for (const eng::RenderPresetInfo& preset : eng::renderPresets()) {
-                if (ImGui::Selectable(preset.name, chosen == preset.name)) {
-                    mSettings.playtestPreset = preset.name;
-                    changed = true;
-                }
-            }
-            ImGui::EndCombo();
-        }
-    }
-    ImGui::EndDisabled();
-
-    if (ImGui::Checkbox("Start where the camera is", &mPlayFromCamera)) {
-        mSettings.playFromCamera = mPlayFromCamera;
-        changed = true;
-    }
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("off starts at the player spawn, which is how the "
-                          "arrival itself gets checked");
-    changed |= ImGui::Checkbox("Open the debug console",
-                               &mSettings.playtestConsole);
-    ImGui::SameLine();
-    changed |= ImGui::Checkbox("Show colliders", &mSettings.playtestColliders);
-    ImGui::SameLine();
-    changed |= ImGui::Checkbox("Fullscreen", &mSettings.playtestFullscreen);
-
-    // Exactly what F5 will run. A launcher whose switches are invisible is a
-    // launcher you end up debugging by reading its source.
-    {
-        PlaytestEnvironment preview;
-        preview.renderPreset = playtestPresetName();
-        preview.console = mSettings.playtestConsole;
-        preview.colliders = mSettings.playtestColliders;
-        preview.fullscreen = mSettings.playtestFullscreen;
-        if (mPlayFromCamera)
-            preview.playFrom = "<camera>";
-        std::string line = "game <scene>.map";
-        for (const std::string& entry : playtestEnvironment(preview))
-            line += "  " + entry;
-        ImGui::PushStyleColor(ImGuiCol_Text,
-                              ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("%s", line.c_str());
-        ImGui::PopStyleColor();
-    }
+        ImGui::SetTooltip(
+            "Scales tool text and controls together. Use a larger "
+            "value for high-resolution displays or TV viewing.");
+    ImGui::TextDisabled(
+        "Viewport state lives in Window and Scene View. Launch state lives in "
+        "Play. Those controls are saved when changed.");
 
     ImGui::Spacing();
     ImGui::SeparatorText("Where these live");
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     ImGui::TextWrapped("%s", mSettingsFile.c_str());
     ImGui::PopStyleColor();
     ImGui::TextWrapped(
@@ -5940,8 +6073,16 @@ void EditorApp::drawHelp()
 {
     if (!mHelpOpen)
         return;
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
+                            ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(460.0f, 520.0f), ImGuiCond_Appearing);
-    if (!ImGui::Begin("Shortcuts", &mHelpOpen)) {
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(340.0f, 280.0f),
+        ImVec2(std::max(viewport->WorkSize.x - 32.0f, 340.0f),
+               std::max(viewport->WorkSize.y - 32.0f, 280.0f)));
+    if (!ImGui::Begin("Keyboard Shortcuts###Shortcuts", &mHelpOpen,
+                      ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
         return;
     }
@@ -6001,6 +6142,7 @@ void EditorApp::drawHelp()
     };
     static const Row kScene[] = {
         {"Ctrl+P", "command palette -- every verb, by name"},
+        {"Ctrl+1..6", "focus Scene, Assets, Hierarchy, Inspector, HUD, Problems"},
         {"Ctrl+O", "open a scene"},
         {"Ctrl+S", "save"},
         {"Ctrl+R", "reload from disk"},
@@ -6031,7 +6173,7 @@ void EditorApp::drawSaveAsPopup()
         ImGui::OpenPopup(kTitle);
     }
     if (!ImGui::BeginPopupModal(kTitle, nullptr,
-                                  ImGuiWindowFlags_AlwaysAutoResize))
+                                ImGuiWindowFlags_AlwaysAutoResize))
         return;
     if (!mSaveAsOpen) {
         ImGui::CloseCurrentPopup();
@@ -6046,33 +6188,31 @@ void EditorApp::drawSaveAsPopup()
         ImGui::SetKeyboardFocusHere();
     const bool entered =
         ImGui::InputText("##saveaspath", mSaveAsPath, sizeof(mSaveAsPath),
-                           ImGuiInputTextFlags_EnterReturnsTrue);
+                         ImGuiInputTextFlags_EnterReturnsTrue);
 
     std::filesystem::path candidate(mSaveAsPath);
     std::string validation;
     if (candidate.empty()) {
         validation = "Enter a scene name.";
-    } else {
+    }
+    else {
         if (!candidate.has_extension())
             candidate.replace_extension(".scn");
         if (candidate.extension() != ".scn")
             validation = "Scene files use the .scn extension.";
     }
     std::error_code existsError;
-    const bool exists = validation.empty() &&
-                        std::filesystem::exists(candidate, existsError);
+    const bool exists =
+        validation.empty() && std::filesystem::exists(candidate, existsError);
     const bool replacing = exists && candidate.string() != mState.scenePath;
     if (existsError)
         validation = "The destination could not be inspected.";
     if (!mSaveAsError.empty())
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s",
-                           mSaveAsError.c_str());
+        ImGui::TextColored(kUiDanger, "%s", mSaveAsError.c_str());
     else if (!validation.empty())
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s",
-                           validation.c_str());
+        ImGui::TextColored(kUiDanger, "%s", validation.c_str());
     else if (replacing)
-        ImGui::TextColored(ImVec4(0.95f, 0.82f, 0.38f, 1.0f),
-                           "A scene already exists at this path.");
+        ImGui::TextColored(kUiWarning, "A scene already exists at this path.");
 
     const auto saved = [this](const std::string& path) {
         if (!saveSceneTo(path)) {
@@ -6102,7 +6242,8 @@ void EditorApp::drawSaveAsPopup()
                         performDiscard();
                 },
                 "Replace");
-        } else if (saved(path)) {
+        }
+        else if (saved(path)) {
             const bool continueDiscard = mContinueDiscardAfterSave;
             mContinueDiscardAfterSave = false;
             mSaveAsOpen = false;
@@ -6192,8 +6333,8 @@ bool EditorApp::importModel(const std::string& source)
         commands.push_back(makeCreateEntity(std::move(entity)));
     }
 
-    runCommand(makeComposite("import " + path.stem().string(),
-                             std::move(commands)));
+    runCommand(
+        makeComposite("import " + path.stem().string(), std::move(commands)));
     mState.selection = created;
     mSelectionAnchor = created.back();
     mOutlinerReveal = created.back();
@@ -6206,8 +6347,8 @@ bool EditorApp::importModel(const std::string& source)
     mStatus = "imported " + path.filename().string() + " as " +
               std::to_string(imported.parts.size()) + " mesh part(s)";
     if (!imported.textures.empty())
-        mStatus += ", " + std::to_string(imported.textures.size()) +
-                   " texture(s)";
+        mStatus +=
+            ", " + std::to_string(imported.textures.size()) + " texture(s)";
     // Warnings are the difference between "it looks wrong" and "it looks wrong
     // BECAUSE the texture was not beside the model".
     mImportWarnings = imported.warnings;
@@ -6289,8 +6430,10 @@ void EditorApp::drawImportModelPopup()
         if (mImportBrowsing) {
             mImportEntries = listDirectory(mImportDir, kModelExtensions);
             mImportEntriesTruncated = false;
-        } else {
-            const ScanResult scan = findFiles(mImportScanRoot, kModelExtensions);
+        }
+        else {
+            const ScanResult scan =
+                findFiles(mImportScanRoot, kModelExtensions);
             mImportEntries = scan.files;
             mImportEntriesTruncated = scan.truncated;
         }
@@ -6337,14 +6480,15 @@ void EditorApp::drawImportModelPopup()
             ImGui::PopID();
         }
         if (mImportEntriesTruncated)
-            ImGui::TextDisabled("(list truncated -- filter, or browse folders)");
+            ImGui::TextDisabled(
+                "(list truncated -- filter, or browse folders)");
     }
     ImGui::EndChild();
 
-    ImGui::TextDisabled(
-        "%s", mImportModelPath.empty()
-                  ? "select a model, or double-click to import it"
-                  : mImportModelPath.c_str());
+    ImGui::TextDisabled("%s",
+                        mImportModelPath.empty()
+                            ? "select a model, or double-click to import it"
+                            : mImportModelPath.c_str());
 
     ImGui::BeginDisabled(mImportModelPath.empty());
     if (ImGui::Button("Import", ImVec2(120.0f, 0.0f))) {
@@ -6361,68 +6505,111 @@ void EditorApp::drawImportModelPopup()
 
 void EditorApp::drawStatusBar()
 {
-    if (ImGui::Begin("Status", nullptr, kPanelFlags)) {
-        ImGui::TextUnformatted(mStatus.c_str());
-        if (!mPreview->lastError().empty()) {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "preview: %s",
-                               mPreview->lastError().c_str());
-        }
-        // An import that half-worked says which half. Dismissable, because it
-        // is about one past action rather than the current state.
-        if (!mImportWarnings.empty()) {
-            for (const std::string& warning : mImportWarnings)
-                ImGui::TextColored(ImVec4(0.95f, 0.78f, 0.35f, 1.0f),
-                                   "import: %s", warning.c_str());
-            if (ImGui::SmallButton("dismiss import warnings"))
-                mImportWarnings.clear();
-        }
-        ImGui::Text(
-            "%s%s | cook: %s | undo: %s",
-            mState.scenePath.empty() ? "(no scene)"
-                                     : std::filesystem::path(mState.scenePath)
-                                           .filename()
-                                           .string()
-                                           .c_str(),
-            mState.dirty ? " *" : "", mCookStatus.c_str(),
-            mCommands.canUndo() ? mCommands.undoLabel().c_str() : "(empty)");
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(8.0f * mAppliedUiScale, 4.0f * mAppliedUiScale));
+    if (ImGui::BeginChild("##workspace_status", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_NoScrollbar |
+                              ImGuiWindowFlags_NoScrollWithMouse)) {
+        const float scale = mAppliedUiScale;
+        if (ImGui::BeginTable("##status_fields", 4,
+                              ImGuiTableFlags_SizingStretchProp |
+                                  ImGuiTableFlags_BordersInnerV |
+                                  ImGuiTableFlags_NoSavedSettings)) {
+            ImGui::TableSetupColumn("brand", ImGuiTableColumnFlags_WidthFixed,
+                                    142.0f * scale);
+            ImGui::TableSetupColumn("scene", ImGuiTableColumnFlags_WidthFixed,
+                                    250.0f * scale);
+            ImGui::TableSetupColumn("activity",
+                                    ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn(
+                "selection", ImGuiTableColumnFlags_WidthFixed, 260.0f * scale);
+            ImGui::TableNextRow();
 
-        // What is selected, by name. The batch and triangle counts moved to the
-        // viewport corner, where they are watched; this line is about the
-        // document, and "which of these forty pillars am I holding" was the
-        // question it could not answer.
-        const glm::vec3 eye = mState.camera.activeEye();
-        if (mState.selection.empty()) {
-            ImGui::Text("camera %.1f %.1f %.1f | nothing selected", double(eye.x),
-                        double(eye.y), double(eye.z));
-        } else {
-            const Entity* primary = mState.document.find(*mState.primary());
-            const std::string name =
-                primary ? (primary->name.empty() ? primary->id : primary->name)
-                        : std::string("(gone)");
-            const std::string extra =
-                mState.selection.size() > 1
-                    ? "  +" + std::to_string(mState.selection.size() - 1)
-                    : std::string();
-            // Inside a composed object, say which one. Otherwise "candle_0003"
-            // is the whole story the editor tells about a selection whose drag
-            // will move something bigger, and the only way to find out is to
-            // drag it.
-            std::string within;
-            if (primary && !primary->parent.empty()) {
-                const AuthorId root = rootOf(mState.document, primary->id);
-                const Entity* object = mState.document.find(root);
-                within = "   (in " +
-                         (object ? (object->name.empty() ? object->id
-                                                         : object->name)
-                                 : root) +
-                         ")";
+            ImGui::TableNextColumn();
+            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark),
+                               "RAVEN");
+            ImGui::SameLine(0.0f, 4.0f);
+            ImGui::TextDisabled("// EDIT");
+
+            ImGui::TableNextColumn();
+            const std::string scene =
+                mState.scenePath.empty()
+                    ? std::string("untitled")
+                    : std::filesystem::path(mState.scenePath)
+                          .filename()
+                          .string();
+            ImGui::Text("%s%s", scene.c_str(), mState.dirty ? "  *" : "");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "%s\ncook: %s\nundo: %s",
+                    mState.scenePath.empty() ? "not saved"
+                                             : mState.scenePath.c_str(),
+                    mCookStatus.c_str(),
+                    mCommands.canUndo() ? mCommands.undoLabel().c_str()
+                                        : "empty");
             }
-            ImGui::Text("camera %.1f %.1f %.1f | %s%s%s", double(eye.x),
-                        double(eye.y), double(eye.z), name.c_str(),
-                        extra.c_str(), within.c_str());
+
+            ImGui::TableNextColumn();
+            if (!mPreview->lastError().empty()) {
+                ImGui::TextColored(kUiDanger, "preview: %s",
+                                   mPreview->lastError().c_str());
+            }
+            else if (!mImportWarnings.empty()) {
+                ImGui::TextColored(kUiWarning, "%zu import warning%s",
+                                   mImportWarnings.size(),
+                                   mImportWarnings.size() == 1 ? "" : "s");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    for (const std::string& warning : mImportWarnings)
+                        ImGui::TextWrapped("%s", warning.c_str());
+                    ImGui::EndTooltip();
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("dismiss"))
+                    mImportWarnings.clear();
+            }
+            else {
+                ImGui::TextUnformatted(mStatus.empty() ? "ready"
+                                                       : mStatus.c_str());
+                if (!mStatus.empty() && ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", mStatus.c_str());
+            }
+
+            ImGui::TableNextColumn();
+            const glm::vec3 eye = mState.camera.activeEye();
+            if (mState.selection.empty()) {
+                ImGui::TextDisabled("camera %.1f  %.1f  %.1f", double(eye.x),
+                                    double(eye.y), double(eye.z));
+            }
+            else {
+                const Entity* primary = mState.document.find(*mState.primary());
+                const std::string name =
+                    primary
+                        ? (primary->name.empty() ? primary->id : primary->name)
+                        : std::string("(gone)");
+                ImGui::Text(
+                    "%s%s", name.c_str(),
+                    mState.selection.size() > 1
+                        ? ("  +" + std::to_string(mState.selection.size() - 1))
+                              .c_str()
+                        : "");
+                if (ImGui::IsItemHovered() && primary &&
+                    !primary->parent.empty()) {
+                    const AuthorId root = rootOf(mState.document, primary->id);
+                    const Entity* object = mState.document.find(root);
+                    ImGui::SetTooltip("inside %s",
+                                      object ? (object->name.empty()
+                                                    ? object->id.c_str()
+                                                    : object->name.c_str())
+                                             : root.c_str());
+                }
+            }
+            ImGui::EndTable();
         }
     }
-    ImGui::End();
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
 }
 
 void EditorApp::onShutdown(eng::Engine& engine)

@@ -67,10 +67,10 @@ struct EditorSettings {
     // another is tuning blind. Unticking it is for the deliberate comparison.
     bool playtestMatchesViewport = true;
     std::string playtestPreset; // used when it does not; empty = engine default
-    bool playFromCamera = true; // PSX_PLAY_FROM, from the viewport camera
-    bool playtestConsole = false;   // PSX_DEBUG_UI: open the debug console
-    bool playtestColliders = false; // PSX_SHOW_COLLIDERS: physics shapes on
-    bool playtestFullscreen = false; // PSX_FULLSCREEN
+    bool playFromCamera = true; // RAVEN_PLAY_FROM, from the viewport camera
+    bool playtestConsole = false;   // RAVEN_DEBUG_UI: open the debug console
+    bool playtestColliders = false; // RAVEN_SHOW_COLLIDERS: physics shapes on
+    bool playtestFullscreen = false; // RAVEN_FULLSCREEN
 
     static constexpr float kMinSeconds = 15.0f;
     static constexpr float kMaxSeconds = 900.0f;

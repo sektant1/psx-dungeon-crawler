@@ -74,8 +74,8 @@ FrameCapture::FrameCapture(int frame, std::string pathTemplate, Api api)
 
 FrameCapture FrameCapture::fromEnvironment()
 {
-    const int frame = positiveFrame(std::getenv("PSX_RENDERDOC_FRAME"));
-    const char* path = std::getenv("PSX_RENDERDOC_CAPTURE");
+    const int frame = positiveFrame(std::getenv("RAVEN_RENDERDOC_FRAME"));
+    const char* path = std::getenv("RAVEN_RENDERDOC_CAPTURE");
     return FrameCapture(frame, path ? path : "", discoverApi());
 }
 

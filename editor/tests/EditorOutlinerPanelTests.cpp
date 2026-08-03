@@ -77,11 +77,30 @@ struct Harness {
                     return true;
             return false;
         };
-        a.selectGroup = [this](const OutlinerGroup& group, bool add) {
-            if (!add)
+        a.selectGroup = [this](const OutlinerGroup& group, SelectMode mode) {
+            const std::vector<AuthorId> ids = groupIds(group);
+            const bool allSelected =
+                std::all_of(ids.begin(), ids.end(), [this](const AuthorId& id) {
+                    return std::find(selection.begin(), selection.end(), id) !=
+                           selection.end();
+                });
+            if (mode == SelectMode::Replace)
                 selection.clear();
-            for (const AuthorId& id : groupIds(group))
-                selection.push_back(id);
+            if (mode == SelectMode::Toggle && allSelected) {
+                selection.erase(
+                    std::remove_if(selection.begin(), selection.end(),
+                                   [&ids](const AuthorId& id) {
+                                       return std::find(ids.begin(), ids.end(),
+                                                        id) != ids.end();
+                                   }),
+                    selection.end());
+            }
+            else {
+                for (const AuthorId& id : ids)
+                    if (std::find(selection.begin(), selection.end(), id) ==
+                        selection.end())
+                        selection.push_back(id);
+            }
         };
         a.selectNode = [this](const AuthorId& id, bool add) {
             if (!add)
@@ -160,9 +179,9 @@ void draw(Harness& harness)
     {
         const float size = ImGui::GetFontSize();
         const float gap = 6.0f;
-        harness.toggleLeft = ImGui::GetWindowPos().x +
-                             ImGui::GetWindowContentRegionMax().x -
-                             ImGui::GetStyle().ScrollbarSize - (size + gap) * 2.0f;
+        harness.toggleLeft =
+            ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x -
+            ImGui::GetStyle().ScrollbarSize - (size + gap) * 2.0f;
     }
     OutlinerActions actions = harness.actions();
     const auto note = [&harness](const std::string& key) {
@@ -334,6 +353,28 @@ int main()
                 "clicking a group row selects every entity in it");
     }
 
+    // --- aggregate modifiers keep file-manager semantics -------------------
+    {
+        Harness harness;
+        harness.tree.groups.push_back(makeGroup(
+            "kit.wall", "wall", {"wall_0001", "wall_0002", "wall_0003"}));
+        harness.tree.shown = 3;
+        clickRow(harness, "kit.wall");
+        gCtrl = true;
+        clickRow(harness, "kit.wall");
+        gCtrl = false;
+        require(
+            harness.selection.empty(),
+            "ctrl-clicking a selected aggregate toggles the whole group off");
+
+        harness.selection = {"wall_0001"};
+        gCtrl = true;
+        clickRow(harness, "kit.wall");
+        gCtrl = false;
+        require(harness.selection.size() == 3,
+                "ctrl-clicking a partially selected aggregate completes it");
+    }
+
     // --- a leaf below a group: the row under the cursor, not the first one --
     {
         Harness harness;
@@ -379,11 +420,12 @@ int main()
         harness.tree.shown = 3;
 
         clickRow(harness, "chandelier_0001");
-        require(harness.selection.size() == 1 &&
-                    harness.selection[0] == "chandelier_0001",
-                "clicking the root of a composed object selects the root -- not "
-                "the whole chain, which is what the group row of a *prefab* "
-                "group does");
+        require(
+            harness.selection.size() == 1 &&
+                harness.selection[0] == "chandelier_0001",
+            "clicking the root of a composed object selects the root -- not "
+            "the whole chain, which is what the group row of a *prefab* "
+            "group does");
 
         clickRow(harness, "candle_0002");
         require(harness.selection.size() == 1 &&
@@ -489,7 +531,8 @@ int main()
     // --- a caller without clickNode still selects the old way ---------------
     {
         Harness harness; // modifierAware stays false
-        harness.tree.groups.push_back(makeGroup("spawn", "spawn", {"spawn_0001"}));
+        harness.tree.groups.push_back(
+            makeGroup("spawn", "spawn", {"spawn_0001"}));
         harness.tree.shown = 1;
         clickRow(harness, "spawn");
         require(harness.selection.size() == 1,
@@ -534,21 +577,23 @@ int main()
     // nothing at all.
     {
         Harness harness;
-        harness.tree.groups.push_back(makeGroup("spawn", "spawn", {"spawn_0001"}));
+        harness.tree.groups.push_back(
+            makeGroup("spawn", "spawn", {"spawn_0001"}));
 
         clickSwitch(harness, "spawn", RowSwitch::Eye);
-        require(harness.hidden.size() == 1 && harness.hidden.front() == "spawn_0001",
+        require(harness.hidden.size() == 1 &&
+                    harness.hidden.front() == "spawn_0001",
                 "clicking the eye hides the row's entity");
         // The click belongs to the switch, not to the row underneath it.
-        require(harness.selection.empty(),
-                "and does not also select the row");
+        require(harness.selection.empty(), "and does not also select the row");
         require(harness.focusCalls == 0, "nor focus the camera on it");
 
         clickSwitch(harness, "spawn", RowSwitch::Eye);
         require(harness.hidden.empty(), "clicking it again shows the entity");
 
         clickSwitch(harness, "spawn", RowSwitch::Lock);
-        require(harness.locked.size() == 1 && harness.locked.front() == "spawn_0001",
+        require(harness.locked.size() == 1 &&
+                    harness.locked.front() == "spawn_0001",
                 "the padlock locks the row's entity");
         require(harness.selection.empty(), "without selecting it");
 
@@ -566,8 +611,8 @@ int main()
     // --- a group's switches act on every entity under it --------------------
     {
         Harness harness;
-        harness.tree.groups.push_back(
-            makeGroup("kit.wall", "kit", {"wall_0001", "wall_0002", "wall_0003"}));
+        harness.tree.groups.push_back(makeGroup(
+            "kit.wall", "kit", {"wall_0001", "wall_0002", "wall_0003"}));
 
         clickSwitch(harness, "kit.wall", RowSwitch::Eye);
         require(harness.hidden.size() == 3,

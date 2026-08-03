@@ -2,6 +2,8 @@
 
 #include <editor/scene/EntityComponents.h>
 
+#include <eng/assets/AssetName.h>
+
 #include <algorithm>
 #include <cctype>
 #include <unordered_map>
@@ -28,6 +30,13 @@ bool contains(const std::string& haystackLower, const std::string& needleLower)
     return haystackLower.find(needleLower) != std::string::npos;
 }
 
+std::string entityLabel(const Entity& entity)
+{
+    if (!entity.name.empty() && entity.name != entity.id)
+        return entity.name;
+    return eng::assets::friendlyAssetLabel(entity.id);
+}
+
 // One search term: free text, or one of the two prefixes.
 struct Term {
     enum class Kind { Text, HasComponent, IsKind } kind = Kind::Text;
@@ -49,10 +58,12 @@ std::vector<Term> parseFilter(const std::string& filterLower)
         if (word.rfind("has:", 0) == 0) {
             term.kind = Term::Kind::HasComponent;
             term.value = word.substr(4);
-        } else if (word.rfind("kind:", 0) == 0) {
+        }
+        else if (word.rfind("kind:", 0) == 0) {
             term.kind = Term::Kind::IsKind;
             term.value = word.substr(5);
-        } else {
+        }
+        else {
             term.value = std::move(word);
         }
         // A bare "has:" is somebody midway through typing, not a request to
@@ -125,8 +136,9 @@ std::size_t countNodes(const OutlinerNode& node)
 
 bool subtreeMatches(const OutlinerNode& node, const std::vector<Term>& terms)
 {
-    if (matchesTerms(terms, lower(node.label) + " " + lower(node.id) + " " +
-                                lower(node.kind),
+    if (matchesTerms(terms,
+                     lower(node.label) + " " + lower(node.id) + " " +
+                         lower(node.kind) + " " + lower(node.prefab),
                      node.kind, node.components))
         return true;
     for (const OutlinerNode& child : node.children)
@@ -149,9 +161,10 @@ OutlinerNode buildNode(const SceneDocument& document, const KitCatalog& catalog,
 {
     OutlinerNode node;
     node.id = entity.id;
-    node.label = entity.name.empty() ? entity.id : entity.name;
+    node.label = entityLabel(entity);
     node.kind = entityKind(entity, catalog);
     node.components = componentIds(entity);
+    node.prefab = entity.prefab;
     visited.insert(entity.id);
 
     std::vector<const Entity*> children = document.childrenOf(entity.id);
@@ -250,7 +263,7 @@ OutlinerTree buildOutliner(const SceneDocument& document,
             ++tree.hidden;
             continue;
         }
-        const std::string label = entity.name.empty() ? entity.id : entity.name;
+        const std::string label = entityLabel(entity);
         // Group by prefab where there is one -- that is the "same node,
         // different id" the panel exists to collapse -- and by kind otherwise,
         // which puts the loose lights and markers together.
@@ -282,8 +295,8 @@ OutlinerTree buildOutliner(const SceneDocument& document,
             tree.groups.push_back(std::move(group));
         }
         OutlinerGroup& group = tree.groups[found->second];
-        group.nodes.push_back(
-            OutlinerNode{entity.id, label, kind, components, {}});
+        group.nodes.push_back(OutlinerNode{
+            entity.id, label, kind, components, {}, entity.prefab});
         ++tree.shown;
     }
 
@@ -329,9 +342,9 @@ OutlinerTree buildOutliner(const SceneDocument& document,
                   // Kit groups after the loose gameplay ones, whatever a
                   // member happens to carry: the panel's order is a property of
                   // the level's structure, not of the last edit.
-                   if (a.invalid != b.invalid)
-                       return a.invalid;
-                   if (a.geometry != b.geometry)
+                  if (a.invalid != b.invalid)
+                      return a.invalid;
+                  if (a.geometry != b.geometry)
                       return !a.geometry;
                   return a.label < b.label;
               });

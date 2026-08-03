@@ -110,8 +110,8 @@ rather than discovering:
 Findings from the code, to be confirmed against how it feels in play:
 
 1. **Non-deterministic by default.** `Physics::init` uses
-   `hardware_concurrency() - 1` worker threads unless `PSX_SCREENSHOT` or
-   `PSX_FIXED_DT` is set, so contact resolution order varies run to run. For a
+   `hardware_concurrency() - 1` worker threads unless `RAVEN_SCREENSHOT` or
+   `RAVEN_FIXED_DT` is set, so contact resolution order varies run to run. For a
    game with replays, boss-fight retries or any future netcode, the simulation
    should be deterministic in normal play, not only under capture.
 2. **Character sweeps cannot be filtered.** `characterUpdate` passes empty

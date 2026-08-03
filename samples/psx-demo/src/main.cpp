@@ -116,7 +116,7 @@ public:
         // frame. Without this the runner never opens one and every debug
         // surface the demo registers is dead code.
         cfg.imgui = true;
-        cfg.loadingTitle = "PSX SHOWCASE";
+        cfg.loadingTitle = "RAVEN ENGINE SHOWCASE";
         return cfg;
     }
 
@@ -150,13 +150,13 @@ public:
             return false;
 
         // ------------------------------------------------------------ presets
-        // --- Seed from PSX_RENDER_PRESET (already applied once by
+        // --- Seed from RAVEN_RENDER_PRESET (already applied once by
         // Engine::init) so the label matches reality, then let Tab/Backspace
         // cycle it live. With no override the engine is on its default profile,
         // so start the cursor there rather than on whatever happens to be first
         // in the table.
         {
-            const char* presetName = std::getenv("PSX_RENDER_PRESET");
+            const char* presetName = std::getenv("RAVEN_RENDER_PRESET");
             const int id = presetName ? eng::renderPresetFromName(presetName)
                                       : eng::kDefaultRenderPreset;
             const auto& presets = eng::renderPresets();

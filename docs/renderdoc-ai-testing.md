@@ -48,7 +48,7 @@ python tools/visual_test.py validate /absolute/path/frame.rdc --kind capture
 ```
 
 Global options such as `--build-dir` and `--artifact-dir` precede the
-subcommand. Every invocation prints exactly one `psx-visual-test/v1` JSON
+subcommand. Every invocation prints exactly one `raven-visual-test/v1` JSON
 object to stdout. Child logs are captured into the run directory. The result
 contains status, operation, command, effective capture environment, artifacts,
 metrics, capabilities, and structured errors. A failed operation exits nonzero.
@@ -73,8 +73,8 @@ silently replaced with a screenshot. Inspect the accompanying `process.log`.
 `renderdoccmd capture` performs process injection. The runner also sets:
 
 ```text
-PSX_RENDERDOC_FRAME=<positive frame number>
-PSX_RENDERDOC_CAPTURE=<absolute capture template>
+RAVEN_RENDERDOC_FRAME=<positive frame number>
+RAVEN_RENDERDOC_CAPTURE=<absolute capture template>
 ```
 
 The engine dynamically obtains RenderDoc's 1.6 application API and brackets
@@ -122,7 +122,7 @@ be opened and queried.
 - `missing_metrics`: the game exited before its warm-up plus requested
   benchmark frames completed.
 - `missing_artifact`: RenderDoc injected but did not complete the requested
-  frame. Confirm `PSX_RENDERDOC_FRAME` is reached and capture is not blocked by
+  frame. Confirm `RAVEN_RENDERDOC_FRAME` is reached and capture is not blocked by
   another RenderDoc instance.
 - MCP startup/import errors: verify the configured interpreter, `PYTHONPATH`,
   and `RENDERDOC_MODULE_PATH` all exist and belong to compatible Python and

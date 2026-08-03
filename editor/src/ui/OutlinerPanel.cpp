@@ -15,16 +15,16 @@ namespace {
 ImVec4 kindColour(const std::string& kind)
 {
     if (kind == "MISSING")
-        return ImVec4(1.00f, 0.42f, 0.36f, 1.0f);
+        return ImVec4(0.89f, 0.42f, 0.33f, 1.0f);
     if (kind == "spawn" || kind == "exit")
-        return ImVec4(0.55f, 0.92f, 0.62f, 1.0f);
+        return ImVec4(0.52f, 0.68f, 0.58f, 1.0f);
     if (kind == "enemy" || kind == "trigger")
-        return ImVec4(1.00f, 0.68f, 0.45f, 1.0f);
+        return ImVec4(0.76f, 0.45f, 0.40f, 1.0f);
     if (kind == "light" || kind == "sun")
-        return ImVec4(0.98f, 0.88f, 0.45f, 1.0f);
+        return ImVec4(0.72f, 0.63f, 0.42f, 1.0f);
     if (kind == "marker" || kind == "pickup")
-        return ImVec4(0.68f, 0.78f, 1.00f, 1.0f);
-    return ImVec4(0.60f, 0.63f, 0.70f,
+        return ImVec4(0.45f, 0.59f, 0.70f, 1.0f);
+    return ImVec4(0.48f, 0.52f, 0.56f,
                   1.0f); // kit geometry: the quiet majority
 }
 
@@ -33,6 +33,7 @@ ImVec4 kindColour(const std::string& kind)
 // label -- becomes "the last item", and the IsItem* family would then answer
 // for that instead.
 struct RowInput {
+    bool hovered = false;
     bool clicked = false;
     bool doubleClicked = false;
     SelectMode mode = SelectMode::Replace;
@@ -42,7 +43,12 @@ RowInput sampleRow()
 {
     RowInput input;
     const bool hovered = ImGui::IsItemHovered();
-    input.clicked = ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen();
+    input.hovered = hovered;
+    const bool keyboardActivate =
+        ImGui::IsItemFocused() && (ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                                   ImGui::IsKeyPressed(ImGuiKey_Space));
+    input.clicked = (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) ||
+                    keyboardActivate;
     input.doubleClicked =
         hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
     // Shift beats Ctrl when both are down, which is what a file manager does:
@@ -53,6 +59,27 @@ RowInput sampleRow()
                  : io.KeyCtrl ? SelectMode::Toggle
                               : SelectMode::Replace;
     return input;
+}
+
+void drawNodeTooltip(const OutlinerNode& node, bool hovered)
+{
+    if (!hovered)
+        return;
+    ImGui::BeginTooltip();
+    ImGui::TextUnformatted(node.label.c_str());
+    ImGui::TextDisabled("id: %s", node.id.c_str());
+    if (!node.prefab.empty())
+        ImGui::TextDisabled("prefab: %s", node.prefab.c_str());
+    if (!node.components.empty()) {
+        std::string list;
+        for (const std::string& component : node.components) {
+            if (!list.empty())
+                list += ", ";
+            list += component;
+        }
+        ImGui::TextDisabled("components: %s", list.c_str());
+    }
+    ImGui::EndTooltip();
 }
 
 // Routes a single-row click through the modifier-aware handler when the caller
@@ -70,7 +97,8 @@ void applyClick(const game::content::AuthorId& id, SelectMode mode,
 
 // Scrolls to the row just submitted, once, when it is the one the caller asked
 // to reveal. Called after the row's item so GetItemRect is this row's.
-void revealRow(const game::content::AuthorId& id, const OutlinerActions& actions)
+void revealRow(const game::content::AuthorId& id,
+               const OutlinerActions& actions)
 {
     if (actions.reveal.empty() || actions.reveal != id)
         return;
@@ -86,15 +114,15 @@ void revealRow(const game::content::AuthorId& id, const OutlinerActions& actions
 // left margins. The guide is what says which rows belong to which parent.
 void drawIndentGuide(float topY)
 {
-    const float x = ImGui::GetCursorScreenPos().x -
-                    ImGui::GetStyle().IndentSpacing * 0.5f;
-    const float bottomY = ImGui::GetCursorScreenPos().y -
-                          ImGui::GetStyle().ItemSpacing.y;
+    const float x =
+        ImGui::GetCursorScreenPos().x - ImGui::GetStyle().IndentSpacing * 0.5f;
+    const float bottomY =
+        ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y;
     if (bottomY <= topY)
         return;
-    ImGui::GetWindowDrawList()->AddLine(
-        ImVec2(x, topY), ImVec2(x, bottomY),
-        ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(x, topY), ImVec2(x, bottomY),
+                                        ImGui::GetColorU32(ImGuiCol_Separator),
+                                        1.0f);
 }
 
 // Where the eye and the padlock column starts, in screen x. Everything to the
@@ -128,7 +156,8 @@ void drawKindLabel(const std::string& kind, const std::string& label,
     if (dimmed)
         colour.w *= 0.45f;
     drawIcon(ImGui::GetWindowDrawList(), iconForKind(kind.c_str()),
-             ImVec2(origin.x, origin.y + 1.0f), size, ImGui::GetColorU32(colour));
+             ImVec2(origin.x, origin.y + 1.0f), size,
+             ImGui::GetColorU32(colour));
     if (ImGui::IsMouseHoveringRect(origin,
                                    ImVec2(origin.x + size, origin.y + size)))
         ImGui::SetTooltip("%s", kind.c_str());
@@ -187,16 +216,23 @@ void drawComponentBadge(const std::vector<std::string>& components)
 // backwards: the name is recognisable from its first eight characters and the
 // count is not recoverable from anything. Its own column also puts every count
 // on one vertical line, so the sizes of a level compare at a glance.
-void drawGroupCount(std::size_t count)
+void drawGroupCount(std::size_t count, std::size_t selected)
 {
     char text[24];
-    std::snprintf(text, sizeof(text), "%zu", count);
+    if (selected > 0 && selected < count)
+        std::snprintf(text, sizeof(text), "%zu/%zu", selected, count);
+    else
+        std::snprintf(text, sizeof(text), "%zu", count);
     const float width = ImGui::CalcTextSize(text).x;
     ImGui::SameLine();
     const ImVec2 here = ImGui::GetCursorScreenPos();
     ImGui::SetCursorScreenPos(
         ImVec2(std::max(here.x, toggleColumnLeft() - width - 8.0f), here.y));
-    ImGui::TextDisabled("%s", text);
+    if (selected > 0 && selected < count)
+        ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), "%s",
+                           text);
+    else
+        ImGui::TextDisabled("%s", text);
 }
 
 // The eye and the padlock, right-aligned on the row.
@@ -241,42 +277,69 @@ bool drawRowToggles(const std::vector<game::content::AuthorId>& ids,
     ImGui::SetCursorScreenPos(
         ImVec2(std::max(here.x, toggleColumnLeft()), here.y));
 
-    // A group counts as hidden only when all of it is. Mixed reads as shown,
-    // because the click that follows should hide the rest rather than reveal
-    // the few.
-    const auto all = [&ids](const auto& query) {
+    const auto count = [&ids](const auto& query) {
+        std::size_t found = 0;
         for (const game::content::AuthorId& id : ids)
-            if (!query(id))
-                return false;
-        return true;
+            found += query(id) ? 1u : 0u;
+        return found;
     };
     const bool many = ids.size() > 1;
 
     bool consumed = false;
     ImGui::PushID(scope);
     if (hasVisibility) {
-        const bool hidden = all(actions.isHidden);
+        const std::size_t hiddenCount = count(actions.isHidden);
+        const bool hidden = hiddenCount == ids.size();
+        const bool mixed = hiddenCount > 0 && !hidden;
+        const std::string hint =
+            many ? (mixed    ? std::to_string(hiddenCount) + " of " +
+                                   std::to_string(ids.size()) +
+                                   " hidden -- click to hide all"
+                    : hidden ? "all hidden -- click to show them"
+                             : "click to hide every entity in here")
+                 : (hidden ? "hidden -- click to show"
+                           : "visible -- click to hide");
         if (iconToggle(hidden ? Icon::EyeClosed : Icon::Eye, "##vis", !hidden,
-                       many ? (hidden ? "all hidden -- click to show them"
-                                      : "click to hide every entity in here")
-                            : (hidden ? "hidden -- click to show"
-                                      : "visible -- click to hide"))) {
+                       hint.c_str())) {
             for (const game::content::AuthorId& id : ids)
                 actions.setHidden(id, !hidden);
             consumed = true;
         }
+        if (mixed) {
+            const ImVec2 min = ImGui::GetItemRectMin();
+            const ImVec2 max = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddLine(
+                ImVec2(min.x + 2.0f, max.y - 1.0f),
+                ImVec2(max.x - 2.0f, max.y - 1.0f),
+                ImGui::GetColorU32(ImGuiCol_CheckMark), 2.0f);
+        }
         ImGui::SameLine(0.0f, gap);
     }
     if (hasLock) {
-        const bool locked = all(actions.isLocked);
+        const std::size_t lockedCount = count(actions.isLocked);
+        const bool locked = lockedCount == ids.size();
+        const bool mixed = lockedCount > 0 && !locked;
+        const std::string hint =
+            many ? (mixed    ? std::to_string(lockedCount) + " of " +
+                                   std::to_string(ids.size()) +
+                                   " locked -- click to lock all"
+                    : locked ? "all locked -- click to unlock them"
+                             : "click to lock every entity in here")
+                 : (locked ? "locked -- cannot be picked in the viewport"
+                           : "unlocked -- click to stop picking it");
         if (iconToggle(locked ? Icon::Lock : Icon::Unlock, "##lock", locked,
-                       many ? (locked ? "all locked -- click to unlock them"
-                                      : "click to lock every entity in here")
-                            : (locked ? "locked -- cannot be picked in the viewport"
-                                      : "unlocked -- click to stop picking it"))) {
+                       hint.c_str())) {
             for (const game::content::AuthorId& id : ids)
                 actions.setLocked(id, !locked);
             consumed = true;
+        }
+        if (mixed) {
+            const ImVec2 min = ImGui::GetItemRectMin();
+            const ImVec2 max = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddLine(
+                ImVec2(min.x + 2.0f, max.y - 1.0f),
+                ImVec2(max.x - 2.0f, max.y - 1.0f),
+                ImGui::GetColorU32(ImGuiCol_CheckMark), 2.0f);
         }
     }
     ImGui::PopID();
@@ -309,7 +372,8 @@ void acceptDrop(const game::content::AuthorId& parent,
         return;
     if (!ImGui::BeginDragDropTarget())
         return;
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kDragPayload)) {
+    if (const ImGuiPayload* payload =
+            ImGui::AcceptDragDropPayload(kDragPayload)) {
         // The payload is the id plus its terminator; trusting Data as a string
         // is safe because this is the only thing that ever sets it.
         actions.reparent(std::string(static_cast<const char*>(payload->Data)),
@@ -351,19 +415,21 @@ void drawComposedNode(const OutlinerNode& node, const OutlinerActions& actions,
     // and padlock are drawn *after* it at the right-hand end. Without this the
     // row wins the hit test for the whole span, the toggles' InvisibleButtons
     // never see a click, and both switches are simply dead.
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth |
-                               ImGuiTreeNodeFlags_OpenOnArrow |
-                               ImGuiTreeNodeFlags_OpenOnDoubleClick |
-                               ImGuiTreeNodeFlags_AllowOverlap |
-                               ImGuiTreeNodeFlags_DefaultOpen;
+    ImGuiTreeNodeFlags flags =
+        ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow |
+        ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_AllowOverlap |
+        ImGuiTreeNodeFlags_DefaultOpen;
     if (selected)
         flags |= ImGuiTreeNodeFlags_Selected;
     if (node.children.empty())
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-    // The row to reveal may be several levels down a chain the author collapsed.
+    // The row to reveal may be several levels down a chain the author
+    // collapsed.
     if (!actions.reveal.empty() && !node.children.empty() &&
         subtreeHas(node, actions.reveal))
         ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    else if (!node.children.empty() && actions.forceOpen >= 0)
+        ImGui::SetNextItemOpen(actions.forceOpen != 0, ImGuiCond_Always);
 
     const bool open = ImGui::TreeNodeEx("##node", flags, " ");
     // Sampled before the tag and the label -- see RowInput.
@@ -379,6 +445,8 @@ void drawComposedNode(const OutlinerNode& node, const OutlinerActions& actions,
     // must not also select, and must not focus the camera on a double press.
     const bool toggled = drawRowToggles({node.id}, node.id.c_str(), actions) ||
                          pointerInToggleColumn(actions);
+    if (!toggled)
+        drawNodeTooltip(node, input.hovered);
 
     if (input.clicked && !toggled)
         applyClick(node.id, input.mode, actions, orders.previous);
@@ -418,8 +486,9 @@ OutlinerRowOrder::between(const game::content::AuthorId& a,
         return {};
     if (from > to)
         std::swap(from, to);
-    return std::vector<game::content::AuthorId>(ids.begin() + std::ptrdiff_t(from),
-                                                ids.begin() + std::ptrdiff_t(to) + 1);
+    return std::vector<game::content::AuthorId>(
+        ids.begin() + std::ptrdiff_t(from),
+        ids.begin() + std::ptrdiff_t(to) + 1);
 }
 
 void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
@@ -452,9 +521,10 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
         const bool single = group.nodes.size() == 1;
         if (single)
             orders.out.ids.push_back(group.nodes.front().id);
-        bool allSelected = true;
+        std::size_t selectedCount = 0;
         for (const OutlinerNode& node : group.nodes)
-            allSelected = allSelected && actions.isSelected(node.id);
+            selectedCount += actions.isSelected(node.id) ? 1u : 0u;
+        const bool allSelected = selectedCount == group.nodes.size();
 
         // AllowOverlap for the same reason as the node rows above: the group's
         // own eye and padlock sit inside this row's span.
@@ -462,7 +532,7 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                                    ImGuiTreeNodeFlags_OpenOnArrow |
                                    ImGuiTreeNodeFlags_OpenOnDoubleClick |
                                    ImGuiTreeNodeFlags_AllowOverlap;
-        if (allSelected)
+        if (selectedCount > 0)
             flags |= ImGuiTreeNodeFlags_Selected;
         // A single entity is a leaf: no arrow, and the row IS the entity.
         if (single)
@@ -478,6 +548,8 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                 revealInside = revealInside || node.id == actions.reveal;
         if (!single && (filterActive || revealInside))
             ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+        else if (!single && actions.forceOpen >= 0)
+            ImGui::SetNextItemOpen(actions.forceOpen != 0, ImGuiCond_Always);
 
         // The count is drawn in its own right-aligned column below, not glued
         // to the label, so the name is what the clip takes from.
@@ -508,17 +580,30 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                           actions.isHidden(group.nodes.front().id),
                       labelRight);
         if (!single)
-            drawGroupCount(group.nodes.size());
+            drawGroupCount(group.nodes.size(), selectedCount);
         bool toggled = false;
         if (single) {
             drawComponentBadge(group.nodes.front().components);
             toggled = drawRowToggles({group.nodes.front().id},
                                      group.nodes.front().id.c_str(), actions);
-        } else {
+        }
+        else {
             // The group's own switches, acting on every entity under it.
-            toggled = drawRowToggles(groupIds(group), group.key.c_str(), actions);
+            toggled =
+                drawRowToggles(groupIds(group), group.key.c_str(), actions);
         }
         toggled = toggled || pointerInToggleColumn(actions);
+        if (input.hovered && !toggled) {
+            if (single) {
+                drawNodeTooltip(group.nodes.front(), true);
+            } else {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(group.label.c_str());
+                ImGui::TextDisabled("%zu entities | %zu selected",
+                                    group.nodes.size(), selectedCount);
+                ImGui::EndTooltip();
+            }
+        }
 
         if (input.clicked && !toggled) {
             // Clicking a group selects everything in it, which is what makes
@@ -528,7 +613,7 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                 applyClick(group.nodes.front().id, input.mode, actions,
                            orders.previous);
             else
-                actions.selectGroup(group, input.mode != SelectMode::Replace);
+                actions.selectGroup(group, input.mode);
         }
         if (input.doubleClicked && !toggled)
             actions.focus();
@@ -536,7 +621,7 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
             // Right-click acts on the row under the cursor, selecting it first
             // so the menu can never act on something else.
             if (!allSelected)
-                actions.selectGroup(group, false);
+                actions.selectGroup(group, SelectMode::Replace);
             actions.contextMenu();
             ImGui::EndPopup();
         }
@@ -547,17 +632,18 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                 ImGui::PushID(node.id.c_str());
                 orders.out.ids.push_back(node.id);
                 const bool selected = actions.isSelected(node.id);
-                const bool pressed = ImGui::Selectable(
-                    "##row", selected,
-                    ImGuiSelectableFlags_AllowDoubleClick |
-                        ImGuiSelectableFlags_AllowOverlap);
-                const SelectMode mode = ImGui::GetIO().KeyShift ? SelectMode::Range
-                                        : ImGui::GetIO().KeyCtrl
-                                            ? SelectMode::Toggle
-                                            : SelectMode::Replace;
+                const bool pressed =
+                    ImGui::Selectable("##row", selected,
+                                      ImGuiSelectableFlags_AllowDoubleClick |
+                                          ImGuiSelectableFlags_AllowOverlap);
+                const SelectMode mode =
+                    ImGui::GetIO().KeyShift  ? SelectMode::Range
+                    : ImGui::GetIO().KeyCtrl ? SelectMode::Toggle
+                                             : SelectMode::Replace;
                 const bool doubleClicked =
                     pressed &&
                     ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+                const bool rowHovered = ImGui::IsItemHovered();
                 revealRow(node.id, actions);
                 beginDragSource(node, actions);
                 acceptDrop(node.id, actions);
@@ -570,6 +656,8 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                 const bool toggled =
                     drawRowToggles({node.id}, node.id.c_str(), actions) ||
                     pointerInToggleColumn(actions);
+                if (!toggled)
+                    drawNodeTooltip(node, rowHovered);
 
                 if (pressed && !toggled)
                     applyClick(node.id, mode, actions, orders.previous);
@@ -596,6 +684,18 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
             ImGui::TextDisabled("geometry is hidden");
         else
             ImGui::TextDisabled("scene contains no entities");
+    }
+
+    // Keep a named root target visible while dragging. Dense trees consume all
+    // empty panel space, which made detach-via-drop disappear exactly when the
+    // hierarchy needed it most.
+    if (actions.reparent) {
+        const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+        if (payload && payload->IsDataType(kDragPayload)) {
+            ImGui::Separator();
+            ImGui::Selectable("Scene root  [drop to detach]", false);
+            acceptDrop({}, actions);
+        }
     }
 
     // The rest of the panel detaches: dropping into empty space is how an

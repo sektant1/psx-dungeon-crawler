@@ -40,7 +40,7 @@ const char* kManifest = "assets.toml";
 
 // The directory holding the running executable. Everything but the dev
 // fallback is relative to it, which is what makes an installed build possible:
-// no absolute source path survives into the binary except PSX_ASSET_ROOT_DEV,
+// no absolute source path survives into the binary except RAVEN_ASSET_ROOT_DEV,
 // and that one is only consulted last.
 fs::path exeDir()
 {
@@ -72,13 +72,13 @@ bool discover(const std::string& rootOverride, fs::path& out, Origin& origin)
         return false;
     }
 
-    if (const char* env = std::getenv("PSX_ASSET_ROOT")) {
+    if (const char* env = std::getenv("RAVEN_ASSET_ROOT")) {
         if (*env) {
             out = env;
             origin = Origin::Env;
             if (hasManifest(out))
                 return true;
-            log::error("assets: PSX_ASSET_ROOT='%s' has no %s", env, kManifest);
+            log::error("assets: RAVEN_ASSET_ROOT='%s' has no %s", env, kManifest);
             return false;
         }
     }
@@ -86,7 +86,7 @@ bool discover(const std::string& rootOverride, fs::path& out, Origin& origin)
     const fs::path exe = exeDir();
     if (!exe.empty()) {
         const fs::path installed =
-            exe.parent_path() / "share" / "psx-dungeon" / "assets";
+            exe.parent_path() / "share" / "raven-engine" / "assets";
         if (hasManifest(installed)) {
             out = installed;
             origin = Origin::InstallShare;
@@ -100,8 +100,8 @@ bool discover(const std::string& rootOverride, fs::path& out, Origin& origin)
         }
     }
 
-#ifdef PSX_ASSET_ROOT_DEV
-    const fs::path dev = PSX_ASSET_ROOT_DEV;
+#ifdef RAVEN_ASSET_ROOT_DEV
+    const fs::path dev = RAVEN_ASSET_ROOT_DEV;
     if (hasManifest(dev)) {
         out = dev;
         origin = Origin::Dev;
@@ -109,8 +109,8 @@ bool discover(const std::string& rootOverride, fs::path& out, Origin& origin)
     }
 #endif
 
-    log::error("assets: no content root found (PSX_ASSET_ROOT, <exe>/../share/"
-               "psx-dungeon/assets, <exe>/assets, then the build default)");
+    log::error("assets: no content root found (RAVEN_ASSET_ROOT, <exe>/../share/"
+               "raven-engine/assets, <exe>/assets, then the build default)");
     return false;
 }
 
@@ -130,7 +130,7 @@ const char* originName(Origin origin)
     case Origin::Override:
         return "override";
     case Origin::Env:
-        return "PSX_ASSET_ROOT";
+        return "RAVEN_ASSET_ROOT";
     case Origin::InstallShare:
         return "install";
     case Origin::ExeLocal:

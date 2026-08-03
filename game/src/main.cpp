@@ -1,4 +1,4 @@
-// dungeon-crawler: FPS walk through a procedurally generated PSX dungeon
+// Raven Engine game sample: FPS traversal through a generated PSX-style dungeon.
 // (DungeonGen -> DungeonMap), with the shared demo scene (crystals, chest,
 // sparkles, light shaft) sitting in the generated level's anchor room.
 // A whole level is built by buildLevel() into a Level bundle; level
@@ -74,7 +74,7 @@ public:
     {
         // `--scene <name>` picks the framing a clip is shot from, so a recording
         // is reproducible from the command line alone. "portal" is the
-        // down-portal showcase the PSX_SHOWCASE_PORTAL env var also selects.
+        // down-portal showcase the RAVEN_SHOWCASE_PORTAL env var also selects.
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i] ? argv[i] : "";
             if (arg == "--scene" && i + 1 < argc)
@@ -282,7 +282,7 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mEngine = &engine;
     eng::Renderer& r = engine.renderer();
 
-    if (const char* s = std::getenv("PSX_GEN_SEED"))
+    if (const char* s = std::getenv("RAVEN_GEN_SEED"))
         mBaseSeed = uint32_t(std::strtoul(s, nullptr, 10));
     mSeeds.assign(1, mBaseSeed);
 
@@ -296,7 +296,7 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mSens = float(cfg.getNumber("player.mouse_sensitivity", 0.002));
     mPlayerBlood = cfg.getString("player.blood", "human");
 
-    colliderView().enabled = std::getenv("PSX_SHOW_COLLIDERS") != nullptr;
+    colliderView().enabled = std::getenv("RAVEN_SHOW_COLLIDERS") != nullptr;
 
     mCtx.emplace(r, physics(), engine.input(), mVocabulary);
 
@@ -306,13 +306,13 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
     mHud.initialise();
     mHud.configure(cfg);
-    mPortalPreviewMode = std::getenv("PSX_SHOWCASE_PORTAL") != nullptr ||
+    mPortalPreviewMode = std::getenv("RAVEN_SHOWCASE_PORTAL") != nullptr ||
                          mScene == "portal";
 
     // Authored showroom shell. Override it for layout iteration without
     // recompiling; all depth-zero exhibits are positioned relative to its C
     // anchor, which is world origin.
-    const char* showroomOverride = std::getenv("PSX_SHOWROOM_MAP");
+    const char* showroomOverride = std::getenv("RAVEN_SHOWROOM_MAP");
     mShowroomPath =
         showroomOverride ? showroomOverride
                          : game::assetPath("config/showroom.toml");
@@ -374,7 +374,7 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // The engine's console owns every engine-tuning tab; the game adds the two
     // that are its own policy.
     mPanels.install(console());
-    if (std::getenv("PSX_DEBUG_UI")) // start with the console open (testing)
+    if (std::getenv("RAVEN_DEBUG_UI")) // start with the console open (testing)
         console().setVisible(true);
     // Last, so the clip's first frame is a fully built level: recording pins the
     // frame delta, and any load hitch would otherwise be baked into the timing.
@@ -925,7 +925,7 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
             *mCtx, steps.delta(eng::StepChannel::Viewmodel));
     }
 
-    if (std::getenv("PSX_PROFILE"))
+    if (std::getenv("RAVEN_PROFILE"))
         stats().logSummaryEvery(120);
 }
 
@@ -1029,9 +1029,9 @@ void DungeonApp::onStopGame(eng::Engine&)
 
 int main(int argc, char** argv)
 {
-    // Dev self-test: PSX_GEN_DUMP=<seed> prints a generated grid and exits,
+    // Dev self-test: RAVEN_GEN_DUMP=<seed> prints a generated grid and exits,
     // no window/Ogre. Eyeball connectivity + room shapes across seeds.
-    if (const char* dump = std::getenv("PSX_GEN_DUMP")) {
+    if (const char* dump = std::getenv("RAVEN_GEN_DUMP")) {
         const auto grid = gen::generate(uint32_t(std::strtoul(dump, nullptr, 10)));
         for (const std::string& row : grid.rows())
             std::printf("%s\n", row.c_str());

@@ -103,7 +103,7 @@ Every one of these came from looking at the scene, not from theory.
 | Multi-part props were loose pairs | parented: barrel + hoops, table + boards, vase + lid are one row and one drag |
 
 The last two were found by capturing the level **from the player's eye**
-(`PSX_EDITOR_WALK=1`), which is the only view that answers a level-design
+(`RAVEN_EDITOR_WALK=1`), which is the only view that answers a level-design
 question. The top-down capture had looked fine.
 
 ## Readability review
@@ -130,7 +130,7 @@ Not verified — no playtest was run, and this cannot be claimed from screenshot
 ```sh
 python3 tools/author_start_hall.py assets/scenes/start_hall.scn
 ./build/scene_cook assets/scenes/start_hall.scn --kit assets/config/kit.toml --validate-only
-PSX_EDITOR_WALK=1 PSX_SCREENSHOT=/tmp/eye.png PSX_SCREENSHOT_FRAME=260 \
+RAVEN_EDITOR_WALK=1 RAVEN_SCREENSHOT=/tmp/eye.png RAVEN_SCREENSHOT_FRAME=260 \
   xvfb-run -a ./build/scene_editor          # the player's view, headless
 ```
 
