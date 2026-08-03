@@ -1,14 +1,20 @@
 <div align="center">
 
-<p align="center"><img src="docs/media/branding/avatar.png" alt="Raven Engine" width="400"></p>
-<p align="center"><img src="docs/media/branding/logo.jpg" alt="Raven Engine" width="900"></p>
 
+<p align="center"><img src="docs/media/branding/avatar.png" alt="Raven Engine" width="200"></p>
+<p align="center"><img src="docs/media/branding/logo.jpg" alt="Raven Engine" width="900"></p>
 
 # Raven Engine
 
 **A Simple Vulkan Engine with PSX/Retro Aesthetics**
 
 “A Raven is a symbol of resolve. The will to choose what one fights for.”
+
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
+[![Jolt Physics](https://img.shields.io/badge/physics-Jolt-8a4fbe)](https://github.com/jrouwe/JoltPhysics)
+[![EnTT](https://img.shields.io/badge/ECS-EnTT-9a3f3f)](https://github.com/skypjack/entt)
+[![CMake](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
 </div>
 
