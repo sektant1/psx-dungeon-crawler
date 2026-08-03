@@ -1,4 +1,5 @@
 #include "VulkanDevice.h"
+#include <SDL2/SDL_image.h>
 
 #include <eng/Log.h>
 
@@ -210,10 +211,21 @@ std::unique_ptr<Device> createDevice(const DeviceDesc& desc)
             "rhi(vulkan): SDL window was not created with SDL_WINDOW_VULKAN");
         return nullptr;
     }
-    auto device = std::make_unique<VulkanDevice>(desc);
-    if (!device->initialize())
-        return nullptr;
-    return device;
+
+    SDL_Surface* iconSurface = IMG_Load("docs/media/branding/avatar.png");
+
+    // 2. Set the window icon
+    SDL_SetWindowIcon(window, iconSurface);
+
+    // 3. Free the surface (SDL copies pixel data internally, keeping this
+    // leaks RAM)
+    SDL_FreeSurface(iconSurface);
+}
+
+auto device = std::make_unique<VulkanDevice>(desc);
+if (!device->initialize())
+    return nullptr;
+return device;
 }
 
 } // namespace eng::rhi::vulkan
