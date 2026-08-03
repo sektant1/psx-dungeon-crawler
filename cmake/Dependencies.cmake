@@ -11,13 +11,10 @@
 #
 # Exposed targets after include(): glm::glm                 (header-only math)
 # SDL2::SDL2               (windowing/input) Jolt                     (physics)
-# tomlplusplus::tomlplusplus + <tomlplusplus/toml.hpp> compat include OgreMain /
-# OgreOverlay   (renderer; plugins built as shared libs) eng_ogre_plugins
-# (INTERFACE: forces the runtime plugin .so builds)
+# tomlplusplus::tomlplusplus + <tomlplusplus/toml.hpp> compat include
 #
-# OGRE-owned locations, resolved for the source build (were SDK paths before):
-# ENG_OGRE_PLUGIN_DIR      generator-expr dir holding RenderSystem_GL3Plus etc.
-# ENG_OGRE_MEDIA_DIR       OGRE's stock Media/ (shadow-extrude programs, fonts)
+# The renderer is not here: it is the Vulkan RHI in engine/src/rhi, which needs
+# only the Vulkan loader and the SPIR-V toolchain the top-level file finds.
 # =============================================================================
 
 include(${CMAKE_CURRENT_LIST_DIR}/CPM.cmake)
@@ -71,7 +68,7 @@ CPMAddPackage(
 
 # --- stb image I/O -----------------------------------------------------------
 # Header-only PNG decoder/writer for the engine-owned renderer. This pin is
-# independent of OGRE's Codec_STBI and is available in an OGRE-free build.
+# the engine's own image decoding, independent of any renderer package.
 CPMAddPackage(
     NAME stb
     GITHUB_REPOSITORY nothings/stb
@@ -93,7 +90,6 @@ set(_eng_sdl_options
     # PipeWire headers (pw_node_enum_params signature drift). We only need
     # SDL for windowing/input; audio still negotiates ALSA/PulseAudio.
     "SDL_PIPEWIRE OFF")
-if(ENG_RENDERER STREQUAL "RHI")
     # RHI uses SDL only for events, a native Vulkan surface and drawable-size
     # queries. These optional modules otherwise pull GL/EGL implementation
     # sources into the platform library; KMSDRM and offscreen depend on EGL.
@@ -103,7 +99,6 @@ if(ENG_RENDERER STREQUAL "RHI")
          "SDL_OPENGLES OFF"
          "SDL_KMSDRM OFF"
          "SDL_OFFSCREEN OFF")
-endif()
 CPMAddPackage(
     NAME SDL2
     GITHUB_REPOSITORY libsdl-org/SDL
@@ -179,7 +174,7 @@ CPMAddPackage(
 # buffers immediately; no Assimp type crosses the engine API boundary.
 #
 # BUILD_SHARED_LIBS is a generic Assimp option. Keep it scoped here so Assimp is
-# self-contained without changing SDL/OGRE linkage selected below.
+# self-contained without changing the SDL linkage selected below.
 if(DEFINED BUILD_SHARED_LIBS)
     set(_eng_saved_build_shared_libs "${BUILD_SHARED_LIBS}")
     set(_eng_had_build_shared_libs ON)
@@ -236,220 +231,8 @@ CPMAddPackage(
 add_library(eng_imguizmo INTERFACE)
 target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 
-# --- OGRE 14 (fallback renderer, built from source) --------------------------
-# The single heavy dependency. First configure fetches + builds OGRE and its
-# bundled deps (freetype/zlib/zziplib/pugixml) — minutes, then cached. Upstream
-# also bootstraps Bullet unconditionally, so the patch below removes that unused
-# download/build; this project uses Jolt and keeps OgreBullet disabled. We build
-# ONLY what the engine loads at runtime: GL3Plus RS, ParticleFX, STBI codec,
-# and the imgui-enabled Overlay. Everything else (samples, tools, other RS,
-# RTSS, terrain/paging/assimp) is off to keep the tree lean.
-if(ENG_RENDERER STREQUAL "OGRE")
-CPMAddPackage(
-    NAME OGRE
-    GITHUB_REPOSITORY OGRECave/ogre
-    GIT_TAG v14.4.1
-    # OGRE is configured below after its legacy macro is fixed and project
-    # options are pinned. Fetching only avoids CPM adding it a second time.
-    DOWNLOAD_ONLY YES
-    # Fix ImGui overlay window-content flicker on GL3Plus at high/uncapped frame
-    # rates: the bundled ImGuiOverlay reuses one dynamic vertex/index buffer
-    # across frames, so the CPU can overwrite geometry the GPU is still reading.
-    PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-imgui-overlay-fresh-buffer.patch"
-            "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-stbi-alloc-mismatch.patch"
-            "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-cmake16-macrolog.patch"
-            "${CMAKE_CURRENT_LIST_DIR}/patches/ogre-no-unused-bullet.patch"
-    OPTIONS
-        "OGRE_BUILD_DEPENDENCIES ON"
-        "OGRE_STATIC OFF"
-        "OGRE_BUILD_SAMPLES OFF"
-        "OGRE_BUILD_TOOLS OFF"
-        "OGRE_BUILD_TESTS OFF"
-        "OGRE_INSTALL_SAMPLES OFF"
-        "OGRE_INSTALL_TOOLS OFF"
-        "OGRE_INSTALL_DOCS OFF"
-        "OGRE_BUILD_RENDERSYSTEM_GL3PLUS ON"
-        "OGRE_BUILD_RENDERSYSTEM_GL OFF"
-        "OGRE_BUILD_RENDERSYSTEM_GLES2 OFF"
-        "OGRE_BUILD_RENDERSYSTEM_VULKAN OFF"
-        "OGRE_BUILD_PLUGIN_PFX ON"
-        "OGRE_BUILD_PLUGIN_STBI ON"
-        "OGRE_BUILD_PLUGIN_DOT_SCENE OFF"
-        "OGRE_BUILD_PLUGIN_ASSIMP OFF"
-        "OGRE_BUILD_PLUGIN_FREEIMAGE OFF"
-        "OGRE_BUILD_COMPONENT_OVERLAY ON"
-        # OFF on purpose: Ogre's ImGuiOverlay compiles against Ogre's OWN imgui
-        # copy, but the engine links the vendored imgui (third_party/imgui,
-        # docking branch). Their ImGuiIO/ImDrawData layouts differ -> the whole
-        # overlay flickers and ImGui::EndFrame segfaults. The engine instead
-        # drives its own imgui through the official SDL2 + OpenGL3 backends (see
-        # RenderCore), rendered via an Ogre window RenderTargetListener.
-        "OGRE_BUILD_COMPONENT_OVERLAY_IMGUI OFF"
-        # Bites is the SDL2-based app framework; the engine drives Ogre::Root
-        # programmatically. Building it drags our CPM SDL2 into Ogre's install
-        # export set, which breaks generation ("SDL2 not in any export set").
-        "OGRE_BUILD_COMPONENT_BITES OFF"
-        # Consumed as a subproject, never installed — skip Ogre's install rules.
-        "OGRE_INSTALL_PDB OFF"
-        "OGRE_BUILD_COMPONENT_RTSHADERSYSTEM OFF"
-        "OGRE_BUILD_COMPONENT_TERRAIN OFF"
-        "OGRE_BUILD_COMPONENT_PAGING OFF"
-        "OGRE_BUILD_COMPONENT_VOLUME OFF"
-        "OGRE_BUILD_COMPONENT_MESHLODGENERATOR OFF"
-        "OGRE_BUILD_COMPONENT_PROPERTY OFF"
-        "OGRE_BUILD_COMPONENT_BULLET OFF"
-        "OGRE_BUILD_COMPONENT_PYTHON OFF"
-        "OGRE_BUILD_COMPONENT_JAVA OFF"
-        "OGRE_BUILD_COMPONENT_CSHARP OFF"
-)
+# OGRE is gone. It was the fallback renderer, built from source here, and it
+# was by far the heaviest dependency in the tree -- its fetch and build
+# dominated a first configure. The Vulkan RHI replaced it; the engine now
+# talks to Vulkan through eng_rhi and needs no renderer package at all.
 
-# OGRE 14.4.1's legacy macro_log_feature() accesses ARGV4..ARGV6 even when
-# callers provide only four arguments. When OGRE is configured through CPM,
-# those missing arguments can resolve to CPMAddPackage's outer argument list.
-# Replace the macro with a scoped function and guarded optional arguments.
-set(_ogre_macro_log_feature
-    "${OGRE_SOURCE_DIR}/CMake/Utils/MacroLogFeature.cmake")
-
-file(READ "${_ogre_macro_log_feature}" _ogre_macro_contents)
-
-string(
-  REPLACE
-    "MACRO(MACRO_LOG_FEATURE _var _package _description _url ) # _required _minvers _comments)"
-    "FUNCTION(MACRO_LOG_FEATURE _var _package _description _url) # _required _minvers _comments)"
-    _ogre_macro_contents
-    "${_ogre_macro_contents}")
-
-string(
-  REPLACE
-    "   SET(_required \"\${ARGV4}\")\n   SET(_minvers \"\${ARGV5}\")\n   SET(_comments \"\${ARGV6}\")"
-    [=[
-   SET(_required FALSE)
-   SET(_minvers "")
-   SET(_comments "")
-
-   IF(ARGC GREATER 4)
-     SET(_required "${ARGV4}")
-   ENDIF()
-   IF(ARGC GREATER 5)
-     SET(_minvers "${ARGV5}")
-   ENDIF()
-   IF(ARGC GREATER 6)
-     SET(_comments "${ARGV6}")
-   ENDIF()
-]=]
-    _ogre_macro_contents
-    "${_ogre_macro_contents}")
-
-string(REPLACE "ENDMACRO(MACRO_LOG_FEATURE)" "ENDFUNCTION(MACRO_LOG_FEATURE)"
-               _ogre_macro_contents "${_ogre_macro_contents}")
-
-file(WRITE "${_ogre_macro_log_feature}" "${_ogre_macro_contents}")
-
-# Set OGRE options explicitly before add_subdirectory. FORCE is appropriate
-# because this file is the project's single source of dependency configuration.
-set(OGRE_BUILD_DEPENDENCIES
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_STATIC
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_SAMPLES
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_TOOLS
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_TESTS
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_INSTALL_SAMPLES
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_INSTALL_TOOLS
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_INSTALL_DOCS
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_INSTALL_PDB
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_BUILD_RENDERSYSTEM_GL3PLUS
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_RENDERSYSTEM_GL
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_RENDERSYSTEM_GLES2
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_RENDERSYSTEM_VULKAN
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_BUILD_PLUGIN_PFX
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_STBI
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_DOT_SCENE
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_ASSIMP
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_PLUGIN_FREEIMAGE
-    OFF
-    CACHE BOOL "" FORCE)
-
-set(OGRE_BUILD_COMPONENT_OVERLAY
-    ON
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_OVERLAY_IMGUI
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_BITES
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_RTSHADERSYSTEM
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_TERRAIN
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_PAGING
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_VOLUME
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_MESHLODGENERATOR
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_PROPERTY
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_BULLET
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_PYTHON
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_JAVA
-    OFF
-    CACHE BOOL "" FORCE)
-set(OGRE_BUILD_COMPONENT_CSHARP
-    OFF
-    CACHE BOOL "" FORCE)
-
-add_subdirectory("${OGRE_SOURCE_DIR}" "${OGRE_BINARY_DIR}" EXCLUDE_FROM_ALL)
-# The runtime loads these plugins by path (see RenderCore). They are separate
-# CMake targets, not linked into libeng, so nothing would build them otherwise:
-# gather them behind one INTERFACE target the engine depends on, and expose
-# their output directory (all land together) via a generator expression.
-set(ENG_OGRE_PLUGIN_DIR "$<TARGET_FILE_DIR:RenderSystem_GL3Plus>")
-set(ENG_OGRE_MEDIA_DIR "${OGRE_SOURCE_DIR}/Media")
-endif()

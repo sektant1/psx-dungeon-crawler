@@ -557,9 +557,7 @@ void test_repository_has_no_obsolete_round_frame_or_authored_arch()
     const std::string oldShape = std::string("shape == ") + '"' + "ring" + '"';
     const char* files[] = {
         "engine/include/eng/Renderer.h",
-        "engine/src/render/Renderer.cpp",
-        "engine/src/render/ProceduralMeshes.h",
-        "engine/src/render/ProceduralMeshes.cpp",
+        "engine/src/render/rhi/Renderer.cpp",
         "game/src/SceneFactory.h",
         "game/src/SceneFactory.cpp",
         "game/src/LiveLevel.cpp",

@@ -40,7 +40,7 @@ int main()
     const std::string programs = read("assets/programs/psx.program");
     const std::string materials = read("assets/materials/psx.material");
     const std::string shader = read("assets/shaders/particle.frag");
-    const std::string runtime = read("engine/src/particles/Particles.cpp");
+    const std::string runtime = read("engine/src/render/rhi/Renderer.cpp");
     const std::string presets =
         read("engine/src/particles/ParticlePresets.cpp");
     const std::string presetHeader =
@@ -56,7 +56,7 @@ int main()
     // fixed at startup. Cost is now bounded by capacity rather than by how
     // much of the level happens to be on screen, so pausing buys little and
     // would cost a visible catch-up pop when an emitter comes back into view.
-    requireText(runtime, "kPoolCapacity",
+    requireText(runtime, "kMaxDrawnParticles",
                 "the particle pool is no longer bounded at a fixed capacity");
     requireText(sim, "particleSystemLifetimeExpired(",
                 "one-shot cleanup does not consume the pure deadline policy");
@@ -65,7 +65,7 @@ int main()
     // Retirement must stay driven by the resolved emission window, never by a
     // live count: an effect that is culled or throttled can legitimately hold
     // zero particles for a frame without being finished.
-    requireText(runtime, "mSim.instanceActive(",
+    requireText(runtime, "particleSim.instanceActive(",
                 "handle retirement does not consult the simulation's own "
                 "instance lifetime");
 

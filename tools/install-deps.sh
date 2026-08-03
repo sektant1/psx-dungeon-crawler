@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs the system toolchain and platform headers needed to configure the
 # project. CMake/CPM fetches pinned source dependencies, including the temporary
-# OGRE renderer and Jolt physics; this script must not install a second OGRE or
-# pull OGRE's unused bundled Bullet dependency.
+# Vulkan RHI renderer and Jolt physics. No renderer package is installed: the
+# engine talks to Vulkan directly and compiles its own SPIR-V.
 #
 # Usage: make deps   (or ./tools/install-deps.sh)
 set -eu
@@ -30,7 +30,7 @@ fi
 echo "==> package manager: $PM"
 
 # ------------------------------------------------- base deps (per distro)
-# Includes the X11/GL/freetype headers the current OGRE path needs until the RHI
+# Includes the X11 headers SDL needs for windowing. The renderer itself needs
 # renderer replaces it. ninja/ccache/mold are build-speed
 # tools the CMake configure step picks up automatically when present: ninja for
 # scheduling, ccache for repeat compiles, mold for link time.

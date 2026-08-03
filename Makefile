@@ -34,28 +34,9 @@ CMAKE_ARGS  ?=
 # visual-test target fail with "python: No such file or directory", which reads
 # as a broken harness rather than as a missing alias.
 PYTHON      ?= $(shell command -v python3 2>/dev/null || echo python)
-# Force X11 on Wayland (XWayland): the GL3Plus path is unreliable on native
-# Wayland. Override with SDL_VIDEODRIVER=... on the command line if needed.
+# Force X11 on Wayland (XWayland). Override with SDL_VIDEODRIVER=... on the
+# command line if needed.
 SDL_VIDEODRIVER ?= x11
-
-# ---- renderer selection ----------------------------------------------------
-# RHI=1 switches every target to the Vulkan backend, in its own build tree so
-# the OGRE build stays intact next to it for A/B comparison:
-#   make run RHI=1
-#   make demo RHI=1
-#   make screenshot RHI=1 SHOT=/tmp/x.png FRAME=200
-#   make test RHI=1
-# BUILD_DIR is still honoured if you want the tree somewhere else.
-# BUILD_DIR already took its `?=` default above, so `?=` here would never fire.
-# Only claim it when the user did not name one explicitly.
-ifdef RHI
-ENG_RENDERER := RHI
-ifeq ($(filter command line environment,$(origin BUILD_DIR)),)
-BUILD_DIR := build-rhi
-endif
-else
-ENG_RENDERER := OGRE
-endif
 
 # ---- run-option -> PSX_* env mapping ---------------------------------------
 # Each variable is only exported when the user sets it, so unset options keep
@@ -141,12 +122,9 @@ configure:
 	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ]; then \
 		cmake -B "$(BUILD_DIR)" -G "$(GENERATOR)" \
 		      -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
-		      -DENG_RENDERER="$(ENG_RENDERER)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
-	elif [ -n "$(strip $(CMAKE_ARGS))" ] || ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt" \
-	     || ! grep -Fqx "ENG_RENDERER:STRING=$(ENG_RENDERER)" "$(BUILD_DIR)/CMakeCache.txt"; then \
+	elif [ -n "$(strip $(CMAKE_ARGS))" ] || ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
 		cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
-		      -DENG_RENDERER="$(ENG_RENDERER)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	fi
 
@@ -181,7 +159,7 @@ build-app: configure
 	cmake --build $(BUILD_DIR) --target $(APP_TARGET) -j$(JOBS)
 
 # Detects pacman/apt/dnf/zypper/apk/brew; installs toolchain + SDL2 + glm,
-# then OGRE >= 14 (distro package where available, source build otherwise).
+# plus the Vulkan loader and the SPIR-V toolchain the RHI compiles through.
 deps:
 	./tools/install-deps.sh
 
@@ -561,16 +539,10 @@ help:
 	@echo "  MATERIAL=1          editor opens in material staging (PSX_EDITOR_MATERIAL)"
 	@echo "  SCENE=<file.scn>    scene for editor/cook targets"
 	@echo ""
-	@echo "Renderer:"
-	@echo "  RHI=1               use the Vulkan backend in build-rhi/ instead of"
-	@echo "                      OGRE/OpenGL in build/. Composes with every"
-	@echo "                      target: make run RHI=1, make demo RHI=1,"
-	@echo "                      make screenshot RHI=1 SHOT=/tmp/x.png FRAME=200"
-	@echo ""
 	@echo "Debug options (make renderdoc/gdb/valgrind/perf/debug-run):"
 	@echo "  APP=game|scene_editor|psx_demo   which executable to drive"
 	@echo "  FRAME=<n>           auto-capture frame / exit frame"
 	@echo "  BATCH=1             gdb: run to completion, print backtrace, exit"
 	@echo "  OUT=<path>          renderdoc: capture file"
 	@echo ""
-	@echo "Build config: BUILD_DIR=$(BUILD_DIR) BUILD_TYPE=$(BUILD_TYPE) GENERATOR=$(GENERATOR) JOBS=$(JOBS) APP=$(APP) RENDERER=$(ENG_RENDERER)"
+	@echo "Build config: BUILD_DIR=$(BUILD_DIR) BUILD_TYPE=$(BUILD_TYPE) GENERATOR=$(GENERATOR) JOBS=$(JOBS) APP=$(APP)"

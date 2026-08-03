@@ -152,15 +152,11 @@ int main()
     const std::string vert = read("assets/shaders/particle_sprite.vert");
     const std::string material =
         read("assets/materials/particles.material");
-    const std::string builder =
-        read("engine/src/particles/ParticleMaterials.cpp");
     for (const char* name :
          {"flipbookCell", "flipbookOrigin", "flipbookPerRow"}) {
         requireText(vert, name, "particle_sprite.vert lost a flipbook uniform");
         requireText(material, name,
                     "particles.material lost a flipbook default");
-        requireText(builder, name,
-                    "ParticleMaterials stopped pushing a uniform");
     }
     // The old whole-sheet-only uniform must be gone from all three, or a
     // material could keep declaring a constant nothing writes.

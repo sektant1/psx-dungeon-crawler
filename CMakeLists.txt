@@ -76,19 +76,11 @@ endif()
 # --- Sanitizers: -DENABLE_ASAN=ON for an ASan+UBSan+LeakSan build -----------
 option(ENABLE_ASAN "Build our targets with Address/UB/Leak sanitizers" OFF)
 
-# Renderer selection. OGRE remains the qualified default until the RHI game and
-# editor gates pass; ENG_RENDERER=RHI is a completely OGRE/OpenGL-free build.
-set(ENG_RENDERER "OGRE" CACHE STRING "Renderer implementation: OGRE or RHI")
-set_property(CACHE ENG_RENDERER PROPERTY STRINGS OGRE RHI)
-string(TOUPPER "${ENG_RENDERER}" ENG_RENDERER)
-if(NOT ENG_RENDERER STREQUAL "OGRE" AND NOT ENG_RENDERER STREQUAL "RHI")
-  message(FATAL_ERROR "ENG_RENDERER must be OGRE or RHI (got '${ENG_RENDERER}')")
-endif()
-
-option(ENG_RHI_VULKAN "Build the isolated Vulkan 1.3 RHI backend" OFF)
-if(ENG_RENDERER STREQUAL "RHI")
-  set(ENG_RHI_VULKAN ON CACHE BOOL "Build the Vulkan 1.3 RHI backend" FORCE)
-endif()
+# The renderer is the Vulkan RHI. There was an ENG_RENDERER switch here while
+# the OGRE/GL3Plus backend was still the qualified default; the RHI has since
+# reached parity and OGRE is gone, so the switch and its second code path went
+# with it. ENG_RENDERER_RHI is still defined for the sources that branch on it.
+option(ENG_RHI_VULKAN "Build the Vulkan 1.3 RHI backend" ON)
 cmake_dependent_option(
   ENG_BUILD_VULKAN_SMOKE
   "Build Vulkan RHI shader tooling and the windowed smoke executable"
@@ -146,7 +138,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Dependencies.cmake)
 # Vendored imgui (docking branch) + SDL2 platform backend and ImGuizmo. The
 # renderer backend is selected below; RHI supplies its own renderer backend.
 # Built once here so no engine layer compiles third-party sources; the docking
-# copy must win over OgreOverlay's bundled imgui, hence the BEFORE include.
+# copy must win over any vendored imgui, hence the BEFORE include.
 set(_eng_imgui_sources
   third_party/imgui/imgui.cpp
   third_party/imgui/imgui_draw.cpp
@@ -154,20 +146,12 @@ set(_eng_imgui_sources
   third_party/imgui/imgui_widgets.cpp
   third_party/imgui/backends/imgui_impl_sdl2.cpp
   ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp)
-if(ENG_RENDERER STREQUAL "OGRE")
-  find_package(OpenGL REQUIRED)
-  list(APPEND _eng_imgui_sources
-       third_party/imgui/backends/imgui_impl_opengl3.cpp)
-endif()
 add_library(eng_imgui STATIC ${_eng_imgui_sources})
 target_include_directories(
   eng_imgui BEFORE
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui
          ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends)
 target_link_libraries(eng_imgui PUBLIC eng_imguizmo PRIVATE SDL2::SDL2)
-if(ENG_RENDERER STREQUAL "OGRE")
-  target_link_libraries(eng_imgui PRIVATE OpenGL::GL)
-endif()
 
 add_library(
   eng_core STATIC
@@ -211,15 +195,10 @@ set(_eng_rhi_sources
     engine/src/rhi/Registry.cpp
     engine/src/rhi/null/NullDevice.cpp
     engine/src/rhi/vulkan/VulkanDevice.cpp)
-if(NOT ENG_RENDERER STREQUAL "RHI")
-  list(APPEND _eng_rhi_sources engine/src/rhi/gl/GLDevice.cpp)
-endif()
 add_library(eng_rhi STATIC ${_eng_rhi_sources})
 target_include_directories(eng_rhi PRIVATE engine/src/rhi)
 target_link_libraries(eng_rhi PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>")
-if(ENG_RENDERER STREQUAL "RHI")
   target_compile_definitions(eng_rhi PRIVATE ENG_RENDERER_RHI=1)
-endif()
 
 if(ENG_RHI_VULKAN)
   target_sources(
@@ -276,7 +255,6 @@ if(ENG_BUILD_VULKAN_SMOKE)
   eng_target_hardening(rhi_vulkan_smoke)
 endif()
 
-if(ENG_RENDERER STREQUAL "RHI")
   find_program(ENG_GLSLANG_VALIDATOR NAMES glslangValidator REQUIRED)
   find_program(ENG_SPIRV_VAL NAMES spirv-val REQUIRED)
   set(_eng_renderer_shader_dir
@@ -306,7 +284,6 @@ if(ENG_RENDERER STREQUAL "RHI")
   endforeach()
   add_custom_target(rhi_renderer_shaders
                     DEPENDS ${_eng_renderer_shader_outputs})
-endif()
 
 add_library(eng_platform STATIC engine/src/platform/Platform.cpp engine/src/platform/Input.cpp
                                 engine/src/platform/Config.cpp)
@@ -348,7 +325,6 @@ set(_eng_systems_sources
   engine/src/audio/SoundInstance.cpp
   engine/src/audio/Audio.cpp)
 
-if(ENG_RENDERER STREQUAL "RHI")
   list(APPEND _eng_systems_sources
        engine/src/render/rhi/RenderCore.cpp
        engine/src/render/rhi/Renderer.cpp
@@ -357,19 +333,6 @@ if(ENG_RENDERER STREQUAL "RHI")
        engine/src/render/rhi/Image.cpp
        engine/src/render/rhi/MaterialLibrary.cpp
        engine/src/particles/DecalSystemRhi.cpp)
-else()
-  list(APPEND _eng_systems_sources
-       engine/src/render/RenderCore.cpp
-       engine/src/ui/BitmapFont.cpp
-       engine/src/render/Warmup.cpp
-       engine/src/render/Renderer.cpp
-       engine/src/render/ObjLoader.cpp
-       engine/src/render/ProceduralMeshes.cpp
-       engine/src/particles/Particles.cpp
-       engine/src/particles/ParticleBatch.cpp
-       engine/src/particles/ParticleMaterials.cpp
-       engine/src/particles/DecalSystem.cpp)
-endif()
 
 add_library(eng_systems STATIC ${_eng_systems_sources})
 target_include_directories(eng_systems PRIVATE third_party engine/src
@@ -378,20 +341,10 @@ target_link_libraries(eng_systems
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_platform>"
          "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_rhi>" eng_imgui
   PRIVATE SDL2::SDL2 Jolt miniaudio eng_model_import ${CMAKE_DL_LIBS})
-if(ENG_RENDERER STREQUAL "RHI")
   add_dependencies(eng_systems rhi_renderer_shaders)
   target_link_libraries(eng_systems PRIVATE eng_stb)
   target_compile_definitions(eng_systems PRIVATE ENG_RENDERER_RHI=1
                                                 ${_eng_renderer_shader_definitions})
-else()
-  # Plugin_ParticleFX is absent on purpose -- RenderCore no longer loads it.
-  add_dependencies(eng_systems RenderSystem_GL3Plus Codec_STBI)
-  target_link_libraries(eng_systems PUBLIC OgreOverlay
-                        PRIVATE OgreMain OpenGL::GL)
-  target_compile_definitions(
-    eng_systems PRIVATE OGRE_PLUGIN_DIR="${ENG_OGRE_PLUGIN_DIR}"
-                        OGRE_MEDIA_DIR="${ENG_OGRE_MEDIA_DIR}")
-endif()
 
 add_library(
   eng_framework STATIC engine/src/ecs/World.cpp engine/src/ecs/SceneSync.cpp
@@ -413,10 +366,8 @@ add_library(eng STATIC engine/src/app/Engine.cpp engine/src/app/Application.cpp
                        engine/src/app/FpsGameApp.cpp)
 target_include_directories(eng PRIVATE third_party engine/src)
 target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
-if(ENG_RENDERER STREQUAL "RHI")
   target_compile_definitions(eng_platform PRIVATE ENG_RENDERER_RHI=1)
   target_compile_definitions(eng PRIVATE ENG_RENDERER_RHI=1)
-endif()
 
 foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_model_import eng_systems
                eng_framework eng)
@@ -441,14 +392,8 @@ if(ENABLE_PCH)
     <unordered_map>
     <vector>
     <glm/glm.hpp>)
-  if(ENG_RENDERER STREQUAL "OGRE")
-    target_precompile_headers(
-      eng_systems PRIVATE <Ogre.h> <OgreMaterialManager.h> <OgreTechnique.h>
-                          <glm/glm.hpp> <glm/gtc/quaternion.hpp>)
-  else()
     target_precompile_headers(
       eng_systems PRIVATE <imgui.h> <glm/glm.hpp> <glm/gtc/quaternion.hpp>)
-  endif()
   target_precompile_headers(eng_framework PRIVATE <entt/entt.hpp>
                             <glm/glm.hpp>)
   target_precompile_headers(eng PRIVATE <imgui.h> <glm/glm.hpp>)
@@ -1034,13 +979,6 @@ if(BUILD_TESTING)
   # Scoped to the OGRE renderer: ObjLoader is an Ogre-typed source that only the
   # OGRE path compiles (the RHI renderer imports geometry through Assimp), so
   # its subject does not exist to test in an RHI build.
-  if(ENG_RENDERER STREQUAL "OGRE")
-    add_executable(obj_geometry_tests engine/tests/ObjGeometryTests.cpp)
-    target_include_directories(obj_geometry_tests PRIVATE engine/src
-                                                          engine/include)
-    target_link_libraries(obj_geometry_tests PRIVATE eng glm::glm)
-    add_test(NAME obj_geometry COMMAND obj_geometry_tests)
-  endif()
 
   add_executable(loading_tests engine/tests/LoadingTests.cpp
                                engine/src/core/Loading.cpp)
