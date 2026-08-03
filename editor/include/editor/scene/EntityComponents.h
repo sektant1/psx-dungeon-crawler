@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 namespace ed {
@@ -45,6 +46,7 @@ enum class Gameplay {
     EnemySpawn,
     Pickup,
     Trigger,
+    AudioEmitter,
     PointLight,
     DirectionalLight,
 };
@@ -135,7 +137,21 @@ struct ComponentType {
     // add menu, the outliner tooltip -- sorts by this, so an entity's parts are
     // always in the same order regardless of what it happens to carry.
     ComponentGroup group = ComponentGroup::Gameplay;
+    // Whether this component means anything on this entity. Null -- which is
+    // every component but one -- means "anything can carry it", the rule the
+    // format has always followed.
+    //
+    // The exception is the actor sound table: a wall performs no actions, so
+    // offering it a cue per action is a page of questions with no answers. A
+    // predicate rather than a check inside the panel, so the gate lives next to
+    // the component it gates and every list obeys it at once.
+    bool (*applies)(const game::content::Entity& entity) = nullptr;
 };
+
+// game::content::actorKindOf, re-exported: the panels ask this constantly and
+// the answer is a property of the document, not of the editor.
+using game::content::actorKindOf;
+using game::content::isActor;
 
 // The table, in the order panels should present it.
 const std::vector<ComponentType>& componentTypes();

@@ -46,6 +46,8 @@ phase_jitter = 0.35    # spread per-object step phase so crowds aren't one puppe
 speed = 14.0        # m/s during the dash
 duration = 0.32     # seconds of movement
 cooldown = 0.45     # seconds after it ends before another is allowed
+camera_drop = 0.34  # cosmetic crouch arc; collision capsule stays standing
+camera_roll_degrees = 360.0 # one complete forward-axis roll
 iframes = 0.22      # seconds of invulnerability, from the start of the dash
 stamina = 25.0      # cost; an empty bar means no dodge
 
@@ -77,6 +79,19 @@ speed = 3.0
 mouse_sensitivity = 0.002
 # Profile in blood.toml the player bleeds when something lands a hit.
 blood = "human"
+
+# User mix values. Settings UI should write these dB values (or map a 0..1
+# slider through linearToDecibels); content-level balancing lives in audio.toml.
+[audio]
+master_db = -4.0
+music_db = -2.0
+ambience_db = -3.0
+dialogue_db = 0.0
+weapons_db = 0.0
+sfx_db = -1.0
+ui_db = -2.0
+warnings_db = 0.0
+max_voices = 96
 
 # Player-facing HUD is rendered at native output resolution after the PSX post
 # chain. Scale and contrast are accessibility controls; reduced_motion removes

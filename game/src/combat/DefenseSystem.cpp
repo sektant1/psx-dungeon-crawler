@@ -3,6 +3,9 @@
 #include "StaminaSystem.h"
 #include "CombatComponents.h" // Health (i-frames)
 
+#include <algorithm>
+#include <cmath>
+
 namespace game::feel::defense {
 
 bool beginDeflect(ActionState& as) {
@@ -23,17 +26,28 @@ bool resolveIncoming(entt::registry& reg, entt::entity defender,
     return true;
 }
 
+bool canDodge(const entt::registry& reg, entt::entity e, float duration,
+              float iframes, float cost) {
+    const auto* as = reg.try_get<ActionState>(e);
+    const auto* st = reg.try_get<Stamina>(e);
+    const auto* health = reg.try_get<Health>(e);
+    return as && st && health && as->phase == ActionPhase::Idle &&
+           std::isfinite(duration) && duration > 0.0f &&
+           std::isfinite(iframes) && iframes >= 0.0f && iframes <= duration &&
+           std::isfinite(cost) && cost >= 0.0f && st->current >= cost;
+}
+
 bool beginDodge(entt::registry& reg, entt::entity e, float dur, float iframes,
-                float cost) {
+                 float cost) {
     auto* as = reg.try_get<ActionState>(e);
     auto* st = reg.try_get<Stamina>(e);
-    if (!as || !st) return false;
-    if (as->phase != ActionPhase::Idle) return false;
+    if (!canDodge(reg, e, dur, iframes, cost))
+        return false;
     if (!stamina::spend(*st, cost)) return false;
     as->phase = ActionPhase::Dodging;
     as->timer = dur;
     if (auto* h = reg.try_get<Health>(e)) {
-        h->invulnTimer = iframes;
+        h->invulnTimer = std::max(h->invulnTimer, iframes);
     }
     return true;
 }

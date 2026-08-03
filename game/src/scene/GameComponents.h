@@ -3,6 +3,7 @@
 #include <eng/Physics.h> // eng::ShapeKind, eng::CollisionLayer
 #include <eng/ecs/Components.h> // eng::ecs::Collider
 #include "GameCollision.h"
+#include "audio/ActorSounds.h"
 
 #include <glm/glm.hpp>
 
@@ -22,6 +23,11 @@ static_assert(layer::Static == 0, "eng::ecs::Collider defaults to layer 0, "
 
 // Unique player start.
 struct PlayerSpawn {};
+
+// game::Actor and game::ActorSounds are defined in audio/ActorSounds.h, which
+// is included above: they ride on the combat registry as well as this one, and
+// that side does not link the physics types this header pulls in. Named here
+// because this is where a reader looks for the scene's component set.
 
 // Level exit / down-portal. yawDegrees orients the arrival facing.
 struct Exit {

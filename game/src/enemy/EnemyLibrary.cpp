@@ -51,6 +51,25 @@ void readVisual(const toml::table& t, EnemyVisual& v)
     v.blood = t["blood"].value_or(v.blood);
 }
 
+// `[enemy.<id>.sounds]` -- one cue id per action, keyed by the action's own
+// name. Merged row by row rather than replaced wholesale (unlike resistances
+// and attacks): overriding a grunt's death cry should not silence the footsteps
+// its archetype authored, and a whole-table replace made that the default.
+void readSounds(const toml::table& t, ActorSoundSet& sounds)
+{
+    for (auto&& [key, node] : t) {
+        const ActorActionInfo* info = findActorAction(key.str());
+        if (!info) {
+            eng::log::error("enemies.toml: '%s' is not an action an enemy "
+                            "performs; sound ignored",
+                            std::string(key.str()).c_str());
+            continue;
+        }
+        if (const std::optional<std::string> cue = node.value<std::string>())
+            sounds.set(info->action, *cue);
+    }
+}
+
 void readStats(const toml::table& t, EnemyStats& s)
 {
     s.health = num(t, "health", s.health);
@@ -190,6 +209,8 @@ void readAttacks(const toml::table& t, std::vector<EnemyAttack>& out)
         atk.weapon = (*a)["weapon"].value_or(atk.weapon);
         atk.telegraphEffect =
             (*a)["telegraph_effect"].value_or(atk.telegraphEffect);
+        atk.telegraphSound =
+            (*a)["telegraph_sound"].value_or(atk.telegraphSound);
         atk.minRange = num(*a, "min_range", atk.minRange);
         atk.maxRange = num(*a, "max_range", atk.maxRange);
         atk.aimConeDeg = num(*a, "aim_cone_deg", atk.aimConeDeg);
@@ -229,6 +250,7 @@ void readInto(const toml::table& t, EnemyDef& def)
     if (const toml::table* s = t["locomotion"].as_table())  readLocomotion(*s, def.locomotion);
     if (const toml::table* s = t["perception"].as_table())  readPerception(*s, def.perception);
     if (const toml::table* s = t["behaviour"].as_table())   readBehaviour(*s, def.behaviour);
+    if (const toml::table* s = t["sounds"].as_table())      readSounds(*s, def.sounds);
     readAttacks(t, def.attacks);
 }
 

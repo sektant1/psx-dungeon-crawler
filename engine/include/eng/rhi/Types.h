@@ -90,7 +90,14 @@ enum class BlendMode { Opaque, AlphaBlend, Additive, Modulate };
 enum class FilterMode { Nearest, Linear };
 enum class AddressMode { Repeat, ClampToEdge, MirrorRepeat };
 
-enum class VertexFormat { Float1, Float2, Float3, Float4, UByte4Unorm };
+enum class VertexFormat {
+    Float1,
+    Float2,
+    Float3,
+    Float4,
+    UByte4Unorm,
+    UShort4Uint,
+};
 
 struct VertexAttribute {
     uint32_t location = 0;

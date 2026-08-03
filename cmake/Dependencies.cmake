@@ -218,6 +218,26 @@ endif()
 unset(_eng_saved_build_shared_libs)
 unset(_eng_had_build_shared_libs)
 
+# --- ozz-animation (skeletal animation runtime + offline cooker) ------------
+# 0.16.0 is latest stable release compatible with project's CMake 3.24 floor.
+# Runtime ships only ozz_base + ozz_animation. gltf2ozz remains host-side build
+# tool used to cook source rigs into compact, version-matched runtime archives.
+CPMAddPackage(
+    NAME ozz_animation_source
+    GITHUB_REPOSITORY guillaumeblanc/ozz-animation
+    GIT_TAG 0.16.0
+    OPTIONS
+        "ozz_build_tools ${ENG_BUILD_ANIMATION_TOOLS}"
+        "ozz_build_fbx OFF"
+        "ozz_build_gltf ${ENG_BUILD_ANIMATION_TOOLS}"
+        "ozz_build_data OFF"
+        "ozz_build_samples OFF"
+        "ozz_build_howtos OFF"
+        "ozz_build_tests OFF"
+        "ozz_build_simd_ref OFF"
+        "ozz_build_postfix OFF"
+)
+
 # --- ImGuizmo (ImGui gizmo widget) -------------------------------------------
 # DOWNLOAD_ONLY: fetch the source + expose its include dir. eng compiles
 # ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp (see CMakeLists) so it draws through
@@ -235,4 +255,3 @@ target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 # was by far the heaviest dependency in the tree -- its fetch and build
 # dominated a first configure. The Vulkan RHI replaced it; the engine now
 # talks to Vulkan through eng_rhi and needs no renderer package at all.
-

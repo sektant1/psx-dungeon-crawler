@@ -39,6 +39,7 @@
 #include "combat/DefenseSystem.h"
 #include "combat/FeelComponents.h"
 #include "combat/PoiseSystem.h"
+#include "audio/GameAudio.h"
 
 #include <eng/ecs/Components.h>
 
@@ -181,6 +182,7 @@ private:
     game::CombatVocabulary mVocabulary;
     std::optional<game::GameContext> mCtx;
     game::CombatSystem mCombat;
+    game::GameAudioSystem mGameAudio;
     bool mCombatReady = false;
     eng::ParticleLibrary mParticles;
     // Owned here so it outlives the renderer that holds a pointer to it.
@@ -275,6 +277,10 @@ void DungeonApp::onLoadGame(eng::Engine& engine, eng::LoadPlan& plan)
                  mParticles.load(r, game::assetPath("config/particles.toml"));
              },
              2.0f);
+    plan.add("Tuning the soundscape", [this] {
+        if (!mGameAudio.load(audio(), game::assetPath("config/audio.toml")))
+            eng::log::error("audio.toml failed to load; game will run silent");
+    });
 }
 
 bool DungeonApp::onStartGame(eng::Engine& engine)
@@ -291,10 +297,14 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mDashTuning.speed = float(cfg.getNumber("dodge.speed", 14.0));
     mDashTuning.duration = float(cfg.getNumber("dodge.duration", 0.32));
     mDashTuning.cooldown = float(cfg.getNumber("dodge.cooldown", 0.45));
+    mDashTuning.cameraDrop = float(cfg.getNumber("dodge.camera_drop", 0.34));
+    mDashTuning.cameraRollDegrees =
+        float(cfg.getNumber("dodge.camera_roll_degrees", 360.0));
     mDodgeIframes = float(cfg.getNumber("dodge.iframes", 0.22));
     mDodgeStamina = float(cfg.getNumber("dodge.stamina", 25.0));
     mSens = float(cfg.getNumber("player.mouse_sensitivity", 0.002));
     mPlayerBlood = cfg.getString("player.blood", "human");
+    mGameAudio.applyUserMix(cfg);
 
     colliderView().enabled = std::getenv("RAVEN_SHOW_COLLIDERS") != nullptr;
 
@@ -324,6 +334,9 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mBackend.emplace(engine.renderer());
     mWorld.attachRenderer(*mBackend);
     mWorld.attachPhysics(physics());
+    // GameAudio owns the player's listener; authored emitters still reconcile
+    // through the World without competing for it.
+    mWorld.attachAudio(audio(), /*drivesListener=*/false);
 
     enterLevel(engine, false); // depth 0, spawn at entry
 
@@ -355,6 +368,16 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mCombat.projectiles().setImpactCallback(
         [this](eng::BodyHandle victim, const std::string& payload,
                glm::vec3 direction, glm::vec3 point) {
+            for (const game::PlayerWeaponDef& weapon :
+                 mPlayerSys.weaponDefinitions()) {
+                if (weapon.payloadId == payload &&
+                    !weapon.projectile.impactSound.empty()) {
+                    game::AudioEmission sound;
+                    sound.position = point;
+                    mGameAudio.emit(weapon.projectile.impactSound, sound);
+                    break;
+                }
+            }
             playerHit(victim, payload.c_str(), direction, point);
         });
 
@@ -608,6 +631,15 @@ void DungeonApp::playerHit(eng::BodyHandle body, const char* weaponId,
     // Hit reaction. A no-op on anything that is not an enemy, which is how the
     // training dummy keeps working without a branch here.
     mEnemies.notifyHit(victim);
+    if (!result.killed) {
+        if (const game::EnemyTag* tag =
+                mCombat.director().registry().try_get<game::EnemyTag>(victim);
+            tag && tag->def && !tag->def->visual.hurtSound.empty()) {
+            game::AudioEmission sound;
+            sound.position = point;
+            mGameAudio.emit(tag->def->visual.hurtSound, sound);
+        }
+    }
 }
 
 glm::vec3 DungeonApp::playerFeet() const
@@ -692,6 +724,11 @@ void DungeonApp::wireEnemies()
         // blocked or dodged hit leaves no mark.
         if (result.hitLanded)
             bleed(mPlayerEntity, point, dir, result);
+        if (result.hitLanded) {
+            game::AudioEmission sound;
+            sound.spatial = game::SpatialOverride::Force2D;
+            mGameAudio.emit("player.hit", sound);
+        }
     });
     mEnemies.setTelegraphCallback(
         [this](entt::entity, const game::EnemyAttack& attack, glm::vec3 at) {
@@ -701,6 +738,11 @@ void DungeonApp::wireEnemies()
             mCtx->renderer.spawnParticles(
                 attack.telegraphEffect, at + glm::vec3(0.0f, 1.2f, 0.0f),
                 options);
+            if (!attack.telegraphSound.empty()) {
+                game::AudioEmission sound;
+                sound.position = at + glm::vec3(0.0f, 1.2f, 0.0f);
+                mGameAudio.emit(attack.telegraphSound, sound);
+            }
         });
 
     // Death: the combat model decides when something is dead; the enemy system
@@ -726,7 +768,13 @@ void DungeonApp::wireEnemies()
         // pool decal to grow.
         const entt::registry& reg = mCombat.director().registry();
         const game::EnemyMotion* motion = reg.try_get<game::EnemyMotion>(e);
+        const game::EnemyTag* tag = reg.try_get<game::EnemyTag>(e);
         const std::string blood = bloodProfileFor(e);
+        if (motion && tag && tag->def && !tag->def->visual.deathSound.empty()) {
+            game::AudioEmission sound;
+            sound.position = motion->feet + glm::vec3(0.0f, 0.8f, 0.0f);
+            mGameAudio.emit(tag->def->visual.deathSound, sound);
+        }
         mCombat.blood().stopDrip(mCtx->renderer, entt::to_integral(e));
         mEnemies.onKilled(*mCtx, e, mLastPlayerHitDirection);
         if (motion)
@@ -764,8 +812,15 @@ void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
                 if (const game::PlayerWeaponDef* weapon =
                         mPlayerSys.weaponDefinition(*fired)) {
                     const eng::FpsController& player = mPlayerSys.controller();
-                    mCombat.fireWeapon(*mCtx, *weapon, player.eyePosition(),
-                                       player.forward());
+                    mCombat.fireWeapon(
+                        *mCtx, *weapon, player.eyePosition(), player.forward(),
+                        mPlayerSys.projectileMuzzle(mCtx->renderer));
+                    if (!weapon->fireSound.empty()) {
+                        game::AudioEmission sound;
+                        sound.position = player.eyePosition();
+                        sound.spatial = game::SpatialOverride::Force2D;
+                        mGameAudio.emit(weapon->fireSound, sound);
+                    }
                 }
             }
         }
@@ -792,6 +847,40 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     eng::Input& in = engine.input();
     eng::StepClock& steps = engine.stepClock();
     eng::FpsController& player = mPlayerSys.controller();
+
+    mGameAudio.setListener(player.eyePosition(), player.forward(), f.realDt);
+    game::PlayerFoleyState foley;
+    foley.feet = playerFeet();
+    foley.horizontalSpeed = player.horizontalSpeed();
+    foley.grounded = player.grounded();
+    foley.sprinting = player.sprinting();
+    mGameAudio.updatePlayerFoley(foley);
+
+    game::MusicMixState music;
+    entt::registry& combatRegistry = mCombat.director().registry();
+    float pressure = 0.0f;
+    for (auto [enemy, tag, motion, health] :
+         combatRegistry
+             .view<const game::EnemyTag, const game::EnemyMotion,
+                   const game::Health>()
+             .each()) {
+        (void)enemy;
+        if (health.dead())
+            continue;
+        const float distance = glm::distance(motion.feet, foley.feet);
+        if (distance <= 22.0f)
+            pressure += std::clamp(1.0f - distance / 24.0f, 0.15f, 1.0f) *
+                        std::clamp(float(tag.def->tier) * 0.22f, 0.2f, 0.8f);
+        music.boss = music.boss || tag.def->boss;
+    }
+    music.threat = std::clamp(pressure, 0.0f, 1.0f);
+    if (const game::Health* health =
+            combatRegistry.try_get<game::Health>(mPlayerEntity))
+        music.playerHealth = health->max > 0.0f
+                                 ? std::clamp(health->current / health->max,
+                                              0.0f, 1.0f)
+                                 : 1.0f;
+    mGameAudio.update(f.realDt, music);
 
     // Render-sync stepping. Each of these copies a physics transform onto a
     // render node, so skipping the copy on a hold frame *is* the stop-motion:
@@ -889,11 +978,15 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
             game::ActionState& pas = creg.get<game::ActionState>(mPlayerEntity);
             if (in.wasPressed("deflect"))
                 game::feel::defense::beginDeflect(pas);
-            // Order matters: the dash is asked first because it is the one that
-            // can refuse (cooldown). Paying stamina and granting i-frames for a
-            // dodge that never moves is the bug that made this read as "there is
-            // no dash".
+            // Preflight combat state before movement. Once both gates pass,
+            // beginDodge cannot reject in this single-threaded presentation
+            // phase, so movement, stamina cost, action lock and i-frames start
+            // as one player-visible transaction.
             if (in.wasPressed("dodge") &&
+                game::feel::defense::canDodge(creg, mPlayerEntity,
+                                              mDashTuning.duration,
+                                              mDodgeIframes,
+                                              mDodgeStamina) &&
                 player.beginDash(player.inputDirection(
                     eng::FpsController::readCommand(in))))
                 game::feel::defense::beginDodge(creg, mPlayerEntity,
@@ -993,6 +1086,7 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
     deps.context = mCtx ? &*mCtx : nullptr;
     deps.level = &mLevel;
     deps.particles = &mParticles;
+    deps.audio = &mGameAudio;
     deps.playerFeet = playerFeet();
     deps.playerForward = mPlayerSys.controller().forward();
     deps.dt = f.dt;
@@ -1011,6 +1105,7 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
 
 void DungeonApp::onStopGame(eng::Engine&)
 {
+    mGameAudio.stopAll(eng::StopMode::Immediate);
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
     mProps.teardown(physics());
     if (mCtx)

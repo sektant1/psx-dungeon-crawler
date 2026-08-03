@@ -13,6 +13,7 @@
 
 namespace eng {
 
+class Audio;
 class FpsController;
 
 // Everything an FPS needs decided before the first frame, beyond what
@@ -138,6 +139,7 @@ protected:
 
     // --- services -------------------------------------------------------
     Physics& physics();
+    Audio& audio();
     DebugTools& console();     // add game tabs with console().addPanel(...)
     // Log + command line. Register game commands with
     // devConsole().registerCommand(...) from onStartGame.

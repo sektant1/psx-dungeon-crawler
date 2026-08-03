@@ -36,6 +36,11 @@
 #include <unordered_set>
 #include <vector>
 
+namespace eng {
+class Audio;
+class SoundInstance;
+}
+
 namespace ed {
 
 // The placement editor: a second consumer of the engine, beside the game.
@@ -209,6 +214,9 @@ private:
     // they answer questions about what is on screen.
     void drawViewportToolbar();
     void drawViewportStats(const eng::FrameContext& f);
+    void refreshAudioAssets();
+    void previewAudio(const game::content::AuthorId& entity);
+    void stopAudioPreview();
 
     // Anything that throws the open document away. An hour of blockout is the
     // most expensive thing in this program and four separate paths used to
@@ -286,6 +294,11 @@ private:
     EditorState mState;
     eng::DebugConsole mConsole;
     std::unique_ptr<PreviewBridge> mPreview;
+    std::unique_ptr<eng::Audio> mAudio;
+    std::shared_ptr<eng::SoundInstance> mAudioPreview;
+    game::content::AuthorId mAudioPreviewEntity;
+    std::string mAudioPreviewSource;
+    std::vector<std::string> mAudioAssets;
     // Held from onStart. The mode switch and the material panel need the
     // renderer outside a frame callback, and the Engine outlives this app.
     eng::Engine* mEngine = nullptr;

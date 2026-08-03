@@ -1,7 +1,7 @@
 #pragma once
 #include <eng/controllers/FpsController.h>
 #include "PlayerWeapons.h"
-#include "ViewModel.h"
+#include "FirstPersonHands.h"
 
 #include <glm/glm.hpp>
 
@@ -46,6 +46,8 @@ public:
     std::optional<std::size_t> fixedStepWeapons(GameContext& ctx, Mana& arc,
                                                 bool canFire, float fixedDt);
     void updateViewmodels(GameContext& ctx, float dt);
+    std::optional<glm::vec3>
+    projectileMuzzle(const eng::Renderer& renderer) const;
 
     int weapon() const { return int(mWeapons.selectedIndex()); }
     const PlayerWeaponDef* selectedWeapon() const { return mWeapons.selected(); }
@@ -55,25 +57,14 @@ public:
         return mWeaponLibrary.defs();
     }
 
-    // Weapon enchantment glow, across every viewmodel. Off by default: the glow
-    // is presentation, and a plain weapon is the honest baseline for tuning
-    // lighting and materials. The debug console drives this; it survives level
-    // transitions because attachLoadout re-applies it to the rebuilt viewmodels.
-    void setWeaponEnchant(eng::Renderer& r, bool on);
-    bool weaponEnchant() const { return mWeaponEnchant; }
-
     eng::FpsController& controller() { return mPlayer; }
     const eng::FpsController& controller() const { return mPlayer; }
 
 private:
-    void applyWeaponVis(GameContext& ctx);
-
     eng::FpsController mPlayer;
     PlayerWeaponLibrary mWeaponLibrary;
     WeaponController mWeapons;
-    std::vector<ViewModel> mViewmodels;
-    std::vector<bool> mPendingFireAnimation;
-    bool mWeaponEnchant = false;
+    FirstPersonHands mHands;
     float mSpeed = 3.0f;
     float mSens = 0.002f;
     float mFootstepFxCooldown = 0.0f;

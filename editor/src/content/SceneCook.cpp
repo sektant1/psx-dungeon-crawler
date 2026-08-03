@@ -214,6 +214,21 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
         if (authored.particles)
             built.emplace<eng::ecs::ParticleEmitter>(entity,
                                                      *authored.particles);
+        if (authored.audio)
+            built.emplace<eng::ecs::AudioEmitter>(entity, *authored.audio);
+        if (authored.audioListener)
+            built.emplace<eng::ecs::AudioListener>(entity,
+                                                   *authored.audioListener);
+        // The kind is resolved, not copied: a scene that says "enemy spawn" and
+        // nothing else still cooks an Actor, so the runtime has one question to
+        // ask instead of the three the format grew.
+        if (const std::optional<game::ActorKind> kind = actorKindOf(authored))
+            built.emplace<game::Actor>(entity, game::Actor{*kind});
+        // Dropped on a non-actor: validate() warns, and cooking it anyway would
+        // put a table in the map that nothing can play.
+        if (authored.sounds && !authored.sounds->empty() && isActor(authored))
+            built.emplace<game::ActorSounds>(entity,
+                                             game::ActorSounds{*authored.sounds});
         if (authored.portal)
             built.emplace<eng::ecs::PortalParams>(entity, *authored.portal);
         if (authored.shader) {

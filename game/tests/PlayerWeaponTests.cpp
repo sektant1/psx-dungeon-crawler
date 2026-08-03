@@ -40,13 +40,17 @@ int main()
     const PlayerWeaponDef* talon = library.find("riven_talon");
     require(spindle && arbalest && talon, "required weapon id is missing");
     require(spindle->trigger == WeaponTrigger::Automatic &&
-                near(spindle->projectile.speed, 72.0f),
+                near(spindle->projectile.speed, 72.0f) &&
+                spindle->viewmodel.handsMuzzleJoint == "f_index.03.R" &&
+                near(spindle->viewmodel.handsMuzzleOffset.y, 0.025f),
             "precision weapon cadence/projectile did not parse");
     require(arbalest->projectileCount == 3 &&
                 near(arbalest->spreadDegrees, 8.0f),
             "heavy weapon spread did not parse");
     require(talon->viewmodel.parts.size() == 4 &&
-                talon->projectile.material == "Game/Prototype/ProjectileTalon",
+                talon->projectile.material == "Game/Prototype/ProjectileTalon" &&
+                talon->viewmodel.handsIdleAnimation == "knife_idle" &&
+                talon->viewmodel.handsFireAnimation == "knife_hit_01",
             "talon presentation did not parse");
     PlayerWeaponDef invalidDefinition = *spindle;
     invalidDefinition.fireInterval =

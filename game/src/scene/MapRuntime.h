@@ -2,6 +2,8 @@
 
 #include <eng/ecs/World.h>
 
+#include "audio/ActorSounds.h"
+
 #include <entt/entt.hpp>
 #include <functional>
 #include <glm/glm.hpp>
@@ -15,6 +17,12 @@ struct ScenePlacement {
     std::string type;
     glm::vec3 position{0.0f};
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    // Cue overrides the author put on this particular placement, empty when
+    // they did not. Carried through the spawn path so "this one grunt screams
+    // differently" survives the trip from the .scn to the live enemy -- the
+    // authored entity and the enemy it produces are entities on two different
+    // registries, so anything not carried here is lost at the seam.
+    ActorSoundSet sounds;
 };
 
 // Reads a cooked .map into the level's world and answers the authored queries

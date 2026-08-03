@@ -62,6 +62,8 @@ endif()
 # nearly every translation unit. Precompiling them once per target removes that
 # from every file in it.
 option(ENABLE_PCH "Precompile the heavy third-party headers" ON)
+option(ENG_BUILD_ANIMATION_TOOLS
+       "Build offline ozz tools and explicit source-asset cook targets" OFF)
 
 # --- Build speed: unity builds ----------------------------------------------
 # Off by default: batching translation units is a large fresh-build win but it
@@ -261,7 +263,7 @@ endif()
   set(_eng_renderer_shader_dir
       "${CMAKE_CURRENT_BINARY_DIR}/rhi-renderer-shaders")
   set(_eng_renderer_shader_outputs)
-  foreach(_shader scene.vert scene.frag fullscreen.vert fullscreen.frag
+  foreach(_shader scene.vert scene.frag skinned_scene.vert skinned_shadow.vert fullscreen.vert fullscreen.frag
                   post.frag stylize.frag bloom_bright.frag bloom_blur.frag surface.vert surface.frag shadow.vert shadow.frag
                   particle.vert particle.frag
                   imgui.vert imgui.frag)
@@ -296,7 +298,8 @@ target_link_libraries(eng_platform PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core
 
 # Renderer-independent source-model import. Kept as its own library so runtime,
 # validation CLI, and hermetic tests execute exactly the same Assimp path.
-add_library(eng_model_import STATIC engine/src/render/AssimpLoader.cpp)
+add_library(eng_model_import STATIC engine/src/render/AssimpLoader.cpp
+                                    engine/src/render/SkinnedAssimpLoader.cpp)
 target_include_directories(eng_model_import PUBLIC engine/include engine/src)
 target_link_libraries(eng_model_import PUBLIC glm::glm PRIVATE assimp::assimp)
 
@@ -315,6 +318,7 @@ set(_eng_systems_sources
   engine/src/render/FrameCapture.cpp
   engine/src/render/GifRecorder.cpp
   engine/src/render/Model.cpp
+  engine/src/animation/SkeletalAnimation.cpp
   engine/src/render/Primitive.cpp
   engine/src/render/PrototypeAssets.cpp
   engine/src/particles/ParticlePresets.cpp
@@ -343,7 +347,8 @@ target_include_directories(eng_systems PRIVATE third_party engine/src
 target_link_libraries(eng_systems
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_platform>"
          "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_rhi>" eng_imgui
-  PRIVATE SDL2::SDL2 Jolt miniaudio eng_model_import ${CMAKE_DL_LIBS})
+  PRIVATE SDL2::SDL2 Jolt miniaudio eng_model_import ozz_animation
+          ${CMAKE_DL_LIBS})
   add_dependencies(eng_systems rhi_renderer_shaders)
   target_link_libraries(eng_systems PRIVATE eng_stb)
   target_compile_definitions(eng_systems PRIVATE ENG_RENDERER_RHI=1
@@ -351,6 +356,7 @@ target_link_libraries(eng_systems
 
 add_library(
   eng_framework STATIC engine/src/ecs/World.cpp engine/src/ecs/SceneSync.cpp
+                        engine/src/ecs/AudioSync.cpp
                        engine/src/ecs/PhysicsSync.cpp
                        engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
@@ -459,6 +465,11 @@ add_library(
   game_content STATIC
   game/src/scene/ComponentRegistry.cpp
   game/src/scene/MapSerializer.cpp
+  # The actor/action vocabulary. In the content library rather than beside the
+  # audio system because the editor and the headless cooker need it and neither
+  # links miniaudio: what an enemy's actions ARE is content, and which clip
+  # plays for one is runtime.
+  game/src/audio/ActorSounds.cpp
   game/src/scene/LayoutToScene.cpp
   editor/src/content/KitCatalog.cpp
   editor/src/content/SceneDocument.cpp
@@ -555,6 +566,7 @@ add_executable(
   game/src/PropSystem.cpp
   game/src/CombatSystem.cpp
   game/src/BloodSystem.cpp
+  game/src/audio/GameAudio.cpp
   game/src/ParticleCollider.cpp
   game/src/DebugOverlay.cpp
   game/src/ui/GameHud.cpp
@@ -593,12 +605,55 @@ add_executable(
   game/src/Targeting.cpp
   game/src/Dummy.cpp
   game/src/ViewModel.cpp
+  game/src/FirstPersonHands.cpp
   game/src/MapPlay.cpp
   game/src/scene/MapRuntime.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
                                         game/src game/src/scene)
 target_link_libraries(game PRIVATE demo_scene game_content)
 eng_target_hardening(game)
+
+# Explicit source-asset cook. Normal builds consume checked-in cooked content
+# and never write into source tree; enable tool only on an asset-authoring build
+# and invoke `cook_first_person_hands` deliberately after changing source rig.
+set(_hands_source_dir
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/source/fps-animated-hand-assets")
+set(_hands_animation_dir
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/animations/viewmodels/arms")
+set(_hands_animation_stage
+    "${CMAKE_CURRENT_BINARY_DIR}/cooked-assets/first-person-hands")
+set(_hands_mesh_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets/meshes/viewmodels")
+set(_hands_texture_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets/textures/viewmodels")
+if(ENG_BUILD_ANIMATION_TOOLS AND TARGET gltf2ozz AND
+   EXISTS "${_hands_source_dir}/arms_rig.glb")
+  add_custom_target(
+    cook_first_person_hands
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${_hands_animation_stage}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_hands_animation_stage}"
+    COMMAND ${CMAKE_COMMAND} -E chdir "${_hands_animation_stage}"
+            $<TARGET_FILE:gltf2ozz>
+            --file=${_hands_source_dir}/arms_rig.glb
+            --config_file=${CMAKE_CURRENT_SOURCE_DIR}/assets/config/arms_rig.ozz.json
+            --endian=little
+    # Converter succeeded: only now replace destination, preventing stale clips
+    # and preserving last good cook on conversion failure.
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${_hands_animation_dir}"
+    COMMAND ${CMAKE_COMMAND} -E rename "${_hands_animation_stage}"
+            "${_hands_animation_dir}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_hands_mesh_dir}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_hands_texture_dir}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_hands_source_dir}/arms_rig.glb"
+            "${_hands_mesh_dir}/arms_rig.glb"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_hands_source_dir}/arms_01.png"
+            "${_hands_texture_dir}/arms_01.png"
+    DEPENDS gltf2ozz "${_hands_source_dir}/arms_rig.glb"
+            "${_hands_source_dir}/arms_01.png"
+            assets/config/arms_rig.ozz.json
+    COMMENT "Cooking checked-in first-person hands runtime assets"
+    VERBATIM)
+endif()
 if(ENABLE_PCH)
   target_precompile_headers(game PRIVATE <entt/entt.hpp> <glm/glm.hpp>
                             <string> <vector> <unordered_map>)
@@ -717,6 +772,15 @@ if(BUILD_TESTING)
   add_executable(fps_controller_tests game/tests/FpsControllerTests.cpp)
   target_link_libraries(fps_controller_tests PRIVATE eng)
   add_test(NAME fps_controller COMMAND fps_controller_tests)
+
+  add_executable(skeletal_animation_tests
+                 engine/tests/SkeletalAnimationTests.cpp)
+  target_include_directories(skeletal_animation_tests PRIVATE engine/src)
+  target_link_libraries(skeletal_animation_tests PRIVATE eng_systems)
+  target_compile_definitions(
+    skeletal_animation_tests
+    PRIVATE PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME skeletal_animation COMMAND skeletal_animation_tests)
 
   add_executable(physics_tests game/tests/PhysicsTests.cpp)
   target_include_directories(physics_tests PRIVATE game/src)
@@ -1204,11 +1268,24 @@ if(BUILD_TESTING)
     audio_tests
     engine/tests/AudioTests.cpp engine/src/audio/Audio.cpp
     engine/src/audio/SoundInstance.cpp engine/src/audio/SoundResource.cpp
-    engine/src/io/FileSystem.cpp engine/src/core/Object.cpp)
+    engine/src/io/FileSystem.cpp engine/src/core/Object.cpp
+    engine/src/core/Log.cpp)
   target_include_directories(audio_tests PRIVATE engine/include
                                                  engine/src/audio)
   target_link_libraries(audio_tests PRIVATE miniaudio)
   add_test(NAME audio COMMAND audio_tests)
+
+  add_executable(audio_scene_sync_tests engine/tests/AudioSceneSyncTests.cpp)
+  target_link_libraries(audio_scene_sync_tests PRIVATE eng)
+  add_test(NAME audio_scene_sync COMMAND audio_scene_sync_tests)
+
+  add_executable(game_audio_tests game/tests/GameAudioTests.cpp
+                                  game/src/audio/GameAudio.cpp)
+  target_include_directories(game_audio_tests PRIVATE game/src engine/include)
+  target_link_libraries(game_audio_tests PRIVATE eng eng_toml)
+  target_compile_definitions(
+    game_audio_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME game_audio COMMAND game_audio_tests)
 
   add_executable(
     map_runtime_tests
@@ -1349,7 +1426,7 @@ if(BUILD_TESTING)
   target_include_directories(editor_model_import_tests PRIVATE editor/include
                              engine/include engine/src)
   target_link_libraries(editor_model_import_tests PRIVATE eng_model_import
-                                                          glm::glm)
+                                                          eng_core glm::glm)
   target_compile_definitions(
     editor_model_import_tests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME editor_model_import COMMAND editor_model_import_tests)

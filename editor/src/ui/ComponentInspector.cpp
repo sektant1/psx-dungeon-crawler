@@ -541,6 +541,228 @@ void drawCamera(Entity& entity, InspectorContext& context)
                           "the game looks through");
 }
 
+void drawAudio(Entity& entity, InspectorContext& context)
+{
+    game::content::AudioEmitterAuthor& audio = *entity.audio;
+
+    stringField("source", audio.source, context);
+    if (context.audioAssets && !context.audioAssets->empty()) {
+        const std::string current = audio.source.empty() ? "pick a clip"
+                                                        : audio.source;
+        if (ImGui::BeginCombo("clip browser", current.c_str())) {
+            for (const std::string& path : *context.audioAssets) {
+                if (ImGui::Selectable(path.c_str(), path == audio.source)) {
+                    audio.source = path;
+                    context.track(true, true);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (!audio.source.empty() &&
+            std::find(context.audioAssets->begin(), context.audioAssets->end(),
+                      audio.source) == context.audioAssets->end()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                               "clip is not in mounted audio assets");
+        }
+    } else {
+        ImGui::TextDisabled("no runtime audio clips found under assets/audio");
+    }
+
+    const bool canPreview = !audio.source.empty() && context.requestAudioPreview;
+    ImGui::BeginDisabled(!canPreview);
+    if (ImGui::Button(context.audioPreviewing ? "Restart preview" : "Play preview"))
+        context.requestAudioPreview(entity.id);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!context.audioPreviewing || !context.stopAudioPreview);
+    if (ImGui::Button("Stop"))
+        context.stopAudioPreview();
+    ImGui::EndDisabled();
+
+    static const eng::AudioBus kBuses[] = {
+        eng::AudioBus::Music,   eng::AudioBus::Ambience,
+        eng::AudioBus::Dialogue, eng::AudioBus::Weapons,
+        eng::AudioBus::Sfx,     eng::AudioBus::Ui,
+        eng::AudioBus::Warnings,
+    };
+    const eng::AudioBus selectedBus =
+        audio.bus > static_cast<int>(eng::AudioBus::Master) &&
+                audio.bus < static_cast<int>(eng::AudioBus::Count)
+            ? static_cast<eng::AudioBus>(audio.bus)
+            : eng::AudioBus::Sfx;
+    if (ImGui::BeginCombo("bus", eng::audioBusName(selectedBus))) {
+        for (eng::AudioBus bus : kBuses) {
+            if (ImGui::Selectable(eng::audioBusName(bus), bus == selectedBus)) {
+                audio.bus = static_cast<int>(bus);
+                context.track(true, true);
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::SliderFloat("gain", &audio.gainDb, -80.0f, 12.0f, "%.1f dB");
+    track(context);
+    ImGui::SliderFloat("pitch", &audio.pitch, 0.25f, 4.0f, "%.2fx");
+    track(context);
+
+    if (ImGui::Checkbox("3D spatial", &audio.spatialized))
+        context.track(true, true);
+    if (audio.spatialized) {
+        drawVec3Property("offset", "Offset", "m", audio.offset,
+                         glm::vec3(0.0f), 0.02f, context);
+        ImGui::DragFloat("full volume to", &audio.minDistance, 0.05f, 0.0f,
+                         1000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
+        ImGui::DragFloat("inaudible after", &audio.maxDistance, 0.25f, 0.01f,
+                         10000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
+        if (audio.maxDistance <= audio.minDistance)
+            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                               "inaudible distance must exceed full-volume distance");
+        ImGui::SliderFloat("rolloff", &audio.rolloff, 0.0f, 8.0f, "%.2f");
+        track(context);
+        ImGui::SliderFloat("doppler", &audio.dopplerFactor, 0.0f, 4.0f,
+                           "%.2f");
+        track(context);
+        ImGui::TextDisabled("selected emitter shows its maximum reach in viewport");
+    }
+
+    int priorityIndex = 2;
+    static const int kPriorities[] = {
+        static_cast<int>(eng::AudioPriority::Background),
+        static_cast<int>(eng::AudioPriority::Low),
+        static_cast<int>(eng::AudioPriority::Normal),
+        static_cast<int>(eng::AudioPriority::Important),
+        static_cast<int>(eng::AudioPriority::Critical),
+    };
+    for (int index = 0; index < 5; ++index)
+        if (audio.priority == kPriorities[index])
+            priorityIndex = index;
+    if (ImGui::Combo("priority", &priorityIndex,
+                     "background\0low\0normal\0important\0critical\0")) {
+        audio.priority = kPriorities[priorityIndex];
+        context.track(true, true);
+    }
+
+    if (ImGui::Checkbox("Loop", &audio.loop))
+        context.track(true, true);
+    if (ImGui::Checkbox("Stream from disk", &audio.streaming))
+        context.track(true, true);
+    if (audio.streaming)
+        ImGui::TextDisabled("use for long ambience/music, not repeated short SFX");
+    if (ImGui::Checkbox("Autostart", &audio.playing))
+        context.track(true, true);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Starts when the runtime scene materialises. Disable "
+                          "when gameplay will control the component.");
+    if (ImGui::Checkbox("May be voice-stolen", &audio.stealable))
+        context.track(true, true);
+}
+
+// What the game will treat this entity as. The kind is not decoration: it is
+// what decides which actions the sound table below offers, and it is what the
+// runtime keys the conventional cue names off.
+void drawActor(Entity& entity, InspectorContext& context)
+{
+    static const game::ActorKind kKinds[] = {
+        game::ActorKind::Player, game::ActorKind::Npc, game::ActorKind::Enemy};
+    const game::ActorKind current = *entity.actor;
+    if (ImGui::BeginCombo("kind", game::actorKindName(current))) {
+        for (game::ActorKind kind : kKinds) {
+            if (ImGui::Selectable(game::actorKindName(kind), kind == current)) {
+                entity.actor = kind;
+                context.track(true, true);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    // The implied kinds, said out loud: an author who has already placed an
+    // enemy spawn does not need this component at all, and finding that out
+    // from the panel beats finding it out from a duplicate.
+    if (const std::optional<game::ActorKind> implied = actorKindOf(entity);
+        implied && entity.actor && *implied != *entity.actor) {
+        ImGui::TextDisabled("its spawn component would say '%s' on its own",
+                            game::actorKindName(*implied));
+    }
+    ImGui::TextDisabled("gates the Sounds table and names its default cues\n"
+                        "(\"%s.hurt\", \"%s.death\", ...)",
+                        game::actorKindCuePrefix(current),
+                        game::actorKindCuePrefix(current));
+}
+
+// One cue per action this actor can perform.
+//
+// Every row is optional and empty by default: an empty row is "sound like the
+// type says", not "silent". That distinction is the whole reason the table can
+// be added to a placed entity without changing anything until a row is filled.
+void drawSounds(Entity& entity, InspectorContext& context)
+{
+    game::ActorSoundSet& sounds = *entity.sounds;
+    const std::optional<game::ActorKind> kind = actorKindOf(entity);
+    if (!kind) {
+        // The component outlived the thing that made it meaningful -- the enemy
+        // spawn was removed, say. Kept and shown so it can be removed, rather
+        // than silently cooked onto an entity that performs nothing.
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                           "this entity is not an actor any more");
+        ImGui::TextDisabled("add an Actor component or remove this table");
+        return;
+    }
+
+    ImGui::TextDisabled("empty = the cue this actor's type already plays");
+    for (const game::ActorActionInfo& info : game::actorActions()) {
+        if (!game::actorPerforms(*kind, info.action))
+            continue; // a player does not telegraph; an enemy does not jump
+        ImGui::PushID(info.id);
+        std::string& cue = sounds.cues[static_cast<std::size_t>(info.action)];
+        const std::string fallback =
+            game::actorConventionCue(*kind, info.action);
+        const std::string current = cue.empty() ? fallback + "  (default)" : cue;
+        if (ImGui::BeginCombo(info.label, current.c_str())) {
+            if (ImGui::Selectable("(default)", cue.empty())) {
+                cue.clear();
+                context.track(true, true);
+            }
+            if (context.audioCues) {
+                for (const std::string& option : *context.audioCues) {
+                    if (ImGui::Selectable(option.c_str(), option == cue)) {
+                        cue = option;
+                        context.track(true, true);
+                    }
+                }
+            }
+            ImGui::EndCombo();
+        }
+        // Free text as well as the list: a cue authored after the editor
+        // started must still be typeable, exactly as the clip field allows.
+        ImGui::SetNextItemWidth(-1.0f);
+        stringField("##typed", cue, context);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", info.hint);
+        if (!cue.empty() && context.audioCues && !context.audioCues->empty() &&
+            std::find(context.audioCues->begin(), context.audioCues->end(),
+                      cue) == context.audioCues->end()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                               "'%s' is not a cue in audio.toml", cue.c_str());
+        }
+        ImGui::PopID();
+    }
+    if (context.audioCues && context.audioCues->empty())
+        ImGui::TextDisabled("no cue list loaded -- typed ids are not checked");
+}
+
+void drawAudioListener(Entity& entity, InspectorContext& context)
+{
+    game::content::AudioListenerAuthor& listener = *entity.audioListener;
+    if (ImGui::Checkbox("active", &listener.active))
+        context.track(true, true);
+    ImGui::DragInt("priority", &listener.priority, 0.1f, -100, 100, "%d",
+                   ImGuiSliderFlags_AlwaysClamp);
+    track(context);
+    ImGui::TextDisabled("highest active listener wins; position and facing come "
+                        "from this entity's transform");
+}
+
 void drawSpin(Entity& entity, InspectorContext& context)
 {
     SpinAuthor& spin = *entity.spin;
@@ -743,6 +965,10 @@ constexpr Drawer kDrawers[] = {
     {"collider", drawCollider},
     {"light", drawLight},
     {"camera", drawCamera},
+    {"audio", drawAudio},
+    {"audio_listener", drawAudioListener},
+    {"actor", drawActor},
+    {"sounds", drawSounds},
     {"spin", drawSpin},
     {"orbit", drawOrbit},
     {"shader", drawShader},

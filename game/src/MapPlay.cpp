@@ -153,6 +153,7 @@ protected:
         mBackend.emplace(r);
         mWorld.attachRenderer(*mBackend);
         mWorld.attachPhysics(physics());
+        mWorld.attachAudio(audio(), /*drivesListener=*/true);
         mParticleCollider.emplace(physics(), eng::kAllLayers);
         r.setParticleCollider(&*mParticleCollider);
         // One map, no transitions: everything it contributes lives as long as

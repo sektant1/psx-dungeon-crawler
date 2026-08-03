@@ -29,6 +29,7 @@ struct PlayerProjectileDef {
     std::string material = "Game/Prototype/ProjectileVesper";
     std::string trailEffect;
     std::string impactEffect;
+    std::string impactSound;
     float speed = 50.0f;
     float lifetime = 1.5f;
     float radius = 0.05f;
@@ -51,6 +52,11 @@ struct WeaponViewmodelDef {
     glm::vec3 rotationDegrees{0.0f};
     std::vector<WeaponViewmodelPart> parts;
     std::string glowSchool = "arcane";
+    std::string handsIdleAnimation = "relax";
+    std::string handsDrawAnimation = "relax";
+    std::string handsFireAnimation = "grab.R";
+    std::string handsMuzzleJoint = "f_index.03.R";
+    glm::vec3 handsMuzzleOffset{0.0f, 0.025f, 0.0f};
     float glowStrength = 0.6f;
 
     float fireDuration = 0.16f;
@@ -78,6 +84,7 @@ struct PlayerWeaponDef {
     // Camera-local right/up/forward offset. Aim remains camera-derived.
     glm::vec3 muzzleOffset{0.18f, -0.16f, 0.40f};
     std::string muzzleEffect;
+    std::string fireSound;
     PlayerProjectileDef projectile;
     WeaponViewmodelDef viewmodel;
 };

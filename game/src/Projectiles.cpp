@@ -76,14 +76,15 @@ eng::MeshHandle ProjectileSystem::meshFor(
 }
 
 void ProjectileSystem::fire(eng::Physics& physics, eng::Renderer& renderer,
-                            const game::PlayerWeaponDef& weapon,
-                            glm::vec3 aimOrigin, glm::vec3 aimDirection)
+                             const game::PlayerWeaponDef& weapon,
+                             glm::vec3 aimOrigin, glm::vec3 aimDirection,
+                             std::optional<glm::vec3> muzzleOrigin)
 {
     if (glm::dot(aimDirection, aimDirection) < 0.000001f)
         return;
     aimDirection = glm::normalize(aimDirection);
-    const glm::vec3 muzzle = muzzlePosition(aimOrigin, aimDirection,
-                                            weapon.muzzleOffset);
+    const glm::vec3 muzzle = muzzleOrigin.value_or(
+        muzzlePosition(aimOrigin, aimDirection, weapon.muzzleOffset));
 
     eng::RayHit targetHit;
     const bool aimedAtBody = physics.rayCast(

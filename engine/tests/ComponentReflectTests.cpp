@@ -135,7 +135,50 @@ int main()
         require(out.effect == in.effect, "a string field round-trips");
         require(out.offset == in.offset, "a vec3 field round-trips");
         require(out.playing == in.playing && out.scale == in.scale,
-                "bool and float fields round-trip");
+                 "bool and float fields round-trip");
+    }
+    {
+        const ComponentType* em = byName(reg, "AudioEmitter");
+        require(em != nullptr && em->fieldCount == 15,
+                "AudioEmitter is fully reflected");
+        AudioEmitter in;
+        in.source = "audio/ambience/crypt.ogg";
+        in.offset = {1.0f, 2.0f, 3.0f};
+        in.bus = static_cast<int>(AudioBus::Ambience);
+        in.gainDb = -7.0f;
+        in.pitch = 0.9f;
+        in.minDistance = 2.0f;
+        in.maxDistance = 60.0f;
+        in.rolloff = 1.5f;
+        in.dopplerFactor = 0.5f;
+        in.priority = static_cast<int>(AudioPriority::Important);
+        in.loop = true;
+        in.streaming = true;
+        in.spatialized = false;
+        in.playing = false;
+        in.stealable = false;
+        const AudioEmitter out = roundTripValue(*em, in);
+        require(out.source == in.source && out.offset == in.offset &&
+                    out.bus == in.bus && out.gainDb == in.gainDb &&
+                    out.pitch == in.pitch && out.minDistance == in.minDistance &&
+                    out.maxDistance == in.maxDistance &&
+                    out.rolloff == in.rolloff &&
+                    out.dopplerFactor == in.dopplerFactor &&
+                    out.priority == in.priority && out.loop == in.loop &&
+                    out.streaming == in.streaming &&
+                    out.spatialized == in.spatialized &&
+                    out.playing == in.playing &&
+                    out.stealable == in.stealable,
+                "every audio emitter field survives a round trip");
+    }
+    {
+        const ComponentType* listener = byName(reg, "AudioListener");
+        require(listener != nullptr && listener->fieldCount == 2,
+                "AudioListener is reflected");
+        const eng::ecs::AudioListener in{42, false};
+        const eng::ecs::AudioListener out = roundTripValue(*listener, in);
+        require(out.priority == 42 && !out.active,
+                "audio listener fields survive a round trip");
     }
     {
         const ComponentType* mo = byName(reg, "MaterialOverride");

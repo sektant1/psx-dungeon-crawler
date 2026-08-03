@@ -8,6 +8,16 @@ struct MeshHandle {
     bool valid() const { return id != 0; }
 };
 
+struct SkinnedMeshHandle {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
+struct SkinInstanceHandle {
+    uint32_t id = 0;
+    bool valid() const { return id != 0; }
+};
+
 struct NodeHandle {
     uint32_t id = 0;
     bool valid() const { return id != 0; }

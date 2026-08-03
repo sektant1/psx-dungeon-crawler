@@ -157,7 +157,22 @@ std::vector<GizmoMark> collectGizmoMarks(const game::content::SceneDocument& doc
             mark.world += world.orientation * (world.scale * entity.particles->offset);
             if (!entity.particles->effect.empty())
                 mark.label = labelFor(entity) + " (" +
-                             entity.particles->effect + ")";
+                              entity.particles->effect + ")";
+        }
+        if (entity.audio) {
+            GizmoMark& mark = push(GizmoKind::AudioEmitter);
+            mark.hasSource = true;
+            mark.sourceWorld = world.position;
+            mark.world += world.orientation * (world.scale * entity.audio->offset);
+            if (entity.audio->spatialized)
+                mark.radius = entity.audio->maxDistance;
+            if (!entity.audio->source.empty())
+                mark.label = labelFor(entity) + " (" + entity.audio->source + ")";
+        }
+        if (entity.audioListener) {
+            GizmoMark& mark = push(GizmoKind::AudioListener);
+            mark.directed = true;
+            mark.yawDegrees = worldYawPitchRoll.y;
         }
         if (entity.collider) {
             const bool hasOtherMark = marks.size() != before;
@@ -209,6 +224,10 @@ GizmoLook gizmoLook(GizmoKind kind)
         return {0xFFB0D8FF, "orbit"};
     case GizmoKind::Particles:
         return {0xFFFFB45C, "particles"};
+    case GizmoKind::AudioEmitter:
+        return {0xFFF2C14E, "audio"};
+    case GizmoKind::AudioListener:
+        return {0xFFB5E853, "listener"};
     case GizmoKind::Collider:
         return {0xFF8F8F8F, "collider"};
     }

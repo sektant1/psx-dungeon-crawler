@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -23,7 +24,8 @@ public:
 
     void setImpactCallback(ImpactFn fn) { mOnImpact = std::move(fn); }
     void fire(eng::Physics&, eng::Renderer&, const game::PlayerWeaponDef&,
-              glm::vec3 aimOrigin, glm::vec3 aimDirection);
+              glm::vec3 aimOrigin, glm::vec3 aimDirection,
+              std::optional<glm::vec3> muzzleOrigin = std::nullopt);
     void onHit(eng::Physics&, eng::Renderer&, const eng::HitEvent&);
     void fixedUpdate(eng::Physics&, eng::Renderer&, float dt);
     void syncRender(eng::Physics&, eng::Renderer&);

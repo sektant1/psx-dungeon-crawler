@@ -329,6 +329,42 @@ template <> FieldSpan fieldsOf<ecs::Camera>()
     return {f, int(std::size(f))};
 }
 
+template <> FieldSpan fieldsOf<ecs::AudioEmitter>()
+{
+    using E = ecs::AudioEmitter;
+    static const Field f[] = {
+        ENG_FIELD(E, source, FieldType::String),
+        ENG_FIELD(E, offset, FieldType::Vec3),
+        ENG_FIELD_RANGE(E, bus, FieldType::Int, 0.0f,
+                        float(static_cast<int>(AudioBus::Count) - 1)),
+        ENG_FIELD_RANGE(E, gainDb, FieldType::Float, -80.0f, 12.0f),
+        ENG_FIELD_RANGE(E, pitch, FieldType::Float, 0.25f, 4.0f),
+        ENG_FIELD_RANGE(E, minDistance, FieldType::Float, 0.0f, 1000.0f),
+        ENG_FIELD_RANGE(E, maxDistance, FieldType::Float, 0.01f, 10000.0f),
+        ENG_FIELD_RANGE(E, rolloff, FieldType::Float, 0.0f, 8.0f),
+        ENG_FIELD_RANGE(E, dopplerFactor, FieldType::Float, 0.0f, 4.0f),
+        ENG_FIELD_RANGE(E, priority, FieldType::Int,
+                        float(static_cast<int>(AudioPriority::Background)),
+                        float(static_cast<int>(AudioPriority::Critical))),
+        ENG_FIELD(E, loop, FieldType::Bool),
+        ENG_FIELD(E, streaming, FieldType::Bool),
+        ENG_FIELD(E, spatialized, FieldType::Bool),
+        ENG_FIELD(E, playing, FieldType::Bool),
+        ENG_FIELD(E, stealable, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+template <> FieldSpan fieldsOf<ecs::AudioListener>()
+{
+    static const Field f[] = {
+        ENG_FIELD_RANGE(ecs::AudioListener, priority, FieldType::Int, -100.0f,
+                        100.0f),
+        ENG_FIELD(ecs::AudioListener, active, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
 template <> FieldSpan fieldsOf<ecs::RigidBody>()
 {
     static const Field f[] = {
@@ -443,6 +479,8 @@ void registerEngineComponents(ComponentRegistry& reg)
     reg.add(reflectedComponent<Orbit>("Orbit", 23));
     reg.add(reflectedComponent<ShaderParams>("ShaderParams", 25));
     reg.add(reflectedComponent<PortalParams>("PortalParams", 26));
+    reg.add(reflectedComponent<AudioEmitter>("AudioEmitter", 27));
+    reg.add(reflectedComponent<AudioListener>("AudioListener", 28));
 }
 
 } // namespace ecs

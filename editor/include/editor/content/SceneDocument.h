@@ -1,6 +1,10 @@
 #pragma once
+#include <eng/ecs/components/AudioEmitter.h>
+#include <eng/ecs/components/AudioListener.h>
 #include <eng/ecs/components/ParticleEmitter.h>
 #include <eng/ecs/components/PortalParams.h>
+
+#include "audio/ActorSounds.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -183,6 +187,25 @@ using PortalAuthor = eng::ecs::PortalParams;
 // a runtime act nothing saves, so an authored scene could not carry one.
 using ParticleAuthor = eng::ecs::ParticleEmitter;
 
+// Sound attached to an entity, and a listener candidate attached to a camera or
+// empty rig node. Authored types are runtime components directly, so cooking
+// cannot lose a setting in translation.
+using AudioEmitterAuthor = eng::ecs::AudioEmitter;
+using AudioListenerAuthor = eng::ecs::AudioListener;
+
+// What this entity is to the game -- player, NPC or enemy -- and what each of
+// its actions sounds like. Same mirror-not-translate rule as the two above: the
+// authored types are the runtime ones, so the cook is a copy.
+//
+// An actor kind is what gates the sound table: a wall performs no actions, so
+// asking an author to fill in "what does this crate sound like when it dies" is
+// a panel full of fields nobody can answer. Placement components imply a kind
+// (a player spawn is a player, an enemy spawn is an enemy), so this component
+// only has to be added by hand for the case the format could not express at
+// all: an NPC.
+using ActorKindAuthor = game::ActorKind;
+using ActorSoundsAuthor = game::ActorSoundSet;
+
 struct SpinAuthor {
     glm::vec3 axis{0.0f, 1.0f, 0.0f};
     float degreesPerSecond = 45.0f;
@@ -218,6 +241,10 @@ struct Entity {
     std::optional<ShaderAuthor> shader;
     std::optional<PortalAuthor> portal;
     std::optional<ParticleAuthor> particles;
+    std::optional<AudioEmitterAuthor> audio;
+    std::optional<AudioListenerAuthor> audioListener;
+    std::optional<ActorKindAuthor> actor;
+    std::optional<ActorSoundsAuthor> sounds;
     std::optional<float> exitYawDegrees;
     std::optional<std::string> marker;
     std::optional<std::string> enemySpawn; // enemy type id
@@ -225,6 +252,20 @@ struct Entity {
     std::optional<TriggerAuthor> trigger;
     bool playerSpawn = false;
 };
+
+// What the game will treat this entity as, or nothing when it is scenery.
+//
+// Explicit first: an `actor` component says so outright, which is the only way
+// to author an NPC. Otherwise the placement components already in the format
+// imply it -- a player spawn is the player, an enemy spawn and an "enemy."
+// marker are enemies -- so every level authored before actors existed
+// classifies correctly without being touched, and the editor, the cooker and
+// the validator cannot disagree about what is an actor.
+std::optional<game::ActorKind> actorKindOf(const Entity& entity);
+inline bool isActor(const Entity& entity)
+{
+    return actorKindOf(entity).has_value();
+}
 
 // The authored scene: what a .scn file says, in memory. Renderer-free and
 // EnTT-free on purpose, so it loads in a headless test in milliseconds.

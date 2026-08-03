@@ -54,10 +54,27 @@ int main() {
         auto& as = reg.emplace<ActionState>(e);
         auto& st = reg.emplace<Stamina>(e); st.current = 100.0f;
         auto& h = reg.emplace<Health>(e);
+        check(feel::defense::canDodge(reg, e, 0.4f, 0.2f),
+              "idle funded dodge preflights");
         check(feel::defense::beginDodge(reg, e, 0.4f, 0.2f), "dodge starts");
         check(as.phase == ActionPhase::Dodging, "in dodging state");
         check(nearly(st.current, 75.0f), "dodge costs 25 stamina");
         check(h.invulnTimer > 0.0f, "i-frames granted");
+    }
+    // Unfunded dodge rejects before changing action or invulnerability state.
+    {
+        entt::registry reg;
+        auto e = reg.create();
+        auto& as = reg.emplace<ActionState>(e);
+        auto& st = reg.emplace<Stamina>(e); st.current = 10.0f;
+        auto& h = reg.emplace<Health>(e);
+        check(!feel::defense::canDodge(reg, e, 0.32f, 0.22f),
+              "empty dodge preflight rejects");
+        check(!feel::defense::beginDodge(reg, e, 0.32f, 0.22f),
+              "empty dodge does not start");
+        check(as.phase == ActionPhase::Idle && nearly(st.current, 10.0f) &&
+                  nearly(h.invulnTimer, 0.0f),
+              "rejected dodge changed combat state");
     }
     // kick: returns a knockback impulse along dir and chips target poise
     {

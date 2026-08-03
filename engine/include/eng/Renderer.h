@@ -15,6 +15,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -117,6 +118,23 @@ public:
     // invalid/already-released handles; callers must first destroy attachments
     // that use this uniquely owned mesh.
     bool releaseMesh(MeshHandle mesh);
+
+    // --- skinned meshes ---------------------------------------------------
+    // Source geometry remains engine-owned while skeleton/clip sampling is
+    // handled by eng::animation. Joint names map mesh bones to stable ozz
+    // skeleton order; deforming geometry never enters static collision/batches.
+    SkinnedMeshHandle
+    loadSkinnedMesh(const std::string& path,
+                    const std::vector<std::string>& skeletonJointNames);
+    SkinInstanceHandle attachSkinnedMesh(
+        NodeHandle node, SkinnedMeshHandle mesh,
+        const std::string& materialName, bool castShadows = false,
+        bool renderOnTop = false);
+    // Model-space matrices in same skeleton order supplied at import. Renderer
+    // combines them with each submesh's inverse bind poses and uploads palette.
+    bool setSkinningPose(SkinInstanceHandle instance,
+                         std::span<const glm::mat4> modelMatrices);
+    bool releaseSkinnedMesh(SkinnedMeshHandle mesh);
 
     // --- scene graph ------------------------------------------------------
     NodeHandle createNode(NodeHandle parent, glm::vec3 position = glm::vec3(0.0f),

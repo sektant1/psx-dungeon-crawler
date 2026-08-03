@@ -208,6 +208,138 @@ bool parseCamera(const Json& source, CameraAuthor& out,
     return true;
 }
 
+bool parseAudioEmitter(const Json& source, AudioEmitterAuthor& out,
+                       const std::string& location, std::string& error)
+{
+    if (!source.is_object()) {
+        error = location + " must be an object";
+        return false;
+    }
+    if (source.contains("source")) {
+        if (!source["source"].is_string()) {
+            error = location + "/source must be a logical audio path";
+            return false;
+        }
+        out.source = source["source"].get<std::string>();
+    }
+    if (source.contains("offset") && !readVec3(source["offset"], out.offset)) {
+        error = location + "/offset must be three finite numbers";
+        return false;
+    }
+
+    const std::string bus = source.value("bus", std::string("sfx"));
+    static const std::pair<const char*, eng::AudioBus> kBuses[] = {
+        {"master", eng::AudioBus::Master},
+        {"music", eng::AudioBus::Music},
+        {"ambience", eng::AudioBus::Ambience},
+        {"dialogue", eng::AudioBus::Dialogue},
+        {"weapons", eng::AudioBus::Weapons},
+        {"sfx", eng::AudioBus::Sfx},
+        {"ui", eng::AudioBus::Ui},
+        {"warnings", eng::AudioBus::Warnings},
+    };
+    bool knownBus = false;
+    for (const auto& [name, value] : kBuses) {
+        if (bus != name)
+            continue;
+        out.bus = static_cast<int>(value);
+        knownBus = true;
+        break;
+    }
+    if (!knownBus) {
+        error = location + "/bus is not a mixer bus";
+        return false;
+    }
+
+    const std::string priority =
+        source.value("priority", std::string("normal"));
+    if (priority == "background")
+        out.priority = static_cast<int>(eng::AudioPriority::Background);
+    else if (priority == "low")
+        out.priority = static_cast<int>(eng::AudioPriority::Low);
+    else if (priority == "normal")
+        out.priority = static_cast<int>(eng::AudioPriority::Normal);
+    else if (priority == "important")
+        out.priority = static_cast<int>(eng::AudioPriority::Important);
+    else if (priority == "critical")
+        out.priority = static_cast<int>(eng::AudioPriority::Critical);
+    else {
+        error = location + "/priority is not a supported voice priority";
+        return false;
+    }
+
+    const auto number = [&](const char* key, float& value) {
+        if (!source.contains(key))
+            return true;
+        if (!source[key].is_number()) {
+            error = location + "/" + key + " must be a number";
+            return false;
+        }
+        value = source[key].get<float>();
+        if (!std::isfinite(value)) {
+            error = location + "/" + key + " must be finite";
+            return false;
+        }
+        return true;
+    };
+    const auto boolean = [&](const char* key, bool& value) {
+        if (!source.contains(key))
+            return true;
+        if (!source[key].is_boolean()) {
+            error = location + "/" + key + " must be true or false";
+            return false;
+        }
+        value = source[key].get<bool>();
+        return true;
+    };
+    if (!number("gain_db", out.gainDb) || !number("pitch", out.pitch) ||
+        !number("min_distance", out.minDistance) ||
+        !number("max_distance", out.maxDistance) ||
+        !number("rolloff", out.rolloff) ||
+        !number("doppler_factor", out.dopplerFactor) ||
+        !boolean("loop", out.loop) || !boolean("stream", out.streaming) ||
+        !boolean("spatial", out.spatialized) ||
+        !boolean("autostart", out.playing) ||
+        !boolean("stealable", out.stealable))
+        return false;
+
+    if (out.gainDb < -80.0f || out.gainDb > 12.0f || out.pitch <= 0.0f ||
+        out.minDistance < 0.0f || out.maxDistance <= out.minDistance ||
+        out.rolloff < 0.0f || out.dopplerFactor < 0.0f) {
+        error = location + " has invalid gain, pitch or attenuation values";
+        return false;
+    }
+    return true;
+}
+
+bool parseAudioListener(const Json& source, AudioListenerAuthor& out,
+                        const std::string& location, std::string& error)
+{
+    if (!source.is_object()) {
+        error = location + " must be an object";
+        return false;
+    }
+    if (source.contains("priority")) {
+        if (!source["priority"].is_number_integer()) {
+            error = location + "/priority must be an integer";
+            return false;
+        }
+        out.priority = source["priority"].get<int>();
+    }
+    if (source.contains("active")) {
+        if (!source["active"].is_boolean()) {
+            error = location + "/active must be true or false";
+            return false;
+        }
+        out.active = source["active"].get<bool>();
+    }
+    if (out.priority < -100 || out.priority > 100) {
+        error = location + "/priority must be between -100 and 100";
+        return false;
+    }
+    return true;
+}
+
 // Every field optional and clamped, because these are shader inputs: a negative
 // rimPower or an opacity of 40 is not a scene the renderer draws differently,
 // it is one it draws wrongly, and the author would be looking at the model
@@ -533,6 +665,59 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
                          &particles, location + "/particles", error))
             return false;
         out.particles = particles;
+    }
+    if (source.contains("audio")) {
+        AudioEmitterAuthor audio;
+        if (!parseAudioEmitter(source["audio"], audio, location + "/audio",
+                               error))
+            return false;
+        out.audio = audio;
+    }
+    if (source.contains("audio_listener")) {
+        AudioListenerAuthor listener;
+        if (!parseAudioListener(source["audio_listener"], listener,
+                                location + "/audio_listener", error))
+            return false;
+        out.audioListener = listener;
+    }
+    if (source.contains("actor")) {
+        if (!source["actor"].is_string()) {
+            error = location + "/actor must be \"player\", \"npc\" or \"enemy\"";
+            return false;
+        }
+        game::ActorKind kind{};
+        if (!game::parseActorKind(source["actor"].get<std::string>(), kind)) {
+            error = location + "/actor is not an actor kind";
+            return false;
+        }
+        out.actor = kind;
+    }
+    if (source.contains("sounds")) {
+        const Json& sounds = source["sounds"];
+        if (!sounds.is_object()) {
+            error = location + "/sounds must be an object of action -> cue id";
+            return false;
+        }
+        ActorSoundsAuthor set;
+        for (auto row = sounds.begin(); row != sounds.end(); ++row) {
+            const game::ActorActionInfo* info =
+                game::findActorAction(row.key());
+            if (!info) {
+                // Named rather than ignored: a misspelled action is a sound
+                // that never plays, and finding that out at load is the whole
+                // point of having a closed vocabulary.
+                error = location + "/sounds/" + row.key() +
+                        " is not an action an actor performs";
+                return false;
+            }
+            if (!row.value().is_string()) {
+                error = location + "/sounds/" + row.key() +
+                        " must be a cue id from audio.toml";
+                return false;
+            }
+            set.set(info->action, row.value().get<std::string>());
+        }
+        out.sounds = set;
     }
     if (source.contains("portal")) {
         PortalAuthor portal;

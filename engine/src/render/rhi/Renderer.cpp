@@ -5,6 +5,7 @@
 #include "render/AssimpLoader.h"
 #include "render/PrimitiveGeometry.h"
 #include "render/SceneRegistry.h"
+#include "render/SkinnedAssimpLoader.h"
 #include "particles/ParticleSim.h"
 #include "particles/ParticleTextureCatalog.h"
 
@@ -46,6 +47,19 @@ struct MeshVertex {
 };
 
 static_assert(sizeof(MeshVertex) == 48);
+
+constexpr uint32_t kMaxSkinJoints = 256;
+
+struct SkinnedMeshVertex {
+    glm::vec3 position{0.0f};
+    glm::vec3 normal{0.0f, 1.0f, 0.0f};
+    glm::vec2 uv{0.0f};
+    glm::vec4 colour{1.0f};
+    std::array<uint16_t, 4> joints{};
+    std::array<float, 4> weights{1.0f, 0.0f, 0.0f, 0.0f};
+};
+
+static_assert(sizeof(SkinnedMeshVertex) == 72);
 
 // One billboard corner. Positions are world-space (the CPU already billboarded
 // them), so the particle vertex stage is a plain viewProjection transform.
@@ -169,6 +183,15 @@ bool finite(glm::quat value)
            std::isfinite(value.y) && std::isfinite(value.z);
 }
 
+bool finite(const glm::mat4& value)
+{
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row)
+            if (!std::isfinite(value[column][row]))
+                return false;
+    return true;
+}
+
 std::vector<uint8_t> readBytes(const char* path)
 {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
@@ -249,6 +272,29 @@ struct Renderer::Impl {
         bool castShadows = false;
         bool renderOnTop = false;
     };
+    struct SkinnedGpuSubmesh {
+        rhi::BufferHandle vertices;
+        rhi::BufferHandle indices;
+        uint32_t indexCount = 0;
+        std::string sourceMaterial;
+        std::vector<glm::mat4> inverseBindPoses;
+    };
+    struct SkinnedMesh {
+        bool alive = false;
+        std::string name;
+        uint32_t jointCount = 0;
+        std::vector<SkinnedGpuSubmesh> submeshes;
+        MeshBounds bounds;
+    };
+    struct SkinInstance {
+        bool alive = false;
+        NodeHandle node{};
+        SkinnedMeshHandle mesh{};
+        std::vector<std::string> materials;
+        std::vector<rhi::BufferHandle> paletteBuffers;
+        bool castShadows = false;
+        bool renderOnTop = false;
+    };
     struct Node {
         bool alive = false;
         NodeHandle parent{};
@@ -316,6 +362,8 @@ struct Renderer::Impl {
     rhi_renderer::MaterialLibrary materials;
     SceneRegistry sceneRegistry;
     std::vector<Mesh> meshes;
+    std::vector<SkinnedMesh> skinnedMeshes;
+    std::vector<SkinInstance> skinInstances;
     std::vector<Node> nodes;
     std::vector<Light> lights;
     std::vector<Sprite> sprites;
@@ -343,12 +391,16 @@ struct Renderer::Impl {
     rhi::ShaderHandle sceneVertex;
     rhi::ShaderHandle sceneFragment;
     std::unordered_map<uint32_t, rhi::PipelineHandle> pipelines;
-    std::array<rhi::BufferHandle, 3> sceneUniformBuffers{};
+    rhi::ShaderHandle skinnedSceneVertex;
+    std::unordered_map<uint32_t, rhi::PipelineHandle> skinnedPipelines;
+    std::array<rhi::BufferHandle, 4> sceneUniformBuffers{};
     bool gpuShutdown = false;
 
     rhi::ShaderHandle shadowVertex;
     rhi::ShaderHandle shadowFragment;
     std::unordered_map<uint32_t, rhi::PipelineHandle> shadowPipelines;
+    rhi::ShaderHandle skinnedShadowVertex;
+    std::unordered_map<uint32_t, rhi::PipelineHandle> skinnedShadowPipelines;
     rhi::ShaderHandle surfaceVertex;
     rhi::ShaderHandle surfaceFragment;
     std::unordered_map<uint32_t, rhi::PipelineHandle> surfacePipelines;
@@ -421,6 +473,24 @@ struct Renderer::Impl {
     const Mesh* mesh(MeshHandle handle) const
     {
         return const_cast<Impl*>(this)->mesh(handle);
+    }
+    SkinnedMesh* skinnedMesh(SkinnedMeshHandle handle)
+    {
+        if (!handle.valid() || handle.id > skinnedMeshes.size() ||
+            !skinnedMeshes[handle.id - 1].alive)
+            return nullptr;
+        return &skinnedMeshes[handle.id - 1];
+    }
+    const SkinnedMesh* skinnedMesh(SkinnedMeshHandle handle) const
+    {
+        return const_cast<Impl*>(this)->skinnedMesh(handle);
+    }
+    SkinInstance* skinInstance(SkinInstanceHandle handle)
+    {
+        if (!handle.valid() || handle.id > skinInstances.size() ||
+            !skinInstances[handle.id - 1].alive)
+            return nullptr;
+        return &skinInstances[handle.id - 1];
     }
 
     std::string nextName(const char* prefix)
@@ -543,6 +613,61 @@ struct Renderer::Impl {
         return pipeline;
     }
 
+    void fillSkinnedVertexLayout(rhi::VertexLayout& layout) const
+    {
+        layout.bindings.push_back({0, sizeof(SkinnedMeshVertex), false});
+        layout.attributes.push_back(
+            {0, 0, rhi::VertexFormat::Float3,
+             offsetof(SkinnedMeshVertex, position)});
+        layout.attributes.push_back(
+            {1, 0, rhi::VertexFormat::Float3,
+             offsetof(SkinnedMeshVertex, normal)});
+        layout.attributes.push_back(
+            {2, 0, rhi::VertexFormat::Float2, offsetof(SkinnedMeshVertex, uv)});
+        layout.attributes.push_back(
+            {3, 0, rhi::VertexFormat::Float4,
+             offsetof(SkinnedMeshVertex, colour)});
+        layout.attributes.push_back(
+            {4, 0, rhi::VertexFormat::UShort4Uint,
+             offsetof(SkinnedMeshVertex, joints)});
+        layout.attributes.push_back(
+            {5, 0, rhi::VertexFormat::Float4,
+             offsetof(SkinnedMeshVertex, weights)});
+    }
+
+    rhi::PipelineHandle
+    skinnedPipelineFor(const rhi_renderer::Material& material,
+                       bool renderOnTop, bool withNormalDepth = true)
+    {
+        const uint32_t key = pipelineKey(material, renderOnTop, withNormalDepth);
+        if (const auto found = skinnedPipelines.find(key);
+            found != skinnedPipelines.end())
+            return found->second;
+        rhi::PipelineDesc desc;
+        desc.vertex = skinnedSceneVertex;
+        desc.fragment = sceneFragment;
+        fillSkinnedVertexLayout(desc.vertexLayout);
+        desc.polygonMode = env.wireframe ? rhi::PolygonMode::Line
+                                         : rhi::PolygonMode::Fill;
+        desc.cull = env.wireframe ? rhi::CullMode::None : material.cull;
+        desc.blend = material.blend;
+        desc.depth.testEnabled = material.depthTest && !renderOnTop;
+        desc.depth.writeEnabled = material.depthWrite && !renderOnTop;
+        desc.depth.compare = rhi::CompareOp::LessEqual;
+        desc.colourFormats = withNormalDepth
+                                 ? std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm,
+                                       rhi::Format::RGBA16Float}
+                                 : std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm};
+        desc.depthFormat = rhi::Format::Depth32Float;
+        desc.debugName = "renderer.skinned-pipeline-" + std::to_string(key);
+        const rhi::PipelineHandle pipeline = core.device()->createPipeline(desc);
+        if (pipeline.valid())
+            skinnedPipelines[key] = pipeline;
+        return pipeline;
+    }
+
     bool initializeGpu()
     {
         if (!core.device())
@@ -555,6 +680,11 @@ struct Renderer::Impl {
                                         ENG_RHI_SCENE_FRAG_SPV,
                                         "renderer.scene.frag");
         if (!sceneVertex.valid() || !sceneFragment.valid())
+            return false;
+        skinnedSceneVertex = loadSceneShader(rhi::ShaderStage::Vertex,
+                                             ENG_RHI_SKINNED_SCENE_VERT_SPV,
+                                             "renderer.skinned-scene.vert");
+        if (!skinnedSceneVertex.valid())
             return false;
         for (rhi::BufferHandle& handle : sceneUniformBuffers) {
             rhi::BufferDesc desc;
@@ -580,6 +710,11 @@ struct Renderer::Impl {
                                          ENG_RHI_SHADOW_FRAG_SPV,
                                          "renderer.shadow.frag");
         if (!shadowVertex.valid() || !shadowFragment.valid())
+            return false;
+        skinnedShadowVertex = loadSceneShader(
+            rhi::ShaderStage::Vertex, ENG_RHI_SKINNED_SHADOW_VERT_SPV,
+            "renderer.skinned-shadow.vert");
+        if (!skinnedShadowVertex.valid())
             return false;
         surfaceVertex = loadSceneShader(rhi::ShaderStage::Vertex,
                                         ENG_RHI_SURFACE_VERT_SPV,
@@ -718,6 +853,33 @@ struct Renderer::Impl {
         return pipeline;
     }
 
+    rhi::PipelineHandle
+    skinnedShadowPipelineFor(const rhi_renderer::Material& material)
+    {
+        const uint32_t key = uint32_t(material.cull);
+        if (const auto found = skinnedShadowPipelines.find(key);
+            found != skinnedShadowPipelines.end())
+            return found->second;
+        rhi::PipelineDesc desc;
+        desc.vertex = skinnedShadowVertex;
+        desc.fragment = shadowFragment;
+        fillSkinnedVertexLayout(desc.vertexLayout);
+        desc.cull = material.cull == rhi::CullMode::None
+                        ? rhi::CullMode::None
+                        : rhi::CullMode::Front;
+        desc.depth.testEnabled = true;
+        desc.depth.writeEnabled = true;
+        desc.depth.compare = rhi::CompareOp::LessEqual;
+        desc.colourFormats = {};
+        desc.depthFormat = rhi::Format::Depth32Float;
+        desc.debugName =
+            "renderer.skinned-shadow-pipeline-" + std::to_string(key);
+        const rhi::PipelineHandle pipeline = core.device()->createPipeline(desc);
+        if (pipeline.valid())
+            skinnedShadowPipelines[key] = pipeline;
+        return pipeline;
+    }
+
     rhi::PipelineHandle particlePipelineFor(ParticleBlend blend,
                                             bool withNormalDepth)
     {
@@ -771,6 +933,28 @@ struct Renderer::Impl {
         resource.submeshes.clear();
     }
 
+    void destroySkinnedMeshGpu(SkinnedMesh& resource)
+    {
+        if (!core.device())
+            return;
+        for (SkinnedGpuSubmesh& submesh : resource.submeshes) {
+            if (submesh.indices.valid())
+                core.device()->destroyBuffer(submesh.indices);
+            if (submesh.vertices.valid())
+                core.device()->destroyBuffer(submesh.vertices);
+        }
+        resource.submeshes.clear();
+    }
+
+    void destroySkinInstanceGpu(SkinInstance& instance)
+    {
+        if (core.device())
+            for (rhi::BufferHandle buffer : instance.paletteBuffers)
+                if (buffer.valid())
+                    core.device()->destroyBuffer(buffer);
+        instance.paletteBuffers.clear();
+    }
+
     void shutdownGpu()
     {
         if (gpuShutdown || !core.device())
@@ -778,9 +962,18 @@ struct Renderer::Impl {
         for (Mesh& resource : meshes)
             if (resource.alive)
                 destroyMeshGpu(resource);
+        for (SkinInstance& instance : skinInstances)
+            if (instance.alive)
+                destroySkinInstanceGpu(instance);
+        for (SkinnedMesh& resource : skinnedMeshes)
+            if (resource.alive)
+                destroySkinnedMeshGpu(resource);
         for (auto& [key, pipeline] : pipelines)
             core.device()->destroyPipeline(pipeline);
         pipelines.clear();
+        for (auto& [key, pipeline] : skinnedPipelines)
+            core.device()->destroyPipeline(pipeline);
+        skinnedPipelines.clear();
         for (rhi::BufferHandle& buffer : sceneUniformBuffers) {
             if (buffer.valid()) core.device()->destroyBuffer(buffer);
             buffer = {};
@@ -795,6 +988,12 @@ struct Renderer::Impl {
         for (auto& [key, pipeline] : shadowPipelines)
             core.device()->destroyPipeline(pipeline);
         shadowPipelines.clear();
+        for (auto& [key, pipeline] : skinnedShadowPipelines)
+            core.device()->destroyPipeline(pipeline);
+        skinnedShadowPipelines.clear();
+        if (skinnedShadowVertex.valid())
+            core.device()->destroyShader(skinnedShadowVertex);
+        skinnedShadowVertex = {};
         if (shadowFragment.valid()) core.device()->destroyShader(shadowFragment);
         if (shadowVertex.valid()) core.device()->destroyShader(shadowVertex);
         shadowFragment = {};
@@ -816,9 +1015,12 @@ struct Renderer::Impl {
         particleFragmentShader = {};
         particleVertexShader = {};
         if (sceneFragment.valid()) core.device()->destroyShader(sceneFragment);
+        if (skinnedSceneVertex.valid())
+            core.device()->destroyShader(skinnedSceneVertex);
         if (sceneVertex.valid()) core.device()->destroyShader(sceneVertex);
         sceneFragment = {};
         sceneVertex = {};
+        skinnedSceneVertex = {};
         gpuShutdown = true;
     }
 
@@ -878,6 +1080,68 @@ struct Renderer::Impl {
         return MeshHandle{uint32_t(meshes.size())};
     }
 
+    SkinnedMeshHandle uploadSkinnedMesh(
+        std::string name, const detail::ImportedSkinnedModel& imported,
+        uint32_t jointCount)
+    {
+        if (!core.device() || imported.submeshes.empty() || jointCount == 0 ||
+            jointCount > kMaxSkinJoints)
+            return {};
+        SkinnedMesh resource;
+        resource.alive = true;
+        resource.name = std::move(name);
+        resource.jointCount = jointCount;
+        resource.bounds = imported.bounds;
+        for (const detail::ImportedSkinnedSubmesh& source :
+             imported.submeshes) {
+            if (source.vertices.empty() || source.indices.empty() ||
+                source.inverseBindPoses.size() != jointCount) {
+                destroySkinnedMeshGpu(resource);
+                return {};
+            }
+            std::vector<SkinnedMeshVertex> vertices(source.vertices.size());
+            for (size_t index = 0; index < source.vertices.size(); ++index) {
+                const detail::ImportedSkinnedVertex& input =
+                    source.vertices[index];
+                SkinnedMeshVertex& output = vertices[index];
+                output.position = input.position;
+                output.normal = input.normal;
+                output.uv = input.texcoord;
+                output.colour = input.colour;
+                output.joints = input.joints;
+                output.weights = input.weights;
+            }
+
+            SkinnedGpuSubmesh submesh;
+            rhi::BufferDesc vertexDesc;
+            vertexDesc.size = vertices.size() * sizeof(SkinnedMeshVertex);
+            vertexDesc.usage = rhi::BufferUsage::Vertex;
+            vertexDesc.initialData = vertices.data();
+            vertexDesc.debugName = resource.name + ".skinned-vertices";
+            submesh.vertices = core.device()->createBuffer(vertexDesc);
+            rhi::BufferDesc indexDesc;
+            indexDesc.size = source.indices.size() * sizeof(uint32_t);
+            indexDesc.usage = rhi::BufferUsage::Index;
+            indexDesc.initialData = source.indices.data();
+            indexDesc.debugName = resource.name + ".skinned-indices";
+            submesh.indices = core.device()->createBuffer(indexDesc);
+            submesh.indexCount = uint32_t(source.indices.size());
+            submesh.sourceMaterial = source.sourceMaterial;
+            submesh.inverseBindPoses = source.inverseBindPoses;
+            if (!submesh.vertices.valid() || !submesh.indices.valid()) {
+                if (submesh.indices.valid())
+                    core.device()->destroyBuffer(submesh.indices);
+                if (submesh.vertices.valid())
+                    core.device()->destroyBuffer(submesh.vertices);
+                destroySkinnedMeshGpu(resource);
+                return {};
+            }
+            resource.submeshes.push_back(std::move(submesh));
+        }
+        skinnedMeshes.push_back(std::move(resource));
+        return SkinnedMeshHandle{uint32_t(skinnedMeshes.size())};
+    }
+
     // Not const: the main view hands the fitted light matrix back to the core,
     // which is what tells the shadow pass whether to run at all.
     void fillSceneUniforms(SceneUniforms& uniforms,
@@ -889,7 +1153,8 @@ struct Renderer::Impl {
         float fov = requested.fovDeg;
         float nearClip = requested.nearClip;
         float farClip = requested.farClip;
-        if (requested.target == RenderCore::SceneTarget::Main) {
+        if (requested.target == RenderCore::SceneTarget::Main ||
+            requested.target == RenderCore::SceneTarget::Viewmodel) {
             const NodeTransform camera = worldTransform(cameraNode);
             cameraPosition = camera.position;
             cameraOrientation = camera.orientation;
@@ -1055,8 +1320,9 @@ struct Renderer::Impl {
     }
 
     void drawMesh(rhi::CommandList& commands, const Node& nodeRecord,
-                  const MeshAttachment& attachment, const glm::mat4& model,
-                  size_t& batches, size_t& triangles, bool withNormalDepth)
+                   const MeshAttachment& attachment, const glm::mat4& model,
+                  size_t& batches, size_t& triangles, bool withNormalDepth,
+                  bool viewmodelPass = false)
     {
         const Mesh* resource = mesh(attachment.mesh);
         if (!resource)
@@ -1082,7 +1348,8 @@ struct Renderer::Impl {
             const rhi::PipelineHandle pipeline =
                 isSurface
                     ? surfacePipelineFor(material, withNormalDepth)
-                    : pipelineFor(material, attachment.renderOnTop,
+                    : pipelineFor(material,
+                                  attachment.renderOnTop && !viewmodelPass,
                                   withNormalDepth);
             if (!pipeline.valid() || !material.texture.valid())
                 continue;
@@ -1212,6 +1479,51 @@ struct Renderer::Impl {
             // Only once the shadow pass has actually written and released it:
             // the texture exists from init, but until the pass runs it is in
             // an attachment layout that cannot be sampled.
+            if (core.shadowTexture().valid())
+                commands.bindTexture(1, core.shadowTexture(),
+                                     core.shadowSampler());
+            commands.pushConstants(&constants, sizeof(constants));
+            commands.drawIndexed(submesh.indexCount);
+            ++batches;
+            triangles += submesh.indexCount / 3;
+        }
+    }
+
+    void drawSkinnedMesh(rhi::CommandList& commands, const Node& nodeRecord,
+                         const SkinInstance& instance, const glm::mat4& model,
+                         size_t& batches, size_t& triangles,
+                         bool withNormalDepth, bool viewmodelPass = false)
+    {
+        const SkinnedMesh* resource = skinnedMesh(instance.mesh);
+        if (!resource)
+            return;
+        for (size_t index = 0; index < resource->submeshes.size(); ++index) {
+            if (index >= instance.paletteBuffers.size() ||
+                !instance.paletteBuffers[index].valid())
+                continue;
+            const std::string requested =
+                instance.materials.empty()
+                    ? prototype::kSurfaceMaterial
+                    : instance.materials[std::min(
+                          index, instance.materials.size() - 1)];
+            const rhi_renderer::Material& material = materials.resolve(
+                requested, prototypes.materialFor(requested));
+            const rhi::PipelineHandle pipeline = skinnedPipelineFor(
+                material, instance.renderOnTop && !viewmodelPass,
+                withNormalDepth);
+            if (!pipeline.valid() || !material.texture.valid())
+                continue;
+            const SkinnedGpuSubmesh& submesh = resource->submeshes[index];
+            DrawConstants constants = drawConstants(nodeRecord, material, model);
+            constants.surfaceParams.z = material.noHighlight ? 1.0f : 0.0f;
+            constants.surfaceParams.w = env.wireframe ? 1.0f : 0.0f;
+            commands.bindPipeline(pipeline);
+            commands.bindUniformBuffer(2, instance.paletteBuffers[index]);
+            commands.bindVertexBuffer(0, submesh.vertices);
+            commands.bindIndexBuffer(submesh.indices, 0,
+                                     rhi::IndexType::UInt32);
+            commands.bindTexture(0, material.texture.texture,
+                                 material.texture.sampler);
             if (core.shadowTexture().valid())
                 commands.bindTexture(1, core.shadowTexture(),
                                      core.shadowSampler());
@@ -1639,6 +1951,42 @@ struct Renderer::Impl {
                 drawCaster(nodeRecord, attachment, model);
             }
         }
+        for (const SkinInstance& instance : skinInstances) {
+            if (!instance.alive || !instance.castShadows ||
+                !worldVisible(instance.node))
+                continue;
+            const Node* nodeRecord = node(instance.node);
+            const SkinnedMesh* resource = skinnedMesh(instance.mesh);
+            if (!nodeRecord || !resource || nodeRecord->thumbnailOnly)
+                continue;
+            const glm::mat4 model = worldMatrix(instance.node);
+            for (size_t i = 0; i < resource->submeshes.size(); ++i) {
+                if (i >= instance.paletteBuffers.size() ||
+                    !instance.paletteBuffers[i].valid())
+                    continue;
+                const std::string requested =
+                    instance.materials.empty()
+                        ? prototype::kSurfaceMaterial
+                        : instance.materials[std::min(
+                              i, instance.materials.size() - 1)];
+                const rhi_renderer::Material& material = materials.resolve(
+                    requested, prototypes.materialFor(requested));
+                const rhi::PipelineHandle pipeline =
+                    skinnedShadowPipelineFor(material);
+                if (!pipeline.valid())
+                    continue;
+                const SkinnedGpuSubmesh& submesh = resource->submeshes[i];
+                DrawConstants constants;
+                constants.model = model;
+                commands.bindPipeline(pipeline);
+                commands.bindUniformBuffer(2, instance.paletteBuffers[i]);
+                commands.bindVertexBuffer(0, submesh.vertices);
+                commands.bindIndexBuffer(submesh.indices, 0,
+                                         rhi::IndexType::UInt32);
+                commands.pushConstants(&constants, sizeof(constants));
+                commands.drawIndexed(submesh.indexCount);
+            }
+        }
     }
 
     void draw(rhi::CommandList& commands, const RenderCore::View& view,
@@ -1656,8 +2004,10 @@ struct Renderer::Impl {
                 drawShadowCasters(commands, width, height);
             return;
         }
+        const bool viewmodelPass =
+            view.target == RenderCore::SceneTarget::Viewmodel;
         const bool withNormalDepth =
-            view.target == RenderCore::SceneTarget::Main;
+            view.target == RenderCore::SceneTarget::Main || viewmodelPass;
         if (withNormalDepth) {
             syncPostParams();
             syncStylizeParams();
@@ -1671,18 +2021,6 @@ struct Renderer::Impl {
 
         size_t batches = 0;
         size_t triangles = 0;
-        // renderOnTop is Ogre's RENDER_QUEUE_8: drawn after everything else so
-        // it lands on top. Here it only clears depth test/write, which is not
-        // enough on its own -- a viewmodel node is created early, so in node
-        // order it drew *before* the dungeon and, writing no depth, was then
-        // painted over by the static batches below. Defer those attachments to
-        // the end of the pass to restore the queue semantics.
-        struct DeferredDraw {
-            const Node* node;
-            const MeshAttachment* attachment;
-            glm::mat4 model;
-        };
-        std::vector<DeferredDraw> onTop;
         for (size_t index = 0; index < nodes.size(); ++index) {
             const Node& nodeRecord = nodes[index];
             if (!nodeRecord.alive || !worldVisible(NodeHandle{uint32_t(index + 1)}))
@@ -1695,14 +2033,32 @@ struct Renderer::Impl {
             }
             const glm::mat4 model = worldMatrix(NodeHandle{uint32_t(index + 1)});
             for (const MeshAttachment& attachment : nodeRecord.meshes) {
-                if (attachment.renderOnTop)
-                    onTop.push_back({&nodeRecord, &attachment, model});
-                else
-                    drawMesh(commands, nodeRecord, attachment, model, batches,
-                             triangles, withNormalDepth);
+                if (attachment.renderOnTop != viewmodelPass)
+                    continue;
+                drawMesh(commands, nodeRecord, attachment, model, batches,
+                         triangles, withNormalDepth, viewmodelPass);
             }
         }
-        if (view.target != RenderCore::SceneTarget::Thumbnail) {
+        for (const SkinInstance& instance : skinInstances) {
+            if (!instance.alive || !worldVisible(instance.node))
+                continue;
+            const Node* nodeRecord = node(instance.node);
+            if (!nodeRecord)
+                continue;
+            if (view.target == RenderCore::SceneTarget::Thumbnail) {
+                if (!nodeRecord->thumbnailOnly)
+                    continue;
+            } else if (nodeRecord->thumbnailOnly) {
+                continue;
+            }
+            const glm::mat4 model = worldMatrix(instance.node);
+            if (instance.renderOnTop != viewmodelPass)
+                continue;
+            drawSkinnedMesh(commands, *nodeRecord, instance, model, batches,
+                            triangles, withNormalDepth, viewmodelPass);
+        }
+        if (!viewmodelPass &&
+            view.target != RenderCore::SceneTarget::Thumbnail) {
             Node neutralNode;
             neutralNode.alive = true;
             for (const StaticBatch& batch : staticBatches) {
@@ -1724,10 +2080,8 @@ struct Renderer::Impl {
         // Between world geometry and the renderOnTop set, which is where the
         // legacy queues put them: particles are RENDER_QUEUE_MAIN (50), the
         // viewmodel is RENDER_QUEUE_8 (80).
-        drawParticles(commands, view, batches, triangles, withNormalDepth);
-        for (const DeferredDraw& deferred : onTop)
-            drawMesh(commands, *deferred.node, *deferred.attachment,
-                     deferred.model, batches, triangles, withNormalDepth);
+        if (!viewmodelPass)
+            drawParticles(commands, view, batches, triangles, withNormalDepth);
         core.addFrameStats(batches, triangles);
         if (!debugLines.empty())
             warnOnce("debug-lines", "debug lines");
@@ -1916,6 +2270,123 @@ bool Renderer::releaseMesh(MeshHandle handle)
     return true;
 }
 
+SkinnedMeshHandle Renderer::loadSkinnedMesh(
+    const std::string& path,
+    const std::vector<std::string>& skeletonJointNames)
+{
+    if (skeletonJointNames.size() > kMaxSkinJoints) {
+        log::error("RHI renderer: skinned model '%s' has %zu joints; GPU limit is %u",
+                   path.c_str(), skeletonJointNames.size(), kMaxSkinJoints);
+        return {};
+    }
+    detail::ImportedSkinnedModel imported;
+    std::string error;
+    if (!detail::importSkinnedModel(path, skeletonJointNames, imported, error)) {
+        log::error("RHI renderer: skinned model '%s' failed: %s", path.c_str(),
+                   error.c_str());
+        return {};
+    }
+    return mImpl->uploadSkinnedMesh(mImpl->nextName("skinned-model"), imported,
+                                    uint32_t(skeletonJointNames.size()));
+}
+
+SkinInstanceHandle Renderer::attachSkinnedMesh(
+    NodeHandle node, SkinnedMeshHandle mesh, const std::string& materialName,
+    bool castShadows, bool renderOnTop)
+{
+    Impl::Node* owner = mImpl->node(node, "attachSkinnedMesh");
+    const Impl::SkinnedMesh* resource = mImpl->skinnedMesh(mesh);
+    if (!owner || !resource || !mImpl->core.device()) {
+        log::error("RHI renderer: invalid skinned mesh attachment");
+        return {};
+    }
+    const rhi_renderer::Material& material = mImpl->materials.resolve(
+        materialName, mImpl->prototypes.materialFor(materialName));
+    if (material.name != materialName &&
+        mImpl->missingMaterialWarnings.shouldLog(materialName, true))
+        log::error("RHI renderer: material '%s' is missing; using '%s'",
+                   materialName.c_str(), material.name.c_str());
+
+    const uint64_t paletteBytes =
+        uint64_t(kMaxSkinJoints) * sizeof(glm::mat4);
+    if (paletteBytes >
+        mImpl->core.device()->capabilities().maxUniformBufferRange) {
+        log::error("RHI renderer: device uniform range cannot hold skin palette");
+        return {};
+    }
+    std::array<glm::mat4, kMaxSkinJoints> identities;
+    identities.fill(glm::mat4(1.0f));
+    Impl::SkinInstance instance;
+    instance.alive = true;
+    instance.node = node;
+    instance.mesh = mesh;
+    instance.materials.assign(resource->submeshes.size(), material.name);
+    instance.castShadows = castShadows;
+    instance.renderOnTop = renderOnTop;
+    instance.paletteBuffers.reserve(resource->submeshes.size());
+    for (size_t index = 0; index < resource->submeshes.size(); ++index) {
+        rhi::BufferDesc desc;
+        desc.size = paletteBytes;
+        desc.usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::Dynamic;
+        desc.initialData = identities.data();
+        desc.debugName = "renderer.skin-palette";
+        const rhi::BufferHandle buffer = mImpl->core.device()->createBuffer(desc);
+        if (!buffer.valid()) {
+            mImpl->destroySkinInstanceGpu(instance);
+            return {};
+        }
+        instance.paletteBuffers.push_back(buffer);
+    }
+    mImpl->skinInstances.push_back(std::move(instance));
+    mImpl->skinnedPipelineFor(material, renderOnTop);
+    return SkinInstanceHandle{uint32_t(mImpl->skinInstances.size())};
+}
+
+bool Renderer::setSkinningPose(SkinInstanceHandle handle,
+                               std::span<const glm::mat4> modelMatrices)
+{
+    Impl::SkinInstance* instance = mImpl->skinInstance(handle);
+    if (!instance || !mImpl->core.device())
+        return false;
+    const Impl::SkinnedMesh* resource = mImpl->skinnedMesh(instance->mesh);
+    if (!resource || modelMatrices.size() != resource->jointCount ||
+        instance->paletteBuffers.size() != resource->submeshes.size())
+        return false;
+    std::array<glm::mat4, kMaxSkinJoints> palette;
+    for (size_t submeshIndex = 0;
+         submeshIndex < resource->submeshes.size(); ++submeshIndex) {
+        const Impl::SkinnedGpuSubmesh& submesh =
+            resource->submeshes[submeshIndex];
+        if (submesh.inverseBindPoses.size() != modelMatrices.size())
+            return false;
+        for (size_t joint = 0; joint < modelMatrices.size(); ++joint) {
+            if (!finite(modelMatrices[joint]))
+                return false;
+            palette[joint] =
+                modelMatrices[joint] * submesh.inverseBindPoses[joint];
+            if (!finite(palette[joint]))
+                return false;
+        }
+        mImpl->core.device()->updateBuffer(
+            instance->paletteBuffers[submeshIndex], palette.data(),
+            modelMatrices.size() * sizeof(glm::mat4));
+    }
+    return true;
+}
+
+bool Renderer::releaseSkinnedMesh(SkinnedMeshHandle handle)
+{
+    Impl::SkinnedMesh* resource = mImpl->skinnedMesh(handle);
+    if (!resource)
+        return false;
+    for (const Impl::SkinInstance& instance : mImpl->skinInstances)
+        if (instance.alive && instance.mesh.id == handle.id)
+            return false;
+    mImpl->destroySkinnedMeshGpu(*resource);
+    resource->alive = false;
+    return true;
+}
+
 NodeHandle Renderer::createNode(NodeHandle parent, glm::vec3 position,
                                 const std::string& name)
 {
@@ -1987,6 +2458,14 @@ void Renderer::setNodeMaterial(NodeHandle handle,
                                     ? mImpl->mesh(attachment.mesh)->submeshes.size()
                                     : 1),
             resolved);
+    for (Impl::SkinInstance& instance : mImpl->skinInstances)
+        if (instance.alive && instance.node.id == handle.id)
+            instance.materials.assign(
+                std::max<size_t>(
+                    1, mImpl->skinnedMesh(instance.mesh)
+                           ? mImpl->skinnedMesh(instance.mesh)->submeshes.size()
+                           : 1),
+                resolved);
     mImpl->sceneRegistry.setMeshMaterial(handle, resolved);
 }
 
@@ -2075,6 +2554,26 @@ bool Renderer::nodeWorldBounds(NodeHandle handle, glm::vec3& center,
                         found = true;
                     }
         }
+        for (const Impl::SkinInstance& instance : mImpl->skinInstances) {
+            if (!instance.alive || instance.node.id != targets[i].id)
+                continue;
+            const Impl::SkinnedMesh* mesh = mImpl->skinnedMesh(instance.mesh);
+            if (!mesh)
+                continue;
+            for (int x = 0; x < 2; ++x)
+                for (int y = 0; y < 2; ++y)
+                    for (int z = 0; z < 2; ++z) {
+                        const glm::vec3 corner{
+                            x ? mesh->bounds.max.x : mesh->bounds.min.x,
+                            y ? mesh->bounds.max.y : mesh->bounds.min.y,
+                            z ? mesh->bounds.max.z : mesh->bounds.min.z};
+                        const glm::vec3 point =
+                            glm::vec3(world * glm::vec4(corner, 1.0f));
+                        minimum = glm::min(minimum, point);
+                        maximum = glm::max(maximum, point);
+                        found = true;
+                    }
+        }
     }
     if (!found)
         return false;
@@ -2109,6 +2608,11 @@ void Renderer::destroyNode(NodeHandle handle)
         for (Impl::Light& light : mImpl->lights)
             if (light.alive && light.node.id == it->id)
                 light.alive = false;
+        for (Impl::SkinInstance& instance : mImpl->skinInstances)
+            if (instance.alive && instance.node.id == it->id) {
+                mImpl->destroySkinInstanceGpu(instance);
+                instance.alive = false;
+            }
         current->alive = false;
         current->meshes.clear();
         current->children.clear();
@@ -2271,7 +2775,15 @@ void Renderer::clearScene()
     for (Impl::Mesh& mesh : mImpl->meshes)
         if (mesh.alive)
             mImpl->destroyMeshGpu(mesh);
+    for (Impl::SkinInstance& instance : mImpl->skinInstances)
+        if (instance.alive)
+            mImpl->destroySkinInstanceGpu(instance);
+    for (Impl::SkinnedMesh& mesh : mImpl->skinnedMeshes)
+        if (mesh.alive)
+            mImpl->destroySkinnedMeshGpu(mesh);
     mImpl->meshes.clear();
+    mImpl->skinInstances.clear();
+    mImpl->skinnedMeshes.clear();
     mImpl->nodes.clear();
     mImpl->lights.clear();
     mImpl->sprites.clear();

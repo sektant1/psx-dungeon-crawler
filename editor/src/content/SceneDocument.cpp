@@ -196,6 +196,22 @@ bool SceneDocument::wouldCycle(std::string_view child,
     return false;
 }
 
+std::optional<game::ActorKind> actorKindOf(const Entity& entity)
+{
+    if (entity.actor)
+        return *entity.actor;
+    if (entity.playerSpawn)
+        return game::ActorKind::Player;
+    if (entity.enemySpawn)
+        return game::ActorKind::Enemy;
+    // The marker spelling of an enemy spawn. MapRuntime feeds markers and
+    // EnemySpawn components into one encounter path, so classifying only one of
+    // them would offer the sound table on half the enemies in a level.
+    if (entity.marker && entity.marker->rfind("enemy.", 0) == 0)
+        return game::ActorKind::Enemy;
+    return std::nullopt;
+}
+
 AuthorId SceneDocument::allocateId(std::string_view stem) const
 {
     std::string prefix(stem.empty() ? std::string_view("entity") : stem);

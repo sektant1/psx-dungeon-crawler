@@ -299,6 +299,63 @@ std::vector<Issue> validate(const SceneDocument& document,
                     QuickFix::SetDefaultRange);
             }
         }
+        if (entity.audio) {
+            const AudioEmitterAuthor& audio = *entity.audio;
+            if (audio.source.empty()) {
+                add(issues, Severity::Error, "audio.no_source",
+                    "audio emitter has no clip", entity.id);
+            } else {
+                const std::filesystem::path source(audio.source);
+                if (source.is_absolute() || audio.source.find("..") !=
+                                                std::string::npos) {
+                    add(issues, Severity::Error, "audio.non_portable_source",
+                        "audio clip must be a logical path inside the content pack",
+                        entity.id);
+                } else if (!assetRoot.empty()) {
+                    std::error_code code;
+                    if (!std::filesystem::is_regular_file(
+                            std::filesystem::path(assetRoot) / source, code)) {
+                        add(issues, Severity::Error, "audio.source_missing",
+                            "audio clip '" + audio.source + "' is not on disk",
+                            entity.id);
+                    }
+                }
+            }
+            if (audio.pitch <= 0.0f || audio.minDistance < 0.0f ||
+                audio.maxDistance <= audio.minDistance || audio.rolloff < 0.0f ||
+                audio.dopplerFactor < 0.0f) {
+                add(issues, Severity::Error, "audio.invalid_settings",
+                    "audio pitch and attenuation settings are invalid", entity.id);
+            }
+        }
+        if (entity.sounds) {
+            // A sound table on something that performs no actions is cooked and
+            // read by nothing. It is a warning rather than an error: the entity
+            // is still loadable, and the fix (add an Actor component, or drop
+            // the table) is the author's call.
+            const std::optional<game::ActorKind> kind = actorKindOf(entity);
+            if (!kind) {
+                add(issues, Severity::Warning, "sounds.not_an_actor",
+                    "sound table on an entity that is not a player, NPC or "
+                    "enemy -- nothing will play it",
+                    entity.id);
+            }
+            for (const game::ActorActionInfo& info : game::actorActions()) {
+                const std::string& cue = entity.sounds->cue(info.action);
+                if (cue.empty())
+                    continue;
+                if (cue.find_first_of(" \t") != std::string::npos) {
+                    add(issues, Severity::Error, "sounds.invalid_cue",
+                        "'" + cue + "' is not a cue id (no spaces)", entity.id);
+                }
+                if (kind && !game::actorPerforms(*kind, info.action)) {
+                    add(issues, Severity::Warning, "sounds.action_not_performed",
+                        std::string("a ") + game::actorKindName(*kind) +
+                            " never performs '" + info.id + "'",
+                        entity.id);
+                }
+            }
+        }
         if (entity.collider) {
             const glm::vec3& half = entity.collider->halfExtents;
             if (!(half.x > 0.0f) || !(half.y > 0.0f) || !(half.z > 0.0f)) {

@@ -18,6 +18,7 @@
 #include <editor/content/SceneWriter.h>
 
 #include <eng/Input.h>
+#include <eng/Audio.h>
 #include <eng/Log.h>
 #include <eng/render/Warmup.h>
 #include <eng/render/ImGuiHint.h>
@@ -202,6 +203,11 @@ bool EditorApp::onStart(eng::Engine& engine)
 
     mEngine = &engine;
     eng::Renderer& renderer = engine.renderer();
+
+    mAudio = std::make_unique<eng::Audio>();
+    if (!mAudio->startup())
+        eng::log::warn("Editor audio preview unavailable");
+    refreshAudioAssets();
 
     if (std::getenv("RAVEN_EDITOR_SELFTEST"))
         mSelfTestStep = 0;
@@ -407,9 +413,108 @@ bool EditorApp::onStart(eng::Engine& engine)
     return true;
 }
 
+void EditorApp::refreshAudioAssets()
+{
+    mAudioAssets.clear();
+    const std::filesystem::path root = mState.assetRoot;
+    const std::filesystem::path audioRoot = root / "audio";
+    std::error_code error;
+    if (!std::filesystem::is_directory(audioRoot, error))
+        return;
+
+    for (std::filesystem::recursive_directory_iterator it(audioRoot, error), end;
+         it != end && !error; it.increment(error)) {
+        if (!it->is_regular_file(error))
+            continue;
+        std::string extension = it->path().extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                       [](unsigned char c) { return char(std::tolower(c)); });
+        if (extension != ".wav" && extension != ".ogg" &&
+            extension != ".flac" && extension != ".mp3")
+            continue;
+        const std::filesystem::path relative =
+            std::filesystem::relative(it->path(), root, error);
+        if (!error)
+            mAudioAssets.push_back(relative.generic_string());
+        error.clear();
+    }
+    std::sort(mAudioAssets.begin(), mAudioAssets.end());
+}
+
+void EditorApp::previewAudio(const AuthorId& id)
+{
+    stopAudioPreview();
+    if (!mAudio || !mAudio->ready()) {
+        mStatus = "audio preview backend is unavailable";
+        return;
+    }
+    const Entity* entity = mState.document.find(id);
+    if (!entity || !entity->audio || entity->audio->source.empty())
+        return;
+
+    const AudioEmitterAuthor& authored = *entity->audio;
+    std::filesystem::path source = authored.source;
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(source, error))
+        source = eng::assets::resolve(authored.source);
+    if (source.empty()) {
+        mStatus = "audio clip does not resolve: " + authored.source;
+        return;
+    }
+
+    eng::PlaybackSettings settings;
+    settings.bus = authored.bus > static_cast<int>(eng::AudioBus::Master) &&
+                           authored.bus < static_cast<int>(eng::AudioBus::Count)
+                       ? static_cast<eng::AudioBus>(authored.bus)
+                       : eng::AudioBus::Sfx;
+    settings.gainDb = authored.gainDb;
+    settings.pitch = authored.pitch;
+    settings.loop = authored.loop;
+    settings.streaming = authored.streaming;
+    settings.spatialized = authored.spatialized;
+    const WorldTransform world = mState.document.worldTransform(id);
+    settings.position =
+        world.position + world.orientation * (world.scale * authored.offset);
+    settings.minDistance = authored.minDistance;
+    settings.maxDistance = authored.maxDistance;
+    settings.rolloff = authored.rolloff;
+    settings.dopplerFactor = authored.dopplerFactor;
+    settings.stealable = authored.stealable;
+    if (authored.priority <= static_cast<int>(eng::AudioPriority::Background))
+        settings.priority = eng::AudioPriority::Background;
+    else if (authored.priority <= static_cast<int>(eng::AudioPriority::Low))
+        settings.priority = eng::AudioPriority::Low;
+    else if (authored.priority <= static_cast<int>(eng::AudioPriority::Normal))
+        settings.priority = eng::AudioPriority::Normal;
+    else if (authored.priority <=
+             static_cast<int>(eng::AudioPriority::Important))
+        settings.priority = eng::AudioPriority::Important;
+    else
+        settings.priority = eng::AudioPriority::Critical;
+
+    mAudioPreview = mAudio->play(source.string(), settings);
+    if (!mAudioPreview) {
+        mStatus = "could not preview " + authored.source;
+        return;
+    }
+    mAudioPreviewEntity = id;
+    mAudioPreviewSource = authored.source;
+    mStatus = "previewing " + authored.source;
+}
+
+void EditorApp::stopAudioPreview()
+{
+    if (mAudioPreview)
+        mAudioPreview->stop(eng::StopMode::Immediate);
+    mAudioPreview.reset();
+    mAudioPreviewEntity.clear();
+    mAudioPreviewSource.clear();
+}
+
 bool EditorApp::loadScene(const std::string& path)
 {
     finishInspectorEdit();
+    stopAudioPreview();
     std::string error;
     SceneDocument document;
     if (!loadSceneSource(path, document, error)) {
@@ -1627,6 +1732,33 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
     renderer.setEditorCameraPose(mState.camera.activeEye(),
                                  mState.camera.activeOrientation(),
                                  mState.camera.activeFovDeg());
+    if (mAudio) {
+        eng::AudioListener listener;
+        listener.position = mState.camera.activeEye();
+        listener.forward = mState.camera.activeOrientation() *
+                           glm::vec3(0.0f, 0.0f, -1.0f);
+        listener.up = mState.camera.activeOrientation() *
+                      glm::vec3(0.0f, 1.0f, 0.0f);
+        mAudio->setListener(listener);
+
+        if (mAudioPreview) {
+            const Entity* entity = mState.document.find(mAudioPreviewEntity);
+            if (!entity || !entity->audio ||
+                entity->audio->source != mAudioPreviewSource) {
+                stopAudioPreview();
+            } else {
+                const WorldTransform world =
+                    mState.document.worldTransform(entity->id);
+                const glm::vec3 position =
+                    world.position + world.orientation *
+                                         (world.scale * entity->audio->offset);
+                mAudioPreview->setPosition(position);
+                mAudioPreview->setGainDb(entity->audio->gainDb);
+                mAudioPreview->setPitch(entity->audio->pitch);
+            }
+        }
+        mAudio->update(f.dt);
+    }
     if (mMaterialMode)
         renderer.setDebugLines({}); // the checkerboard is the reference here
     else
@@ -4296,9 +4428,24 @@ void EditorApp::drawSelectionContextMenu()
         detachSelection();
     if (ImGui::BeginMenu("Add Component")) {
         const ComponentDefaults defaults = componentDefaults();
+        std::vector<const Entity*> selected;
+        selected.reserve(mState.selection.size());
+        for (const AuthorId& id : mState.selection)
+            if (const Entity* entity = mState.document.find(id))
+                selected.push_back(entity);
         for (const ComponentType& type : componentTypes()) {
             if (!type.add)
                 continue;
+            // A component that means nothing on any of these entities is not
+            // offered at all -- the sound table on a wall being the case this
+            // exists for.
+            if (type.applies) {
+                bool any = false;
+                for (const Entity* entity : selected)
+                    any = any || type.applies(*entity);
+                if (!any)
+                    continue;
+            }
             const bool ready = !type.addable || type.addable(defaults);
             if (ImGui::MenuItem(type.label, nullptr, false, ready))
                 addComponentToSelection(type);
@@ -4333,6 +4480,11 @@ void EditorApp::addComponentToSelection(const ComponentType& type)
         const Entity* entity = mState.document.find(id);
         if (!entity || type.has(*entity))
             continue;
+        // Mixed selections are normal (drag a box over a room and you get the
+        // enemies and the walls it stands on). The component lands only on the
+        // entities it means something for.
+        if (type.applies && !type.applies(*entity))
+            continue;
         Entity after = *entity;
         type.add(after, defaults);
         parts.push_back(
@@ -4362,6 +4514,10 @@ void EditorApp::removeComponentFromSelection(const ComponentType& type)
     }
     if (parts.empty())
         return;
+    if (std::string_view(type.id) == "audio" &&
+        std::find(mState.selection.begin(), mState.selection.end(),
+                  mAudioPreviewEntity) != mState.selection.end())
+        stopAudioPreview();
     runCommand(
         makeComposite(std::string("remove ") + type.label, std::move(parts)));
     mPreview->invalidate();
@@ -4433,6 +4589,10 @@ Entity EditorApp::makeGameplayEntity(Gameplay kind,
     case Gameplay::Trigger:
         stem = "trigger";
         component = "trigger";
+        break;
+    case Gameplay::AudioEmitter:
+        stem = "audio";
+        component = "audio";
         break;
     case Gameplay::PointLight:
         stem = "light";
@@ -4745,6 +4905,7 @@ void EditorApp::drawInspector()
     for (const eng::ParticleEffectDesc& d : mParticles.descs())
         mParticleEffectNames.push_back(d.name);
     context.particleEffects = &mParticleEffectNames;
+    context.audioAssets = &mAudioAssets;
     context.previewTexture = mEngine->renderer().materialThumbnailTextureId();
     context.requestMaterialPreview = [this](const std::string& name) {
         requestMaterialPreview(name);
@@ -4752,6 +4913,13 @@ void EditorApp::drawInspector()
     context.requestEffectPreview = [this](const std::string& name) {
         requestEffectPreview(name);
     };
+    context.requestAudioPreview = [this](const AuthorId& id) {
+        previewAudio(id);
+    };
+    context.stopAudioPreview = [this] { stopAudioPreview(); };
+    context.audioPreviewing =
+        mAudioPreview && mAudioPreview->isPlaying() &&
+        mAudioPreviewEntity == entity->id;
 
     // The swatch, first thing in the panel: "what does this look like" is the
     // question an inspector is opened to answer, and the answer used to live in
@@ -5312,14 +5480,18 @@ void EditorApp::drawMaterialPanel()
                 hoveredMaterial = true;
                 mStage.setThumbnailMaterial(renderer, name);
                 if (warn && !advice.reason.empty()) {
-                    ImGui::SetTooltip("%s\n\n%s",
+                    ImGui::SetTooltip("%s\n\n%s\n%s", name.c_str(),
                                       advice.fit == Fit::Broken
                                           ? "Will not render on this selection:"
                                           : "Will render, but probably wrong:",
                                       advice.reason.c_str());
                 }
-                else if (!info.texture.empty()) {
-                    ImGui::SetTooltip("%s  |  %s", info.texture.c_str(),
+                else {
+                    ImGui::SetTooltip("%s\n%s%s%s", name.c_str(),
+                                      info.texture.empty()
+                                          ? "no texture"
+                                          : info.texture.c_str(),
+                                      info.shader.empty() ? "" : "  |  ",
                                       info.shader.c_str());
                 }
             }
@@ -5469,6 +5641,15 @@ void EditorApp::drawParticlePanel()
                               mSelectedEffect == descs[size_t(i)].name)) {
             mSelectedEffect = descs[size_t(i)].name;
             selectedIndex = size_t(i);
+        }
+        if (ImGui::IsItemHovered()) {
+            const eng::ParticleEffectDesc& effect = descs[size_t(i)];
+            ImGui::SetTooltip("%s\n%s | %zu emitter(s) | %s", effect.name.c_str(),
+                              effect.renderMode == eng::ParticleRenderMode::Voxel
+                                  ? "voxel"
+                                  : "sprite",
+                              effect.emitters.size(),
+                              effect.loop ? "loop" : "burst");
         }
     }
     ImGui::EndChild();
@@ -6622,6 +6803,10 @@ void EditorApp::onShutdown(eng::Engine& engine)
     if (mParticleThumbnailNode.valid())
         engine.renderer().destroyNode(mParticleThumbnailNode);
     mPreview.reset();
+    stopAudioPreview();
+    if (mAudio)
+        mAudio->terminate();
+    mAudio.reset();
 }
 
 } // namespace ed

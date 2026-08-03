@@ -1,6 +1,9 @@
 #include <eng/controllers/FpsController.h>
 
+#include <glm/gtc/constants.hpp>
+
 #include <cstdlib>
+#include <cmath>
 
 // Drives the controller with no physics backend (AABB fallback) to exercise
 // locomotion + the sustained-sprint stamina model.
@@ -54,6 +57,31 @@ int main()
             resumed = true;
     }
     if (!resumed)
+        return EXIT_FAILURE;
+
+    // Dash presentation follows one complete roll plus crouch-shaped Y arc,
+    // without changing collision crouch state.
+    player.reset(glm::vec3(0.0f), 3.0f, 0.002f,
+                 glm::vec3(-100.0f), glm::vec3(100.0f));
+    eng::FpsController::DashTuning dash;
+    dash.duration = 0.30f;
+    dash.cooldown = 0.10f;
+    dash.cameraDrop = 0.34f;
+    dash.cameraRollDegrees = 360.0f;
+    player.setDashTuning(dash);
+    if (!player.beginDash({0.0f, -1.0f}))
+        return EXIT_FAILURE;
+    eng::FpsController::Command dashCommand;
+    for (int i = 0; i < 9; ++i)
+        player.simulate(dashCommand, 1.0f / 60.0f);
+    if (player.dashCameraDrop() < 0.30f || player.crouched() ||
+        std::abs(std::abs(player.dashRollRadians()) - glm::pi<float>()) > 0.2f)
+        return EXIT_FAILURE;
+    for (int i = 0; i < 10; ++i)
+        player.simulate(dashCommand, 1.0f / 60.0f);
+    if (player.dashing() || player.dashCameraDrop() > 0.001f ||
+        std::abs(std::abs(player.dashRollRadians()) - glm::two_pi<float>()) >
+            0.2f)
         return EXIT_FAILURE;
 
     return EXIT_SUCCESS;

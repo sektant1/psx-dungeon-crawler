@@ -36,6 +36,10 @@
 #include <eng/ecs/components/Transform.h>
 #include <eng/ecs/components/WorldTransform.h>
 
+// --- audio ---
+#include <eng/ecs/components/AudioEmitter.h>
+#include <eng/ecs/components/AudioListener.h>
+
 // --- rendering ---
 #include <eng/ecs/components/Camera.h>
 #include <eng/ecs/components/LightAnimation.h>

@@ -82,10 +82,9 @@ void buildEditorWorkspace(std::uint32_t dockspaceId, float width, float height,
     ImGui::DockBuilderSplitNode(left, ImGuiDir_Up, plan.assetBrowserFraction,
                                 &assets, &hierarchy);
 
-    // Reference flow: browse above hierarchy, scene in centre, selected object
-    // on right, diagnostics below scene. Catalog is docked last in its tab
-    // stack so first launch opens on placeable content rather than a specialist
-    // tool.
+    // Reference flow: one asset browser above hierarchy, scene in centre,
+    // selected object on right, diagnostics below scene. Asset modes are
+    // internal tabs, so they cannot fragment dock topology again.
     ImGui::DockBuilderDockWindow(workspace_window::kAssetBrowser, assets);
     ImGui::DockBuilderDockWindow(workspace_window::kHierarchy, hierarchy);
     ImGui::DockBuilderDockWindow(workspace_window::kInspector, right);

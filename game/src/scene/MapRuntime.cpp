@@ -110,7 +110,8 @@ std::vector<ScenePlacement> MapRuntime::placements(
         if (!prefix.empty() && marker.type.rfind(prefix, 0) != 0)
             continue;
         const auto& transform = reg.get<const eng::ecs::Transform>(entity);
-        result.push_back({marker.type, transform.position, transform.rotation});
+        result.push_back({marker.type, transform.position, transform.rotation,
+                          authoredSounds(reg, entity)});
     }
     return result;
 }
@@ -129,8 +130,8 @@ std::vector<ScenePlacement> componentPlacements(const entt::registry& reg,
         if (id.empty())
             continue;
         const auto& transform = reg.get<const eng::ecs::Transform>(entity);
-        result.push_back(
-            {prefix + id, transform.position, transform.rotation});
+        result.push_back({prefix + id, transform.position, transform.rotation,
+                          authoredSounds(reg, entity)});
     }
     return result;
 }

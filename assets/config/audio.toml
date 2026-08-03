@@ -1,0 +1,371 @@
+# Runtime cue catalogue. Paths are logical content paths resolved through
+# assets.toml. Source recordings belong under assets/source/audio; runtime WAV,
+# FLAC, MP3 or OGG files belong under assets/audio using these names.
+#
+# Repeated cues use several independently edited takes, not pitch-shifted copies.
+# The runtime prevents immediate repeats, then applies only subtle pitch/gain
+# variation. Music files are streamed; short SFX are decoded and cached.
+
+[mixer]
+max_voices = 96
+master_db = -4.0
+music_db = -2.0
+ambience_db = -3.0
+dialogue_db = 0.0
+weapons_db = 0.0
+sfx_db = -1.0
+ui_db = -2.0
+warnings_db = 0.0
+
+[ducking]
+music_under_dialogue_db = -9.0
+attack_seconds = 0.025
+release_seconds = 0.45
+
+[[cue]]
+id = "player.footstep"
+files = [
+  "audio/foley/player_step_stone_01.wav",
+  "audio/foley/player_step_stone_02.wav",
+  "audio/foley/player_step_stone_03.wav",
+  "audio/foley/player_step_stone_04.wav",
+]
+bus = "sfx"
+gain_db = -7.0
+gain_variation_db = 1.2
+pitch_min = 0.96
+pitch_max = 1.04
+spatial = false
+max_instances = 3
+cooldown_seconds = 0.08
+priority = "low"
+limit = "steal_oldest"
+
+[[cue]]
+id = "player.land"
+files = [
+  "audio/foley/player_land_stone_01.wav",
+  "audio/foley/player_land_stone_02.wav",
+]
+bus = "sfx"
+gain_db = -3.0
+gain_variation_db = 0.8
+pitch_min = 0.97
+pitch_max = 1.03
+spatial = false
+max_instances = 2
+priority = "normal"
+
+[[cue]]
+id = "weapon.vesper.fire"
+files = [
+  "audio/weapons/vesper_fire_01.wav",
+  "audio/weapons/vesper_fire_02.wav",
+  "audio/weapons/vesper_fire_03.wav",
+]
+bus = "weapons"
+gain_db = -2.5
+gain_variation_db = 0.5
+pitch_min = 0.985
+pitch_max = 1.015
+spatial = false
+max_instances = 5
+cooldown_seconds = 0.035
+priority = "important"
+limit = "steal_oldest"
+
+[[cue]]
+id = "weapon.eidolon.fire"
+files = [
+  "audio/weapons/eidolon_fire_01.wav",
+  "audio/weapons/eidolon_fire_02.wav",
+]
+bus = "weapons"
+gain_db = 0.0
+gain_variation_db = 0.35
+pitch_min = 0.99
+pitch_max = 1.01
+spatial = false
+max_instances = 3
+priority = "critical"
+duck_music_db = -3.0
+
+[[cue]]
+id = "weapon.talon.fire"
+files = [
+  "audio/weapons/talon_fire_01.wav",
+  "audio/weapons/talon_fire_02.wav",
+  "audio/weapons/talon_fire_03.wav",
+]
+bus = "weapons"
+gain_db = -3.0
+gain_variation_db = 0.6
+pitch_min = 0.98
+pitch_max = 1.025
+spatial = false
+max_instances = 6
+cooldown_seconds = 0.025
+priority = "important"
+limit = "steal_oldest"
+
+[[cue]]
+id = "weapon.vesper.impact"
+files = ["audio/impacts/vesper_impact_01.wav", "audio/impacts/vesper_impact_02.wav"]
+bus = "sfx"
+gain_db = -5.0
+gain_variation_db = 0.8
+pitch_min = 0.96
+pitch_max = 1.04
+spatial = true
+min_distance = 1.5
+max_distance = 40.0
+max_instances = 10
+priority = "normal"
+
+[[cue]]
+id = "weapon.eidolon.impact"
+files = ["audio/impacts/eidolon_impact_01.wav", "audio/impacts/eidolon_impact_02.wav"]
+bus = "sfx"
+gain_db = -1.0
+gain_variation_db = 0.5
+pitch_min = 0.98
+pitch_max = 1.02
+spatial = true
+min_distance = 2.0
+max_distance = 55.0
+max_instances = 8
+priority = "important"
+
+[[cue]]
+id = "weapon.talon.impact"
+files = ["audio/impacts/talon_impact_01.wav", "audio/impacts/talon_impact_02.wav"]
+bus = "sfx"
+gain_db = -4.0
+gain_variation_db = 0.7
+pitch_min = 0.97
+pitch_max = 1.04
+spatial = true
+min_distance = 1.5
+max_distance = 42.0
+max_instances = 12
+priority = "normal"
+
+[[cue]]
+id = "enemy.telegraph"
+files = [
+  "audio/enemies/attack_telegraph_01.wav",
+  "audio/enemies/attack_telegraph_02.wav",
+  "audio/enemies/attack_telegraph_03.wav",
+]
+bus = "warnings"
+gain_db = -1.5
+gain_variation_db = 0.7
+pitch_min = 0.96
+pitch_max = 1.04
+spatial = true
+min_distance = 2.0
+max_distance = 35.0
+max_instances = 12
+cooldown_seconds = 0.04
+priority = "critical"
+
+[[cue]]
+id = "enemy.hurt"
+files = [
+  "audio/enemies/hurt_01.wav",
+  "audio/enemies/hurt_02.wav",
+  "audio/enemies/hurt_03.wav",
+  "audio/enemies/hurt_04.wav",
+]
+bus = "sfx"
+gain_db = -4.0
+gain_variation_db = 1.0
+pitch_min = 0.94
+pitch_max = 1.05
+spatial = true
+min_distance = 1.5
+max_distance = 32.0
+max_instances = 8
+cooldown_seconds = 0.09
+priority = "normal"
+
+[[cue]]
+id = "enemy.death"
+files = [
+  "audio/enemies/death_01.wav",
+  "audio/enemies/death_02.wav",
+  "audio/enemies/death_03.wav",
+]
+bus = "sfx"
+gain_db = -2.0
+gain_variation_db = 0.8
+pitch_min = 0.95
+pitch_max = 1.04
+spatial = true
+min_distance = 2.0
+max_distance = 45.0
+max_instances = 8
+priority = "important"
+
+[[cue]]
+id = "player.hit"
+files = ["audio/feedback/player_hit_01.wav", "audio/feedback/player_hit_02.wav"]
+bus = "warnings"
+gain_db = -1.0
+gain_variation_db = 0.4
+pitch_min = 0.98
+pitch_max = 1.02
+spatial = false
+max_instances = 2
+cooldown_seconds = 0.08
+priority = "critical"
+duck_music_db = -4.0
+
+# All stems within one section must share sample rate, exact length, downbeat and
+# loop points. Different sections must begin/end on the declared bar grid.
+[music]
+bpm = 80.0
+beats_per_bar = 4
+transition_bars = 1
+transition_seconds = 0.35
+intensity_rise_seconds = 0.8
+intensity_fall_seconds = 3.5
+default_section = "exploration"
+combat_stinger = "music.stinger.combat"
+boss_stinger = "music.stinger.boss"
+
+[[cue]]
+id = "music.exploration.bed"
+files = ["audio/music/exploration_bed.ogg"]
+bus = "music"
+gain_db = 0.0
+spatial = false
+stream = true
+loop = true
+max_instances = 2
+priority = "background"
+limit = "reject"
+
+[[cue]]
+id = "music.exploration.tension"
+files = ["audio/music/exploration_tension.ogg"]
+bus = "music"
+gain_db = 0.0
+spatial = false
+stream = true
+loop = true
+max_instances = 2
+priority = "background"
+limit = "reject"
+
+[[cue]]
+id = "music.combat.pulse"
+files = ["audio/music/combat_pulse.ogg"]
+bus = "music"
+gain_db = 0.0
+spatial = false
+stream = true
+loop = true
+max_instances = 2
+priority = "background"
+limit = "reject"
+
+[[cue]]
+id = "music.combat.percussion"
+files = ["audio/music/combat_percussion.ogg"]
+bus = "music"
+gain_db = 0.0
+spatial = false
+stream = true
+loop = true
+max_instances = 2
+priority = "background"
+limit = "reject"
+
+[[cue]]
+id = "music.boss.ritual"
+files = ["audio/music/boss_ritual.ogg"]
+bus = "music"
+gain_db = 0.0
+spatial = false
+stream = true
+loop = true
+max_instances = 2
+priority = "background"
+limit = "reject"
+
+[[cue]]
+id = "music.boss.assault"
+files = ["audio/music/boss_assault.ogg"]
+bus = "music"
+gain_db = 0.0
+spatial = false
+stream = true
+loop = true
+max_instances = 2
+priority = "background"
+limit = "reject"
+
+[[cue]]
+id = "music.stinger.combat"
+files = ["audio/music/stinger_combat.ogg"]
+bus = "music"
+gain_db = -2.0
+spatial = false
+stream = true
+max_instances = 1
+priority = "important"
+limit = "reject"
+
+[[cue]]
+id = "music.stinger.boss"
+files = ["audio/music/stinger_boss.ogg"]
+bus = "music"
+gain_db = 0.0
+spatial = false
+stream = true
+max_instances = 1
+priority = "critical"
+limit = "reject"
+
+[[music_stem]]
+section = "exploration"
+cue = "music.exploration.bed"
+starts_at = 0.0
+full_at = 0.0
+max_gain_db = -2.0
+
+[[music_stem]]
+section = "exploration"
+cue = "music.exploration.tension"
+starts_at = 0.18
+full_at = 0.55
+max_gain_db = -4.0
+
+[[music_stem]]
+section = "combat"
+cue = "music.combat.pulse"
+starts_at = 0.25
+full_at = 0.55
+max_gain_db = -2.0
+
+[[music_stem]]
+section = "combat"
+cue = "music.combat.percussion"
+starts_at = 0.45
+full_at = 0.85
+max_gain_db = -1.0
+
+[[music_stem]]
+section = "boss"
+cue = "music.boss.ritual"
+starts_at = 0.0
+full_at = 0.0
+max_gain_db = -2.0
+
+[[music_stem]]
+section = "boss"
+cue = "music.boss.assault"
+starts_at = 0.55
+full_at = 1.0
+max_gain_db = 0.0

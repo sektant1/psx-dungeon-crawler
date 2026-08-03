@@ -211,6 +211,80 @@
         }
       }
     },
+    "audio": {
+      "description": "A runtime audio clip attached to the entity transform. Source is a logical path under the mounted content pack.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "offset": {
+          "$ref": "#/$defs/vec3"
+        },
+        "bus": {
+          "enum": ["music", "ambience", "dialogue", "weapons", "sfx", "ui", "warnings"]
+        },
+        "gain_db": {
+          "type": "number",
+          "minimum": -80,
+          "maximum": 12
+        },
+        "pitch": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "min_distance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_distance": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rolloff": {
+          "type": "number",
+          "minimum": 0
+        },
+        "doppler_factor": {
+          "type": "number",
+          "minimum": 0
+        },
+        "priority": {
+          "enum": ["background", "low", "normal", "important", "critical"]
+        },
+        "loop": {
+          "type": "boolean"
+        },
+        "stream": {
+          "type": "boolean"
+        },
+        "spatial": {
+          "type": "boolean"
+        },
+        "autostart": {
+          "type": "boolean"
+        },
+        "stealable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "audio_listener": {
+      "description": "Candidate listener attached to the entity transform. Highest-priority active listener wins.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priority": {
+          "type": "integer",
+          "minimum": -100,
+          "maximum": 100
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
     "spin": {
       "description": "Constant rotation about a local axis. Whatever is parented under it turns with it, which is how an orbiting camera is authored rather than coded.",
       "type": "object",
@@ -301,6 +375,12 @@
         },
         "camera": {
           "$ref": "#/$defs/camera"
+        },
+        "audio": {
+          "$ref": "#/$defs/audio"
+        },
+        "audio_listener": {
+          "$ref": "#/$defs/audio_listener"
         },
         "spin": {
           "$ref": "#/$defs/spin"

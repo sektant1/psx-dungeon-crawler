@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/AudioTypes.h>
+#include <cstdint>
 #include <memory>
 
 namespace eng {
@@ -16,12 +17,21 @@ public:
     SoundInstance& operator=(const SoundInstance&) = delete;
 
     void setVolume(float v);
+    void setGainDb(float db);
     void setPitch(float p);
     void setLooping(bool loop);
+    void setPosition(glm::vec3 position);
+    void setVelocity(glm::vec3 velocity);
+    void fadeToGainDb(float db, float seconds);
+    void scheduleStop(std::uint64_t absoluteFrame, float fadeSeconds = 0.0f);
     void pause();
     void resume();
     void stop(StopMode mode = StopMode::Immediate);
     bool isPlaying() const;
+    bool paused() const;
+    bool finished() const;
+    float cursorSeconds() const;
+    float lengthSeconds() const;
 
     using Ptr = std::shared_ptr<SoundInstance>;
 

@@ -42,6 +42,12 @@ float approach(float value, float target, float maxDelta)
         return std::min(value + maxDelta, target);
     return std::max(value - maxDelta, target);
 }
+
+float smootherstep(float value)
+{
+    const float t = std::clamp(value, 0.0f, 1.0f);
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
 } // namespace
 
 namespace eng {
@@ -104,6 +110,12 @@ void FpsController::reset(glm::vec3 startPos, float speed, float sensitivity,
     mVerticalVelocity = 0.0f;
     mSprintStamina = 1.0f;
     mSlideTime = 0.0f;
+    mDashTime = 0.0f;
+    mDashCooldown = 0.0f;
+    mDashRoll = 0.0f;
+    mPrevDashRoll = 0.0f;
+    mDashRollSign = 1.0f;
+    mDashCameraDrop = 0.0f;
     mBobPhase = 0.0f;
     mEyeHeight = kEyeHeight;
     mCollisionRadius = 0.30f;
@@ -123,6 +135,23 @@ void FpsController::setBaseFov(float degrees)
 {
     mBaseFov = degrees;
     mLastAppliedFov = degrees;
+}
+
+void FpsController::setDashTuning(const DashTuning& tuning)
+{
+    mDash = tuning;
+    if (!std::isfinite(mDash.speed) || mDash.speed <= 0.0f)
+        mDash.speed = 14.0f;
+    if (!std::isfinite(mDash.duration) || mDash.duration <= 0.0f)
+        mDash.duration = 0.32f;
+    if (!std::isfinite(mDash.cooldown) || mDash.cooldown < 0.0f)
+        mDash.cooldown = 0.45f;
+    if (!std::isfinite(mDash.cameraDrop) || mDash.cameraDrop < 0.0f)
+        mDash.cameraDrop = 0.34f;
+    if (!std::isfinite(mDash.cameraRollDegrees))
+        mDash.cameraRollDegrees = 360.0f;
+    mDash.cameraRollDegrees =
+        std::round(mDash.cameraRollDegrees / 360.0f) * 360.0f;
 }
 
 FpsController::Command FpsController::readCommand(eng::Input& in)
@@ -170,6 +199,13 @@ bool FpsController::beginDash(glm::vec2 direction)
         direction = {-fwd.x, -fwd.z};
     }
     mDashDirection = glm::normalize(direction);
+    const glm::vec2 localRight(std::cos(mYaw), -std::sin(mYaw));
+    mDashRollSign = glm::dot(mDashDirection, localRight) < -0.1f ? -1.0f
+                                                                 : 1.0f;
+    // Previous completed roll is equivalent to identity at 2*pi, but scalar
+    // interpolation is not. Reset both endpoints before starting next roll.
+    mDashRoll = 0.0f;
+    mPrevDashRoll = 0.0f;
     mDashTime = mDash.duration;
     mDashCooldown = mDash.duration + mDash.cooldown;
     // A dash cancels a slide; both own horizontal velocity and the dash wins.
@@ -191,6 +227,7 @@ void FpsController::simulate(const Command& command, float dt)
 {
     mPrevPos = mPos;
     mPrevHeadOffset = mHeadOffset;
+    mPrevDashRoll = mDashRoll;
 
     // Camera looks down -Z at yaw 0; forward/right on the ground plane.
     const glm::vec3 fwd(-std::sin(mYaw), 0.0f, -std::cos(mYaw));
@@ -228,8 +265,9 @@ void FpsController::simulate(const Command& command, float dt)
         mSprintStamina = std::min(1.0f, mSprintStamina + kStaminaRecover * dt);
     }
 
+    const bool dashWasActive = mDashTime > 0.0f;
     mDashCooldown = std::max(0.0f, mDashCooldown - dt);
-    if (mDashTime > 0.0f)
+    if (dashWasActive)
         mDashTime = std::max(0.0f, mDashTime - dt);
 
     if (!mSliding && command.slidePressed && mSprinting && grounded()) {
@@ -355,9 +393,23 @@ void FpsController::simulate(const Command& command, float dt)
                                (mPos.z - beforeMove.z) / safeDt);
     }
 
+    // Dash roll is presentation only: capsule/steering stay owned by movement.
+    // Drop follows a smooth arch while roll completes exactly one turn, so the
+    // camera returns to identity without an orientation snap.
+    if (dashWasActive) {
+        const float duration = std::max(mDash.duration, 0.001f);
+        const float progress =
+            std::clamp(1.0f - mDashTime / duration, 0.0f, 1.0f);
+        mDashCameraDrop = std::max(0.0f, mDash.cameraDrop) *
+                          std::sin(glm::pi<float>() * progress);
+        mDashRoll = mDashRollSign *
+                    glm::radians(mDash.cameraRollDegrees) *
+                    smootherstep(progress);
+    } else {
+        mDashCameraDrop = 0.0f;
+    }
+
     // The authored templates pair locomotion state with camera feedback.
-    // Keep it subtle for the PSX presentation: no nausea-inducing roll, just
-    // a small local sway and a sprint FOV kick.
     const float horizontalSpeed = glm::length(mVelocity);
     const float speedRatio = glm::clamp(horizontalSpeed / std::max(mSpeed, 0.001f),
                                         0.0f, kSprintMultiplier);
@@ -368,7 +420,8 @@ void FpsController::simulate(const Command& command, float dt)
     const float bobAmount = actuallyMoving ? mBobAmount * speedRatio : 0.0f;
     mHeadOffset = {
         std::sin(mBobPhase * 0.5f) * bobAmount * 0.55f,
-        mEyeHeight + std::abs(std::sin(mBobPhase)) * bobAmount,
+        mEyeHeight + std::abs(std::sin(mBobPhase)) * bobAmount -
+            mDashCameraDrop,
         0.0f};
     mFovKick = mSprinting ? mSprintFovKick * speedRatio : 0.0f;
 }
@@ -388,7 +441,10 @@ void FpsController::present(eng::Renderer& r, float alpha)
     r.setPosition(mHead, glm::mix(mPrevHeadOffset, mHeadOffset, t));
     r.setPosition(mBody, glm::mix(mPrevPos, mPos, t));
     r.setOrientation(mBody, glm::angleAxis(mYaw, glm::vec3(0, 1, 0)));
-    r.setOrientation(mHead, glm::angleAxis(mPitch, glm::vec3(1, 0, 0)));
+    const float dashRoll = glm::mix(mPrevDashRoll, mDashRoll, t);
+    r.setOrientation(
+        mHead, glm::angleAxis(mPitch, glm::vec3(1, 0, 0)) *
+                   glm::angleAxis(dashRoll, glm::vec3(0, 0, 1)));
 }
 
 } // namespace eng

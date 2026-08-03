@@ -46,6 +46,35 @@ const char* edgeName(CellPlacement::Edge edge)
     return nullptr;
 }
 
+const char* audioBusName(int value)
+{
+    switch (static_cast<eng::AudioBus>(value)) {
+    case eng::AudioBus::Master:   return "master";
+    case eng::AudioBus::Music:    return "music";
+    case eng::AudioBus::Ambience: return "ambience";
+    case eng::AudioBus::Dialogue: return "dialogue";
+    case eng::AudioBus::Weapons:  return "weapons";
+    case eng::AudioBus::Sfx:      return "sfx";
+    case eng::AudioBus::Ui:       return "ui";
+    case eng::AudioBus::Warnings: return "warnings";
+    case eng::AudioBus::Count:    break;
+    }
+    return "sfx";
+}
+
+const char* audioPriorityName(int value)
+{
+    if (value <= static_cast<int>(eng::AudioPriority::Background))
+        return "background";
+    if (value <= static_cast<int>(eng::AudioPriority::Low))
+        return "low";
+    if (value <= static_cast<int>(eng::AudioPriority::Normal))
+        return "normal";
+    if (value <= static_cast<int>(eng::AudioPriority::Important))
+        return "important";
+    return "critical";
+}
+
 Json writeEntity(const Entity& entity)
 {
     Json out = Json::object();
@@ -160,6 +189,66 @@ Json writeEntity(const Entity& entity)
         if (fx.scale != defaults.scale)
             node["scale"] = canonical(fx.scale);
         out["particles"] = std::move(node);
+    }
+    if (entity.audio) {
+        const AudioEmitterAuthor& audio = *entity.audio;
+        const AudioEmitterAuthor defaults;
+        Json node = Json::object();
+        if (!audio.source.empty())
+            node["source"] = audio.source;
+        if (!nearlyEqual(audio.offset, defaults.offset))
+            node["offset"] = vec3(audio.offset);
+        if (audio.bus != defaults.bus)
+            node["bus"] = audioBusName(audio.bus);
+        if (audio.gainDb != defaults.gainDb)
+            node["gain_db"] = canonical(audio.gainDb);
+        if (audio.pitch != defaults.pitch)
+            node["pitch"] = canonical(audio.pitch);
+        if (audio.minDistance != defaults.minDistance)
+            node["min_distance"] = canonical(audio.minDistance);
+        if (audio.maxDistance != defaults.maxDistance)
+            node["max_distance"] = canonical(audio.maxDistance);
+        if (audio.rolloff != defaults.rolloff)
+            node["rolloff"] = canonical(audio.rolloff);
+        if (audio.dopplerFactor != defaults.dopplerFactor)
+            node["doppler_factor"] = canonical(audio.dopplerFactor);
+        if (audio.priority != defaults.priority)
+            node["priority"] = audioPriorityName(audio.priority);
+        if (audio.loop != defaults.loop)
+            node["loop"] = audio.loop;
+        if (audio.streaming != defaults.streaming)
+            node["stream"] = audio.streaming;
+        if (audio.spatialized != defaults.spatialized)
+            node["spatial"] = audio.spatialized;
+        if (audio.playing != defaults.playing)
+            node["autostart"] = audio.playing;
+        if (audio.stealable != defaults.stealable)
+            node["stealable"] = audio.stealable;
+        out["audio"] = std::move(node);
+    }
+    if (entity.actor)
+        out["actor"] = game::actorKindName(*entity.actor);
+    if (entity.sounds) {
+        // Only the rows an author actually overrode. An empty row means "the
+        // cue this actor's type plays", so writing it as "" would turn a
+        // default into an authored silence on the next read.
+        Json node = Json::object();
+        for (const game::ActorActionInfo& info : game::actorActions()) {
+            const std::string& cue = entity.sounds->cue(info.action);
+            if (!cue.empty())
+                node[info.id] = cue;
+        }
+        out["sounds"] = std::move(node);
+    }
+    if (entity.audioListener) {
+        const AudioListenerAuthor& listener = *entity.audioListener;
+        const AudioListenerAuthor defaults;
+        Json node = Json::object();
+        if (listener.priority != defaults.priority)
+            node["priority"] = listener.priority;
+        if (listener.active != defaults.active)
+            node["active"] = listener.active;
+        out["audio_listener"] = std::move(node);
     }
     if (entity.portal) {
         const PortalAuthor& portal = *entity.portal;

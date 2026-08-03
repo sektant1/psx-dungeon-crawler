@@ -1,5 +1,6 @@
 #include <eng/app/FpsGameApp.h>
 
+#include <eng/Audio.h>
 #include <eng/Input.h>
 #include <eng/render/Warmup.h>
 #include <eng/Log.h>
@@ -17,6 +18,7 @@ struct FpsGameApp::Impl
 {
     FpsGameConfig cfg;
     Physics physics;
+    Audio audio;
     DebugTools console;
     DebugConsole dev;
     PerfOverlay perf;
@@ -30,6 +32,7 @@ FpsGameApp::FpsGameApp() : mImpl(std::make_unique<Impl>()) {}
 FpsGameApp::~FpsGameApp() = default;
 
 Physics& FpsGameApp::physics() { return mImpl->physics; }
+Audio& FpsGameApp::audio() { return mImpl->audio; }
 DebugTools& FpsGameApp::console() { return mImpl->console; }
 DebugConsole& FpsGameApp::devConsole() { return mImpl->dev; }
 FrameStats& FpsGameApp::stats() { return *mImpl->stats; }
@@ -84,6 +87,8 @@ void FpsGameApp::startSystems(Engine& engine)
     r.setCameraClip(mImpl->cfg.nearClip, mImpl->cfg.farClip);
 
     mImpl->physics.init(mImpl->cfg.physics);
+    if (!mImpl->audio.startup())
+        log::warn("Audio: miniaudio engine could not start; sound disabled");
     mImpl->perf.setVisible(false); // diagnostic only; the perf key reveals it
 
     // Engine-level commands every game on this base gets for free. Anything
@@ -273,6 +278,9 @@ void FpsGameApp::onUpdate(const FrameContext& f)
     // forgetting it is a whole class of judder bugs.
     mImpl->physics.setInterpolationAlpha(f.alpha);
     onPresent(f);
+    // Audio follows wall time: pausing gameplay must not strand fades, dialogue,
+    // or music transitions halfway through a buffer.
+    mImpl->audio.update(f.realDt);
     mImpl->stats->endFrame(f.dt * 1000.0f);
 }
 
@@ -313,6 +321,7 @@ void FpsGameApp::onFrameRendered(float renderMs)
 void FpsGameApp::onShutdown(Engine& engine)
 {
     onStopGame(engine);
+    mImpl->audio.terminate();
     mImpl->physics.shutdown();
 }
 

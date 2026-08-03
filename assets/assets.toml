@@ -47,6 +47,7 @@ resources = [
     "textures/prototype",
     "textures/surfaces",
     "textures/vfx",
+    "textures/viewmodels",
     "particles/textures",
     "particles/textures/sheets",
 ]

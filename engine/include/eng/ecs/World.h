@@ -7,6 +7,7 @@
 #include <string>
 
 namespace eng {
+class Audio;
 class Physics;
 }
 
@@ -14,8 +15,8 @@ namespace eng::ecs {
 
 class SceneBackend;
 
-// One view driven from the registry: the renderer (SceneSync) or physics
-// (PhysicsSync). World knows only this contract and the order to call it in, so
+// One view driven from the registry: renderer, physics, or audio. World knows
+// only this contract and the order to call it in, so
 // a build that links neither reconciler still gets a working headless World --
 // which is what the combat sim and the map tests run on.
 class WorldReconciler
@@ -77,15 +78,17 @@ public:
     World& operator=(const World&) = delete;
 
     // --- attachments -----------------------------------------------------
-    // Materialise renderer nodes for entities that ask for one (MeshRenderer,
-    // LightRef or a bare RenderNode tag), and physics bodies for entities with
-    // a Collider. Both are optional; both must outlive this World, and
+    // Materialise renderer nodes, physics bodies, and authored audio voices.
+    // All are optional, must outlive this World, and
     // detachAll() exists for the case where they do not.
     // `drivesCamera` is false for a world that is being *looked at* rather
     // than looked *through*: the editor previews documents whose cameras are
     // content, and a preview that took the viewport would fight the author.
     void attachRenderer(SceneBackend& backend, bool drivesCamera = true);
     void attachPhysics(Physics& physics);
+    // `drivesListener=false` lets a player/editor camera keep listener control
+    // while entity emitters still follow their WorldTransforms.
+    void attachAudio(Audio& audio, bool drivesListener = true);
     // Drop every materialised node and body and forget both attachments. Call
     // before the renderer or physics world dies; the registry survives.
     void detachAll();
@@ -150,6 +153,7 @@ private:
     // attach() is defined next to the reconciler it constructs.
     std::unique_ptr<WorldReconciler> mRender;
     std::unique_ptr<WorldReconciler> mPhysics;
+    std::unique_ptr<WorldReconciler> mAudio;
     uint32_t mActiveGroup = 0;
 };
 

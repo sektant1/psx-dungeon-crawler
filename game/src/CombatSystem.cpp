@@ -55,9 +55,10 @@ void CombatSystem::clear(GameContext& ctx)
 }
 
 void CombatSystem::fireWeapon(GameContext& ctx, const PlayerWeaponDef& weapon,
-                              glm::vec3 eye, glm::vec3 forward)
+                              glm::vec3 eye, glm::vec3 forward,
+                              std::optional<glm::vec3> muzzle)
 {
-    mProjectiles.fire(ctx.physics, ctx.renderer, weapon, eye, forward);
+    mProjectiles.fire(ctx.physics, ctx.renderer, weapon, eye, forward, muzzle);
 }
 
 } // namespace game

@@ -381,6 +381,11 @@ void test_shipped_models_pass_import_gate()
         if (!entry.is_regular_file() ||
             !eng::detail::assimpSupportsModelFile(entry.path()))
             continue;
+        // Deforming assets have their own skeleton/bind-pose production gate
+        // in SkeletalAnimationTests; static importer must continue rejecting
+        // them rather than silently discarding skin and clips.
+        if (entry.path().filename() == "arms_rig.glb")
+            continue;
         eng::ModelImportOptions options;
         eng::detail::ImportedModelData model;
         eng::ModelImportReport report;

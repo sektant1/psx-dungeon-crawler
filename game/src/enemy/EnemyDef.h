@@ -3,6 +3,7 @@
 #include "combat/BulletPattern.h"
 #include "combat/DamageTypes.h"
 #include "combat/FeelComponents.h"
+#include "audio/ActorSounds.h"
 
 #include <glm/glm.hpp>
 
@@ -182,6 +183,7 @@ struct EnemyAttack {
     // from one weapon table: an enemy "weapon" is just a row in it.
     std::string weapon = "sword";
     std::string telegraphEffect = "enemy_attack_telegraph";
+    std::string telegraphSound = "enemy.telegraph";
     float minRange = 0.0f; // below this the move is not selectable
     float maxRange = 2.2f;
     // Half-angle (degrees) the target must be within for the move to be chosen.
@@ -214,6 +216,17 @@ struct EnemyDef {
     EnemyPerception perception;
     EnemyBehaviour behaviour;
     std::vector<EnemyAttack> attacks;
+
+    // What this type sounds like doing each thing it can do, authored as
+    // `[enemy.<id>.sounds]`. Replaces the three loose `*_sound` fields, which
+    // covered death, hurt and telegraph and nothing else -- an enemy could not
+    // be given a footstep, a spawn or an idle growl without a fourth field and
+    // a fourth call site.
+    //
+    // Empty rows fall back to "enemy.<action>", so an enemy that names none of
+    // them sounds exactly as it did before this existed. Inherited from the
+    // archetype row by row.
+    ActorSoundSet sounds;
 
     // Resolved once by EnemyLibrary::resolve against the vocabulary. Kept
     // alongside the authored names so a reload can re-resolve without

@@ -34,27 +34,9 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
                              std::pow(0.54f, 2.2f)) * 0.72f;
     carry.range = 6.0f;
     r.attachLight(mPlayer.headNode(), carry);
-    mViewmodels.clear();
-    mViewmodels.resize(mWeaponLibrary.defs().size());
-    mPendingFireAnimation.assign(mViewmodels.size(), false);
-    const CombatVocabulary& vocab = ctx.vocabulary;
-    for (std::size_t i = 0; i < mViewmodels.size(); ++i) {
-        const PlayerWeaponDef& weapon = mWeaponLibrary.defs()[i];
-        mViewmodels[i].initPlayerWeapon(
-            r, mPlayer.headNode(), weapon.viewmodel,
-            {vocab.palette(weapon.viewmodel.glowSchool),
-             weapon.viewmodel.glowStrength});
-    }
     mWeapons.resetRuntime();
-    setWeaponEnchant(r, mWeaponEnchant); // fresh viewmodels start from the flag
-    applyWeaponVis(ctx);
-}
-
-void PlayerSystem::setWeaponEnchant(eng::Renderer& r, bool on)
-{
-    mWeaponEnchant = on;
-    for (ViewModel& model : mViewmodels)
-        model.setEnchantEnabled(r, on);
+    if (mHands.init(r, mPlayer.headNode()) && mWeapons.selected())
+        mHands.setWeapon(mWeapons.selected()->viewmodel, false);
 }
 
 void PlayerSystem::look(GameContext& ctx)
@@ -109,37 +91,29 @@ std::optional<std::size_t> PlayerSystem::fixedStepWeapons(
     const std::optional<std::size_t> fired =
         mWeapons.fixedUpdate(fixedDt, arc, canFire);
     if (mWeapons.consumeSelectionChanged()) {
-        applyWeaponVis(ctx);
-        if (mWeapons.selectedIndex() < mViewmodels.size())
-            mViewmodels[mWeapons.selectedIndex()].beginEquip();
+        if (mWeapons.selected())
+            mHands.setWeapon(mWeapons.selected()->viewmodel, true);
     }
-    if (fired && *fired < mPendingFireAnimation.size())
-        mPendingFireAnimation[*fired] = true;
+    if (fired)
+        mHands.triggerFire(ctx.renderer);
     return fired;
 }
 
 void PlayerSystem::updateViewmodels(GameContext& ctx, float dt)
 {
-    for (std::size_t i = 0; i < mViewmodels.size(); ++i) {
-        mViewmodels[i].configure(mWeaponLibrary.defs()[i].viewmodel);
-        mViewmodels[i].update(ctx.renderer, dt, mPendingFireAnimation[i],
-                              mPlayer.horizontalSpeed(), mLastLookDelta,
-                              mPlayer.grounded());
-        mPendingFireAnimation[i] = false;
-    }
+    mHands.update(ctx.renderer, dt);
+}
+
+std::optional<glm::vec3>
+PlayerSystem::projectileMuzzle(const eng::Renderer& renderer) const
+{
+    return mHands.muzzleWorldPosition(renderer);
 }
 
 const PlayerWeaponDef* PlayerSystem::weaponDefinition(std::size_t index) const
 {
     const auto& definitions = mWeaponLibrary.defs();
     return index < definitions.size() ? &definitions[index] : nullptr;
-}
-
-void PlayerSystem::applyWeaponVis(GameContext& ctx)
-{
-    eng::Renderer& r = ctx.renderer;
-    for (std::size_t i = 0; i < mViewmodels.size(); ++i)
-        mViewmodels[i].setVisible(r, i == mWeapons.selectedIndex());
 }
 
 } // namespace game

@@ -11,6 +11,7 @@ namespace game::feel::defense {
 inline constexpr float kDeflectPoisePunish = 45.0f;
 // Default dodge cost / i-frame duration used by the live layer.
 inline constexpr float kDodgeStamina = 25.0f;
+inline constexpr float kDodgeIframes = 0.22f;
 
 // Enter the Deflecting state from Idle for kDeflectWindow seconds. Returns
 // success (false if not idle).
@@ -23,13 +24,17 @@ bool beginDeflect(ActionState& as);
 bool resolveIncoming(entt::registry& reg, entt::entity defender,
                      entt::entity attacker, float incomingPoise);
 
+// Pure preflight used to keep movement dash and combat dodge atomic.
+bool canDodge(const entt::registry& reg, entt::entity e, float duration,
+              float iframes, float cost = kDodgeStamina);
+
 // Start a dodge: pay `cost` stamina, enter Dodging for `dur`, and grant
 // `iframes` seconds of Health.invulnTimer (honored by damage::apply). Returns
 // false if not idle or unaffordable. No-op on components that are absent.
 //
-// This grants the invulnerability; it does not move anything. The dash itself
-// is FpsController::beginDash, and the caller drives both -- ask the dash
-// first, because it is the one that can refuse.
+// This grants invulnerability; it does not move anything. Caller preflights
+// this state before asking FpsController to move, so rejected stamina/action
+// state cannot leave a visible dash without i-frames.
 bool beginDodge(entt::registry& reg, entt::entity e, float dur, float iframes,
                 float cost = kDodgeStamina);
 

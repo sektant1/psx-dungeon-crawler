@@ -25,6 +25,14 @@ struct InspectorContext {
     // Effect names from the particle library, so the Particles component picks
     // from what exists instead of taking a string nobody validates.
     const std::vector<std::string>* particleEffects = nullptr;
+    // Runtime-ready audio clips under the mounted content pack. Free text stays
+    // available for a clip generated after the editor started.
+    const std::vector<std::string>* audioAssets = nullptr;
+    // Cue ids from audio.toml, for the actor sound table. A cue is a semantic
+    // event ("enemy.death"), not a clip: the catalog decides which takes it
+    // draws from, so this is the vocabulary an actor's action is authored
+    // against and a clip path here would bypass every mix decision in it.
+    const std::vector<std::string>* audioCues = nullptr;
     // The vocabularies the game itself defines: enemy ids from enemies.toml,
     // pickup ids, and the marker prefixes the runtime looks up.
     //
@@ -51,6 +59,9 @@ struct InspectorContext {
     uint64_t previewTexture = 0;
     std::function<void(const std::string&)> requestMaterialPreview;
     std::function<void(const std::string&)> requestEffectPreview;
+    std::function<void(const game::content::AuthorId&)> requestAudioPreview;
+    std::function<void()> stopAudioPreview;
+    bool audioPreviewing = false;
 
     // Set by the drawers, read by the caller: `edited` means the document must
     // be touched so the preview follows the drag, `closed` means the widget was

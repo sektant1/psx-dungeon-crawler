@@ -133,6 +133,55 @@ void deEnvironment(entt::registry& r, entt::entity e, ByteReader& b,
         e, game::SceneEnvironment{palette});
 }
 
+void serActor(const entt::registry& r, entt::entity e, ByteWriter& w)
+{ w.u8(uint8_t(r.get<game::Actor>(e).kind)); }
+void deActor(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    if (bytes < 1) { b.invalidate(); return; }
+    const uint8_t kind = b.u8();
+    if (kind >= game::kActorKindCount) { b.invalidate(); return; }
+    r.emplace_or_replace<game::Actor>(e, game::Actor{game::ActorKind(kind)});
+}
+
+// The whole table, action by action, in vocabulary order: a count first so a
+// map written by an older build (fewer actions) still reads, and an id per row
+// so reordering the vocabulary cannot silently move a cue from "death" to
+// "dodge".
+void serActorSounds(const entt::registry& r, entt::entity e, ByteWriter& w)
+{
+    const game::ActorSoundSet& set = r.get<game::ActorSounds>(e).set;
+    uint32_t named = 0;
+    for (const game::ActorActionInfo& info : game::actorActions())
+        if (!set.cue(info.action).empty())
+            ++named;
+    w.u32(named);
+    for (const game::ActorActionInfo& info : game::actorActions()) {
+        const std::string& cue = set.cue(info.action);
+        if (cue.empty())
+            continue;
+        w.str(info.id);
+        w.str(cue);
+    }
+}
+void deActorSounds(entt::registry& r, entt::entity e, ByteReader& b,
+                   uint32_t bytes)
+{
+    if (bytes < 4) { b.invalidate(); return; }
+    const uint32_t named = b.u32();
+    if (named > game::kActorActionCount) { b.invalidate(); return; }
+    game::ActorSounds sounds;
+    for (uint32_t i = 0; i < named; ++i) {
+        const std::string action = b.str();
+        const std::string cue = b.str();
+        // An action this build does not know is skipped rather than fatal: a
+        // map cooked by a newer editor must still load in an older game with
+        // one sound missing, not fail to load a level.
+        if (const game::ActorActionInfo* info = game::findActorAction(action))
+            sounds.set.set(info->action, cue);
+    }
+    r.emplace_or_replace<game::ActorSounds>(e, std::move(sounds));
+}
+
 void serEmpty(const entt::registry&, entt::entity, ByteWriter&) {}
 void dePlayerSpawn(entt::registry& r, entt::entity e, ByteReader&, uint32_t)
 { r.emplace_or_replace<game::PlayerSpawn>(e); }
@@ -161,6 +210,11 @@ ComponentRegistry buildCore()
     reg.add({"SceneEnvironment", 17, addDefault<game::SceneEnvironment>,
              has<game::SceneEnvironment>, remove<game::SceneEnvironment>,
              serEnvironment, deEnvironment});
+    reg.add({"Actor", 18, addDefault<game::Actor>, has<game::Actor>,
+             remove<game::Actor>, serActor, deActor});
+    reg.add({"ActorSounds", 19, addDefault<game::ActorSounds>,
+             has<game::ActorSounds>, remove<game::ActorSounds>,
+             serActorSounds, deActorSounds});
     return reg;
 }
 

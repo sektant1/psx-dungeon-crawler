@@ -539,14 +539,16 @@ struct RenderCore::Impl {
     }
 
     void scenePass(rhi::TextureHandle colour, rhi::TextureHandle depth,
-                   uint32_t width, uint32_t height, glm::vec3 clear,
-                   const View& view, rhi::TextureHandle normalDepth = {})
+                    uint32_t width, uint32_t height, glm::vec3 clear,
+                    const View& view, rhi::TextureHandle normalDepth = {},
+                    bool clearColour = true, bool clearDepth = true)
     {
         if (!colour.valid() || !depth.valid())
             return;
         rhi::RenderPassDesc pass;
         rhi::ColourAttachment target;
         target.texture = colour;
+        target.clear = clearColour;
         target.clearColour[0] = clear.r;
         target.clearColour[1] = clear.g;
         target.clearColour[2] = clear.b;
@@ -557,6 +559,7 @@ struct RenderCore::Impl {
         if (normalDepth.valid()) {
             rhi::ColourAttachment metadata;
             metadata.texture = normalDepth;
+            metadata.clear = clearColour;
             metadata.clearColour[0] = 0.0f;
             metadata.clearColour[1] = 0.0f;
             metadata.clearColour[2] = 0.0f;
@@ -564,10 +567,13 @@ struct RenderCore::Impl {
             pass.colour.push_back(metadata);
         }
         pass.depth.texture = depth;
+        pass.depth.clear = clearDepth;
         pass.debugName =
             view.target == SceneTarget::Main     ? "renderer.scene-pass"
             : view.target == SceneTarget::Editor ? "renderer.editor-pass"
-                                                 : "renderer.thumbnail-pass";
+            : view.target == SceneTarget::Thumbnail
+                ? "renderer.thumbnail-pass"
+                : "renderer.viewmodel-pass";
         rhi::CommandList& commands = device->beginPass(pass);
         commands.setViewport({0, 0, float(width), float(height), 0, 1});
         commands.setScissor({0, 0, width, height});
@@ -1013,8 +1019,16 @@ void RenderCore::renderFrame(float)
         mImpl->device->endPass();
     }
     mImpl->scenePass(mImpl->sceneColour, mImpl->sceneDepth, sceneWidth,
-                     sceneHeight, mImpl->background, mainView,
-                     mImpl->sceneNormalDepth);
+                      sceneHeight, mImpl->background, mainView,
+                      mImpl->sceneNormalDepth);
+    // First-person geometry needs world-independent depth, not disabled depth.
+    // Preserve scene/MRT colour, clear only depth, then draw viewmodels with
+    // normal depth testing so hands and weapons self-occlude correctly.
+    View viewmodelView;
+    viewmodelView.target = SceneTarget::Viewmodel;
+    mImpl->scenePass(mImpl->sceneColour, mImpl->sceneDepth, sceneWidth,
+                     sceneHeight, mImpl->background, viewmodelView,
+                     mImpl->sceneNormalDepth, false, true);
     // Every blit below wants flipV. The scene pass renders through the
     // negative-height viewport, which is the maintenance1 y-inversion: NDC +1
     // lands on row 0, so the world is already upright in sceneColour, and

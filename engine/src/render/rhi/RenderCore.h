@@ -18,7 +18,7 @@ public:
     // Shadow is a depth-only pass from the sun's point of view, drawn before
     // Main so the scene can sample it. The renderer treats it as another view
     // so caster selection stays in the one place that knows what a mesh is.
-    enum class SceneTarget { Main, Editor, Thumbnail, Shadow };
+    enum class SceneTarget { Main, Editor, Thumbnail, Viewmodel, Shadow };
 
     struct View {
         SceneTarget target = SceneTarget::Main;

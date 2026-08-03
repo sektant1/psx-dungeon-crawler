@@ -65,8 +65,12 @@ public:
         float speed = 14.0f;    // m/s during the dash
         float duration = 0.32f; // seconds
         float cooldown = 0.45f; // seconds before another dash is allowed
+        float cameraDrop = 0.34f; // cosmetic crouch arc, metres
+        // Whole turns only; setDashTuning rounds to nearest 360 degrees so a
+        // completed dash always returns camera to identity. Zero disables.
+        float cameraRollDegrees = 360.0f;
     };
-    void setDashTuning(const DashTuning& t) { mDash = t; }
+    void setDashTuning(const DashTuning& t);
     const DashTuning& dashTuning() const { return mDash; }
 
     // Start a dash. `direction` is world-space XZ; a zero direction dashes
@@ -75,6 +79,8 @@ public:
     // the caller knows not to spend stamina or grant i-frames.
     bool beginDash(glm::vec2 direction);
     bool dashing() const { return mDashTime > 0.0f; }
+    float dashCameraDrop() const { return mDashCameraDrop; }
+    float dashRollRadians() const { return mDashRoll; }
     // Movement direction the current input maps to, world-space XZ, normalised.
     // Zero when there is no movement input. Callers building a dash direction
     // want this rather than re-deriving it from yaw.
@@ -132,6 +138,10 @@ private:
     glm::vec2 mDashDirection{0.0f};
     float mDashTime = 0.0f;
     float mDashCooldown = 0.0f;
+    float mDashRoll = 0.0f;
+    float mPrevDashRoll = 0.0f;
+    float mDashRollSign = 1.0f;
+    float mDashCameraDrop = 0.0f;
     glm::vec3 mPrevHeadOffset{0.0f, 1.7f, 0.0f};
     glm::vec3 mMin{0.0f};
     glm::vec3 mMax{0.0f};

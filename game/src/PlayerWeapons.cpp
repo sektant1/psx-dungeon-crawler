@@ -69,11 +69,13 @@ std::vector<PlayerWeaponDef> defaults()
     spindle.fireInterval = 0.14f;
     spindle.arcCost = 2.0f;
     spindle.muzzleEffect = "vesper_muzzle";
+    spindle.fireSound = "weapon.vesper.fire";
     spindle.projectile.primitive = WeaponPrimitive::Cone;
     spindle.projectile.visualScale = {0.035f, 0.22f, 0.035f};
     spindle.projectile.material = "Game/Prototype/ProjectileVesper";
     spindle.projectile.trailEffect = "vesper_trail";
     spindle.projectile.impactEffect = "vesper_impact";
+    spindle.projectile.impactSound = "weapon.vesper.impact";
     spindle.projectile.speed = 72.0f;
     spindle.projectile.lifetime = 1.1f;
     spindle.projectile.radius = 0.025f;
@@ -83,6 +85,10 @@ std::vector<PlayerWeaponDef> defaults()
         part(WeaponPrimitive::Sphere, {0, 0.18f, 0}, {0, 0, 0},
              glm::vec3(0.075f), "Game/ViewModelVesperGlow", true),
     };
+    spindle.viewmodel.handsIdleAnimation = "finger_gun_idle";
+    spindle.viewmodel.handsDrawAnimation = "finger_gun_fix";
+    spindle.viewmodel.handsFireAnimation = "finger_gun_fire";
+    spindle.viewmodel.handsMuzzleJoint = "f_index.03.R";
 
     PlayerWeaponDef arbalest;
     arbalest.id = "eidolon_arbalest";
@@ -94,11 +100,13 @@ std::vector<PlayerWeaponDef> defaults()
     arbalest.projectileCount = 3;
     arbalest.spreadDegrees = 8.0f;
     arbalest.muzzleEffect = "eidolon_muzzle";
+    arbalest.fireSound = "weapon.eidolon.fire";
     arbalest.projectile.primitive = WeaponPrimitive::Cone;
     arbalest.projectile.visualScale = {0.07f, 0.42f, 0.07f};
     arbalest.projectile.material = "Game/Prototype/ProjectileEidolon";
     arbalest.projectile.trailEffect = "eidolon_trail";
     arbalest.projectile.impactEffect = "eidolon_impact";
+    arbalest.projectile.impactSound = "weapon.eidolon.impact";
     arbalest.projectile.speed = 48.0f;
     arbalest.projectile.lifetime = 1.5f;
     arbalest.projectile.radius = 0.055f;
@@ -113,6 +121,11 @@ std::vector<PlayerWeaponDef> defaults()
         part(WeaponPrimitive::Cylinder, {0, 0.02f, -0.04f}, {0, 0, 90},
              {0.025f, 0.30f, 0.025f}, "Game/ViewModelEidolonGlow", true),
     };
+    arbalest.viewmodel.handsIdleAnimation = "guard_idle";
+    arbalest.viewmodel.handsDrawAnimation = "guard_draw";
+    arbalest.viewmodel.handsFireAnimation = "push.R";
+    arbalest.viewmodel.handsMuzzleJoint = "f_middle.03.R";
+    arbalest.viewmodel.handsMuzzleOffset = {0.0f, 0.03f, 0.0f};
 
     PlayerWeaponDef talon;
     talon.id = "riven_talon";
@@ -123,11 +136,13 @@ std::vector<PlayerWeaponDef> defaults()
     talon.fireInterval = 0.09f;
     talon.arcCost = 3.0f;
     talon.muzzleEffect = "talon_muzzle";
+    talon.fireSound = "weapon.talon.fire";
     talon.projectile.primitive = WeaponPrimitive::Sphere;
     talon.projectile.visualScale = glm::vec3(0.09f);
     talon.projectile.material = "Game/Prototype/ProjectileTalon";
     talon.projectile.trailEffect = "talon_trail";
     talon.projectile.impactEffect = "talon_impact";
+    talon.projectile.impactSound = "weapon.talon.impact";
     talon.projectile.speed = 58.0f;
     talon.projectile.lifetime = 1.25f;
     talon.projectile.radius = 0.06f;
@@ -147,6 +162,11 @@ std::vector<PlayerWeaponDef> defaults()
         part(WeaponPrimitive::Cone, {0.07f, 0.06f, -0.05f}, {-70, 0, 12},
              {0.025f, 0.18f, 0.025f}, "Game/ViewModelTalonGlow", true),
     };
+    talon.viewmodel.handsIdleAnimation = "knife_idle";
+    talon.viewmodel.handsDrawAnimation = "knife_draw";
+    talon.viewmodel.handsFireAnimation = "knife_hit_01";
+    talon.viewmodel.handsMuzzleJoint = "hand.R";
+    talon.viewmodel.handsMuzzleOffset = {0.0f, 0.12f, 0.0f};
 
     return {std::move(spindle), std::move(arbalest), std::move(talon)};
 }
@@ -176,6 +196,7 @@ bool valid(const PlayerWeaponDef& def)
                  def.viewmodel.lookSway}) ||
         !finiteVec(def.muzzleOffset) ||
         !finiteVec(def.projectile.visualScale) ||
+        !finiteVec(def.viewmodel.handsMuzzleOffset) ||
         !finiteVec(def.viewmodel.position) ||
         !finiteVec(def.viewmodel.rotationDegrees) ||
         def.fireInterval <= 0.0f || def.arcCost < 0.0f ||
@@ -194,7 +215,11 @@ bool valid(const PlayerWeaponDef& def)
         def.viewmodel.movementBob < 0.0f ||
         def.viewmodel.movementBobSpeed < 0.0f ||
         def.viewmodel.idleSway < 0.0f || def.viewmodel.lookSway < 0.0f ||
-        def.projectile.material.empty() || def.viewmodel.parts.empty())
+        def.projectile.material.empty() || def.viewmodel.parts.empty() ||
+        def.viewmodel.handsIdleAnimation.empty() ||
+        def.viewmodel.handsDrawAnimation.empty() ||
+        def.viewmodel.handsFireAnimation.empty() ||
+        def.viewmodel.handsMuzzleJoint.empty())
         return false;
     return std::all_of(def.viewmodel.parts.begin(), def.viewmodel.parts.end(),
                        [](const WeaponViewmodelPart& value) {
@@ -242,6 +267,8 @@ bool parseDefinitions(const toml::table& root,
         def.muzzleOffset = vector3(*table, "muzzle_offset", def.muzzleOffset);
         def.muzzleEffect =
             (*table)["muzzle_effect"].value_or(std::string{});
+        def.fireSound =
+            (*table)["fire_sound"].value_or(def.fireSound);
 
         const toml::table* projectile = (*table)["projectile"].as_table();
         const toml::table* viewmodel = (*table)["viewmodel"].as_table();
@@ -259,8 +286,11 @@ bool parseDefinitions(const toml::table& root,
             (*projectile)["material"].value_or(std::string{});
         def.projectile.trailEffect =
             (*projectile)["trail_effect"].value_or(std::string{});
-        def.projectile.impactEffect =
-            (*projectile)["impact_effect"].value_or(std::string{});
+            def.projectile.impactEffect =
+                (*projectile)["impact_effect"].value_or(std::string{});
+            def.projectile.impactSound =
+                (*projectile)["impact_sound"].value_or(
+                    def.projectile.impactSound);
         def.projectile.speed = number(*projectile, "speed", def.projectile.speed);
         def.projectile.lifetime =
             number(*projectile, "lifetime", def.projectile.lifetime);
@@ -278,6 +308,16 @@ bool parseDefinitions(const toml::table& root,
             vector3(*viewmodel, "rotation", def.viewmodel.rotationDegrees);
         def.viewmodel.glowSchool =
             (*viewmodel)["glow_school"].value_or(std::string{"arcane"});
+        def.viewmodel.handsIdleAnimation =
+            (*viewmodel)["hands_idle_animation"].value_or(std::string{});
+        def.viewmodel.handsDrawAnimation =
+            (*viewmodel)["hands_draw_animation"].value_or(std::string{});
+        def.viewmodel.handsFireAnimation =
+            (*viewmodel)["hands_fire_animation"].value_or(std::string{});
+        def.viewmodel.handsMuzzleJoint =
+            (*viewmodel)["hands_muzzle_joint"].value_or(std::string{});
+        def.viewmodel.handsMuzzleOffset = vector3(
+            *viewmodel, "hands_muzzle_offset", def.viewmodel.handsMuzzleOffset);
         def.viewmodel.glowStrength =
             number(*viewmodel, "glow_strength", def.viewmodel.glowStrength);
         def.viewmodel.fireDuration =

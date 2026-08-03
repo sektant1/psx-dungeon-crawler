@@ -1,0 +1,40 @@
+{
+  "skeleton": {
+    "filename": "arms_rig.skeleton.ozz",
+    "import": {
+      "enable": true,
+      "raw": false,
+      "types": {
+        "skeleton": true,
+        "marker": false,
+        "camera": false,
+        "geometry": false,
+        "light": false,
+        "null": false,
+        "any": false
+      }
+    }
+  },
+  "animations": [
+    {
+      "clip": "*",
+      "filename": "clip_*.ozz",
+      "raw": false,
+      "additive": false,
+      "sampling_rate": 30,
+      "iframe_interval": 2,
+      "optimize": true,
+      "optimization_settings": {
+        "tolerance": 0.0005,
+        "distance": 0.1,
+        "override": []
+      },
+      "tracks": {
+        "properties": [],
+        "motion": {
+          "enable": false
+        }
+      }
+    }
+  ]
+}

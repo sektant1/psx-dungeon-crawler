@@ -9,6 +9,7 @@
 #include "enemy/EnemySave.h"
 #include "enemy/EnemySpawner.h"
 #include "enemy/EnemySystem.h"
+#include "audio/GameAudio.h"
 
 #include <eng/Renderer.h>
 #include <eng/particles/ParticleLibrary.h>
@@ -41,6 +42,8 @@ void DebugPanels::install(eng::DebugTools& console)
         "Feel", [this] { drawFeelTab(); }, eng::PanelGroup::Gameplay);
     console.addPanel(
         "Enemies", [this] { drawEnemiesTab(); }, eng::PanelGroup::Gameplay);
+    console.addPanel(
+        "Audio", [this] { drawAudioTab(); }, eng::PanelGroup::Content);
 
     // Content, beside the shader panels: an effect is authored against the
     // bloom and grade settings that sit in the same dock group.
@@ -91,21 +94,6 @@ void DebugPanels::install(eng::DebugTools& console)
 
 void DebugPanels::drawCombatTab()
 {
-    if (section("Weapon presentation")) {
-        ImGui::PushID("wp");
-        if (mCur.playerSystem && mCur.renderer) {
-            bool enchant = mCur.playerSystem->weaponEnchant();
-            if (ImGui::Checkbox("Enchantment glow", &enchant))
-                mCur.playerSystem->setWeaponEnchant(*mCur.renderer, enchant);
-            ImGui::SameLine();
-            ImGui::TextDisabled("(off by default)");
-        }
-        else {
-            ImGui::TextDisabled("Player system unavailable.");
-        }
-        ImGui::PopID();
-    }
-
     if (!mCur.playerSystem) {
         ImGui::TextDisabled("Weapon definitions unavailable.");
         return;
@@ -123,11 +111,6 @@ void DebugPanels::drawCombatTab()
                                5.0f, 140.0f);
             ImGui::SliderFloat("Projectile radius", &weapon.projectile.radius,
                                0.01f, 0.3f);
-            ImGui::SliderFloat("Recoil distance",
-                               &weapon.viewmodel.recoilDistance, 0.0f, 0.25f);
-            ImGui::SliderFloat("Recoil pitch",
-                               &weapon.viewmodel.recoilPitchDegrees, 0.0f,
-                               25.0f);
         }
         ImGui::PopID();
     }
@@ -195,6 +178,58 @@ void DebugPanels::drawFeelTab()
         ImGui::SliderFloat("Poise damage", &action->attack.poiseDamage, 0.0f,
                            80.0f);
     }
+}
+
+void DebugPanels::drawAudioTab()
+{
+    if (!mCur.audio || !mCur.audio->loaded()) {
+        ImGui::TextDisabled("Audio system unavailable.");
+        return;
+    }
+    const GameAudioStats stats = mCur.audio->stats();
+    ImGui::Text("Voices: %zu / %zu", stats.backend.activeVoices,
+                stats.backend.voiceLimit);
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s backend",
+                        stats.backend.nullBackend ? "null" : "device");
+    ImGui::ProgressBar(stats.musicIntensity, ImVec2(-FLT_MIN, 0.0f));
+    ImGui::Text("Music intensity %.2f  tier %d", stats.musicIntensity,
+                stats.musicTier);
+
+    if (ImGui::BeginTable("audio_buses", 2,
+                          ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("Bus");
+        ImGui::TableSetupColumn("Voices");
+        ImGui::TableHeadersRow();
+        for (std::size_t i = 0; i < eng::kAudioBusCount; ++i) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(
+                eng::audioBusName(static_cast<eng::AudioBus>(i)));
+            ImGui::TableNextColumn();
+            ImGui::Text("%zu", stats.backend.voicesByBus[i]);
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::SeparatorText("Session telemetry");
+    ImGui::Text("Emitted: %llu",
+                static_cast<unsigned long long>(stats.emitted));
+    ImGui::Text("Cue concurrency rejects: %llu",
+                static_cast<unsigned long long>(stats.concurrencyRejected));
+    ImGui::Text("Cooldown rejects: %llu",
+                static_cast<unsigned long long>(stats.cooldownRejected));
+    ImGui::Text("Distance culled: %llu",
+                static_cast<unsigned long long>(stats.distanceCulled));
+    ImGui::Text("Unavailable cue requests: %llu",
+                static_cast<unsigned long long>(stats.unavailableRejected));
+    ImGui::Text("Backend stolen/rejected: %llu / %llu",
+                static_cast<unsigned long long>(stats.backend.voicesStolen),
+                static_cast<unsigned long long>(stats.backend.voicesRejected));
+    ImGui::TextDisabled("%zu cues, %zu adaptive stems",
+                        mCur.audio->catalog().cues.size(),
+                        mCur.audio->catalog().music.stems.size());
 }
 
 // Live enemy tuning. Three things a designer does constantly and should never

@@ -51,6 +51,10 @@ enum class GizmoKind {
     // The point where a ParticleEmitter emits after its local offset is
     // transformed through the entity hierarchy.
     Particles,
+    // Positional clip origin and its maximum audible distance.
+    AudioEmitter,
+    // Runtime listener candidate on a transform-only rig node.
+    AudioListener,
     Collider,
 };
 

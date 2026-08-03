@@ -7,6 +7,7 @@
 
 #include <glm/glm.hpp>
 
+#include <optional>
 #include <string>
 
 namespace eng { struct HitEvent; }
@@ -32,7 +33,8 @@ public:
     void clear(GameContext& ctx);
 
     void fireWeapon(GameContext& ctx, const PlayerWeaponDef& weapon,
-                    glm::vec3 eye, glm::vec3 forward);
+                    glm::vec3 eye, glm::vec3 forward,
+                    std::optional<glm::vec3> muzzle = std::nullopt);
     ProjectileSystem& projectiles() { return mProjectiles; }
 
     BloodSystem& blood() { return mBlood; }

@@ -27,6 +27,7 @@ const char* gameplayName(Gameplay kind)
     case Gameplay::EnemySpawn:       return "enemy spawn";
     case Gameplay::Pickup:           return "pickup";
     case Gameplay::Trigger:          return "trigger volume";
+    case Gameplay::AudioEmitter:     return "audio emitter";
     case Gameplay::PointLight:       return "point light";
     case Gameplay::DirectionalLight: return "directional light";
     }
@@ -43,7 +44,8 @@ const std::vector<Gameplay>& paintableGameplay()
     static const std::vector<Gameplay> kKinds = {
         Gameplay::Group,     Gameplay::PlayerSpawn, Gameplay::Portal,
         Gameplay::Exit,      Gameplay::Marker,      Gameplay::EnemySpawn,
-        Gameplay::Pickup,    Gameplay::Trigger,     Gameplay::PointLight,
+        Gameplay::Pickup,    Gameplay::Trigger,     Gameplay::AudioEmitter,
+        Gameplay::PointLight,
     };
     return kKinds;
 }
@@ -129,6 +131,46 @@ const std::vector<ComponentType>& table()
          },
          [](Entity& e) { e.camera.reset(); }, always,
          ComponentGroup::Gameplay},
+
+        {"audio", "Audio Emitter", "a clip emitted from this entity",
+         [](const Entity& e) { return e.audio.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.audio = game::content::AudioEmitterAuthor{};
+         },
+         [](Entity& e) { e.audio.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        {"audio_listener", "Audio Listener",
+         "candidate ears attached to this entity",
+         [](const Entity& e) { return e.audioListener.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.audioListener = game::content::AudioListenerAuthor{};
+         },
+         [](Entity& e) { e.audioListener.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        {"actor", "Actor", "this entity is a player, an NPC or an enemy",
+         [](const Entity& e) { return e.actor.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // NPC by default: the other two kinds are already implied by the
+             // spawn components, so the one an author has to state is this one.
+             e.actor = game::ActorKind::Npc;
+         },
+         [](Entity& e) { e.actor.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        {"sounds", "Sounds", "a cue per action this actor can perform",
+         [](const Entity& e) { return e.sounds.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // Every field empty: an actor added to the table sounds exactly as
+             // its type says it does until an author overrides a row. Adding a
+             // component must never change what the game does before anything
+             // is typed into it.
+             e.sounds = game::content::ActorSoundsAuthor{};
+         },
+         [](Entity& e) { e.sounds.reset(); }, always,
+         ComponentGroup::Gameplay,
+         [](const Entity& e) { return isActor(e); }},
 
         {"orbit", "Orbit", "travels a ring around a point -- no pivot needed",
          [](const Entity& e) { return e.orbit.has_value(); },
@@ -243,7 +285,8 @@ std::vector<const ComponentType*> missingComponents(const Entity& entity)
 {
     std::vector<const ComponentType*> out;
     for (const ComponentType& type : table())
-        if (type.add && !type.has(entity))
+        if (type.add && !type.has(entity) &&
+            (!type.applies || type.applies(entity)))
             out.push_back(&type);
     std::stable_sort(out.begin(), out.end(),
                      [](const ComponentType* a, const ComponentType* b) {
@@ -271,8 +314,19 @@ missingComponents(const std::vector<const Entity*>& entities)
     if (entities.empty())
         return out;
     for (const ComponentType& type : table()) {
-        if (type.add && !componentPresence(type, entities).all())
-            out.push_back(&type);
+        if (!type.add || componentPresence(type, entities).all())
+            continue;
+        // Offered when it applies to at least one of the selection: adding
+        // Sounds to a mixed selection of enemies and walls should give the
+        // enemies a table rather than being greyed out by the walls.
+        if (type.applies) {
+            bool any = false;
+            for (const Entity* entity : entities)
+                any = any || (entity && type.applies(*entity));
+            if (!any)
+                continue;
+        }
+        out.push_back(&type);
     }
     std::stable_sort(out.begin(), out.end(),
                      [](const ComponentType* a, const ComponentType* b) {

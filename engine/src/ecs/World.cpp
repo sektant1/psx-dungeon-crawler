@@ -14,6 +14,7 @@ void World::detachAll()
     // components, so re-attaching later re-materialises them.
     mRender.reset();
     mPhysics.reset();
+    mAudio.reset();
 }
 
 entt::entity World::create(std::string name)
@@ -187,6 +188,8 @@ void World::sync()
         updateWorldTransforms();
     if (mPhysics)
         mPhysics->sync();
+    if (mAudio)
+        mAudio->sync();
 }
 
 void World::clear()
@@ -195,6 +198,8 @@ void World::clear()
         mRender->clear();
     if (mPhysics)
         mPhysics->clear();
+    if (mAudio)
+        mAudio->clear();
     mReg.clear();
 }
 

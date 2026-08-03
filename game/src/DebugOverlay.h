@@ -22,6 +22,7 @@ class PlayerSystem;
 class EnemySystem;
 class EnemyLibrary;
 class EnemySpawner;
+class GameAudioSystem;
 struct GameContext;
 
 // Collider-view settings are engine tooling; the game just keeps naming the
@@ -71,6 +72,7 @@ public:
         // which is why they arrive per-frame like everything else here.
         LiveLevel* level = nullptr;
         eng::ParticleLibrary* particles = nullptr;
+        GameAudioSystem* audio = nullptr;
         glm::vec3 playerFeet{0.0f};
         glm::vec3 playerForward{0.0f, 0.0f, 1.0f};
         // Frame delta, for the panels that own something with a lifetime. Only
@@ -98,6 +100,7 @@ private:
     void drawCombatTab();
     void drawFeelTab();
     void drawEnemiesTab();
+    void drawAudioTab();
     // The Dressing section of the engine's Portal tab, called with the index of
     // the selected profile -- 1 is the ascent portal, matching the order the
     // materials are registered in install().
