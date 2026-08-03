@@ -1,8 +1,8 @@
 [window]
-title = "PSX Placement Editor"
+title = "PSX 3D Editor"
 width = 1600
 height = 950
-vsync = true
+vsync = false
 
 # Viewport navigation, TrenchBroom-style: hold the right mouse button to fly,
 # and the usual WASD + Q/E while it is held. These names are what

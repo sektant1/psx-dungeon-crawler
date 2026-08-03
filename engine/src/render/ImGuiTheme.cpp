@@ -42,97 +42,153 @@ ImVec4 lerp(const ImVec4& a, const ImVec4& b, float t)
                   std::lerp(a.z, b.z, t), std::lerp(a.w, b.w, t));
 }
 
-// AC Vixen: the engine logo's palette, which is Armored Core: Project
-// Phantasma's -- gunmetal and near-black chrome carrying one hot magenta
-// accent, and nothing else. Sampled off assets/logo.png: the greys run neutral
-// (R=G=B) rather than the blue-tinted slate this replaced, and the accent is
-// the mech's edge lighting at ~(240,172,239) with its body around (132,98,133).
+// AC Vixen / Project Phantasma.
 //
-// The discipline is the point. A monochrome shell means the one saturated
-// colour always reads as "this is active/selected", so the eye has a single
-// thing to track instead of competing blues, ambers and greens.
-void oneDark()
+// Palette sampled from the supplied engine logo:
+//   void black      #0C0D12
+//   deep gunmetal   #14151C
+//   raised gunmetal #20212A
+//   chrome edge     #5B5B66
+//   chrome text     #E6E4E6
+//   hot magenta     #F98BE8
+//   dark magenta    #BE4EA1
+//
+// The logo is almost monochrome. Magenta is reserved for selected, focused,
+// checked, or actively manipulated controls; neutral chrome handles ordinary
+// hover feedback. The low rounding and hard borders mirror the AC's faceted
+// armour rather than a soft desktop application theme.
+void acVixen()
 {
     ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::StyleColorsDark(&style);
 
-    style.WindowBorderSize = 3.0f;
+    style.Alpha = 1.0f;
+    style.DisabledAlpha = 0.55f;
 
-    style.FrameRounding = 3.0f;
-    style.PopupRounding = 3.0f;
-    style.ScrollbarRounding = 3.0f;
-    style.GrabRounding = 3.0f;
+    style.WindowPadding = ImVec2(10.0f, 9.0f);
+    style.FramePadding = ImVec2(7.0f, 4.0f);
+    style.CellPadding = ImVec2(7.0f, 4.0f);
+    style.ItemSpacing = ImVec2(7.0f, 6.0f);
+    style.ItemInnerSpacing = ImVec2(6.0f, 4.0f);
+    style.IndentSpacing = 18.0f;
+    style.ScrollbarSize = 13.0f;
+    style.GrabMinSize = 10.0f;
 
-    style.DockingSeparatorSize = 3.0f;
+    style.WindowBorderSize = 1.0f;
+    style.ChildBorderSize = 1.0f;
+    style.PopupBorderSize = 1.0f;
+    style.FrameBorderSize = 1.0f;
+    style.TabBorderSize = 1.0f;
+    style.TabBarBorderSize = 1.0f;
+    style.DockingSeparatorSize = 2.0f;
 
-    // The single accent. Used SPARINGLY and only where it means "this one is
-    // active": the check, the selected tab's overline, a link, the keyboard
-    // cursor. That is the trick the Vixen pulls -- the mech is entirely
-    // gunmetal except for two shoulder strips and a vent, and the logo repeats
-    // it as two thin underline strokes. Spend it on hovers and plot fills too
-    // and the restraint that makes it read is gone.
-    const ImVec4 kAccent = rgba(0xFFF0ACEF);
+    style.WindowRounding = 0.0f;
+    style.ChildRounding = 0.0f;
+    style.FrameRounding = 1.0f;
+    style.PopupRounding = 1.0f;
+    style.ScrollbarRounding = 1.0f;
+    style.GrabRounding = 1.0f;
+    style.TabRounding = 0.0f;
+
+    style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
+    style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
+    style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
+
+    const ImVec4 kVoid = rgba(0xFF0C0D12);
+    const ImVec4 kDeep = rgba(0xFF14151C);
+    const ImVec4 kPanel = rgba(0xFF191A22);
+    const ImVec4 kRaised = rgba(0xFF20212A);
+    const ImVec4 kRaisedHover = rgba(0xFF30313B);
+    const ImVec4 kEdge = rgba(0xFF555661);
+    const ImVec4 kEdgeBright = rgba(0xFF7A7B85);
+    const ImVec4 kText = rgba(0xFFE6E4E6);
+    const ImVec4 kTextDim = rgba(0xFF898891);
+    const ImVec4 kChrome = rgba(0xFFC7C6CA);
+    const ImVec4 kAccent = rgba(0xFFF98BE8);
+    const ImVec4 kAccentBody = rgba(0xFFBE4EA1);
+    const ImVec4 kAccentDark = rgba(0xFF4A2346);
+
+    const auto alpha = [](const ImVec4& color, float value) {
+        return ImVec4(color.x, color.y, color.z, value);
+    };
+
     ImVec4* c = style.Colors;
-    c[ImGuiCol_Text] = rgba(0xFFC8C8CC);
-    c[ImGuiCol_TextDisabled] = rgba(0xFF6A6A6E);
-    c[ImGuiCol_WindowBg] = rgba(0xFF232326);
-    c[ImGuiCol_ChildBg] = rgba(0xFF1B1B1E);
-    c[ImGuiCol_PopupBg] = rgba(0xFF2A2A2E);
-    c[ImGuiCol_Border] = rgba(0xFF3A3A3F);
-    c[ImGuiCol_BorderShadow] = rgba(0x00000000);
-    c[ImGuiCol_FrameBg] = c[ImGuiCol_ChildBg];
-    c[ImGuiCol_FrameBgHovered] = rgba(0xFF3E3E44);
-    c[ImGuiCol_FrameBgActive] = rgba(0xFF4C4C53);
-    c[ImGuiCol_TitleBg] = c[ImGuiCol_WindowBg];
-    c[ImGuiCol_TitleBgActive] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_TitleBgCollapsed] = rgba(0x821B1B1E);
-    c[ImGuiCol_MenuBarBg] = c[ImGuiCol_ChildBg];
-    c[ImGuiCol_ScrollbarBg] = c[ImGuiCol_PopupBg];
-    c[ImGuiCol_ScrollbarGrab] = rgba(0xFF3A3A3F);
-    c[ImGuiCol_ScrollbarGrabHovered] = rgba(0xFF4C4C53);
-    c[ImGuiCol_ScrollbarGrabActive] = rgba(0xFF6E6E75);
+    c[ImGuiCol_Text] = kText;
+    c[ImGuiCol_TextDisabled] = kTextDim;
+
+    c[ImGuiCol_WindowBg] = kDeep;
+    c[ImGuiCol_ChildBg] = kVoid;
+    c[ImGuiCol_PopupBg] = alpha(kPanel, 0.98f);
+
+    c[ImGuiCol_Border] = kEdge;
+    c[ImGuiCol_BorderShadow] = alpha(kVoid, 0.0f);
+
+    c[ImGuiCol_FrameBg] = kPanel;
+    c[ImGuiCol_FrameBgHovered] = kRaisedHover;
+    c[ImGuiCol_FrameBgActive] = kAccentDark;
+
+    c[ImGuiCol_TitleBg] = kVoid;
+    c[ImGuiCol_TitleBgActive] = kRaised;
+    c[ImGuiCol_TitleBgCollapsed] = alpha(kVoid, 0.86f);
+    c[ImGuiCol_MenuBarBg] = kPanel;
+
+    c[ImGuiCol_ScrollbarBg] = kVoid;
+    c[ImGuiCol_ScrollbarGrab] = kRaised;
+    c[ImGuiCol_ScrollbarGrabHovered] = kEdge;
+    c[ImGuiCol_ScrollbarGrabActive] = kAccentBody;
+
     c[ImGuiCol_CheckMark] = kAccent;
-    c[ImGuiCol_SliderGrab] = rgba(0xFF33333A);
-    c[ImGuiCol_SliderGrabActive] = rgba(0xFF8A8A92);
-    c[ImGuiCol_Button] = c[ImGuiCol_SliderGrab];
-    c[ImGuiCol_ButtonHovered] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_ButtonActive] = c[ImGuiCol_ScrollbarGrabActive];
-    c[ImGuiCol_Header] = c[ImGuiCol_ChildBg];
-    c[ImGuiCol_HeaderHovered] = rgba(0xFF33333A);
-    c[ImGuiCol_HeaderActive] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_Separator] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_SeparatorHovered] = rgba(0xFF4C4C53);
-    c[ImGuiCol_SeparatorActive] = c[ImGuiCol_SeparatorHovered];
-    c[ImGuiCol_ResizeGrip] = c[ImGuiCol_Separator];
-    c[ImGuiCol_ResizeGripHovered] = c[ImGuiCol_SeparatorHovered];
-    c[ImGuiCol_ResizeGripActive] = c[ImGuiCol_SeparatorActive];
-    c[ImGuiCol_TabHovered] = c[ImGuiCol_HeaderHovered];
-    c[ImGuiCol_Tab] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_TabSelected] = c[ImGuiCol_HeaderHovered];
+    c[ImGuiCol_SliderGrab] = kChrome;
+    c[ImGuiCol_SliderGrabActive] = kAccent;
+
+    c[ImGuiCol_Button] = kRaised;
+    c[ImGuiCol_ButtonHovered] = kRaisedHover;
+    c[ImGuiCol_ButtonActive] = kAccentDark;
+
+    c[ImGuiCol_Header] = kPanel;
+    c[ImGuiCol_HeaderHovered] = kRaisedHover;
+    c[ImGuiCol_HeaderActive] = kAccentDark;
+
+    c[ImGuiCol_Separator] = kEdge;
+    c[ImGuiCol_SeparatorHovered] = kEdgeBright;
+    c[ImGuiCol_SeparatorActive] = kAccentBody;
+
+    c[ImGuiCol_ResizeGrip] = alpha(kEdge, 0.45f);
+    c[ImGuiCol_ResizeGripHovered] = kEdgeBright;
+    c[ImGuiCol_ResizeGripActive] = kAccentBody;
+
+    c[ImGuiCol_Tab] = kPanel;
+    c[ImGuiCol_TabHovered] = kRaisedHover;
+    c[ImGuiCol_TabSelected] = kRaised;
     c[ImGuiCol_TabSelectedOverline] = kAccent;
-    c[ImGuiCol_TabDimmed] = lerp(c[ImGuiCol_Tab], c[ImGuiCol_TitleBg], 0.80f);
-    c[ImGuiCol_TabDimmedSelected] =
-        lerp(c[ImGuiCol_TabSelected], c[ImGuiCol_TitleBg], 0.40f);
-    c[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.50f, 0.50f, 0.50f, 0.00f);
-    c[ImGuiCol_DockingPreview] = c[ImGuiCol_ChildBg];
-    c[ImGuiCol_DockingEmptyBg] = c[ImGuiCol_WindowBg];
-    c[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
-    c[ImGuiCol_PlotLinesHovered] = rgba(0xFF9A9AA2);
-    c[ImGuiCol_PlotHistogram] = rgba(0xFF6E6E75);
-    c[ImGuiCol_PlotHistogramHovered] = rgba(0xFF9A9AA2);
-    c[ImGuiCol_TableHeaderBg] = c[ImGuiCol_ChildBg];
-    c[ImGuiCol_TableBorderStrong] = c[ImGuiCol_SliderGrab];
-    c[ImGuiCol_TableBorderLight] = c[ImGuiCol_FrameBgActive];
-    c[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    c[ImGuiCol_TableRowBgAlt] = ImVec4(1.00f, 1.00f, 1.00f, 0.06f);
+    c[ImGuiCol_TabDimmed] = lerp(kPanel, kVoid, 0.65f);
+    c[ImGuiCol_TabDimmedSelected] = lerp(kRaised, kVoid, 0.45f);
+    c[ImGuiCol_TabDimmedSelectedOverline] = alpha(kAccentBody, 0.35f);
+
+    c[ImGuiCol_DockingPreview] = alpha(kAccentBody, 0.45f);
+    c[ImGuiCol_DockingEmptyBg] = kVoid;
+
+    c[ImGuiCol_PlotLines] = kChrome;
+    c[ImGuiCol_PlotLinesHovered] = kAccent;
+    c[ImGuiCol_PlotHistogram] = kEdgeBright;
+    c[ImGuiCol_PlotHistogramHovered] = kAccentBody;
+
+    c[ImGuiCol_TableHeaderBg] = kRaised;
+    c[ImGuiCol_TableBorderStrong] = kEdge;
+    c[ImGuiCol_TableBorderLight] = alpha(kEdge, 0.55f);
+    c[ImGuiCol_TableRowBg] = alpha(kVoid, 0.0f);
+    c[ImGuiCol_TableRowBgAlt] = alpha(kText, 0.035f);
+
     c[ImGuiCol_TextLink] = kAccent;
-    c[ImGuiCol_TextSelectedBg] = rgba(0xFF3A2C3A);
-    c[ImGuiCol_DragDropTarget] = rgba(0xFFC8C8CC);
+    c[ImGuiCol_TextSelectedBg] = alpha(kAccentBody, 0.32f);
+    c[ImGuiCol_DragDropTarget] = kAccent;
     c[ImGuiCol_NavCursor] = kAccent;
-    c[ImGuiCol_NavWindowingHighlight] = c[ImGuiCol_Text];
-    c[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-    c[ImGuiCol_ModalWindowDimBg] = rgba(0xC81B1B1E);
-    // ImGuiCol_InputTextCursor / ImGuiCol_TreeLines land after imgui 1.91.9b;
-    // add them here when the vendored copy is bumped.
+    c[ImGuiCol_NavWindowingHighlight] = kChrome;
+    c[ImGuiCol_NavWindowingDimBg] = alpha(kVoid, 0.72f);
+    c[ImGuiCol_ModalWindowDimBg] = alpha(kVoid, 0.78f);
+
+    // ImGuiCol_InputTextCursor and ImGuiCol_TreeLines are newer than the
+    // currently vendored ImGui. Assign them here after upgrading.
 }
 
 // Pacome Danhiez's light palette with Doug Binks's dark-value conversion.
@@ -322,9 +378,11 @@ void ensureBuiltins()
 {
     if (!registry().empty())
         return;
+    registerTheme("ac_vixen", &acVixen);
     registerTheme("hud_reliquary", &hudReliquary);
+    // Backward-compatible alias for projects that persisted the old id.
+    registerTheme("one_dark", &acVixen);
     registerTheme("dougbinks_dark", &dougBinksDark);
-    registerTheme("one_dark", &oneDark);
     registerTheme("dark", [] { ImGui::StyleColorsDark(); });
     registerTheme("light", [] { ImGui::StyleColorsLight(); });
     registerTheme("classic", [] { ImGui::StyleColorsClassic(); });
@@ -363,8 +421,8 @@ bool apply(const std::string& id)
         return false;
     // A theme describes the complete style, not a delta from whichever theme
     // happened to run before it. Resetting geometry as well as colours makes
-    // hot-swapping deterministic (one_dark after hud_reliquary used to inherit
-    // square tabs and tight padding, while one_dark at startup did not).
+    // hot-swapping deterministic (ac_vixen after hud_reliquary used to inherit
+    // square tabs and tight padding, while ac_vixen at startup did not).
     ImGui::GetStyle() = ImGuiStyle{};
     it->fn();
     currentId() = id;

@@ -103,7 +103,7 @@ struct StylizeUniforms {
     glm::vec4 shadowColour{0.0f};
     glm::vec4 highlightColour{0.0f};
     glm::vec4 outlineColour{0.0f};
-    glm::vec4 clip{0.05f, 4000.0f, 0.0f, 0.0f};   // near, far, -, -
+    glm::vec4 clip{0.05f, 4000.0f, 0.0f, 0.0f}; // near, far, -, -
     glm::vec4 toggles{0.0f};   // stylize, shadows, highlights, outline
     glm::vec4 shadow{0.0f};    // strength, threshold, -, -
     glm::vec4 highlight{0.0f}; // strength, threshold, darkFade, colourOverride
@@ -246,13 +246,20 @@ struct RenderCore::Impl {
     {
         if (!device)
             return;
-        if (finalColour.valid()) device->destroyTexture(finalColour);
-        if (bloomBlur.valid()) device->destroyTexture(bloomBlur);
-        if (bloomBright.valid()) device->destroyTexture(bloomBright);
-        if (stylizeColour.valid()) device->destroyTexture(stylizeColour);
-        if (sceneNormalDepth.valid()) device->destroyTexture(sceneNormalDepth);
-        if (sceneDepth.valid()) device->destroyTexture(sceneDepth);
-        if (sceneColour.valid()) device->destroyTexture(sceneColour);
+        if (finalColour.valid())
+            device->destroyTexture(finalColour);
+        if (bloomBlur.valid())
+            device->destroyTexture(bloomBlur);
+        if (bloomBright.valid())
+            device->destroyTexture(bloomBright);
+        if (stylizeColour.valid())
+            device->destroyTexture(stylizeColour);
+        if (sceneNormalDepth.valid())
+            device->destroyTexture(sceneNormalDepth);
+        if (sceneDepth.valid())
+            device->destroyTexture(sceneDepth);
+        if (sceneColour.valid())
+            device->destroyTexture(sceneColour);
         finalColour = {};
         bloomBlur = {};
         bloomBright = {};
@@ -268,22 +275,19 @@ struct RenderCore::Impl {
             return false;
         device->waitIdle();
         destroyMainTargets();
-        const uint32_t sceneWidth = targetWidth > 0
-                                        ? static_cast<uint32_t>(targetWidth)
-                                        : std::max(1u, windowWidth /
-                                                          uint32_t(pixelSize));
-        const uint32_t sceneHeight = targetHeight > 0
-                                         ? static_cast<uint32_t>(targetHeight)
-                                         : std::max(1u, windowHeight /
-                                                           uint32_t(pixelSize));
+        const uint32_t sceneWidth =
+            targetWidth > 0 ? static_cast<uint32_t>(targetWidth)
+                            : std::max(1u, windowWidth / uint32_t(pixelSize));
+        const uint32_t sceneHeight =
+            targetHeight > 0 ? static_cast<uint32_t>(targetHeight)
+                             : std::max(1u, windowHeight / uint32_t(pixelSize));
         sceneColour = makeTarget(
             sceneWidth, sceneHeight, rhi::Format::RGBA8Unorm,
             rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
             "renderer.scene-colour");
-        sceneDepth = makeTarget(sceneWidth, sceneHeight,
-                                rhi::Format::Depth32Float,
-                                rhi::TextureUsage::DepthStencil,
-                                "renderer.scene-depth");
+        sceneDepth =
+            makeTarget(sceneWidth, sceneHeight, rhi::Format::Depth32Float,
+                       rhi::TextureUsage::DepthStencil, "renderer.scene-depth");
         // Float16, like the legacy PF_FLOAT16_RGBA mrt: the alpha channel holds
         // signed linear depth / farClip, which has no headroom in 8 bit.
         sceneNormalDepth = makeTarget(
@@ -302,10 +306,10 @@ struct RenderCore::Impl {
             bloomWidth, bloomHeight, rhi::Format::RGBA8Unorm,
             rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
             "renderer.bloom-bright");
-        bloomBlur = makeTarget(
-            bloomWidth, bloomHeight, rhi::Format::RGBA8Unorm,
-            rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
-            "renderer.bloom-blur");
+        bloomBlur = makeTarget(bloomWidth, bloomHeight, rhi::Format::RGBA8Unorm,
+                               rhi::TextureUsage::RenderTarget |
+                                   rhi::TextureUsage::Sampled,
+                               "renderer.bloom-blur");
         finalColour = makeTarget(
             windowWidth, windowHeight, rhi::Format::RGBA8Unorm,
             rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled |
@@ -318,9 +322,12 @@ struct RenderCore::Impl {
     {
         if (!device)
             return;
-        if (editorToken) replaceToken(editorToken, {}, 0, 0);
-        if (editorDepth.valid()) device->destroyTexture(editorDepth);
-        if (editorColour.valid()) device->destroyTexture(editorColour);
+        if (editorToken)
+            replaceToken(editorToken, {}, 0, 0);
+        if (editorDepth.valid())
+            device->destroyTexture(editorDepth);
+        if (editorColour.valid())
+            device->destroyTexture(editorColour);
         editorDepth = {};
         editorColour = {};
     }
@@ -335,15 +342,15 @@ struct RenderCore::Impl {
             editorWidth, editorHeight, rhi::Format::RGBA8Unorm,
             rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
             "renderer.editor-colour");
-        editorDepth = makeTarget(editorWidth, editorHeight,
-                                 rhi::Format::Depth32Float,
-                                 rhi::TextureUsage::DepthStencil,
-                                 "renderer.editor-depth");
+        editorDepth = makeTarget(
+            editorWidth, editorHeight, rhi::Format::Depth32Float,
+            rhi::TextureUsage::DepthStencil, "renderer.editor-depth");
         if (!editorToken) {
             TextureBinding binding{editorColour, sceneSampler, 0, editorWidth,
                                    editorHeight};
             editorToken = addTexture(binding, false, false);
-        } else {
+        }
+        else {
             replaceToken(editorToken, editorColour, editorWidth, editorHeight);
         }
         return editorColour.valid() && editorDepth.valid();
@@ -353,9 +360,12 @@ struct RenderCore::Impl {
     {
         if (!device)
             return;
-        if (thumbnailToken) replaceToken(thumbnailToken, {}, 0, 0);
-        if (thumbnailDepth.valid()) device->destroyTexture(thumbnailDepth);
-        if (thumbnailColour.valid()) device->destroyTexture(thumbnailColour);
+        if (thumbnailToken)
+            replaceToken(thumbnailToken, {}, 0, 0);
+        if (thumbnailDepth.valid())
+            device->destroyTexture(thumbnailDepth);
+        if (thumbnailColour.valid())
+            device->destroyTexture(thumbnailColour);
         thumbnailDepth = {};
         thumbnailColour = {};
     }
@@ -370,15 +380,15 @@ struct RenderCore::Impl {
             thumbnailSize, thumbnailSize, rhi::Format::RGBA8Unorm,
             rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
             "renderer.thumbnail-colour");
-        thumbnailDepth = makeTarget(thumbnailSize, thumbnailSize,
-                                    rhi::Format::Depth32Float,
-                                    rhi::TextureUsage::DepthStencil,
-                                    "renderer.thumbnail-depth");
+        thumbnailDepth = makeTarget(
+            thumbnailSize, thumbnailSize, rhi::Format::Depth32Float,
+            rhi::TextureUsage::DepthStencil, "renderer.thumbnail-depth");
         if (!thumbnailToken) {
             TextureBinding binding{thumbnailColour, sceneSampler, 0,
                                    thumbnailSize, thumbnailSize};
             thumbnailToken = addTexture(binding, false, false);
-        } else {
+        }
+        else {
             replaceToken(thumbnailToken, thumbnailColour, thumbnailSize,
                          thumbnailSize);
         }
@@ -406,9 +416,9 @@ struct RenderCore::Impl {
         fullscreenVertex =
             loadShader(*device, rhi::ShaderStage::Vertex,
                        ENG_RHI_FULLSCREEN_VERT_SPV, "renderer.fullscreen.vert");
-        fullscreenFragment = loadShader(
-            *device, rhi::ShaderStage::Fragment, ENG_RHI_FULLSCREEN_FRAG_SPV,
-            "renderer.fullscreen.frag");
+        fullscreenFragment =
+            loadShader(*device, rhi::ShaderStage::Fragment,
+                       ENG_RHI_FULLSCREEN_FRAG_SPV, "renderer.fullscreen.frag");
         postFragment = loadShader(*device, rhi::ShaderStage::Fragment,
                                   ENG_RHI_POST_FRAG_SPV, "renderer.post.frag");
         stylizeFragment =
@@ -417,9 +427,9 @@ struct RenderCore::Impl {
         bloomBrightFragment = loadShader(*device, rhi::ShaderStage::Fragment,
                                          ENG_RHI_BLOOM_BRIGHT_FRAG_SPV,
                                          "renderer.bloom-bright.frag");
-        bloomBlurFragment = loadShader(*device, rhi::ShaderStage::Fragment,
-                                       ENG_RHI_BLOOM_BLUR_FRAG_SPV,
-                                       "renderer.bloom-blur.frag");
+        bloomBlurFragment =
+            loadShader(*device, rhi::ShaderStage::Fragment,
+                       ENG_RHI_BLOOM_BLUR_FRAG_SPV, "renderer.bloom-blur.frag");
         imguiVertex = loadShader(*device, rhi::ShaderStage::Vertex,
                                  ENG_RHI_IMGUI_VERT_SPV, "renderer.imgui.vert");
         imguiFragment =
@@ -433,9 +443,9 @@ struct RenderCore::Impl {
 
         postPipeline = makeFullscreenPipeline(
             rhi::Format::RGBA8Unorm, "renderer.post-pipeline", postFragment);
-        stylizePipeline = makeFullscreenPipeline(
-            rhi::Format::RGBA8Unorm, "renderer.stylize-pipeline",
-            stylizeFragment);
+        stylizePipeline = makeFullscreenPipeline(rhi::Format::RGBA8Unorm,
+                                                 "renderer.stylize-pipeline",
+                                                 stylizeFragment);
         bloomBrightPipeline = makeFullscreenPipeline(
             rhi::Format::RGBA8Unorm, "renderer.bloom-bright-pipeline",
             bloomBrightFragment);
@@ -460,8 +470,7 @@ struct RenderCore::Impl {
         ui.vertexLayout.attributes.push_back(
             {1, 0, rhi::VertexFormat::Float2, offsetof(ImDrawVert, uv)});
         ui.vertexLayout.attributes.push_back(
-            {2, 0, rhi::VertexFormat::UByte4Unorm,
-             offsetof(ImDrawVert, col)});
+            {2, 0, rhi::VertexFormat::UByte4Unorm, offsetof(ImDrawVert, col)});
         ui.cull = rhi::CullMode::None;
         ui.depth.testEnabled = false;
         ui.depth.writeEnabled = false;
@@ -483,9 +492,12 @@ struct RenderCore::Impl {
         const uint64_t indexBytes =
             uint64_t(std::max(data.TotalIdxCount, 1)) * sizeof(ImDrawIdx);
         if (vertexBytes > imguiVertexCapacity) {
-            if (imguiVertices.valid()) device->destroyBuffer(imguiVertices);
-            imguiVertexCapacity = std::max(vertexBytes, imguiVertexCapacity * 2);
-            imguiVertexCapacity = std::max<uint64_t>(imguiVertexCapacity, 65536);
+            if (imguiVertices.valid())
+                device->destroyBuffer(imguiVertices);
+            imguiVertexCapacity =
+                std::max(vertexBytes, imguiVertexCapacity * 2);
+            imguiVertexCapacity =
+                std::max<uint64_t>(imguiVertexCapacity, 65536);
             rhi::BufferDesc desc;
             desc.size = imguiVertexCapacity;
             desc.usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::Dynamic;
@@ -493,7 +505,8 @@ struct RenderCore::Impl {
             imguiVertices = device->createBuffer(desc);
         }
         if (indexBytes > imguiIndexCapacity) {
-            if (imguiIndices.valid()) device->destroyBuffer(imguiIndices);
+            if (imguiIndices.valid())
+                device->destroyBuffer(imguiIndices);
             imguiIndexCapacity = std::max(indexBytes, imguiIndexCapacity * 2);
             imguiIndexCapacity = std::max<uint64_t>(imguiIndexCapacity, 32768);
             rhi::BufferDesc desc;
@@ -527,8 +540,7 @@ struct RenderCore::Impl {
 
     void scenePass(rhi::TextureHandle colour, rhi::TextureHandle depth,
                    uint32_t width, uint32_t height, glm::vec3 clear,
-                   const View& view,
-                   rhi::TextureHandle normalDepth = {})
+                   const View& view, rhi::TextureHandle normalDepth = {})
     {
         if (!colour.valid() || !depth.valid())
             return;
@@ -552,11 +564,10 @@ struct RenderCore::Impl {
             pass.colour.push_back(metadata);
         }
         pass.depth.texture = depth;
-        pass.debugName = view.target == SceneTarget::Main
-                             ? "renderer.scene-pass"
-                             : view.target == SceneTarget::Editor
-                                   ? "renderer.editor-pass"
-                                   : "renderer.thumbnail-pass";
+        pass.debugName =
+            view.target == SceneTarget::Main     ? "renderer.scene-pass"
+            : view.target == SceneTarget::Editor ? "renderer.editor-pass"
+                                                 : "renderer.thumbnail-pass";
         rhi::CommandList& commands = device->beginPass(pass);
         commands.setViewport({0, 0, float(width), float(height), 0, 1});
         commands.setScissor({0, 0, width, height});
@@ -573,18 +584,18 @@ struct RenderCore::Impl {
     enum class PushShape { Ui, Post, Bloom };
 
     struct BlitPass {
-        rhi::TextureHandle output;   // invalid = swapchain
+        rhi::TextureHandle output; // invalid = swapchain
         rhi::Format outputFormat = rhi::Format::RGBA8Unorm;
         rhi::PipelineHandle pipeline;
         rhi::TextureHandle source;
-        rhi::TextureHandle source2;  // optional texture binding 1
-        rhi::BufferHandle uniforms;  // optional uniform binding 0
+        rhi::TextureHandle source2; // optional texture binding 1
+        rhi::BufferHandle uniforms; // optional uniform binding 0
         bool clear = true;
         const char* name = "renderer.blit";
         bool flipV = false;
         PushShape push = PushShape::Ui;
         glm::vec4 bloomParams{0.0f};
-        uint32_t width = 0;          // 0 = window size
+        uint32_t width = 0; // 0 = window size
         uint32_t height = 0;
     };
 
@@ -610,33 +621,33 @@ struct RenderCore::Impl {
         const bool flipV = blit.flipV;
         // uvScale/uvOffset select a straight or vertically mirrored sample.
         // Padded to the fixed push range so no declared byte is left unset.
-        const glm::vec2 scale = flipV ? glm::vec2(1.0f, -1.0f)
-                                      : glm::vec2(1.0f, 1.0f);
-        const glm::vec2 translate = flipV ? glm::vec2(0.0f, 1.0f)
-                                          : glm::vec2(0.0f, 0.0f);
+        const glm::vec2 scale =
+            flipV ? glm::vec2(1.0f, -1.0f) : glm::vec2(1.0f, 1.0f);
+        const glm::vec2 translate =
+            flipV ? glm::vec2(0.0f, 1.0f) : glm::vec2(0.0f, 0.0f);
         switch (blit.push) {
-            case PushShape::Post: {
-                PostConstants post = postConstants;
-                post.scale = scale;
-                post.translate = translate;
-                commands.pushConstants(&post, sizeof(post));
-                break;
-            }
-            case PushShape::Bloom: {
-                BloomConstants bloom;
-                bloom.scale = scale;
-                bloom.translate = translate;
-                bloom.params = blit.bloomParams;
-                commands.pushConstants(&bloom, sizeof(bloom));
-                break;
-            }
-            default: {
-                UiConstants ui;
-                ui.scale = scale;
-                ui.translate = translate;
-                commands.pushConstants(&ui, sizeof(ui));
-                break;
-            }
+        case PushShape::Post: {
+            PostConstants post = postConstants;
+            post.scale = scale;
+            post.translate = translate;
+            commands.pushConstants(&post, sizeof(post));
+            break;
+        }
+        case PushShape::Bloom: {
+            BloomConstants bloom;
+            bloom.scale = scale;
+            bloom.translate = translate;
+            bloom.params = blit.bloomParams;
+            commands.pushConstants(&bloom, sizeof(bloom));
+            break;
+        }
+        default: {
+            UiConstants ui;
+            ui.scale = scale;
+            ui.translate = translate;
+            commands.pushConstants(&ui, sizeof(ui));
+            break;
+        }
         }
         commands.draw(3);
         device->endPass();
@@ -668,9 +679,8 @@ struct RenderCore::Impl {
         UiConstants constants;
         constants.scale = {2.0f / data.DisplaySize.x,
                            -2.0f / data.DisplaySize.y};
-        constants.translate = {
-            -1.0f - data.DisplayPos.x * constants.scale.x,
-            1.0f - data.DisplayPos.y * constants.scale.y};
+        constants.translate = {-1.0f - data.DisplayPos.x * constants.scale.x,
+                               1.0f - data.DisplayPos.y * constants.scale.y};
         commands.pushConstants(&constants, sizeof(constants));
 
         int globalVertexOffset = 0;
@@ -701,9 +711,9 @@ struct RenderCore::Impl {
                     0, static_cast<int32_t>(float(windowHeight) - clipMaxY));
                 const uint32_t width = static_cast<uint32_t>(std::max(
                     0.0f, std::min(float(windowWidth), clipMaxX) - left));
-                const uint32_t height = static_cast<uint32_t>(std::max(
-                    0.0f, std::min(float(windowHeight), clipMaxY) -
-                              std::max(0.0f, clipMinY)));
+                const uint32_t height = static_cast<uint32_t>(
+                    std::max(0.0f, std::min(float(windowHeight), clipMaxY) -
+                                       std::max(0.0f, clipMinY)));
                 if (!width || !height)
                     continue;
                 commands.setScissor({left, bottom, width, height});
@@ -730,7 +740,10 @@ struct RenderCore::Impl {
 };
 
 RenderCore::RenderCore() : mImpl(std::make_unique<Impl>()) {}
-RenderCore::~RenderCore() { shutdown(); }
+RenderCore::~RenderCore()
+{
+    shutdown();
+}
 
 bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
                       int height, const std::string&, bool vsync)
@@ -796,7 +809,8 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     ImFontConfig toolFont;
     toolFont.OversampleH = 2;
     toolFont.OversampleV = 2;
-    const std::filesystem::path mono = assets::resolve("fonts/DejaVuSansMono.ttf");
+    const std::filesystem::path mono =
+        assets::resolve("fonts/DejaVuSansMono.ttf");
     if (!mono.empty()) {
         if (ImFont* font = io.Fonts->AddFontFromFileTTF(mono.string().c_str(),
                                                         15.0f, &toolFont))
@@ -804,7 +818,7 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     }
     const char* theme = std::getenv("PSX_IMGUI_THEME");
     if (!theme || !imguitheme::apply(theme))
-        imguitheme::apply("hud_reliquary");
+        imguitheme::apply("ac_vixen");
     if (!ImGui_ImplSDL2_InitForVulkan(mImpl->window)) {
         log::error("RHI renderer: ImGui SDL2 Vulkan initialization failed");
         shutdown();
@@ -852,25 +866,44 @@ void RenderCore::shutdown()
         ImGui::DestroyContext();
         mImpl->imguiInit = false;
     }
-    if (mImpl->imguiIndices.valid()) mImpl->device->destroyBuffer(mImpl->imguiIndices);
-    if (mImpl->imguiVertices.valid()) mImpl->device->destroyBuffer(mImpl->imguiVertices);
-    if (mImpl->imguiPipeline.valid()) mImpl->device->destroyPipeline(mImpl->imguiPipeline);
-    if (mImpl->presentPipeline.valid()) mImpl->device->destroyPipeline(mImpl->presentPipeline);
-    if (mImpl->shadowDepth.valid()) mImpl->device->destroyTexture(mImpl->shadowDepth);
-    if (mImpl->shadowSamplerHandle.valid()) mImpl->device->destroySampler(mImpl->shadowSamplerHandle);
-    if (mImpl->stylizeUniformBuffer.valid()) mImpl->device->destroyBuffer(mImpl->stylizeUniformBuffer);
-    if (mImpl->bloomBlurPipeline.valid()) mImpl->device->destroyPipeline(mImpl->bloomBlurPipeline);
-    if (mImpl->bloomBrightPipeline.valid()) mImpl->device->destroyPipeline(mImpl->bloomBrightPipeline);
-    if (mImpl->stylizePipeline.valid()) mImpl->device->destroyPipeline(mImpl->stylizePipeline);
-    if (mImpl->postPipeline.valid()) mImpl->device->destroyPipeline(mImpl->postPipeline);
-    if (mImpl->imguiFragment.valid()) mImpl->device->destroyShader(mImpl->imguiFragment);
-    if (mImpl->imguiVertex.valid()) mImpl->device->destroyShader(mImpl->imguiVertex);
-    if (mImpl->bloomBlurFragment.valid()) mImpl->device->destroyShader(mImpl->bloomBlurFragment);
-    if (mImpl->bloomBrightFragment.valid()) mImpl->device->destroyShader(mImpl->bloomBrightFragment);
-    if (mImpl->stylizeFragment.valid()) mImpl->device->destroyShader(mImpl->stylizeFragment);
-    if (mImpl->postFragment.valid()) mImpl->device->destroyShader(mImpl->postFragment);
-    if (mImpl->fullscreenFragment.valid()) mImpl->device->destroyShader(mImpl->fullscreenFragment);
-    if (mImpl->fullscreenVertex.valid()) mImpl->device->destroyShader(mImpl->fullscreenVertex);
+    if (mImpl->imguiIndices.valid())
+        mImpl->device->destroyBuffer(mImpl->imguiIndices);
+    if (mImpl->imguiVertices.valid())
+        mImpl->device->destroyBuffer(mImpl->imguiVertices);
+    if (mImpl->imguiPipeline.valid())
+        mImpl->device->destroyPipeline(mImpl->imguiPipeline);
+    if (mImpl->presentPipeline.valid())
+        mImpl->device->destroyPipeline(mImpl->presentPipeline);
+    if (mImpl->shadowDepth.valid())
+        mImpl->device->destroyTexture(mImpl->shadowDepth);
+    if (mImpl->shadowSamplerHandle.valid())
+        mImpl->device->destroySampler(mImpl->shadowSamplerHandle);
+    if (mImpl->stylizeUniformBuffer.valid())
+        mImpl->device->destroyBuffer(mImpl->stylizeUniformBuffer);
+    if (mImpl->bloomBlurPipeline.valid())
+        mImpl->device->destroyPipeline(mImpl->bloomBlurPipeline);
+    if (mImpl->bloomBrightPipeline.valid())
+        mImpl->device->destroyPipeline(mImpl->bloomBrightPipeline);
+    if (mImpl->stylizePipeline.valid())
+        mImpl->device->destroyPipeline(mImpl->stylizePipeline);
+    if (mImpl->postPipeline.valid())
+        mImpl->device->destroyPipeline(mImpl->postPipeline);
+    if (mImpl->imguiFragment.valid())
+        mImpl->device->destroyShader(mImpl->imguiFragment);
+    if (mImpl->imguiVertex.valid())
+        mImpl->device->destroyShader(mImpl->imguiVertex);
+    if (mImpl->bloomBlurFragment.valid())
+        mImpl->device->destroyShader(mImpl->bloomBlurFragment);
+    if (mImpl->bloomBrightFragment.valid())
+        mImpl->device->destroyShader(mImpl->bloomBrightFragment);
+    if (mImpl->stylizeFragment.valid())
+        mImpl->device->destroyShader(mImpl->stylizeFragment);
+    if (mImpl->postFragment.valid())
+        mImpl->device->destroyShader(mImpl->postFragment);
+    if (mImpl->fullscreenFragment.valid())
+        mImpl->device->destroyShader(mImpl->fullscreenFragment);
+    if (mImpl->fullscreenVertex.valid())
+        mImpl->device->destroyShader(mImpl->fullscreenVertex);
 
     mImpl->destroyThumbnailTargets();
     mImpl->destroyEditorTargets();
@@ -900,7 +933,10 @@ void RenderCore::beginImGuiFrame(float)
     mImpl->imguiFrameStarted = true;
 }
 
-bool RenderCore::imguiReady() const { return mImpl->imguiInit; }
+bool RenderCore::imguiReady() const
+{
+    return mImpl->imguiInit;
+}
 
 void RenderCore::renderFrame(float)
 {
@@ -941,14 +977,14 @@ void RenderCore::renderFrame(float)
                          mImpl->thumbnailSize, mImpl->thumbnailSize,
                          {0.13f, 0.14f, 0.16f}, mImpl->thumbnailView);
 
-    const uint32_t sceneWidth = mImpl->targetWidth > 0
-                                    ? uint32_t(mImpl->targetWidth)
-                                    : std::max(1u, mImpl->windowWidth /
-                                                      uint32_t(mImpl->pixelSize));
-    const uint32_t sceneHeight = mImpl->targetHeight > 0
-                                     ? uint32_t(mImpl->targetHeight)
-                                     : std::max(1u, mImpl->windowHeight /
-                                                       uint32_t(mImpl->pixelSize));
+    const uint32_t sceneWidth =
+        mImpl->targetWidth > 0
+            ? uint32_t(mImpl->targetWidth)
+            : std::max(1u, mImpl->windowWidth / uint32_t(mImpl->pixelSize));
+    const uint32_t sceneHeight =
+        mImpl->targetHeight > 0
+            ? uint32_t(mImpl->targetHeight)
+            : std::max(1u, mImpl->windowHeight / uint32_t(mImpl->pixelSize));
     View mainView;
     // Legacy chain (assets/compositors/psx.compositor):
     //   scene MRT -> PixelStylize -> bloom -> dither -> window.
@@ -965,8 +1001,8 @@ void RenderCore::renderFrame(float)
         pass.depth.texture = mImpl->shadowDepth;
         pass.debugName = "renderer.shadow-pass";
         rhi::CommandList& commands = mImpl->device->beginPass(pass);
-        commands.setViewport({0, 0, float(Impl::kShadowSize),
-                              float(Impl::kShadowSize), 0, 1});
+        commands.setViewport(
+            {0, 0, float(Impl::kShadowSize), float(Impl::kShadowSize), 0, 1});
         commands.setScissor({0, 0, Impl::kShadowSize, Impl::kShadowSize});
         if (mImpl->drawScene) {
             View shadowView;
@@ -1062,8 +1098,8 @@ void RenderCore::renderFrame(float)
     upscale.source = mImpl->stylizeColour;
     // Always bound: a descriptor set with a hole is invalid even when the
     // shader's own toggle would never sample it.
-    upscale.source2 = mImpl->bloomEnabled ? mImpl->bloomBright
-                                          : mImpl->stylizeColour;
+    upscale.source2 =
+        mImpl->bloomEnabled ? mImpl->bloomBright : mImpl->stylizeColour;
     upscale.name = "renderer.upscale-pass";
     upscale.flipV = true;
     upscale.push = Impl::PushShape::Post;
@@ -1102,7 +1138,8 @@ void RenderCore::writeScreenshot(const std::string& path)
         return;
     std::vector<uint8_t> pixels(size_t(mImpl->windowWidth) *
                                 mImpl->windowHeight * 4u);
-    mImpl->device->readTexture(mImpl->finalColour, pixels.data(), pixels.size());
+    mImpl->device->readTexture(mImpl->finalColour, pixels.data(),
+                               pixels.size());
     if (rhi_renderer::writePng(path, int(mImpl->windowWidth),
                                int(mImpl->windowHeight), pixels.data()))
         log::info("RHI renderer: screenshot wrote %s", path.c_str());
@@ -1114,7 +1151,10 @@ void RenderCore::frameStats(size_t& batches, size_t& triangles) const
     triangles = mImpl->triangles;
 }
 
-void RenderCore::setDrawScene(DrawScene draw) { mImpl->drawScene = std::move(draw); }
+void RenderCore::setDrawScene(DrawScene draw)
+{
+    mImpl->drawScene = std::move(draw);
+}
 void RenderCore::setShutdownCallback(std::function<void()> callback)
 {
     mImpl->shutdownCallback = std::move(callback);
@@ -1138,16 +1178,21 @@ void RenderCore::setRenderResolution(int width, int height)
     if (width <= 0 || height <= 0) {
         mImpl->targetWidth = 0;
         mImpl->targetHeight = 0;
-    } else {
+    }
+    else {
         mImpl->targetWidth = std::clamp(width, 64, 4096);
         mImpl->targetHeight = std::clamp(height, 64, 4096);
     }
     mImpl->rebuildMainTargets();
 }
 
-void RenderCore::setBackground(glm::vec3 colour) { mImpl->background = colour; }
+void RenderCore::setBackground(glm::vec3 colour)
+{
+    mImpl->background = colour;
+}
 
-void RenderCore::setShadowView(bool enabled, const glm::mat4& lightViewProjection)
+void RenderCore::setShadowView(bool enabled,
+                               const glm::mat4& lightViewProjection)
 {
     mImpl->shadowEnabled = enabled;
     mImpl->shadowViewProjection = lightViewProjection;
@@ -1216,14 +1261,16 @@ void RenderCore::resizeOffscreenViewport(int width, int height)
     mImpl->editorHeight = h;
     mImpl->rebuildEditorTargets();
 }
-uint64_t RenderCore::viewportTextureId() const { return mImpl->editorToken; }
+uint64_t RenderCore::viewportTextureId() const
+{
+    return mImpl->editorToken;
+}
 void RenderCore::setOffscreenBackground(float r, float g, float b)
 {
     mImpl->editorBackground = {r, g, b};
 }
 void RenderCore::setEditorCameraPose(float px, float py, float pz, float qw,
-                                     float qx, float qy, float qz,
-                                     float fovDeg)
+                                     float qx, float qy, float qz, float fovDeg)
 {
     mImpl->editorView.position = {px, py, pz};
     mImpl->editorView.orientation = glm::normalize(glm::quat(qw, qx, qy, qz));
@@ -1239,7 +1286,10 @@ void RenderCore::enableThumbnailViewport(int size)
     mImpl->thumbnailView.farClip = 100.0f;
     mImpl->rebuildThumbnailTargets();
 }
-uint64_t RenderCore::thumbnailTextureId() const { return mImpl->thumbnailToken; }
+uint64_t RenderCore::thumbnailTextureId() const
+{
+    return mImpl->thumbnailToken;
+}
 void RenderCore::setThumbnailCameraPose(float px, float py, float pz, float qw,
                                         float qx, float qy, float qz,
                                         float fovDeg)
@@ -1250,9 +1300,10 @@ void RenderCore::setThumbnailCameraPose(float px, float py, float pz, float qw,
     mImpl->thumbnailView.fovDeg = std::clamp(fovDeg, 1.0f, 179.0f);
 }
 
-RenderCore::TextureBinding RenderCore::createTexture(
-    const std::string& name, uint32_t width, uint32_t height, const void* rgba,
-    rhi::FilterMode filter, rhi::AddressMode address)
+RenderCore::TextureBinding
+RenderCore::createTexture(const std::string& name, uint32_t width,
+                          uint32_t height, const void* rgba,
+                          rhi::FilterMode filter, rhi::AddressMode address)
 {
     TextureBinding binding;
     if (!mImpl->device || !rgba || width == 0 || height == 0)
@@ -1274,17 +1325,19 @@ RenderCore::TextureBinding RenderCore::createTexture(
     binding.width = width;
     binding.height = height;
     if (!binding.texture.valid() || !binding.sampler.valid()) {
-        if (binding.sampler.valid()) mImpl->device->destroySampler(binding.sampler);
-        if (binding.texture.valid()) mImpl->device->destroyTexture(binding.texture);
+        if (binding.sampler.valid())
+            mImpl->device->destroySampler(binding.sampler);
+        if (binding.texture.valid())
+            mImpl->device->destroyTexture(binding.texture);
         return {};
     }
     binding.token = mImpl->addTexture(binding, true, true);
     return binding;
 }
 
-RenderCore::TextureBinding RenderCore::loadTexture(
-    const std::filesystem::path& path, rhi::FilterMode filter,
-    rhi::AddressMode address)
+RenderCore::TextureBinding
+RenderCore::loadTexture(const std::filesystem::path& path,
+                        rhi::FilterMode filter, rhi::AddressMode address)
 {
     const std::string key = path.lexically_normal().string() + "|" +
                             std::to_string(int(filter)) + "|" +
@@ -1298,9 +1351,9 @@ RenderCore::TextureBinding RenderCore::loadTexture(
     rhi_renderer::Image image;
     if (!rhi_renderer::loadImage(path, image))
         return {};
-    TextureBinding binding =
-        createTexture(path.filename().string(), uint32_t(image.width),
-                      uint32_t(image.height), image.rgba.data(), filter, address);
+    TextureBinding binding = createTexture(
+        path.filename().string(), uint32_t(image.width), uint32_t(image.height),
+        image.rgba.data(), filter, address);
     if (binding.valid())
         mImpl->textureCache[key] = binding.token;
     return binding;
@@ -1316,12 +1369,12 @@ RenderCore::TextureBinding RenderCore::fallbackTexture()
         mImpl->fallback = loadTexture(checker, rhi::FilterMode::Nearest,
                                       rhi::AddressMode::Repeat);
     if (!mImpl->fallback.valid()) {
-        constexpr std::array<uint8_t, 16> pixels{
-            255, 0, 255, 255, 16, 16, 16, 255,
-            16, 16, 16, 255, 255, 0, 255, 255};
-        mImpl->fallback = createTexture(
-            "renderer.prototype-checker", 2, 2, pixels.data(),
-            rhi::FilterMode::Nearest, rhi::AddressMode::Repeat);
+        constexpr std::array<uint8_t, 16> pixels{255, 0,   255, 255, 16, 16,
+                                                 16,  255, 16,  16,  16, 255,
+                                                 255, 0,   255, 255};
+        mImpl->fallback =
+            createTexture("renderer.prototype-checker", 2, 2, pixels.data(),
+                          rhi::FilterMode::Nearest, rhi::AddressMode::Repeat);
     }
     return mImpl->fallback;
 }
@@ -1335,8 +1388,14 @@ bool RenderCore::textureForToken(uint64_t token, TextureBinding& out) const
     return true;
 }
 
-rhi::Device* RenderCore::device() { return mImpl->device.get(); }
-const rhi::Device* RenderCore::device() const { return mImpl->device.get(); }
+rhi::Device* RenderCore::device()
+{
+    return mImpl->device.get();
+}
+const rhi::Device* RenderCore::device() const
+{
+    return mImpl->device.get();
+}
 
 namespace rhi_texture_registry {
 uint64_t load(const std::filesystem::path& path, rhi::FilterMode filter,
