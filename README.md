@@ -1,7 +1,6 @@
 <div align="center">
 
 
-<p align="center"><img src="docs/media/branding/logo.jpg" alt="Raven Engine" width="900"></p>
 <p align="center"><img src="docs/media/avatar.png" alt="Raven Engine" width="200"></p>
 
 # Raven Engine
@@ -10,7 +9,10 @@
 
 “A Raven is a symbol of resolve. The will to choose what one fights for.”
 
+
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
+<p align="center"><img src="docs/media/branding/logo.jpg" alt="Raven Engine" width="900"></p>
+
 
 </div>
 
