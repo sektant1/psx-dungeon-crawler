@@ -37,7 +37,8 @@ void requireText(const std::string& text, const char* expected,
 
 int main()
 {
-    const std::string programs = read("assets/programs/psx.program");
+    const std::string vkParticle =
+        read("assets/shaders/vulkan/particle.frag");
     const std::string materials = read("assets/materials/psx.mat");
     const std::string shader = read("assets/shaders/particle.frag");
     const std::string runtime = read("engine/src/render/rhi/Renderer.cpp");
@@ -69,36 +70,11 @@ int main()
                 "handle retirement does not consult the simulation's own "
                 "instance lifetime");
 
-    require(programs.find("fragment_program RainParticle_FS") !=
-                std::string::npos,
-            "rain has a dedicated fragment program");
-    require(programs.find("preprocessor_defines PROCEDURAL_RAIN=1") !=
-                std::string::npos,
-            "rain program selects the procedural rain shader");
-    const std::size_t particleVertex =
-        programs.find("vertex_program Particle_VS glsl");
-    const std::size_t particleVertexEnd =
-        programs.find("fragment_program", particleVertex);
-    const std::string particleVertexBlock =
-        programs.substr(particleVertex, particleVertexEnd - particleVertex);
-    requireText(particleVertexBlock, "param_named_auto time time 1.0",
-                "particle vertex program does not bind animation time");
-    requireText(particleVertexBlock, "param_named atlasGrid float2",
-                "particle vertex program does not bind atlas dimensions");
-    require(materials.find(
-                "texture_unit { texture retro_particle_atlas.png filtering") ==
-                std::string::npos,
-            "particle atlas texture unit uses parser-unsafe one-line syntax");
-
-    const std::size_t rainMaterial =
-        materials.find("[material.\"Engine/Psx/Rain\"]");
-    require(rainMaterial != std::string::npos, "rain material exists");
-    require(materials.find("shader = \"particle.rain\"", rainMaterial) !=
-                std::string::npos,
-            "rain material names its dedicated shader");
-    require(shader.find("defined(PROCEDURAL_RAIN)") != std::string::npos,
-            "particle shader implements procedural rain");
-
+    // Ogre compiled one program per look and selected it with a preprocessor
+    // define. The engine has no programs: the Vulkan particle shader carries
+    // every variant as a runtime mode, so what has to exist is the branch.
+    requireText(vkParticle, "mode == 4", "rain has no branch in the shader");
+    requireText(vkParticle, "slantedX", "rain does not draw a tapered streak");
     for (const char* preset :
          {"engine.arcane_motes", "engine.frost_shards",
           "engine.toxic_bubbles", "engine.portal_wisps"}) {
@@ -110,8 +86,6 @@ int main()
           "PROCEDURAL_BUBBLE", "PROCEDURAL_WISP"}) {
         requireText(shader, define,
                     "modern pixel particle mask is missing");
-        requireText(programs, define,
-                    "modern pixel particle program is missing");
     }
     for (const char* materialName :
          {"[material.\"Engine/Psx/ArcaneMote\"]",

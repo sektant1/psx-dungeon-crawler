@@ -17,18 +17,26 @@ struct UiPalette {
     // Packed as imgui does it: 0xAABBGGRR, i.e. the byte order is R,G,B,A in
     // memory. Writing these as if they were 0xAARRGGBB is the classic way to
     // get a gold UI that renders blue.
-    unsigned int ink = 0xF00A0E12U;        // panel fill
-    unsigned int inkSoft = 0xF012171DU;    // secondary fill
-    unsigned int edge = 0xFF33546BU;       // panel border
-    unsigned int edgeBright = 0xFF5593B8U;
-    unsigned int text = 0xFFC0DCE8U;
-    unsigned int textDim = 0xFF68818EU;
+    // AC Vixen, the engine logo's palette: a gunmetal shell carrying colour
+    // only where colour means something. The chassis is deliberately neutral
+    // (R=G=B) so the readouts are the only saturated thing on screen -- that
+    // restraint is what makes a bar draw the eye without any of it flashing.
+    unsigned int ink = 0xF01A1616U;        // panel fill, near-black chrome
+    unsigned int inkSoft = 0xF0201C1CU;    // secondary fill
+    unsigned int edge = 0xFF3F3A3AU;       // panel border, gunmetal
+    unsigned int edgeBright = 0xFF756E6EU; // lit edge
+    unsigned int text = 0xFFCCC8C8U;       // brushed steel
+    unsigned int textDim = 0xFF6E6A6AU;
     unsigned int shadow = 0xC0000000U;
-    unsigned int accent = 0xFF5CB9F0U;     // candle gold
-    unsigned int good = 0xFF6FA56FU;       // moss green
-    unsigned int warn = 0xFF41A4D9U;       // ember amber
-    unsigned int bad = 0xFF464AC7U;        // blood red
-    unsigned int mystic = 0xFFC9838FU;     // ritual violet
+    // The one hot colour, and the only place it is spent: whatever currently
+    // has focus. Same magenta as the mech's shoulder strips.
+    unsigned int accent = 0xFFEFACF0U;
+    // The three readouts. Muted rather than primary -- they have to be
+    // distinguishable at a glance without competing with the accent.
+    unsigned int good = 0xFF8CA56FU;       // STA, desaturated teal-green
+    unsigned int warn = 0xFF508AC0U;       // low, muted amber
+    unsigned int bad = 0xFF5A50B4U;        // VIT, muted crimson
+    unsigned int mystic = 0xFFC078C0U;     // ARC, violet from the accent family
 };
 
 // Semantic colours are the UI equivalent of CSS custom properties. Content

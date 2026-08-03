@@ -64,8 +64,8 @@ std::string material(const std::string& source, const std::string& name)
 
 int main()
 {
-    const std::string program =
-        read("assets/programs/vfx.program");
+    const std::string vkSurface =
+        read("assets/shaders/vulkan/surface.frag");
     const std::string portalFragment =
         read("assets/shaders/portal.frag");
     const std::string prototypePortalFragment =
@@ -96,16 +96,11 @@ int main()
     const std::string placementGhost =
         read("assets/shaders/placement_ghost.frag");
 
-    requireText(program, "vertex_program PixelVfx/SurfaceVS glsl",
-                "dedicated portal vertex program is missing");
-    requireText(program, "fragment_program PixelVfx/PortalFS glsl",
-                "dedicated portal fragment program is missing");
-    requireText(program, "vertex_program PixelVfx/LiquidVS glsl",
-                "dedicated liquid vertex program is missing");
-    requireText(program, "fragment_program PixelVfx/LiquidFS glsl",
-                "dedicated liquid fragment program is missing");
-    requireText(program, "fragment_program PixelVfx/LavaFS glsl",
-                "dedicated lava fragment program is missing");
+    // One shader, three profiles selected at runtime -- there are no per-look
+    // programs to declare any more, so what must exist are the branches.
+    requireText(vkSurface, "mode == 3", "portal profile is missing");
+    requireText(vkSurface, "mode == 2", "lava profile is missing");
+    requireText(vkSurface, "surfaceRimShade", "portal rims are missing");
 
     requireText(surfaceCommon, "floor(time * surfaceStepFps)",
                 "portal animation is not frame-stepped");

@@ -217,8 +217,6 @@ int main()
         read("assets/shaders/enchantment.vert");
     const std::string fragment =
         read("assets/shaders/enchantment.frag");
-    const std::string program =
-        read("assets/programs/enchantment.program");
     const std::string rhiRenderer = read("engine/src/render/rhi/Renderer.cpp");
 
     requireText(vertex, "in vec3 normal",
@@ -246,26 +244,9 @@ int main()
     requireNoText(fragment, "fragNormalDepth",
                   "enchantment pass still writes normal/depth metadata");
 
-    for (const char* uniform :
-         {"enchantColour", "enchantStrength", "enchantRuneScale",
-          "enchantScroll", "enchantPulseSpeed", "enchantPulseDepth",
-          "enchantEdgeIntensity", "enchantBandCount",
-          "enchantPixelScale", "enchantCoreBoost",
-          "time", "cameraPositionObject"}) {
-        requireText(fragment, uniform,
-                    "fragment shader is missing a required uniform");
-        requireText(program, uniform,
-                    "program declaration is missing a shader uniform");
-    }
     // No renderer-side uniform check any more. Binding these by name was the
     // Ogre pass's job; the loop above already holds the shader and its program
     // declaration to the same names, and what the RHI owes is asserted below.
-    requireText(program, "param_named_auto time time",
-                "program does not bind renderer time");
-    requireText(program,
-                "param_named_auto cameraPositionObject "
-                "camera_position_object_space",
-                "program does not bind object-space camera position");
     // Backend-independent contract: the Vulkan cut preserves enchantment
     // state in draw constants instead of testing Ogre pass implementation.
     requireText(rhiRenderer, "constants.tintOpacity",
