@@ -494,18 +494,120 @@ void EditorApp::runCommand(Command command)
     mCookStatus = "stale";
 }
 
+void EditorApp::requestMaterialPreview(const std::string& material)
+{
+    if (material.empty() || (mPreviewSubject == PreviewSubject::Material &&
+                             mPreviewName == material))
+        return;
+    if (!mEngine)
+        return;
+    eng::Renderer& renderer = mEngine->renderer();
+    if (!mStage.thumbnailBuilt())
+        mStage.buildThumbnail(renderer, 256);
+    // Take the swatch back off the particle subject: the effect keeps running
+    // otherwise, and the sphere would be composited over a live burst.
+    if (mParticleThumbnail.valid()) {
+        renderer.despawnParticles(mParticleThumbnail);
+        mParticleThumbnail = {};
+    }
+    if (mParticleThumbnailNode.valid())
+        renderer.setNodeVisible(mParticleThumbnailNode, false);
+    mParticleThumbnailEffect.clear();
+    mStage.setThumbnailVisible(renderer, true);
+    mStage.setThumbnailMaterial(renderer, material);
+    mPreviewSubject = PreviewSubject::Material;
+    mPreviewName = material;
+}
+
+void EditorApp::requestEffectPreview(const std::string& effect)
+{
+    if (effect.empty() ||
+        (mPreviewSubject == PreviewSubject::Effect && mPreviewName == effect))
+        return;
+    if (!mEngine)
+        return;
+    eng::Renderer& renderer = mEngine->renderer();
+    if (!mStage.thumbnailBuilt())
+        mStage.buildThumbnail(renderer, 256);
+    // The swatch RTT is a generic isolated square despite its legacy name: hide
+    // the material sphere and put the effect at the camera's focus, marked
+    // thumbnail-only so it cannot leak into the scene viewport.
+    mStage.setThumbnailVisible(renderer, false);
+    if (!mParticleThumbnailNode.valid())
+        mParticleThumbnailNode = renderer.createNode(
+            eng::kRootNode, glm::vec3(0.0f, -1000.0f, 0.0f),
+            "particle_catalog_thumbnail");
+    renderer.setNodeVisible(mParticleThumbnailNode, true);
+    if (mParticleThumbnail.valid())
+        renderer.despawnParticles(mParticleThumbnail);
+    eng::ParticleSpawnOptions options;
+    options.sizeScale = mParticlePreviewScale;
+    mParticleThumbnail =
+        renderer.spawnParticles(effect, mParticleThumbnailNode, options);
+    renderer.setNodeThumbnailOnly(mParticleThumbnailNode, true);
+    mParticleThumbnailEffect = effect;
+    mParticleThumbnailScale = mParticlePreviewScale;
+    mParticleThumbnailRestartAt = std::numeric_limits<double>::max();
+    mPreviewSubject = PreviewSubject::Effect;
+    mPreviewName = effect;
+}
+
 void EditorApp::finishInspectorEdit()
 {
     if (!mInspectorEdit.active())
         return;
     const AuthorId id = mInspectorEdit.id();
+    // Captured before commit(), which clears the transaction: comparing the
+    // pre-edit material against the post-edit one is how the fan-out below
+    // knows a material change is what just happened.
+    const std::string materialBefore = mInspectorEdit.beforeMaterial();
     std::optional<Command> command = mInspectorEdit.commit(
         mState.document, "edit " + id);
     if (!command)
         return;
+
+    // A material picked in the Inspector applies to everything selected, not
+    // just the one entity whose fields the panel happens to be showing. The
+    // panel is explicit that it edits one entity, which is right for a position
+    // or a name -- but "give these twelve walls that material" is the whole
+    // reason to multi-select, and doing it one entity at a time is not a
+    // workflow. Only the material fans out; every other field stays per-entity.
+    std::vector<Command> parts;
+    parts.push_back(std::move(*command));
+    if (const Entity* edited = mState.document.find(id)) {
+        const std::string& material = edited->material;
+        if (material != materialBefore) {
+            for (const AuthorId& other : mState.selection) {
+                if (other == id)
+                    continue;
+                const Entity* entity = mState.document.find(other);
+                // Same rule as applyMaterialToSelection: an entity with no
+                // prefab has no surface to override.
+                if (!entity || entity->prefab.empty() ||
+                    entity->material == material)
+                    continue;
+                Entity updated = *entity;
+                updated.material = material;
+                parts.push_back(
+                    makeEditEntity("set material", other, *entity, updated));
+            }
+        }
+    }
+
     // Do not call runCommand(): it intentionally flushes an inspector edit,
     // and this is that flush.
-    mCommands.run(mState.document, std::move(*command));
+    if (parts.size() == 1) {
+        mCommands.run(mState.document, std::move(parts.front()));
+    } else {
+        const std::size_t count = parts.size();
+        mCommands.run(mState.document,
+                      makeComposite("set material on " +
+                                        std::to_string(count),
+                                    std::move(parts)));
+        mPreview->invalidate();
+        mStatus = "applied the material to " + std::to_string(count) +
+                  " selected";
+    }
     mState.dirty = !mCommands.savedStateReached();
     mCookStatus = "stale";
 }
@@ -1453,11 +1555,15 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
     }
     else {
         mPreview->sync(mState.document, mState.catalog);
-        // Everything above the storey being edited is cut away, so a ceiling
-        // does not become a lid over the top-down view. The work plane picks
-        // the storey; raising it one cell reveals the level above.
-        mPreview->setCeilingCut(renderer, mState.gridState.level +
-                                              mState.grid.cell * 0.5f);
+        // The whole scene, every storey, unless the author asks for the cut.
+        // The cut is still here because a ceiling becomes a lid over a
+        // top-down view, but it is opt-in now: the work plane is a placement
+        // and snapping control, and letting it also decide visibility meant a
+        // multi-storey scene could never be viewed as a whole.
+        mPreview->setCeilingCut(
+            renderer, mState.gridState.cutAboveLevel
+                          ? mState.gridState.level + mState.grid.cell * 0.5f
+                          : std::numeric_limits<float>::infinity());
         mPreview->setHiddenEntities(renderer, mState.hidden);
     }
     // Walk mode hands the renderer the player's eye and the game's field of
@@ -2108,6 +2214,13 @@ void EditorApp::drawToolbar()
         ImGui::SameLine();
         if (ImGui::SmallButton("+"))
             mState.gridState.level += mState.grid.cell;
+        ImGui::SameLine();
+        ImGui::Checkbox("cut above", &mState.gridState.cutAboveLevel);
+        eng::imguihint::hover(
+            "editor.grid.cutabove",
+            "Hide everything above the work plane. Off, the viewport shows "
+            "every storey; the level control then only moves the grid and "
+            "what new pieces snap to.");
 
         ImGui::SameLine();
         ImGui::TextDisabled("|");
@@ -4397,6 +4510,40 @@ void EditorApp::drawInspector()
     for (const eng::ParticleEffectDesc& d : mParticles.descs())
         mParticleEffectNames.push_back(d.name);
     context.particleEffects = &mParticleEffectNames;
+    context.previewTexture = mEngine->renderer().materialThumbnailTextureId();
+    context.requestMaterialPreview = [this](const std::string& name) {
+        requestMaterialPreview(name);
+    };
+    context.requestEffectPreview = [this](const std::string& name) {
+        requestEffectPreview(name);
+    };
+
+    // The swatch, first thing in the panel: "what does this look like" is the
+    // question an inspector is opened to answer, and the answer used to live in
+    // a different dock column. Shows the entity's effective material -- its own
+    // override, or the kit piece's when it has none.
+    {
+        std::string worn = entity->material;
+        if (worn.empty())
+            if (const KitPiece* piece = mState.catalog.find(entity->prefab))
+                worn = piece->material;
+        if (!worn.empty()) {
+            requestMaterialPreview(worn);
+            if (context.previewTexture != 0) {
+                const float side = std::clamp(
+                    ImGui::GetContentRegionAvail().x * 0.34f, 72.0f, 112.0f);
+                ImGui::Image(static_cast<ImTextureID>(context.previewTexture),
+                             ImVec2(side, side));
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                ImGui::TextUnformatted(worn.c_str());
+                ImGui::TextDisabled(entity->material.empty() ? "from kit"
+                                                             : "override");
+                ImGui::EndGroup();
+                ImGui::Separator();
+            }
+        }
+    }
 
     // Entity identity scopes every widget. Switching selection while a text or
     // numeric field is active can no longer transfer ImGui's active input state

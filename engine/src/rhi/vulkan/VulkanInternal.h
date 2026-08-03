@@ -223,6 +223,7 @@ struct VulkanContext {
     PFN_vkCmdBeginDebugUtilsLabelEXT beginLabel = nullptr;
     PFN_vkCmdEndDebugUtilsLabelEXT endLabel = nullptr;
     bool samplerAnisotropy = false;
+    bool fillModeNonSolid = false;
 };
 
 struct DeferredDelete {

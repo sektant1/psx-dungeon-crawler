@@ -48,6 +48,14 @@ public:
         return desc.file.empty() ? desc.stem + ".png" : desc.file;
     }
 
+    // Absolute path for a description's PNG. Entries name a bare leaf
+    // ("bullet16.png") even when the file lives in a subdirectory, because Ogre
+    // resolves textures by leaf name across recursively registered resource
+    // locations; the scan indexes every PNG under textures/ the same way so a
+    // backend that opens files directly agrees with that authoring contract.
+    // Empty when no such file was found.
+    std::string pathFor(const ParticleTextureDesc& desc) const;
+
 private:
     void scan();
 
@@ -55,6 +63,8 @@ private:
     bool mLoaded = false;
     std::vector<ParticleTextureDesc> mDescs;
     std::unordered_map<std::string, size_t> mByStem;
+    // Leaf name -> absolute path, for every PNG under textures/.
+    std::unordered_map<std::string, std::string> mFilesByLeaf;
 };
 
 } // namespace eng

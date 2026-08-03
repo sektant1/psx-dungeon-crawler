@@ -24,6 +24,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <optional>
@@ -60,6 +61,85 @@ static_assert(sizeof(ParticleVertex) == 36);
 // than reallocating a GPU buffer mid-frame.
 constexpr uint32_t kMaxDrawnParticles = 8192;
 
+// Keep in sync with the mode switch in assets/shaders/vulkan/particle.frag.
+// Ogre compiles one fragment_program per look; a runtime mode keeps the RHI
+// pipeline cache keyed on blend state alone.
+enum class ParticleMode : uint32_t {
+    Textured = 0, Atlas, Flame, Smoke, Rain, Block, Mote, Shard, Bubble, Wisp
+};
+
+ParticleMode particleModeFor(const std::string& fragmentProgram)
+{
+    struct Entry { const char* program; ParticleMode mode; };
+    static const Entry kModes[] = {
+        {"AtlasParticle_FS", ParticleMode::Atlas},
+        {"FireParticle_FS", ParticleMode::Flame},
+        {"SmokeParticle_FS", ParticleMode::Smoke},
+        {"RainParticle_FS", ParticleMode::Rain},
+        {"BlockParticle_FS", ParticleMode::Block},
+        {"MoteParticle_FS", ParticleMode::Mote},
+        {"ShardParticle_FS", ParticleMode::Shard},
+        {"BubbleParticle_FS", ParticleMode::Bubble},
+        {"WispParticle_FS", ParticleMode::Wisp},
+    };
+    for (const Entry& entry : kModes)
+        if (fragmentProgram == entry.program)
+            return entry.mode;
+    return ParticleMode::Textured;
+}
+
+// The stylised scrolling-surface profiles. Keep in sync with the mode switch in
+// assets/shaders/vulkan/surface.frag.
+enum class SurfaceMode : uint32_t { None = 0, Liquid, Lava, Portal };
+
+SurfaceMode surfaceModeFor(const std::string& fragmentProgram)
+{
+    if (fragmentProgram == "PixelVfx/LiquidFS")
+        return SurfaceMode::Liquid;
+    if (fragmentProgram == "PixelVfx/LavaFS")
+        return SurfaceMode::Lava;
+    // Both the authored (textured flow) and prototype (procedural) portals are
+    // one profile: they differ only in where surfaceField comes from, and this
+    // backend samples a texture either way.
+    if (fragmentProgram.find("Portal") != std::string::npos)
+        return SurfaceMode::Portal;
+    return SurfaceMode::None;
+}
+
+// The half of a surface profile's parameters that does not fit the push range
+// once the model matrix is in it. Per material rather than per draw, uploaded
+// once per frame for the one surface being drawn.
+// Field order is the shader's std140 block, verbatim. It drifted once already:
+// the shader grew paletteA..C while this struct still began at paletteD, so
+// every field read one slot early and the liquids came out of the wrong
+// colours entirely. Keep the two in the same order or neither is meaningful.
+struct alignas(16) SurfaceUniforms {
+    glm::vec4 paletteA{0.0f};
+    glm::vec4 paletteB{0.0f};
+    glm::vec4 paletteC{0.0f};
+    glm::vec4 paletteD{0.0f};
+    glm::vec4 glowColour{0.0f};
+    glm::vec4 flow{0.0f};
+    glm::vec4 tuning{8.0f, 32.0f, 0.0f, 0.22f};
+    glm::vec4 modeTime{0.0f};
+    glm::vec4 present{0.0f, 0.0f, 1.0f, 0.0f}; // texel, dither, bright, glow
+    glm::vec4 rims{0.0f, 0.0f, 0.0f, 1.0f};    // glow, flow, mode, threshold
+    glm::vec4 motion{0.0f, 0.0f, 0.0f, 1.0f};  // flow, swirl, twist, arms
+    glm::vec4 shapeA{0.5f, 1.0f, 0.0f, 0.0f};  // armW, depth, parallax, weight
+    glm::vec4 shapeB{0.0f, 0.0f, 0.5f, 0.05f}; // coreR, coreB, rimR, rimW
+    glm::vec4 shapeC{0.0f};                    // rimIntensity, edgeFade
+};
+
+// Particle draws replace the mesh DrawConstants entirely: the vertex stage
+// needs no model matrix (corners are already world-space) and the fragment
+// stage only wants its mode and cutoff.
+struct ParticleConstants {
+    glm::vec4 modeScissor{0.0f};
+    float pad[28]{};
+};
+
+static_assert(sizeof(ParticleConstants) == 128);
+
 struct alignas(16) SceneUniforms {
     glm::mat4 viewProjection{1.0f};
     glm::mat4 view{1.0f};
@@ -67,6 +147,8 @@ struct alignas(16) SceneUniforms {
     glm::vec4 ambient{0.0f};
     glm::vec4 fogColourDensity{0.0f};
     glm::vec4 clipParams{0.05f, 4000.0f, 0.0f, 0.0f};
+    glm::mat4 lightViewProjection{1.0f};
+    glm::vec4 shadowParams{0.0f};  // enabled, bias, strength, texel
     std::array<glm::vec4, 16> lightPositionRange{};
     std::array<glm::vec4, 16> lightColourType{};
 };
@@ -217,6 +299,16 @@ struct Renderer::Impl {
         RenderCore::TextureBinding texture;
         ParticleBlend blend = ParticleBlend::Alpha;
         FlipbookDesc flipbook;
+        ParticleMode mode = ParticleMode::Textured;
+        float alphaScissor = 0.0f;
+        // The hand-authored atlas materials animate a row of a shared sheet on
+        // a wall clock, which is a different thing from the catalogue flipbook
+        // above (that one is driven by each particle's own age).
+        glm::vec2 atlasGrid{1.0f};
+        float atlasRow = 0.0f;
+        float atlasFrames = 1.0f;
+        float atlasFps = 0.0f;
+        bool atlas = false;
         bool resolved = false;
     };
     struct LiveParticles {
@@ -238,6 +330,19 @@ struct Renderer::Impl {
     prototype::PrototypeCatalog prototypes;
     ModelMaterialFallbackWarnings missingMaterialWarnings;
     EnvState env;
+    // Modulative darkening applied where the sun is occluded, matching the
+    // tone Ogre's stencil pass used. Not in EnvState because nothing else in
+    // the engine has a concept of it yet.
+    float shadowStrength = 0.55f;
+    // Whether the sun casts. The pass itself runs either way (see
+    // RenderCore): it is what keeps the depth target in a sampleable layout.
+    bool shadowsEnabled = true;
+    // Post-chain settings stashed by setWireframeDebug(true), restored on
+    // toggle-off (the view bypasses them so the lines stay crisp).
+    struct {
+        int pixelSize = 3;
+        bool dither = false, bloom = true, grade = false;
+    } preWireframe;
     NodeHandle cameraNode{};
     int nameCounter = 0;
 
@@ -247,8 +352,25 @@ struct Renderer::Impl {
     std::array<rhi::BufferHandle, 3> sceneUniformBuffers{};
     bool gpuShutdown = false;
 
+    rhi::ShaderHandle shadowVertex;
+    rhi::ShaderHandle shadowFragment;
+    std::unordered_map<uint32_t, rhi::PipelineHandle> shadowPipelines;
+    rhi::ShaderHandle surfaceVertex;
+    rhi::ShaderHandle surfaceFragment;
+    std::unordered_map<uint32_t, rhi::PipelineHandle> surfacePipelines;
+    // One buffer PER MATERIAL, not one shared. updateBuffer writes host memory
+    // now but the GPU reads it when the command buffer executes, so a single
+    // buffer rewritten before each draw hands every surface in the frame the
+    // last material's parameters -- which is exactly how water, slime and lava
+    // all came out as one flat two-tone palette.
+    std::unordered_map<std::string, rhi::BufferHandle> surfaceUniformBuffers;
+    // Advanced alongside the particle clock so the two stay in step.
+    float surfaceTime = 0.0f;
+
     ParticleSim particleSim;
     ParticleTextureCatalog particleTextures;
+    // Wall clock for the atlas materials, advanced by updateParticles().
+    float particleTime = 0.0f;
     rhi::ShaderHandle particleVertexShader;
     rhi::ShaderHandle particleFragmentShader;
     // Keyed by blend mode: alpha and additive differ only in the blend state.
@@ -261,7 +383,6 @@ struct Renderer::Impl {
     std::unordered_map<std::string, uint32_t> particleByName;
     std::unordered_map<uint32_t, LiveParticles> liveParticles;
     std::vector<DecalRequest> decalRequests;
-    std::vector<ParticleTextureDesc> particleTextureDescs;
     DecalSystem decals;
     IParticleCollider* particleCollider = nullptr;
     uint32_t nextParticleHandle = 1;
@@ -380,6 +501,9 @@ struct Renderer::Impl {
         // The editor/thumbnail passes have no MRT metadata surface, and a
         // pipeline's colour attachment count must match the pass it runs in.
         key |= uint32_t(withNormalDepth) << 8u;
+        // The wireframe debug view is a whole separate rasterizer state, so it
+        // needs its own pipelines rather than mutating the cached ones.
+        key |= uint32_t(env.wireframe) << 9u;
         return key;
     }
 
@@ -402,7 +526,11 @@ struct Renderer::Impl {
             {2, 0, rhi::VertexFormat::Float2, offsetof(MeshVertex, uv)});
         desc.vertexLayout.attributes.push_back(
             {3, 0, rhi::VertexFormat::Float4, offsetof(MeshVertex, colour)});
-        desc.cull = material.cull;
+        // Lines, unculled: a wireframe that back-face culls hides exactly the
+        // edges the view exists to show.
+        desc.polygonMode = env.wireframe ? rhi::PolygonMode::Line
+                                         : rhi::PolygonMode::Fill;
+        desc.cull = env.wireframe ? rhi::CullMode::None : material.cull;
         desc.blend = material.blend;
         desc.depth.testEnabled = material.depthTest && !renderOnTop;
         desc.depth.writeEnabled = material.depthWrite && !renderOnTop;
@@ -451,6 +579,22 @@ struct Renderer::Impl {
             }
         particleSim.reserve(kMaxDrawnParticles);
         particleSim.setCollider(particleCollider);
+        shadowVertex = loadSceneShader(rhi::ShaderStage::Vertex,
+                                       ENG_RHI_SHADOW_VERT_SPV,
+                                       "renderer.shadow.vert");
+        shadowFragment = loadSceneShader(rhi::ShaderStage::Fragment,
+                                         ENG_RHI_SHADOW_FRAG_SPV,
+                                         "renderer.shadow.frag");
+        if (!shadowVertex.valid() || !shadowFragment.valid())
+            return false;
+        surfaceVertex = loadSceneShader(rhi::ShaderStage::Vertex,
+                                        ENG_RHI_SURFACE_VERT_SPV,
+                                        "renderer.surface.vert");
+        surfaceFragment = loadSceneShader(rhi::ShaderStage::Fragment,
+                                          ENG_RHI_SURFACE_FRAG_SPV,
+                                          "renderer.surface.frag");
+        if (!surfaceVertex.valid() || !surfaceFragment.valid())
+            return false;
         if (!initializeParticleGpu())
             return false;
         core.setDrawScene([this](rhi::CommandList& commands,
@@ -500,6 +644,84 @@ struct Renderer::Impl {
         core.device()->updateBuffer(particleIndices, quads.data(),
                                     quads.size() * sizeof(uint32_t));
         return true;
+    }
+
+    // Same vertex layout and state as a scene draw -- only the fragment stage
+    // differs -- so this mirrors pipelineFor() rather than inventing new state.
+    rhi::PipelineHandle surfacePipelineFor(const rhi_renderer::Material& material,
+                                           bool withNormalDepth)
+    {
+        const uint32_t key =
+            pipelineKey(material, false, withNormalDepth) | (1u << 12u);
+        if (const auto found = surfacePipelines.find(key);
+            found != surfacePipelines.end())
+            return found->second;
+        rhi::PipelineDesc desc;
+        desc.vertex = surfaceVertex;
+        desc.fragment = surfaceFragment;
+        desc.vertexLayout.bindings.push_back({0, sizeof(MeshVertex), false});
+        desc.vertexLayout.attributes.push_back(
+            {0, 0, rhi::VertexFormat::Float3, offsetof(MeshVertex, position)});
+        desc.vertexLayout.attributes.push_back(
+            {1, 0, rhi::VertexFormat::Float3, offsetof(MeshVertex, normal)});
+        desc.vertexLayout.attributes.push_back(
+            {2, 0, rhi::VertexFormat::Float2, offsetof(MeshVertex, uv)});
+        desc.vertexLayout.attributes.push_back(
+            {3, 0, rhi::VertexFormat::Float4, offsetof(MeshVertex, colour)});
+        desc.cull = material.cull;
+        desc.blend = material.blend;
+        desc.depth.testEnabled = material.depthTest;
+        desc.depth.writeEnabled = material.depthWrite;
+        desc.depth.compare = rhi::CompareOp::LessEqual;
+        desc.colourFormats = withNormalDepth
+                                 ? std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm,
+                                       rhi::Format::RGBA16Float}
+                                 : std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm};
+        desc.depthFormat = rhi::Format::Depth32Float;
+        desc.debugName = "renderer.surface-pipeline-" + std::to_string(key);
+        const rhi::PipelineHandle pipeline = core.device()->createPipeline(desc);
+        if (pipeline.valid())
+            surfacePipelines[key] = pipeline;
+        return pipeline;
+    }
+
+    // Depth only: no colour attachments, no fragment shader. Front faces are
+    // culled instead of back ones, which pushes the depth stored for a caster
+    // to its far side and is the cheapest way to keep a surface from
+    // shadow-acneing itself.
+    rhi::PipelineHandle shadowPipelineFor(const rhi_renderer::Material& material)
+    {
+        const uint32_t key = uint32_t(material.cull);
+        if (const auto found = shadowPipelines.find(key);
+            found != shadowPipelines.end())
+            return found->second;
+        rhi::PipelineDesc desc;
+        desc.vertex = shadowVertex;
+        desc.fragment = shadowFragment;
+        desc.vertexLayout.bindings.push_back({0, sizeof(MeshVertex), false});
+        desc.vertexLayout.attributes.push_back(
+            {0, 0, rhi::VertexFormat::Float3, offsetof(MeshVertex, position)});
+        desc.vertexLayout.attributes.push_back(
+            {1, 0, rhi::VertexFormat::Float3, offsetof(MeshVertex, normal)});
+        desc.vertexLayout.attributes.push_back(
+            {2, 0, rhi::VertexFormat::Float2, offsetof(MeshVertex, uv)});
+        desc.vertexLayout.attributes.push_back(
+            {3, 0, rhi::VertexFormat::Float4, offsetof(MeshVertex, colour)});
+        desc.cull = material.cull == rhi::CullMode::None
+                        ? rhi::CullMode::None
+                        : rhi::CullMode::Front;
+        desc.depth.testEnabled = true;
+        desc.depth.writeEnabled = true;
+        desc.depth.compare = rhi::CompareOp::LessEqual;
+        desc.colourFormats = {};
+        desc.depthFormat = rhi::Format::Depth32Float;
+        desc.debugName = "renderer.shadow-pipeline-" + std::to_string(key);
+        const rhi::PipelineHandle pipeline = core.device()->createPipeline(desc);
+        if (pipeline.valid())
+            shadowPipelines[key] = pipeline;
+        return pipeline;
     }
 
     rhi::PipelineHandle particlePipelineFor(ParticleBlend blend,
@@ -569,6 +791,36 @@ struct Renderer::Impl {
             if (buffer.valid()) core.device()->destroyBuffer(buffer);
             buffer = {};
         }
+        for (auto& [key, pipeline] : surfacePipelines)
+            core.device()->destroyPipeline(pipeline);
+        surfacePipelines.clear();
+        for (auto& [name, buffer] : surfaceUniformBuffers)
+            core.device()->destroyBuffer(buffer);
+        surfaceUniformBuffers.clear();
+        if (surfaceFragment.valid()) core.device()->destroyShader(surfaceFragment);
+        for (auto& [key, pipeline] : shadowPipelines)
+            core.device()->destroyPipeline(pipeline);
+        shadowPipelines.clear();
+        if (shadowFragment.valid()) core.device()->destroyShader(shadowFragment);
+        if (shadowVertex.valid()) core.device()->destroyShader(shadowVertex);
+        shadowFragment = {};
+        shadowVertex = {};
+        if (surfaceVertex.valid()) core.device()->destroyShader(surfaceVertex);
+        surfaceFragment = {};
+        surfaceVertex = {};
+        for (auto& [key, pipeline] : particlePipelines)
+            core.device()->destroyPipeline(pipeline);
+        particlePipelines.clear();
+        if (particleIndices.valid()) core.device()->destroyBuffer(particleIndices);
+        if (particleVertices.valid()) core.device()->destroyBuffer(particleVertices);
+        particleIndices = {};
+        particleVertices = {};
+        if (particleFragmentShader.valid())
+            core.device()->destroyShader(particleFragmentShader);
+        if (particleVertexShader.valid())
+            core.device()->destroyShader(particleVertexShader);
+        particleFragmentShader = {};
+        particleVertexShader = {};
         if (sceneFragment.valid()) core.device()->destroyShader(sceneFragment);
         if (sceneVertex.valid()) core.device()->destroyShader(sceneVertex);
         sceneFragment = {};
@@ -632,9 +884,11 @@ struct Renderer::Impl {
         return MeshHandle{uint32_t(meshes.size())};
     }
 
+    // Not const: the main view hands the fitted light matrix back to the core,
+    // which is what tells the shadow pass whether to run at all.
     void fillSceneUniforms(SceneUniforms& uniforms,
                            const RenderCore::View& requested, uint32_t width,
-                           uint32_t height) const
+                           uint32_t height)
     {
         glm::vec3 cameraPosition = requested.position;
         glm::quat cameraOrientation = requested.orientation;
@@ -699,6 +953,44 @@ struct Renderer::Impl {
         }
         uniforms.cameraPositionAndLightCount =
             glm::vec4(cameraPosition, float(count));
+
+        // One orthographic shadow view, fitted to a box around the camera.
+        // Ogre capped stencil shadows at 10 m; the same budget spent on a map
+        // this size keeps the texel density high enough for a hard edge.
+        constexpr float kShadowRange = 14.0f;
+        glm::vec3 sunDirection{0.0f};
+        for (uint32_t i = 0; i < count; ++i)
+            if (uniforms.lightColourType[i].w < 0.5f) {
+                // Directional entries store the direction TO the light.
+                sunDirection = glm::vec3(uniforms.lightPositionRange[i]);
+                break;
+            }
+        const bool haveSun = glm::dot(sunDirection, sunDirection) > 1e-6f &&
+                             shadowsEnabled &&
+                             requested.target == RenderCore::SceneTarget::Main;
+        if (haveSun) {
+            const glm::vec3 direction = glm::normalize(sunDirection);
+            // Snap the centre to shadow texels: without it the whole map
+            // crawls as the camera moves and every edge shimmers.
+            const float texelWorld = 2.0f * kShadowRange / 1024.0f;
+            glm::vec3 centre = cameraPosition;
+            centre = glm::floor(centre / texelWorld) * texelWorld;
+            const glm::vec3 eye = centre + direction * kShadowRange;
+            const glm::vec3 up =
+                std::abs(direction.y) > 0.95f ? glm::vec3(0.0f, 0.0f, 1.0f)
+                                              : glm::vec3(0.0f, 1.0f, 0.0f);
+            const glm::mat4 lightView = glm::lookAt(eye, centre, up);
+            const glm::mat4 lightProjection =
+                glm::orthoRH_ZO(-kShadowRange, kShadowRange, -kShadowRange,
+                                kShadowRange, 0.05f, kShadowRange * 2.5f);
+            uniforms.lightViewProjection = lightProjection * lightView;
+            uniforms.shadowParams = {1.0f, 0.0015f, shadowStrength,
+                                     1.0f / 1024.0f};
+        } else {
+            uniforms.shadowParams = glm::vec4(0.0f);
+        }
+        if (requested.target == RenderCore::SceneTarget::Main)
+            core.setShadowView(haveSun, uniforms.lightViewProjection);
     }
 
     DrawConstants drawConstants(const Node& nodeRecord,
@@ -709,6 +1001,28 @@ struct Renderer::Impl {
         constants.model = model;
         const glm::vec4 materialTint = material.modulate();
         constants.tintOpacity = materialTint;
+
+        // The material's own fragment_program_ref defaults come first: they are
+        // the authored look, and a node's ShaderParams or an enchantment then
+        // overrides them. This used to be skipped entirely, so a material that
+        // states `param_named rimColour ...` -- which is how every rim-lit
+        // material in the game states it, the crystals included -- rendered
+        // with no rim at all.
+        const auto materialValue =
+            [&](const char* name) -> const rhi_renderer::MaterialValue* {
+            const auto found = material.params.find(name);
+            return found == material.params.end() ? nullptr : &found->second;
+        };
+        if (const auto* value = materialValue("rimColour"))
+            if (const glm::vec4* rim = std::get_if<glm::vec4>(value))
+                constants.rimColourStrength = *rim;
+        if (const auto* value = materialValue("rimPower"))
+            if (const float* rimPower = std::get_if<float>(value))
+                constants.surfaceParams.y = *rimPower;
+        if (const auto* value = materialValue("alphaScissor"))
+            if (const float* alpha = std::get_if<float>(value))
+                constants.surfaceParams.x = *alpha;
+
         if (nodeRecord.hasShader) {
             constants.tintOpacity *= glm::vec4(nodeRecord.shader.tint,
                                                 nodeRecord.shader.opacity);
@@ -759,23 +1073,154 @@ struct Renderer::Impl {
                     ? prototype::kSurfaceMaterial
                     : attachment.materials[std::min(index,
                                                     attachment.materials.size() - 1)];
-            const rhi_renderer::Material& material = materials.resolve(
-                env.wireframe ? prototype::kSurfaceMaterial : requested,
-                prototypes.materialFor(requested));
+            // Keep the real material: the wireframe view only changes the
+            // rasterizer state and the fragment colour. Substituting the
+            // prototype surface here (as this used to) drew every line in the
+            // placeholder's magenta rather than the flat wire tint.
+            const rhi_renderer::Material& material =
+                materials.resolve(requested, prototypes.materialFor(requested));
+            // A stylised surface (water, slime, lava) is the same geometry
+            // through a different fragment stage; everything else about the
+            // draw -- vertex layout, blend, depth, culling -- is unchanged.
+            const SurfaceMode surfaceMode =
+                surfaceModeFor(material.fragmentProgram);
+            const bool isSurface = surfaceMode != SurfaceMode::None;
             const rhi::PipelineHandle pipeline =
-                pipelineFor(material, attachment.renderOnTop, withNormalDepth);
+                isSurface
+                    ? surfacePipelineFor(material, withNormalDepth)
+                    : pipelineFor(material, attachment.renderOnTop,
+                                  withNormalDepth);
             if (!pipeline.valid() || !material.texture.valid())
                 continue;
+            if (isSurface) {
+                SurfaceUniforms uniforms;
+                const auto number = [&](const char* name, float fallback) {
+                    const auto found = material.params.find(name);
+                    if (found == material.params.end())
+                        return fallback;
+                    const float* value = std::get_if<float>(&found->second);
+                    return value ? *value : fallback;
+                };
+                const auto vec2Of = [&](const char* name, glm::vec2 fallback) {
+                    const auto found = material.params.find(name);
+                    if (found == material.params.end())
+                        return fallback;
+                    const glm::vec2* value =
+                        std::get_if<glm::vec2>(&found->second);
+                    return value ? *value : fallback;
+                };
+                const auto palette = [&](const char* name, glm::vec4 fallback) {
+                    const auto found = material.params.find(name);
+                    if (found == material.params.end())
+                        return fallback;
+                    const glm::vec4* value =
+                        std::get_if<glm::vec4>(&found->second);
+                    return value ? *value : fallback;
+                };
+                if (surfaceMode == SurfaceMode::Lava) {
+                    uniforms.paletteA =
+                        palette("lavaDark", {0.12f, 0.004f, 0.001f, 1.0f});
+                    uniforms.paletteB =
+                        palette("lavaCrust", {0.46f, 0.025f, 0.004f, 1.0f});
+                    uniforms.paletteC =
+                        palette("lavaHot", {1.65f, 0.36f, 0.018f, 1.0f});
+                    uniforms.paletteD =
+                        palette("lavaCore", {2.20f, 1.10f, 0.12f, 1.0f});
+                    uniforms.tuning = {number("lavaStepFps", 10.0f),
+                                       number("lavaPixelGrid", 40.0f), 0.0f,
+                                       number("lavaFlowSpeed", 0.22f)};
+                } else if (surfaceMode == SurfaceMode::Portal) {
+                    uniforms.paletteA =
+                        palette("surfaceDark", {0.076f, 0.0f, 0.535f, 1.0f});
+                    uniforms.paletteB =
+                        palette("surfaceMid", {0.858f, 0.0f, 1.0f, 1.0f});
+                    uniforms.paletteC =
+                        palette("surfaceBright", {0.540f, 0.0f, 1.0f, 1.0f});
+                    uniforms.paletteD =
+                        palette("surfaceCore", {0.566f, 0.0f, 1.0f, 1.0f});
+                    uniforms.glowColour =
+                        palette("surfaceGlowColour", {1.0f, 1.0f, 1.0f, 1.0f});
+                    uniforms.tuning = {number("surfaceStepFps", 11.0f),
+                                       number("surfacePixelGrid", 39.0f), 0.0f,
+                                       0.0f};
+                    uniforms.present = {number("surfaceTexelSize", 0.0f),
+                                        number("surfaceDither", 0.0f),
+                                        number("surfaceBrightness", 1.0f),
+                                        number("surfaceGlowStrength", 0.0f)};
+                    uniforms.rims = {number("surfaceEdgeGlow", 0.0f),
+                                     number("surfaceEdgeFlow", 0.0f),
+                                     number("surfaceEdgeMode", 0.0f),
+                                     number("surfaceGlowThreshold", 1.0f)};
+                    uniforms.motion = {number("portalFlowSpeed", 0.0f),
+                                       number("portalSwirlSpeed", 0.0f),
+                                       number("portalTwist", 0.0f),
+                                       number("portalArms", 1.0f)};
+                    uniforms.shapeA = {number("portalArmWidth", 0.5f),
+                                       number("portalDepthScale", 1.0f),
+                                       number("portalParallax", 0.0f),
+                                       number("portalFieldWeight", 0.0f)};
+                    uniforms.shapeB = {number("portalCoreRadius", 0.0f),
+                                       number("portalCoreBoost", 0.0f),
+                                       number("portalRimRadius", 0.5f),
+                                       number("portalRimWidth", 0.05f)};
+                    uniforms.shapeC = {number("portalRimIntensity", 0.0f),
+                                       number("portalEdgeFade", 0.0f), 0.0f,
+                                       0.0f};
+                } else {
+                    uniforms.paletteA =
+                        palette("liquidDark", {0.02f, 0.08f, 0.16f, 1.0f});
+                    uniforms.paletteB =
+                        palette("liquidMid", {0.05f, 0.42f, 0.78f, 1.0f});
+                    uniforms.paletteC =
+                        palette("liquidBright", {0.28f, 0.90f, 1.0f, 1.0f});
+                    const glm::vec2 flowA =
+                        vec2Of("liquidFlowA", {0.07f, 0.035f});
+                    const glm::vec2 flowB =
+                        vec2Of("liquidFlowB", {-0.035f, 0.055f});
+                    uniforms.flow = {flowA.x, flowA.y, flowB.x, flowB.y};
+                    uniforms.tuning = {number("liquidStepFps", 8.0f),
+                                       number("liquidPixelGrid", 32.0f),
+                                       number("liquidEmission", 0.0f), 0.0f};
+                }
+                uniforms.modeTime = {float(surfaceMode), surfaceTime, 0.0f,
+                                     0.0f};
+                rhi::BufferHandle& buffer =
+                    surfaceUniformBuffers[material.name];
+                if (!buffer.valid()) {
+                    rhi::BufferDesc desc;
+                    desc.size = sizeof(SurfaceUniforms);
+                    desc.usage = rhi::BufferUsage::Uniform |
+                                 rhi::BufferUsage::Dynamic;
+                    desc.debugName = "renderer.surface-uniforms";
+                    buffer = core.device()->createBuffer(desc);
+                }
+                if (!buffer.valid())
+                    continue;
+                core.device()->updateBuffer(buffer, &uniforms,
+                                            sizeof(uniforms));
+                commands.bindUniformBuffer(1, buffer);
+            }
             const GpuSubmesh& submesh = resource->submeshes[index];
             DrawConstants constants = drawConstants(nodeRecord, material, model);
             // Stone keeps its outlines but refuses the highlight wash; the
             // scene shader encodes that as a negative MRT depth.
             constants.surfaceParams.z = material.noHighlight ? 1.0f : 0.0f;
+            constants.surfaceParams.w = env.wireframe ? 1.0f : 0.0f;
             commands.bindPipeline(pipeline);
             commands.bindVertexBuffer(0, submesh.vertices);
             commands.bindIndexBuffer(submesh.indices, 0, rhi::IndexType::UInt32);
             commands.bindTexture(0, material.texture.texture,
                                  material.texture.sampler);
+            // Slot 1 is the shadow map. It must be bound on every scene draw,
+            // not just the shadowed ones: an unbound sampler reads zero, which
+            // the depth comparison takes as "fully occluded" and drops the
+            // whole frame into shadow.
+            // Only once the shadow pass has actually written and released it:
+            // the texture exists from init, but until the pass runs it is in
+            // an attachment layout that cannot be sampled.
+            if (core.shadowTexture().valid())
+                commands.bindTexture(1, core.shadowTexture(),
+                                     core.shadowSampler());
             commands.pushConstants(&constants, sizeof(constants));
             commands.drawIndexed(submesh.indexCount);
             ++batches;
@@ -826,6 +1271,24 @@ struct Renderer::Impl {
         params.vignetteStrength = param("vignetteStrength", 0.0f);
         params.vignetteColour = colourParam("vignetteColor", glm::vec3(1.0f));
         params.dither = env.dither && param("ditherEnabled", 1.0f) > 0.5f;
+        params.bloom = env.bloom;
+        params.bloomThreshold = env.bloomThreshold;
+        params.bloomIntensity = env.bloomIntensity;
+        // The one bloom knob the palette drives through a material rather than
+        // through EnvState, like the grade/dither block above it.
+        params.bloomPixelSnap =
+            materials.find("Engine/Psx/BloomComposite")
+                ? [&] {
+                      const rhi_renderer::Material* composite =
+                          materials.find("Engine/Psx/BloomComposite");
+                      const auto found =
+                          composite->params.find("bloomPixelSnap");
+                      if (found == composite->params.end())
+                          return 0.0f;
+                      const float* value = std::get_if<float>(&found->second);
+                      return value ? *value : 0.0f;
+                  }()
+                : 0.0f;
         params.colourDepth = std::max(param("colDepth", 255.0f), 1.0f);
         params.ditherBanding = param("ditherBanding", 0.0f);
         params.ditherDarkFade = param("ditherDarkFade", 0.0f);
@@ -890,11 +1353,315 @@ struct Renderer::Impl {
         core.setStylizeParams(params);
     }
 
+    // Effects name a PNG *stem*; the catalogue turns that into the file plus the
+    // blend/flipbook metadata a sheet entry may override. Resolved on first use
+    // so a pack of several hundred strips stays off the boot path.
+    void resolveParticleEffect(ParticleEffect& effect)
+    {
+        if (effect.resolved)
+            return;
+        effect.resolved = true;
+        const std::string& stem = effect.desc.texture;
+        if (stem.empty()) {
+            // No stem: the effect names a hand-authored material instead, which
+            // is the older spelling and still what most library effects use
+            // ("Engine/Psx/Fire"). The material library already owns its texture
+            // and blend, so take both from there rather than making the effect
+            // author restate them.
+            if (effect.desc.material.empty())
+                return;
+            const rhi_renderer::Material* material =
+                materials.find(effect.desc.material);
+            if (!material) {
+                warnOnce("particle-material:" + effect.desc.material,
+                         "a particle effect names an unknown material");
+                return;
+            }
+            effect.mode = particleModeFor(material->fragmentProgram);
+            effect.blend = material->blend == rhi::BlendMode::Additive
+                               ? ParticleBlend::Additive
+                               : ParticleBlend::Alpha;
+            const auto number = [&](const char* name, float fallback) {
+                const auto found = material->params.find(name);
+                if (found == material->params.end())
+                    return fallback;
+                const float* value = std::get_if<float>(&found->second);
+                return value ? *value : fallback;
+            };
+            effect.alphaScissor = number("alphaScissor", 0.0f);
+            if (const auto found = material->params.find("atlasGrid");
+                found != material->params.end())
+                if (const glm::vec2* grid = std::get_if<glm::vec2>(&found->second))
+                    effect.atlasGrid = glm::max(*grid, glm::vec2(1.0f));
+            effect.atlasRow = number("atlasRow", 0.0f);
+            effect.atlasFrames = number("atlasFrames", 1.0f);
+            effect.atlasFps = number("atlasFps", 0.0f);
+            effect.atlas = effect.mode == ParticleMode::Atlas;
+            // The procedural variants generate their whole look in the fragment
+            // stage and bind no texture at all, so a missing one is expected;
+            // the descriptor still needs something, hence the fallback bind.
+            effect.texture = material->texture.valid() ? material->texture
+                                                       : core.fallbackTexture();
+            if (!effect.texture.valid())
+                warnOnce("particle-material:" + effect.desc.material,
+                         "a particle material has no bindable texture");
+            return;
+        }
+        const ParticleTextureDesc* desc = particleTextures.find(stem);
+        if (!desc) {
+            warnOnce("particle-texture:" + stem,
+                     "a particle effect names an undeclared texture");
+            return;
+        }
+        effect.blend = desc->blend;
+        effect.flipbook = desc->flipbook;
+        const std::string path = particleTextures.pathFor(*desc);
+        if (path.empty()) {
+            warnOnce("particle-file:" + stem,
+                     "a particle texture names a PNG that does not exist");
+            return;
+        }
+        effect.texture = core.loadTexture(
+            path,
+            desc->nearest ? rhi::FilterMode::Nearest : rhi::FilterMode::Linear,
+            rhi::AddressMode::ClampToEdge);
+    }
+
+    // One draw per effect, matching how the Ogre path batches per material.
+    // Alpha effects are sorted back-to-front within their own batch; additive
+    // output is order-independent, so sorting it would be pure cost.
+    void drawParticles(rhi::CommandList& commands, const RenderCore::View& view,
+                       size_t& batches, size_t& triangles, bool withNormalDepth)
+    {
+        if (particleSim.liveCount() == 0 || particleEffects.empty())
+            return;
+        glm::quat cameraOrientation = view.orientation;
+        glm::vec3 cameraPosition = view.position;
+        if (view.target == RenderCore::SceneTarget::Main) {
+            const NodeTransform camera = worldTransform(cameraNode);
+            cameraPosition = camera.position;
+            cameraOrientation = camera.orientation;
+        }
+        // The camera's world axes billboard the quad without a per-particle
+        // matrix, exactly as the legacy vertex program reads them out of the
+        // view matrix columns.
+        const glm::vec3 right = cameraOrientation * glm::vec3(1.0f, 0.0f, 0.0f);
+        const glm::vec3 up = cameraOrientation * glm::vec3(0.0f, 1.0f, 0.0f);
+
+        struct Group {
+            RenderCore::TextureBinding texture;
+            ParticleBlend blend = ParticleBlend::Alpha;
+            ParticleMode mode = ParticleMode::Textured;
+            float alphaScissor = 0.0f;
+            uint32_t firstQuad = 0;
+            uint32_t quads = 0;
+        };
+        std::vector<Group> groups;
+
+        const ParticlePool& pool = particleSim.pool();
+        particleStaging.clear();
+        uint32_t quadCount = 0;
+
+        static const glm::vec2 kCorners[4] = {
+            {-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}};
+        // v is flipped against the corner sign: image row 0 is the top of the
+        // sprite, which is +y in world space.
+        static const glm::vec2 kUvs[4] = {
+            {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f}};
+
+        for (ParticleEffect& effect : particleEffects) {
+            resolveParticleEffect(effect);
+            const std::vector<uint32_t>& indices =
+                particleSim.indicesForEffect(effect.simId);
+            if (!effect.texture.valid() || indices.empty())
+                continue;
+
+            particleOrder.assign(indices.begin(), indices.end());
+            if (effect.blend == ParticleBlend::Alpha) {
+                std::sort(particleOrder.begin(), particleOrder.end(),
+                          [&](uint32_t a, uint32_t b) {
+                              const glm::vec3 da = pool.pos[a] - cameraPosition;
+                              const glm::vec3 db = pool.pos[b] - cameraPosition;
+                              return glm::dot(da, da) > glm::dot(db, db);
+                          });
+            }
+
+            Group group;
+            group.texture = effect.texture;
+            group.blend = effect.blend;
+            group.mode = effect.mode;
+            group.alphaScissor = effect.alphaScissor;
+            group.firstQuad = quadCount;
+
+            const FlipbookDesc& flipbook = effect.flipbook;
+            const bool animated = flipbook.active();
+            const float frameCount = float(flipbook.frameCount());
+            const float perRow = std::max(float(flipbook.framesPerRow()), 1.0f);
+            glm::vec2 cell(flipbook.cellU(), flipbook.cellV());
+            glm::vec2 origin(flipbook.originU(), flipbook.originV());
+
+            // Atlas materials pick their cell off a wall clock shared by every
+            // particle, rather than off each particle's own age. Expressed in
+            // the same origin/cell/window form so the corner loop stays common:
+            // (corner + window) / grid.
+            glm::vec2 atlasWindow(0.0f);
+            if (effect.atlas) {
+                cell = 1.0f / effect.atlasGrid;
+                origin = glm::vec2(0.0f);
+                const float count =
+                    std::clamp(effect.atlasFrames, 1.0f, effect.atlasGrid.x);
+                const float frame =
+                    effect.atlasFps > 0.0f
+                        ? std::fmod(std::floor(particleTime * effect.atlasFps),
+                                    count)
+                        : 0.0f;
+                atlasWindow = {frame,
+                               std::clamp(effect.atlasRow, 0.0f,
+                                          effect.atlasGrid.y - 1.0f)};
+            }
+
+            for (uint32_t index : particleOrder) {
+                if (quadCount >= kMaxDrawnParticles)
+                    break;
+                // Wall-clock cadence, not normalised life, so a flipbook keeps
+                // its authored speed however long the particle lives.
+                float frame = 0.0f;
+                if (animated) {
+                    const float f = pool.age[index] * flipbook.fps;
+                    frame = flipbook.loop ? std::fmod(f, frameCount)
+                                          : std::min(f, frameCount - 1.0f);
+                }
+                const float cellIndex = std::floor(std::max(frame, 0.0f));
+                const glm::vec2 window =
+                    effect.atlas ? atlasWindow
+                                 : glm::vec2(std::fmod(cellIndex, perRow),
+                                             std::floor(cellIndex / perRow));
+
+                const float angle = pool.rot[index];
+                const float sinAngle = std::sin(angle);
+                const float cosAngle = std::cos(angle);
+                const float half = pool.size[index] * 0.5f;
+                const glm::vec3 centre = pool.pos[index];
+                const glm::vec4 colour = pool.colour[index];
+
+                // Corner order matches the quad index pattern uploaded once in
+                // initializeParticleGpu(): 0-1-2, 0-2-3.
+                for (int corner = 0; corner < 4; ++corner) {
+                    const glm::vec2 c = kCorners[corner];
+                    const glm::vec2 spun(c.x * cosAngle - c.y * sinAngle,
+                                         c.x * sinAngle + c.y * cosAngle);
+                    ParticleVertex vertex;
+                    vertex.position =
+                        centre + (right * spun.x + up * spun.y) * half;
+                    vertex.uv = origin + (kUvs[corner] + window) * cell;
+                    vertex.colour = colour;
+                    particleStaging.push_back(vertex);
+                }
+                ++quadCount;
+                ++group.quads;
+            }
+            if (group.quads)
+                groups.push_back(group);
+        }
+
+        if (particleStaging.empty())
+            return;
+        core.device()->updateBuffer(
+            particleVertices, particleStaging.data(),
+            particleStaging.size() * sizeof(ParticleVertex));
+
+        for (const Group& group : groups) {
+            const rhi::PipelineHandle pipeline =
+                particlePipelineFor(group.blend, withNormalDepth);
+            if (!pipeline.valid())
+                continue;
+            commands.bindPipeline(pipeline);
+            commands.bindVertexBuffer(0, particleVertices);
+            commands.bindIndexBuffer(particleIndices, 0, rhi::IndexType::UInt32);
+            commands.bindTexture(0, group.texture.texture,
+                                 group.texture.sampler);
+            ParticleConstants constants;
+            constants.modeScissor = {float(group.mode), group.alphaScissor,
+                                     0.0f, 0.0f};
+            commands.pushConstants(&constants, sizeof(constants));
+            commands.drawIndexed(group.quads * 6u, 1, group.firstQuad * 6u);
+            ++batches;
+            triangles += group.quads * 2u;
+        }
+    }
+
+    void drawShadowCasters(rhi::CommandList& commands, uint32_t width,
+                           uint32_t height)
+    {
+        SceneUniforms uniforms;
+        RenderCore::View mainView;
+        fillSceneUniforms(uniforms, mainView, width, height);
+        // The pass transforms by lightViewProjection, which fillSceneUniforms
+        // has already computed for the main view.
+        core.device()->updateBuffer(sceneUniformBuffers[0], &uniforms,
+                                    sizeof(uniforms));
+        commands.bindUniformBuffer(0, sceneUniformBuffers[0]);
+
+        const auto drawCaster = [&](const Node& nodeRecord,
+                                    const MeshAttachment& attachment,
+                                    const glm::mat4& model) {
+            if (!attachment.castShadows)
+                return;
+            const Mesh* resource = mesh(attachment.mesh);
+            if (!resource)
+                return;
+            for (size_t i = 0; i < resource->submeshes.size(); ++i) {
+                const std::string requested =
+                    attachment.materials.empty()
+                        ? prototype::kSurfaceMaterial
+                        : attachment.materials[std::min(
+                              i, attachment.materials.size() - 1)];
+                const rhi_renderer::Material& material = materials.resolve(
+                    requested, prototypes.materialFor(requested));
+                const rhi::PipelineHandle pipeline =
+                    shadowPipelineFor(material);
+                if (!pipeline.valid())
+                    continue;
+                const GpuSubmesh& submesh = resource->submeshes[i];
+                DrawConstants constants;
+                constants.model = model;
+                commands.bindPipeline(pipeline);
+                commands.bindVertexBuffer(0, submesh.vertices);
+                commands.bindIndexBuffer(submesh.indices, 0,
+                                         rhi::IndexType::UInt32);
+                commands.pushConstants(&constants, sizeof(constants));
+                commands.drawIndexed(submesh.indexCount);
+            }
+        };
+
+        for (size_t index = 0; index < nodes.size(); ++index) {
+            const Node& nodeRecord = nodes[index];
+            const NodeHandle handle{uint32_t(index + 1)};
+            if (!nodeRecord.alive || nodeRecord.thumbnailOnly ||
+                !worldVisible(handle))
+                continue;
+            const glm::mat4 model = worldMatrix(handle);
+            for (const MeshAttachment& attachment : nodeRecord.meshes) {
+                drawCaster(nodeRecord, attachment, model);
+            }
+        }
+    }
+
     void draw(rhi::CommandList& commands, const RenderCore::View& view,
               uint32_t width, uint32_t height)
     {
         // Only the main pass carries the MRT metadata surface the stylizer
         // reads; the editor/thumbnail viewports render colour only.
+        // Depth-only caster pass: draw the opted-in meshes from the sun and
+        // stop. Everything below -- lighting, particles, the on-top set --
+        // has nothing to contribute to a depth buffer.
+        if (view.target == RenderCore::SceneTarget::Shadow) {
+            // Disabled: the pass still runs to clear and to leave the texture
+            // sampleable, but there is nothing to put in it.
+            if (shadowsEnabled)
+                drawShadowCasters(commands, width, height);
+            return;
+        }
         const bool withNormalDepth =
             view.target == RenderCore::SceneTarget::Main;
         if (withNormalDepth) {
@@ -960,14 +1727,16 @@ struct Renderer::Impl {
                 }
             }
         }
+        // Between world geometry and the renderOnTop set, which is where the
+        // legacy queues put them: particles are RENDER_QUEUE_MAIN (50), the
+        // viewmodel is RENDER_QUEUE_8 (80).
+        drawParticles(commands, view, batches, triangles, withNormalDepth);
         for (const DeferredDraw& deferred : onTop)
             drawMesh(commands, *deferred.node, *deferred.attachment,
                      deferred.model, batches, triangles, withNormalDepth);
         core.addFrameStats(batches, triangles);
         if (!debugLines.empty())
             warnOnce("debug-lines", "debug lines");
-        if (particleSim.liveCount() > 0)
-            warnOnce("particles", "particle batches");
     }
 };
 
@@ -1389,8 +2158,6 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     mImpl->pipelineFor(material, renderOnTop);
     mImpl->sceneRegistry.addAttachment(
         node, {NodeAttachKind::Mesh, 0, material.name});
-    if (castShadows)
-        mImpl->warnOnce("shadows", "mesh shadows");
 }
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
                           const ResolvedModelMaterial& material,
@@ -1432,8 +2199,6 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     }
     owner->meshes.push_back(std::move(attachment));
     mImpl->sceneRegistry.addAttachment(node, {NodeAttachKind::Mesh, 0, label});
-    if (castShadows)
-        mImpl->warnOnce("shadows", "mesh shadows");
 }
 
 std::string Renderer::createSpriteMaterial(const SpriteClip&)
@@ -1541,7 +2306,14 @@ ParticleEffectId Renderer::registerParticleEffect(const ParticleEffectDesc& raw)
         Impl::ParticleEffect& effect =
             mImpl->particleEffects[found->second - 1];
         mImpl->particleSim.updateEffect(effect.simId, desc);
+        // Hot reload may have repointed the effect at a different texture, so
+        // drop the cached binding and let the next frame resolve it again.
+        const bool textureChanged = effect.desc.texture != desc.texture;
         effect.desc = std::move(desc);
+        if (textureChanged) {
+            effect.resolved = false;
+            effect.texture = {};
+        }
         return ParticleEffectId{found->second};
     }
     const uint16_t simId = mImpl->particleSim.registerEffect(desc);
@@ -1623,7 +2395,6 @@ ParticlesHandle Renderer::spawnParticles(ParticleEffectId effect,
     mImpl->liveParticles[handle] = {instance, parent, glm::mat4(1), true};
     mImpl->sceneRegistry.addAttachment(
         parent, {NodeAttachKind::Particles, handle, registered.desc.name});
-    mImpl->warnOnce("particles", "particle batches");
     return {handle};
 }
 ParticlesHandle Renderer::spawnParticles(ParticleEffectId effect,
@@ -1651,7 +2422,6 @@ ParticlesHandle Renderer::spawnParticles(ParticleEffectId effect,
     if (instance == ParticleSim::kInvalidInstance)
         return {};
     mImpl->liveParticles[handle] = {instance, {}, transform, false};
-    mImpl->warnOnce("particles", "particle batches");
     return {handle};
 }
 void Renderer::stopParticles(ParticlesHandle handle)
@@ -1675,11 +2445,21 @@ void Renderer::setParticleQuality(float quality)
 }
 const std::vector<ParticleTextureDesc>& Renderer::particleTextures() const
 {
-    return mImpl->particleTextureDescs;
+    // Was a permanently empty vector, so the editor's texture list showed
+    // nothing; the catalogue is the real, stably-sorted answer.
+    return mImpl->particleTextures.all();
 }
 bool Renderer::reloadParticleTextures()
 {
-    mImpl->warnOnce("particle-textures", "particle texture hot reload");
+    if (!mImpl->particleTextures.reload())
+        return false;
+    // Re-resolve every effect against the rescanned catalogue: a blend mode or
+    // flipbook window may have changed even when the file did not. The texture
+    // cache is keyed by path, so unchanged PNGs are not re-uploaded.
+    for (Impl::ParticleEffect& effect : mImpl->particleEffects) {
+        effect.resolved = false;
+        effect.texture = {};
+    }
     return true;
 }
 uint32_t Renderer::liveParticleCount() const
@@ -1722,6 +2502,8 @@ void Renderer::updateParticles(float dt)
             mImpl->particleSim.setInstanceTransform(
                 live.instance, mImpl->worldMatrix(live.parent));
     }
+    mImpl->particleTime += dt;
+    mImpl->surfaceTime = mImpl->particleTime;
     mImpl->decalRequests.clear();
     mImpl->particleSim.update(dt, mImpl->decalRequests);
     for (const DecalRequest& request : mImpl->decalRequests)
@@ -1751,7 +2533,7 @@ LightHandle Renderer::attachLight(NodeHandle node, const LightDesc& desc)
     mImpl->sceneRegistry.addAttachment(
         node, {NodeAttachKind::Light, handle.id, ""});
     if (desc.castShadows)
-        mImpl->warnOnce("shadows", "light shadows");
+
     return handle;
 }
 void Renderer::setLightColour(LightHandle handle, glm::vec3 colour)
@@ -1936,11 +2718,7 @@ void Renderer::setFogDesatBoost(float boost)
 {
     mImpl->env.fogDesatBoost = boost;
 }
-void Renderer::setBloomEnabled(bool enabled)
-{
-    mImpl->env.bloom = enabled;
-    if (enabled) mImpl->warnOnce("bloom", "bloom post-processing");
-}
+void Renderer::setBloomEnabled(bool enabled) { mImpl->env.bloom = enabled; }
 void Renderer::setBloomParams(float threshold, float intensity)
 {
     mImpl->env.bloomThreshold = threshold;
@@ -1948,8 +2726,28 @@ void Renderer::setBloomParams(float threshold, float intensity)
 }
 void Renderer::setWireframeDebug(bool enabled)
 {
+    if (mImpl->env.wireframe == enabled)
+        return;
     mImpl->env.wireframe = enabled;
-    if (enabled) mImpl->warnOnce("wireframe", "wireframe rasterization");
+    // The post chain smears one-pixel lines, so the whole of it is bypassed
+    // while the view is up and restored afterwards -- the same trade the Ogre
+    // path makes. Stylize in particular would ink every triangle edge a second
+    // time and turn the mesh into noise.
+    if (enabled) {
+        mImpl->preWireframe = {mImpl->env.pixelSize, mImpl->env.dither,
+                               mImpl->env.bloom, mImpl->env.grade};
+        setPixelSize(1);
+        setMaterialParam("Engine/Psx/PixelStylize", "stylizeEnabled", 0.0f);
+        setDitherEnabled(false);
+        setBloomEnabled(false);
+        setGradeEnabled(false);
+    } else {
+        setPixelSize(mImpl->preWireframe.pixelSize);
+        setMaterialParam("Engine/Psx/PixelStylize", "stylizeEnabled", 1.0f);
+        setDitherEnabled(mImpl->preWireframe.dither);
+        setBloomEnabled(mImpl->preWireframe.bloom);
+        setGradeEnabled(mImpl->preWireframe.grade);
+    }
 }
 void Renderer::setGradeEnabled(bool enabled)
 {

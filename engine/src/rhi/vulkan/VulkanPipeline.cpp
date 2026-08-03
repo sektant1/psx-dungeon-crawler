@@ -230,7 +230,12 @@ PipelineHandle VulkanDevice::createPipeline(const PipelineDesc& desc)
     VkPipelineRasterizationStateCreateInfo rasterization{};
     rasterization.sType =
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterization.polygonMode = VK_POLYGON_MODE_FILL;
+    // Line mode is a device feature; without it the request degrades to solid
+    // rather than failing pipeline creation and losing the whole draw.
+    rasterization.polygonMode =
+        (desc.polygonMode == PolygonMode::Line && mContext.fillModeNonSolid)
+            ? VK_POLYGON_MODE_LINE
+            : VK_POLYGON_MODE_FILL;
     rasterization.cullMode = toVkCullMode(desc.cull);
     // VulkanCommandList::setViewport submits a negative-height viewport, the
     // maintenance1 idiom that makes Vulkan rasterize with GL's orientation. It

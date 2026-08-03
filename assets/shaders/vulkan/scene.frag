@@ -20,11 +20,14 @@ layout(set = 0, binding = 0, std140) uniform SceneUniforms {
     vec4 cameraPositionAndLightCount;
     vec4 ambient;
     vec4 fogColourDensity;
-    vec4 clipParams;          // x = near, y = far
+    vec4 clipParams;
+    mat4 lightViewProjection;
+    vec4 shadowParams;        // enabled, bias, strength, texel          // x = near, y = far
     vec4 lightPositionRange[16];
     vec4 lightColourType[16];
 } scene;
 layout(set = 1, binding = 0) uniform sampler2D albedoTexture;
+layout(set = 1, binding = 1) uniform sampler2D shadowMap;
 
 layout(push_constant) uniform DrawConstants {
     mat4 model;
@@ -41,7 +44,19 @@ layout(push_constant) uniform DrawConstants {
 vec3 toLinear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
 vec3 toSrgb(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }
 
+// Flat wire tint, matching Wire_FS's authored default. A diagnostic view wants
+// one legible colour, not the material's own.
+const vec3 kWireColour = vec3(0.55, 0.8, 1.0);
+
 void main() {
+    if (drawData.surfaceParams.w > 0.5) {
+        // Debug wireframe: the rasterizer is already drawing lines, so this
+        // only has to colour them. No lighting, no texture, no fog -- the view
+        // exists to show topology.
+        outColour = vec4(kWireColour, 1.0);
+        outNormalDepth = vec4(0.0);
+        return;
+    }
     vec4 albedo = texture(albedoTexture, uv) * colour * drawData.tintOpacity;
     if (albedo.a < drawData.surfaceParams.x)
         discard;
@@ -66,13 +81,58 @@ void main() {
                     max(dot(normal, lightVector), 0.0) * attenuation;
     }
 
+    // Directional shadow. Ogre used stencil volumes modulatively -- one
+    // darkening pass over shadowed area -- so this reproduces the RESULT
+    // rather than the technique: a hard-edged darkening toward the same
+    // shadow tone, which is what the look actually depends on. A depth map is
+    // the tractable way to get that here, and at this render resolution its
+    // stair-step is under the pixel grid anyway.
+    if (scene.shadowParams.x > 0.5) {
+        vec4 lightClip = scene.lightViewProjection * vec4(worldPosition, 1.0);
+        vec3 lightNdc = lightClip.xyz / max(lightClip.w, 1e-6);
+        // V is flipped: VulkanCommandList::setViewport submits a
+        // negative-height viewport, so the shadow pass rasterised into the map
+        // upside down relative to its own clip space. Sampling without this
+        // reads the map mirrored and shadows land nowhere near their casters.
+        vec2 shadowUv = lightNdc.xy * 0.5 + 0.5;
+        shadowUv.y = 1.0 - shadowUv.y;
+        // Outside the map is lit, not shadowed: the map covers a short range
+        // around the camera, and clamping would smear its border across the
+        // whole level.
+        if (all(greaterThanEqual(shadowUv, vec2(0.0))) &&
+            all(lessThanEqual(shadowUv, vec2(1.0))) &&
+            lightNdc.z <= 1.0) {
+            // Slope-scaled bias: a surface edge-on to the sun crosses many
+            // depth texels per pixel, and a flat bias large enough for it
+            // would peel the shadow off everything else (peter-panning).
+            float ndl = clamp(dot(normal, normalize(
+                -scene.lightPositionRange[0].xyz)), 0.0, 1.0);
+            float bias = scene.shadowParams.y * (2.0 - ndl);
+            float texel = scene.shadowParams.w;
+            float lit = 0.0;
+            // Four taps: enough to break the staircase along a silhouette
+            // without softening the shadow into something un-PSX.
+            for (int x = 0; x < 2; ++x)
+                for (int y = 0; y < 2; ++y) {
+                    vec2 offset = (vec2(x, y) - 0.5) * texel;
+                    float depth = texture(shadowMap, shadowUv + offset).r;
+                    lit += lightNdc.z - bias <= depth ? 1.0 : 0.0;
+                }
+            lit *= 0.25;
+            lighting *= mix(scene.shadowParams.z, 1.0, lit);
+        }
+    }
+
     vec3 viewDirection = normalize(scene.cameraPositionAndLightCount.xyz -
                                    worldPosition);
     float rim = pow(1.0 - clamp(dot(normal, viewDirection), 0.0, 1.0),
                     max(drawData.surfaceParams.y, 0.01));
+    // Gate by the local light level: the sheen is reflected light, so it has to
+    // die on shadowed/unlit faces instead of glowing through them (psx.frag).
+    float rimLit = clamp(dot(lighting, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
     vec3 rgb = albedo.rgb * lighting +
                toLinear(drawData.rimColourStrength.rgb) *
-               drawData.rimColourStrength.a * rim;
+               (rim * drawData.rimColourStrength.a * rimLit);
     float distanceToEye = length(scene.cameraPositionAndLightCount.xyz -
                                  worldPosition);
     float fog = clamp(1.0 - exp(-max(scene.fogColourDensity.a, 0.0) *

@@ -40,14 +40,6 @@ std::string writeFixture(const char* name, const std::string& contents)
     return path.string();
 }
 
-const game::BloodDecalDef* findDecal(const game::BloodDefinitions& defs,
-                                     const std::string& id)
-{
-    for (const game::BloodDecalDef& decal : defs.decals)
-        if (decal.id == id) return &decal;
-    return nullptr;
-}
-
 } // namespace
 
 int main()
@@ -62,8 +54,18 @@ int main()
         require(game::parseBloodDefinitions(path, defs),
                 "the shipped blood.toml no longer parses");
 
-        require(defs.profiles.size() == 3,
-                "blood.toml no longer defines exactly three profiles");
+        // Blood is particles and voxel chunks only: no decals, and every
+        // creature falls back to `default` so a hit always reads.
+        require(defs.profiles.size() == 4,
+                "blood.toml no longer defines exactly four profiles");
+        {
+            auto it = defs.profiles.find(game::kDefaultBlood);
+            require(it != defs.profiles.end(),
+                    "the 'default' fallback profile is missing; enemies that "
+                    "name no profile would stop bleeding entirely");
+            require(!it->second.sprayEffect.empty(),
+                    "the fallback profile throws no spray");
+        }
         const game::BloodProfile* human = nullptr;
         {
             auto it = defs.profiles.find("human");
@@ -72,8 +74,6 @@ int main()
         }
         require(human->sprayEffect == "blood_spray" &&
                     human->gibEffect == "blood_gibs" &&
-                    human->decalProfile == "blood_splat" &&
-                    human->poolProfile == "blood_pool" &&
                     human->dripEffect == "blood_drip",
                 "profile 'human' no longer names the effects blood.toml states");
         require(near(human->dripHpFraction, 0.35f) &&
@@ -93,92 +93,18 @@ int main()
             auto it = defs.profiles.find("undead_ichor");
             require(it != defs.profiles.end(),
                     "profile 'undead_ichor' is missing");
-            require(it->second.decalProfile == "ichor_splat" &&
-                        near(it->second.amountScale, 0.7f) &&
+            require(near(it->second.amountScale, 0.7f) &&
                         near(it->second.damageBias, 0.2f),
                     "profile 'undead_ichor' no longer oozes as authored");
-            require(it->second.gibEffect.empty() &&
-                        it->second.poolProfile.empty(),
+            require(it->second.gibEffect.empty(),
                     "profile 'undead_ichor' gained effects it does not state");
         }
-
-        require(defs.decals.size() == 4,
-                "blood.toml no longer defines exactly four decals");
-        // Order is load-bearing: profiles name decals, so decals must arrive in
-        // file order for registration to precede any reference.
-        require(defs.decals[0].id == "blood_splat" &&
-                    defs.decals[1].id == "blood_splat_small" &&
-                    defs.decals[2].id == "blood_pool" &&
-                    defs.decals[3].id == "ichor_splat",
-                "the decal ids or their file order changed");
-
-        const game::BloodDecalDef* splat = findDecal(defs, "blood_splat");
-        require(splat != nullptr, "decal 'blood_splat' is missing");
-        // Every shipped mark must name a texture stem. An empty one resolves to
-        // the base decal material, whose texture unit binds nothing at all, and
-        // the mark renders as black blocks rather than as the flat tinted quad
-        // the field's name suggests -- which is exactly how it shipped.
-        for (const game::BloodDecalDef& decal : defs.decals)
-            require(!decal.desc.texture.empty(),
-                    "a shipped decal has no texture stem; it will render as "
-                    "black blocks, not as a tinted quad");
-        require(near(splat->desc.sizeMin, 0.18f) &&
-                    near(splat->desc.sizeMax, 0.34f),
-                "decal 'blood_splat' size range changed");
-        require(near(splat->desc.colour.x, 0.40f) &&
-                    near(splat->desc.colour.y, 0.03f) &&
-                    near(splat->desc.colour.z, 0.025f) &&
-                    near(splat->desc.colour.w, 0.92f),
-                "decal 'blood_splat' colour changed");
-        require(near(splat->desc.colourJitter.x, 0.06f) &&
-                    near(splat->desc.colourJitter.y, 0.015f) &&
-                    near(splat->desc.colourJitter.z, 0.015f),
-                "decal 'blood_splat' colour jitter changed");
-        require(near(splat->desc.alphaJitter, 0.12f),
-                "decal 'blood_splat' alpha jitter changed");
-        require(near(splat->desc.lifetime, 0.0f) &&
-                    near(splat->desc.fadeTime, 1.5f),
-                "decal 'blood_splat' is no longer permanent-until-evicted");
-        require(near(splat->desc.normalOffset, 0.012f),
-                "decal 'blood_splat' normal offset changed");
-        require(splat->desc.blend == eng::ParticleBlend::Alpha,
-                "decal 'blood_splat' is no longer alpha blended");
-
-        const game::BloodDecalDef* small =
-            findDecal(defs, "blood_splat_small");
-        require(small != nullptr, "decal 'blood_splat_small' is missing");
-        require(near(small->desc.sizeMin, 0.07f) &&
-                    near(small->desc.sizeMax, 0.13f) &&
-                    near(small->desc.lifetime, 45.0f) &&
-                    near(small->desc.fadeTime, 6.0f),
-                "decal 'blood_splat_small' values changed");
-
-        const game::BloodDecalDef* pool = findDecal(defs, "blood_pool");
-        require(pool != nullptr, "decal 'blood_pool' is missing");
-        require(pool->desc.pool, "decal 'blood_pool' stopped pooling");
-        require(near(pool->desc.growthRate, 0.10f) &&
-                    near(pool->desc.maxSize, 1.05f) &&
-                    near(pool->desc.mergeRadius, 0.55f),
-                "decal 'blood_pool' growth or merge tuning changed");
-
-        const game::BloodDecalDef* ichor = findDecal(defs, "ichor_splat");
-        require(ichor != nullptr, "decal 'ichor_splat' is missing");
-        require(ichor->desc.blend == eng::ParticleBlend::Additive,
-                "decal 'ichor_splat' no longer glows additively");
-        require(near(ichor->desc.colour.y, 0.45f),
-                "decal 'ichor_splat' is no longer green");
-        require(near(ichor->desc.lifetime, 30.0f) &&
-                    near(ichor->desc.fadeTime, 5.0f),
-                "decal 'ichor_splat' lifetime changed");
     }
 
     // 2. Defaults. A minimal block must be usable, because the documented way to
     // add a creature is to state only what differs from the norm.
     {
         const std::string path = writeFixture("blood_defaults_test.toml",
-                                              "[[decal]]\n"
-                                              "id = \"bare\"\n"
-                                              "\n"
                                               "[[profile]]\n"
                                               "id = \"bare\"\n");
         game::BloodDefinitions defs;
@@ -187,27 +113,13 @@ int main()
 
         const game::BloodProfile& p = defs.profiles.at("bare");
         require(p.sprayEffect.empty() && p.gibEffect.empty() &&
-                    p.mistEffect.empty() && p.decalProfile.empty() &&
-                    p.poolProfile.empty() && p.dripEffect.empty(),
+                    p.mistEffect.empty() && p.dripEffect.empty(),
                 "an omitted effect name did not default to empty");
         require(near(p.dripHpFraction, 0.35f),
                 "drip_hp_fraction default changed");
         require(near(p.amountScale, 1.0f), "amount_scale default changed");
         require(near(p.damageBias, 0.55f), "damage_bias default changed");
 
-        const eng::DecalProfileDesc reference;
-        const eng::DecalProfileDesc& d = defs.decals.at(0).desc;
-        require(near(d.sizeMin, reference.sizeMin) &&
-                    near(d.sizeMax, reference.sizeMax) &&
-                    near(d.lifetime, reference.lifetime) &&
-                    near(d.fadeTime, reference.fadeTime) &&
-                    near(d.normalOffset, reference.normalOffset) &&
-                    near(d.maxSize, reference.maxSize) &&
-                    d.pool == reference.pool &&
-                    d.randomRotation == reference.randomRotation,
-                "an omitted decal key did not fall back to the struct default");
-        require(d.blend == eng::ParticleBlend::Alpha,
-                "an omitted blend did not default to alpha");
     }
 
     // 3. Clamping. Out-of-range tuning must be corrected at the boundary rather
@@ -254,17 +166,10 @@ int main()
         std::filesystem::remove(absent);
         require(!game::parseBloodDefinitions(absent, missing),
                 "a missing file was reported as a successful parse");
-        require(missing.profiles.empty() && missing.decals.empty(),
+        require(missing.profiles.empty(),
                 "a missing file produced definitions out of nowhere");
 
         const std::string path = writeFixture("blood_malformed_test.toml",
-                                              "[[decal]]\n"
-                                              "size_min = 0.5\n"
-                                              "\n"
-                                              "[[decal]]\n"
-                                              "id = \"weird\"\n"
-                                              "blend = \"screen\"\n"
-                                              "\n"
                                               "[[profile]]\n"
                                               "amount_scale = 3.0\n"
                                               "\n"
@@ -274,10 +179,6 @@ int main()
         game::BloodDefinitions defs;
         require(game::parseBloodDefinitions(path, defs),
                 "bad blocks aborted the whole parse");
-        require(defs.decals.size() == 1 && defs.decals[0].id == "weird",
-                "an id-less decal was not skipped");
-        require(defs.decals[0].desc.blend == eng::ParticleBlend::Alpha,
-                "an unknown blend did not fall back to alpha");
         require(defs.profiles.size() == 1 &&
                     defs.profiles.count("good") == 1,
                 "an id-less profile was not skipped");

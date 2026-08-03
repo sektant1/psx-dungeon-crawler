@@ -186,6 +186,16 @@ bool VulkanDevice::initializeContext()
     mContext.samplerAnisotropy =
         mContext.physical.enable_features_if_present(optionalFeatures);
 
+    // Optional, and asked for separately so a device without it still selects:
+    // only the wireframe debug view needs line-filled polygons.
+    VkPhysicalDeviceFeatures fillModeFeature{};
+    fillModeFeature.fillModeNonSolid = VK_TRUE;
+    mContext.fillModeNonSolid =
+        mContext.physical.enable_features_if_present(fillModeFeature);
+    if (!mContext.fillModeNonSolid)
+        log::warn("rhi(vulkan): no fillModeNonSolid; the wireframe debug view "
+                  "will draw solid");
+
     auto deviceResult = vkb::DeviceBuilder(mContext.physical).build();
     if (!deviceResult) {
         logBootstrapError("creating the Vulkan logical device",

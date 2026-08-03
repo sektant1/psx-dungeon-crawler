@@ -11,7 +11,9 @@ layout(set = 0, binding = 0, std140) uniform SceneUniforms {
     vec4 cameraPositionAndLightCount;
     vec4 ambient;
     vec4 fogColourDensity;
-    vec4 clipParams;          // x = near, y = far
+    vec4 clipParams;
+    mat4 lightViewProjection;
+    vec4 shadowParams;        // enabled, bias, strength, texel          // x = near, y = far
     vec4 lightPositionRange[16];
     vec4 lightColourType[16];
 } scene;

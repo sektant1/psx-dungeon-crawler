@@ -1,89 +1,36 @@
-# Blood: which effects a creature throws and which marks it leaves.
+# Blood: which effects a creature throws.
 #
-# Nothing in engine/ reads this file. The decal system draws generic marks and
-# the particle system throws generic particles; deciding that a "human" bleeds
-# dark red and a construct sheds sparks is a gameplay call, so it lives here and
-# is parsed by game/src/BloodSystem.cpp.
+# Nothing in engine/ reads this file. The particle system throws generic
+# particles; deciding that a "human" bleeds dark red and a construct sheds
+# sparks is a gameplay call, so it lives here and is parsed by
+# game/src/BloodSystem.cpp.
 #
-# Adding a creature type is a [[profile]] block. Adding a new kind of mark is a
-# [[decal]] block. Neither needs C++.
-
-# --- marks ------------------------------------------------------------------
-# Decals are registered with the renderer at load, before any profile can name
-# one, so a typo is reported at startup rather than at the first hit.
-
-[[decal]]
-id = "blood_splat"
-# Texture stem under engine/assets/particles/textures/. Naming one is what gets
-# the mark its own material clone; leaving it empty falls back to the base
-# decal material, whose texture unit binds nothing at all -- which reads as
-# black blocks, not as the flat tinted quad it sounds like.
-texture = "blood_splat"
-size_min = 0.18
-size_max = 0.34
-colour = [0.40, 0.03, 0.025, 0.92]
-# Per-mark jitter keeps a wall of hits from reading as one repeated stamp.
-colour_jitter = [0.06, 0.015, 0.015]
-alpha_jitter = 0.12
-# Permanent until the budget evicts it. A dungeon fight should still show where
-# it happened when the player walks back through.
-lifetime = 0.0
-fade_time = 1.5
-normal_offset = 0.012
-
-[[decal]]
-id = "blood_splat_small"
-texture = "blood_drop"
-size_min = 0.07
-size_max = 0.13
-colour = [0.38, 0.03, 0.025, 0.85]
-colour_jitter = [0.05, 0.01, 0.01]
-alpha_jitter = 0.15
-lifetime = 45.0
-fade_time = 6.0
-normal_offset = 0.010
-
-[[decal]]
-id = "blood_pool"
-texture = "blood_splat"
-size_min = 0.30
-size_max = 0.42
-colour = [0.30, 0.02, 0.018, 0.95]
-colour_jitter = [0.03, 0.01, 0.01]
-alpha_jitter = 0.06
-lifetime = 0.0
-fade_time = 4.0
-# Pools grow and swallow their neighbours instead of stacking. Without the merge
-# radius a body bleeding for a minute becomes a hundred overlapping quads.
-pool = true
-growth_rate = 0.10
-max_size = 1.05
-merge_radius = 0.55
-normal_offset = 0.008
-
-[[decal]]
-id = "ichor_splat"
-texture = "blood_splat"
-size_min = 0.16
-size_max = 0.30
-colour = [0.10, 0.45, 0.22, 0.88]
-colour_jitter = [0.02, 0.07, 0.03]
-alpha_jitter = 0.10
-lifetime = 30.0
-fade_time = 5.0
-# Additive so it glows faintly against the dungeon's dark stone, which is what
-# sells it as something other than blood.
-blend = "additive"
-normal_offset = 0.012
+# Adding a creature type is a [[profile]] block; it needs no C++.
+#
+# Blood is particles and voxel chunks only -- there are no blood decals. Sprays
+# and gibs collide and settle where they land, which is what leaves the mark.
+# A profile with no id match still bleeds: `default` below is the fallback, so
+# every creature bleeds something unless it opts out with blood = "none".
 
 # --- creatures ---------------------------------------------------------------
+
+# The fallback. Anything whose `blood` names no known profile bleeds this, so a
+# new enemy bleeds correctly before anyone remembers to give it a profile, and a
+# typo costs a shade of red rather than all feedback that the hit landed. Use
+# blood = "none" for something that genuinely does not bleed.
+[[profile]]
+id = "default"
+spray_effect = "blood_spray"
+gib_effect = "blood_gibs"
+drip_effect = "blood_drip"
+drip_hp_fraction = 0.35
+amount_scale = 1.0
+damage_bias = 0.55
 
 [[profile]]
 id = "human"
 spray_effect = "blood_spray"
 gib_effect = "blood_gibs"
-decal = "blood_splat"
-pool = "blood_pool"
 drip_effect = "blood_drip"
 drip_hp_fraction = 0.35
 amount_scale = 1.0
@@ -93,8 +40,6 @@ damage_bias = 0.55
 id = "boss"
 spray_effect = "blood_spray"
 gib_effect = "blood_gibs"
-decal = "blood_splat"
-pool = "blood_pool"
 drip_effect = "blood_drip"
 drip_hp_fraction = 0.5
 # A boss bleeds visibly more than a rat without needing its own effects.
@@ -104,7 +49,6 @@ damage_bias = 0.5
 [[profile]]
 id = "undead_ichor"
 spray_effect = "blood_spray"
-decal = "ichor_splat"
 drip_hp_fraction = 0.25
 amount_scale = 0.7
 # Ichor sprays along the surface rather than back at the attacker: it reads as

@@ -1,6 +1,5 @@
 #pragma once
 #include <eng/Handles.h>
-#include <eng/particles/DecalSystem.h>
 
 #include <glm/glm.hpp>
 
@@ -13,45 +12,33 @@ namespace eng { class Renderer; }
 
 namespace game {
 
-// How much blood an event is worth. Severity scales spray count, decal size and
-// whether gibs appear at all, so one call site serves a scratch and a
-// decapitation without the caller naming effects.
+// How much blood an event is worth. Severity scales spray amount and whether
+// gibs appear at all, so one call site serves a scratch and a decapitation
+// without the caller naming effects.
 enum class BloodSeverity { Light, Normal, Heavy };
 
-// One creature's blood: which effects it throws and which marks it leaves.
-// Everything here is a name resolved against the particle library and the decal
-// registry, so a new creature type is a TOML block and no C++ at all.
+// One creature's blood: which effects it throws. Blood is particles and voxel
+// chunks only -- sprays and gibs collide and settle where they land, which is
+// what leaves the mark, so there is no decal here. Every name resolves against
+// the particle library, so a new creature type is a TOML block and no C++.
 struct BloodProfile {
     std::string sprayEffect;   // fine spatter, sprite
     std::string gibEffect;     // chunky voxel debris, Heavy only
     std::string mistEffect;    // optional lingering haze
-    std::string decalProfile;  // mark left where spray lands
-    std::string poolProfile;   // growing pool under a bleeding body
     std::string dripEffect;    // continuous emitter while wounded
 
     // Below this fraction of maximum health the drip emitter runs.
     float dripHpFraction = 0.35f;
-    // Multiplies spray amount and decal size, so a boss bleeds more than a rat
-    // without duplicating every effect.
+    // Multiplies spray amount, so a boss bleeds more than a rat without
+    // duplicating every effect.
     float amountScale = 1.0f;
     // Spray cone bias: 0 follows the surface normal, 1 follows the incoming
     // damage direction. Most creatures want a blend of the two.
     float damageBias = 0.55f;
 };
 
-// One decal profile as the file states it, still paired with the id it will be
-// registered under. Registration order matters -- a profile naming a decal must
-// find it already registered -- so this is a vector rather than a map.
-struct BloodDecalDef {
-    std::string           id;
-    eng::DecalProfileDesc desc;
-};
-
-// Everything blood.toml says, as plain data. Holding DecalProfileDesc here is
-// deliberate: it is a POD of numbers, so carrying it costs nothing and keeps the
-// parser from having to call into a renderer just to hand its results on.
+// Everything blood.toml says, as plain data.
 struct BloodDefinitions {
-    std::vector<BloodDecalDef>                     decals;
     std::unordered_map<std::string, BloodProfile>  profiles;
 };
 
@@ -65,8 +52,14 @@ struct BloodDefinitions {
 // because one typo should not cost the level all of its blood.
 bool parseBloodDefinitions(const std::string& tomlPath, BloodDefinitions& out);
 
-// How much a severity multiplies spray amount and decal size by. Exposed rather
-// than buried in the .cpp so the mapping can be asserted without a renderer.
+// The profile every creature falls back to, and the explicit opt-out for the
+// things that do not bleed (a stone construct chips, it does not spray). Named
+// constants because both blood.toml and enemies.toml spell them.
+inline constexpr const char* kDefaultBlood = "default";
+inline constexpr const char* kNoBlood = "none";
+
+// How much a severity multiplies spray amount by. Exposed rather than buried
+// in the .cpp so the mapping can be asserted without a renderer.
 float bloodSeverityScale(BloodSeverity severity);
 
 // What a damage event is worth, as a fraction of the victim's health rather
@@ -89,8 +82,7 @@ BloodSeverity bloodSeverityFor(float damageDealt, float maxHealth, bool killed);
 class BloodSystem
 {
 public:
-    // Parses profiles and their decal definitions, registering the decals with
-    // the renderer. Returns false if the file is missing or unreadable, in
+    // Parses profiles. Returns false if the file is missing or unreadable, in
     // which case every spawn call becomes a no-op rather than a crash.
     bool load(eng::Renderer& renderer, const std::string& tomlPath);
 
@@ -99,20 +91,6 @@ public:
     void spawnHit(eng::Renderer& renderer, const std::string& profile,
                   glm::vec3 point, glm::vec3 normal, glm::vec3 damageDir,
                   BloodSeverity severity = BloodSeverity::Normal) const;
-
-    // The instant mark, placed on a surface the *caller* has found. Split from
-    // spawnHit because a wound is on a body: a decal is a world-space quad, so
-    // painting it at the wound leaves one hanging in the air where a walking
-    // enemy's chest used to be -- permanently, for the profiles that never
-    // fade. Only the caller can say where the floor under that wound is.
-    void spawnSplat(eng::Renderer& renderer, const std::string& profile,
-                    glm::vec3 surfacePoint, glm::vec3 surfaceNormal) const;
-
-    // A body that has come to rest and is still bleeding. Separate from
-    // spawnHit because a pool grows from one persistent mark rather than
-    // accumulating a fresh decal every frame.
-    void spawnPool(eng::Renderer& renderer, const std::string& profile,
-                   glm::vec3 groundPoint) const;
 
     // --- drip -----------------------------------------------------------
     // A wounded body drips, and unlike a hit that is a *state*: the emitter

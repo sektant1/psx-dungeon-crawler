@@ -409,8 +409,8 @@ visual_role = "feedback"
 # what colour blood is.
 texture = "blood_drop"
 render_mode = "sprite"
-base_width = 0.075
-base_height = 0.075
+base_width = 0.038
+base_height = 0.038
 quota = 96
 loop = false
 burst_count = 34
@@ -420,10 +420,12 @@ rotation_jitter_deg = 180
 # Wide on purpose: every droplet a different size, heading and speed, so a hit
 # reads as a burst rather than as one stamp played twice.
 scale_jitter = 0.8
-# Droplets mark whatever they land on. Without this the spray vanishes in
-# mid-air and the hit leaves nothing behind.
-collide = "decal"
-decal_profile = "blood_splat"
+# Droplets settle where they land rather than stamping a decal: the particles
+# and voxels ARE the blood now, so a spray that vanished on contact would leave
+# a hit with nothing behind it.
+collide = "bounce"
+restitution = 0.10
+friction = 0.85
 [[effect.emitter]]
 direction = [0,1,0]
 angle = 95
@@ -453,8 +455,8 @@ visual_role = "feedback"
 # bright rather than at the colour blood "is".
 material = "Engine/Particles/VoxelSolid"
 render_mode = "voxel"
-base_width = 0.11
-base_height = 0.11
+base_width = 0.055
+base_height = 0.055
 quota = 64
 loop = false
 burst_count = 20
@@ -485,14 +487,15 @@ name = "blood_drip"
 visual_role = "ambient"
 texture = "blood_drop"
 render_mode = "sprite"
-base_width = 0.05
-base_height = 0.07
+base_width = 0.026
+base_height = 0.036
 quota = 32
 loop = true
 acceleration = [0.0, -12.0, 0.0]
 scale_jitter = 0.6
-collide = "decal"
-decal_profile = "blood_splat_small"
+collide = "bounce"
+restitution = 0.08
+friction = 0.9
 [[effect.emitter]]
 direction = [0,-1,0]
 angle = 22

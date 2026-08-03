@@ -28,6 +28,10 @@ struct Material {
     // The legacy PSX_FS_Dungeon variant (DUNGEON_NO_HIGHLIGHT): keeps outlines
     // and creases, but suppresses the stylize highlight wash over stone.
     bool noHighlight = false;
+    // The fragment_program_ref this pass named. Ogre compiles one program per
+    // look; the RHI backend needs the name to pick the equivalent runtime mode
+    // (particle variants especially, which are otherwise indistinguishable).
+    std::string fragmentProgram;
     std::unordered_map<std::string, MaterialValue> params;
 
     glm::vec4 modulate() const;

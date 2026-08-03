@@ -38,16 +38,6 @@ glm::vec3 vec3(const toml::table& t, const char* k, glm::vec3 d)
             float((*a)[2].value_or(double(d.z)))};
 }
 
-eng::ParticleBlend blendMode(const std::string& blend, const std::string& id)
-{
-    if (blend == "alpha") return eng::ParticleBlend::Alpha;
-    if (blend == "additive") return eng::ParticleBlend::Additive;
-    eng::log::warn("BloodSystem: decal '%s' has unknown blend '%s'; "
-                   "using alpha",
-                   id.c_str(), blend.c_str());
-    return eng::ParticleBlend::Alpha;
-}
-
 } // namespace
 
 // Severity is the one knob a call site is expected to pass, so it has to map to
@@ -88,39 +78,6 @@ bool parseBloodDefinitions(const std::string& tomlPath, BloodDefinitions& out)
     }
     const toml::table& root = parsed.table();
 
-    // Decals first: a profile that names one should find it already registered,
-    // so a typo is reported here rather than silently at the first hit.
-    if (const toml::array* decals = root["decal"].as_array()) {
-        for (const toml::node& node : *decals) {
-            const toml::table* t = node.as_table();
-            if (!t) continue;
-            const std::string id = (*t)["id"].value_or(std::string{});
-            if (id.empty()) {
-                eng::log::warn("BloodSystem: decal without an id, skipped");
-                continue;
-            }
-            eng::DecalProfileDesc desc;
-            desc.texture = (*t)["texture"].value_or(std::string{});
-            desc.sizeMin = num(*t, "size_min", desc.sizeMin);
-            desc.sizeMax = num(*t, "size_max", desc.sizeMax);
-            desc.colour = vec4(*t, "colour", desc.colour);
-            desc.colourJitter = vec3(*t, "colour_jitter", desc.colourJitter);
-            desc.alphaJitter = num(*t, "alpha_jitter", desc.alphaJitter);
-            desc.lifetime = num(*t, "lifetime", desc.lifetime);
-            desc.fadeTime = num(*t, "fade_time", desc.fadeTime);
-            desc.pool = (*t)["pool"].value_or(desc.pool);
-            desc.growthRate = num(*t, "growth_rate", desc.growthRate);
-            desc.maxSize = num(*t, "max_size", desc.maxSize);
-            desc.mergeRadius = num(*t, "merge_radius", desc.mergeRadius);
-            desc.normalOffset = num(*t, "normal_offset", desc.normalOffset);
-            desc.randomRotation =
-                (*t)["random_rotation"].value_or(desc.randomRotation);
-            desc.blend = blendMode(
-                (*t)["blend"].value_or(std::string{"alpha"}), id);
-            out.decals.push_back({id, desc});
-        }
-    }
-
     if (const toml::array* profiles = root["profile"].as_array()) {
         for (const toml::node& node : *profiles) {
             const toml::table* t = node.as_table();
@@ -134,8 +91,6 @@ bool parseBloodDefinitions(const std::string& tomlPath, BloodDefinitions& out)
             p.sprayEffect = (*t)["spray_effect"].value_or(std::string{});
             p.gibEffect = (*t)["gib_effect"].value_or(std::string{});
             p.mistEffect = (*t)["mist_effect"].value_or(std::string{});
-            p.decalProfile = (*t)["decal"].value_or(std::string{});
-            p.poolProfile = (*t)["pool"].value_or(std::string{});
             p.dripEffect = (*t)["drip_effect"].value_or(std::string{});
             p.dripHpFraction =
                 std::clamp(num(*t, "drip_hp_fraction", p.dripHpFraction),
@@ -156,12 +111,6 @@ bool BloodSystem::load(eng::Renderer& renderer, const std::string& tomlPath)
     BloodDefinitions defs;
     if (!parseBloodDefinitions(tomlPath, defs)) return false;
 
-    // The only part of loading that needs a renderer: handing the parsed decal
-    // profiles over. Order is preserved from the file so the "decals before
-    // profiles" guarantee documented in blood.toml still holds.
-    for (const BloodDecalDef& decal : defs.decals)
-        renderer.registerDecalProfile(decal.id, decal.desc);
-
     mProfiles = std::move(defs.profiles);
     mLoaded = !mProfiles.empty();
     eng::log::info("BloodSystem: %zu profiles from %s", mProfiles.size(),
@@ -172,6 +121,16 @@ bool BloodSystem::load(eng::Renderer& renderer, const std::string& tomlPath)
 const BloodProfile* BloodSystem::profile(const std::string& id) const
 {
     auto it = mProfiles.find(id);
+    if (it != mProfiles.end())
+        return &it->second;
+    // Everything bleeds unless it says otherwise. An enemy that names no
+    // profile -- or names one that was removed or misspelled -- used to produce
+    // no blood at all, which reads as a missing hit rather than as a design
+    // choice. "none" is the explicit opt-out for things that genuinely do not
+    // bleed, and it is spelled out rather than being the accidental default.
+    if (id == kNoBlood)
+        return nullptr;
+    it = mProfiles.find(kDefaultBlood);
     return it == mProfiles.end() ? nullptr : &it->second;
 }
 
@@ -220,22 +179,9 @@ void BloodSystem::spawnHit(eng::Renderer& renderer, const std::string& id,
     if (!p->mistEffect.empty())
         renderer.spawnParticles(p->mistEffect, point, options);
 
-    // No mark here: the wound is on a body, and the mark belongs on whatever is
-    // under it. Spray droplets carry their own decal profile and stamp what
-    // they land on; spawnSplat is the instant version, for a caller that has
-    // already found the surface.
-}
-
-void BloodSystem::spawnSplat(eng::Renderer& renderer, const std::string& id,
-                             glm::vec3 surfacePoint,
-                             glm::vec3 surfaceNormal) const
-{
-    const BloodProfile* p = profile(id);
-    if (!p || p->decalProfile.empty()) return;
-    const float length = glm::dot(surfaceNormal, surfaceNormal);
-    const glm::vec3 up = length > 1e-6f ? glm::normalize(surfaceNormal)
-                                        : glm::vec3(0.0f, 1.0f, 0.0f);
-    renderer.spawnDecal(p->decalProfile, surfacePoint, up);
+    // No mark is stamped here. Blood is particles and voxel chunks only: the
+    // spray and the gibs collide and settle where they land, and that IS the
+    // mark.
 }
 
 void BloodSystem::updateDrip(eng::Renderer& renderer, uint32_t bleeder,
@@ -249,8 +195,9 @@ void BloodSystem::updateDrip(eng::Renderer& renderer, uint32_t bleeder,
     auto it = mDrips.find(bleeder);
     if (!bleeding) {
         if (it != mDrips.end() && it->second.fx.valid()) {
-            // Stop emitting, but leave the drops already falling: they are what
-            // marks the floor, and cutting them off in mid-air reads as a bug.
+            // Stop emitting, but leave the drops already falling: they are
+            // what marks the floor, and cutting them off in mid-air reads as a
+            // bug.
             renderer.stopParticles(it->second.fx);
             it->second.fx = {};
         }
@@ -275,16 +222,6 @@ void BloodSystem::stopDrip(eng::Renderer& renderer, uint32_t bleeder)
     if (it->second.node.valid())
         renderer.destroyNode(it->second.node);
     mDrips.erase(it);
-}
-
-void BloodSystem::spawnPool(eng::Renderer& renderer, const std::string& id,
-                            glm::vec3 groundPoint) const
-{
-    const BloodProfile* p = profile(id);
-    if (!p || p->poolProfile.empty()) return;
-    // Straight up: a pool lies on the floor regardless of how the body fell.
-    renderer.spawnDecal(p->poolProfile, groundPoint,
-                        glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
 } // namespace game

@@ -152,11 +152,16 @@ struct DepthState {
     CompareOp compare = CompareOp::LessEqual;
 };
 
+// Line mode needs the fillModeNonSolid device feature; backends that lack it
+// fall back to Fill rather than failing to create the pipeline.
+enum class PolygonMode { Fill, Line };
+
 struct PipelineDesc {
     ShaderHandle vertex;
     ShaderHandle fragment;
     VertexLayout vertexLayout;
     PrimitiveTopology topology = PrimitiveTopology::TriangleList;
+    PolygonMode polygonMode = PolygonMode::Fill;
     CullMode cull = CullMode::Back;
     DepthState depth;
     BlendMode blend = BlendMode::Opaque;

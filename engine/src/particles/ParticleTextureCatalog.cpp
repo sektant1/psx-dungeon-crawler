@@ -151,13 +151,47 @@ ParticleTextureCatalog::find(const std::string& stem) const
     return it == mByStem.end() ? nullptr : &mDescs[it->second];
 }
 
+std::string ParticleTextureCatalog::pathFor(const ParticleTextureDesc& desc) const
+{
+    const std::string leaf = fileFor(desc);
+    // The table may spell a path ("sheets/bullet16.png"); index on the leaf.
+    const std::string key = std::filesystem::path(leaf).filename().string();
+    const auto found = mFilesByLeaf.find(key);
+    return found == mFilesByLeaf.end() ? std::string() : found->second;
+}
+
 void ParticleTextureCatalog::scan()
 {
     mDescs.clear();
     mByStem.clear();
+    mFilesByLeaf.clear();
 
     const std::string textureDir = mRoot + "/textures";
     const Overrides overrides = parseOverrides(mRoot);
+
+    // Index every PNG under textures/, at any depth: shared effect sheets live
+    // in a subdirectory but are referenced by bare leaf name.
+    {
+        std::error_code walkError;
+        for (auto it = std::filesystem::recursive_directory_iterator(
+                 textureDir, walkError);
+             it != std::filesystem::recursive_directory_iterator();
+             it.increment(walkError)) {
+            if (walkError)
+                break;
+            if (!it->is_regular_file())
+                continue;
+            std::string ext = it->path().extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return char(std::tolower(c)); });
+            if (ext != ".png")
+                continue;
+            // First wins, matching the sorted top-level walk below: a texture
+            // that owns a file must not be shadowed by a same-named sheet.
+            mFilesByLeaf.emplace(it->path().filename().string(),
+                                 it->path().string());
+        }
+    }
 
     std::error_code ec;
     if (!std::filesystem::is_directory(textureDir, ec)) {

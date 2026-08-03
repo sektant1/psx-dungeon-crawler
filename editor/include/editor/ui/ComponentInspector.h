@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <editor/scene/EntityComponents.h>
 #include <editor/content/GridMath.h>
 #include <editor/content/KitCatalog.h>
@@ -38,6 +39,18 @@ struct InspectorContext {
     // is what it always was.
     const std::vector<MaterialInfo>* materials = nullptr;
     MeshKind meshKind = MeshKind::Unknown;
+
+    // --- live preview ------------------------------------------------------
+    // The editor renders one shared offscreen swatch (a lit sphere for a
+    // material, the running effect for a particle). This panel only asks for a
+    // subject and draws the result, so it stays free of any renderer type.
+    //
+    // `previewTexture` is that swatch's id, 0 when the editor has none yet.
+    // The request callbacks are deduplicated by the editor, so calling one
+    // every frame while a row is hovered costs nothing.
+    uint64_t previewTexture = 0;
+    std::function<void(const std::string&)> requestMaterialPreview;
+    std::function<void(const std::string&)> requestEffectPreview;
 
     // Set by the drawers, read by the caller: `edited` means the document must
     // be touched so the preview follows the drag, `closed` means the widget was

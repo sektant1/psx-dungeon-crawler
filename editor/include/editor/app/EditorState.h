@@ -24,6 +24,13 @@ struct GridState {
     int subdivision = 0;
     bool snap = true;
     float level = 0.0f; // work-plane height in metres
+    // Whether the viewport hides everything above the work plane. Off by
+    // default: `level` is a placement/snap control, and having it silently
+    // decide which storeys are VISIBLE meant a multi-storey scene could only
+    // ever be seen one floor at a time. The cut still exists because a ceiling
+    // becomes a lid over a top-down view, but it is now something the author
+    // asks for rather than a side effect of choosing a work plane.
+    bool cutAboveLevel = false;
 
     static constexpr float kSubdivisions[] = {4.0f, 2.0f, 1.0f, 0.5f};
     static constexpr int kSubdivisionCount = 4;

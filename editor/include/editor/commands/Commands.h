@@ -58,6 +58,10 @@ class EntityEditTransaction
 public:
     bool active() const { return mBefore.has_value(); }
     const AuthorId& id() const { return mId; }
+    // The material as it was when the edit began. The inspector compares it
+    // against the committed value to tell a material change from any other
+    // field, so that one field can fan out across the whole selection.
+    const std::string& beforeMaterial() const;
     void begin(const Entity& before);
     std::optional<Command> commit(const Doc& document, std::string label);
     bool cancel(Doc& document);

@@ -12,6 +12,7 @@
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColour;
 layout(set = 1, binding = 0) uniform sampler2D sourceTexture;
+layout(set = 1, binding = 1) uniform sampler2D bloomTexture;
 
 layout(push_constant) uniform PostConstants {
     vec2 uvScale;
@@ -22,6 +23,7 @@ layout(push_constant) uniform PostConstants {
     vec4 gradeA;          // x desaturate, y contrast, z saturation, w tintStrength
     vec4 gradeB;          // x blackLift, y vignetteStrength, z gradeOn, w ditherOn
     vec4 ditherA;         // x colDepth, y ditherBanding, z ditherDarkFade
+    vec4 bloom;           // x intensity, y enabled, z pixel snap
 } post;
 
 // The 4x4 Bayer matrix that assets/textures/psxdither.png stores (that PNG is
@@ -36,6 +38,25 @@ const float kBayer[16] = float[16](
 
 void main() {
     vec4 base = texture(sourceTexture, uv);
+
+    // Bloom composite. Ogre gives this its own pass (Engine/Psx/BloomComposite
+    // into rt_final); folding it into the top of this shader keeps the legacy
+    // ordering exactly -- the glow is added BEFORE the grade and the dither, so
+    // it is quantized like everything else rather than laid on top crisp -- and
+    // saves a full-screen target and pass.
+    //
+    // bloom.z snaps the lookup to scene-texel centres. The bright/blur targets
+    // are half the scene's resolution, so the bilinear upsample would otherwise
+    // lay a smooth ramp *across* each render pixel: the one gradient in the
+    // chain finer than the pixel grid, and what makes an otherwise crisp
+    // pixel-art frame read as soft around every light source. Snapped, the glow
+    // stays built out of render pixels.
+    if (post.bloom.y > 0.5) {
+        vec2 sceneTexel = 1.0 / vec2(textureSize(sourceTexture, 0));
+        vec2 snapped = (floor(uv / sceneTexel) + 0.5) * sceneTexel;
+        vec3 glow = texture(bloomTexture, mix(uv, snapped, post.bloom.z)).rgb;
+        base.rgb += glow * post.bloom.x;
+    }
 
     if (post.gradeB.z > 0.5) {
         // Moonlit storybook split-tone. Deep values bend toward indigo,

@@ -497,7 +497,8 @@ name     = "Stone Brute"
 category = "Construct - armoured, slow"
 
 [enemy.stone_brute.visual]
-blood = ""        # it is rock; it chips, it does not bleed
+blood = ""        # falls back to the default profile: every enemy bleeds, so a
+                  # hit always reads. Set "none" to opt a creature out entirely.
 
 [enemy.stone_brute.stats.resistances]
 slash    = 0.6

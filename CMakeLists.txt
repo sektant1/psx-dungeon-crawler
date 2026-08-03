@@ -283,7 +283,8 @@ if(ENG_RENDERER STREQUAL "RHI")
       "${CMAKE_CURRENT_BINARY_DIR}/rhi-renderer-shaders")
   set(_eng_renderer_shader_outputs)
   foreach(_shader scene.vert scene.frag fullscreen.vert fullscreen.frag
-                  post.frag stylize.frag particle.vert particle.frag
+                  post.frag stylize.frag bloom_bright.frag bloom_blur.frag surface.vert surface.frag shadow.vert shadow.frag
+                  particle.vert particle.frag
                   imgui.vert imgui.frag)
     get_filename_component(_stage "${_shader}" LAST_EXT)
     string(SUBSTRING "${_stage}" 1 -1 _stage)

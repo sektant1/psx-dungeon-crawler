@@ -396,6 +396,17 @@ private:
     char mParticleFilter[64] = {};
     std::vector<eng::ParticlesHandle> mParticlePreviews;
     float mParticlePreviewScale = 1.0f;
+    // The offscreen swatch has one subject at a time: a lit sphere wearing a
+    // material, or a running particle effect. These route every request through
+    // one place so the Inspector, the Material panel and the Particles panel
+    // hand it over cleanly instead of half-configuring it behind each other.
+    // Both deduplicate, so calling them every frame for a hovered row is free.
+    void requestMaterialPreview(const std::string& material);
+    void requestEffectPreview(const std::string& effect);
+    enum class PreviewSubject { None, Material, Effect };
+    PreviewSubject mPreviewSubject = PreviewSubject::None;
+    std::string mPreviewName;
+
     eng::NodeHandle mParticleThumbnailNode;
     eng::ParticlesHandle mParticleThumbnail;
     std::string mParticleThumbnailEffect;

@@ -15,7 +15,10 @@ namespace eng {
 
 class RenderCore {
 public:
-    enum class SceneTarget { Main, Editor, Thumbnail };
+    // Shadow is a depth-only pass from the sun's point of view, drawn before
+    // Main so the scene can sample it. The renderer treats it as another view
+    // so caster selection stays in the one place that knows what a mesh is.
+    enum class SceneTarget { Main, Editor, Thumbnail, Shadow };
 
     struct View {
         SceneTarget target = SceneTarget::Main;
@@ -56,6 +59,12 @@ public:
         float colourDepth = 255.0f;
         float ditherBanding = 0.0f;
         float ditherDarkFade = 0.0f;
+        bool bloom = false;
+        float bloomThreshold = 0.7f;
+        float bloomIntensity = 0.0f;
+        // 1 = sample the glow at scene-texel centres, keeping it on the pixel
+        // grid; 0 = smooth bilinear, which the PS2/GameCube profiles want.
+        float bloomPixelSnap = 0.0f;
     };
 
     // Pixel-art edge pass, mirroring Engine/Psx/PixelStylize. Defaults are
@@ -111,6 +120,10 @@ public:
     void setRenderResolution(int width, int height);
     void setBackground(glm::vec3 colour);
     void setPostParams(const PostParams& params);
+    // The sun's view-projection for the shadow pass, and whether to run it.
+    void setShadowView(bool enabled, const glm::mat4& lightViewProjection);
+    rhi::TextureHandle shadowTexture() const;
+    rhi::SamplerHandle shadowSampler() const;
     void setStylizeParams(const StylizeParams& params);
 
     void enableOffscreenViewport(int width, int height);

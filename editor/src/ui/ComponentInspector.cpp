@@ -106,6 +106,29 @@ void stringField(const char* label, std::string& value,
     track(context);
 }
 
+// Hovering a row previews its subject in the shared swatch and shows it in the
+// tooltip. Selecting commits. That split is what makes scrubbing a long list to
+// find the right material or effect actually work, and it is the same rule the
+// Material panel's own grid follows.
+void previewTooltip(InspectorContext& context,
+                    const std::function<void(const std::string&)>& request,
+                    const std::string& name, const char* note)
+{
+    if (!ImGui::IsItemHovered() || !request)
+        return;
+    request(name);
+    if (context.previewTexture == 0 && !note)
+        return;
+    ImGui::BeginTooltip();
+    if (context.previewTexture != 0)
+        ImGui::Image(static_cast<ImTextureID>(context.previewTexture),
+                     ImVec2(128.0f, 128.0f));
+    ImGui::TextUnformatted(name.c_str());
+    if (note && *note)
+        ImGui::TextWrapped("%s", note);
+    ImGui::EndTooltip();
+}
+
 void drawMesh(Entity& entity, InspectorContext& context)
 {
     const KitPiece* piece =
@@ -149,11 +172,12 @@ void drawMesh(Entity& entity, InspectorContext& context)
                     entity.material = info.name;
                     context.track(true, true);
                 }
-                if (advice.fit != Fit::Good) {
+                if (advice.fit != Fit::Good)
                     ImGui::PopStyleColor();
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("%s", advice.reason.c_str());
-                }
+                previewTooltip(context, context.requestMaterialPreview,
+                               info.name,
+                               advice.fit != Fit::Good ? advice.reason.c_str()
+                                                       : nullptr);
             }
         } else if (context.materialNames) {
             for (const std::string& option : *context.materialNames) {
@@ -162,6 +186,8 @@ void drawMesh(Entity& entity, InspectorContext& context)
                     entity.material = option;
                     context.track(true, true);
                 }
+                previewTooltip(context, context.requestMaterialPreview, option,
+                               nullptr);
             }
         }
         ImGui::EndCombo();
@@ -242,20 +268,45 @@ void drawLight(Entity& entity, InspectorContext& context)
                                : LightAuthor::Type::Point;
     track(context);
 
-    float energy = std::max({light.colour.r, light.colour.g, light.colour.b});
-    glm::vec3 hue = energy > 1e-4f ? light.colour / energy : glm::vec3(1.0f);
-    bool recombine = false;
+    // A light stores one over-bright colour; the panel edits it as a hue and a
+    // brightness. That split has to be REMEMBERED, not re-derived from the
+    // product each frame, because the decomposition is not unique: deriving
+    // brightness as the largest channel forces the hue's largest channel to 1,
+    // so picking a dim colour silently moved its darkness into the brightness
+    // field, which then jumped under the cursor -- and dragging brightness to
+    // zero collapsed the colour to black and lost the hue for good, handing
+    // back white on the way up.
+    //
+    // Keyed by entity so switching selection re-derives, and re-derived anyway
+    // whenever the stored colour stops matching the split (undo, a preset, or
+    // any other writer).
+    static game::content::AuthorId sSplitOwner;
+    static glm::vec3 sHue{1.0f};
+    static float sEnergy = 1.0f;
+    const glm::vec3 recomposed = sHue * sEnergy;
+    const bool stale = sSplitOwner != entity.id ||
+                       std::abs(recomposed.r - light.colour.r) > 1e-4f ||
+                       std::abs(recomposed.g - light.colour.g) > 1e-4f ||
+                       std::abs(recomposed.b - light.colour.b) > 1e-4f;
+    if (stale) {
+        sSplitOwner = entity.id;
+        sEnergy = std::max({light.colour.r, light.colour.g, light.colour.b});
+        sHue = sEnergy > 1e-4f ? light.colour / sEnergy : glm::vec3(1.0f);
+    }
 
-    if (ImGui::ColorEdit3("colour", &hue.x, ImGuiColorEditFlags_Float))
+    bool recombine = false;
+    if (ImGui::ColorEdit3("colour", &sHue.x, ImGuiColorEditFlags_Float))
         recombine = true;
     track(context);
-    if (ImGui::DragFloat("brightness", &energy, 0.02f, 0.0f, 20.0f, "%.2f",
+    if (ImGui::DragFloat("brightness", &sEnergy, 0.02f, 0.0f, 20.0f, "%.2f",
                          ImGuiSliderFlags_AlwaysClamp))
         recombine = true;
     track(context);
-    if (recombine)
-        light.colour = hue * std::max(energy, 0.0f);
-    if (energy > 1.0f)
+    if (recombine) {
+        sEnergy = std::max(sEnergy, 0.0f);
+        light.colour = sHue * sEnergy;
+    }
+    if (sEnergy > 1.0f)
         ImGui::TextDisabled("above 1.0 -- feeds the bloom pass");
 
     // The presets are the values the game's own lights use. A level author
@@ -509,6 +560,18 @@ void drawSpin(Entity& entity, InspectorContext& context)
 void drawShader(Entity& entity, InspectorContext& context)
 {
     game::content::ShaderAuthor& sh = *entity.shader;
+    // These params modulate the entity's material, so the material swatch is
+    // the subject here too -- the panel above already has it pointed at this
+    // entity, so this only draws it.
+    if (context.previewTexture != 0) {
+        ImGui::Image(static_cast<ImTextureID>(context.previewTexture),
+                     ImVec2(96.0f, 96.0f));
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("tint and rim modulate");
+        ImGui::TextDisabled("the material shown here");
+        ImGui::EndGroup();
+    }
     ImGui::ColorEdit3("tint", &sh.tint.x);
     track(context);
     ImGui::SliderFloat("opacity", &sh.opacity, 0.0f, 1.0f, "%.2f");
@@ -553,12 +616,22 @@ void drawParticles(Entity& entity, InspectorContext& context)
                     fx.effect = name;
                     context.track(true, true);
                 }
+                previewTooltip(context, context.requestEffectPreview, name,
+                               nullptr);
             }
             ImGui::EndCombo();
         }
     } else {
         stringField("effect", fx.effect, context);
         ImGui::TextDisabled("no effect library loaded");
+    }
+    // The assigned effect, running. A particle is motion, so a still frame of
+    // the name tells an author nothing about whether it is the one they meant.
+    if (!fx.effect.empty() && context.requestEffectPreview) {
+        context.requestEffectPreview(fx.effect);
+        if (context.previewTexture != 0)
+            ImGui::Image(static_cast<ImTextureID>(context.previewTexture),
+                         ImVec2(112.0f, 112.0f));
     }
     drawVec3Property("offset", "Offset", "m", fx.offset, glm::vec3(0.0f),
                      0.02f, context);

@@ -226,10 +226,12 @@ bool MaterialLibrary::parse(RenderCore& core, const std::filesystem::path& path,
                                              ? rhi::AddressMode::MirrorRepeat
                                              : rhi::AddressMode::Repeat;
             } else if (token == "fragment_program_ref" && p + 1 < body.size()) {
-                // Compile-time variant in Ogre; here it becomes a per-draw flag
-                // the scene shader encodes into the MRT depth sign.
+                // Compile-time variant in Ogre; here the program name selects a
+                // runtime mode instead (and the dungeon variant becomes a flag
+                // the scene shader encodes into the MRT depth sign).
+                material.fragmentProgram = body[++p];
                 material.noHighlight =
-                    body[++p].find("Dungeon") != std::string::npos;
+                    material.fragmentProgram.find("Dungeon") != std::string::npos;
             } else if (token == "cull_hardware" && p + 1 < body.size()) {
                 const std::string& mode = body[++p];
                 material.cull = mode == "none" ? rhi::CullMode::None

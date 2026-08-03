@@ -80,10 +80,21 @@ struct PostConstants {
     glm::vec4 gradeA{0.0f};  // desaturate, contrast, saturation, tintStrength
     glm::vec4 gradeB{0.0f};  // blackLift, vignetteStrength, gradeOn, ditherOn
     glm::vec4 ditherA{1.0f}; // colDepth, ditherBanding, ditherDarkFade, -
-    float pad[4]{};
+    glm::vec4 bloom{0.0f};   // intensity, enabled, pixelSnap, -
 };
 static_assert(sizeof(PostConstants) == 128,
               "post push constants must cover the fixed RHI push range");
+
+// Bright-pass threshold / blur direction. Same scale/translate prefix as the
+// other blit push shapes so one code path fills it.
+struct BloomConstants {
+    glm::vec2 scale{1.0f};
+    glm::vec2 translate{0.0f};
+    glm::vec4 params{0.0f};
+    float pad[24]{};
+};
+static_assert(sizeof(BloomConstants) == 128,
+              "bloom push constants must cover the fixed RHI push range");
 
 // Pixel-stylize edge pass parameters. Too many to fit the 128-byte push range
 // alongside the blit prefix, so these ride in a uniform block instead; std140
@@ -134,6 +145,17 @@ struct RenderCore::Impl {
     rhi::TextureHandle sceneColour;
     rhi::TextureHandle sceneNormalDepth; // MRT surface 1 for the stylize pass
     rhi::TextureHandle stylizeColour;    // stylizer output, scene resolution
+    // Bright-pass and blur ping-pong, at half the scene resolution (the legacy
+    // chain's 1/6 of the window against its 1/3 scene target).
+    rhi::TextureHandle bloomBright;
+    rhi::TextureHandle bloomBlur;
+    // One directional shadow map, sized once. 1024 is generous for a hard,
+    // short-range shadow at this render resolution and costs one pass.
+    rhi::TextureHandle shadowDepth;
+    rhi::SamplerHandle shadowSamplerHandle;
+    static constexpr uint32_t kShadowSize = 1024;
+    bool shadowEnabled = false;
+    glm::mat4 shadowViewProjection{1.0f};
     rhi::TextureHandle sceneDepth;
     rhi::TextureHandle finalColour;
     rhi::TextureHandle editorColour;
@@ -155,6 +177,16 @@ struct RenderCore::Impl {
     rhi::ShaderHandle imguiFragment;
     rhi::ShaderHandle postFragment;
     rhi::ShaderHandle stylizeFragment;
+    rhi::ShaderHandle bloomBrightFragment;
+    rhi::ShaderHandle bloomBlurFragment;
+    rhi::PipelineHandle bloomBrightPipeline;
+    rhi::PipelineHandle bloomBlurPipeline;
+    uint32_t bloomWidth = 1;
+    uint32_t bloomHeight = 1;
+    // Threshold/intensity/snap as the palette states them; enabled stays false
+    // until the game turns bloom on, and then the passes are skipped entirely.
+    bool bloomEnabled = false;
+    float bloomThreshold = 0.7f;
     rhi::PipelineHandle presentPipeline;
     rhi::PipelineHandle postPipeline;
     rhi::PipelineHandle stylizePipeline;
@@ -215,11 +247,15 @@ struct RenderCore::Impl {
         if (!device)
             return;
         if (finalColour.valid()) device->destroyTexture(finalColour);
+        if (bloomBlur.valid()) device->destroyTexture(bloomBlur);
+        if (bloomBright.valid()) device->destroyTexture(bloomBright);
         if (stylizeColour.valid()) device->destroyTexture(stylizeColour);
         if (sceneNormalDepth.valid()) device->destroyTexture(sceneNormalDepth);
         if (sceneDepth.valid()) device->destroyTexture(sceneDepth);
         if (sceneColour.valid()) device->destroyTexture(sceneColour);
         finalColour = {};
+        bloomBlur = {};
+        bloomBright = {};
         stylizeColour = {};
         sceneNormalDepth = {};
         sceneDepth = {};
@@ -260,6 +296,16 @@ struct RenderCore::Impl {
             "renderer.stylize-colour");
         this->sceneWidth = sceneWidth;
         this->sceneHeight = sceneHeight;
+        bloomWidth = std::max(1u, sceneWidth / 2u);
+        bloomHeight = std::max(1u, sceneHeight / 2u);
+        bloomBright = makeTarget(
+            bloomWidth, bloomHeight, rhi::Format::RGBA8Unorm,
+            rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+            "renderer.bloom-bright");
+        bloomBlur = makeTarget(
+            bloomWidth, bloomHeight, rhi::Format::RGBA8Unorm,
+            rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+            "renderer.bloom-blur");
         finalColour = makeTarget(
             windowWidth, windowHeight, rhi::Format::RGBA8Unorm,
             rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled |
@@ -368,6 +414,12 @@ struct RenderCore::Impl {
         stylizeFragment =
             loadShader(*device, rhi::ShaderStage::Fragment,
                        ENG_RHI_STYLIZE_FRAG_SPV, "renderer.stylize.frag");
+        bloomBrightFragment = loadShader(*device, rhi::ShaderStage::Fragment,
+                                         ENG_RHI_BLOOM_BRIGHT_FRAG_SPV,
+                                         "renderer.bloom-bright.frag");
+        bloomBlurFragment = loadShader(*device, rhi::ShaderStage::Fragment,
+                                       ENG_RHI_BLOOM_BLUR_FRAG_SPV,
+                                       "renderer.bloom-blur.frag");
         imguiVertex = loadShader(*device, rhi::ShaderStage::Vertex,
                                  ENG_RHI_IMGUI_VERT_SPV, "renderer.imgui.vert");
         imguiFragment =
@@ -375,6 +427,7 @@ struct RenderCore::Impl {
                        ENG_RHI_IMGUI_FRAG_SPV, "renderer.imgui.frag");
         if (!fullscreenVertex.valid() || !fullscreenFragment.valid() ||
             !postFragment.valid() || !stylizeFragment.valid() ||
+            !bloomBrightFragment.valid() || !bloomBlurFragment.valid() ||
             !imguiVertex.valid() || !imguiFragment.valid())
             return false;
 
@@ -383,6 +436,12 @@ struct RenderCore::Impl {
         stylizePipeline = makeFullscreenPipeline(
             rhi::Format::RGBA8Unorm, "renderer.stylize-pipeline",
             stylizeFragment);
+        bloomBrightPipeline = makeFullscreenPipeline(
+            rhi::Format::RGBA8Unorm, "renderer.bloom-bright-pipeline",
+            bloomBrightFragment);
+        bloomBlurPipeline = makeFullscreenPipeline(
+            rhi::Format::RGBA8Unorm, "renderer.bloom-blur-pipeline",
+            bloomBlurFragment);
         rhi::BufferDesc stylizeDesc;
         stylizeDesc.size = sizeof(StylizeUniforms);
         stylizeDesc.usage =
@@ -413,6 +472,7 @@ struct RenderCore::Impl {
         imguiPipeline = device->createPipeline(ui);
         return presentPipeline.valid() && postPipeline.valid() &&
                stylizePipeline.valid() && stylizeUniformBuffer.valid() &&
+               bloomBrightPipeline.valid() && bloomBlurPipeline.valid() &&
                imguiPipeline.valid();
     }
 
@@ -508,6 +568,10 @@ struct RenderCore::Impl {
     // Fullscreen-triangle pass. Grew enough knobs (second sampler, off-window
     // target sizes, a uniform block, two push-constant shapes) that positional
     // arguments stopped being readable.
+    // Which push-constant shape the bound pipeline declares. All three share a
+    // scale/translate prefix, so the blit fills that part identically.
+    enum class PushShape { Ui, Post, Bloom };
+
     struct BlitPass {
         rhi::TextureHandle output;   // invalid = swapchain
         rhi::Format outputFormat = rhi::Format::RGBA8Unorm;
@@ -518,7 +582,8 @@ struct RenderCore::Impl {
         bool clear = true;
         const char* name = "renderer.blit";
         bool flipV = false;
-        bool postConstants = false;
+        PushShape push = PushShape::Ui;
+        glm::vec4 bloomParams{0.0f};
         uint32_t width = 0;          // 0 = window size
         uint32_t height = 0;
     };
@@ -549,16 +614,29 @@ struct RenderCore::Impl {
                                       : glm::vec2(1.0f, 1.0f);
         const glm::vec2 translate = flipV ? glm::vec2(0.0f, 1.0f)
                                           : glm::vec2(0.0f, 0.0f);
-        if (blit.postConstants) {
-            PostConstants post = postConstants;
-            post.scale = scale;
-            post.translate = translate;
-            commands.pushConstants(&post, sizeof(post));
-        } else {
-            UiConstants blit;
-            blit.scale = scale;
-            blit.translate = translate;
-            commands.pushConstants(&blit, sizeof(blit));
+        switch (blit.push) {
+            case PushShape::Post: {
+                PostConstants post = postConstants;
+                post.scale = scale;
+                post.translate = translate;
+                commands.pushConstants(&post, sizeof(post));
+                break;
+            }
+            case PushShape::Bloom: {
+                BloomConstants bloom;
+                bloom.scale = scale;
+                bloom.translate = translate;
+                bloom.params = blit.bloomParams;
+                commands.pushConstants(&bloom, sizeof(bloom));
+                break;
+            }
+            default: {
+                UiConstants ui;
+                ui.scale = scale;
+                ui.translate = translate;
+                commands.pushConstants(&ui, sizeof(ui));
+                break;
+            }
         }
         commands.draw(3);
         device->endPass();
@@ -685,7 +763,21 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     sampler.addressU = rhi::AddressMode::ClampToEdge;
     sampler.addressV = rhi::AddressMode::ClampToEdge;
     mImpl->sceneSampler = mImpl->device->createSampler(sampler);
-    if (!mImpl->sceneSampler.valid() || !mImpl->initializePipelines() ||
+    // Linear on the shadow map: the comparison is still a hard threshold, but
+    // filtering the depth lets the four taps in the scene shader soften the
+    // stair-step along a silhouette without turning the shadow soft.
+    rhi::SamplerDesc shadowSampler;
+    shadowSampler.minFilter = rhi::FilterMode::Linear;
+    shadowSampler.magFilter = rhi::FilterMode::Linear;
+    shadowSampler.addressU = rhi::AddressMode::ClampToEdge;
+    shadowSampler.addressV = rhi::AddressMode::ClampToEdge;
+    mImpl->shadowSamplerHandle = mImpl->device->createSampler(shadowSampler);
+    mImpl->shadowDepth = mImpl->makeTarget(
+        Impl::kShadowSize, Impl::kShadowSize, rhi::Format::Depth32Float,
+        rhi::TextureUsage::DepthStencil | rhi::TextureUsage::Sampled,
+        "renderer.shadow-depth");
+    if (!mImpl->shadowSamplerHandle.valid() || !mImpl->shadowDepth.valid() ||
+        !mImpl->sceneSampler.valid() || !mImpl->initializePipelines() ||
         !mImpl->rebuildMainTargets()) {
         shutdown();
         return false;
@@ -764,11 +856,17 @@ void RenderCore::shutdown()
     if (mImpl->imguiVertices.valid()) mImpl->device->destroyBuffer(mImpl->imguiVertices);
     if (mImpl->imguiPipeline.valid()) mImpl->device->destroyPipeline(mImpl->imguiPipeline);
     if (mImpl->presentPipeline.valid()) mImpl->device->destroyPipeline(mImpl->presentPipeline);
+    if (mImpl->shadowDepth.valid()) mImpl->device->destroyTexture(mImpl->shadowDepth);
+    if (mImpl->shadowSamplerHandle.valid()) mImpl->device->destroySampler(mImpl->shadowSamplerHandle);
     if (mImpl->stylizeUniformBuffer.valid()) mImpl->device->destroyBuffer(mImpl->stylizeUniformBuffer);
+    if (mImpl->bloomBlurPipeline.valid()) mImpl->device->destroyPipeline(mImpl->bloomBlurPipeline);
+    if (mImpl->bloomBrightPipeline.valid()) mImpl->device->destroyPipeline(mImpl->bloomBrightPipeline);
     if (mImpl->stylizePipeline.valid()) mImpl->device->destroyPipeline(mImpl->stylizePipeline);
     if (mImpl->postPipeline.valid()) mImpl->device->destroyPipeline(mImpl->postPipeline);
     if (mImpl->imguiFragment.valid()) mImpl->device->destroyShader(mImpl->imguiFragment);
     if (mImpl->imguiVertex.valid()) mImpl->device->destroyShader(mImpl->imguiVertex);
+    if (mImpl->bloomBlurFragment.valid()) mImpl->device->destroyShader(mImpl->bloomBlurFragment);
+    if (mImpl->bloomBrightFragment.valid()) mImpl->device->destroyShader(mImpl->bloomBrightFragment);
     if (mImpl->stylizeFragment.valid()) mImpl->device->destroyShader(mImpl->stylizeFragment);
     if (mImpl->postFragment.valid()) mImpl->device->destroyShader(mImpl->postFragment);
     if (mImpl->fullscreenFragment.valid()) mImpl->device->destroyShader(mImpl->fullscreenFragment);
@@ -854,6 +952,30 @@ void RenderCore::renderFrame(float)
     View mainView;
     // Legacy chain (assets/compositors/psx.compositor):
     //   scene MRT -> PixelStylize -> bloom -> dither -> window.
+    // Depth only, from the sun, before anything samples it.
+    //
+    // Run UNCONDITIONALLY when the target exists, even with shadows off. The
+    // pass is what leaves the texture in a sampleable layout, and the scene
+    // binds it on every draw; skipping the pass left it in the attachment
+    // layout it was created in and every draw of the first frame failed
+    // validation. Disabled, this is a clear with no draws -- and the shader
+    // ignores the result because shadowParams.x is zero.
+    if (mImpl->shadowDepth.valid()) {
+        rhi::RenderPassDesc pass;
+        pass.depth.texture = mImpl->shadowDepth;
+        pass.debugName = "renderer.shadow-pass";
+        rhi::CommandList& commands = mImpl->device->beginPass(pass);
+        commands.setViewport({0, 0, float(Impl::kShadowSize),
+                              float(Impl::kShadowSize), 0, 1});
+        commands.setScissor({0, 0, Impl::kShadowSize, Impl::kShadowSize});
+        if (mImpl->drawScene) {
+            View shadowView;
+            shadowView.target = SceneTarget::Shadow;
+            mImpl->drawScene(commands, shadowView, Impl::kShadowSize,
+                             Impl::kShadowSize);
+        }
+        mImpl->device->endPass();
+    }
     mImpl->scenePass(mImpl->sceneColour, mImpl->sceneDepth, sceneWidth,
                      sceneHeight, mImpl->background, mainView,
                      mImpl->sceneNormalDepth);
@@ -886,6 +1008,50 @@ void RenderCore::renderFrame(float)
     stylize.height = mImpl->sceneHeight;
     mImpl->fullscreenPass(stylize);
 
+    // Bloom: bright-pass then a separable blur, all at half the scene
+    // resolution. The composite is folded into the upscale below rather than
+    // given its own target, which keeps it before the grade and dither exactly
+    // as the legacy chain has it. Skipped entirely when the palette turns bloom
+    // off -- the post shader's own toggle then reads an unwritten target, so
+    // the passes and the flag have to agree.
+    if (mImpl->bloomEnabled) {
+        Impl::BlitPass bright;
+        bright.output = mImpl->bloomBright;
+        bright.pipeline = mImpl->bloomBrightPipeline;
+        bright.source = mImpl->stylizeColour;
+        bright.name = "renderer.bloom-bright-pass";
+        bright.flipV = true;
+        bright.push = Impl::PushShape::Bloom;
+        bright.bloomParams = {mImpl->bloomThreshold, 0.0f, 0.0f, 0.0f};
+        bright.width = mImpl->bloomWidth;
+        bright.height = mImpl->bloomHeight;
+        mImpl->fullscreenPass(bright);
+
+        Impl::BlitPass blurH;
+        blurH.output = mImpl->bloomBlur;
+        blurH.pipeline = mImpl->bloomBlurPipeline;
+        blurH.source = mImpl->bloomBright;
+        blurH.name = "renderer.bloom-blur-h";
+        blurH.flipV = true;
+        blurH.push = Impl::PushShape::Bloom;
+        blurH.bloomParams = {1.0f, 0.0f, 0.0f, 0.0f};
+        blurH.width = mImpl->bloomWidth;
+        blurH.height = mImpl->bloomHeight;
+        mImpl->fullscreenPass(blurH);
+
+        Impl::BlitPass blurV;
+        blurV.output = mImpl->bloomBright;
+        blurV.pipeline = mImpl->bloomBlurPipeline;
+        blurV.source = mImpl->bloomBlur;
+        blurV.name = "renderer.bloom-blur-v";
+        blurV.flipV = true;
+        blurV.push = Impl::PushShape::Bloom;
+        blurV.bloomParams = {0.0f, 1.0f, 0.0f, 0.0f};
+        blurV.width = mImpl->bloomWidth;
+        blurV.height = mImpl->bloomHeight;
+        mImpl->fullscreenPass(blurV);
+    }
+
     // The upscale doubles as the legacy dither/grade compositor pass: it is the
     // one place that sees the finished scene colour at scene resolution while
     // still writing window pixels, so grading, vignette and the ordered dither
@@ -894,9 +1060,13 @@ void RenderCore::renderFrame(float)
     upscale.output = mImpl->finalColour;
     upscale.pipeline = mImpl->postPipeline;
     upscale.source = mImpl->stylizeColour;
+    // Always bound: a descriptor set with a hole is invalid even when the
+    // shader's own toggle would never sample it.
+    upscale.source2 = mImpl->bloomEnabled ? mImpl->bloomBright
+                                          : mImpl->stylizeColour;
     upscale.name = "renderer.upscale-pass";
     upscale.flipV = true;
-    upscale.postConstants = true;
+    upscale.push = Impl::PushShape::Post;
     mImpl->fullscreenPass(upscale);
 
     if (drawData)
@@ -977,6 +1147,22 @@ void RenderCore::setRenderResolution(int width, int height)
 
 void RenderCore::setBackground(glm::vec3 colour) { mImpl->background = colour; }
 
+void RenderCore::setShadowView(bool enabled, const glm::mat4& lightViewProjection)
+{
+    mImpl->shadowEnabled = enabled;
+    mImpl->shadowViewProjection = lightViewProjection;
+}
+
+rhi::TextureHandle RenderCore::shadowTexture() const
+{
+    return mImpl->shadowDepth;
+}
+
+rhi::SamplerHandle RenderCore::shadowSampler() const
+{
+    return mImpl->shadowSamplerHandle;
+}
+
 void RenderCore::setStylizeParams(const StylizeParams& p)
 {
     StylizeUniforms& u = mImpl->stylizeUniforms;
@@ -1008,6 +1194,10 @@ void RenderCore::setPostParams(const PostParams& params)
                    params.grade ? 1.0f : 0.0f, params.dither ? 1.0f : 0.0f};
     post.ditherA = {params.colourDepth, params.ditherBanding,
                     params.ditherDarkFade, 0.0f};
+    post.bloom = {params.bloomIntensity, params.bloom ? 1.0f : 0.0f,
+                  params.bloomPixelSnap, 0.0f};
+    mImpl->bloomEnabled = params.bloom && params.bloomIntensity > 0.0f;
+    mImpl->bloomThreshold = std::clamp(params.bloomThreshold, 0.0f, 0.999f);
 }
 
 void RenderCore::enableOffscreenViewport(int width, int height)

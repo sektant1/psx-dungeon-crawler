@@ -541,15 +541,9 @@ void DungeonApp::bleed(entt::entity victim, glm::vec3 point, glm::vec3 dir,
         mCtx->renderer, profile, point, -dir, dir,
         game::bloodSeverityFor(result.dealt, health ? health->max : 0.0f,
                                result.killed));
-    // The mark lands on the floor under the wound rather than at it: a decal is
-    // a world-space quad and the victim is walking away from where it was hit.
-    // Static geometry only -- the ray starts inside the victim's own capsule,
-    // and anything else would catch it immediately.
-    eng::RayHit ground;
-    if (physics().rayCast(point, glm::vec3(0.0f, -1.0f, 0.0f), 2.6f, ground,
-                          eng::layerMask(game::layer::Static)))
-        mCombat.blood().spawnSplat(mCtx->renderer, profile, ground.point,
-                                   ground.normal);
+    // No floor mark: blood is particles and voxel chunks only now. The spray
+    // and the gibs collide and settle where they land, which is what leaves the
+    // trace -- so the ground raycast that used to place a decal is gone.
 }
 
 void DungeonApp::updateBleeders()
@@ -725,16 +719,21 @@ void DungeonApp::wireEnemies()
                         pos);
             return;
         }
-        // The pool a body leaves where it fell. Read before onKilled, which
-        // hands the corpse to the physics world: from that moment the feet the
-        // AI was tracking are a ragdoll's and no longer where it died.
+        // Where the body fell, read before onKilled hands the corpse to the
+        // physics world: from that moment the feet the AI was tracking are a
+        // ragdoll's and no longer where it died. The death throws one last
+        // spray there -- blood is particles and voxels only, so there is no
+        // pool decal to grow.
         const entt::registry& reg = mCombat.director().registry();
         const game::EnemyMotion* motion = reg.try_get<game::EnemyMotion>(e);
         const std::string blood = bloodProfileFor(e);
         mCombat.blood().stopDrip(mCtx->renderer, entt::to_integral(e));
         mEnemies.onKilled(*mCtx, e, mLastPlayerHitDirection);
         if (motion)
-            mCombat.blood().spawnPool(mCtx->renderer, blood, motion->feet);
+            mCombat.blood().spawnHit(mCtx->renderer, blood, motion->feet,
+                                     glm::vec3(0.0f, 1.0f, 0.0f),
+                                     glm::vec3(0.0f, -1.0f, 0.0f),
+                                     game::BloodSeverity::Heavy);
     });
 }
 
