@@ -1,13 +1,50 @@
-#include <cstdlib>
 #include "Platform.h"
 
 #include <eng/Log.h>
+#include <eng/assets/AssetRoot.h>
+
+#include <cstdlib>
+
+#define STBI_ONLY_PNG
+#include <stb_image.h>
 
 #if !defined(ENG_RENDERER_RHI)
 #include <SDL2/SDL_syswm.h>
 #endif
 
 namespace eng {
+
+namespace {
+
+void setWindowIcon(SDL_Window* window)
+{
+    const auto path = assets::project() / "docs/media/avatar.png";
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    stbi_uc* pixels = stbi_load(path.string().c_str(), &width, &height,
+                                &channels, STBI_rgb_alpha);
+    if (!pixels) {
+        log::warn("Platform: cannot load window icon '%s': %s",
+                  path.string().c_str(), stbi_failure_reason());
+        return;
+    }
+
+    SDL_Surface* icon = SDL_CreateRGBSurfaceWithFormatFrom(
+        pixels, width, height, 32, width * 4, SDL_PIXELFORMAT_RGBA32);
+    if (!icon) {
+        log::warn("Platform: cannot create window icon surface: %s",
+                  SDL_GetError());
+        stbi_image_free(pixels);
+        return;
+    }
+
+    SDL_SetWindowIcon(window, icon);
+    SDL_FreeSurface(icon);
+    stbi_image_free(pixels);
+}
+
+} // namespace
 
 bool Platform::init(const std::string& title, int width, int height)
 {
@@ -43,6 +80,7 @@ bool Platform::init(const std::string& title, int width, int height)
         log::error("Platform: SDL_CreateWindow failed: %s", SDL_GetError());
         return false;
     }
+    setWindowIcon(mWindow);
 #if !defined(ENG_RENDERER_RHI)
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);

@@ -285,11 +285,13 @@ endif()
   add_custom_target(rhi_renderer_shaders
                     DEPENDS ${_eng_renderer_shader_outputs})
 
-add_library(eng_platform STATIC engine/src/platform/Platform.cpp engine/src/platform/Input.cpp
+add_library(eng_platform STATIC engine/src/platform/Platform.cpp
+                                engine/src/platform/ImageDecode.cpp
+                                engine/src/platform/Input.cpp
                                 engine/src/platform/Config.cpp)
 target_include_directories(eng_platform PRIVATE third_party engine/src)
 target_link_libraries(eng_platform PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>"
-                      PRIVATE SDL2::SDL2)
+                      PRIVATE SDL2::SDL2 eng_stb)
 
 # Renderer-independent source-model import. Kept as its own library so runtime,
 # validation CLI, and hermetic tests execute exactly the same Assimp path.

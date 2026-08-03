@@ -2,7 +2,7 @@
 
 
 <p align="center"><img src="docs/media/branding/logo.jpg" alt="Raven Engine" width="900"></p>
-<p align="center"><img src="docs/media/branding/avatar.png" alt="Raven Engine" width="200"></p>
+<p align="center"><img src="docs/media/avatar.png" alt="Raven Engine" width="200"></p>
 
 # Raven Engine
 
@@ -32,17 +32,17 @@
 
 ## Footage
 
-<p align="center"><img src="assets/preview.gif" alt="Portal room running in the engine" width="900"></p>
+<p align="center"><img src="docs/media/footage/preview.gif" alt="Portal room running in the engine" width="900"></p>
 
-<p align="center"><img src="docs/media/engine-demo.gif" alt="Engine rendering demo" width="900"></p>
+<p align="center"><img src="docs/media/footage/engine-demo.gif" alt="Engine rendering demo" width="900"></p>
 
-<p align="center"><img src="docs/media/engine-demo-debug-ui.gif" alt="Engine debug UI" width="900"></p>
+<p align="center"><img src="docs/media/footage/engine-demo-debug-ui.gif" alt="Engine debug UI" width="900"></p>
 
-<p align="center"><img src="docs/media/scene-editor.gif" alt="Scene editor" width="900"></p>
+<p align="center"><img src="docs/media/footage/scene-editor.gif" alt="Scene editor" width="900"></p>
 
-<p align="center"><img src="docs/media/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
+<p align="center"><img src="docs/media/footage/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
 
-<p align="center"><img src="docs/media/ac_vexian.gif" alt="Model viewer turntable" width="600"></p>
+<p align="center"><img src="docs/media/footage/ac_vexian.gif" alt="Model viewer turntable" width="600"></p>
 
 
 ## Build
