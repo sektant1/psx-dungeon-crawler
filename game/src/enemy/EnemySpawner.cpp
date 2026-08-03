@@ -224,6 +224,12 @@ int EnemySpawner::addFromMarkers(const std::vector<Marker>& markers)
         p.enemy = enemyId;
         p.position = m.position;
         p.yaw = m.yaw;
+        // Row by row over the preset's, so a placement's own cue wins where it
+        // states one and the preset keeps the rest: the more specific authoring
+        // is the placement, and it is rarely a whole table.
+        for (const ActorActionInfo& info : actorActions())
+            if (!m.sounds.cue(info.action).empty())
+                p.sounds.set(info.action, m.sounds.cue(info.action));
         add(p);
         ++added;
     }

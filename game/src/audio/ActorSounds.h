@@ -72,6 +72,15 @@ struct ActorActionInfo {
     const char* label; // inspector row
     const char* hint;  // WHEN the runtime plays it, in gameplay terms
     std::uint8_t kinds; // which kinds can perform it
+    // Whether the sound comes from the actor's own body. True for almost
+    // everything: a footstep, a grunt, a swing all happen where the actor is.
+    //
+    // It matters because the player's own body is the listener. Panning the
+    // player's own footstep by where they are looking is the one case 3D audio
+    // is simply wrong, so these emit 2D for the player and 3D for everyone
+    // else. Impact is the exception -- it happens wherever the shot landed,
+    // which for a projectile weapon is across the room.
+    bool ownBody = true;
 };
 
 const std::array<ActorActionInfo, kActorActionCount>& actorActions();

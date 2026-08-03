@@ -246,6 +246,14 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                                          authored.camera->priority,
                                          authored.camera->active});
         }
+        // Mirror components: the authored type IS the runtime one, so the cook
+        // is a copy and there is no field-by-field translation to lose a
+        // setting in.
+        if (authored.firstPerson)
+            built.emplace<eng::ecs::FirstPersonController>(
+                entity, *authored.firstPerson);
+        if (authored.viewmodelRig)
+            built.emplace<game::ViewmodelRig>(entity, *authored.viewmodelRig);
         if (authored.orbit) {
             eng::ecs::Orbit orbit;
             orbit.centre = authored.orbit->centre;

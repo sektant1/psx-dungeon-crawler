@@ -207,8 +207,13 @@ max_distance = 45.0
 max_instances = 8
 priority = "important"
 
+# Named "player.hurt" rather than "player.hit" because an actor's default cue is
+# "<kind>.<action>" and the action an actor performs when it survives a blow is
+# "hurt" -- the same row an enemy fills in. A cue whose id does not follow the
+# convention is reachable only by being named explicitly somewhere, which is the
+# state this catalogue was in for every actor sound.
 [[cue]]
-id = "player.hit"
+id = "player.hurt"
 files = ["audio/feedback/player_hit_01.wav", "audio/feedback/player_hit_02.wav"]
 bus = "warnings"
 gain_db = -1.0
@@ -220,6 +225,269 @@ max_instances = 2
 cooldown_seconds = 0.08
 priority = "critical"
 duck_music_db = -4.0
+
+# --- conventional actor cues -------------------------------------------------
+# An actor's action resolves to "<kind>.<action>" when neither the placed entity
+# nor its type names a cue, so these are the rows every player, NPC and enemy
+# falls back to. They exist here -- rather than only where a weapon or an enemy
+# happens to name one -- so that adding an actor to a level produces sound
+# without touching any table, and so the sound panel's defaults are real.
+#
+# A cue with no files on disk is a counted no-op, not an error: the mix policy,
+# the buses and the concurrency limits are authored now and the takes land
+# later, which is the same staging every cue above is in.
+
+[[cue]]
+id = "player.attack"
+files = ["audio/foley/player_swing_01.wav", "audio/foley/player_swing_02.wav"]
+bus = "weapons"
+gain_db = -5.0
+gain_variation_db = 1.0
+pitch_min = 0.96
+pitch_max = 1.05
+spatial = false
+max_instances = 3
+cooldown_seconds = 0.05
+priority = "normal"
+
+[[cue]]
+id = "player.jump"
+files = ["audio/foley/player_jump_01.wav", "audio/foley/player_jump_02.wav"]
+bus = "sfx"
+gain_db = -8.0
+gain_variation_db = 1.0
+pitch_min = 0.97
+pitch_max = 1.04
+spatial = false
+max_instances = 2
+priority = "low"
+
+[[cue]]
+id = "player.dodge"
+files = ["audio/foley/player_dodge_01.wav", "audio/foley/player_dodge_02.wav"]
+bus = "sfx"
+gain_db = -6.0
+pitch_min = 0.97
+pitch_max = 1.04
+spatial = false
+max_instances = 2
+priority = "normal"
+
+[[cue]]
+id = "player.block"
+files = ["audio/feedback/player_deflect_01.wav",
+         "audio/feedback/player_deflect_02.wav"]
+bus = "warnings"
+gain_db = -1.5
+pitch_min = 0.98
+pitch_max = 1.03
+spatial = false
+max_instances = 2
+priority = "critical"
+duck_music_db = -3.0
+
+[[cue]]
+id = "player.death"
+files = ["audio/feedback/player_death_01.wav"]
+bus = "warnings"
+gain_db = 0.0
+spatial = false
+max_instances = 1
+priority = "critical"
+duck_music_db = -12.0
+
+[[cue]]
+id = "player.impact"
+files = ["audio/weapons/generic_impact_01.wav",
+         "audio/weapons/generic_impact_02.wav"]
+bus = "weapons"
+gain_db = -6.0
+gain_variation_db = 1.0
+pitch_min = 0.94
+pitch_max = 1.06
+spatial = true
+min_distance = 1.0
+max_distance = 40.0
+max_instances = 8
+cooldown_seconds = 0.03
+priority = "normal"
+
+[[cue]]
+id = "enemy.spawn"
+files = ["audio/enemies/spawn_01.wav", "audio/enemies/spawn_02.wav"]
+bus = "sfx"
+gain_db = -5.0
+gain_variation_db = 1.0
+pitch_min = 0.95
+pitch_max = 1.05
+spatial = true
+min_distance = 2.0
+max_distance = 35.0
+max_instances = 6
+priority = "normal"
+
+[[cue]]
+id = "enemy.idle"
+files = [
+  "audio/enemies/idle_01.wav",
+  "audio/enemies/idle_02.wav",
+  "audio/enemies/idle_03.wav",
+]
+bus = "ambience"
+gain_db = -12.0
+gain_variation_db = 1.5
+pitch_min = 0.92
+pitch_max = 1.08
+spatial = true
+min_distance = 1.0
+max_distance = 18.0
+max_instances = 4
+cooldown_seconds = 0.5
+priority = "background"
+
+[[cue]]
+id = "enemy.alert"
+files = ["audio/enemies/alert_01.wav", "audio/enemies/alert_02.wav"]
+bus = "warnings"
+gain_db = -2.5
+gain_variation_db = 0.8
+pitch_min = 0.95
+pitch_max = 1.05
+spatial = true
+min_distance = 2.0
+max_distance = 38.0
+max_instances = 6
+cooldown_seconds = 0.2
+priority = "important"
+
+[[cue]]
+id = "enemy.footstep"
+files = [
+  "audio/enemies/step_01.wav",
+  "audio/enemies/step_02.wav",
+  "audio/enemies/step_03.wav",
+]
+bus = "sfx"
+gain_db = -14.0
+gain_variation_db = 1.5
+pitch_min = 0.93
+pitch_max = 1.07
+spatial = true
+min_distance = 1.0
+max_distance = 20.0
+max_instances = 10
+cooldown_seconds = 0.06
+priority = "low"
+
+[[cue]]
+id = "enemy.attack"
+files = ["audio/enemies/swing_01.wav", "audio/enemies/swing_02.wav"]
+bus = "weapons"
+gain_db = -5.0
+gain_variation_db = 1.0
+pitch_min = 0.95
+pitch_max = 1.05
+spatial = true
+min_distance = 1.5
+max_distance = 30.0
+max_instances = 8
+cooldown_seconds = 0.04
+priority = "normal"
+
+[[cue]]
+id = "enemy.impact"
+files = ["audio/enemies/impact_01.wav", "audio/enemies/impact_02.wav"]
+bus = "weapons"
+gain_db = -5.0
+spatial = true
+min_distance = 1.0
+max_distance = 30.0
+max_instances = 8
+cooldown_seconds = 0.03
+priority = "normal"
+
+[[cue]]
+id = "enemy.block"
+files = ["audio/enemies/block_01.wav", "audio/enemies/block_02.wav"]
+bus = "weapons"
+gain_db = -3.0
+spatial = true
+min_distance = 1.5
+max_distance = 30.0
+max_instances = 6
+priority = "important"
+
+[[cue]]
+id = "enemy.dodge"
+files = ["audio/enemies/dodge_01.wav"]
+bus = "sfx"
+gain_db = -9.0
+spatial = true
+min_distance = 1.0
+max_distance = 22.0
+max_instances = 6
+priority = "low"
+
+[[cue]]
+id = "enemy.land"
+files = ["audio/enemies/land_01.wav"]
+bus = "sfx"
+gain_db = -8.0
+spatial = true
+min_distance = 1.5
+max_distance = 26.0
+max_instances = 6
+priority = "low"
+
+# NPCs share the enemy body-foley language until they have takes of their own;
+# what distinguishes them is Interact, which no other kind performs.
+[[cue]]
+id = "npc.interact"
+files = ["audio/npc/interact_01.wav", "audio/npc/interact_02.wav"]
+bus = "dialogue"
+gain_db = -1.0
+spatial = true
+min_distance = 1.0
+max_distance = 15.0
+max_instances = 2
+priority = "important"
+duck_music_db = -6.0
+
+[[cue]]
+id = "npc.idle"
+files = ["audio/npc/idle_01.wav", "audio/npc/idle_02.wav"]
+bus = "ambience"
+gain_db = -13.0
+pitch_min = 0.95
+pitch_max = 1.05
+spatial = true
+min_distance = 1.0
+max_distance = 16.0
+max_instances = 3
+cooldown_seconds = 0.6
+priority = "background"
+
+[[cue]]
+id = "npc.hurt"
+files = ["audio/npc/hurt_01.wav", "audio/npc/hurt_02.wav"]
+bus = "dialogue"
+gain_db = -3.0
+spatial = true
+min_distance = 1.5
+max_distance = 30.0
+max_instances = 4
+priority = "important"
+
+[[cue]]
+id = "npc.death"
+files = ["audio/npc/death_01.wav"]
+bus = "dialogue"
+gain_db = -1.0
+spatial = true
+min_distance = 2.0
+max_distance = 40.0
+max_instances = 2
+priority = "important"
 
 # All stems within one section must share sample rate, exact length, downbeat and
 # loop points. Different sections must begin/end on the declared bar grid.

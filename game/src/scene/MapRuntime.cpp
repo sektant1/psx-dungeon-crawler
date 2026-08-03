@@ -24,6 +24,16 @@ void materialiseTriggers(entt::registry& reg)
                                           /*sensor=*/true});
     }
 }
+
+// The cue overrides authored on a placement, or an empty set. Every placement
+// query reports them, so a caller never has to know whether the encounter came
+// from a marker or from an EnemySpawn component to honour them.
+ActorSoundSet authoredSounds(const entt::registry& reg, entt::entity entity)
+{
+    if (const ActorSounds* sounds = reg.try_get<ActorSounds>(entity))
+        return sounds->set;
+    return {};
+}
 } // namespace
 
 MapRuntime::MapRuntime(eng::ecs::World& world, uint32_t group)
@@ -152,6 +162,30 @@ std::string MapRuntime::palette() const
     for (const auto entity : mWorld.registry().view<const SceneEnvironment>())
         return mWorld.registry().get<const SceneEnvironment>(entity).palette;
     return {};
+}
+
+MapRuntime::AuthoredPlayerRig MapRuntime::playerRig() const
+{
+    AuthoredPlayerRig rig;
+    const entt::registry& reg = mWorld.registry();
+    // First of each, independently: the two components usually ride the same
+    // camera, but nothing forces that, and a level that puts the rig on its
+    // player spawn instead should still be read.
+    for (const auto entity :
+         reg.view<const eng::ecs::FirstPersonController>()) {
+        const auto& authored =
+            reg.get<const eng::ecs::FirstPersonController>(entity);
+        // `active` is how an author parks a tuning without deleting it.
+        if (!authored.active)
+            continue;
+        rig.controller = authored;
+        break;
+    }
+    for (const auto entity : reg.view<const ViewmodelRig>()) {
+        rig.viewmodel = reg.get<const ViewmodelRig>(entity);
+        break;
+    }
+    return rig;
 }
 
 std::vector<ScenePlacement> MapRuntime::pickupPlacements() const

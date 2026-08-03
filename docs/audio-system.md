@@ -6,7 +6,9 @@ Runtime audio has two layers:
   listener state, voice scheduling, fades, voice limits and backend telemetry.
 - `game::GameAudioSystem` owns authored cue policy, sample variation,
   concurrency/cooldowns, distance culling, gameplay emissions, ducking, player
-  foley and adaptive music.
+  foley timing and adaptive music.
+- `game::ActorAudio` owns *which cue an actor's action plays* — the override
+  chain from placed entity to actor type to convention (see Actor Sounds).
 
 Engine code never names weapons, enemies or music sections. Game code never
 touches `ma_sound`, `ma_engine` or the miniaudio node graph.
@@ -97,6 +99,115 @@ Cue cooldown and concurrency run before backend voice allocation. Inaudible 3D
 cues are culled beyond `max_distance * 1.1`. If global budget is full,
 `eng::Audio` steals oldest voice in lowest eligible priority; critical voices
 are non-stealable. Default budget is 96 and clamps to `8..512`.
+
+## Actor Sounds
+
+An actor is an entity the game treats as somebody: a player, an NPC or an enemy.
+`game::Actor` says which, and it is what gates everything below — scenery,
+props and projectiles carry no `Actor` and therefore make no actor noise.
+
+A level rarely states the kind. It is implied by what is already authored:
+
+| authored | kind |
+|---|---|
+| `player_spawn` | player |
+| `enemy_spawn`, or a marker named `enemy.<id>` | enemy |
+| an explicit `actor` component | whatever it says |
+
+Only an NPC needs the component, because nothing else in the format implies one.
+The cooker resolves the kind once (`game::content::actorKindOf`) and writes
+`Actor`, so the runtime asks one question instead of the three the format grew.
+
+### Actions
+
+`game::ActorAction` is a closed list. Every entry has a call site — the `hint`
+in `ActorSounds.cpp` names the moment it plays — so an author choosing a cue
+gets a sound rather than a field nothing reads.
+
+| action | when | kinds |
+|---|---|---|
+| `spawn` | it appears in the level | all |
+| `idle` | breathing/growl with no target | npc, enemy |
+| `alert` | the beat it notices the player | npc, enemy |
+| `footstep` | per stride on the ground | all |
+| `jump` | leaving the ground under its own power | player |
+| `land` | touching down | all |
+| `telegraph` | the readable wind-up before a swing | npc, enemy |
+| `attack` | the swing or shot leaving the body | all |
+| `impact` | its attack landing on something | all |
+| `hurt` | damage taken and survived | all |
+| `block` | a deflect negating a hit | all |
+| `dodge` | a dodge/dash starting | all |
+| `death` | the killing blow | all |
+| `interact` | the player interacting with it | npc |
+
+A kind only sees the actions it performs: the inspector hides `telegraph` on the
+player and `jump` on an enemy, and `SceneValidate` warns about a row authored
+for an action the kind never takes.
+
+### The override chain
+
+A cue resolves three deep, most specific first:
+
+```text
+the placed entity's table   ActorSounds component, authored per placement
+    -> the actor type's     EnemyDef::sounds, [enemy.<id>.sounds]
+        -> the convention   "<kind>.<action>", e.g. "enemy.death"
+```
+
+An empty row means *not stated*, never *silent* — so adding a sound table to an
+entity changes nothing until a row is filled in. A cue the catalog does not
+define is a counted no-op, which is what makes the convention safe to lean on
+before the takes are recorded.
+
+`game::ActorAudio` walks that chain. Call sites name what happened, not what it
+sounds like:
+
+```cpp
+mActorAudio->play(victim, game::ActorAction::Hurt, point);
+```
+
+A more specific cue the caller already holds — an attack's own
+`telegraph_sound`, a weapon's `fire_sound` — is passed as an override and wins
+over the actor's row; an empty one falls straight through, so no call site
+branches on whether it was authored.
+
+Emissions are 3D except when the sound comes from the player's own body
+(`ActorActionInfo::ownBody`). `impact` is the exception that proves it: the
+shot lands across the room, and forcing that 2D would put it inside the
+player's head.
+
+### Authoring
+
+Per enemy type, in `enemies.toml`, inherited from the archetype row by row:
+
+```toml
+[enemy.knight.sounds]
+death = "enemy.knight.death"   # everything else stays the archetype's
+```
+
+Per placement, in a `.scn` — the Sounds component in the inspector, offered only
+on entities that are actors:
+
+```json
+{ "id": "boss_0001", "enemy_spawn": "knight",
+  "sounds": { "death": "boss.knight.death", "alert": "boss.knight.roar" } }
+```
+
+The placement's table rides through the spawner (`EnemySpawnPoint::sounds`) onto
+the live enemy, because the authored entity and the enemy it produces are
+entities on two different registries.
+
+### Adding an action
+
+1. A row in `kActions` (`game/src/audio/ActorSounds.cpp`), with its `hint` and
+   the kinds that perform it.
+2. The call site that plays it — for an enemy, an `mOnAction` emission in
+   `EnemySystem`; nothing else has to change.
+3. A `[[cue]]` for `<kind>.<action>` in `audio.toml`, so the default is real.
+
+The inspector row, the `.scn` key, the cooked payload and the validator all come
+from that one table entry.
 
 ## Adaptive Music
 

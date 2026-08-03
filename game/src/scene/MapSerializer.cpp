@@ -1,5 +1,6 @@
 #include "MapSerializer.h"
 
+#include <eng/Log.h>
 #include <eng/io/ByteStream.h>
 #include "ComponentRegistry.h"
 
@@ -83,9 +84,22 @@ bool writeMap(const std::string& path, const entt::registry& reg,
     }
     if (!validParentGraph(parentOf)) return false;
 
-    std::unordered_set<uint16_t> registeredTypeIds;
-    for (const eng::ecs::ComponentType& type : types.types())
-        if (!registeredTypeIds.insert(type.stableTypeId).second) return false;
+    // A duplicate stable id is a programming error in whoever built the
+    // registry, not a bad scene -- so it is named. Silently returning false
+    // reported it as "failed to write cooked map" against whatever level
+    // happened to be cooking, which sends you looking through the level.
+    std::unordered_map<uint16_t, const char*> registeredTypeIds;
+    for (const eng::ecs::ComponentType& type : types.types()) {
+        const auto [at, inserted] =
+            registeredTypeIds.emplace(type.stableTypeId, type.name);
+        if (!inserted) {
+            eng::log::error("map: component id %u is claimed by both '%s' and "
+                            "'%s'; a stable id is a file format and cannot be "
+                            "shared",
+                            unsigned(type.stableTypeId), at->second, type.name);
+            return false;
+        }
+    }
 
     ByteWriter w;
     w.u32(uint32_t(order.size()));

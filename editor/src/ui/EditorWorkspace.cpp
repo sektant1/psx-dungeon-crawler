@@ -32,7 +32,27 @@ WorkspacePlan makeWorkspacePlan(float width, float height, float uiScale)
         plan.rightPixels *= squeeze;
     }
 
-    plan.commandBarPixels = 64.0f * std::clamp(uiScale, 0.80f, 1.50f);
+    // Tall enough for the toolbar's two wrapped rows *plus the dock node's own
+    // tab bar*, which is the part the old 64px forgot: the tab took roughly a
+    // third of the node and the controls were drawn into what was left, so the
+    // bottom of every button sat under the panel below it.
+    //
+    // Rows are sized from the ImGui defaults the editor runs with (a ~23px
+    // frame at 1.0 scale) rather than measured, because the workspace is built
+    // before the first frame draws anything.
+    constexpr float kToolbarRowPixels = 26.0f;
+    constexpr float kToolbarRows = 2.0f;
+    constexpr float kDockTabBarPixels = 26.0f;
+    constexpr float kToolbarPaddingPixels = 14.0f;
+    plan.commandBarPixels =
+        (kToolbarRowPixels * kToolbarRows + kDockTabBarPixels +
+         kToolbarPaddingPixels) *
+        std::clamp(uiScale, 0.80f, 1.50f);
+    // ...but never at the workspace's expense. On a short window at 2x text the
+    // requested height is a fifth of the screen; the split clamps it anyway, so
+    // clamping here as well is what keeps the plan honest about what it will
+    // get. The toolbar wraps to fewer visible rows rather than growing.
+    plan.commandBarPixels = std::min(plan.commandBarPixels, height * 0.16f);
     plan.diagnosticsPixels =
         std::clamp(height * 0.18f, 132.0f * density, 192.0f * density);
     return plan;
@@ -77,16 +97,17 @@ void buildEditorWorkspace(std::uint32_t dockspaceId, float width, float height,
         std::clamp(plan.diagnosticsPixels / heightAfterCommand, 0.14f, 0.36f),
         &diagnostics, &centre);
 
-    ImGuiID assets = 0;
-    ImGuiID hierarchy = left;
-    ImGui::DockBuilderSplitNode(left, ImGuiDir_Up, plan.assetBrowserFraction,
-                                &assets, &hierarchy);
-
-    // Reference flow: one asset browser above hierarchy, scene in centre,
-    // selected object on right, diagnostics below scene. Asset modes are
-    // internal tabs, so they cannot fragment dock topology again.
-    ImGui::DockBuilderDockWindow(workspace_window::kAssetBrowser, assets);
-    ImGui::DockBuilderDockWindow(workspace_window::kHierarchy, hierarchy);
+    // Reference flow: the left rail is one node the author tabs between, scene
+    // in centre, selected object on right, diagnostics below scene.
+    //
+    // Asset Browser and Hierarchy were stacked, which split the rail's height
+    // between two lists that are each read top-to-bottom -- so both were short,
+    // and a deep scene meant scrolling a third of a panel while the catalogue
+    // sat half empty above it. They answer different questions ("what can I
+    // place" versus "what is already here") and are never read at once, which
+    // is what a tab is for.
+    ImGui::DockBuilderDockWindow(workspace_window::kAssetBrowser, left);
+    ImGui::DockBuilderDockWindow(workspace_window::kHierarchy, left);
     ImGui::DockBuilderDockWindow(workspace_window::kInspector, right);
     ImGui::DockBuilderDockWindow(workspace_window::kCommandBar, commandBar);
     ImGui::DockBuilderDockWindow(workspace_window::kHudPreview, centre);

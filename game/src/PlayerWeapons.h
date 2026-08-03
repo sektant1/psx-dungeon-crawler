@@ -57,6 +57,12 @@ struct WeaponViewmodelDef {
     std::string handsFireAnimation = "grab.R";
     std::string handsMuzzleJoint = "f_index.03.R";
     glm::vec3 handsMuzzleOffset{0.0f, 0.025f, 0.0f};
+    // Per-weapon nudge on top of the shared rig socket (see ViewmodelRig.h).
+    // Deliberately small and defaulted to identity: the framing the player
+    // learns belongs to [player_viewmodel], a weapon only leans out of it.
+    glm::vec3 handsOffset{0.0f};
+    glm::vec3 handsRotationDegrees{0.0f};
+    float handsScale = 1.0f;
     float glowStrength = 0.6f;
 
     float fireDuration = 0.16f;

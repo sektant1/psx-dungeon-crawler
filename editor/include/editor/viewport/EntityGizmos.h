@@ -45,6 +45,11 @@ enum class GizmoKind {
     // the volume it will see is a framing decision an author can make by
     // looking at it.
     Camera,
+    // Where the first-person hands sit in front of a camera carrying a
+    // ViewmodelRig. The socket is a camera-space offset, so on a placed camera
+    // it is a point nobody can locate from three numbers -- and getting it
+    // wrong is a weapon that clips the floor or floats off screen.
+    ViewmodelSocket,
     // The ring an entity travels. Drawn on the entity's own mark, because the
     // ring is a property of its motion rather than a thing of its own.
     Orbit,

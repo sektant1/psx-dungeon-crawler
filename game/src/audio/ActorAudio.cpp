@@ -70,9 +70,11 @@ bool ActorAudio::play(entt::entity entity, ActorAction action,
 
     AudioEmission emission;
     emission.position = position;
-    // The player's own foley is head-locked: panning a footstep the player
-    // themselves took by where they are looking is the one case 3D is wrong.
-    if (firstPerson || actor->kind == ActorKind::Player)
+    // Head-locked when it is the player's own body making the noise. An impact
+    // is not: it happens where the shot landed, and forcing that 2D would put
+    // a hit across the room inside the player's skull.
+    if (firstPerson || (actor->kind == ActorKind::Player &&
+                        actorActionInfo(action).ownBody))
         emission.spatial = SpatialOverride::Force2D;
     return mAudio->emit(audioCueId(cue), emission) != nullptr;
 }

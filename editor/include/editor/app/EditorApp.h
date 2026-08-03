@@ -215,6 +215,7 @@ private:
     void drawViewportToolbar();
     void drawViewportStats(const eng::FrameContext& f);
     void refreshAudioAssets();
+    void refreshAudioCues();
     void previewAudio(const game::content::AuthorId& entity);
     void stopAudioPreview();
 
@@ -299,6 +300,10 @@ private:
     game::content::AuthorId mAudioPreviewEntity;
     std::string mAudioPreviewSource;
     std::vector<std::string> mAudioAssets;
+    // Cue ids from audio.toml. Rebuilt alongside the clip scan, because both
+    // answer "what sound can this name" and a stale one offers an id that
+    // resolves to nothing.
+    std::vector<std::string> mAudioCues;
     // Held from onStart. The mode switch and the material panel need the
     // renderer outside a frame callback, and the Engine outlives this app.
     eng::Engine* mEngine = nullptr;

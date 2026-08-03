@@ -615,7 +615,9 @@ void GameAudioSystem::updatePlayerFoley(const PlayerFoleyState& state)
             AudioEmission emission;
             emission.position = state.feet;
             emission.spatial = SpatialOverride::Force2D;
-            emit("player.footstep", emission);
+            emit(state.footstepCue.empty() ? std::string_view("player.footstep")
+                                           : std::string_view(state.footstepCue),
+                 emission);
             mImpl->strideDistance = std::fmod(mImpl->strideDistance, stride);
         }
     }
@@ -625,7 +627,9 @@ void GameAudioSystem::updatePlayerFoley(const PlayerFoleyState& state)
         emission.position = state.feet;
         emission.spatial = SpatialOverride::Force2D;
         emission.gainDb = std::clamp(state.horizontalSpeed * 0.3f, 0.0f, 3.0f);
-        emit("player.land", emission);
+        emit(state.landCue.empty() ? std::string_view("player.land")
+                                   : std::string_view(state.landCue),
+             emission);
     }
     mImpl->previousFoley = state;
 }

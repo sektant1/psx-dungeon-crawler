@@ -42,6 +42,7 @@
 
 // --- rendering ---
 #include <eng/ecs/components/Camera.h>
+#include <eng/ecs/components/FirstPersonController.h>
 #include <eng/ecs/components/LightAnimation.h>
 #include <eng/ecs/components/LightColour.h>
 #include <eng/ecs/components/LightRef.h>

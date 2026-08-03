@@ -1,4 +1,6 @@
 #pragma once
+#include "audio/ActorSounds.h"
+
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -46,6 +48,11 @@ struct EnemySpawnPoint {
     float respawnDelay = 0.0f;
     // Delay after arming before the first wave lands (the "they heard you" beat).
     float armDelay = 0.0f;
+
+    // Cue overrides stamped on every enemy this point produces, over whatever
+    // the enemy type authors. Set from an authored placement's sound table;
+    // empty for spawners defined in the spawner TOML, which get the type's.
+    ActorSoundSet sounds;
 };
 
 // Mutable per-spawner state. Split from the definition so the definition stays
@@ -94,6 +101,7 @@ public:
         std::string type;     // full marker name, e.g. "enemy.hollow"
         glm::vec3 position{0.0f};
         float yaw = 0.0f;
+        ActorSoundSet sounds; // authored per-placement cue overrides
     };
     int addFromMarkers(const std::vector<Marker>& markers);
 

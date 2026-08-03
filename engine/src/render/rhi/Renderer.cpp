@@ -3067,15 +3067,22 @@ void Renderer::setCameraClip(float nearDist, float farDist)
     mImpl->env.nearClip = std::clamp(nearDist, 0.001f, 10.0f);
     mImpl->env.farClip = std::max(farDist, mImpl->env.nearClip + 0.01f);
 }
-glm::mat4 Renderer::cameraViewProj() const
+glm::mat4 Renderer::cameraView() const
 {
     const NodeTransform camera = mImpl->worldTransform(mImpl->cameraNode);
-    const glm::mat4 view = glm::inverse(
-        glm::translate(glm::mat4(1), camera.position) *
-        glm::mat4_cast(camera.orientation));
+    return glm::inverse(glm::translate(glm::mat4(1), camera.position) *
+                        glm::mat4_cast(camera.orientation));
+}
+
+glm::mat4 Renderer::cameraProjection() const
+{
     return glm::perspectiveRH_ZO(glm::radians(mImpl->env.fovDeg), 4.0f / 3.0f,
-                                 mImpl->env.nearClip, mImpl->env.farClip) *
-           view;
+                                 mImpl->env.nearClip, mImpl->env.farClip);
+}
+
+glm::mat4 Renderer::cameraViewProj() const
+{
+    return cameraProjection() * cameraView();
 }
 
 bool Renderer::loadMaterialScript(const std::string& path)

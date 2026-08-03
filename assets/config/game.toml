@@ -80,6 +80,42 @@ mouse_sensitivity = 0.002
 # Profile in blood.toml the player bleeds when something lands a hit.
 blood = "human"
 
+# The shared first-person rig: where the hands sit in front of the eye, and how
+# hard each procedural layer is allowed to move them. Every weapon inherits this
+# framing and only leans out of it (hands_offset/hands_rotation/hands_scale in
+# weapons.toml), so a weapon can never drop the hands out of frame.
+#
+# Camera space: +x right, +y up, -z forward. The 180 degree yaw turns the source
+# rig -- authored facing glTF +z -- around to face the way the camera looks.
+#
+# Tune live in the debug console's Viewmodel tab (F1), then paste the block it
+# copies back over this one. Nothing here changes gameplay: aim comes from the
+# camera ray, and the muzzle the projectile leaves from is a joint on the rig.
+[player_viewmodel]
+# Camera space: right / up / forward, with -z ahead. Close to the eye and only
+# slightly low, so the hands read as the player's own.
+offset = [0.0, -0.855, -0.08]
+rotation = [0.0, 180.0, 0.0]
+scale = 0.5
+# Multipliers over the per-weapon feel numbers; 0 mutes a layer everywhere.
+bob_scale = 1.0
+sway_scale = 1.0
+recoil_scale = 1.0
+# Bob is normalised against this speed, so retuning player.speed does not
+# silently retune the walk cycle.
+bob_reference_speed = 6.0
+bob_roll_degrees = 1.4
+# Look sway: the hands lag a mouse flick, clamped so they cannot leave frame,
+# then are pulled back to centre at sway_return per second.
+sway_return = 9.0
+sway_max = 0.05
+sway_roll_degrees = 3.0
+# Touchdown dip. The camera itself is deliberately left alone here.
+landing_dip = 0.055
+landing_recovery = 9.0
+# false freezes every layer at the socket pose -- how you author a placement.
+motion_enabled = true
+
 # User mix values. Settings UI should write these dB values (or map a 0..1
 # slider through linearToDecibels); content-level balancing lives in audio.toml.
 [audio]

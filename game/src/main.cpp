@@ -39,6 +39,7 @@
 #include "combat/DefenseSystem.h"
 #include "combat/FeelComponents.h"
 #include "combat/PoiseSystem.h"
+#include "audio/ActorAudio.h"
 #include "audio/GameAudio.h"
 
 #include <eng/ecs/Components.h>
@@ -174,6 +175,11 @@ private:
 
     float mSpeed = 3.0f;
     float mSens = 0.002f;
+    // The game's own player tuning, from game.toml. A level that authors a
+    // FirstPersonController or a ViewmodelRig overrides these for as long as
+    // it is loaded; leaving the level restores them.
+    eng::ecs::FirstPersonController mConfigController{};
+    game::ViewmodelRig mConfigRig{};
     std::string mPlayerBlood = "human";
     eng::FpsController::DashTuning mDashTuning;
     float mDodgeIframes = 0.22f;
@@ -183,6 +189,9 @@ private:
     std::optional<game::GameContext> mCtx;
     game::CombatSystem mCombat;
     game::GameAudioSystem mGameAudio;
+    // Plays an actor's actions. Constructed once the combat registry exists,
+    // because the override chain it walks lives on that registry.
+    std::optional<game::ActorAudio> mActorAudio;
     bool mCombatReady = false;
     eng::ParticleLibrary mParticles;
     // Owned here so it outlives the renderer that holds a pointer to it.
@@ -191,6 +200,8 @@ private:
     Dummy mDummy;
     bool mDummyAlive = false;
     entt::entity mPlayerEntity = entt::null;
+    // Last frame's stance, so leaving the ground can be detected as an edge.
+    bool mPlayerWasGrounded = true;
     entt::entity mDummyEntity = entt::null;
 
     // Enemies. The library is the authored table, the system owns the live
@@ -311,9 +322,26 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mCtx.emplace(r, physics(), engine.input(), mVocabulary);
 
     // Player controller + three data-authored magical ranged weapons.
-    mPlayerSys.setTuning(mSpeed, mSens);
+    //
+    // The config values become the same struct a scene authors on its camera,
+    // so "the game's defaults" and "this level's override" are one type and
+    // one code path (enterLevel picks between them).
+    mConfigController.moveSpeed = mSpeed;
+    mConfigController.mouseSensitivity = mSens;
+    mConfigController.baseFovDegrees =
+        float(cfg.getNumber("player.fov", 70.0));
+    mConfigController.sprintFovKick =
+        float(cfg.getNumber("player.sprint_fov_kick", 4.0));
+    mConfigController.bobAmount = float(cfg.getNumber("player.bob_amount", 0.025));
+    mConfigController.bobSpeed = float(cfg.getNumber("player.bob_speed", 8.5));
+    mPlayerSys.setControllerTuning(mConfigController);
     mPlayerSys.controller().setDashTuning(mDashTuning);
     mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
+    // Shared first-person rig framing. Read from the file rather than through
+    // eng::Config because the socket and rotation are arrays, which the
+    // flattened config has no getter for (see eng/Config.h).
+    game::loadViewmodelRig(game::assetPath("config/game.toml"), mConfigRig);
+    mPlayerSys.setViewmodelRig(mConfigRig);
     mHud.initialise();
     mHud.configure(cfg);
     mPortalPreviewMode = std::getenv("RAVEN_SHOWCASE_PORTAL") != nullptr ||
@@ -368,16 +396,21 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mCombat.projectiles().setImpactCallback(
         [this](eng::BodyHandle victim, const std::string& payload,
                glm::vec3 direction, glm::vec3 point) {
+            // The weapon's own impact cue over the player's Impact row: what a
+            // bolt sounds like hitting a wall is a property of the bolt, and
+            // the actor's row is what an author reaches for to change every
+            // weapon at once.
+            std::string_view impact;
             for (const game::PlayerWeaponDef& weapon :
                  mPlayerSys.weaponDefinitions()) {
-                if (weapon.payloadId == payload &&
-                    !weapon.projectile.impactSound.empty()) {
-                    game::AudioEmission sound;
-                    sound.position = point;
-                    mGameAudio.emit(weapon.projectile.impactSound, sound);
+                if (weapon.payloadId == payload) {
+                    impact = weapon.projectile.impactSound;
                     break;
                 }
             }
+            if (mActorAudio)
+                mActorAudio->play(mPlayerEntity, game::ActorAction::Impact,
+                                  point, impact);
             playerHit(victim, payload.c_str(), direction, point);
         });
 
@@ -463,6 +496,16 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     mParticles.reregisterAll(r);
     if (mCombatReady)
         mCombat.reloadPresentation(*mCtx);
+    // What this level says about the player, falling back to the config for
+    // whichever half it did not author. Applied before the spawn, because
+    // spawning builds the controller out of the movement numbers.
+    {
+        const game::MapRuntime::AuthoredPlayerRig authored = mLevel.playerRig();
+        mPlayerSys.setControllerTuning(authored.controller ? *authored.controller
+                                                           : mConfigController);
+        mPlayerSys.setViewmodelRig(authored.viewmodel ? *authored.viewmodel
+                                                      : mConfigRig);
+    }
     eng::FpsController& player = mPlayerSys.controller();
     const bool portalPreview = mDepth == 0 && mPortalPreviewMode;
     const float portalYaw = glm::radians(mLevel.dungeon().exitYawDegrees());
@@ -488,6 +531,7 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
             m.type = p.type;
             m.position = p.position;
             m.yaw = glm::yaw(p.rotation);
+            m.sounds = p.sounds;
             markers.push_back(std::move(m));
         }
         mSpawner.addFromMarkers(markers);
@@ -508,6 +552,7 @@ void DungeonApp::wireCombatModel()
     playerHp.current = playerHp.max = 100.0f;
     mPlayerEntity = mCombat.director().addCombatant(
         eng::BodyHandle{}, playerHp, game::Resistances{}, game::Faction::Player);
+    mActorAudio.emplace(mGameAudio, mCombat.director().registry());
 
     game::Health dummyHp;
     dummyHp.current = dummyHp.max = 60.0f;
@@ -527,6 +572,11 @@ void DungeonApp::wireCombatModel()
         creg.emplace<game::Mana>(mPlayerEntity);
         creg.emplace<game::Poise>(mPlayerEntity);
         creg.emplace<game::ActionState>(mPlayerEntity);
+        // The player is an actor like any other, so their foley resolves
+        // through the same table an enemy's does -- which is what lets the
+        // sound panel tune a footstep without a player-only code path.
+        creg.emplace<game::Actor>(mPlayerEntity,
+                                  game::Actor{game::ActorKind::Player});
 
         creg.emplace<game::Stamina>(mDummyEntity);
         creg.emplace<game::ActionState>(mDummyEntity);
@@ -631,15 +681,12 @@ void DungeonApp::playerHit(eng::BodyHandle body, const char* weaponId,
     // Hit reaction. A no-op on anything that is not an enemy, which is how the
     // training dummy keeps working without a branch here.
     mEnemies.notifyHit(victim);
-    if (!result.killed) {
-        if (const game::EnemyTag* tag =
-                mCombat.director().registry().try_get<game::EnemyTag>(victim);
-            tag && tag->def && !tag->def->visual.hurtSound.empty()) {
-            game::AudioEmission sound;
-            sound.position = point;
-            mGameAudio.emit(tag->def->visual.hurtSound, sound);
-        }
-    }
+    // The victim grunts, whatever the victim is: the cue resolves from its own
+    // table, then its type's, then the convention. A hit on a prop or a wall
+    // carries no Actor and therefore emits nothing, which is the branch this
+    // used to spell as an EnemyTag lookup.
+    if (!result.killed && mActorAudio)
+        mActorAudio->play(victim, game::ActorAction::Hurt, point);
 }
 
 glm::vec3 DungeonApp::playerFeet() const
@@ -695,6 +742,17 @@ void DungeonApp::wireEnemies()
     mEnemyLibrary.resolve(mVocabulary);
     mEnemies.init(mEnemyLibrary, mCombat.director());
 
+    // Every noise an enemy makes by acting -- spawning, noticing you, stepping,
+    // landing, swinging -- arrives here as one callback and resolves through
+    // one table. The enemy system names the action; what it sounds like is the
+    // author's, three overrides deep (this placement, this enemy type, the
+    // convention).
+    mEnemies.setActionCallback(
+        [this](entt::entity enemy, game::ActorAction action, glm::vec3 at) {
+            if (mActorAudio)
+                mActorAudio->play(enemy, action, at);
+        });
+
     // An enemy landed a hit on the player. It resolves through the same damage
     // pipeline a player hit does -- one weapon table, one resistance model, one
     // set of i-frames -- which is why a dodge's invulnerability works against
@@ -709,8 +767,12 @@ void DungeonApp::wireEnemies()
         // Deflect first: a clean parry negates the hit and punishes the
         // attacker's poise, and that has to happen before damage is applied.
         if (game::feel::defense::resolveIncoming(reg, mPlayerEntity, enemy,
-                                                 poiseDamage))
+                                                 poiseDamage)) {
+            if (mActorAudio)
+                mActorAudio->play(mPlayerEntity, game::ActorAction::Block,
+                                  point);
             return;
+        }
         const game::WeaponDef& wd = mCombat.director().weapons().get(weapon);
         const game::DamagePacket packet =
             wd.makePacket(enemy, dir, 0.5f); // no crits against the player
@@ -724,25 +786,31 @@ void DungeonApp::wireEnemies()
         // blocked or dodged hit leaves no mark.
         if (result.hitLanded)
             bleed(mPlayerEntity, point, dir, result);
-        if (result.hitLanded) {
-            game::AudioEmission sound;
-            sound.spatial = game::SpatialOverride::Force2D;
-            mGameAudio.emit("player.hit", sound);
+        if (result.hitLanded && mActorAudio) {
+            // Two sounds, two actors: the attacker's blow connecting, and the
+            // player being hurt by it. They are authored separately because a
+            // hit that a heavy armour shrugs off should be able to sound like
+            // the armour rather than like the axe.
+            mActorAudio->play(enemy, game::ActorAction::Impact, point);
+            mActorAudio->play(mPlayerEntity, game::ActorAction::Hurt, point);
         }
     });
     mEnemies.setTelegraphCallback(
-        [this](entt::entity, const game::EnemyAttack& attack, glm::vec3 at) {
+        [this](entt::entity enemy, const game::EnemyAttack& attack,
+               glm::vec3 at) {
             eng::ParticleSpawnOptions options;
             options.lifetimeScale =
                 std::max(0.5f, attack.timing.windup / 0.33f);
-            mCtx->renderer.spawnParticles(
-                attack.telegraphEffect, at + glm::vec3(0.0f, 1.2f, 0.0f),
-                options);
-            if (!attack.telegraphSound.empty()) {
-                game::AudioEmission sound;
-                sound.position = at + glm::vec3(0.0f, 1.2f, 0.0f);
-                mGameAudio.emit(attack.telegraphSound, sound);
-            }
+            const glm::vec3 chest = at + glm::vec3(0.0f, 1.2f, 0.0f);
+            mCtx->renderer.spawnParticles(attack.telegraphEffect, chest,
+                                          options);
+            // The move's own cue beats the actor's, because a windup is a
+            // property of the swing rather than of the swinger -- and an empty
+            // one falls through to the actor's Telegraph row rather than
+            // needing a branch here.
+            if (mActorAudio)
+                mActorAudio->play(enemy, game::ActorAction::Telegraph, chest,
+                                  attack.telegraphSound);
         });
 
     // Death: the combat model decides when something is dead; the enemy system
@@ -768,13 +836,10 @@ void DungeonApp::wireEnemies()
         // pool decal to grow.
         const entt::registry& reg = mCombat.director().registry();
         const game::EnemyMotion* motion = reg.try_get<game::EnemyMotion>(e);
-        const game::EnemyTag* tag = reg.try_get<game::EnemyTag>(e);
         const std::string blood = bloodProfileFor(e);
-        if (motion && tag && tag->def && !tag->def->visual.deathSound.empty()) {
-            game::AudioEmission sound;
-            sound.position = motion->feet + glm::vec3(0.0f, 0.8f, 0.0f);
-            mGameAudio.emit(tag->def->visual.deathSound, sound);
-        }
+        if (motion && mActorAudio)
+            mActorAudio->play(e, game::ActorAction::Death,
+                              motion->feet + glm::vec3(0.0f, 0.8f, 0.0f));
         mCombat.blood().stopDrip(mCtx->renderer, entt::to_integral(e));
         mEnemies.onKilled(*mCtx, e, mLastPlayerHitDirection);
         if (motion)
@@ -815,12 +880,15 @@ void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
                     mCombat.fireWeapon(
                         *mCtx, *weapon, player.eyePosition(), player.forward(),
                         mPlayerSys.projectileMuzzle(mCtx->renderer));
-                    if (!weapon->fireSound.empty()) {
-                        game::AudioEmission sound;
-                        sound.position = player.eyePosition();
-                        sound.spatial = game::SpatialOverride::Force2D;
-                        mGameAudio.emit(weapon->fireSound, sound);
-                    }
+                    // The weapon's own fire cue over the player's Attack row,
+                    // for the same reason the impact one wins: a wand and a
+                    // crossbow do not sound alike, and the actor's row is the
+                    // blanket the author reaches for when they do.
+                    if (mActorAudio)
+                        mActorAudio->play(mPlayerEntity,
+                                          game::ActorAction::Attack,
+                                          player.eyePosition(),
+                                          weapon->fireSound);
                 }
             }
         }
@@ -854,6 +922,21 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     foley.horizontalSpeed = player.horizontalSpeed();
     foley.grounded = player.grounded();
     foley.sprinting = player.sprinting();
+    // Leaving the ground under your own power. Read from the controller rather
+    // than from the jump key so a jump the controller refused (mid-air, no
+    // headroom) makes no noise -- the rule the rest of the foley follows.
+    if (mActorAudio && mPlayerWasGrounded && !player.grounded() &&
+        player.verticalSpeed() > 0.5f)
+        mActorAudio->play(mPlayerEntity, game::ActorAction::Jump, foley.feet);
+    mPlayerWasGrounded = player.grounded();
+    // The player's own sound table decides what a step and a landing are; the
+    // foley layer above decides when they happen.
+    if (mActorAudio) {
+        foley.footstepCue =
+            mActorAudio->cueFor(mPlayerEntity, game::ActorAction::Footstep);
+        foley.landCue =
+            mActorAudio->cueFor(mPlayerEntity, game::ActorAction::Land);
+    }
     mGameAudio.updatePlayerFoley(foley);
 
     game::MusicMixState music;
@@ -976,8 +1059,14 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         {
             entt::registry& creg = mCombat.director().registry();
             game::ActionState& pas = creg.get<game::ActionState>(mPlayerEntity);
-            if (in.wasPressed("deflect"))
-                game::feel::defense::beginDeflect(pas);
+            if (in.wasPressed("deflect") &&
+                game::feel::defense::beginDeflect(pas) && mActorAudio) {
+                // The parry going up, not a parry connecting: the negate itself
+                // plays Block from the hit path, and hearing the guard raise is
+                // what tells the player the window opened.
+                mActorAudio->play(mPlayerEntity, game::ActorAction::Block,
+                                  player.eyePosition());
+            }
             // Preflight combat state before movement. Once both gates pass,
             // beginDodge cannot reject in this single-threaded presentation
             // phase, so movement, stamina cost, action lock and i-frames start
@@ -988,10 +1077,14 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
                                               mDodgeIframes,
                                               mDodgeStamina) &&
                 player.beginDash(player.inputDirection(
-                    eng::FpsController::readCommand(in))))
+                    eng::FpsController::readCommand(in)))) {
                 game::feel::defense::beginDodge(creg, mPlayerEntity,
                                                 mDashTuning.duration,
                                                 mDodgeIframes, mDodgeStamina);
+                if (mActorAudio)
+                    mActorAudio->play(mPlayerEntity, game::ActorAction::Dodge,
+                                      player.eyePosition());
+            }
             if (in.wasPressed("kick") && mDummyAlive && mDummy.alive()) {
                 // Only shove the dummy when it is roughly in front and close.
                 glm::vec3 dpos;
@@ -1014,8 +1107,12 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // stay full-rate: the weapon animation is stepped, the view is not.
     {
         const auto timed = stats().time(PhaseWeapons);
+        // Two deltas on purpose: the authored clips snap on the stepped
+        // channel above, while the rig's own bob/sway/recoil runs at frame
+        // rate. Stepping the placement as well reads as input lag this close
+        // to the eye -- the same reason the camera is never stepped.
         mPlayerSys.updateViewmodels(
-            *mCtx, steps.delta(eng::StepChannel::Viewmodel));
+            *mCtx, steps.delta(eng::StepChannel::Viewmodel), f.dt);
     }
 
     if (std::getenv("RAVEN_PROFILE"))

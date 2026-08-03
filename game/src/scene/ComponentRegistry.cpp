@@ -6,6 +6,36 @@
 
 #include <cmath>
 
+// The first-person rig's field table. Lives beside the registration that uses
+// it, the way the engine keeps its own: the ranges here are what the editor's
+// sliders and the .scn clamp read, so a value nobody can author is a value
+// nobody can ship by accident.
+namespace eng {
+
+template <> FieldSpan fieldsOf<game::ViewmodelRig>()
+{
+    using R = game::ViewmodelRig;
+    static const Field f[] = {
+        ENG_FIELD(R, offset, FieldType::Vec3),
+        ENG_FIELD(R, rotation, FieldType::Vec3),
+        ENG_FIELD_RANGE(R, scale, FieldType::Float, 0.05f, 3.0f),
+        ENG_FIELD_RANGE(R, bobScale, FieldType::Float, 0.0f, 4.0f),
+        ENG_FIELD_RANGE(R, swayScale, FieldType::Float, 0.0f, 4.0f),
+        ENG_FIELD_RANGE(R, recoilScale, FieldType::Float, 0.0f, 4.0f),
+        ENG_FIELD_RANGE(R, bobReferenceSpeed, FieldType::Float, 1.0f, 14.0f),
+        ENG_FIELD_RANGE(R, bobRollDegrees, FieldType::Float, 0.0f, 12.0f),
+        ENG_FIELD_RANGE(R, swayReturn, FieldType::Float, 0.0f, 30.0f),
+        ENG_FIELD_RANGE(R, swayMax, FieldType::Float, 0.0f, 0.25f),
+        ENG_FIELD_RANGE(R, swayRollDegrees, FieldType::Float, 0.0f, 15.0f),
+        ENG_FIELD_RANGE(R, landingDip, FieldType::Float, 0.0f, 0.3f),
+        ENG_FIELD_RANGE(R, landingRecovery, FieldType::Float, 0.5f, 30.0f),
+        ENG_FIELD(R, motionEnabled, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+} // namespace eng
+
 namespace mapio {
 
 namespace {
@@ -183,6 +213,7 @@ void deActorSounds(entt::registry& r, entt::entity e, ByteReader& b,
 }
 
 void serEmpty(const entt::registry&, entt::entity, ByteWriter&) {}
+
 void dePlayerSpawn(entt::registry& r, entt::entity e, ByteReader&, uint32_t)
 { r.emplace_or_replace<game::PlayerSpawn>(e); }
 
@@ -210,11 +241,21 @@ ComponentRegistry buildCore()
     reg.add({"SceneEnvironment", 17, addDefault<game::SceneEnvironment>,
              has<game::SceneEnvironment>, remove<game::SceneEnvironment>,
              serEnvironment, deEnvironment});
-    reg.add({"Actor", 18, addDefault<game::Actor>, has<game::Actor>,
+    // 18..28 belong to the engine (see registerEngineComponents: the engine's
+    // second block starts above the game's 10-17 reservation), so the game
+    // continues at 29. A stable id is a file format and a duplicate is not a
+    // warning: writeMap refuses to emit a map whose registry has two types on
+    // one id, which is a cook that fails with no bad entity to point at.
+    reg.add({"Actor", 29, addDefault<game::Actor>, has<game::Actor>,
              remove<game::Actor>, serActor, deActor});
-    reg.add({"ActorSounds", 19, addDefault<game::ActorSounds>,
+    reg.add({"ActorSounds", 30, addDefault<game::ActorSounds>,
              has<game::ActorSounds>, remove<game::ActorSounds>,
              serActorSounds, deActorSounds});
+    // Authored on the camera the player looks through, next to the engine's
+    // FirstPersonController. One line, because the field table below is the
+    // payload format, the inspector rows and the add-menu entry at once.
+    reg.add(eng::ecs::reflectedComponent<game::ViewmodelRig>("ViewmodelRig",
+                                                             31));
     return reg;
 }
 

@@ -32,7 +32,7 @@ void EnemySpawner::emit(GameContext& ctx, EnemySystem& enemies, int index,
             at += glm::vec3(std::cos(angle) * radius, 0.0f,
                             std::sin(angle) * radius);
         }
-        enemies.spawn(ctx, p.enemy, at, p.yaw, index);
+        enemies.spawn(ctx, p.enemy, at, p.yaw, index, p.sounds);
     }
     eng::log::info("EnemySpawner: '%s' released %d x %s (%d alive)",
                    p.id.empty() ? p.enemy.c_str() : p.id.c_str(), count,

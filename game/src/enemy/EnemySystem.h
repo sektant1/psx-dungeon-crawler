@@ -65,6 +65,16 @@ public:
     using TelegraphFn = std::function<void(entt::entity enemy,
                                            const EnemyAttack&, glm::vec3 at)>;
     using DeathFn = std::function<void(entt::entity enemy, const EnemyDef&)>;
+    // Something the enemy did that the game may want to make a noise about --
+    // it spawned, it noticed you, it took a step, it landed.
+    //
+    // A callback rather than a call into the audio system, for the same reason
+    // TelegraphFn is one: this system knows when an enemy does a thing, and the
+    // game decides what a thing sounds like. It is also what keeps every action
+    // in one vocabulary -- ActorAudio resolves a cue for a player, an NPC and
+    // an enemy the same way, and this system does not learn a second one.
+    using ActionFn =
+        std::function<void(entt::entity enemy, ActorAction, glm::vec3 at)>;
 
     // `library` and `director` must outlive the system. Loading enemies.toml is
     // the caller's job, so a level can swap tables without this owning a file.
@@ -72,9 +82,14 @@ public:
 
     // Spawn `defId` standing on `feetPos`. Returns entt::null on an unknown id
     // (already logged). `spawnerIndex` is bookkeeping for EnemySpawner.
+    //
+    // `sounds` is the placement's own cue overrides, which sit above the
+    // enemy type's own table. Empty -- which is every spawn that did not come
+    // from an authored entity -- leaves the type's table in charge.
     entt::entity spawn(GameContext& ctx, const std::string& defId,
                        glm::vec3 feetPos, float yaw = 0.0f,
-                       int spawnerIndex = -1);
+                       int spawnerIndex = -1,
+                       const ActorSoundSet& sounds = {});
 
     // One fixed step: perception, brains, attack delivery, movement, corpses.
     // `targetFeet` is the player's feet position; `targetValid` false means
@@ -104,6 +119,7 @@ public:
     void setHitPlayerCallback(HitPlayerFn fn) { mOnHitPlayer = std::move(fn); }
     void setTelegraphCallback(TelegraphFn fn) { mOnTelegraph = std::move(fn); }
     void setDeathCallback(DeathFn fn) { mOnDeath = std::move(fn); }
+    void setActionCallback(ActionFn fn) { mOnAction = std::move(fn); }
 
     // Player capsule the attacks test against. Height is the standing height;
     // radius is generous on purpose -- an enemy that whiffs a swing that
@@ -175,6 +191,7 @@ private:
     HitPlayerFn mOnHitPlayer;
     TelegraphFn mOnTelegraph;
     DeathFn mOnDeath;
+    ActionFn mOnAction;
     TargetShape mTarget;
     eng::MeshHandle mBoltMesh;
     std::uint32_t mSpawnCounter = 0;

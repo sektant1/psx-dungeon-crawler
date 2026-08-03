@@ -132,6 +132,28 @@ const std::vector<ComponentType>& table()
          [](Entity& e) { e.camera.reset(); }, always,
          ComponentGroup::Gameplay},
 
+        // The player rig. Both belong on the camera the player looks through,
+        // which is why they sit directly after it in the table: an author who
+        // has just added a camera and means it to be the player's eye finds
+        // the next two rows already under the cursor.
+        {"first_person", "First-Person Controller",
+         "how the player moves and what the lens does",
+         [](const Entity& e) { return e.firstPerson.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.firstPerson = game::content::FirstPersonAuthor{};
+         },
+         [](Entity& e) { e.firstPerson.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        {"viewmodel_rig", "Viewmodel Rig",
+         "where the first-person hands sit and how they move",
+         [](const Entity& e) { return e.viewmodelRig.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.viewmodelRig = game::content::ViewmodelRigAuthor{};
+         },
+         [](Entity& e) { e.viewmodelRig.reset(); }, always,
+         ComponentGroup::Gameplay},
+
         {"audio", "Audio Emitter", "a clip emitted from this entity",
          [](const Entity& e) { return e.audio.has_value(); },
          [](Entity& e, const ComponentDefaults&) {

@@ -25,7 +25,6 @@ struct WorkspacePlan {
     float rightPixels = 0.0f;
     float commandBarPixels = 0.0f;
     float diagnosticsPixels = 0.0f;
-    float assetBrowserFraction = 0.55f;
 };
 
 WorkspacePlan makeWorkspacePlan(float width, float height, float uiScale);

@@ -183,7 +183,12 @@ struct EnemyAttack {
     // from one weapon table: an enemy "weapon" is just a row in it.
     std::string weapon = "sword";
     std::string telegraphEffect = "enemy_attack_telegraph";
-    std::string telegraphSound = "enemy.telegraph";
+    // This move's own windup cue. Empty -- the default -- defers to the actor's
+    // Telegraph row, which defers to its type's, which defers to
+    // "enemy.telegraph". Defaulting it to that id directly would make the
+    // actor's row unreachable: an override that is always set overrides
+    // everything, always.
+    std::string telegraphSound;
     float minRange = 0.0f; // below this the move is not selectable
     float maxRange = 2.2f;
     // Half-angle (degrees) the target must be within for the move to be chosen.

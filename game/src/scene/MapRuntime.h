@@ -1,13 +1,16 @@
 #pragma once
 
 #include <eng/ecs/World.h>
+#include <eng/ecs/components/FirstPersonController.h>
 
+#include "ViewmodelRig.h"
 #include "audio/ActorSounds.h"
 
 #include <entt/entt.hpp>
 #include <functional>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -69,6 +72,20 @@ public:
     // The palette the level asks to be lit and graded with, or empty for the
     // game's default.
     std::string palette() const;
+
+    // The player rig a level authored, if it did: how the body moves and where
+    // the first-person hands sit, both authored on the camera that is the
+    // player's eye (see eng::ecs::FirstPersonController, game::ViewmodelRig).
+    //
+    // Optional per half, because they are separate components an author adds
+    // separately: a level that only wants a wider FOV should not have to
+    // restate the whole viewmodel framing to get one. Absent means the game's
+    // own config, which is every level authored before these existed.
+    struct AuthoredPlayerRig {
+        std::optional<eng::ecs::FirstPersonController> controller;
+        std::optional<ViewmodelRig> viewmodel;
+    };
+    AuthoredPlayerRig playerRig() const;
 
     entt::registry& registry() { return mWorld.registry(); }
     const entt::registry& registry() const { return mWorld.registry(); }

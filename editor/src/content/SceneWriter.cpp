@@ -34,6 +34,62 @@ bool nearlyEqual(const glm::vec3& a, const glm::vec3& b)
            canonical(a.z) == canonical(b.z);
 }
 
+// A reflected component, written as only what differs from its defaults.
+//
+// One helper for every component whose authored type is the runtime one: the
+// portal parameters, the first-person controller and the viewmodel rig were
+// three copies of this loop, and a fourth component should not add a fourth.
+// Writing only the differences is what keeps a scene file readable -- a rig
+// that spells out fourteen numbers on an entity that changed one is a diff
+// nobody can review.
+template <typename T> Json reflectedNode(const T& value)
+{
+    const T defaults;
+    Json node = Json::object();
+    const eng::FieldSpan fields = eng::fieldsOf<T>();
+    for (int i = 0; i < fields.count; ++i) {
+        const eng::Field& f = fields.data[i];
+        const void* now = eng::fieldPtr(&value, f);
+        const void* was = eng::fieldPtr(&defaults, f);
+        switch (f.type) {
+        case eng::FieldType::Float: {
+            const float v = *static_cast<const float*>(now);
+            if (canonical(v) != canonical(*static_cast<const float*>(was)))
+                node[f.name] = canonical(v);
+            break;
+        }
+        case eng::FieldType::Vec3:
+        case eng::FieldType::Colour: {
+            const glm::vec3& v = *static_cast<const glm::vec3*>(now);
+            if (!nearlyEqual(v, *static_cast<const glm::vec3*>(was)))
+                node[f.name] = vec3(v);
+            break;
+        }
+        case eng::FieldType::Bool: {
+            const bool v = *static_cast<const bool*>(now);
+            if (v != *static_cast<const bool*>(was))
+                node[f.name] = v;
+            break;
+        }
+        case eng::FieldType::Int: {
+            const int v = *static_cast<const int*>(now);
+            if (v != *static_cast<const int*>(was))
+                node[f.name] = v;
+            break;
+        }
+        case eng::FieldType::String: {
+            const std::string& v = *static_cast<const std::string*>(now);
+            if (v != *static_cast<const std::string*>(was))
+                node[f.name] = v;
+            break;
+        }
+        case eng::FieldType::Quat:
+            break; // no reflected component carries one yet
+        }
+    }
+    return node;
+}
+
 const char* edgeName(CellPlacement::Edge edge)
 {
     switch (edge) {
@@ -250,48 +306,12 @@ Json writeEntity(const Entity& entity)
             node["active"] = listener.active;
         out["audio_listener"] = std::move(node);
     }
-    if (entity.portal) {
-        const PortalAuthor& portal = *entity.portal;
-        const PortalAuthor defaults;
-        Json node = Json::object();
-        const eng::FieldSpan fields = eng::fieldsOf<PortalAuthor>();
-        for (int i = 0; i < fields.count; ++i) {
-            const eng::Field& f = fields.data[i];
-            const void* now = eng::fieldPtr(&portal, f);
-            const void* was = eng::fieldPtr(&defaults, f);
-            switch (f.type) {
-            case eng::FieldType::Float: {
-                const float v = *static_cast<const float*>(now);
-                if (v != *static_cast<const float*>(was))
-                    node[f.name] = canonical(v);
-                break;
-            }
-            case eng::FieldType::Vec3:
-            case eng::FieldType::Colour: {
-                const glm::vec3& v = *static_cast<const glm::vec3*>(now);
-                if (!nearlyEqual(v, *static_cast<const glm::vec3*>(was)))
-                    node[f.name] = vec3(v);
-                break;
-            }
-            case eng::FieldType::Bool: {
-                const bool v = *static_cast<const bool*>(now);
-                if (v != *static_cast<const bool*>(was))
-                    node[f.name] = v;
-                break;
-            }
-            case eng::FieldType::Int: {
-                const int v = *static_cast<const int*>(now);
-                if (v != *static_cast<const int*>(was))
-                    node[f.name] = v;
-                break;
-            }
-            case eng::FieldType::String:
-            case eng::FieldType::Quat:
-                break; // not authorable in this block
-            }
-        }
-        out["portal"] = std::move(node);
-    }
+    if (entity.portal)
+        out["portal"] = reflectedNode(*entity.portal);
+    if (entity.firstPerson)
+        out["first_person"] = reflectedNode(*entity.firstPerson);
+    if (entity.viewmodelRig)
+        out["viewmodel_rig"] = reflectedNode(*entity.viewmodelRig);
     if (entity.shader) {
         const ShaderAuthor& shader = *entity.shader;
         const ShaderAuthor defaults;

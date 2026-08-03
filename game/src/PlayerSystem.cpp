@@ -12,11 +12,31 @@
 
 namespace game {
 
+void PlayerSystem::setControllerTuning(
+    const eng::ecs::FirstPersonController& tuning)
+{
+    mTuning = tuning;
+    // The live controller too, not just the next spawn: a level transition is
+    // not the only time this changes -- the debug panel and an authored scene
+    // both expect the view to answer immediately.
+    mPlayer.speed() = mTuning.moveSpeed;
+    mPlayer.sensitivity() = mTuning.mouseSensitivity;
+    mPlayer.setBaseFov(mTuning.baseFovDegrees);
+    mPlayer.sprintFovKick() = mTuning.sprintFovKick;
+    mPlayer.bobAmount() = mTuning.bobAmount;
+    mPlayer.bobSpeed() = mTuning.bobSpeed;
+}
+
 void PlayerSystem::spawnAt(GameContext& ctx, glm::vec3 pos)
 {
-    mPlayer.init(ctx.renderer, ctx.physics, pos, mSpeed, mSens,
-                 glm::vec3(-1000.0f), glm::vec3(1000.0f));
+    mPlayer.init(ctx.renderer, ctx.physics, pos, mTuning.moveSpeed,
+                 mTuning.mouseSensitivity, glm::vec3(-1000.0f),
+                 glm::vec3(1000.0f));
     mPlayer.setCeilingHeight(3.0f);
+    // init() rebuilds the controller from scratch, so the lens tuning has to
+    // be pushed again -- otherwise every level transition silently reset FOV
+    // and bob to the engine defaults.
+    setControllerTuning(mTuning);
 }
 
 bool PlayerSystem::loadWeapons(const std::string& definitionsPath)
@@ -99,9 +119,29 @@ std::optional<std::size_t> PlayerSystem::fixedStepWeapons(
     return fired;
 }
 
-void PlayerSystem::updateViewmodels(GameContext& ctx, float dt)
+void PlayerSystem::updateViewmodels(GameContext& ctx, float animationDt,
+                                    float frameDt)
 {
-    mHands.update(ctx.renderer, dt);
+    ViewmodelMotionInput motion;
+    motion.horizontalSpeed = mPlayer.horizontalSpeed();
+    motion.grounded = mPlayer.grounded();
+    motion.lookDelta = mLastLookDelta;
+    mHands.update(ctx.renderer, animationDt, frameDt, motion);
+    // Consumed: look() refills it every frame the player drives the camera, so
+    // holding the last delta would sway the hands forever in a menu.
+    mLastLookDelta = glm::vec2(0.0f);
+}
+
+void PlayerSystem::setViewmodelRig(const ViewmodelRig& tuning)
+{
+    mHands.setRig(tuning);
+}
+
+void PlayerSystem::refreshViewmodel(GameContext& ctx)
+{
+    if (const PlayerWeaponDef* weapon = mWeapons.selected())
+        mHands.refreshFeel(weapon->viewmodel);
+    mHands.applyPose(ctx.renderer);
 }
 
 std::optional<glm::vec3>

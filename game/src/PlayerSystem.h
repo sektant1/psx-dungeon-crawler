@@ -1,5 +1,6 @@
 #pragma once
 #include <eng/controllers/FpsController.h>
+#include <eng/ecs/components/FirstPersonController.h>
 #include "PlayerWeapons.h"
 #include "FirstPersonHands.h"
 
@@ -16,10 +17,15 @@ struct GameContext;
 // Owns player locomotion plus data-driven ranged loadout/runtime presentation.
 class PlayerSystem {
 public:
-    // Movement tunables, read once from config before the first spawn.
-    void setTuning(float speed, float sensitivity) {
-        mSpeed = speed;
-        mSens = sensitivity;
+    // How the player moves and what the lens does. The same struct the scene
+    // format authors on a camera (eng::ecs::FirstPersonController), so a
+    // level's override and the game's config defaults arrive by one path.
+    // Applied to the live controller immediately and again at the next spawn,
+    // which recreates it.
+    void setControllerTuning(const eng::ecs::FirstPersonController& tuning);
+    const eng::ecs::FirstPersonController& controllerTuning() const
+    {
+        return mTuning;
     }
 
     // (Re)spawn the player controller at pos (fresh body/head nodes). Call
@@ -45,9 +51,22 @@ public:
     void sampleWeaponInput(GameContext& ctx, bool enabled);
     std::optional<std::size_t> fixedStepWeapons(GameContext& ctx, Mana& arc,
                                                 bool canFire, float fixedDt);
-    void updateViewmodels(GameContext& ctx, float dt);
+    // `animationDt` is the stepped viewmodel channel, `frameDt` the real frame
+    // delta the procedural rig motion runs on. See FirstPersonHands::update.
+    void updateViewmodels(GameContext& ctx, float animationDt, float frameDt);
     std::optional<glm::vec3>
     projectileMuzzle(const eng::Renderer& renderer) const;
+
+    // Shared first-person rig placement/feel. Authored in game.toml's
+    // [player_viewmodel]; the Viewmodel debug panel edits it in place.
+    void setViewmodelRig(const ViewmodelRig& tuning);
+    ViewmodelRig& viewmodelRig() { return mHands.rig(); }
+    const ViewmodelRig& viewmodelRig() const { return mHands.rig(); }
+    FirstPersonHands& hands() { return mHands; }
+    const FirstPersonHands& hands() const { return mHands; }
+    // Re-applies the selected weapon's feel numbers after a live edit, and
+    // re-poses the rig so a frozen viewmodel still tracks the sliders.
+    void refreshViewmodel(GameContext& ctx);
 
     int weapon() const { return int(mWeapons.selectedIndex()); }
     const PlayerWeaponDef* selectedWeapon() const { return mWeapons.selected(); }
@@ -65,8 +84,7 @@ private:
     PlayerWeaponLibrary mWeaponLibrary;
     WeaponController mWeapons;
     FirstPersonHands mHands;
-    float mSpeed = 3.0f;
-    float mSens = 0.002f;
+    eng::ecs::FirstPersonController mTuning{};
     float mFootstepFxCooldown = 0.0f;
     glm::vec2 mLastLookDelta{0.0f};
     bool mWeaponInputWasEnabled = false;

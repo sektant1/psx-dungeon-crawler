@@ -827,9 +827,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.502200126647949,
+          -6.502200126647949,
           4.0,
-          -9.997099876403809
+          -8.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -850,9 +850,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.500199794769287,
+          -6.500199794769287,
           4.0,
-          -5.997099876403809
+          -4.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -873,9 +873,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.498300075531006,
+          -6.498300075531006,
           4.0,
-          -1.9970999956130981
+          -0.9970999956130981
         ],
         "rotation_degrees": [
           0.0,
@@ -896,9 +896,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.502200126647949,
+          -6.502200126647949,
           8.0,
-          -9.997099876403809
+          -8.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -919,9 +919,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.500199794769287,
+          -6.500199794769287,
           8.0,
-          -5.997099876403809
+          -4.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -942,9 +942,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.498300075531006,
+          -6.498300075531006,
           8.0,
-          -1.9970999956130981
+          -0.9970999956130981
         ],
         "rotation_degrees": [
           0.0,
@@ -965,9 +965,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.502200126647949,
+          -6.502200126647949,
           12.0,
-          -9.997099876403809
+          -8.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -988,9 +988,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.500199794769287,
+          -6.500199794769287,
           12.0,
-          -5.997099876403809
+          -4.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -1011,9 +1011,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.498300075531006,
+          -6.498300075531006,
           12.0,
-          -1.9970999956130981
+          -0.9970999956130981
         ],
         "rotation_degrees": [
           0.0,
@@ -1034,9 +1034,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.502200126647949,
+          -6.502200126647949,
           0.0,
-          -9.997099876403809
+          -8.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -1057,9 +1057,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.500199794769287,
+          -6.500199794769287,
           0.0,
-          -5.997099876403809
+          -4.997099876403809
         ],
         "rotation_degrees": [
           0.0,
@@ -1080,9 +1080,9 @@
       "material": "Game/DungeonFloor",
       "transform": {
         "position": [
-          -5.498300075531006,
+          -6.498300075531006,
           0.0,
-          -1.9970999956130981
+          -0.9970999956130981
         ],
         "rotation_degrees": [
           0.0,

@@ -111,6 +111,16 @@ struct PlayerFoleyState {
     float horizontalSpeed = 0.0f;
     bool grounded = false;
     bool sprinting = false;
+    // Which cue each beat plays. Empty keeps the conventional ids, which is
+    // what a caller with no actor table gets.
+    //
+    // The split is deliberate: *when* a footstep happens is foley timing and
+    // belongs here (stride distance, sprint, the teleport guard), while *what*
+    // it sounds like is the player's actor sound table and belongs to whoever
+    // owns that. Hardcoding the ids here made the player the one actor whose
+    // sounds could not be authored.
+    std::string footstepCue;
+    std::string landCue;
 };
 
 struct GameAudioStats {

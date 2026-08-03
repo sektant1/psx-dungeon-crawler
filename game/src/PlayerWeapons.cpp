@@ -58,38 +58,17 @@ WeaponViewmodelPart part(WeaponPrimitive kind, glm::vec3 position,
     return result;
 }
 
+// The loadout the game falls back to when weapons.toml is missing or malformed.
+//
+// It mirrors that file rather than extending it: a fallback that ships a weapon
+// the authored table does not have is a loadout nobody can tune. The Vesper
+// Spindle used to be here and is archived alongside its authored section in
+// assets/source/archive/weapons/vesper_spindle.toml -- restoring it means
+// pasting that section back and adding its definition here again.
+//
+// Order is the slot order: the first entry is what the player starts holding.
 std::vector<PlayerWeaponDef> defaults()
 {
-    PlayerWeaponDef spindle;
-    spindle.id = "vesper_spindle";
-    spindle.displayName = "VESPER SPINDLE";
-    spindle.discipline = "NEEDLE / PRECISION";
-    spindle.payloadId = "vesper_needle";
-    spindle.trigger = WeaponTrigger::Automatic;
-    spindle.fireInterval = 0.14f;
-    spindle.arcCost = 2.0f;
-    spindle.muzzleEffect = "vesper_muzzle";
-    spindle.fireSound = "weapon.vesper.fire";
-    spindle.projectile.primitive = WeaponPrimitive::Cone;
-    spindle.projectile.visualScale = {0.035f, 0.22f, 0.035f};
-    spindle.projectile.material = "Game/Prototype/ProjectileVesper";
-    spindle.projectile.trailEffect = "vesper_trail";
-    spindle.projectile.impactEffect = "vesper_impact";
-    spindle.projectile.impactSound = "weapon.vesper.impact";
-    spindle.projectile.speed = 72.0f;
-    spindle.projectile.lifetime = 1.1f;
-    spindle.projectile.radius = 0.025f;
-    spindle.viewmodel.parts = {
-        part(WeaponPrimitive::Cylinder, {0, 0, 0}, {0, 0, 0},
-             {0.035f, 0.30f, 0.035f}, "Game/ViewModelVesper"),
-        part(WeaponPrimitive::Sphere, {0, 0.18f, 0}, {0, 0, 0},
-             glm::vec3(0.075f), "Game/ViewModelVesperGlow", true),
-    };
-    spindle.viewmodel.handsIdleAnimation = "finger_gun_idle";
-    spindle.viewmodel.handsDrawAnimation = "finger_gun_fix";
-    spindle.viewmodel.handsFireAnimation = "finger_gun_fire";
-    spindle.viewmodel.handsMuzzleJoint = "f_index.03.R";
-
     PlayerWeaponDef arbalest;
     arbalest.id = "eidolon_arbalest";
     arbalest.displayName = "EIDOLON ARBALEST";
@@ -162,13 +141,17 @@ std::vector<PlayerWeaponDef> defaults()
         part(WeaponPrimitive::Cone, {0.07f, 0.06f, -0.05f}, {-70, 0, 12},
              {0.025f, 0.18f, 0.025f}, "Game/ViewModelTalonGlow", true),
     };
-    talon.viewmodel.handsIdleAnimation = "knife_idle";
-    talon.viewmodel.handsDrawAnimation = "knife_draw";
-    talon.viewmodel.handsFireAnimation = "knife_hit_01";
-    talon.viewmodel.handsMuzzleJoint = "hand.R";
-    talon.viewmodel.handsMuzzleOffset = {0.0f, 0.12f, 0.0f};
+    // The finger-gun set rather than the knife clips: the talon shoots from the
+    // hand, and a stabbing animation reads as a melee weapon that happens to
+    // fire. The muzzle is the index fingertip, where that pose points.
+    talon.viewmodel.handsIdleAnimation = "finger_gun_idle";
+    talon.viewmodel.handsDrawAnimation = "finger_gun_fix";
+    talon.viewmodel.handsFireAnimation = "finger_gun_fire";
+    talon.viewmodel.handsMuzzleJoint = "f_index.03.R";
+    talon.viewmodel.handsMuzzleOffset = {0.0f, 0.025f, 0.0f};
 
-    return {std::move(spindle), std::move(arbalest), std::move(talon)};
+    // Talon first: it is what the player starts with in hand.
+    return {std::move(talon), std::move(arbalest)};
 }
 
 bool valid(const PlayerWeaponDef& def)
@@ -193,10 +176,13 @@ bool valid(const PlayerWeaponDef& def)
                  def.viewmodel.recoilYawDegrees,
                  def.viewmodel.recoilRecovery, def.viewmodel.movementBob,
                  def.viewmodel.movementBobSpeed, def.viewmodel.idleSway,
-                 def.viewmodel.lookSway}) ||
+                 def.viewmodel.lookSway, def.viewmodel.handsScale}) ||
         !finiteVec(def.muzzleOffset) ||
         !finiteVec(def.projectile.visualScale) ||
         !finiteVec(def.viewmodel.handsMuzzleOffset) ||
+        !finiteVec(def.viewmodel.handsOffset) ||
+        !finiteVec(def.viewmodel.handsRotationDegrees) ||
+        def.viewmodel.handsScale <= 0.0f ||
         !finiteVec(def.viewmodel.position) ||
         !finiteVec(def.viewmodel.rotationDegrees) ||
         def.fireInterval <= 0.0f || def.arcCost < 0.0f ||
@@ -318,6 +304,12 @@ bool parseDefinitions(const toml::table& root,
             (*viewmodel)["hands_muzzle_joint"].value_or(std::string{});
         def.viewmodel.handsMuzzleOffset = vector3(
             *viewmodel, "hands_muzzle_offset", def.viewmodel.handsMuzzleOffset);
+        def.viewmodel.handsOffset =
+            vector3(*viewmodel, "hands_offset", def.viewmodel.handsOffset);
+        def.viewmodel.handsRotationDegrees = vector3(
+            *viewmodel, "hands_rotation", def.viewmodel.handsRotationDegrees);
+        def.viewmodel.handsScale =
+            number(*viewmodel, "hands_scale", def.viewmodel.handsScale);
         def.viewmodel.glowStrength =
             number(*viewmodel, "glow_strength", def.viewmodel.glowStrength);
         def.viewmodel.fireDuration =

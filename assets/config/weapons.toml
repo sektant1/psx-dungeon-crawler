@@ -7,66 +7,6 @@
 #   burn magnitude       = damage per second (dealt as fire over `duration`)
 #   stun/root/silence    = magnitude ignored (boolean gate)
 
-[player_weapon.vesper_spindle]
-slot = 0
-name = "VESPER SPINDLE"
-discipline = "NEEDLE / PRECISION"
-payload = "vesper_needle"
-trigger = "automatic"
-fire_interval = 0.14
-arc_cost = 2.0
-projectile_count = 1
-spread_degrees = 0.0
-switch_time = 0.16
-muzzle_offset = [0.18, -0.15, 0.42]
-muzzle_effect = "vesper_muzzle"
-fire_sound = "weapon.vesper.fire"
-[player_weapon.vesper_spindle.projectile]
-shape = "cone"
-visual_scale = [0.035, 0.22, 0.035]
-material = "Game/Prototype/ProjectileVesper"
-trail_effect = "vesper_trail"
-impact_effect = "vesper_impact"
-impact_sound = "weapon.vesper.impact"
-speed = 72.0
-lifetime = 1.10
-radius = 0.025
-mass = 0.06
-gravity_factor = 0.0
-aim_range = 80.0
-[player_weapon.vesper_spindle.viewmodel]
-position = [0.25, -0.26, -0.55]
-rotation = [-8.0, 7.0, 3.0]
-glow_school = "arcane"
-glow_strength = 0.70
-hands_idle_animation = "finger_gun_idle"
-hands_draw_animation = "finger_gun_fix"
-hands_fire_animation = "finger_gun_fire"
-hands_muzzle_joint = "f_index.03.R"
-hands_muzzle_offset = [0.0, 0.025, 0.0]
-fire_duration = 0.14
-recoil_distance = 0.055
-recoil_pitch_degrees = 5.0
-recoil_yaw_degrees = 1.5
-recoil_recovery = 24.0
-movement_bob = 0.010
-movement_bob_speed = 8.0
-idle_sway = 0.004
-look_sway = 0.0011
-[[player_weapon.vesper_spindle.viewmodel.part]]
-shape = "cylinder"
-position = [0.0, 0.0, 0.0]
-rotation = [0.0, 0.0, 0.0]
-scale = [0.035, 0.30, 0.035]
-material = "Game/ViewModelVesper"
-[[player_weapon.vesper_spindle.viewmodel.part]]
-shape = "sphere"
-position = [0.0, 0.18, 0.0]
-rotation = [0.0, 0.0, 0.0]
-scale = [0.075, 0.075, 0.075]
-material = "Game/ViewModelVesperGlow"
-enchanted = true
-
 [player_weapon.eidolon_arbalest]
 slot = 1
 name = "EIDOLON ARBALEST"
@@ -128,7 +68,8 @@ material = "Game/ViewModelEidolonGlow"
 enchanted = true
 
 [player_weapon.riven_talon]
-slot = 2
+# Slot 0: the weapon the player starts with in hand.
+slot = 0
 name = "RIVEN TALON"
 discipline = "SURGE / AGGRESSION"
 payload = "riven_spark"
@@ -159,11 +100,15 @@ position = [0.27, -0.25, -0.52]
 rotation = [-11.0, 10.0, 6.0]
 glow_school = "fire"
 glow_strength = 0.82
-hands_idle_animation = "knife_idle"
-hands_draw_animation = "knife_draw"
-hands_fire_animation = "knife_hit_01"
-hands_muzzle_joint = "hand.R"
-hands_muzzle_offset = [0.0, 0.120, 0.0]
+# The finger-gun set, shared with the loadout's other pointed weapon rather
+# than the knife clips this used: the talon fires a projectile from the hand,
+# and a stabbing animation reads as a melee weapon that happens to shoot.
+hands_idle_animation = "finger_gun_idle"
+hands_draw_animation = "finger_gun_fix"
+hands_fire_animation = "finger_gun_fire"
+# The index fingertip, which is where the finger-gun pose points.
+hands_muzzle_joint = "f_index.03.R"
+hands_muzzle_offset = [0.0, 0.025, 0.0]
 fire_duration = 0.11
 recoil_distance = 0.08
 recoil_pitch_degrees = 9.0

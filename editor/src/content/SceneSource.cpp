@@ -726,6 +726,24 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
             return false;
         out.portal = portal;
     }
+    // The player rig: both components are reflected, so the accepted keys are
+    // their own field names and there is no parser here to fall behind them.
+    if (source.contains("first_person")) {
+        FirstPersonAuthor player;
+        if (!parseFields(source["first_person"],
+                         eng::fieldsOf<FirstPersonAuthor>(), &player,
+                         location + "/first_person", error))
+            return false;
+        out.firstPerson = player;
+    }
+    if (source.contains("viewmodel_rig")) {
+        ViewmodelRigAuthor rig;
+        if (!parseFields(source["viewmodel_rig"],
+                         eng::fieldsOf<ViewmodelRigAuthor>(), &rig,
+                         location + "/viewmodel_rig", error))
+            return false;
+        out.viewmodelRig = rig;
+    }
     if (source.contains("shader")) {
         ShaderAuthor shader;
         if (!parseShader(source["shader"], shader, location + "/shader", error))

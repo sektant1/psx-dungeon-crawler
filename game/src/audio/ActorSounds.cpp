@@ -31,7 +31,7 @@ const std::array<ActorActionInfo, kActorActionCount> kActions = {{
     {ActorAction::Attack, "attack", "Attack",
      "the swing or shot leaving the actor", kAnyActor},
     {ActorAction::Impact, "impact", "Impact",
-     "its attack landing on something", kAnyActor},
+     "its attack landing on something", kAnyActor, /*ownBody=*/false},
     {ActorAction::Hurt, "hurt", "Hurt", "taking damage and surviving",
      kAnyActor},
     {ActorAction::Block, "block", "Block",

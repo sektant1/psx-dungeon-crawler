@@ -103,6 +103,10 @@ public:
     bool grounded() const { return mPhysics ? mCharGrounded : (mPos.y <= 0.001f); }
     glm::vec3 groundNormal() const { return mGroundNormal; }
     float horizontalSpeed() const { return glm::length(mVelocity); }
+    // Metres per second up the world axis. Positive is rising, which is how a
+    // caller distinguishes a jump from walking off a ledge -- both leave the
+    // ground, and only one of them is something the player did.
+    float verticalSpeed() const { return mVerticalVelocity; }
     glm::vec3 position() const { return mPos; }
     // Horizontal capsule footprint, useful to gameplay-side movement sweeps.
     float collisionRadius() const { return mCollisionRadius; }

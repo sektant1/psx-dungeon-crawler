@@ -153,12 +153,20 @@ void ravenEditor()
     c[ImGuiCol_ResizeGripHovered] = kEdgeBright;
     c[ImGuiCol_ResizeGripActive] = kAccent;
 
-    c[ImGuiCol_Tab] = kControl;
-    c[ImGuiCol_TabHovered] = kHover;
-    c[ImGuiCol_TabSelected] = kRaised;
+    // A tab is the front edge of the panel it opens, so the selected one is the
+    // panel's own colour and the rest sit *below* it. The values were the other
+    // way round -- the unselected tab (kControl) was lighter than the selected
+    // one (kRaised) and neither matched WindowBg -- which reads as the inactive
+    // tab being the active one. With two tabs in a rail (Hierarchy beside Asset
+    // Browser) that is a rail where you cannot tell what you are looking at.
+    c[ImGuiCol_TabSelected] = kPanel;
+    c[ImGuiCol_Tab] = lerp(kPanel, kVoid, 0.55f);
+    c[ImGuiCol_TabHovered] = lerp(kPanel, kHover, 0.75f);
     c[ImGuiCol_TabSelectedOverline] = kAccent;
-    c[ImGuiCol_TabDimmed] = lerp(kControl, kVoid, 0.65f);
-    c[ImGuiCol_TabDimmedSelected] = lerp(kRaised, kVoid, 0.45f);
+    // Unfocused: the same order, flattened toward the void so a background dock
+    // recedes as a group rather than each tab dimming on its own.
+    c[ImGuiCol_TabDimmedSelected] = lerp(kPanel, kVoid, 0.45f);
+    c[ImGuiCol_TabDimmed] = lerp(kPanel, kVoid, 0.80f);
     c[ImGuiCol_TabDimmedSelectedOverline] = alpha(kAccentPressed, 0.35f);
 
     c[ImGuiCol_DockingPreview] = alpha(kAccent, 0.45f);

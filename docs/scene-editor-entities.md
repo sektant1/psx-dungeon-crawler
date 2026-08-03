@@ -495,7 +495,7 @@ Sections are grouped and always in the same order, whatever the entity carries:
 | *(identity + transform)* | id, name, parent, position/rotation/scale |
 | **appearance** | Mesh (and its material), Shader, Particles, Light |
 | **physical** | Collider, Trigger |
-| **gameplay** | Camera, Spin, Player Spawn, Exit, Marker, Enemy Spawn, Pickup |
+| **gameplay** | Camera, First-Person Controller, Viewmodel Rig, Spin, Player Spawn, Exit, Marker, Enemy Spawn, Pickup |
 | **placement** | Grid Cell |
 
 Before, sections came out in whatever order the component table happened to be
@@ -731,6 +731,14 @@ Two of the entries are what turn a scene into a shot:
   judge and the wedge it cuts through the room is the same value made visible.
   The highest-priority active camera is the one the game looks through, so a
   second framing is added by copying the first and unticking `active`.
+- **First-Person Controller** and **Viewmodel Rig** -- the player, authored on
+  the camera that is their eye: how the body moves and what the lens does, and
+  where the first-person hands sit in front of it. A level that carries neither
+  plays on the game's own config; one that carries either overrides it for as
+  long as it is loaded. The viewport marks the hand socket and draws a line back
+  to the eye, for the same reason it draws the frustum. Tuning them live is the
+  game console's Viewmodel panel (F1) -- see
+  [fps-viewmodel.md](fps-viewmodel.md).
 - **Spin** -- an axis and degrees per second, turning the entity where it
   stands. Whatever is parented under it turns with it.
 - **Orbit** -- a centre, a radius, an axis and a facing: the entity travels a

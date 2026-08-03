@@ -57,6 +57,16 @@ public:
     // markers ("enemy.goblin") or as the editor's own EnemySpawn component.
     // Both mean the same thing, so both arrive here.
     std::vector<game::ScenePlacement> enemyPlacements() const;
+
+    // The player tuning this level authored, if any. Empty for a procedural
+    // dungeon, which has no .scn to carry components: the caller then applies
+    // the game's own config, so a transition from an authored level back into
+    // a generated one restores the defaults rather than keeping the override.
+    game::MapRuntime::AuthoredPlayerRig playerRig() const
+    {
+        return authoredMap ? authoredMap->playerRig()
+                           : game::MapRuntime::AuthoredPlayerRig{};
+    }
     bool torchIsLit(int index) const { return map.torchLit(index); }
     void toggleTorch(eng::Renderer& r, int index) { map.toggleTorch(r, index); }
     const DungeonMap& dungeon() const { return map; }

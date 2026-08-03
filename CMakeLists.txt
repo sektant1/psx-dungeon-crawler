@@ -567,6 +567,7 @@ add_executable(
   game/src/CombatSystem.cpp
   game/src/BloodSystem.cpp
   game/src/audio/GameAudio.cpp
+  game/src/audio/ActorAudio.cpp
   game/src/ParticleCollider.cpp
   game/src/DebugOverlay.cpp
   game/src/ui/GameHud.cpp
@@ -605,6 +606,7 @@ add_executable(
   game/src/Targeting.cpp
   game/src/Dummy.cpp
   game/src/ViewModel.cpp
+  game/src/ViewmodelMotion.cpp
   game/src/FirstPersonHands.cpp
   game/src/MapPlay.cpp
   game/src/scene/MapRuntime.cpp)
@@ -919,6 +921,7 @@ if(BUILD_TESTING)
   add_executable(
     enemy_library_tests game/tests/EnemyLibraryTests.cpp
                         game/src/enemy/EnemyLibrary.cpp
+                        game/src/audio/ActorSounds.cpp
                         game/src/combat/BulletPattern.cpp
                         game/src/combat/CombatVocabulary.cpp)
   target_include_directories(enemy_library_tests
@@ -926,6 +929,11 @@ if(BUILD_TESTING)
   target_link_libraries(enemy_library_tests PRIVATE eng_toml eng_core glm::glm
                                                     EnTT::EnTT)
   add_test(NAME enemy_library COMMAND enemy_library_tests)
+
+  add_executable(actor_sounds_tests game/tests/ActorSoundsTests.cpp
+                                    game/src/audio/ActorSounds.cpp)
+  target_include_directories(actor_sounds_tests PRIVATE game/src)
+  add_test(NAME actor_sounds COMMAND actor_sounds_tests)
 
   add_executable(enemy_ai_tests game/tests/EnemyAITests.cpp
                                 game/src/enemy/EnemyAI.cpp)
@@ -943,7 +951,8 @@ if(BUILD_TESTING)
   add_test(NAME enemy_save COMMAND enemy_save_tests)
 
   add_executable(enemy_spawner_tests game/tests/EnemySpawnerTests.cpp
-                                     game/src/enemy/EnemySpawner.cpp)
+                                     game/src/enemy/EnemySpawner.cpp
+                                     game/src/audio/ActorSounds.cpp)
   target_include_directories(enemy_spawner_tests
                              PRIVATE game/src engine/include third_party)
   target_link_libraries(enemy_spawner_tests PRIVATE eng_toml eng_core glm::glm)
@@ -966,6 +975,17 @@ if(BUILD_TESTING)
   target_link_libraries(player_weapon_tests PRIVATE eng_toml eng_core glm::glm
                                                     EnTT::EnTT)
   add_test(NAME player_weapon COMMAND player_weapon_tests)
+
+  # Viewmodel placement + procedural motion. Renderer-free by construction, so
+  # the layer composition (bob/sway/recoil/landing) is testable at all.
+  add_executable(viewmodel_rig_tests game/tests/ViewmodelRigTests.cpp
+                                     game/src/ViewmodelMotion.cpp
+                                     game/src/PlayerWeapons.cpp)
+  target_include_directories(viewmodel_rig_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(viewmodel_rig_tests PRIVATE eng_toml eng_core glm::glm
+                                                    EnTT::EnTT)
+  add_test(NAME viewmodel_rig COMMAND viewmodel_rig_tests)
 
   add_executable(bullet_pattern_tests game/tests/BulletPatternTests.cpp
                                       game/src/combat/BulletPattern.cpp)
@@ -1308,7 +1328,7 @@ if(BUILD_TESTING)
   add_executable(editor_command_tests editor/tests/EditorCommandTests.cpp
                                       editor/src/commands/Commands.cpp
                                       editor/src/content/SceneDocument.cpp)
-  target_include_directories(editor_command_tests PRIVATE editor/include
+  target_include_directories(editor_command_tests PRIVATE editor/include game/src
                                                           engine/include)
   target_link_libraries(editor_command_tests PRIVATE glm::glm)
   add_test(NAME editor_command COMMAND editor_command_tests)
@@ -1316,7 +1336,7 @@ if(BUILD_TESTING)
   add_executable(editor_component_tests editor/tests/EditorComponentTests.cpp
                                         editor/src/scene/EntityComponents.cpp
                                         editor/src/content/SceneDocument.cpp)
-  target_include_directories(editor_component_tests PRIVATE editor/include
+  target_include_directories(editor_component_tests PRIVATE editor/include game/src
                                                             engine/include)
   target_link_libraries(editor_component_tests PRIVATE glm::glm)
   add_test(NAME editor_component COMMAND editor_component_tests)
@@ -1324,7 +1344,7 @@ if(BUILD_TESTING)
   add_executable(editor_outliner_tests editor/tests/EditorOutlinerTests.cpp
                                        editor/src/scene/OutlinerTree.cpp
                                        editor/src/scene/EntityComponents.cpp)
-  target_include_directories(editor_outliner_tests PRIVATE editor/include
+  target_include_directories(editor_outliner_tests PRIVATE editor/include game/src
                                              engine/include)
   target_link_libraries(editor_outliner_tests PRIVATE game_content
                                                       eng_ecs_headless)
@@ -1335,7 +1355,7 @@ if(BUILD_TESTING)
                                 editor/src/ui/OutlinerPanel.cpp
                                 editor/src/ui/EditorIcons.cpp)
   target_include_directories(editor_outliner_panel_tests
-                             PRIVATE editor/include
+                             PRIVATE editor/include game/src
                              engine/include)
   target_link_libraries(editor_outliner_panel_tests PRIVATE eng_imgui glm::glm)
   add_test(NAME editor_outliner_panel COMMAND editor_outliner_panel_tests)
@@ -1390,7 +1410,7 @@ if(BUILD_TESTING)
     editor_entity_gizmo_tests editor/tests/EditorEntityGizmoTests.cpp
                               editor/src/viewport/EntityGizmos.cpp
                               editor/src/scene/Picker.cpp)
-  target_include_directories(editor_entity_gizmo_tests PRIVATE editor/include
+  target_include_directories(editor_entity_gizmo_tests PRIVATE editor/include game/src
                              engine/include)
   target_link_libraries(editor_entity_gizmo_tests PRIVATE game_content eng_imgui
                                                           glm::glm)
@@ -1411,7 +1431,7 @@ if(BUILD_TESTING)
                            editor/src/scene/BrushPlacement.cpp
                            editor/src/scene/DocumentRaycast.cpp
                            editor/src/scene/Picker.cpp)
-  target_include_directories(editor_placement_tests PRIVATE editor/include
+  target_include_directories(editor_placement_tests PRIVATE editor/include game/src
                                                             game/tests
                              engine/include)
   target_link_libraries(editor_placement_tests PRIVATE game_content
@@ -1439,7 +1459,7 @@ if(BUILD_TESTING)
 
   add_executable(editor_clipboard_tests editor/tests/EditorClipboardTests.cpp
                                         editor/src/commands/Clipboard.cpp)
-  target_include_directories(editor_clipboard_tests PRIVATE editor/include
+  target_include_directories(editor_clipboard_tests PRIVATE editor/include game/src
                                                             engine/include)
   target_link_libraries(editor_clipboard_tests PRIVATE game_content glm::glm)
   add_test(NAME editor_clipboard COMMAND editor_clipboard_tests)
@@ -1461,7 +1481,7 @@ if(BUILD_TESTING)
 
   add_executable(editor_paint_slot_tests editor/tests/EditorPaintSlotTests.cpp
                                          editor/src/scene/PaintSlot.cpp)
-  target_include_directories(editor_paint_slot_tests PRIVATE editor/include
+  target_include_directories(editor_paint_slot_tests PRIVATE editor/include game/src
                              engine/include)
   target_link_libraries(editor_paint_slot_tests PRIVATE glm::glm)
   add_test(NAME editor_paint_slot COMMAND editor_paint_slot_tests)

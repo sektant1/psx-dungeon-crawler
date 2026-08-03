@@ -76,6 +76,10 @@ struct EnemyMotion {
     // crowd separation is an O(n^2) pass over a small vector instead of n^2
     // physics transform reads.
     glm::vec3 feet{0.0f};
+    // Ground covered since the last footstep sound. A step is a distance, not a
+    // timer: an enemy that walks fires them further apart than one that charges
+    // without either being authored per-speed.
+    float sinceFootstep = 0.0f;
 };
 
 // Render-side handles and the presentation timers the AI never reads.

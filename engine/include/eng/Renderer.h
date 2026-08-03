@@ -282,6 +282,12 @@ public:
     // Current camera view-projection (world -> clip). For projecting debug
     // overlays (collider gizmos) to screen space at full window resolution.
     glm::mat4 cameraViewProj() const;
+    // The same pair, separately. ImGuizmo takes view and projection as two
+    // matrices, and multiplying them back apart is not possible -- so a tool
+    // that manipulates a transform in the game's own view (the viewmodel
+    // gizmo) needs these rather than the product above.
+    glm::mat4 cameraView() const;
+    glm::mat4 cameraProjection() const;
 
     // --- materials --------------------------------------------------------
     // Parse one generated Ogre material script at runtime. Editor imports use

@@ -73,6 +73,47 @@ constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoCollapse;
 const ImVec4 kUiWarning(0.780f, 0.604f, 0.314f, 1.0f);
 const ImVec4 kUiDanger(0.890f, 0.416f, 0.333f, 1.0f);
 
+// --- toolbar layout ---------------------------------------------------------
+// The toolbar wraps onto a second row instead of scrolling.
+//
+// It used to be a child window with a forced 1480px content width and a
+// horizontal scrollbar, which meant two things at once: the strip always
+// believed it was too narrow (so the scrollbar was always there, eating the
+// row's height and pushing the buttons under the dock below), and every command
+// past the fold was reachable only by scrolling a bar nobody looks at. A
+// command you cannot see is a command you do not have.
+//
+// ImGui lays out immediately, so wrapping means knowing how wide the next run
+// of controls is before drawing it -- hence the explicit widths below.
+float toolbarTextWidth(const char* text)
+{
+    return ImGui::CalcTextSize(text).x;
+}
+
+float toolbarButtonWidth(const char* label)
+{
+    return ImGui::CalcTextSize(label).x +
+           ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+float toolbarIconWidth(float size, int count)
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    return float(count) * (size + style.FramePadding.x * 2.0f) +
+           float(count - 1) * style.ItemSpacing.x;
+}
+
+// Continue this row when `nextWidth` still fits, otherwise fall to the next.
+// Not calling SameLine is what starts a new row, so the "else" is silence.
+void toolbarSameLine(float nextWidth)
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float right =
+        ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+    if (ImGui::GetItemRectMax().x + style.ItemSpacing.x + nextWidth <= right)
+        ImGui::SameLine();
+}
+
 bool filterMatches(std::string_view text, std::string_view query)
 {
     if (query.empty())
@@ -439,6 +480,54 @@ void EditorApp::refreshAudioAssets()
         error.clear();
     }
     std::sort(mAudioAssets.begin(), mAudioAssets.end());
+    refreshAudioCues();
+}
+
+// The cue ids in audio.toml, for the actor sound table.
+//
+// Scanned for `id = "..."` inside `[[cue]]` rather than parsed through the
+// catalogue, for the reason GameVocabulary states about enemies: the editor
+// needs the list of names, and a scene editor that cannot start because a music
+// stem is malformed is one that took on a dependency it did not need.
+void EditorApp::refreshAudioCues()
+{
+    mAudioCues.clear();
+    const std::filesystem::path path =
+        eng::assets::resolve("config/audio.toml");
+    if (path.empty())
+        return;
+    std::ifstream in(path);
+    if (!in)
+        return;
+
+    bool inCue = false;
+    std::string line;
+    while (std::getline(in, line)) {
+        const std::size_t begin = line.find_first_not_of(" \t");
+        if (begin == std::string::npos)
+            continue;
+        const std::string_view trimmed(line.c_str() + begin);
+        if (trimmed.front() == '[') {
+            inCue = trimmed.rfind("[[cue]]", 0) == 0;
+            continue;
+        }
+        if (!inCue || trimmed.rfind("id", 0) != 0)
+            continue;
+        const std::size_t open = line.find('"');
+        const std::size_t close = line.find('"', open + 1);
+        if (open == std::string::npos || close == std::string::npos)
+            continue;
+        std::string id = line.substr(open + 1, close - open - 1);
+        // Music stems and stingers are section content, not actions an actor
+        // performs; offering them in the sound table would be offering a cue
+        // that plays a whole score under a footstep.
+        if (!id.empty() && id.rfind("music.", 0) != 0)
+            mAudioCues.push_back(std::move(id));
+    }
+    std::sort(mAudioCues.begin(), mAudioCues.end());
+    mAudioCues.erase(std::unique(mAudioCues.begin(), mAudioCues.end()),
+                     mAudioCues.end());
+    eng::log::info("Editor: %zu audio cues", mAudioCues.size());
 }
 
 void EditorApp::previewAudio(const AuthorId& id)
@@ -1625,6 +1714,11 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
 void EditorApp::installConsoleCommands()
 {
     mConsole.captureEngineLog();
+    // Open by default, because the workspace docks it beside Problems and a
+    // hidden window has no tab: the diagnostics rail showed one tab and looked
+    // like the editor had no console, when it had one behind a backtick nobody
+    // presses. Both answer "what is wrong", so both are one click apart.
+    mConsole.setVisible(true);
     mConsole.registerCommand("quit", "close the editor",
                              [this](const eng::DebugConsole::Args&) {
                                  requestDiscard(Discard::Quit);
@@ -2073,9 +2167,14 @@ void EditorApp::onGui(const eng::FrameContext& f)
         ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
     const ImVec2 dockSize(content.x, std::max(content.y - statusHeight, 1.0f));
 
-    // v3 is an intentional workspace-schema change. Old fixed 1600x950 layouts
-    // cannot silently override the responsive rails introduced here.
-    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v3");
+    // The version is bumped whenever the shipped topology changes, because a
+    // saved .ini wins over the builder: without a new id, an author who has run
+    // the editor once keeps the old layout forever and never sees the fix.
+    //
+    // v4: the toolbar is tall enough for its own tab bar plus two wrapped rows
+    // (it was being clipped by the panel below), and Hierarchy became a tab
+    // beside Asset Browser rather than a stack under it.
+    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v4");
     if (!mLayoutBuilt || mResetLayoutRequested) {
         const bool missing = ImGui::DockBuilderGetNode(dock) == nullptr ||
                              ImGui::DockBuilderGetNode(dock)->IsEmpty();
@@ -2329,16 +2428,14 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
 
 void EditorApp::drawToolbar()
 {
-    if (ImGui::Begin(workspace_window::kCommandBar, nullptr, kPanelFlags)) {
-        // Keep every authoring control reachable when the centre viewport is
-        // narrow. The old uninterrupted SameLine chain simply clipped its
-        // right half; a horizontal tool strip is predictable desktop-editor
-        // behaviour and preserves the compact one-row layout on ultrawide.
-        ImGui::SetNextWindowContentSize(
-            ImVec2(1480.0f * mAppliedUiScale, 0.0f));
-        if (ImGui::BeginChild("##toolbar_scroll", ImVec2(0.0f, 0.0f),
-                              ImGuiChildFlags_None,
-                              ImGuiWindowFlags_HorizontalScrollbar)) {
+    // No horizontal scrollbar: the strip wraps (see toolbarSameLine). The
+    // vertical one is off too, because a toolbar tall enough to need one is a
+    // toolbar the workspace has mis-sized, and hiding that behind a scrollbar
+    // is how it stayed mis-sized.
+    if (ImGui::Begin(workspace_window::kCommandBar, nullptr,
+                     kPanelFlags | ImGuiWindowFlags_NoScrollbar |
+                         ImGuiWindowFlags_NoScrollWithMouse)) {
+        {
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3.0f, 4.0f));
             ImGui::TextDisabled("SCENE");
             ImGui::SameLine();
@@ -2359,7 +2456,9 @@ void EditorApp::drawToolbar()
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Ctrl+S");
 
-            ImGui::SameLine();
+            toolbarSameLine(toolbarTextWidth("|  HISTORY") +
+                            toolbarButtonWidth("Undo") +
+                            toolbarButtonWidth("Redo"));
             ImGui::TextDisabled("|  HISTORY");
             ImGui::SameLine();
             ImGui::BeginDisabled(!mCommands.canUndo());
@@ -2382,7 +2481,8 @@ void EditorApp::drawToolbar()
                                       ? mCommands.redoLabel().c_str()
                                       : "history empty");
 
-            ImGui::SameLine();
+            toolbarSameLine(toolbarTextWidth("|  MODE") +
+                            toolbarIconWidth(18.0f, 3));
             ImGui::TextDisabled("|  MODE");
             ImGui::SameLine();
             if (iconButton(Icon::Select, "##tool_select",
@@ -2403,7 +2503,8 @@ void EditorApp::drawToolbar()
                            mState.tool == Tool::Room, 18.0f))
                 mState.tool = Tool::Room;
 
-            ImGui::SameLine();
+            toolbarSameLine(toolbarTextWidth("|  TRANSFORM") +
+                            toolbarIconWidth(18.0f, 3));
             ImGui::TextDisabled("|  TRANSFORM");
             ImGui::SameLine();
             ImGui::BeginDisabled(mMaterialMode || mGizmoDragging);
@@ -2432,7 +2533,13 @@ void EditorApp::drawToolbar()
             }
             ImGui::EndDisabled();
 
-            ImGui::SameLine();
+            // The grid run is the widest of them, and the natural place for the
+            // strip to fold on a narrow viewport: everything before it is a
+            // command, everything from here is a setting.
+            toolbarSameLine(toolbarTextWidth("| grid 0.25 m") +
+                            toolbarButtonWidth("[") +
+                            toolbarButtonWidth("]") +
+                            toolbarButtonWidth("snap"));
             ImGui::TextDisabled("|");
             ImGui::SameLine();
             ImGui::Text("grid %.2g m", double(mState.gridState.step()));
@@ -2451,7 +2558,9 @@ void EditorApp::drawToolbar()
                 mState.gridState.finer();
             ImGui::SameLine();
             ImGui::Checkbox("snap", &mState.gridState.snap);
-            ImGui::SameLine();
+            toolbarSameLine(toolbarTextWidth("| level 0.0 m") +
+                            toolbarButtonWidth("-") + toolbarButtonWidth("+") +
+                            toolbarButtonWidth("cut above"));
             ImGui::Text("| level %.1f m", double(mState.gridState.level));
             ImGui::SameLine();
             if (ImGui::SmallButton("-"))
@@ -2467,7 +2576,8 @@ void EditorApp::drawToolbar()
                 "every storey; the level control then only moves the grid and "
                 "what new pieces snap to.");
 
-            ImGui::SameLine();
+            toolbarSameLine(toolbarTextWidth("| ") +
+                            toolbarButtonWidth("world (multi)"));
             ImGui::TextDisabled("|");
             ImGui::SameLine();
             if (mMaterialMode) {
@@ -2505,12 +2615,11 @@ void EditorApp::drawToolbar()
             // alone: the one you are not looking at is the one that looks
             // stale.
             if (mState.dirty) {
-                ImGui::SameLine();
+                toolbarSameLine(toolbarTextWidth("* unsaved"));
                 ImGui::TextColored(kUiWarning, "* unsaved");
             }
             ImGui::PopStyleVar();
         }
-        ImGui::EndChild();
     }
     ImGui::End();
 }
@@ -4906,6 +5015,7 @@ void EditorApp::drawInspector()
         mParticleEffectNames.push_back(d.name);
     context.particleEffects = &mParticleEffectNames;
     context.audioAssets = &mAudioAssets;
+    context.audioCues = &mAudioCues;
     context.previewTexture = mEngine->renderer().materialThumbnailTextureId();
     context.requestMaterialPreview = [this](const std::string& name) {
         requestMaterialPreview(name);

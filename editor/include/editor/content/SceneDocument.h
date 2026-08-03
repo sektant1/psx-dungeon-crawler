@@ -1,9 +1,11 @@
 #pragma once
 #include <eng/ecs/components/AudioEmitter.h>
 #include <eng/ecs/components/AudioListener.h>
+#include <eng/ecs/components/FirstPersonController.h>
 #include <eng/ecs/components/ParticleEmitter.h>
 #include <eng/ecs/components/PortalParams.h>
 
+#include "ViewmodelRig.h"
 #include "audio/ActorSounds.h"
 
 #include <glm/glm.hpp>
@@ -206,6 +208,17 @@ using AudioListenerAuthor = eng::ecs::AudioListener;
 using ActorKindAuthor = game::ActorKind;
 using ActorSoundsAuthor = game::ActorSoundSet;
 
+// The player, authored on the camera that is their eye. Same mirror-not-
+// translate rule again: these ARE the runtime components, so a cook is a copy
+// and the .scn keys are the components' own field names.
+//
+// Together they are the answer to "how does this level play": the controller
+// is how the body moves and what the lens does, the rig is where the hands sit
+// in front of it. A scene that carries neither runs on the game's config
+// defaults, which is every level authored before they existed.
+using FirstPersonAuthor = eng::ecs::FirstPersonController;
+using ViewmodelRigAuthor = game::ViewmodelRig;
+
 struct SpinAuthor {
     glm::vec3 axis{0.0f, 1.0f, 0.0f};
     float degreesPerSecond = 45.0f;
@@ -236,6 +249,8 @@ struct Entity {
     std::optional<ColliderAuthor> collider;
     std::optional<LightAuthor> light;
     std::optional<CameraAuthor> camera;
+    std::optional<FirstPersonAuthor> firstPerson;
+    std::optional<ViewmodelRigAuthor> viewmodelRig;
     std::optional<SpinAuthor> spin;
     std::optional<OrbitAuthor> orbit;
     std::optional<ShaderAuthor> shader;

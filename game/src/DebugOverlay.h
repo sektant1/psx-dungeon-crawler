@@ -98,6 +98,11 @@ public:
 
 private:
     void drawCombatTab();
+    void drawViewmodelTab();
+    // The handles themselves, drawn over the game view rather than inside the
+    // panel. Called from the Viewmodel tab so the controls and the gizmo they
+    // configure cannot get out of step.
+    void drawViewmodelGizmo();
     void drawFeelTab();
     void drawEnemiesTab();
     void drawAudioTab();
@@ -122,6 +127,31 @@ private:
     // invalidates definitions but not their names.
     std::string mSpawnId;
     std::string mTuneId;
+    // Viewmodel tab: which definition the presentation sliders edit. It tracks
+    // the equipped weapon by default -- the common case is tuning what you are
+    // holding -- until the viewer picks a row by hand.
+    int mViewmodelWeapon = 0;
+    // Result of the last "Save to game.toml", and how long the panel still says
+    // so. A save that reports nothing is a save you press twice.
+    bool mViewmodelSaved = false;
+    float mViewmodelSaveNoted = 0.0f;
+    bool mViewmodelFollowsEquipped = true;
+    // Viewmodel gizmo: which transform the handles drive, and how. The handles
+    // sit on the *authored* pose rather than the animated node, so bob and
+    // sway do not drag them out from under the cursor mid-drag.
+    enum class ViewmodelGizmoTarget { Socket, WeaponLean, Muzzle };
+    bool mGizmoEnabled = false;
+    ViewmodelGizmoTarget mGizmoTarget = ViewmodelGizmoTarget::Socket;
+    int mGizmoOperation = 0; // 0 translate, 1 rotate, 2 scale
+    bool mGizmoLocal = true;
+    bool mGizmoSnap = false;
+    float mGizmoTranslateSnap = 0.01f;
+    float mGizmoRotateSnap = 5.0f;
+    // Motion is frozen for the duration of a drag and restored after it, so a
+    // placement is made against a still pose without the viewer having to
+    // remember to switch the layers off and back on.
+    bool mGizmoFroze = false;
+    bool mGizmoMotionWas = true;
 };
 
 } // namespace game

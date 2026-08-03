@@ -53,8 +53,20 @@ int main()
         const WorkspacePlan plan = makeWorkspacePlan(1280.0f, 672.0f, 2.0f);
         require(1280.0f - plan.leftPixels - plan.rightPixels >= 750.0f,
                 "large text cannot erase the 720p workspace");
-        require(plan.commandBarPixels <= 96.0f,
+        // A sixth of a 672px window. The bound is a fraction rather than a
+        // pixel count because the bar's content scales with the text: pinning
+        // it at 96px was pinning it to the one-row-plus-scrollbar toolbar it
+        // used to have, and that bar was clipped by the panel below it.
+        require(plan.commandBarPixels <= 672.0f * 0.16f,
                 "large text keeps the command bar bounded");
+    }
+    {
+        // The toolbar is a docked panel, so its node pays for the dock's tab
+        // bar before the first button is drawn. Sizing it for the controls
+        // alone is what put their bottom half under the panel below.
+        const WorkspacePlan plan = makeWorkspacePlan(1600.0f, 950.0f, 1.0f);
+        require(plan.commandBarPixels >= 78.0f,
+                "the command bar fits its tab bar plus two wrapped rows");
     }
 
     std::cout << "EditorWorkspaceTests: ok\n";

@@ -3,6 +3,7 @@
 #include <eng/Physics.h> // eng::ShapeKind, eng::CollisionLayer
 #include <eng/ecs/Components.h> // eng::ecs::Collider
 #include "GameCollision.h"
+#include "ViewmodelRig.h" // game::ViewmodelRig, authored on the player camera
 #include "audio/ActorSounds.h"
 
 #include <glm/glm.hpp>
@@ -23,6 +24,17 @@ static_assert(layer::Static == 0, "eng::ecs::Collider defaults to layer 0, "
 
 // Unique player start.
 struct PlayerSpawn {};
+
+// game::ViewmodelRig is defined in ViewmodelRig.h, included above: it is a
+// runtime tuning struct as well as an authored component, and the runtime
+// motion composer must not have to include this header (which pulls in Jolt)
+// to read it. Named here because this is where a reader looks for the scene's
+// component set.
+//
+// It rides on the same entity as eng::ecs::FirstPersonController -- the camera
+// that is the player's eye -- so "how this level's player moves" and "where
+// this level's hands sit" are two components on one entity, in the inspector,
+// beside each other.
 
 // game::Actor and game::ActorSounds are defined in audio/ActorSounds.h, which
 // is included above: they ride on the combat registry as well as this one, and

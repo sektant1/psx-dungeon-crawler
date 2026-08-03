@@ -32,27 +32,37 @@ int main()
     PlayerWeaponLibrary library;
     require(library.load(game::test::asset("config/weapons.toml")),
             "shipped player weapons did not load");
-    require(library.defs().size() == 3,
-            "shipped loadout must contain exactly three MVP weapons");
+    require(library.defs().size() == 2,
+            "shipped loadout no longer matches the authored slots");
+    // The Vesper Spindle was archived out of the loadout; its section lives in
+    // assets/source/archive/weapons, which is not a runtime mount.
+    require(library.find("vesper_spindle") == nullptr,
+            "an archived weapon is still in the shipped loadout");
 
-    const PlayerWeaponDef* spindle = library.find("vesper_spindle");
     const PlayerWeaponDef* arbalest = library.find("eidolon_arbalest");
     const PlayerWeaponDef* talon = library.find("riven_talon");
-    require(spindle && arbalest && talon, "required weapon id is missing");
-    require(spindle->trigger == WeaponTrigger::Automatic &&
-                near(spindle->projectile.speed, 72.0f) &&
-                spindle->viewmodel.handsMuzzleJoint == "f_index.03.R" &&
-                near(spindle->viewmodel.handsMuzzleOffset.y, 0.025f),
-            "precision weapon cadence/projectile did not parse");
+    require(arbalest && talon, "required weapon id is missing");
+    // Slot order is what the player starts holding, and the library reports
+    // definitions in it.
+    require(library.defs().front().id == "riven_talon",
+            "the talon is no longer the weapon in hand at slot 0");
     require(arbalest->projectileCount == 3 &&
                 near(arbalest->spreadDegrees, 8.0f),
             "heavy weapon spread did not parse");
-    require(talon->viewmodel.parts.size() == 4 &&
-                talon->projectile.material == "Game/Prototype/ProjectileTalon" &&
-                talon->viewmodel.handsIdleAnimation == "knife_idle" &&
-                talon->viewmodel.handsFireAnimation == "knife_hit_01",
-            "talon presentation did not parse");
-    PlayerWeaponDef invalidDefinition = *spindle;
+    require(talon->trigger == WeaponTrigger::Automatic &&
+                near(talon->projectile.speed, 58.0f) &&
+                talon->viewmodel.parts.size() == 4 &&
+                talon->projectile.material == "Game/Prototype/ProjectileTalon",
+            "talon cadence/projectile did not parse");
+    // The finger-gun hand set, shared with the archived spindle: the talon
+    // fires from the fingertip rather than stabbing with a knife.
+    require(talon->viewmodel.handsIdleAnimation == "finger_gun_idle" &&
+                talon->viewmodel.handsDrawAnimation == "finger_gun_fix" &&
+                talon->viewmodel.handsFireAnimation == "finger_gun_fire" &&
+                talon->viewmodel.handsMuzzleJoint == "f_index.03.R" &&
+                near(talon->viewmodel.handsMuzzleOffset.y, 0.025f),
+            "talon does not use the finger-gun hand animations");
+    PlayerWeaponDef invalidDefinition = *talon;
     invalidDefinition.fireInterval =
         std::numeric_limits<float>::quiet_NaN();
     require(!validPlayerWeaponDefinition(invalidDefinition),
@@ -72,7 +82,11 @@ int main()
     controller.sample({true, true, true, false, -1});
     const auto first = controller.fixedUpdate(1.0f / 60.0f, arc);
     require(first && *first == 0, "automatic weapon did not fire immediately");
-    require(near(arc.current, 98.0f), "shot did not spend authored ARC");
+    // Against slot 0's own cost rather than a literal: which weapon starts in
+    // hand is a loadout decision, and this is testing that firing spends what
+    // the definition says, not what that weapon happens to charge today.
+    require(near(arc.current, 100.0f - library.defs().front().arcCost),
+            "shot did not spend authored ARC");
     require(!controller.fixedUpdate(1.0f / 60.0f, arc),
             "cooldown allowed a duplicate fixed-step shot");
 
@@ -87,7 +101,9 @@ int main()
     controller.sample({true, false, true, false, -1});
     const auto heavy = controller.fixedUpdate(1.0f / 60.0f, arc);
     require(heavy && *heavy == 1, "press weapon did not fire after switch lock");
-    require(near(arc.current, 86.0f), "heavy shot spent wrong ARC amount");
+    require(near(arc.current, 100.0f - library.defs().front().arcCost -
+                                  library.defs()[1].arcCost),
+            "heavy shot spent wrong ARC amount");
     require(!controller.fixedUpdate(1.0f, arc),
             "press weapon repeated without another edge");
 

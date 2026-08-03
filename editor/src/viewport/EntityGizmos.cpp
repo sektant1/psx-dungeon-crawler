@@ -147,6 +147,17 @@ std::vector<GizmoMark> collectGizmoMarks(const game::content::SceneDocument& doc
                          std::to_string(int(entity.camera->fovDegrees + 0.5f)) +
                           " deg";
         }
+        if (entity.viewmodelRig) {
+            GizmoMark& mark = push(GizmoKind::ViewmodelSocket);
+            // Camera space, composed through the entity's world transform the
+            // same way a child point is: a rotated or scaled rig node must not
+            // make the mark disagree with where the hands actually end up.
+            mark.hasSource = true;
+            mark.sourceWorld = world.position;
+            mark.world +=
+                world.orientation * (world.scale * entity.viewmodelRig->offset);
+            mark.label = labelFor(entity) + "  hands";
+        }
         if (entity.particles) {
             GizmoMark& mark = push(GizmoKind::Particles);
             mark.hasSource = true;
@@ -220,6 +231,8 @@ GizmoLook gizmoLook(GizmoKind kind)
         return {0xFF73E0FA, "sun"};
     case GizmoKind::Camera:
         return {0xFFEFE0B0, "camera"};
+    case GizmoKind::ViewmodelSocket:
+        return {0xFF9CD8FF, "hands"};
     case GizmoKind::Orbit:
         return {0xFFB0D8FF, "orbit"};
     case GizmoKind::Particles:

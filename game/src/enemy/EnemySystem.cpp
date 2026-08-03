@@ -167,7 +167,8 @@ const entt::registry& EnemySystem::registry() const
 }
 
 entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
-                                glm::vec3 feetPos, float yaw, int spawnerIndex)
+                                glm::vec3 feetPos, float yaw, int spawnerIndex,
+                                const ActorSoundSet& sounds)
 {
     if (!mLibrary || !mDirector)
         return entt::null;
@@ -255,6 +256,14 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
     stam.regenRate = def->stats.staminaRegen;
     reg.emplace<ActionState>(e);
 
+    // The actor half: what it is, and what it sounds like. Every enemy carries
+    // the tag, so one question answers "can this thing make a noise" for a
+    // grunt, a boss and (later) an NPC alike -- and ActorAudio needs no enemy
+    // special case to find the def's table.
+    reg.emplace<Actor>(e, Actor{ActorKind::Enemy});
+    if (!sounds.empty())
+        reg.emplace<ActorSounds>(e, ActorSounds{sounds});
+
     // The enemy half.
     reg.emplace<EnemyTag>(e, EnemyTag{def, defId});
     EnemyBrain& brain = reg.emplace<EnemyBrain>(e);
@@ -273,6 +282,12 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
     reg.emplace<EnemyRender>(e, EnemyRender{node, mesh, 0.0f, 0.0f, false});
     reg.emplace<EnemyOrigin>(e, EnemyOrigin{spawnerIndex});
     reg.emplace<EnemyPatternExecution>(e);
+
+    // Last, once the entity is whole: the callback resolves the cue off this
+    // enemy's own components, so firing it mid-construction would ask about a
+    // table that is not on it yet.
+    if (mOnAction)
+        mOnAction(e, ActorAction::Spawn, feetPos);
     return e;
 }
 
@@ -561,7 +576,14 @@ void EnemySystem::fixedStep(GameContext& ctx, glm::vec3 targetFeet,
             enemy::separation(reg, e, motion.feet, def.body.separationRadius);
 
         // --- brain --------------------------------------------------------
+        const EnemyState before = brain.state;
         const enemyai::Intent intent = enemyai::think(def, brain, senses, dt);
+        // The one state change that is a readable beat rather than bookkeeping:
+        // "it has seen me". Read here rather than inside the brain because the
+        // brain is pure and has no way to make a noise.
+        if (mOnAction && brain.state == EnemyState::Alert &&
+            before != EnemyState::Alert)
+            mOnAction(e, ActorAction::Alert, motion.feet);
 
         // --- attack delivery ----------------------------------------------
         // Starting an attack can still be refused (stamina), which is the point
@@ -586,6 +608,10 @@ void EnemySystem::fixedStep(GameContext& ctx, glm::vec3 targetFeet,
             const EnemyAttack& atk = def.attacks[size_t(brain.pendingAttack)];
             const glm::vec3 origin =
                 motion.feet + glm::vec3(0.0f, def.body.eyeHeight, 0.0f);
+            // The swing leaving the body, on the frame it becomes dangerous --
+            // the telegraph above is the wind-up, this is the release.
+            if (mOnAction)
+                mOnAction(e, ActorAction::Attack, origin);
             if (atk.ranged && atk.pattern) {
                 glm::vec3 commitAim = forwardOf(motion.yaw);
                 if (targetValid) {
@@ -643,9 +669,31 @@ void EnemySystem::fixedStep(GameContext& ctx, glm::vec3 targetFeet,
                                : delta;
 
         bool grounded = motion.grounded;
+        const glm::vec3 wasAt = motion.feet;
+        const bool wasGrounded = motion.grounded;
         motion.feet = moveAndSlide(ctx.physics, def, motion.feet,
                                    motion.velocity, dt, grounded);
         motion.grounded = grounded;
+
+        // Foley, from what the body actually did rather than from what the
+        // brain intended: an enemy pinned against a wall is running on the
+        // spot, and it should not sound like it is covering ground.
+        if (mOnAction && !render.dying) {
+            if (motion.grounded && !wasGrounded)
+                mOnAction(e, ActorAction::Land, motion.feet);
+            if (motion.grounded) {
+                const glm::vec3 travelled = motion.feet - wasAt;
+                motion.sinceFootstep +=
+                    glm::length(glm::vec3(travelled.x, 0.0f, travelled.z));
+                // Stride scales with the body: a hound and a giant covering the
+                // same ground do not take the same number of steps.
+                const float stride = std::max(0.6f, def.body.height * 0.55f);
+                if (motion.sinceFootstep >= stride) {
+                    motion.sinceFootstep = 0.0f;
+                    mOnAction(e, ActorAction::Footstep, motion.feet);
+                }
+            }
+        }
 
         const glm::vec3 centre =
             motion.feet + glm::vec3(0.0f, def.body.height * 0.5f, 0.0f);

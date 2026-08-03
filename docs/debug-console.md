@@ -178,10 +178,14 @@ The shipped arrangement puts three or four tabs in a node, never eleven in one:
 
 | Node | Group | Panels |
 |---|---|---|
-| left | `PanelGroup::World` | Player, Colliders, Animation |
+| left | `PanelGroup::World` | Player, Colliders, Animation, Viewmodel |
 | right (upper) | `PanelGroup::Look` | Render, Shaders, Materials |
-| right (lower) | `PanelGroup::Content` | Portal, VFX, Particles |
+| right (lower) | `PanelGroup::Content` | Portal, VFX, Particles, Audio |
 | bottom | `PanelGroup::Gameplay` | Combat, Feel, Enemies |
+
+Viewmodel sits beside Player because FOV, look sensitivity and where the hands
+are framed are one tuning session; it also draws manipulator handles over the
+game view. See [fps-viewmodel.md](fps-viewmodel.md).
 
 An app picks a group when it registers: `addPanel("Combat", fn,
 eng::PanelGroup::Gameplay)`. The default is `Gameplay`, so an existing two-arg

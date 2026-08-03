@@ -710,6 +710,19 @@ void drawSounds(Entity& entity, InspectorContext& context)
     }
 
     ImGui::TextDisabled("empty = the cue this actor's type already plays");
+
+    // One row per action: label, the cue, and a "..." that opens free text.
+    //
+    // The free-text field used to be on every row unconditionally, which made a
+    // fourteen-action enemy twenty-eight rows tall -- so the actions at the
+    // bottom (death, dodge) were below the fold of any inspector. Typing an id
+    // by hand is the rare case (a cue authored since the editor started), so it
+    // is one click away rather than always present.
+    static std::string sTypingRow; // "<entity id>/<action id>", or empty
+    const auto rowKey = [&](const game::ActorActionInfo& info) {
+        return entity.id + "/" + info.id;
+    };
+
     for (const game::ActorActionInfo& info : game::actorActions()) {
         if (!game::actorPerforms(*kind, info.action))
             continue; // a player does not telegraph; an enemy does not jump
@@ -717,33 +730,54 @@ void drawSounds(Entity& entity, InspectorContext& context)
         std::string& cue = sounds.cues[static_cast<std::size_t>(info.action)];
         const std::string fallback =
             game::actorConventionCue(*kind, info.action);
+        const bool unknown =
+            !cue.empty() && context.audioCues && !context.audioCues->empty() &&
+            std::find(context.audioCues->begin(), context.audioCues->end(),
+                      cue) == context.audioCues->end();
+        const bool typing = sTypingRow == rowKey(info) || unknown;
+
+        const float buttonWidth = ImGui::GetFrameHeight();
+        ImGui::SetNextItemWidth(-(ImGui::CalcTextSize(info.label).x +
+                                  buttonWidth +
+                                  ImGui::GetStyle().ItemSpacing.x * 3.0f));
         const std::string current = cue.empty() ? fallback + "  (default)" : cue;
-        if (ImGui::BeginCombo(info.label, current.c_str())) {
+        if (ImGui::BeginCombo("##cue", current.c_str())) {
             if (ImGui::Selectable("(default)", cue.empty())) {
                 cue.clear();
+                sTypingRow.clear();
                 context.track(true, true);
             }
             if (context.audioCues) {
                 for (const std::string& option : *context.audioCues) {
                     if (ImGui::Selectable(option.c_str(), option == cue)) {
                         cue = option;
+                        sTypingRow.clear();
                         context.track(true, true);
                     }
                 }
             }
             ImGui::EndCombo();
         }
-        // Free text as well as the list: a cue authored after the editor
-        // started must still be typeable, exactly as the clip field allows.
-        ImGui::SetNextItemWidth(-1.0f);
-        stringField("##typed", cue, context);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("%s", info.hint);
-        if (!cue.empty() && context.audioCues && !context.audioCues->empty() &&
-            std::find(context.audioCues->begin(), context.audioCues->end(),
-                      cue) == context.audioCues->end()) {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                               "'%s' is not a cue in audio.toml", cue.c_str());
+        ImGui::SameLine();
+        // Free text as well as the list: a cue authored after the editor
+        // started must still be typeable, exactly as the clip field allows.
+        if (ImGui::SmallButton(typing ? "v" : "..."))
+            sTypingRow = typing ? std::string() : rowKey(info);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("type a cue id that is not in the list yet");
+        ImGui::SameLine();
+        ImGui::TextUnformatted(info.label);
+
+        if (typing) {
+            ImGui::SetNextItemWidth(-1.0f);
+            stringField("##typed", cue, context);
+            if (unknown) {
+                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                                   "'%s' is not a cue in audio.toml",
+                                   cue.c_str());
+            }
         }
         ImGui::PopID();
     }
@@ -892,6 +926,94 @@ void drawPortal(Entity& entity, InspectorContext& context)
     }
 }
 
+// The player, authored on the camera that is their eye. Both drawers edit the
+// runtime components directly (mirror-not-translate), so what the inspector
+// shows, what the .scn stores and what the game reads are one set of numbers.
+// The in-game console's Viewmodel tab (F1) tunes the same fields live and
+// copies them back out as TOML; this is where a *level* pins its own.
+void drawFirstPerson(Entity& entity, InspectorContext& context)
+{
+    game::content::FirstPersonAuthor& player = *entity.firstPerson;
+    ImGui::Checkbox("Active", &player.active);
+    track(context);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Off keeps the tuning in the scene without applying "
+                          "it -- the game falls back to its config defaults.");
+
+    ImGui::SeparatorText("Movement");
+    ImGui::SliderFloat("Move speed", &player.moveSpeed, 0.5f, 20.0f, "%.2f m/s");
+    track(context);
+    ImGui::SliderFloat("Mouse sensitivity", &player.mouseSensitivity, 0.0002f,
+                       0.02f, "%.4f rad/px");
+    track(context);
+
+    ImGui::SeparatorText("Lens");
+    ImGui::SliderFloat("Base FOV", &player.baseFovDegrees, 40.0f, 130.0f,
+                       "%.1f deg");
+    track(context);
+    ImGui::SliderFloat("Sprint FOV kick", &player.sprintFovKick, 0.0f, 25.0f,
+                       "%.1f deg");
+    track(context);
+    ImGui::SliderFloat("Head bob", &player.bobAmount, 0.0f, 0.2f, "%.3f m");
+    track(context);
+    ImGui::SliderFloat("Head bob speed", &player.bobSpeed, 0.0f, 25.0f);
+    track(context);
+    ImGui::TextDisabled("The camera moves subtly; the viewmodel moves loudly.");
+}
+
+void drawViewmodelRig(Entity& entity, InspectorContext& context)
+{
+    game::content::ViewmodelRigAuthor& rig = *entity.viewmodelRig;
+    ImGui::TextDisabled("Camera space: +x right, +y up, -z forward.");
+    drawVec3Property("offset", "Socket", "m", rig.offset,
+                     game::content::ViewmodelRigAuthor{}.offset, 0.005f, context);
+    drawVec3Property("rotation", "Rotation", "deg", rig.rotation,
+                     game::content::ViewmodelRigAuthor{}.rotation, 0.25f, context);
+    ImGui::SliderFloat("Scale", &rig.scale, 0.05f, 3.0f, "%.3f");
+    track(context);
+    ImGui::Checkbox("Motion enabled", &rig.motionEnabled);
+    track(context);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Off freezes bob, sway, recoil and the landing dip "
+                          "at the socket pose.");
+
+    ImGui::SeparatorText("Layer strength");
+    ImGui::TextDisabled("Multipliers over each weapon's own feel numbers.");
+    ImGui::SliderFloat("Bob", &rig.bobScale, 0.0f, 4.0f, "x%.2f");
+    track(context);
+    ImGui::SliderFloat("Sway", &rig.swayScale, 0.0f, 4.0f, "x%.2f");
+    track(context);
+    ImGui::SliderFloat("Recoil", &rig.recoilScale, 0.0f, 4.0f, "x%.2f");
+    track(context);
+
+    ImGui::SeparatorText("Bob");
+    ImGui::SliderFloat("Reference speed", &rig.bobReferenceSpeed, 1.0f, 14.0f,
+                       "%.1f m/s");
+    track(context);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Player speed the walk cycle is normalised against, "
+                          "so retuning move speed does not retune the bob.");
+    ImGui::SliderFloat("Roll", &rig.bobRollDegrees, 0.0f, 12.0f, "%.2f deg");
+    track(context);
+
+    ImGui::SeparatorText("Look sway");
+    ImGui::SliderFloat("Return speed", &rig.swayReturn, 0.0f, 30.0f);
+    track(context);
+    ImGui::SliderFloat("Max offset", &rig.swayMax, 0.0f, 0.25f, "%.3f m");
+    track(context);
+    ImGui::SliderFloat("Sway roll", &rig.swayRollDegrees, 0.0f, 15.0f,
+                       "%.2f deg");
+    track(context);
+
+    ImGui::SeparatorText("Landing");
+    ImGui::SliderFloat("Dip", &rig.landingDip, 0.0f, 0.3f, "%.3f m");
+    track(context);
+    ImGui::SliderFloat("Recovery", &rig.landingRecovery, 0.5f, 30.0f);
+    track(context);
+    ImGui::TextDisabled("Tune live in the game's Viewmodel panel (F1), then "
+                        "pin the result here or in game.toml.");
+}
+
 void drawOrbit(Entity& entity, InspectorContext& context)
 {
     OrbitAuthor& orbit = *entity.orbit;
@@ -965,6 +1087,8 @@ constexpr Drawer kDrawers[] = {
     {"collider", drawCollider},
     {"light", drawLight},
     {"camera", drawCamera},
+    {"first_person", drawFirstPerson},
+    {"viewmodel_rig", drawViewmodelRig},
     {"audio", drawAudio},
     {"audio_listener", drawAudioListener},
     {"actor", drawActor},

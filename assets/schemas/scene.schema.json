@@ -211,6 +211,109 @@
         }
       }
     },
+    "first_person": {
+      "description": "The player's body and lens, authored on the camera that is their eye. The game pushes these into the controller it already owns; a scene without one runs on the game's config defaults.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "moveSpeed": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "mouseSensitivity": {
+          "description": "Radians of view per pixel of mouse movement.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "baseFovDegrees": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 180
+        },
+        "sprintFovKick": {
+          "description": "Degrees added at full sprint. Restrained on purpose.",
+          "type": "number",
+          "minimum": 0
+        },
+        "bobAmount": {
+          "description": "Camera head-bob amplitude in metres. The weapon has its own, louder bob.",
+          "type": "number",
+          "minimum": 0
+        },
+        "bobSpeed": {
+          "type": "number",
+          "minimum": 0
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "viewmodel_rig": {
+      "description": "Where the first-person hands sit in front of the eye and how strongly each procedural layer moves them. Every weapon inherits this framing and only leans out of it. Same fields as game.toml's [player_viewmodel]; a scene carrying this overrides that default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "offset": {
+          "description": "Camera space: +x right, +y up, -z forward.",
+          "$ref": "#/$defs/vec3"
+        },
+        "rotation": {
+          "description": "Degrees: pitch, yaw, roll.",
+          "$ref": "#/$defs/vec3"
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "bobScale": {
+          "type": "number",
+          "minimum": 0
+        },
+        "swayScale": {
+          "type": "number",
+          "minimum": 0
+        },
+        "recoilScale": {
+          "type": "number",
+          "minimum": 0
+        },
+        "bobReferenceSpeed": {
+          "description": "Player speed the walk cycle is normalised against, so retuning move speed does not retune the bob.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "bobRollDegrees": {
+          "type": "number",
+          "minimum": 0
+        },
+        "swayReturn": {
+          "type": "number",
+          "minimum": 0
+        },
+        "swayMax": {
+          "description": "Metres. Clamps how far a fast flick can throw the hands.",
+          "type": "number",
+          "minimum": 0
+        },
+        "swayRollDegrees": {
+          "type": "number",
+          "minimum": 0
+        },
+        "landingDip": {
+          "type": "number",
+          "minimum": 0
+        },
+        "landingRecovery": {
+          "type": "number",
+          "minimum": 0
+        },
+        "motionEnabled": {
+          "description": "False freezes every layer at the socket pose, which is how a placement is authored.",
+          "type": "boolean"
+        }
+      }
+    },
     "audio": {
       "description": "A runtime audio clip attached to the entity transform. Source is a logical path under the mounted content pack.",
       "type": "object",
@@ -223,7 +326,15 @@
           "$ref": "#/$defs/vec3"
         },
         "bus": {
-          "enum": ["music", "ambience", "dialogue", "weapons", "sfx", "ui", "warnings"]
+          "enum": [
+            "music",
+            "ambience",
+            "dialogue",
+            "weapons",
+            "sfx",
+            "ui",
+            "warnings"
+          ]
         },
         "gain_db": {
           "type": "number",
@@ -251,7 +362,13 @@
           "minimum": 0
         },
         "priority": {
-          "enum": ["background", "low", "normal", "important", "critical"]
+          "enum": [
+            "background",
+            "low",
+            "normal",
+            "important",
+            "critical"
+          ]
         },
         "loop": {
           "type": "boolean"
@@ -376,6 +493,12 @@
         "camera": {
           "$ref": "#/$defs/camera"
         },
+        "first_person": {
+          "$ref": "#/$defs/first_person"
+        },
+        "viewmodel_rig": {
+          "$ref": "#/$defs/viewmodel_rig"
+        },
         "audio": {
           "$ref": "#/$defs/audio"
         },
@@ -423,6 +546,12 @@
         },
         "particles": {
           "$ref": "#/$defs/particles"
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "sounds": {
+          "$ref": "#/$defs/sounds"
         }
       }
     },
@@ -523,6 +652,64 @@
           "type": "number",
           "minimum": 0.01,
           "maximum": 16
+        }
+      }
+    },
+    "actor": {
+      "description": "What the game treats this entity as. Gates the sound table and names its default cues (\"enemy.death\"). A player spawn, an enemy spawn or an \"enemy.\" marker already imply a kind; this states one outright, which is the only way to author an NPC.",
+      "type": "string",
+      "enum": [
+        "player",
+        "npc",
+        "enemy"
+      ]
+    },
+    "sounds": {
+      "description": "One cue id from audio.toml per action this actor performs. An absent row falls back to the actor type's table, then to \"<kind>.<action>\", so an empty table changes nothing.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "spawn": {
+          "type": "string"
+        },
+        "idle": {
+          "type": "string"
+        },
+        "alert": {
+          "type": "string"
+        },
+        "footstep": {
+          "type": "string"
+        },
+        "jump": {
+          "type": "string"
+        },
+        "land": {
+          "type": "string"
+        },
+        "telegraph": {
+          "type": "string"
+        },
+        "attack": {
+          "type": "string"
+        },
+        "impact": {
+          "type": "string"
+        },
+        "hurt": {
+          "type": "string"
+        },
+        "block": {
+          "type": "string"
+        },
+        "dodge": {
+          "type": "string"
+        },
+        "death": {
+          "type": "string"
+        },
+        "interact": {
+          "type": "string"
         }
       }
     }

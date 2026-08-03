@@ -329,6 +329,21 @@ template <> FieldSpan fieldsOf<ecs::Camera>()
     return {f, int(std::size(f))};
 }
 
+template <> FieldSpan fieldsOf<ecs::FirstPersonController>()
+{
+    using C = ecs::FirstPersonController;
+    static const Field f[] = {
+        ENG_FIELD_RANGE(C, moveSpeed, FieldType::Float, 0.5f, 20.0f),
+        ENG_FIELD_RANGE(C, mouseSensitivity, FieldType::Float, 0.0002f, 0.02f),
+        ENG_FIELD_RANGE(C, baseFovDegrees, FieldType::Float, 40.0f, 130.0f),
+        ENG_FIELD_RANGE(C, sprintFovKick, FieldType::Float, 0.0f, 25.0f),
+        ENG_FIELD_RANGE(C, bobAmount, FieldType::Float, 0.0f, 0.2f),
+        ENG_FIELD_RANGE(C, bobSpeed, FieldType::Float, 0.0f, 25.0f),
+        ENG_FIELD(C, active, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
 template <> FieldSpan fieldsOf<ecs::AudioEmitter>()
 {
     using E = ecs::AudioEmitter;
@@ -477,6 +492,10 @@ void registerEngineComponents(ComponentRegistry& reg)
     reg.add(reflectedComponent<LightAnimation>("LightAnimation", 21));
     reg.add(reflectedComponent<Camera>("Camera", 22));
     reg.add(reflectedComponent<Orbit>("Orbit", 23));
+    // 24 was the one gap left in the engine's block; the player's tuning is
+    // exactly the kind of component it was being kept for.
+    reg.add(reflectedComponent<FirstPersonController>("FirstPersonController",
+                                                      24));
     reg.add(reflectedComponent<ShaderParams>("ShaderParams", 25));
     reg.add(reflectedComponent<PortalParams>("PortalParams", 26));
     reg.add(reflectedComponent<AudioEmitter>("AudioEmitter", 27));
