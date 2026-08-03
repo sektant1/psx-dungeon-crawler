@@ -231,8 +231,31 @@
           -5.129000186920166
         ]
       },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.75,
+          0.44999998807907104
+        ],
+        "range": 8.0
+      },
       "spin": {
-        "degrees_per_second": 30.0
+        "degrees_per_second": 183.0
+      },
+      "particles": {
+        "effect": "portal_draw"
+      },
+      "orbit": {
+        "centre": [
+          0.6136000156402588,
+          3.5,
+          -5.129000186920166
+        ],
+        "radius": 1.9500000476837158,
+        "degrees_per_second": 30.0,
+        "phase_degrees": 67.0,
+        "facing": "centre"
       }
     },
     {
