@@ -10,11 +10,7 @@ compile_commands.json
 # writes its playtest capture under artifacts/ with the other generated files.
 ogre.log
 artifacts/
-.agents/
-.codex/
-.claude/
-.opencode/
-.goose/
+
 
 # Pipeline source art living alongside the content packs: archives and DCC
 # files are *inputs* to the asset pipeline, not build inputs -- what the game
@@ -30,12 +26,10 @@ assets/**/*.blend
 assets/**/*.blend1
 assets/**/*.fbx
 assets/*.webm
+
 # Screen captures are local scratch; the two the README embeds are committed.
 assets/*.mp4
 assets/*.gif
-!assets/preview.mp4
-!assets/preview.gif
-docs/superpowers/
 
 # Vendored SDK
 vendor/ogre/
