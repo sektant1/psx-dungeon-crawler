@@ -17,6 +17,9 @@
 #   ui/           UI data (hint text)
 #   scenes/       .scn sources and cooked .map
 #   schemas/      JSON Schema for the editor's scene format
+#   scripts/      Lua entity and level scripts, read by explicit path. NOT in
+#                 the resources list below: that is Ogre's flat group, and a
+#                 script is data the host loads by name, not a renderer asset.
 #   templates/    authoring templates, never loaded at runtime
 #   source/       pipeline INPUTS: archives, .blend, raw sprite packs. Not
 #                 loaded by anything; gitignored by extension.
