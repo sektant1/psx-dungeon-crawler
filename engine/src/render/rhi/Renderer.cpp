@@ -2587,6 +2587,27 @@ void Renderer::destroyNode(NodeHandle handle)
     Impl::Node* root = mImpl->node(handle, "destroyNode");
     if (!root || handle.id == kRootNode.id)
         return;
+    // Unlink from the parent BEFORE walking the subtree.
+    //
+    // Without this the parent kept a handle to a node it no longer owns, and
+    // destroying the parent later walked into that dead entry and reported an
+    // invalid handle -- once per orphaned child, which on a level teardown is a
+    // screenful of errors describing nothing a caller can act on. Worse, it
+    // trained everyone to ignore the one channel that reports real handle
+    // misuse.
+    //
+    // SceneRegistry::removeNode has always unlinked its own copy of the graph;
+    // this is the renderer's node vector catching up with it.
+    // const_cast rather than the logging overload: a node whose parent is
+    // already gone is the ordinary case when a subtree unwinds top-down, and
+    // reporting it would reintroduce exactly the noise this removes.
+    if (auto* owner = const_cast<Impl::Node*>(
+            static_cast<const Impl*>(mImpl.get())->node(root->parent))) {
+        auto& kids = owner->children;
+        kids.erase(std::remove_if(kids.begin(), kids.end(),
+                                  [&](NodeHandle h) { return h.id == handle.id; }),
+                   kids.end());
+    }
     std::vector<NodeHandle> targets{handle};
     for (size_t i = 0; i < targets.size(); ++i)
         if (const Impl::Node* current = mImpl->node(targets[i]))
