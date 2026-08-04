@@ -85,6 +85,41 @@ AssetPreviewLayout assetPreviewLayout(float availableWidth)
     return layout;
 }
 
+float dialogButtonWidth()
+{
+    // Eight em-widths of the current font. A constant would have to be chosen
+    // for one scale and would be wrong at every other; this is the same
+    // proportion at all of them.
+    return ImGui::CalcTextSize("M").x * 8.0f +
+           ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+float iconButtonSize() { return ImGui::GetFrameHeight(); }
+
+void centreNextModal(float widthInTextHeights, float heightInTextHeights,
+                     float minWidthInTextHeights, float minHeightInTextHeights)
+{
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float unit = ImGui::GetTextLineHeight();
+
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
+                            ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(
+        ImVec2(widthInTextHeights * unit, heightInTextHeights * unit),
+        ImGuiCond_Appearing);
+
+    // The maximum keeps a dialog inside the window it opened over: a floor
+    // taller than the viewport would otherwise make one that cannot be closed
+    // because its buttons are off-screen.
+    const float minWidth = minWidthInTextHeights * unit;
+    const float minHeight = minHeightInTextHeights * unit;
+    const float margin = ImGui::GetStyle().WindowPadding.x * 4.0f;
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(minWidth, minHeight),
+        ImVec2(std::max(viewport->WorkSize.x - margin, minWidth),
+               std::max(viewport->WorkSize.y - margin, minHeight)));
+}
+
 bool filterMatches(std::string_view text, std::string_view query)
 {
     if (query.empty())

@@ -114,6 +114,38 @@ struct AssetPreviewLayout {
 
 AssetPreviewLayout assetPreviewLayout(float availableWidth);
 
+// --- metrics ---------------------------------------------------------------
+//
+// Sizes derived from the current style, for the places a raw pixel count would
+// otherwise go.
+//
+// These exist because the editor has a UI scale setting that hardcoded sizes
+// quietly opt out of. applyUiScale calls ImGui::ScaleAllSizes and sets
+// FontGlobalScale, so padding, spacing and text all grow -- but an
+// `ImVec2(120.0f, 0.0f)` button stays 120 pixels wide while the label inside it
+// gets bigger, and at 1.5x the text runs out of its own button. Every size here
+// is a multiple of something the style owns, so it follows the scale for free.
+
+// The width of a dialog's confirm/cancel buttons. Wide enough to read as a
+// button rather than as its text, equal across a dialog so the pair lines up.
+float dialogButtonWidth();
+
+// A square button that holds one glyph: the remove "x" at the end of a row, an
+// arrow. Exactly the height of a frame, so it matches the widget beside it.
+float iconButtonSize();
+
+// Centres the next modal on the viewport and gives it a starting size and a
+// floor, both in units of the CURRENT text height rather than pixels.
+//
+// Call immediately before BeginPopupModal. The sizes are `ImGuiCond_Appearing`,
+// so an author who resizes a dialog keeps their size; this only decides what it
+// opens at. The two dialogs that did this by hand each carried four pixel
+// constants and disagreed about them, and both shrank relative to their own
+// text as the UI scale went up.
+void centreNextModal(float widthInTextHeights, float heightInTextHeights,
+                     float minWidthInTextHeights,
+                     float minHeightInTextHeights);
+
 // --- shared bits -----------------------------------------------------------
 
 // Case-insensitive substring match, the rule every search box in the editor

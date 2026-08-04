@@ -6725,11 +6725,11 @@ void EditorApp::drawOpenScenePopup()
     const bool enter = ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
                        ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false);
     ImGui::BeginDisabled(mOpenSceneSelection.empty());
-    if (ImGui::Button("Open", ImVec2(120.0f, 0.0f)) || enter)
+    if (ImGui::Button("Open", ImVec2(ui::dialogButtonWidth(), 0.0f)) || enter)
         activate = mOpenSceneSelection;
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+    if (ImGui::Button("Cancel", ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         mOpenSceneOpen = false;
         ImGui::CloseCurrentPopup();
@@ -6750,14 +6750,7 @@ void EditorApp::drawSettings()
 {
     if (!mSettingsOpen)
         return;
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
-                            ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(520.0f, 560.0f), ImGuiCond_Appearing);
-    ImGui::SetNextWindowSizeConstraints(
-        ImVec2(360.0f, 320.0f),
-        ImVec2(std::max(viewport->WorkSize.x - 32.0f, 360.0f),
-               std::max(viewport->WorkSize.y - 32.0f, 320.0f)));
+    ui::centreNextModal(34.0f, 37.0f, 24.0f, 21.0f);
     if (!ImGui::Begin("Settings", &mSettingsOpen, ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
         return;
@@ -6883,14 +6876,7 @@ void EditorApp::drawHelp()
 {
     if (!mHelpOpen)
         return;
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
-                            ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(460.0f, 520.0f), ImGuiCond_Appearing);
-    ImGui::SetNextWindowSizeConstraints(
-        ImVec2(340.0f, 280.0f),
-        ImVec2(std::max(viewport->WorkSize.x - 32.0f, 340.0f),
-               std::max(viewport->WorkSize.y - 32.0f, 280.0f)));
+    ui::centreNextModal(30.0f, 34.0f, 22.0f, 18.0f);
     if (!ImGui::Begin("Keyboard Shortcuts###Shortcuts", &mHelpOpen,
                       ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
@@ -7034,7 +7020,7 @@ void EditorApp::drawSaveAsPopup()
     };
     ImGui::BeginDisabled(!validation.empty());
     const char* saveLabel = replacing ? "Replace..." : "Save";
-    const bool clickedSave = ImGui::Button(saveLabel, ImVec2(120.0f, 0.0f));
+    const bool clickedSave = ImGui::Button(saveLabel, ImVec2(ui::dialogButtonWidth(), 0.0f));
     if (clickedSave || (entered && validation.empty())) {
         const std::string path = candidate.string();
         if (replacing) {
@@ -7063,7 +7049,7 @@ void EditorApp::drawSaveAsPopup()
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+    if (ImGui::Button("Cancel", ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         mContinueDiscardAfterSave = false;
         mSaveAsOpen = false;
@@ -7301,13 +7287,13 @@ void EditorApp::drawImportModelPopup()
                             : mImportModelPath.c_str());
 
     ImGui::BeginDisabled(mImportModelPath.empty());
-    if (ImGui::Button("Import", ImVec2(120.0f, 0.0f))) {
+    if (ImGui::Button("Import", ImVec2(ui::dialogButtonWidth(), 0.0f))) {
         if (importModel(mImportModelPath))
             ImGui::CloseCurrentPopup();
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+    if (ImGui::Button("Cancel", ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape))
         ImGui::CloseCurrentPopup();
     ImGui::EndPopup();

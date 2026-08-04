@@ -6,6 +6,8 @@
 // checks pixels; it checks that a row's pieces still add up to its width at
 // sizes other than the one somebody happened to have docked.
 
+#include <editor/ui/EditorUi.h>
+
 #include <imgui.h>
 
 #include <cstdio>
@@ -105,6 +107,36 @@ int main()
                 "the reserved width follows the frame height: a bigger font "
                 "makes the buttons bigger, and a constant would not have "
                 "noticed");
+    }
+
+    // --- sizes follow the UI scale ----------------------------------------
+    //
+    // The editor has a UI scale setting. applyUiScale calls ScaleAllSizes and
+    // sets FontGlobalScale, so padding, spacing and text all grow with it -- but
+    // a hardcoded ImVec2(120, 0) button does not. At 1.5x the label grew and its
+    // button did not, and the text ran out of its own button. Six dialog buttons
+    // had that constant.
+    {
+        const float buttonBefore = ed::ui::dialogButtonWidth();
+        const float iconBefore = ed::ui::iconButtonSize();
+
+        // What applyUiScale does, in miniature.
+        const float scale = 1.5f;
+        ImGui::GetStyle().ScaleAllSizes(scale);
+        ImGui::GetIO().FontGlobalScale = scale;
+
+        const float buttonAfter = ed::ui::dialogButtonWidth();
+        const float iconAfter = ed::ui::iconButtonSize();
+
+        require(buttonAfter > buttonBefore,
+                "a dialog button gets wider when the UI scales up -- a "
+                "constant would not have, and the label inside it would "
+                "outgrow the box");
+        require(iconAfter > iconBefore,
+                "and so does a one-glyph icon button");
+
+        ImGui::GetIO().FontGlobalScale = 1.0f;
+        ImGui::GetStyle().ScaleAllSizes(1.0f / scale);
     }
 
     ImGui::EndFrame();

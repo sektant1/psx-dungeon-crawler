@@ -1456,8 +1456,11 @@ if(BUILD_TESTING)
   # no backend. Widget sizing is the part that was measured by hand and drifted,
   # and it is checkable without drawing anything.
   add_executable(editor_inspector_layout_tests
-                 editor/tests/EditorInspectorLayoutTests.cpp)
-  target_link_libraries(editor_inspector_layout_tests PRIVATE eng_imgui)
+                 editor/tests/EditorInspectorLayoutTests.cpp
+                 editor/src/ui/EditorUi.cpp)
+  target_link_libraries(editor_inspector_layout_tests PRIVATE eng_imgui eng)
+  target_include_directories(editor_inspector_layout_tests
+                             PRIVATE editor/include engine/include)
   add_test(NAME editor_inspector_layout
            COMMAND editor_inspector_layout_tests)
 
