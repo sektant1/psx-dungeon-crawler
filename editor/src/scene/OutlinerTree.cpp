@@ -217,6 +217,30 @@ OutlinerTree buildOutliner(const SceneDocument& document,
     const std::vector<Term> terms = parseFilter(lower(options.filter));
     std::unordered_set<std::string> visited;
 
+    // Scoped to one object: its whole subtree, as one composed group, and
+    // nothing else. Returned early rather than filtered out below, because the
+    // grouping rules that follow are about reading a level -- collapsing a
+    // hundred identical walls is exactly wrong for the four parts of one prop.
+    if (!options.root.empty()) {
+        const Entity* root = document.find(options.root);
+        if (!root)
+            return tree; // deleted; the caller is about to leave the mode
+        OutlinerGroup group;
+        group.key = root->id;
+        group.kind = entityKind(*root, catalog);
+        group.composed = true;
+        group.nodes.push_back(buildNode(document, catalog, *root, visited));
+        group.label = group.nodes.front().label;
+        const std::size_t count = countNodes(group.nodes.front());
+        if (!terms.empty() && !subtreeMatches(group.nodes.front(), terms)) {
+            tree.hidden = count;
+            return tree;
+        }
+        tree.shown = count;
+        tree.groups.push_back(std::move(group));
+        return tree;
+    }
+
     // Which entities are part of a composed object: they have a parent, or
     // something is parented to them. Everything else -- the flat majority of a
     // blockout -- keeps the prefab grouping below.

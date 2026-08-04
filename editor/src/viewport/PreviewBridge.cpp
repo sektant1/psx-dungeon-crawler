@@ -87,6 +87,9 @@ struct PreviewBridge::Impl
     bool handsFailed = false;
     std::string builtWeapon;   // the id currently in the hands
     bool viewmodelShown = false;
+    // The entity carrying the Viewmodel Preview component, so isolation can
+    // decide whether the hands belong on screen with the rest of the subtree.
+    AuthorId viewmodelHost;
 
     // Loads weapons.toml and viewmodel_hands.toml once, lazily: an editor
     // session that never opens a scene with a preview should not pay for them.
@@ -123,10 +126,22 @@ struct PreviewBridge::Impl
     // must survive that.
     std::unordered_set<AuthorId> hidden;
 
-    // Everything that keeps an entity off screen, in one place: the ceiling
-    // cut, and the author's own choice.
+    // The isolated subtree: the root and its descendants, or empty when the
+    // viewport is showing the whole level. Inverted sense from `hidden` -- this
+    // is what stays, not what goes -- because an isolated object is a handful
+    // of entities and the level around it is hundreds.
+    std::unordered_set<AuthorId> isolated;
+    bool isolating = false;
+
+    // Everything that keeps an entity off screen, in one place: isolation, the
+    // ceiling cut, and the author's own choice. Picking asks the same function,
+    // so an entity hidden by any of them cannot be clicked through either.
     bool cutAway(const AuthorId& id) const
     {
+        // First, because it is the strongest: an entity outside the isolated
+        // subtree is gone regardless of what the other two think.
+        if (isolating && isolated.count(id) == 0)
+            return true;
         if (hidden.count(id) != 0)
             return true;
         const auto found = authorToHeight.find(id);
@@ -326,7 +341,9 @@ void PreviewBridge::syncViewmodel(const game::content::SceneDocument& document)
     }
 
     mImpl->hands.applyPose(mImpl->renderer);
-    mImpl->renderer.setNodeVisible(mImpl->viewmodelRoot, true);
+    mImpl->viewmodelHost = host->id;
+    mImpl->renderer.setNodeVisible(mImpl->viewmodelRoot,
+                                   !mImpl->cutAway(host->id));
     mImpl->viewmodelShown = true;
 }
 
@@ -347,6 +364,36 @@ void PreviewBridge::setVisible(eng::Renderer& renderer, bool visible)
     if (!visible)
         mImpl->hideGhost();
     mImpl->visible = visible;
+}
+
+void PreviewBridge::setIsolation(eng::Renderer& renderer, bool active,
+                                 const std::vector<AuthorId>& members)
+{
+    // Compared before doing anything, like the hidden set: this is called every
+    // frame, and re-walking every node per frame would cost more than the mode
+    // saves.
+    if (mImpl->isolating == active && mImpl->isolated.size() == members.size()) {
+        bool same = true;
+        for (const AuthorId& id : members)
+            same = same && mImpl->isolated.count(id) != 0;
+        if (same)
+            return;
+    }
+    mImpl->isolating = active;
+    mImpl->isolated.clear();
+    for (const AuthorId& id : members)
+        mImpl->isolated.insert(id);
+    if (!mImpl->visible)
+        return;
+    for (const auto& [id, node] : mImpl->authorToNode)
+        renderer.setNodeVisible(node, !mImpl->cutAway(id));
+    // The previewed hands belong to whichever entity carries the component; if
+    // that entity is outside the isolated subtree it goes with the rest.
+    if (mImpl->viewmodelShown && mImpl->viewmodelRoot.valid())
+        renderer.setNodeVisible(mImpl->viewmodelRoot,
+                                !mImpl->isolating ||
+                                    mImpl->isolated.count(
+                                        mImpl->viewmodelHost) != 0);
 }
 
 void PreviewBridge::setCeilingCut(eng::Renderer& renderer, float height)

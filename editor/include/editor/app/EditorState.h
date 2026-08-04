@@ -6,6 +6,7 @@
 #include <editor/content/KitCatalog.h>
 #include <editor/content/SceneDocument.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,44 @@ struct GridState {
     }
 };
 
+// What the 3D view is showing. Three answers, so it is an enum rather than the
+// two independent booleans it would otherwise become -- and two booleans
+// deciding what the viewport draws is how they end up both true.
+//
+//   Level     the whole scene, which is every session's starting state
+//   Isolate   one entity and its descendants, alone on the grid
+//   Material  the shipped material stage: one sphere, one material
+enum class ViewportMode { Level, Isolate, Material };
+
+// Which entity the viewport is isolated on, and what to put back on leaving.
+//
+// A view of the open document, never a copy of it: the entity is not extracted
+// and no second file is opened, so undo, save and cook are unaffected and an
+// edit made here is the same edit made in the level.
+struct IsolationState {
+    // Empty when not isolated. The mode enum is the authority; this is which.
+    game::content::AuthorId root;
+    // The root and every descendant, rebuilt when the document revision moves.
+    // Cached because it is asked once per entity per frame by the visibility
+    // filter, and walking the parent chain there would be quadratic.
+    std::vector<game::content::AuthorId> members;
+    uint64_t membersRevision = ~uint64_t(0);
+
+    // Restored on leaving. The author was somewhere when they entered, and a
+    // mode that returns them to the origin is a mode they stop using.
+    EditorCamera cameraBefore;
+    float gridLevelBefore = 0.0f;
+    bool gridCutBefore = false;
+
+    bool contains(const game::content::AuthorId& id) const
+    {
+        for (const game::content::AuthorId& member : members)
+            if (member == id)
+                return true;
+        return false;
+    }
+};
+
 // Everything the editor session holds that is not the document itself. Kept
 // apart so the document stays exactly what the .scn says -- panel layout,
 // selection and camera bookmarks are presentation state and belong in the
@@ -73,6 +112,10 @@ struct EditorState {
     Tool tool = Tool::Select;
     GridState gridState;
     EditorCamera camera;
+    ViewportMode mode = ViewportMode::Level;
+    IsolationState isolation;
+
+    bool isolating() const { return mode == ViewportMode::Isolate; }
 
     std::vector<game::content::AuthorId> selection;
     // What the Place tool will drop next, and which way up.

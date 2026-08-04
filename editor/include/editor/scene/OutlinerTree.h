@@ -73,6 +73,14 @@ struct OutlinerOptions {
     // AND together, so `has:collider kind:enemy` is the intersection.
     std::string filter;
     bool showGeometry = true;
+    // Scope the panel to one entity and its descendants. Set while the viewport
+    // is isolated on that entity (see EditorState::IsolationState), so the
+    // hierarchy is the object's own tree rather than a level with one object
+    // visible in it -- which is the difference between a mode and a filter.
+    //
+    // An id no entity carries yields an empty tree, which is what the caller
+    // wants: the entity was deleted, and the mode is about to leave.
+    game::content::AuthorId root;
 };
 
 struct OutlinerTree {

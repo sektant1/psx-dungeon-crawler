@@ -361,7 +361,7 @@ bool EditorApp::onStart(eng::Engine& engine)
     // Verification hook: start in the staging scene so a screenshot run can
     // capture it without driving the UI.
     if (std::getenv("RAVEN_EDITOR_MATERIAL"))
-        setMode(true);
+        setMode(ViewportMode::Material);
     // Verification hook: stage one material by name. Without it a screenshot
     // run can only cycle the whole list and hope, which cannot show a specific
     // rig (the quad is only reachable through a handful of names).
@@ -708,6 +708,112 @@ void EditorApp::frameCamera(const glm::vec3& min, const glm::vec3& max)
     const float pitch = -1.15f;
     const glm::vec3 back{0.0f, -std::sin(pitch), std::cos(pitch)};
     mState.camera.setYawPitch(0.0f, pitch);
+    mState.camera.setFlyPosition(centre + back * distance);
+    mState.camera.frame(centre, distance);
+}
+
+// --- isolation -------------------------------------------------------------
+
+void EditorApp::enterIsolation(const AuthorId& id)
+{
+    if (!mState.document.find(id))
+        return;
+    if (mState.isolating() && mState.isolation.root == id)
+        return; // already here; a second double-click is not a toggle
+
+    // You cannot edit an object on the material stage, so that mode yields.
+    if (materialMode())
+        setMode(ViewportMode::Level);
+
+    // Saved on the FIRST entry only. Isolating a child from inside an object
+    // -- which is how you work down a chandelier to one candle -- must still
+    // return to the level on the way out, not to the parent's framing.
+    if (!mState.isolating()) {
+        mState.isolation.cameraBefore = mState.camera;
+        mState.isolation.gridLevelBefore = mState.gridState.level;
+        mState.isolation.gridCutBefore = mState.gridState.cutAboveLevel;
+    }
+
+    mState.mode = ViewportMode::Isolate;
+    mState.isolation.root = id;
+    mState.isolation.membersRevision = ~uint64_t(0);
+    refreshIsolation();
+
+    // The grid becomes the ground the object stands on. This is the whole of
+    // the "superflat sandbox": the level is hidden, and the one plane left is
+    // at the object's own height rather than at whatever the level's work
+    // plane happened to be.
+    mState.gridState.level = mState.document.worldTransform(id).position.y;
+    mState.gridState.cutAboveLevel = false;
+
+    mState.select(id);
+    mOutlinerReveal = id;
+
+    glm::vec3 min, max;
+    if (boundsOf({id}, min, max))
+        frameIsolated(min, max);
+}
+
+void EditorApp::leaveIsolation()
+{
+    if (!mState.isolating())
+        return;
+    const AuthorId was = mState.isolation.root;
+    mState.mode = ViewportMode::Level;
+    mState.isolation.root.clear();
+    mState.isolation.members.clear();
+    mState.isolation.membersRevision = ~uint64_t(0);
+    mState.camera = mState.isolation.cameraBefore;
+    mState.gridState.level = mState.isolation.gridLevelBefore;
+    mState.gridState.cutAboveLevel = mState.isolation.gridCutBefore;
+    // Reveal what was being edited, so the level comes back with the object
+    // still under the cursor rather than somewhere in three hundred rows.
+    if (!was.empty() && mState.document.find(was))
+        mOutlinerReveal = was;
+}
+
+void EditorApp::refreshIsolation()
+{
+    if (!mState.isolating())
+        return;
+    // An undo can delete the entity being edited. A mode pinned to an id that
+    // no longer exists is an empty viewport with no way out of it, so leaving
+    // is not optional -- and it has to be checked against the document rather
+    // than trusted from entry.
+    if (!mState.document.find(mState.isolation.root)) {
+        leaveIsolation();
+        return;
+    }
+    if (mState.isolation.membersRevision == mState.document.revision)
+        return;
+    mState.isolation.membersRevision = mState.document.revision;
+    mState.isolation.members.assign(1, mState.isolation.root);
+    for (const AuthorId& id :
+         mState.document.descendantsOf(mState.isolation.root))
+        mState.isolation.members.push_back(id);
+}
+
+AuthorId EditorApp::parentForNewEntity() const
+{
+    return mState.isolating() ? mState.isolation.root : AuthorId{};
+}
+
+// A gentler pitch than frameSelectionOrAll's. That one looks steeply down
+// because a dungeon is a closed box seen from above; an isolated object is a
+// thing on a table, and a three-quarter view is how you judge one.
+void EditorApp::frameIsolated(const glm::vec3& min, const glm::vec3& max)
+{
+    const glm::vec3 centre = (min + max) * 0.5f;
+    const float radius = glm::max(glm::length(max - min) * 0.5f, 0.5f);
+    const float distance =
+        radius / std::tan(glm::radians(EditorCamera::kEditorFovDeg * 0.5f)) *
+        1.9f;
+    const float pitch = -0.42f;
+    const float yaw = 0.6f;
+    const glm::vec3 back{std::sin(yaw) * std::cos(pitch), -std::sin(pitch),
+                         std::cos(yaw) * std::cos(pitch)};
+    mState.camera.leaveWalk();
+    mState.camera.setYawPitch(yaw, pitch);
     mState.camera.setFlyPosition(centre + back * distance);
     mState.camera.frame(centre, distance);
 }
@@ -1704,8 +1810,13 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
     else if (mPalette.open) {
         mPalette.open = false;
     }
-    else if (mMaterialMode) {
-        setMode(false);
+    else if (materialMode()) {
+        setMode(ViewportMode::Level);
+    }
+    else if (mState.isolating()) {
+        // Esc walks out one layer at a time, and isolation is the outermost
+        // thing it can be in once the popups and the brush are dealt with.
+        leaveIsolation();
     }
     else if (!mState.selection.empty()) {
         finishInspectorEdit();
@@ -1805,7 +1916,7 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
         const std::string& name = mMaterialNames[mCycleIndex];
         mSelectedMaterial = name;
         mStage.setThumbnailMaterial(renderer, name);
-        if (mMaterialMode)
+        if (materialMode())
             mStage.setMaterial(renderer, name);
     }
 
@@ -1814,7 +1925,7 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
     if (mThumbAutoSpin && mStage.thumbnailBuilt())
         mStage.spinThumbnail(renderer, mStage.thumbnailSpin() + 0.6f * f.dt);
 
-    if (mMaterialMode) {
+    if (materialMode()) {
         if (mStageAutoSpin)
             mStage.setSpin(renderer, mStage.spin() + mStageSpinSpeed * f.dt);
     }
@@ -1833,6 +1944,12 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
                           ? mState.gridState.level + mState.grid.cell * 0.5f
                           : std::numeric_limits<float>::infinity());
         mPreview->setHiddenEntities(renderer, mState.hidden);
+        // After the document is synced, so a member added this frame is in the
+        // set before the visibility pass reads it -- otherwise a part placed
+        // inside an object flickers into view a frame late.
+        refreshIsolation();
+        mPreview->setIsolation(renderer, mState.isolating(),
+                               mState.isolation.members);
     }
     // Walk mode hands the renderer the player's eye and the game's field of
     // view, so the viewport shows exactly the frame the player will get.
@@ -1866,7 +1983,7 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
         }
         mAudio->update(f.dt);
     }
-    if (mMaterialMode)
+    if (materialMode())
         renderer.setDebugLines({}); // the checkerboard is the reference here
     else
         updateGridLines(renderer);
@@ -2093,8 +2210,19 @@ std::vector<PaletteAction> EditorApp::paletteActions()
             if (mEngine)
                 applySceneEnvironment(mEngine->renderer());
         });
-    add(mMaterialMode ? "Leave material stage" : "Material stage", "view", "",
-        true, [this] { setMode(!mMaterialMode); });
+    add(materialMode() ? "Leave material stage" : "Material stage", "view", "",
+        true, [this] {
+            setMode(materialMode() ? ViewportMode::Level
+                                   : ViewportMode::Material);
+        });
+    add(mState.isolating() ? "Leave isolation" : "Isolate selection", "view",
+        "Esc", mState.isolating() || mState.primary() != nullptr, [this] {
+            if (mState.isolating())
+                leaveIsolation();
+            else if (const AuthorId* id = mState.primary())
+                enterIsolation(*id);
+        },
+        "edit one object alone on the grid");
     add("Console", "view", "`", true, [this] { mConsole.toggle(); });
     add("Shortcuts", "view", "F1", true, [this] { mHelpOpen = !mHelpOpen; });
     add("Settings", "view", "", true,
@@ -2193,7 +2321,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
                              ImGui::DockBuilderGetNode(dock)->IsEmpty();
         if (missing || mResetLayoutRequested) {
             buildEditorWorkspace(dock, dockSize.x, dockSize.y, mAppliedUiScale);
-            if (mMaterialMode)
+            if (materialMode())
                 mAssetBrowserModeRequest = 2; // Materials
         }
         mLayoutBuilt = true;
@@ -2235,7 +2363,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // GUI widgets mutate authored data after onUpdate() has already mirrored
     // the document. A final revision-aware sync removes the otherwise visible
     // one-frame delay between an inspector/gizmo edit and the 3D viewport.
-    if (!mMaterialMode && mPreview)
+    if (!materialMode() && mPreview)
         mPreview->sync(mState.document, mState.catalog);
 }
 
@@ -2520,7 +2648,7 @@ void EditorApp::drawToolbar()
                             toolbarIconWidth(18.0f, 3));
             ImGui::TextDisabled("|  TRANSFORM");
             ImGui::SameLine();
-            ImGui::BeginDisabled(mMaterialMode || mGizmoDragging);
+            ImGui::BeginDisabled(materialMode() || mGizmoDragging);
             if (iconButton(Icon::Move, "##gizmo_move",
                            "Move  [W]\nTranslate the selection",
                            mState.tool == Tool::Select && mGizmoOperation == 0,
@@ -2612,7 +2740,7 @@ void EditorApp::drawToolbar()
                             toolbarButtonWidth("world (multi)"));
             ImGui::TextDisabled("|");
             ImGui::SameLine();
-            if (mMaterialMode) {
+            if (materialMode()) {
                 ImGui::TextDisabled("stage Y rotate");
             }
             else {
@@ -2789,7 +2917,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             ImGui::IsWindowHovered(
                 ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
             ImGui::IsMouseHoveringRect(pos, imageMax, false);
-        if (mMaterialMode || mState.tool != Tool::Place || !mViewportHovered ||
+        if (materialMode() || mState.tool != Tool::Place || !mViewportHovered ||
             mFlying)
             mPreview->hidePlacementGhost();
 
@@ -2806,7 +2934,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
         // scene, this badge answers whether a click will pick, paint or drag.
         if (validViewport) {
             std::string mode;
-            if (mMaterialMode) {
+            if (materialMode()) {
                 mode = "MATERIAL STAGE";
             }
             else if (mState.tool == Tool::Place) {
@@ -2859,7 +2987,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
                                   ImGui::GetColorU32(ImGuiCol_Text),
                                   mode.c_str());
         }
-        if (mMaterialMode) {
+        if (materialMode()) {
             // Only the test shape may be manipulated: a reference stage whose
             // floor and lights can be dragged out of alignment has stopped
             // being a reference.
@@ -2968,7 +3096,7 @@ const std::vector<GizmoMark>& EditorApp::entityGizmoMarks()
 
 void EditorApp::drawEntityGizmos()
 {
-    if (!mShowEntityGizmos || mMaterialMode || mViewportW < 8.0f)
+    if (!mShowEntityGizmos || materialMode() || mViewportW < 8.0f)
         return;
     glm::mat4 view, projection;
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
@@ -3882,12 +4010,16 @@ const OutlinerTree& EditorApp::outlinerTree()
     OutlinerOptions options;
     options.filter = mOutlinerFilter;
     options.showGeometry = mOutlinerShowGeometry;
+    // While isolated the panel is the object's own tree, not the level with one
+    // object visible in it. That is the difference between a mode and a filter.
+    options.root = mState.isolating() ? mState.isolation.root : AuthorId{};
     // Grouping walks and sorts every entity, and this panel is open while the
     // gizmo is dragged -- so it is rebuilt on a document revision or an option
     // change, never per frame.
     if (mOutlinerRevision != mState.document.revision ||
         options.filter != mOutlinerOptions.filter ||
-        options.showGeometry != mOutlinerOptions.showGeometry) {
+        options.showGeometry != mOutlinerOptions.showGeometry ||
+        options.root != mOutlinerOptions.root) {
         mOutlinerRevision = mState.document.revision;
         mOutlinerOptions = options;
         mOutliner = buildOutliner(mState.document, mState.catalog, options);
@@ -4512,6 +4644,7 @@ void EditorApp::drawOutliner()
             }
         };
         actions.focus = [this] { frameSelectionOrAll(); };
+        actions.isolate = [this](const AuthorId& id) { enterIsolation(id); };
         actions.contextMenu = [this] { drawSelectionContextMenu(); };
         actions.reparent = [this](const AuthorId& child,
                                   const AuthorId& parent) {
@@ -5468,11 +5601,22 @@ void EditorApp::drawIssues()
 
 // --- material staging mode ---------------------------------------------------
 
-void EditorApp::setMode(bool material)
+void EditorApp::setMode(ViewportMode mode)
 {
-    if (mMaterialMode == material)
+    if (mState.mode == mode)
         return;
-    mMaterialMode = material;
+    // Leaving isolation is not optional when another mode is entered: the two
+    // both decide what the viewport draws, and a level hidden by one and
+    // restored by the other is a viewport nobody can get back.
+    if (mState.mode == ViewportMode::Isolate)
+        leaveIsolation();
+    if (mode == ViewportMode::Isolate) {
+        // Entered through enterIsolation, which has an entity to isolate on.
+        // Reaching here means a caller asked for the mode without one.
+        return;
+    }
+    const bool material = mode == ViewportMode::Material;
+    mState.mode = mode;
     if (material)
         mAssetBrowserModeRequest = 2; // Materials
     eng::Renderer& renderer = mEngine->renderer();
@@ -5631,9 +5775,9 @@ void EditorApp::drawMaterialPanel()
     view.toggles = [&] {
         ImGui::Checkbox("spin", &mThumbAutoSpin);
         ImGui::SameLine();
-        bool material = mMaterialMode;
+        bool material = materialMode();
         if (ImGui::Checkbox("Material Stage", &material))
-            setMode(material);
+            setMode(material ? ViewportMode::Material : ViewportMode::Level);
         ImGui::SameLine();
         eng::imguihint::marker(
             "editor.staging_mode",
@@ -5651,7 +5795,7 @@ void EditorApp::drawMaterialPanel()
                 "particle, sprite and compositor materials -- they "
                 "need geometry the engine generates, not an entity's");
 
-        if (mMaterialMode) {
+        if (materialMode()) {
             ImGui::SetNextItemWidth(110.0f);
             ImGui::SliderFloat("turntable", &mStageSpinSpeed, -2.0f, 2.0f);
             ImGui::SameLine();
@@ -5717,7 +5861,7 @@ void EditorApp::drawMaterialPanel()
             if (picked) {
                 mSelectedMaterial = name;
                 mStage.setThumbnailMaterial(renderer, name);
-                if (mMaterialMode)
+                if (materialMode())
                     mStage.setMaterial(renderer, name);
             }
             // Hovering previews. Selecting commits. That split is what makes
@@ -5930,7 +6074,7 @@ void EditorApp::requestMeshPreview(const std::string& meshPath,
 
 void EditorApp::useMeshBrush(const std::string& meshPath)
 {
-    setMode(false);
+    leaveMaterialStage();
     mState.brush.kind = Brush::Kind::Mesh;
     mState.brush.meshPath = meshPath;
     mState.tool = Tool::Place;
@@ -5940,7 +6084,7 @@ void EditorApp::useMeshBrush(const std::string& meshPath)
 
 void EditorApp::usePrimitiveBrush(const eng::ecs::PrimitiveMesh& primitive)
 {
-    setMode(false);
+    leaveMaterialStage();
     mState.brush.kind = Brush::Kind::Primitive;
     mState.brush.primitive = primitive;
     mState.tool = Tool::Place;
@@ -6125,7 +6269,7 @@ void EditorApp::drawMeshPanel()
         if (selected && !selected->kitPrefab.empty()) {
             ImGui::SameLine();
             if (ImGui::Button("Place as Kit Piece")) {
-                setMode(false);
+                leaveMaterialStage();
                 mState.brush.kind = Brush::Kind::Piece;
                 mState.brush.prefab = selected->kitPrefab;
                 mState.tool = Tool::Place;
@@ -6348,7 +6492,7 @@ void EditorApp::drawParticlePanel()
         ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Use as Brush")) {
-            setMode(false);
+            leaveMaterialStage();
             mState.brush.kind = Brush::Kind::Particles;
             mState.brush.effect = d.name;
             mState.tool = Tool::Place;

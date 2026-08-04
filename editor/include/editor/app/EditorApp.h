@@ -152,7 +152,37 @@ private:
     // What the selected entities' meshes offer a material, taken from the
     // material their kit pieces were authored with.
     MeshKind selectionMeshKind();
-    void setMode(bool material);
+    // Switches what the 3D view shows. Isolation is entered through
+    // enterIsolation instead, because it needs an entity to isolate on.
+    void setMode(ViewportMode mode);
+    // Arming a brush leaves the material stage -- you cannot place onto a
+    // sphere -- but must not leave isolation: choosing something to put inside
+    // an object is exactly what an author does while editing one.
+    void leaveMaterialStage()
+    {
+        if (materialMode())
+            setMode(ViewportMode::Level);
+    }
+    bool materialMode() const
+    {
+        return mState.mode == ViewportMode::Material;
+    }
+
+    // Takes the viewport into `id` and its descendants: the level is hidden,
+    // the grid drops to the entity's own height, and the hierarchy scopes to
+    // its tree. Leaving restores all three. A view of the document, never a
+    // copy -- see docs/superpowers/specs/2026-08-04-entity-isolation-design.md.
+    void enterIsolation(const game::content::AuthorId& id);
+    void leaveIsolation();
+    // The isolated subtree, rebuilt when the document revision moves. Also
+    // leaves the mode when the root has gone (an undo can delete it).
+    void refreshIsolation();
+    // Where a newly placed entity belongs: the isolated root while that mode is
+    // on, nothing otherwise. Isolating an object to add a part to it and having
+    // the part appear beside it in the level is the mode being read-only in
+    // practice.
+    game::content::AuthorId parentForNewEntity() const;
+    void frameIsolated(const glm::vec3& min, const glm::vec3& max);
     // Selection and manipulation, both driven from inside the viewport panel so
     // they share its rect with ImGuizmo.
     void handleViewportPicking(const eng::FrameContext& f);
@@ -409,7 +439,8 @@ private:
     // Material staging mode. A separate scene rather than a panel over the
     // level: the point of a reference stage is that nothing else is in it.
     MaterialStage mStage;
-    bool mMaterialMode = false;
+    // The mode itself lives in mState (EditorState::mode) with the camera and
+    // the tool, because it is session state the panels also read.
     bool mStageAutoSpin = true;
     float mStageSpinSpeed = 0.35f;
     std::vector<std::string> mMaterialNames;

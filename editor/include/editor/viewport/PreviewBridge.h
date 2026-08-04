@@ -56,6 +56,11 @@ public:
     // the top-down view is a lid. Cheap to call every frame -- it returns
     // immediately unless the height moved.
     void setCeilingCut(eng::Renderer& renderer, float height);
+    // Shows only `members` -- an entity and its descendants -- and hides the
+    // level around them. `active` false restores the whole scene. Cheap to call
+    // every frame; it returns immediately unless the set moved.
+    void setIsolation(eng::Renderer& renderer, bool active,
+                      const std::vector<game::content::AuthorId>& members);
 
     // Transient brush mesh under the cursor. It never enters the document or
     // ECS preview, so it cannot be picked, cooked or recorded by undo.
