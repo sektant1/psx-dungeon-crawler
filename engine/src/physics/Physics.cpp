@@ -24,6 +24,7 @@
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <mutex>
@@ -38,7 +39,11 @@ namespace eng {
 // Shared data that the contact listener writes to during Jolt's Update.
 // Plain struct — no private visibility issues — passed by pointer to the listener.
 struct ContactSharedData {
-    Physics::HitCallback*                     contactCb = nullptr;
+    // Read from Jolt's job threads inside OnContactAdded. An atomic bool rather
+    // than a pointer to the subscriber list: the listener only needs to know
+    // whether collecting is worth it, and reading a std::vector concurrently
+    // with a subscribe would be a race.
+    const std::atomic<bool>*                  contactsWanted = nullptr;
     std::mutex*                               contactMtx = nullptr;
     std::vector<HitEvent>*                    pendingContacts = nullptr;
     std::unordered_map<uint32_t, uint32_t>*   idToSlot = nullptr;
@@ -93,7 +98,10 @@ struct Physics::Impl {
     phys::CharacterPushListener charPushListener;
 
     // contact seam
-    Physics::HitCallback contactCb;
+    struct ContactSub { ContactToken token; Physics::HitCallback fn; };
+    std::vector<ContactSub> contactSubs;
+    ContactToken nextContactToken = 1;   // 0 is reserved for "none"
+    std::atomic<bool> contactsWanted{false};
     std::mutex  contactMtx;
     std::vector<HitEvent> pendingContacts;
     ContactSharedData contactShared;
@@ -110,7 +118,9 @@ public:
                         const JPH::ContactManifold& manifold,
                         JPH::ContactSettings&) override
     {
-        if (!mShared->contactCb || !*mShared->contactCb) return;
+        if (!mShared->contactsWanted ||
+            !mShared->contactsWanted->load(std::memory_order_relaxed))
+            return;
 
         // Map body IDs to BodyHandles via the id->slot table
         BodyHandle h1{}, h2{};
@@ -277,7 +287,7 @@ void Physics::init(const PhysicsSetup& setup) {
                                   mImpl->setup.gravity.z));
     // Register the contact listener so we can forward HitEvents to game code.
     // The listener is owned by the Impl; it must outlive the PhysicsSystem.
-    mImpl->contactShared.contactCb      = &mImpl->contactCb;
+    mImpl->contactShared.contactsWanted = &mImpl->contactsWanted;
     mImpl->contactShared.contactMtx     = &mImpl->contactMtx;
     mImpl->contactShared.pendingContacts = &mImpl->pendingContacts;
     mImpl->contactShared.idToSlot       = &mImpl->idToSlot;
@@ -318,14 +328,20 @@ void Physics::update(float dt, int steps) {
     // Flush deferred contact events collected during Update (called from job threads).
     // We hold the lock just long enough to swap out the vector, then call the
     // callback from the main thread with no lock held.
-    if (mImpl->contactCb) {
+    if (mImpl->contactsWanted.load(std::memory_order_relaxed)) {
         std::vector<HitEvent> batch;
         {
             std::lock_guard<std::mutex> lock(mImpl->contactMtx);
             batch.swap(mImpl->pendingContacts);
         }
+        // Copied before dispatch: a subscriber may subscribe or unsubscribe
+        // from inside its own callback -- a script that destroys the entity it
+        // just hit does exactly that -- and that would reallocate the vector
+        // under this loop.
+        const std::vector<Impl::ContactSub> subs = mImpl->contactSubs;
         for (const HitEvent& ev : batch)
-            mImpl->contactCb(ev);
+            for (const Impl::ContactSub& sub : subs)
+                if (sub.fn) sub.fn(ev);
     }
 }
 
@@ -805,8 +821,22 @@ int Physics::overlap(const BodyDesc& shape, glm::vec3 at,
     }
     return int(out.size());
 }
-void Physics::setContactCallback(HitCallback cb) {
-    mImpl->contactCb = std::move(cb);
+ContactToken Physics::addContactCallback(HitCallback cb) {
+    if (!cb) return 0;
+    const ContactToken token = mImpl->nextContactToken++;
+    mImpl->contactSubs.push_back({token, std::move(cb)});
+    mImpl->contactsWanted.store(true, std::memory_order_relaxed);
+    return token;
+}
+
+void Physics::removeContactCallback(ContactToken token) {
+    auto& subs = mImpl->contactSubs;
+    subs.erase(std::remove_if(subs.begin(), subs.end(),
+                              [token](const Impl::ContactSub& s) {
+                                  return s.token == token;
+                              }),
+               subs.end());
+    mImpl->contactsWanted.store(!subs.empty(), std::memory_order_relaxed);
 }
 
 // ---- debug draw ----------------------------------------------------------

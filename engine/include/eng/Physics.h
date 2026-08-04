@@ -173,6 +173,10 @@ struct HitEvent { BodyHandle self; BodyHandle other; glm::vec3 point{0}; glm::ve
 
 class EngContactListener;
 
+// A contact subscription. Namespace scope so a caller can store one without
+// naming Physics.
+using ContactToken = uint32_t;
+
 class Physics {
 public:
     Physics();
@@ -218,7 +222,18 @@ public:
                  CollisionMask mask = kAllLayers) const;
 
     using HitCallback = std::function<void(const HitEvent&)>;
-    void setContactCallback(HitCallback);
+
+    // Every subscriber sees every contact, in subscription order.
+    //
+    // Multi-subscriber rather than one slot because the slot had two claimants
+    // the moment anything besides combat wanted contacts: the game's combat
+    // system and the script host's trigger bridge. A setter would have let
+    // whichever ran second silently unregister the first, and nothing would
+    // have reported it.
+    //
+    // Returns a non-zero token; zero is never issued, so it is a usable "none".
+    ContactToken addContactCallback(HitCallback);
+    void removeContactCallback(ContactToken);
 
     // Debug visualisation: fills `out` with the wireframe of every live body's
     // actual collision shape (oriented box/sphere/capsule/cylinder; mesh/hull

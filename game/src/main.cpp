@@ -391,7 +391,9 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // that ask to bounce or to leave a decal fall straight through the level.
     mParticleCollider.emplace(physics(), eng::kAllLayers);
     mCtx->renderer.setParticleCollider(&*mParticleCollider);
-    physics().setContactCallback(
+    // Token discarded deliberately: this subscription lives as long as the
+    // physics world does.
+    physics().addContactCallback(
         [this](const eng::HitEvent& e) { mCombat.onContact(*mCtx, e); });
     mCombat.projectiles().setImpactCallback(
         [this](eng::BodyHandle victim, const std::string& payload,
