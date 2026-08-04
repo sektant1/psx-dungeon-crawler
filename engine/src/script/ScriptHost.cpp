@@ -5,6 +5,7 @@
 #include "script/ScriptInstance.h"
 #include "script/bind/Bindings.h"
 
+#include <eng/Log.h>
 #include <eng/ecs/World.h>
 #include <eng/ecs/components/Name.h>
 #include <eng/ecs/components/Scripts.h>
@@ -32,6 +33,33 @@ struct ScriptHost::Impl {
         entityType = bindEntity(lua);
         setComponentRegistry(&registry);
         bindComponents(lua, entityType);
+
+        WorldCallbacks cb;
+        cb.queueDestroy = [this](entt::entity target, bool hierarchy) {
+            if (tearingDown) {
+                log::warn("Script: destroy refused during teardown");
+                return;
+            }
+            pendingDestroy.push_back({target, hierarchy});
+        };
+        cb.sendEvent = [this](entt::entity target, const std::string& n,
+                              sol::object d) { sendEvent(target, n, std::move(d)); };
+        cb.broadcastEvent = [this](const std::string& n, sol::object d) {
+            broadcastEvent(n, std::move(d));
+        };
+        bindWorld(lua, world, cb);
+
+        // Registered here rather than in BindEntity because both reach into
+        // the instance pool, which is the host's and not a binding's.
+        entityType["send"] = [this](const LuaEntity& h, const std::string& name,
+                                    sol::object data) {
+            if (h.valid()) sendEvent(h.e, name, std::move(data));
+        };
+        entityType["script"] = [this](const LuaEntity& h,
+                                      sol::optional<std::string> p) {
+            if (!h.valid()) return sol::object(sol::lua_nil);
+            return instanceTable(h.e, p.value_or(std::string{}));
+        };
 
         // on_destroy fires from here rather than from World::destroy, because
         // the World must not know scripting exists. entt calls this while the
@@ -113,6 +141,93 @@ struct ScriptHost::Impl {
         return false;
     }
 
+    // --- structural changes, deferred -------------------------------------
+    struct PendingDestroy {
+        entt::entity e;
+        bool hierarchy;
+    };
+    std::vector<PendingDestroy> pendingDestroy;
+
+    void flushDestroys()
+    {
+        // Swapped out first: an on_destroy handler may itself queue a destroy,
+        // and appending to the vector being iterated would invalidate it.
+        std::vector<PendingDestroy> batch;
+        batch.swap(pendingDestroy);
+        for (const PendingDestroy& d : batch) {
+            if (!world.registry().valid(d.e)) continue;
+            if (d.hierarchy)
+                world.destroyHierarchy(d.e);
+            else
+                world.destroy(d.e);
+        }
+    }
+
+    // --- messaging --------------------------------------------------------
+    void sendEvent(entt::entity target, const std::string& name, sol::object data)
+    {
+        auto& reg = world.registry();
+        if (!reg.valid(target) || !reg.all_of<ScriptState>(target)) return;
+        // Copied: on_event may attach a script, which reallocates the vector.
+        const std::vector<uint32_t> slots = reg.get<ScriptState>(target).instances;
+        for (const uint32_t slot : slots)
+            if (ScriptInstance* inst = instances.get(slot))
+                call(*inst, "on_event", name, data);
+    }
+
+    void broadcastEvent(const std::string& name, sol::object data)
+    {
+        for (const uint32_t slot : liveSlots())
+            if (ScriptInstance* inst = instances.get(slot))
+                call(*inst, "on_event", name, data);
+    }
+
+    // The first instance of `path` on `e`, or nil. Empty path means the first
+    // instance of any script. Used by Entity:script().
+    sol::object instanceTable(entt::entity e, const std::string& path)
+    {
+        auto& reg = world.registry();
+        if (!reg.valid(e) || !reg.all_of<ScriptState>(e)) return sol::lua_nil;
+        for (const uint32_t slot : reg.get<ScriptState>(e).instances) {
+            const ScriptInstance* inst = instances.get(slot);
+            if (inst != nullptr && (path.empty() || inst->path == path))
+                return sol::object(inst->self);
+        }
+        return sol::lua_nil;
+    }
+
+    // --- authored props ---------------------------------------------------
+    // Builds self.props for one script instance.
+    sol::table buildProps(entt::entity owner, const ecs::ScriptRef& ref)
+    {
+        sol::table props = lua.create_table();
+        for (const ecs::ScriptProp& p : ref.props) {
+            switch (p.type) {
+            case ecs::ScriptProp::Type::Bool:   props[p.key] = p.b; break;
+            case ecs::ScriptProp::Type::Number: props[p.key] = p.n; break;
+            case ecs::ScriptProp::Type::String: props[p.key] = p.s; break;
+            case ecs::ScriptProp::Type::Vec3:   props[p.key] = p.v; break;
+            case ecs::ScriptProp::Type::Entity: {
+                const entt::entity target = findByName(world, p.s);
+                if (target == entt::null) {
+                    // A warning, not an error: a level may legitimately ship
+                    // without the collaborator, and the cooker already fails
+                    // the build on a name absent from the authored scene.
+                    log::warn("Script: %s on %s: prop '%s' names entity '%s', "
+                              "which does not exist",
+                              ref.path.c_str(), subject(owner).c_str(),
+                              p.key.c_str(), p.s.c_str());
+                    props[p.key] = sol::lua_nil;
+                } else {
+                    props[p.key] = LuaEntity{&world, target};
+                }
+                break;
+            }
+            }
+        }
+        return props;
+    }
+
     // Builds instances for any entity carrying Scripts but no ScriptState.
     void instantiateNew()
     {
@@ -140,6 +255,7 @@ struct ScriptHost::Impl {
                 mt["__index"] = *cls;
                 self[sol::metatable_key] = mt;
                 self["entity"] = LuaEntity{&world, e};
+                self["props"] = buildProps(e, ref);
 
                 state.instances.push_back(
                     instances.create(e, ref.path, std::move(self)));
@@ -202,6 +318,14 @@ void ScriptHost::tick(float dt)
         if (!inst || !inst->started) continue;
         mImpl->call(*inst, "update", dt);
     }
+
+    mImpl->flushDestroys();
+}
+
+void ScriptHost::broadcast(const std::string& name)
+{
+    mImpl->broadcastEvent(name, sol::lua_nil);
+    mImpl->flushDestroys();
 }
 
 void ScriptHost::fixedTick(float dt)
@@ -213,6 +337,7 @@ void ScriptHost::fixedTick(float dt)
         if (!inst || !inst->started) continue;
         mImpl->call(*inst, "fixed_update", dt);
     }
+    mImpl->flushDestroys();
 }
 
 std::size_t ScriptHost::revive()

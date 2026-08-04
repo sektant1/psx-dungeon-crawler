@@ -54,6 +54,12 @@ public:
     // physics from onPresent -- where the caller simply calls this first.
     void fixedTick(float dt);
 
+    // --- messaging -------------------------------------------------------
+    // Delivers on_event(name, nil) to every live instance. The C++ side of what
+    // Lua reaches through event.broadcast, for a game that wants to announce
+    // something from native code -- a level transition, a boss phase.
+    void broadcast(const std::string& name);
+
     // --- errors ----------------------------------------------------------
     // Un-quarantines every instance that errored. Returns how many. Called by
     // the console and by a successful hot reload.

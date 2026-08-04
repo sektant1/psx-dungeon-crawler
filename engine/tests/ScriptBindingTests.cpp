@@ -361,6 +361,201 @@ int main()
                 "nothing is how a typo becomes an afternoon");
     }
 
+    // --- props arrive typed, before start ----------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "props.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  p_bool = self.props.open\n"
+            "  p_num = self.props.speed\n"
+            "  p_str = self.props.label\n"
+            "  p_vec = self.props.tint.y\n"
+            "  p_ent_name = self.props.target.name\n"
+            "  p_missing = self.props.nope\n"
+            "end\n"
+            "return M\n");
+        world.create("lever_a");
+        const entt::entity e = world.create("door");
+        auto& s = world.registry().get_or_emplace<Scripts>(e);
+        ScriptRef ref;
+        ref.path = path;
+        ref.props.push_back({"open", ScriptProp::Type::Bool, true, 0.0f, {}, ""});
+        ref.props.push_back(
+            {"speed", ScriptProp::Type::Number, false, 2.5f, {}, ""});
+        ref.props.push_back({"label", ScriptProp::Type::String, false, 0.0f, {},
+                             "north"});
+        ref.props.push_back({"tint", ScriptProp::Type::Vec3, false, 0.0f,
+                             glm::vec3(0.0f, 0.5f, 0.0f), ""});
+        ref.props.push_back({"target", ScriptProp::Type::Entity, false, 0.0f, {},
+                             "lever_a"});
+        s.items.push_back(ref);
+
+        host.tick(0.016f);
+        require(host.luaGlobalBool("p_bool"), "bool prop");
+        require(host.luaGlobalNumber("p_num") == 2.5, "number prop");
+        require(host.luaGlobalString("p_str") == "north", "string prop");
+        require(host.luaGlobalNumber("p_vec") == 0.5, "vec3 prop");
+        require(host.luaGlobalString("p_ent_name") == "lever_a",
+                "an Entity prop arrives already resolved to a handle");
+        require(host.luaGlobalNil("p_missing"),
+                "an unauthored prop is nil, not an error");
+    }
+
+    // --- an Entity prop naming nothing is nil, not a crash -----------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "dangling.lua",
+            "local M = {}\n"
+            "function M:start() dangled = (self.props.target == nil) end\n"
+            "return M\n");
+        const entt::entity e = world.create("orphan");
+        auto& s = world.registry().get_or_emplace<Scripts>(e);
+        ScriptRef ref;
+        ref.path = path;
+        ref.props.push_back({"target", ScriptProp::Type::Entity, false, 0.0f, {},
+                             "no_such_entity"});
+        s.items.push_back(ref);
+        host.tick(0.016f);
+        require(host.luaGlobalBool("dangled"),
+                "an unresolvable Entity prop is nil -- a level may legitimately "
+                "ship without the collaborator");
+    }
+
+    // --- world.spawn / find / destroy --------------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "worldapi.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  local made = world.spawn('spawned')\n"
+            "  made.position = vec3(1, 1, 1)\n"
+            "  spawned_ok = made.valid\n"
+            "  found_ok = world.find('spawned').valid\n"
+            "  missing_nil = (world.find('nothing_here') == nil)\n"
+            "  world.destroy(made)\n"
+            "  -- Still valid THIS frame: destroys are queued, so the loop we\n"
+            "  -- are inside cannot have its views invalidated under it.\n"
+            "  immediate = made.valid\n"
+            "end\n"
+            "return M\n");
+        scripted(world, "spawner", path);
+        host.tick(0.016f);
+        require(host.luaGlobalBool("spawned_ok"), "spawn returns a live handle");
+        require(host.luaGlobalBool("found_ok"), "find locates it by name");
+        require(host.luaGlobalBool("missing_nil"), "find returns nil when absent");
+        require(host.luaGlobalBool("immediate"),
+                "destroy is deferred within the tick");
+
+        const std::string probe = writeScript(
+            "probe2.lua",
+            "local M = {}\n"
+            "function M:start() gone = (world.find('spawned') == nil) end\n"
+            "return M\n");
+        scripted(world, "probe", probe);
+        host.tick(0.016f);
+        require(host.luaGlobalBool("gone"),
+                "and the queued destroy was flushed after the tick");
+    }
+
+    // --- set_parent composes transforms ------------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "parent.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  self.entity:set_parent(world.find('anchor'))\n"
+            "end\n"
+            "return M\n");
+        const entt::entity anchor = world.create("anchor");
+        world.setLocalTransform(anchor, Transform{glm::vec3(4.0f, 0.0f, 0.0f)});
+        const entt::entity e = scripted(world, "hanger", path);
+        host.tick(0.016f);
+        world.updateWorldTransforms();
+        require(world.registry().get<WorldTransform>(e).matrix[3].x == 4.0f,
+                "set_parent puts the entity in its parent's frame");
+    }
+
+    // --- events reach another entity's script ------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string listener = writeScript(
+            "listener.lua",
+            "local M = {}\n"
+            "function M:on_event(name, data)\n"
+            "  heard = name\n"
+            "  payload = data and data.amount or 0\n"
+            "end\n"
+            "return M\n");
+        const std::string sender = writeScript(
+            "sender.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  world.find('ear'):send('open', { amount = 7 })\n"
+            "end\n"
+            "return M\n");
+        scripted(world, "ear", listener);
+        scripted(world, "mouth", sender);
+        host.tick(0.016f);
+        require(host.luaGlobalString("heard") == "open",
+                "send reaches the target's on_event");
+        require(host.luaGlobalNumber("payload") == 7.0,
+                "and carries its data table");
+    }
+
+    // --- broadcast reaches everything --------------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string ear = writeScript(
+            "ear2.lua",
+            "local M = {}\n"
+            "function M:on_event(name, data) count = (count or 0) + 1 end\n"
+            "return M\n");
+        scripted(world, "a", ear);
+        scripted(world, "b", ear);
+        host.tick(0.016f);
+        host.broadcast("wake");
+        require(host.luaGlobalNumber("count") == 2.0,
+                "a broadcast reaches every live instance");
+    }
+
+    // --- e:script() reaches another entity's instance ----------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string doorPath = writeScript(
+            "door_api.lua",
+            "local M = {}\n"
+            "function M:start() self.open = false end\n"
+            "function M:toggle() self.open = not self.open; door_open = self.open end\n"
+            "return M\n");
+        const std::string leverPath = writeScript(
+            "lever_api.lua",
+            "local M = {}\n"
+            "function M:update(dt)\n"
+            "  if pulled then return end\n"
+            "  local d = world.find('door'):script('" + doorPath + "')\n"
+            "  if d then d:toggle(); pulled = true end\n"
+            "end\n"
+            "return M\n");
+        scripted(world, "door", doorPath);
+        scripted(world, "lever", leverPath);
+        host.tick(0.016f);
+        require(host.luaGlobalBool("door_open"),
+                "a lever can call a method on the door's instance directly, "
+                "without routing every interaction through an event");
+    }
+
     std::cout << "ScriptBindingTests: ok\n";
     return 0;
 }

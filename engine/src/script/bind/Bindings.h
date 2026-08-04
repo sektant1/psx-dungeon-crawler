@@ -3,6 +3,9 @@
 
 #include <entt/entt.hpp>
 
+#include <functional>
+#include <string>
+
 namespace eng::ecs {
 class World;
 class ComponentRegistry;
@@ -40,5 +43,21 @@ void setComponentRegistry(const ecs::ComponentRegistry* reg);
 // This is what makes a component registered later scriptable with no Lua-side
 // work, which is the property the engine's component table already prizes.
 void bindComponents(sol::state& lua, sol::usertype<LuaEntity>& entity);
+
+// What the world bindings need from the host, without this file having to see
+// ScriptHost::Impl. std::function rather than a pointer to Impl: this header is
+// the boundary between "what Lua may ask for" and "how the host does it", and
+// neither side should be able to reach into the other.
+struct WorldCallbacks {
+    std::function<void(entt::entity, bool hierarchy)> queueDestroy;
+    std::function<void(entt::entity, const std::string&, sol::object)> sendEvent;
+    std::function<void(const std::string&, sol::object)> broadcastEvent;
+};
+
+// Linear scan of the Name view. Shared with the host, which resolves Entity
+// props with it.
+entt::entity findByName(ecs::World& world, const std::string& name);
+
+void bindWorld(sol::state& lua, ecs::World& world, const WorldCallbacks& cb);
 
 } // namespace eng::script
