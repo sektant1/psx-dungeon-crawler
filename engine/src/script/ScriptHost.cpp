@@ -481,13 +481,18 @@ void ScriptHost::pollReload()
         // Only reload what something is actually running. A watcher fires for
         // every file under the root, and loading a script no entity carries
         // would execute its chunk for nothing.
-        bool inUse = false;
+        //
+        // Matched on the RESOLVED path: the watcher reports where the file is,
+        // while an instance is keyed by the logical path a scene named it with,
+        // and comparing those two directly never matches.
+        std::string logical;
         mImpl->instances.forEach([&](uint32_t, const ScriptInstance& inst) {
-            if (inst.path == change.path) inUse = true;
+            if (!logical.empty()) return;
+            if (resolveScriptPath(inst.path) == change.path) logical = inst.path;
         });
-        if (!inUse) continue;
-        if (reload(change.path))
-            log::info("Script: reloaded %s", change.path.c_str());
+        if (logical.empty()) continue;
+        if (reload(logical))
+            log::info("Script: reloaded %s", logical.c_str());
     }
 }
 

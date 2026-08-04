@@ -2,14 +2,34 @@
 
 #include "script/ScriptError.h"
 
+#include <eng/assets/AssetRoot.h>
+
+#include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <system_error>
 
 namespace eng::script {
 
+// Where `path` actually lives. Scripts are named by *logical* path in a scene
+// ("scripts/door.lua"), which is what makes a map portable, so the raw string
+// is not openable from an arbitrary working directory.
+//
+// Prefers the path as it stands, then falls back to the resolver -- the same
+// order MapPlay uses for meshes, and what lets a test hand this an absolute
+// path while a scene hands it a logical one.
+std::string resolveScriptPath(const std::string& path)
+{
+    std::error_code ec;
+    if (std::filesystem::exists(path, ec)) return path;
+    const std::filesystem::path resolved = assets::resolve(path);
+    return resolved.empty() ? path : resolved.string();
+}
+
 std::optional<sol::table> ScriptChunkCache::load(const std::string& path)
 {
-    std::ifstream in(path, std::ios::binary);
+    const std::string file = resolveScriptPath(path);
+    std::ifstream in(file, std::ios::binary);
     if (!in) {
         reportScriptError(path, "load", {}, "cannot open the file");
         return std::nullopt;

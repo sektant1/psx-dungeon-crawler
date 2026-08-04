@@ -462,6 +462,88 @@ bool parseFields(const Json& source, const eng::FieldSpan& fields, void* out,
     return true;
 }
 
+// Scripts cannot go through parseFields: that helper is driven by a FieldSpan,
+// which describes a fixed layout, and this is a variable-length list of
+// heterogeneous values. So it is parsed by hand, and the JSON schema is what
+// keeps the accepted shape documented.
+//
+// Prop types are inferred from the JSON value -- boolean, number, string, three
+// numbers as a vec3 -- except Entity, which is the tagged object
+// { "entity": "name" } so the type survives a round trip and the inspector
+// knows to offer a picker.
+bool parseScripts(const Json& entity, std::vector<ScriptAuthor>& out,
+                  const std::string& location, std::string& error)
+{
+    if (!entity.contains("scripts"))
+        return true;
+    const Json& list = entity["scripts"];
+    if (!list.is_array()) {
+        error = location + "/scripts must be an array";
+        return false;
+    }
+
+    for (std::size_t i = 0; i < list.size(); ++i) {
+        const Json& node = list[i];
+        const std::string where = location + "/scripts/" + std::to_string(i);
+        if (!node.is_object() || !node.contains("path") ||
+            !node["path"].is_string()) {
+            error = where + " needs a string 'path'";
+            return false;
+        }
+
+        ScriptAuthor script;
+        script.path = node["path"].get<std::string>();
+        script.enabled = node.value("enabled", true);
+
+        if (node.contains("props")) {
+            const Json& props = node["props"];
+            if (!props.is_object()) {
+                error = where + "/props must be an object";
+                return false;
+            }
+            for (auto it = props.begin(); it != props.end(); ++it) {
+                ScriptPropAuthor p;
+                p.key = it.key();
+                const Json& v = it.value();
+                if (v.is_boolean()) {
+                    p.type = ScriptPropAuthor::Type::Bool;
+                    p.boolValue = v.get<bool>();
+                } else if (v.is_number()) {
+                    const double n = v.get<double>();
+                    if (!std::isfinite(n)) {
+                        error = where + "/props/" + it.key() + " must be finite";
+                        return false;
+                    }
+                    p.type = ScriptPropAuthor::Type::Number;
+                    p.numberValue = float(n);
+                } else if (v.is_string()) {
+                    p.type = ScriptPropAuthor::Type::String;
+                    p.stringValue = v.get<std::string>();
+                } else if (v.is_array()) {
+                    if (!readVec3(v, p.vecValue)) {
+                        error = where + "/props/" + it.key() +
+                                " must be three finite numbers";
+                        return false;
+                    }
+                    p.type = ScriptPropAuthor::Type::Vec3;
+                } else if (v.is_object() && v.contains("entity") &&
+                           v["entity"].is_string()) {
+                    p.type = ScriptPropAuthor::Type::Entity;
+                    p.stringValue = v["entity"].get<std::string>();
+                } else {
+                    error = where + "/props/" + it.key() +
+                            " must be a boolean, number, string, three numbers, "
+                            "or { \"entity\": \"name\" }";
+                    return false;
+                }
+                script.props.push_back(std::move(p));
+            }
+        }
+        out.push_back(std::move(script));
+    }
+    return true;
+}
+
 bool parseSpin(const Json& source, SpinAuthor& out, const std::string& location,
                std::string& error)
 {
@@ -784,6 +866,8 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
             return false;
         out.camera = camera;
     }
+    if (!parseScripts(source, out.scripts, location, error))
+        return false;
     if (source.contains("spin")) {
         SpinAuthor spin;
         if (!parseSpin(source["spin"], spin, location + "/spin", error))

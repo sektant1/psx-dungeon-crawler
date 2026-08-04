@@ -955,6 +955,144 @@ void drawAudioListener(Entity& entity, InspectorContext& context)
               "this entity's transform");
 }
 
+// Scripts get a hand-written block for the same reason they hand-write their
+// serialiser: every other component is a fixed set of typed rows, and this is a
+// reorderable list whose rows each carry a variable table of values.
+void drawScriptProps(std::vector<game::content::ScriptPropAuthor>& props,
+                     InspectorContext& context)
+{
+    using Prop = game::content::ScriptPropAuthor;
+    static const char* kTypeNames[] = {"bool", "number", "string", "vec3",
+                                       "entity"};
+    int removeAt = -1;
+
+    for (int i = 0; i < int(props.size()); ++i) {
+        Prop& p = props[i];
+        ImGui::PushID(i);
+
+        ImGui::SetNextItemWidth(110.0f);
+        char key[96];
+        std::snprintf(key, sizeof(key), "%s", p.key.c_str());
+        if (ImGui::InputText("##key", key, sizeof(key)))
+            p.key = key;
+        track(context);
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(78.0f);
+        int typeIndex = int(p.type);
+        if (ImGui::Combo("##type", &typeIndex, kTypeNames,
+                         IM_ARRAYSIZE(kTypeNames)))
+            p.type = Prop::Type(typeIndex);
+        track(context);
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(150.0f);
+        switch (p.type) {
+        case Prop::Type::Bool:
+            ImGui::Checkbox("##v", &p.boolValue);
+            break;
+        case Prop::Type::Number:
+            ImGui::DragFloat("##v", &p.numberValue, 0.01f);
+            break;
+        case Prop::Type::Vec3:
+            ImGui::DragFloat3("##v", &p.vecValue.x, 0.01f);
+            break;
+        case Prop::Type::String:
+        case Prop::Type::Entity: {
+            // Entity is a string with a different meaning: it names another
+            // entity, which the cooker checks and the host resolves at start().
+            char value[96];
+            std::snprintf(value, sizeof(value), "%s", p.stringValue.c_str());
+            if (ImGui::InputText("##v", value, sizeof(value)))
+                p.stringValue = value;
+            break;
+        }
+        }
+        track(context);
+
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x"))
+            removeAt = i;
+        ImGui::PopID();
+    }
+
+    // Applied after the loop: erasing inside it would invalidate the reference
+    // the current row is still holding.
+    if (removeAt >= 0) {
+        props.erase(props.begin() + removeAt);
+        track(context);
+    }
+    if (ImGui::SmallButton("add prop")) {
+        props.emplace_back();
+        track(context);
+    }
+}
+
+void drawScripts(Entity& entity, InspectorContext& context)
+{
+    int removeAt = -1;
+    int moveFrom = -1;
+    int moveTo = -1;
+
+    for (int i = 0; i < int(entity.scripts.size()); ++i) {
+        game::content::ScriptAuthor& script = entity.scripts[i];
+        ImGui::PushID(i);
+        ImGui::Separator();
+
+        // The order is the order callbacks run in, so it is worth being able to
+        // see and change.
+        ImGui::Checkbox("##enabled", &script.enabled);
+        track(context);
+        ImGui::SameLine();
+        ImGui::TextDisabled("%d.", i + 1);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-90.0f);
+        char path[96];
+        std::snprintf(path, sizeof(path), "%s", script.path.c_str());
+        if (ImGui::InputText("##path", path, sizeof(path)))
+            script.path = path;
+        track(context);
+
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##up", ImGuiDir_Up) && i > 0) {
+            moveFrom = i;
+            moveTo = i - 1;
+        }
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##down", ImGuiDir_Down) &&
+            i + 1 < int(entity.scripts.size())) {
+            moveFrom = i;
+            moveTo = i + 1;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("remove"))
+            removeAt = i;
+
+        if (script.path.empty())
+            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                               "a script with no path does nothing");
+        drawScriptProps(script.props, context);
+        ImGui::PopID();
+    }
+
+    // Both applied after the loop, for the same reason as the props above.
+    if (removeAt >= 0) {
+        entity.scripts.erase(entity.scripts.begin() + removeAt);
+        track(context);
+    } else if (moveFrom >= 0) {
+        std::swap(entity.scripts[moveFrom], entity.scripts[moveTo]);
+        track(context);
+    }
+
+    ImGui::Separator();
+    if (ImGui::Button("add script")) {
+        entity.scripts.emplace_back();
+        track(context);
+    }
+    ImGui::TextDisabled("paths are logical, e.g. scripts/door.lua\n"
+                        "props reach the script as self.props");
+}
+
 void drawSpin(Entity& entity, InspectorContext& context)
 {
     SpinAuthor& spin = *entity.spin;
@@ -1334,6 +1472,7 @@ constexpr Drawer kDrawers[] = {
     {"audio_listener", drawAudioListener},
     {"actor", drawActor},
     {"sounds", drawSounds},
+    {"scripts", drawScripts},
     {"spin", drawSpin},
     {"orbit", drawOrbit},
     {"shader", drawShader},

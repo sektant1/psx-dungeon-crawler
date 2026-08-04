@@ -586,6 +586,68 @@
         "audio_listener": {
           "$ref": "#/$defs/audio_listener"
         },
+        "scripts": {
+          "type": "array",
+          "description": "Lua scripts attached to this entity, in the order their callbacks run.",
+          "items": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Logical asset path, e.g. scripts/door.lua",
+                "pattern": "\\.lua$"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "A disabled script is never instantiated."
+              },
+              "props": {
+                "type": "object",
+                "description": "Per-instance authored values, reachable as self.props.",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "description": "a vec3"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "entity"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "entity": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "a reference to another entity, by name"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
         "spin": {
           "$ref": "#/$defs/spin"
         },

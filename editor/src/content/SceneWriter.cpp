@@ -279,6 +279,48 @@ Json writeEntity(const Entity& entity)
             node["active"] = false;
         out["camera"] = std::move(node);
     }
+    if (!entity.scripts.empty()) {
+        // Written in full rather than as a diff against defaults, unlike
+        // reflectedNode: there is no meaningful "default script list", and a
+        // half-written entry would be a scene that silently lost a prop.
+        Json list = Json::array();
+        for (const ScriptAuthor& script : entity.scripts) {
+            Json node = Json::object();
+            node["path"] = script.path;
+            if (!script.enabled)
+                node["enabled"] = false; // true is the default
+            if (!script.props.empty()) {
+                Json props = Json::object();
+                for (const ScriptPropAuthor& p : script.props) {
+                    switch (p.type) {
+                    case ScriptPropAuthor::Type::Bool:
+                        props[p.key] = p.boolValue;
+                        break;
+                    case ScriptPropAuthor::Type::Number:
+                        props[p.key] = canonical(p.numberValue);
+                        break;
+                    case ScriptPropAuthor::Type::String:
+                        props[p.key] = p.stringValue;
+                        break;
+                    case ScriptPropAuthor::Type::Vec3:
+                        props[p.key] = vec3(p.vecValue);
+                        break;
+                    case ScriptPropAuthor::Type::Entity: {
+                        // Tagged, so the type survives the round trip: a bare
+                        // string would read back as a String prop.
+                        Json target = Json::object();
+                        target["entity"] = p.stringValue;
+                        props[p.key] = std::move(target);
+                        break;
+                    }
+                    }
+                }
+                node["props"] = std::move(props);
+            }
+            list.push_back(std::move(node));
+        }
+        out["scripts"] = std::move(list);
+    }
     if (entity.spin) {
         const SpinAuthor& spin = *entity.spin;
         Json node = Json::object();

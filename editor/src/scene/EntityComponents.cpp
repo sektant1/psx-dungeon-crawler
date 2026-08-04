@@ -244,6 +244,16 @@ const std::vector<ComponentType>& table()
          },
          [](Entity& e) { e.orbit.reset(); }, always},
 
+        {"scripts", "Scripts", "Lua behaviour: start, update, collisions",
+         [](const Entity& e) { return !e.scripts.empty(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // One empty row, so adding the component immediately shows the
+             // path field rather than an empty section with an Add button.
+             e.scripts.emplace_back();
+         },
+         [](Entity& e) { e.scripts.clear(); }, always,
+         ComponentGroup::Gameplay},
+
         {"spin", "Spin", "turns forever -- and turns whatever hangs under it",
          [](const Entity& e) { return e.spin.has_value(); },
          [](Entity& e, const ComponentDefaults&) {

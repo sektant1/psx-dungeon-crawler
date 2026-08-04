@@ -166,6 +166,73 @@ int main()
     require(tiny.allocateId("kit.wall") == "wall_0002",
             "and take the lowest free index, not a counter");
 
+    // --- scripts round-trip, including every prop type ---------------------
+    {
+        using game::content::ScriptAuthor;
+        using game::content::ScriptPropAuthor;
+        using Prop = ScriptPropAuthor::Type;
+
+        const char* source = R"({"format":"raven-scene","version":2,
+          "id":"scene.test.scripts","entities":[
+            {"id":"lever_a","name":"Lever"},
+            {"id":"iron_door","name":"Door","scripts":[
+              {"path":"scripts/door.lua","props":{
+                 "speed":2.5,"open":true,"label":"north",
+                 "tint":[0.0,0.5,0.0],"target":{"entity":"lever_a"}}},
+              {"path":"scripts/creak.lua","enabled":false}
+            ]}
+          ]})";
+
+        SceneDocument doc = parse(source, "<scripts>");
+        const Entity* door = doc.find("iron_door");
+        require(door != nullptr, "the scripted entity parses");
+        require(door->scripts.size() == 2, "both scripts parse");
+        require(door->scripts[0].path == "scripts/door.lua", "path parses");
+        require(door->scripts[0].enabled, "enabled defaults to true");
+        require(!door->scripts[1].enabled, "and an authored false is kept");
+        require(door->scripts[0].props.size() == 5, "every prop parses");
+
+        // The writer must round-trip the TYPE, not just the text: a bare string
+        // for an entity reference would read back as a String prop, and the
+        // inspector and cooker would both stop treating it as a reference.
+        const SceneDocument again =
+            parse(serializeSceneSource(doc), "<scripts-reparse>");
+        const Entity* door2 = again.find("iron_door");
+        require(door2 != nullptr && door2->scripts.size() == 2,
+                "scripts survive the write");
+        require(!door2->scripts[1].enabled, "and so does a disabled one");
+
+        int seen = 0;
+        for (const ScriptPropAuthor& p : door2->scripts[0].props) {
+            if (p.key == "speed") {
+                require(p.type == Prop::Number && p.numberValue == 2.5f,
+                        "number prop");
+                ++seen;
+            } else if (p.key == "open") {
+                require(p.type == Prop::Bool && p.boolValue, "bool prop");
+                ++seen;
+            } else if (p.key == "label") {
+                require(p.type == Prop::String && p.stringValue == "north",
+                        "string prop");
+                ++seen;
+            } else if (p.key == "tint") {
+                require(p.type == Prop::Vec3 && p.vecValue.y == 0.5f,
+                        "vec3 prop");
+                ++seen;
+            } else if (p.key == "target") {
+                require(p.type == Prop::Entity && p.stringValue == "lever_a",
+                        "an entity reference keeps its type across the write");
+                ++seen;
+            }
+        }
+        require(seen == 5, "all five prop types survive");
+
+        // And serialisation stays a fixed point with scripts in the document.
+        const std::string first = serializeSceneSource(doc);
+        require(first == serializeSceneSource(parse(first, "<again>")),
+                "serialize is still idempotent with scripts present");
+    }
+
     std::cout << "SceneRoundTripTests: ok\n";
     return 0;
 }

@@ -229,6 +229,30 @@ int main()
                 "start is attempted once, even when it throws");
     }
 
+    // --- a logical path resolves through the asset root --------------------
+    //
+    // Regression. Scripts are named by logical path in a scene
+    // ("scripts/door.lua"), which is what makes a map portable, and the cache
+    // opened that string directly -- so every scripted scene failed with
+    // "cannot open the file" from any working directory but one. The unit
+    // tests missed it because they all pass absolute paths.
+    {
+        const std::string absolute =
+            writeScript("resolvable.lua", "local M = {}\nreturn M\n");
+
+        // The path as given wins when it exists, which is what lets the tests
+        // above pass absolute paths at all.
+        require(resolveScriptPath(absolute) == absolute,
+                "an existing path is used as-is");
+
+        // And an unresolvable logical path comes back unchanged rather than
+        // empty, so the failure is reported against the name the author wrote.
+        require(resolveScriptPath("scripts/definitely_not_here.lua") ==
+                    "scripts/definitely_not_here.lua",
+                "an unresolved logical path is returned unchanged, so the error "
+                "names what the author actually typed");
+    }
+
     std::cout << "ScriptErrorTests: ok\n";
     return 0;
 }

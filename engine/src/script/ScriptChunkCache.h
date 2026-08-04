@@ -7,6 +7,15 @@
 
 namespace eng::script {
 
+// Where a script named by logical path ("scripts/door.lua") actually lives.
+// Prefers the path as it stands, then falls back to eng::assets::resolve, so a
+// test can pass an absolute path while a scene passes a portable one.
+//
+// Scripts are always *keyed* by their logical path -- that is what the cache,
+// the reload command and the traceback all use -- and this is only for opening
+// the file.
+std::string resolveScriptPath(const std::string& path);
+
 // Logical script path -> the class table the chunk returned.
 //
 // A .lua file is a chunk that returns a table: its *class*. It is run exactly

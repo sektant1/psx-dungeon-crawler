@@ -220,6 +220,29 @@ using ActorSoundsAuthor = game::ActorSoundSet;
 using FirstPersonAuthor = eng::ecs::FirstPersonController;
 using ViewmodelRigAuthor = game::ViewmodelRig;
 
+// One authored value on a script instance. Mirrors eng::ecs::ScriptProp; kept
+// as its own type because the editor's author structs are the document's
+// vocabulary, and the cooker is what translates them into components.
+struct ScriptPropAuthor {
+    enum class Type { Bool, Number, String, Vec3, Entity };
+    std::string key;
+    Type type = Type::Number;
+    bool boolValue = false;
+    float numberValue = 0.0f;
+    glm::vec3 vecValue{0.0f};
+    // String's value, and also Entity's target entity name.
+    std::string stringValue;
+};
+
+// One script attached to an entity. A list of these is the only component the
+// document carries as a vector rather than an optional: an entity may run
+// several scripts, and their order is the order they tick in.
+struct ScriptAuthor {
+    std::string path; // logical asset path, "scripts/door.lua"
+    std::vector<ScriptPropAuthor> props;
+    bool enabled = true;
+};
+
 struct SpinAuthor {
     glm::vec3 axis{0.0f, 1.0f, 0.0f};
     float degreesPerSecond = 45.0f;
@@ -291,6 +314,7 @@ struct Entity {
     std::optional<CameraAuthor> camera;
     std::optional<FirstPersonAuthor> firstPerson;
     std::optional<ViewmodelRigAuthor> viewmodelRig;
+    std::vector<ScriptAuthor> scripts;
     std::optional<SpinAuthor> spin;
     std::optional<OrbitAuthor> orbit;
     std::optional<ShaderAuthor> shader;
