@@ -377,7 +377,9 @@ target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_sys
 # a habit. It sits AT the framework layer -- check_layering.py maps
 # engine/src/script to "framework" -- so its bindings may reach World, Physics
 # and Input, and an upward include is still a lint failure.
-add_library(eng_script STATIC engine/src/script/ScriptHost.cpp)
+add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
+                              engine/src/script/ScriptError.cpp
+                              engine/src/script/ScriptChunkCache.cpp)
 target_include_directories(eng_script PRIVATE third_party engine/src)
 target_link_libraries(eng_script
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>"
@@ -833,6 +835,11 @@ if(BUILD_TESTING)
                              PRIVATE engine/include third_party)
   target_link_libraries(script_serialize_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME script_serialize COMMAND script_serialize_tests)
+
+  add_executable(script_error_tests engine/tests/ScriptErrorTests.cpp)
+  target_include_directories(script_error_tests PRIVATE engine/include engine/src)
+  target_link_libraries(script_error_tests PRIVATE eng_script eng_sol2 glm::glm)
+  add_test(NAME script_error COMMAND script_error_tests)
 
   add_executable(scene_tests engine/tests/SceneTests.cpp
                              engine/src/ecs/World.cpp)
