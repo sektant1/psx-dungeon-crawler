@@ -6,7 +6,9 @@
 #include "script/ScriptInstance.h"
 #include "script/bind/Bindings.h"
 
+#include <eng/DirectoryWatcher.h>
 #include <eng/Log.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/ecs/World.h>
 #include <eng/ecs/components/Name.h>
 #include <eng/ecs/components/Scripts.h>
@@ -14,6 +16,9 @@
 
 #include <sol/sol.hpp>
 
+#include <algorithm>
+#include <filesystem>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -61,6 +66,15 @@ struct ScriptHost::Impl {
             if (!h.valid()) return sol::object(sol::lua_nil);
             return instanceTable(h.e, p.value_or(std::string{}));
         };
+
+        if (config.hotReload) {
+            const std::filesystem::path dir = assets::resolve(config.root);
+            if (!dir.empty())
+                watcher.emplace(dir.string(), std::vector<std::string>{".lua"});
+            else
+                log::warn("Script: hot reload is on but '%s' does not resolve",
+                          config.root.c_str());
+        }
 
         // on_destroy fires from here rather than from World::destroy, because
         // the World must not know scripting exists. entt calls this while the
@@ -288,6 +302,9 @@ struct ScriptHost::Impl {
     // Only when bindPhysics was called. Destroyed with the host, before the
     // Lua state, so the subscription cannot outlive the queue it fills.
     std::unique_ptr<ScriptContactBridge> contacts;
+    // Only when hot reload is on: a shipped build has nothing to reload from,
+    // and polling a directory every frame for nothing is waste.
+    std::optional<DirectoryWatcher> watcher;
     // True while on_destroy handlers are running. Structural changes from Lua
     // are refused during that window.
     bool tearingDown = false;
@@ -408,6 +425,116 @@ bool ScriptHost::isQuarantined(entt::entity e, const std::string& path) const
         if (inst && inst->path == path) return inst->quarantined;
     }
     return false;
+}
+
+bool ScriptHost::reload(const std::string& path)
+{
+    std::vector<std::string> paths;
+    if (path.empty()) {
+        mImpl->instances.forEach([&](uint32_t, const ScriptInstance& inst) {
+            if (std::find(paths.begin(), paths.end(), inst.path) == paths.end())
+                paths.push_back(inst.path);
+        });
+    } else {
+        paths.push_back(path);
+    }
+
+    bool allOk = true;
+    for (const std::string& p : paths) {
+        if (!mImpl->chunks.reload(p)) {
+            allOk = false;
+            continue;
+        }
+        sol::table* cls = mImpl->chunks.classFor(p);
+        if (cls == nullptr) {
+            allOk = false;
+            continue;
+        }
+
+        std::vector<uint32_t> slots;
+        mImpl->instances.forEach([&](uint32_t slot, const ScriptInstance& inst) {
+            if (inst.path == p) slots.push_back(slot);
+        });
+
+        for (const uint32_t slot : slots) {
+            ScriptInstance* inst = mImpl->instances.get(slot);
+            if (inst == nullptr) continue;
+            // Swap the metatable's __index, not `self`. Everything the script
+            // stored on self stays exactly where it was and only the methods
+            // change -- which is the whole difference between a reload and a
+            // restart.
+            sol::table mt = inst->self[sol::metatable_key];
+            mt["__index"] = *cls;
+            // A fixed file is how an author expects to un-break a script.
+            inst->quarantined = false;
+            mImpl->call(*inst, "on_reload");
+        }
+    }
+    return allOk;
+}
+
+void ScriptHost::pollReload()
+{
+    if (!mImpl->watcher) return;
+    for (const FileChange& change : mImpl->watcher->poll()) {
+        if (change.kind == FileChange::Removed) continue;
+        // Only reload what something is actually running. A watcher fires for
+        // every file under the root, and loading a script no entity carries
+        // would execute its chunk for nothing.
+        bool inUse = false;
+        mImpl->instances.forEach([&](uint32_t, const ScriptInstance& inst) {
+            if (inst.path == change.path) inUse = true;
+        });
+        if (!inUse) continue;
+        if (reload(change.path))
+            log::info("Script: reloaded %s", change.path.c_str());
+    }
+}
+
+bool ScriptHost::executeConsole(const std::string& line, std::string& out)
+{
+    // Tried as an expression first so `lua 1+1` prints 2 rather than being a
+    // syntax error, then as a statement so `lua x = 5` works too.
+    sol::load_result chunk =
+        mImpl->lua.load("return (" + line + ")", "@console");
+    if (!chunk.valid()) chunk = mImpl->lua.load(line, "@console");
+    if (!chunk.valid()) {
+        const sol::error err = chunk;
+        out = err.what();
+        log::error("Script: console: %s", out.c_str());
+        return false;
+    }
+
+    const sol::protected_function fn(chunk.get<sol::function>(),
+                                     tracebackHandler(mImpl->lua));
+    const sol::protected_function_result r = fn();
+    if (!r.valid()) {
+        const sol::error err = r;
+        out = err.what();
+        log::error("Script: console: %s", out.c_str());
+        return false;
+    }
+
+    if (r.get_type() == sol::type::lua_nil) {
+        out = "nil";
+    } else {
+        const sol::function tostring = mImpl->lua["tostring"];
+        out = tostring(r.get<sol::object>()).get<std::string>();
+    }
+    log::info("Script: %s", out.c_str());
+    return true;
+}
+
+void ScriptHost::listInstances() const
+{
+    std::size_t n = 0;
+    mImpl->instances.forEach([&](uint32_t slot, const ScriptInstance& inst) {
+        log::info("Script: [%u] %s on %s%s", slot, inst.path.c_str(),
+                  mImpl->subject(inst.entity).c_str(),
+                  inst.quarantined ? "  (QUARANTINED)" : "");
+        ++n;
+    });
+    log::info("Script: %zu live instance(s)", n);
 }
 
 std::size_t ScriptHost::instanceCount() const

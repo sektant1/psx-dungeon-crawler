@@ -387,7 +387,8 @@ add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
                               engine/src/script/bind/BindWorld.cpp
                               engine/src/script/bind/BindInput.cpp
                               engine/src/script/bind/BindPhysics.cpp
-                              engine/src/script/ScriptContactBridge.cpp)
+                              engine/src/script/ScriptContactBridge.cpp
+                              engine/src/script/ScriptConsole.cpp)
 target_include_directories(eng_script PRIVATE third_party engine/src)
 target_link_libraries(eng_script
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>"
@@ -867,6 +868,13 @@ if(BUILD_TESTING)
   target_link_libraries(script_contact_tests PRIVATE eng_script glm::glm
                                                      EnTT::EnTT)
   add_test(NAME script_contact COMMAND script_contact_tests)
+
+  add_executable(script_reload_tests engine/tests/ScriptReloadTests.cpp)
+  target_include_directories(script_reload_tests
+                             PRIVATE engine/include engine/src)
+  target_link_libraries(script_reload_tests PRIVATE eng_script glm::glm
+                                                    EnTT::EnTT)
+  add_test(NAME script_reload COMMAND script_reload_tests)
 
   add_executable(scene_tests engine/tests/SceneTests.cpp
                              engine/src/ecs/World.cpp)

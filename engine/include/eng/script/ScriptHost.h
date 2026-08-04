@@ -11,6 +11,7 @@
 namespace eng {
 class Input;
 class Physics;
+class DebugConsole;
 }
 
 namespace eng::ecs {
@@ -92,6 +93,30 @@ public:
     // Whether this entity's instance of `path` is currently quarantined.
     bool isQuarantined(entt::entity e, const std::string& path) const;
 
+    // --- hot reload ------------------------------------------------------
+    // Re-runs `path`'s chunk and swaps the class table under every live
+    // instance of it. Instance state -- everything on self -- survives, start()
+    // is NOT re-run, on_reload() fires if the class defines it, and any
+    // quarantined instance of that script is revived.
+    //
+    // Returns false and changes nothing when the new source fails to load: a
+    // half-typed save must not kill a running level. An empty path reloads
+    // every script currently in use.
+    bool reload(const std::string& path = {});
+
+    // Polls the script root for changes and reloads what moved. A no-op unless
+    // ScriptConfig::hotReload. Call once per frame.
+    void pollReload();
+
+    // --- console ---------------------------------------------------------
+    // Evaluates one line in the script state, through the same traceback
+    // handler every callback uses. Returns false on failure; `out` carries the
+    // result or the error message either way.
+    bool executeConsole(const std::string& line, std::string& out);
+
+    // Logs every live instance: entity, path, and whether it is quarantined.
+    void listInstances() const;
+
     // --- test and tooling seams ------------------------------------------
     std::size_t instanceCount() const;
     bool luaGlobalBool(const char* name) const;
@@ -108,5 +133,13 @@ private:
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };
+
+// Registers `lua`, `script.list`, `script.reload` and `script.revive`.
+//
+// A free function taking both rather than a method on either: gameplay must not
+// depend on ImGui, and DebugConsole is a debug-layer type. This is the one
+// place that knows about both, and a build without a console simply does not
+// link it.
+void registerScriptCommands(eng::DebugConsole& console, ScriptHost& host);
 
 } // namespace eng::script
