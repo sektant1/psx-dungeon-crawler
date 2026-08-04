@@ -380,7 +380,9 @@ target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_sys
 add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
                               engine/src/script/ScriptError.cpp
                               engine/src/script/ScriptChunkCache.cpp
-                              engine/src/script/ScriptInstance.cpp)
+                              engine/src/script/ScriptInstance.cpp
+                              engine/src/script/bind/BindMath.cpp
+                              engine/src/script/bind/BindEntity.cpp)
 target_include_directories(eng_script PRIVATE third_party engine/src)
 target_link_libraries(eng_script
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>"
@@ -846,6 +848,13 @@ if(BUILD_TESTING)
   target_include_directories(script_host_tests PRIVATE engine/include engine/src)
   target_link_libraries(script_host_tests PRIVATE eng_script glm::glm EnTT::EnTT)
   add_test(NAME script_host COMMAND script_host_tests)
+
+  add_executable(script_binding_tests engine/tests/ScriptBindingTests.cpp)
+  target_include_directories(script_binding_tests
+                             PRIVATE engine/include engine/src)
+  target_link_libraries(script_binding_tests PRIVATE eng_script glm::glm
+                                                     EnTT::EnTT)
+  add_test(NAME script_binding COMMAND script_binding_tests)
 
   add_executable(scene_tests engine/tests/SceneTests.cpp
                              engine/src/ecs/World.cpp)

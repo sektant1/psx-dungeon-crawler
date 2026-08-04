@@ -3,6 +3,7 @@
 #include "script/ScriptChunkCache.h"
 #include "script/ScriptError.h"
 #include "script/ScriptInstance.h"
+#include "script/bind/Bindings.h"
 
 #include <eng/ecs/World.h>
 #include <eng/ecs/components/Name.h>
@@ -26,6 +27,9 @@ struct ScriptHost::Impl {
         lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string,
                            sol::lib::table, sol::lib::debug);
         installTracebackHandler(lua);
+
+        bindMath(lua);
+        entityType = bindEntity(lua);
 
         // on_destroy fires from here rather than from World::destroy, because
         // the World must not know scripting exists. entt calls this while the
@@ -133,6 +137,7 @@ struct ScriptHost::Impl {
                 sol::table mt = lua.create_table();
                 mt["__index"] = *cls;
                 self[sol::metatable_key] = mt;
+                self["entity"] = LuaEntity{&world, e};
 
                 state.instances.push_back(
                     instances.create(e, ref.path, std::move(self)));
@@ -158,6 +163,9 @@ struct ScriptHost::Impl {
     sol::state lua;
     ScriptChunkCache chunks;
     ScriptInstancePool instances;
+    // Held so binders that need the host's internals can add methods to the
+    // entity usertype after it is registered.
+    sol::usertype<LuaEntity> entityType;
     // True while on_destroy handlers are running. Structural changes from Lua
     // are refused during that window.
     bool tearingDown = false;
