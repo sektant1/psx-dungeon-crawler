@@ -39,6 +39,15 @@ position = [0.21, -0.25, -0.59]
 rotation = [-5.0, 5.0, 1.0]
 glow_school = "frost"
 glow_strength = 0.78
+# Attachment: the socket on the hand rig this weapon hangs off, and where in
+# that socket it sits. Sockets are named in assets/config/viewmodel_hands.toml.
+# Set `model = "meshes/viewmodels/weapons/x.glb"` to render a mesh instead of
+# the [[...part]] placeholder primitives below -- nothing else changes.
+socket = "right_hand"
+attach_offset = [0.0, 0.09, 0.0]
+attach_rotation = [0.0, 0.0, 0.0]
+attach_scale = 0.5
+muzzle_socket = "right_middle_tip"
 hands_idle_animation = "guard_idle"
 hands_draw_animation = "guard_draw"
 hands_fire_animation = "push.R"
@@ -103,6 +112,12 @@ glow_strength = 0.82
 # The finger-gun set, shared with the loadout's other pointed weapon rather
 # than the knife clips this used: the talon fires a projectile from the hand,
 # and a stabbing animation reads as a melee weapon that happens to shoot.
+# See the arbalest above for what these do.
+socket = "right_hand"
+attach_offset = [0.0, 0.065, 0.0]
+attach_rotation = [0.0, 0.0, 0.0]
+attach_scale = 0.55
+muzzle_socket = "right_index_tip"
 hands_idle_animation = "finger_gun_idle"
 hands_draw_animation = "finger_gun_fix"
 hands_fire_animation = "finger_gun_fire"

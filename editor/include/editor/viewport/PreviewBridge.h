@@ -41,6 +41,11 @@ public:
     // nothing changed.
     void sync(const game::content::SceneDocument& document,
               const game::content::KitCatalog& catalog);
+    // Advances the first-person hands shown by a Viewmodel Preview component:
+    // the authored clip, and the procedural placement when the rig has motion
+    // enabled. Separate from sync() because the document has not changed --
+    // the rig is simply animating, once per frame.
+    void tickViewmodel(float dt);
     // Forces the next sync to rebuild, after an undo/redo or a fresh load.
     void invalidate();
     // Hides the whole level without tearing it down, for the modes that need
@@ -96,6 +101,7 @@ public:
     const std::string& lastError() const { return mError; }
 
 private:
+    void syncViewmodel(const game::content::SceneDocument& document);
     void showGhostMesh(const std::string& key, eng::MeshHandle mesh,
                        const game::content::XformAuthor& transform,
                        float importScale);

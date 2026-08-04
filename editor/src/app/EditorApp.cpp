@@ -328,6 +328,13 @@ bool EditorApp::onStart(eng::Engine& engine)
             eng::assets::resolve("config/prototypes.toml");
         !pickups.empty())
         mPickupIds = tomlSectionIds(pickups.string(), "pickup");
+    // The player loadout, for the viewmodel preview's weapon picker. Same
+    // argument as enemies and pickups: an id you can only get right by having
+    // read a TOML is not authorable.
+    if (const std::filesystem::path weapons =
+            eng::assets::resolve("config/weapons.toml");
+        !weapons.empty())
+        mWeaponIds = tomlSectionIds(weapons.string(), "player_weapon");
     rescanScriptPaths();
     if (const std::filesystem::path palettes =
             eng::assets::resolve("config/palettes.toml");
@@ -1813,6 +1820,9 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
     }
     else {
         mPreview->sync(mState.document, mState.catalog);
+        // The previewed hands animate on the frame clock; the document has not
+        // changed, so this cannot ride the revision-guarded sync above.
+        mPreview->tickViewmodel(f.dt);
         // The whole scene, every storey, unless the author asks for the cut.
         // The cut is still here because a ceiling becomes a lid over a
         // top-down view, but it is opt-in now: the work plane is a placement
@@ -5143,6 +5153,7 @@ void EditorApp::drawInspector()
         mSceneEntityIds.push_back(e.id);
     context.sceneEntityIds = &mSceneEntityIds;
     context.pickupIds = &mPickupIds;
+    context.weaponIds = &mWeaponIds;
     context.materials = &materialCatalog();
     context.meshKind = selectionMeshKind();
     // Rebuilt each frame from the live library: the Particles panel can add and

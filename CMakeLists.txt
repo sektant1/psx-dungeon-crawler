@@ -562,6 +562,15 @@ add_executable(
   game/src/ui/GameHud.cpp
   game/src/ui/GameHudStyle.cpp
   game/src/HudModel.cpp
+  # The first-person rig, shared rather than approximated for the same reason
+  # the palette and the HUD are: the viewport must show the weapon where the
+  # game will put it, and a second implementation of "where" would not.
+  game/src/FirstPersonHands.cpp
+  game/src/HandsDefinition.cpp
+  game/src/ViewmodelSocket.cpp
+  game/src/WeaponViewmodel.cpp
+  game/src/ViewmodelMotion.cpp
+  game/src/PlayerWeapons.cpp
   editor/src/project/RunGame.cpp)
 target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/src third_party
@@ -639,6 +648,9 @@ add_executable(
   game/src/ViewModel.cpp
   game/src/ViewmodelMotion.cpp
   game/src/FirstPersonHands.cpp
+  game/src/ViewmodelSocket.cpp
+  game/src/HandsDefinition.cpp
+  game/src/WeaponViewmodel.cpp
   game/src/MapPlay.cpp
   game/src/scene/MapRuntime.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
@@ -1059,6 +1071,18 @@ if(BUILD_TESTING)
   target_link_libraries(viewmodel_rig_tests PRIVATE eng_toml eng_core glm::glm
                                                     EnTT::EnTT)
   add_test(NAME viewmodel_rig COMMAND viewmodel_rig_tests)
+
+  # Socket maths and the hands definition that names them. Links the full
+  # engine only because ViewmodelSocketSet holds renderer nodes; the functions
+  # under test here are free functions over a joint matrix, which is what makes
+  # "where does a weapon sit in the hand" answerable without a GPU.
+  add_executable(viewmodel_socket_tests game/tests/ViewmodelSocketTests.cpp
+                                        game/src/ViewmodelSocket.cpp
+                                        game/src/HandsDefinition.cpp)
+  target_include_directories(viewmodel_socket_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(viewmodel_socket_tests PRIVATE eng eng_toml glm::glm)
+  add_test(NAME viewmodel_socket COMMAND viewmodel_socket_tests)
 
   add_executable(bullet_pattern_tests game/tests/BulletPatternTests.cpp
                                       game/src/combat/BulletPattern.cpp)

@@ -45,6 +45,9 @@ struct InspectorContext {
     // get right by having read a TOML is not authorable.
     const std::vector<std::string>* enemyIds = nullptr;
     const std::vector<std::string>* pickupIds = nullptr;
+    // Player weapon ids from weapons.toml, for the viewmodel preview. Null
+    // leaves the field typed, which is survivable but unguided.
+    const std::vector<std::string>* weaponIds = nullptr;
     // The .lua files on disk, as the logical paths a scene names them by. Null
     // or empty falls back to a typed path, which is only survivable, not good.
     const std::vector<std::string>* scriptPaths = nullptr;

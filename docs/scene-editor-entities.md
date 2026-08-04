@@ -496,7 +496,7 @@ Sections are grouped and always in the same order, whatever the entity carries:
 | *(identity + transform)* | id, name, parent, position/rotation/scale |
 | **appearance** | Mesh (and its material), Shader, Particles, Light |
 | **physical** | Collider, Trigger |
-| **gameplay** | Camera, First-Person Controller, Viewmodel Rig, Scripts, Spin, Player Spawn, Exit, Marker, Enemy Spawn, Pickup |
+| **gameplay** | Camera, First-Person Controller, Viewmodel Rig, Viewmodel Preview, Scripts, Spin, Player Spawn, Exit, Marker, Enemy Spawn, Pickup |
 | **placement** | Grid Cell |
 
 Before, sections came out in whatever order the component table happened to be
@@ -771,6 +771,12 @@ Two of the entries are what turn a scene into a shot:
   to the eye, for the same reason it draws the frustum. Tuning them live is the
   game console's Viewmodel panel (F1) -- see
   [fps-viewmodel.md](fps-viewmodel.md).
+- **Viewmodel Preview** -- the hands, drawn here, holding a weapon picked from
+  `weapons.toml`. The real rig and the real weapon presentation, not a marker
+  for them: whether a weapon sits in the grip or through the fingers is a
+  question a cross and a line cannot answer, and launching the game to ask it
+  was the only way before this existed. Editor-only -- the cook drops it, and
+  the map never carries which weapon an author happened to be looking at.
 - **Spin** -- an axis and degrees per second, turning the entity where it
   stands. Whatever is parented under it turns with it.
 - **Orbit** -- a centre, a radius, an axis and a facing: the entity travels a

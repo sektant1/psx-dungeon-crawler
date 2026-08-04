@@ -965,6 +965,14 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
             return false;
         out.viewmodelRig = rig;
     }
+    if (source.contains("viewmodel_preview")) {
+        ViewmodelPreviewAuthor preview;
+        if (!parseFields(source["viewmodel_preview"],
+                         eng::fieldsOf<ViewmodelPreviewAuthor>(), &preview,
+                         location + "/viewmodel_preview", error))
+            return false;
+        out.viewmodelPreview = preview;
+    }
     if (source.contains("shader")) {
         ShaderAuthor shader;
         if (!parseShader(source["shader"], shader, location + "/shader", error))

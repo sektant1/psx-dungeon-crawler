@@ -431,6 +431,8 @@ private:
     // survivable: the inspector falls back to free text and says so.
     std::vector<std::string> mEnemyIds;
     std::vector<std::string> mPickupIds;
+    // Player weapon ids from weapons.toml, for the viewmodel preview picker.
+    std::vector<std::string> mWeaponIds;
     // The .lua files on disk, as logical paths. Rescanned on demand, because
     // unlike the TOML vocabularies this one changes while the editor is open --
     // writing a new script is exactly the moment you want to attach it.

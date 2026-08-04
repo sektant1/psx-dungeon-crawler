@@ -139,7 +139,11 @@ private:
     // Viewmodel gizmo: which transform the handles drive, and how. The handles
     // sit on the *authored* pose rather than the animated node, so bob and
     // sway do not drag them out from under the cursor mid-drag.
-    enum class ViewmodelGizmoTarget { Socket, WeaponLean, Muzzle };
+    // Socket    -- the shared rig's camera-space placement (ViewmodelRig)
+    // WeaponLean-- this weapon's nudge on top of it
+    // WeaponAttach -- where the weapon sits inside the hand socket it hangs on
+    // Muzzle    -- the point its shots leave from
+    enum class ViewmodelGizmoTarget { Socket, WeaponLean, WeaponAttach, Muzzle };
     bool mGizmoEnabled = false;
     ViewmodelGizmoTarget mGizmoTarget = ViewmodelGizmoTarget::Socket;
     int mGizmoOperation = 0; // 0 translate, 1 rotate, 2 scale

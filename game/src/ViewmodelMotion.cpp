@@ -491,10 +491,14 @@ std::string viewmodelRigToml(const ViewmodelRig& t)
 std::string viewmodelWeaponToml(const std::string& weaponId,
                                 const WeaponViewmodelDef& v)
 {
-    char buffer[1024];
+    char buffer[1536];
     std::snprintf(
         buffer, sizeof(buffer),
         "[player_weapon.%s.viewmodel]\n"
+        "socket = \"%s\"\n"
+        "attach_offset = [%.4f, %.4f, %.4f]\n"
+        "attach_rotation = [%.2f, %.2f, %.2f]\n"
+        "attach_scale = %.4f\n"
         "hands_offset = [%.4f, %.4f, %.4f]\n"
         "hands_rotation = [%.2f, %.2f, %.2f]\n"
         "hands_scale = %.4f\n"
@@ -507,7 +511,10 @@ std::string viewmodelWeaponToml(const std::string& weaponId,
         "movement_bob_speed = %.3f\n"
         "idle_sway = %.4f\n"
         "look_sway = %.5f\n",
-        weaponId.c_str(), v.handsOffset.x, v.handsOffset.y, v.handsOffset.z,
+        weaponId.c_str(), v.socket.c_str(), v.attachOffset.x, v.attachOffset.y,
+        v.attachOffset.z, v.attachRotationDegrees.x, v.attachRotationDegrees.y,
+        v.attachRotationDegrees.z, v.attachScale,
+        v.handsOffset.x, v.handsOffset.y, v.handsOffset.z,
         v.handsRotationDegrees.x, v.handsRotationDegrees.y,
         v.handsRotationDegrees.z, v.handsScale, v.fireDuration,
         v.recoilDistance, v.recoilPitchDegrees, v.recoilYawDegrees,

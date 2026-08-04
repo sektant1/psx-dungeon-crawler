@@ -2,6 +2,11 @@
 
 #include <editor/content/SceneCook.h>
 
+#include <FirstPersonHands.h>
+#include <HandsDefinition.h>
+#include <PlayerWeapons.h>
+#include <ViewmodelRig.h>
+
 #include <eng/Renderer.h>
 #include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
@@ -58,6 +63,55 @@ struct PreviewBridge::Impl
     eng::MeshHandle ghostMesh;
     eng::NodeHandle particleGhostNode;
     eng::ParticlesHandle particleGhost;
+
+    // --- the first-person viewmodel preview -------------------------------
+    // The real rig, the real socket set, the real weapon presentation -- the
+    // same classes the game runs, not an editor approximation of them. That is
+    // the whole value: an approximation would tell you about the editor.
+    //
+    // It hangs off a node this bridge owns rather than off the previewed
+    // entity's node, because the ECS preview is torn down and rebuilt on every
+    // keystroke and reloading a skeleton and a skinned mesh at that rate would
+    // make the editor unusable. The node is placed to match the authored
+    // camera instead, which is the same transform by a cheaper route.
+    eng::NodeHandle viewmodelRoot;
+    game::PlayerWeaponLibrary weapons;
+    game::HandsDefinition handsDefinition = game::defaultHandsDefinition();
+    game::FirstPersonHands hands;
+    bool viewmodelLoaded = false;
+    bool handsBuilt = false;
+    // Set once the rig has been tried and refused to come up. Without it a
+    // checkout missing the cooked arms re-parses the skeleton on every
+    // keystroke, which is the one place this preview could make the editor
+    // slower than it was before it existed.
+    bool handsFailed = false;
+    std::string builtWeapon;   // the id currently in the hands
+    bool viewmodelShown = false;
+
+    // Loads weapons.toml and viewmodel_hands.toml once, lazily: an editor
+    // session that never opens a scene with a preview should not pay for them.
+    void loadViewmodelContent()
+    {
+        if (viewmodelLoaded)
+            return;
+        viewmodelLoaded = true;
+        if (const std::filesystem::path path =
+                eng::assets::resolve("config/weapons.toml");
+            !path.empty())
+            weapons.load(path.string());
+        if (const std::filesystem::path path =
+                eng::assets::resolve("config/viewmodel_hands.toml");
+            !path.empty())
+            game::loadHandsDefinition(path.string(), handsDefinition);
+    }
+
+    void hideViewmodel()
+    {
+        if (viewmodelShown && viewmodelRoot.valid())
+            renderer.setNodeVisible(viewmodelRoot, false);
+        viewmodelShown = false;
+    }
+
     std::string particleGhostEffect;
     std::chrono::steady_clock::time_point particleGhostRestart;
     uint64_t builtRevision = ~uint64_t(0);
@@ -200,6 +254,90 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
                 mImpl->renderer.setNodeVisible(node->handle, false);
         }
     }
+
+    syncViewmodel(document);
+}
+
+// Places and equips the previewed hands from whichever entity carries a
+// Viewmodel Preview component.
+//
+// One entity wins -- the first in document order. Two cameras both previewing
+// hands would be two rigs in the viewport with no way to tell which is which,
+// and the question the preview answers ("does this weapon sit right in the
+// hand") is not one that gets clearer with a second answer on screen.
+void PreviewBridge::syncViewmodel(const game::content::SceneDocument& document)
+{
+    const game::content::Entity* host = nullptr;
+    for (const game::content::Entity& entity : document.entities) {
+        if (entity.viewmodelPreview && entity.viewmodelPreview->visible) {
+            host = &entity;
+            break;
+        }
+    }
+    if (!host || !mImpl->visible) {
+        mImpl->hideViewmodel();
+        return;
+    }
+
+    mImpl->loadViewmodelContent();
+    if (!mImpl->viewmodelRoot.valid()) {
+        mImpl->viewmodelRoot = mImpl->renderer.createNode(
+            eng::kRootNode, glm::vec3(0.0f), "editor-viewmodel-preview");
+        if (!mImpl->viewmodelRoot.valid())
+            return;
+    }
+    // The authored camera's place in the world. The rig's own socket offset is
+    // expressed in this node's space, exactly as it is against the head node in
+    // the game, so what the editor frames is what the player will see.
+    const game::content::XformAuthor& xf = host->transform;
+    mImpl->renderer.setPosition(mImpl->viewmodelRoot, xf.position);
+    mImpl->renderer.setOrientation(
+        mImpl->viewmodelRoot, glm::quat(glm::radians(xf.rotationDegrees)));
+
+    if (!mImpl->handsBuilt) {
+        if (mImpl->handsFailed) {
+            mError = "viewmodel preview: the cooked hand rig is unavailable";
+            return;
+        }
+        mImpl->handsBuilt = mImpl->hands.init(
+            mImpl->renderer, mImpl->viewmodelRoot, mImpl->handsDefinition);
+        mImpl->builtWeapon.clear();
+        if (!mImpl->handsBuilt) {
+            mImpl->handsFailed = true;
+            mError = "viewmodel preview: the cooked hand rig is unavailable";
+            return;
+        }
+    }
+
+    // The level's rig override if it authored one, otherwise the shipped
+    // framing -- the same precedence the game applies on entering a level.
+    mImpl->hands.setRig(host->viewmodelRig ? *host->viewmodelRig
+                                           : game::ViewmodelRig{});
+
+    const std::vector<game::PlayerWeaponDef>& defs = mImpl->weapons.defs();
+    const game::PlayerWeaponDef* weapon = nullptr;
+    if (!host->viewmodelPreview->weapon.empty())
+        weapon = mImpl->weapons.find(host->viewmodelPreview->weapon);
+    if (!weapon && !defs.empty())
+        weapon = &defs.front(); // slot 0: what the player starts holding
+    if (weapon && weapon->id != mImpl->builtWeapon) {
+        mImpl->hands.setWeapon(mImpl->renderer, weapon->viewmodel, false);
+        mImpl->builtWeapon = weapon->id;
+    }
+
+    mImpl->hands.applyPose(mImpl->renderer);
+    mImpl->renderer.setNodeVisible(mImpl->viewmodelRoot, true);
+    mImpl->viewmodelShown = true;
+}
+
+void PreviewBridge::tickViewmodel(float dt)
+{
+    if (!mImpl->viewmodelShown || !mImpl->handsBuilt)
+        return;
+    // Both channels get the frame delta here rather than the game's stepped
+    // viewmodel rate: the editor is judging placement, and a 24 Hz clip in a
+    // viewport reads as a dropped-frame editor rather than as the shipped look.
+    mImpl->hands.update(mImpl->renderer, dt, dt, {});
 }
 
 void PreviewBridge::setVisible(eng::Renderer& renderer, bool visible)

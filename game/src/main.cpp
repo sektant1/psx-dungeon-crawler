@@ -344,6 +344,10 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mPlayerSys.setControllerTuning(mConfigController);
     mPlayerSys.controller().setDashTuning(mDashTuning);
     mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
+    // The hands rig and the socket names weapons hang off. Before the weapons,
+    // in load order but not in dependency: a weapon naming a socket this file
+    // does not define is warned about when it is equipped, not here.
+    mPlayerSys.loadHands(game::assetPath("config/viewmodel_hands.toml"));
     // Shared first-person rig framing. Read from the file rather than through
     // eng::Config because the socket and rotation are arrays, which the
     // flattened config has no getter for (see eng/Config.h).

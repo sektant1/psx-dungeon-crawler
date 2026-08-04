@@ -249,6 +249,20 @@
         }
       }
     },
+    "viewmodel_preview": {
+      "description": "Editor-only: show the first-person hands holding a weapon at this entity, so a placement can be judged in the viewport instead of by launching the game. The cook drops it; no runtime component corresponds to it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "weapon": {
+          "description": "A player_weapon id from assets/config/weapons.toml. Empty shows slot 0, which is what the player starts the level holding.",
+          "type": "string"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      }
+    },
     "viewmodel_rig": {
       "description": "Where the first-person hands sit in front of the eye and how strongly each procedural layer moves them. Every weapon inherits this framing and only leans out of it. Same fields as game.toml's [player_viewmodel]; a scene carrying this overrides that default.",
       "type": "object",
@@ -579,6 +593,9 @@
         },
         "viewmodel_rig": {
           "$ref": "#/$defs/viewmodel_rig"
+        },
+        "viewmodel_preview": {
+          "$ref": "#/$defs/viewmodel_preview"
         },
         "audio": {
           "$ref": "#/$defs/audio"

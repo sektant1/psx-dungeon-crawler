@@ -347,6 +347,42 @@ void DebugPanels::drawViewmodelTab()
         feelChanged |= ImGui::SliderFloat("Scale##w", &v.handsScale, 0.25f,
                                           3.0f, "x%.3f");
 
+        // Where the weapon sits *in the hand*, as opposed to where the hands
+        // sit in front of the eye. These are the numbers that were unreachable
+        // before sockets existed: the weapon had nowhere to hang, so seating it
+        // was not a thing anyone could do.
+        ImGui::SeparatorText("Attachment (socket on the hand rig)");
+        const std::vector<std::string> socketNames =
+            player->hands().sockets().names();
+        if (socketNames.empty()) {
+            ImGui::TextDisabled("no cooked rig, so no sockets to hang from");
+        } else if (ImGui::BeginCombo("Socket", v.socket.c_str())) {
+            for (const std::string& name : socketNames)
+                if (ImGui::Selectable(name.c_str(), name == v.socket)) {
+                    v.socket = name;
+                    // A different socket is a different parent, so this one
+                    // rebuilds rather than re-seats.
+                    if (mCur.context)
+                        player->rebuildWeaponViewmodel(*mCur.context);
+                }
+            ImGui::EndCombo();
+        }
+        bool attachChanged =
+            axisDrag("Offset (m)##a", v.attachOffset, 0.002f, -1.0f, 1.0f,
+                     "X##aox", "Y##aoy", "Z##aoz");
+        attachChanged |=
+            axisDrag("Rotation (deg)##a", v.attachRotationDegrees, 0.25f,
+                     -180.0f, 180.0f, "P##arx", "Y##ary", "R##arz");
+        attachChanged |= ImGui::SliderFloat("Scale##a", &v.attachScale, 0.05f,
+                                            3.0f, "x%.3f");
+        if (attachChanged && mCur.context)
+            player->refreshViewmodel(*mCur.context);
+        ImGui::TextDisabled("presenting: %s%s%s",
+                            weaponPresentationName(
+                                player->hands().weapon().presentation()),
+                            v.model.empty() ? "" : "  model ",
+                            v.model.c_str());
+
         ImGui::SeparatorText("Recoil");
         feelChanged |= ImGui::SliderFloat("Distance", &v.recoilDistance, 0.0f,
                                           0.5f, "%.3f m");
@@ -395,7 +431,7 @@ void DebugPanels::drawViewmodelTab()
         ImGui::Checkbox("Show handles in the view", &mGizmoEnabled);
         if (mGizmoEnabled) {
             static const char* targets[] = {"Rig socket", "Weapon lean",
-                                            "Muzzle"};
+                                            "Weapon attach", "Muzzle"};
             int target = int(mGizmoTarget);
             ImGui::SetNextItemWidth(180.0f);
             if (ImGui::Combo("Target", &target, targets,
@@ -514,6 +550,14 @@ void DebugPanels::drawViewmodelGizmo()
             : std::nullopt;
     if (mGizmoTarget == ViewmodelGizmoTarget::Muzzle && !jointWorld)
         return; // no cooked rig, or the weapon names a joint the rig lacks
+    // The attach gizmo lives in the socket's frame, which is a live joint on
+    // the animated skeleton -- not a camera-space offset like the two above.
+    const std::optional<glm::mat4> socketWorld =
+        mGizmoTarget == ViewmodelGizmoTarget::WeaponAttach
+            ? player->hands().weaponSocketWorld(renderer)
+            : std::nullopt;
+    if (mGizmoTarget == ViewmodelGizmoTarget::WeaponAttach && !socketWorld)
+        return; // the weapon names a socket this rig does not define
 
     glm::mat4 parent(1.0f);
     glm::mat4 matrix(1.0f);
@@ -525,6 +569,12 @@ void DebugPanels::drawViewmodelGizmo()
     case ViewmodelGizmoTarget::WeaponLean:
         parent = headWorld * socket;
         matrix = parent * lean;
+        break;
+    case ViewmodelGizmoTarget::WeaponAttach:
+        parent = *socketWorld;
+        matrix = parent * compose(weapon.attachOffset,
+                                  weapon.attachRotationDegrees,
+                                  weapon.attachScale);
         break;
     case ViewmodelGizmoTarget::Muzzle:
         parent = *jointWorld;
@@ -583,6 +633,11 @@ void DebugPanels::drawViewmodelGizmo()
             decompose(local, weapon.handsOffset, weapon.handsRotationDegrees,
                       weapon.handsScale);
             weapon.handsScale = std::max(weapon.handsScale, 0.01f);
+            break;
+        case ViewmodelGizmoTarget::WeaponAttach:
+            decompose(local, weapon.attachOffset, weapon.attachRotationDegrees,
+                      weapon.attachScale);
+            weapon.attachScale = std::max(weapon.attachScale, 0.01f);
             break;
         case ViewmodelGizmoTarget::Muzzle:
             weapon.handsMuzzleOffset = glm::vec3(local[3]);

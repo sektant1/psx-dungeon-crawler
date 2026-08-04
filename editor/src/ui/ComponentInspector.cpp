@@ -1431,6 +1431,35 @@ void drawFirstPerson(Entity& entity, InspectorContext& context)
     }
 }
 
+// The preview is the answer to "is the weapon actually in the hand": a question
+// nobody could ask in the editor before, because the hands were not drawn here
+// at all. Deliberately two fields -- it selects what to look at, it does not
+// tune anything. The seating numbers belong to the weapon (weapons.toml), and
+// the framing belongs to the rig above.
+void drawViewmodelPreview(Entity& entity, InspectorContext& context)
+{
+    game::content::ViewmodelPreviewAuthor& preview = *entity.viewmodelPreview;
+    ui::PropertyGrid grid("##viewmodel_preview");
+    grid.row("weapon");
+    PickerSpec spec;
+    spec.options = context.weaponIds;
+    spec.placeholder = "slot 0";
+    spec.unknownFormat = "'%s' is not a weapon weapons.toml defines";
+    spec.emptyNote = "weapons.toml not found -- typed ids are not checked";
+    const bool known =
+        pickerWidget("##vm_weapon", preview.weapon, spec, context);
+    grid.row("visible");
+    ImGui::Checkbox("##vm_visible", &preview.visible);
+    track(context);
+    if (!known) {
+        grid.row("");
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), spec.unknownFormat,
+                           preview.weapon.c_str());
+    }
+    grid.full("editor only -- the cook drops this, the map never carries it");
+    grid.full("seat the weapon in the hand with the game's F1 Viewmodel panel");
+}
+
 void drawViewmodelRig(Entity& entity, InspectorContext& context)
 {
     game::content::ViewmodelRigAuthor& rig = *entity.viewmodelRig;
@@ -1599,6 +1628,7 @@ constexpr Drawer kDrawers[] = {
     {"camera", drawCamera},
     {"first_person", drawFirstPerson},
     {"viewmodel_rig", drawViewmodelRig},
+    {"viewmodel_preview", drawViewmodelPreview},
     {"audio", drawAudio},
     {"audio_listener", drawAudioListener},
     {"actor", drawActor},

@@ -192,6 +192,17 @@ const std::vector<ComponentType>& table()
          [](Entity& e) { e.viewmodelRig.reset(); }, always,
          ComponentGroup::Gameplay},
 
+        // Directly beneath the rig, because they are one job: the rig is where
+        // the hands are, and this is being able to see them there.
+        {"viewmodel_preview", "Viewmodel Preview",
+         "show the hands and a weapon here, in the viewport",
+         [](const Entity& e) { return e.viewmodelPreview.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.viewmodelPreview = game::content::ViewmodelPreviewAuthor{};
+         },
+         [](Entity& e) { e.viewmodelPreview.reset(); }, always,
+         ComponentGroup::Gameplay},
+
         {"audio", "Audio Emitter", "a clip emitted from this entity",
          [](const Entity& e) { return e.audio.has_value(); },
          [](Entity& e, const ComponentDefaults&) {

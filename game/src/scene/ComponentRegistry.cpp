@@ -1,6 +1,7 @@
 #include "ComponentRegistry.h"
 
 #include "GameComponents.h"
+#include "ViewmodelPreview.h"
 
 #include <eng/io/ByteStream.h>
 
@@ -30,6 +31,20 @@ template <> FieldSpan fieldsOf<game::ViewmodelRig>()
         ENG_FIELD_RANGE(R, landingDip, FieldType::Float, 0.0f, 0.3f),
         ENG_FIELD_RANGE(R, landingRecovery, FieldType::Float, 0.5f, 30.0f),
         ENG_FIELD(R, motionEnabled, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+// The viewmodel preview's fields. Reflected like the rig above, so the .scn
+// reader and writer come for free -- but note it is registered *only* here and
+// never in the component-id table below: it is authoring scaffolding, dropped
+// at cook, with no runtime component behind it.
+template <> FieldSpan fieldsOf<game::ViewmodelPreview>()
+{
+    using P = game::ViewmodelPreview;
+    static const Field f[] = {
+        ENG_FIELD(P, weapon, FieldType::String),
+        ENG_FIELD(P, visible, FieldType::Bool),
     };
     return {f, int(std::size(f))};
 }

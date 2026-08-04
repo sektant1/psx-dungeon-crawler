@@ -1,0 +1,71 @@
+# The player's first-person hands, authored once for every weapon.
+#
+# This file answers two questions the game used to answer in C++:
+#
+#   * which rig the hands are -- swap `model` and `skeleton` and the whole
+#     loadout is holding different hands, with no code change; and
+#   * what a weapon is allowed to hang off, which is the `[[hands.socket]]`
+#     list below. A socket is a named point on the skeleton, and it is the
+#     vocabulary weapons.toml picks from (`socket = "right_hand"`) and the
+#     editor offers in a combo box. An author never types a joint name.
+#
+# See docs/fps-viewmodel.md; the placement of the rig as a whole (how low, how
+# close to the eye) is [player_viewmodel] in game.toml, not here.
+
+[hands]
+skeleton = "animations/viewmodels/arms/arms_rig.skeleton.ozz"
+model = "meshes/viewmodels/arms_rig.glb"
+material = "Game/FirstPersonHands"
+# Played whenever a weapon names no idle clip of its own, and the clip the rig
+# returns to after a draw or a shot.
+idle_animation = "relax"
+
+# --- sockets ----------------------------------------------------------------
+# name     what weapons.toml calls it
+# joint    the skeleton joint it rides (see the rig's joint list)
+# offset   joint space, applied after the joint's pose
+# rotation degrees: pitch, yaw, roll
+# scale    multiplies whatever hangs here
+#
+# Offsets are zero here on purpose. A socket says *where on the skeleton*; the
+# weapon's own attach_offset says *where in the hand*. Splitting one distance
+# across both makes a weapon impossible to seat -- you drag one number and two
+# things move.
+
+[[hands.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[hands.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+# The fingertips the finger-gun weapons fire from. A muzzle is a socket like
+# any other: `muzzle_socket = "right_index_tip"` in a weapon definition.
+[[hands.socket]]
+name = "right_index_tip"
+joint = "f_index.03.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[hands.socket]]
+name = "right_middle_tip"
+joint = "f_middle.03.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+# The forearm, for a shield or a bracer that should not follow the wrist.
+[[hands.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0

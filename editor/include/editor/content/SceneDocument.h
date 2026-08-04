@@ -6,6 +6,7 @@
 #include <eng/ecs/components/PortalParams.h>
 #include <eng/ecs/components/PrimitiveMesh.h>
 
+#include "ViewmodelPreview.h"
 #include "ViewmodelRig.h"
 #include "audio/ActorSounds.h"
 
@@ -219,6 +220,10 @@ using ActorSoundsAuthor = game::ActorSoundSet;
 // defaults, which is every level authored before they existed.
 using FirstPersonAuthor = eng::ecs::FirstPersonController;
 using ViewmodelRigAuthor = game::ViewmodelRig;
+// Editor-only: which weapon the viewport shows in the hands. Dropped at cook
+// (see game/src/ViewmodelPreview.h) -- it is how a placement is judged, not
+// something the level carries.
+using ViewmodelPreviewAuthor = game::ViewmodelPreview;
 
 // One authored value on a script instance. Mirrors eng::ecs::ScriptProp; kept
 // as its own type because the editor's author structs are the document's
@@ -314,6 +319,7 @@ struct Entity {
     std::optional<CameraAuthor> camera;
     std::optional<FirstPersonAuthor> firstPerson;
     std::optional<ViewmodelRigAuthor> viewmodelRig;
+    std::optional<ViewmodelPreviewAuthor> viewmodelPreview;
     std::vector<ScriptAuthor> scripts;
     std::optional<SpinAuthor> spin;
     std::optional<OrbitAuthor> orbit;

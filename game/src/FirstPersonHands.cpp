@@ -4,25 +4,27 @@
 #include <eng/Renderer.h>
 #include <eng/assets/AssetRoot.h>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <filesystem>
 
 namespace game {
 
-bool FirstPersonHands::init(eng::Renderer& renderer,
-                            eng::NodeHandle headNode)
+bool FirstPersonHands::init(eng::Renderer& renderer, eng::NodeHandle headNode)
 {
-    mRig.reset();
-    mMesh = {};
-    mSkin = {};
-    mNode = {};
-    mMuzzleJoint = -1;
+    return init(renderer, headNode, mHands);
+}
 
-    const std::filesystem::path skeleton = eng::assets::resolve(
-        "animations/viewmodels/arms/arms_rig.skeleton.ozz");
-    const std::filesystem::path model =
-        eng::assets::resolve("meshes/viewmodels/arms_rig.glb");
+bool FirstPersonHands::init(eng::Renderer& renderer, eng::NodeHandle headNode,
+                            const HandsDefinition& hands)
+{
+    shutdown(renderer);
+    mHands = hands;
+
+    const std::filesystem::path skeleton = eng::assets::resolve(mHands.skeleton);
+    const std::filesystem::path model = eng::assets::resolve(mHands.model);
     if (skeleton.empty() || model.empty()) {
         eng::log::warn(
             "First-person hands: cooked rig assets are unavailable");
@@ -42,15 +44,7 @@ bool FirstPersonHands::init(eng::Renderer& renderer,
     if (!mMesh.valid())
         return false;
 
-    const auto cleanup = [&] {
-        if (mNode.valid())
-            renderer.destroyNode(mNode);
-        mNode = {};
-        mSkin = {};
-        if (mMesh.valid())
-            renderer.releaseSkinnedMesh(mMesh);
-        mMesh = {};
-    };
+    const auto cleanup = [&] { shutdown(renderer); };
 
     // Rig was authored around a standing Blender character: source up is about
     // 1.4 m and source depth sits around zero. The camera-space reframing, the
@@ -65,13 +59,14 @@ bool FirstPersonHands::init(eng::Renderer& renderer,
     }
     mMotion.reset();
     applyPose(renderer);
-    mSkin = renderer.attachSkinnedMesh(mNode, mMesh, "Game/FirstPersonHands",
-                                       false, true);
+    mSkin = renderer.attachSkinnedMesh(mNode, mMesh, mHands.material, false,
+                                       true);
     if (!mSkin.valid()) {
         cleanup();
         return false;
     }
 
+    mIdleClip = mHands.idleAnimation;
     eng::animation::AnimationPlayOptions idle;
     idle.fadeSeconds = 0.0f;
     idle.loop = true;
@@ -83,28 +78,92 @@ bool FirstPersonHands::init(eng::Renderer& renderer,
         cleanup();
         return false;
     }
+
+    // The sockets come up with the rig, not with the first weapon: the rig's
+    // vocabulary is a property of the hands, and the editor's picker offers it
+    // before any weapon is chosen.
+    mSockets.build(renderer, mNode, *mRig, mHands.sockets);
+    applySockets(renderer);
     return true;
 }
 
-void FirstPersonHands::setWeapon(const WeaponViewmodelDef& definition,
-                                 bool playDraw)
+void FirstPersonHands::shutdown(eng::Renderer& renderer)
+{
+    mWeapon.clear(renderer);
+    mSockets.clear(renderer);
+    if (mNode.valid())
+        renderer.destroyNode(mNode);
+    mNode = {};
+    mSkin = {};
+    if (mMesh.valid())
+        renderer.releaseSkinnedMesh(mMesh);
+    mMesh = {};
+    mRig.reset();
+    mMuzzleJoint = -1;
+    mMuzzleSocket = {};
+    mWeaponSocket.clear();
+}
+
+void FirstPersonHands::bindMuzzle(const WeaponViewmodelDef& definition)
+{
+    mMuzzleSocket = {};
+    mMuzzleOffset = definition.handsMuzzleOffset;
+    mMuzzleJoint = -1;
+    if (!mRig)
+        return;
+
+    // A named socket wins: it is authored once in viewmodel_hands.toml and
+    // reused, where hands_muzzle_joint makes every weapon repeat a Blender
+    // joint name. The older key stays as the fallback so nothing that ships
+    // today has to be rewritten.
+    if (!definition.muzzleSocket.empty()) {
+        const auto& sockets = mHands.sockets;
+        const auto found = std::find_if(
+            sockets.begin(), sockets.end(), [&](const ViewmodelSocketDef& s) {
+                return s.name == definition.muzzleSocket;
+            });
+        if (found != sockets.end()) {
+            mMuzzleSocket = *found;
+            mMuzzleJoint = mRig->jointIndex(found->joint);
+            if (mMuzzleJoint >= 0)
+                return;
+        }
+        eng::log::warn("First-person hands: no muzzle socket '%s' on this rig",
+                       definition.muzzleSocket.c_str());
+        mMuzzleSocket = {};
+    }
+
+    mMuzzleJoint = mRig->jointIndex(definition.handsMuzzleJoint);
+    if (mMuzzleJoint < 0)
+        eng::log::warn("First-person hands: missing muzzle joint '%s'",
+                       definition.handsMuzzleJoint.c_str());
+}
+
+void FirstPersonHands::setWeapon(eng::Renderer& renderer,
+                                 const WeaponViewmodelDef& definition,
+                                 bool playDraw,
+                                 const std::optional<eng::EnchantmentDesc>& glow)
 {
     // The feel numbers are presentation, not animation: they apply even when
     // the cooked rig is missing and the skinned hands never came up.
     mMotion.setFeel(viewmodelFeel(definition));
+    mWeaponSocket = definition.socket;
+    // Rebuild the held visual even when the skeleton did not come up: the
+    // socket set is empty then, build() sees an invalid node and leaves the
+    // weapon empty, which is the honest outcome rather than a crash.
+    mWeapon.build(renderer, mSockets.node(definition.socket), definition, glow);
+    if (!definition.socket.empty() && !mWeapon.valid() && !mSockets.empty())
+        eng::log::warn("First-person hands: no socket '%s' on this rig",
+                       definition.socket.c_str());
     if (!mAnimator.valid())
         return;
     mIdleClip = mRig->hasClip(definition.handsIdleAnimation)
                     ? definition.handsIdleAnimation
-                    : "relax";
+                    : mHands.idleAnimation;
     mFireClip = mRig->hasClip(definition.handsFireAnimation)
                     ? definition.handsFireAnimation
                     : "grab.R";
-    mMuzzleJoint = mRig->jointIndex(definition.handsMuzzleJoint);
-    mMuzzleOffset = definition.handsMuzzleOffset;
-    if (mMuzzleJoint < 0)
-        eng::log::warn("First-person hands: missing muzzle joint '%s'",
-                       definition.handsMuzzleJoint.c_str());
+    bindMuzzle(definition);
     if (playDraw && mRig->hasClip(definition.handsDrawAnimation)) {
         eng::animation::AnimationPlayOptions draw;
         draw.fadeSeconds = 0.06f;
@@ -118,6 +177,12 @@ void FirstPersonHands::setWeapon(const WeaponViewmodelDef& definition,
     idle.fadeSeconds = 0.10f;
     idle.loop = true;
     mAnimator.play(mIdleClip, idle);
+}
+
+void FirstPersonHands::refreshAttachment(eng::Renderer& renderer,
+                                         const WeaponViewmodelDef& definition)
+{
+    mWeapon.applyAttachment(renderer, definition);
 }
 
 bool FirstPersonHands::triggerFire(eng::Renderer& renderer)
@@ -135,10 +200,14 @@ bool FirstPersonHands::triggerFire(eng::Renderer& renderer)
                        mFireClip.c_str());
         return false;
     }
-    // Sample immediately so projectile origin and submitted skin pose describe
-    // same firing frame, even when several fixed steps precede presentation.
-    return mAnimator.update(0.0f) &&
-           renderer.setSkinningPose(mSkin, mAnimator.modelMatrices());
+    // Sample immediately so projectile origin, held weapon and submitted skin
+    // pose describe the same firing frame, even when several fixed steps
+    // precede presentation.
+    if (!mAnimator.update(0.0f) ||
+        !renderer.setSkinningPose(mSkin, mAnimator.modelMatrices()))
+        return false;
+    applySockets(renderer);
+    return true;
 }
 
 void FirstPersonHands::update(eng::Renderer& renderer, float animationDt,
@@ -152,8 +221,13 @@ void FirstPersonHands::update(eng::Renderer& renderer, float animationDt,
     applyMotion(renderer, motion);
     if (!valid())
         return;
-    if (mAnimator.update(animationDt))
+    if (mAnimator.update(animationDt)) {
         renderer.setSkinningPose(mSkin, mAnimator.modelMatrices());
+        // After the pose, never before: a socket posed from last frame's
+        // skeleton puts the weapon one frame behind the hand holding it, which
+        // reads as the weapon swimming in the grip during fast animations.
+        applySockets(renderer);
+    }
 }
 
 void FirstPersonHands::applyMotion(eng::Renderer& renderer,
@@ -168,19 +242,43 @@ void FirstPersonHands::applyMotion(eng::Renderer& renderer,
     renderer.setScale(mNode, glm::vec3(pose.scale));
 }
 
+void FirstPersonHands::applySockets(eng::Renderer& renderer)
+{
+    if (!mAnimator.valid())
+        return;
+    mSockets.update(renderer, mAnimator.modelMatrices());
+}
+
 void FirstPersonHands::applyPose(eng::Renderer& renderer)
 {
     // Zero-delta update: the socket and the current accumulator state, with no
     // time passing. Used at init and by the panel while motion is frozen.
     applyMotion(renderer, {});
+    applySockets(renderer);
+}
+
+void FirstPersonHands::setVisible(eng::Renderer& renderer, bool show)
+{
+    if (mNode.valid())
+        renderer.setNodeVisible(mNode, show);
+}
+
+std::optional<glm::mat4> FirstPersonHands::muzzleLocal() const
+{
+    const std::span<const glm::mat4> joints = mAnimator.modelMatrices();
+    if (!valid() || mMuzzleJoint < 0 ||
+        std::size_t(mMuzzleJoint) >= joints.size())
+        return std::nullopt;
+    // The socket is identity for a weapon that named a raw joint, so this is
+    // the same arithmetic that path always did -- one code path, not two.
+    return socketLocalMatrix(joints[std::size_t(mMuzzleJoint)], mMuzzleSocket);
 }
 
 std::optional<glm::mat4>
 FirstPersonHands::muzzleJointWorld(const eng::Renderer& renderer) const
 {
-    const std::span<const glm::mat4> joints = mAnimator.modelMatrices();
-    if (!valid() || mMuzzleJoint < 0 ||
-        std::size_t(mMuzzleJoint) >= joints.size())
+    const std::optional<glm::mat4> local = muzzleLocal();
+    if (!local)
         return std::nullopt;
 
     eng::NodeTransform world;
@@ -189,23 +287,34 @@ FirstPersonHands::muzzleJointWorld(const eng::Renderer& renderer) const
     const glm::mat4 node = glm::translate(glm::mat4(1.0f), world.position) *
                            glm::mat4_cast(world.orientation) *
                            glm::scale(glm::mat4(1.0f), world.scale);
-    return node * joints[std::size_t(mMuzzleJoint)];
+    return node * *local;
 }
 
 std::optional<glm::vec3>
 FirstPersonHands::muzzleWorldPosition(const eng::Renderer& renderer) const
 {
-    const std::span<const glm::mat4> joints = mAnimator.modelMatrices();
-    if (!valid() || mMuzzleJoint < 0 ||
-        std::size_t(mMuzzleJoint) >= joints.size())
+    const std::optional<glm::mat4> local = muzzleLocal();
+    if (!local)
         return std::nullopt;
 
     eng::NodeTransform world;
     if (!renderer.nodeWorldTransform(mNode, world))
         return std::nullopt;
-    const glm::vec3 modelPosition = glm::vec3(
-        joints[std::size_t(mMuzzleJoint)] * glm::vec4(mMuzzleOffset, 1.0f));
+    const glm::vec3 modelPosition =
+        glm::vec3(*local * glm::vec4(mMuzzleOffset, 1.0f));
     return world.position + world.orientation * (world.scale * modelPosition);
+}
+
+std::optional<glm::mat4>
+FirstPersonHands::weaponSocketWorld(const eng::Renderer& renderer) const
+{
+    eng::NodeTransform world;
+    if (mWeaponSocket.empty() ||
+        !mSockets.worldTransform(renderer, mWeaponSocket, world))
+        return std::nullopt;
+    return glm::translate(glm::mat4(1.0f), world.position) *
+           glm::mat4_cast(world.orientation) *
+           glm::scale(glm::mat4(1.0f), world.scale);
 }
 
 } // namespace game
