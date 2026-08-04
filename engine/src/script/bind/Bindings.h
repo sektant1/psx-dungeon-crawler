@@ -6,6 +6,12 @@
 #include <functional>
 #include <string>
 
+namespace eng {
+class Input;
+class Physics;
+struct BodyHandle;
+}
+
 namespace eng::ecs {
 class World;
 class ComponentRegistry;
@@ -59,5 +65,15 @@ struct WorldCallbacks {
 entt::entity findByName(ecs::World& world, const std::string& name);
 
 void bindWorld(sol::state& lua, ecs::World& world, const WorldCallbacks& cb);
+
+// --- optional subsystems ---------------------------------------------------
+// A host given neither still runs every script that only touches the World,
+// which is what makes the headless tests real and lets a combat sim run
+// scripted behaviour with no window.
+void bindInput(sol::state& lua, Input& input);
+void bindPhysics(sol::state& lua, Physics& physics, ecs::World& world);
+
+// Which entity owns a physics body, or null. Shared with the contact bridge.
+entt::entity entityForBody(ecs::World& world, BodyHandle body);
 
 } // namespace eng::script

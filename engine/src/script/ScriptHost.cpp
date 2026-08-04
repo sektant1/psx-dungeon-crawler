@@ -322,6 +322,16 @@ void ScriptHost::tick(float dt)
     mImpl->flushDestroys();
 }
 
+void ScriptHost::bindInput(Input& input)
+{
+    eng::script::bindInput(mImpl->lua, input);
+}
+
+void ScriptHost::bindPhysics(Physics& physics)
+{
+    eng::script::bindPhysics(mImpl->lua, physics, mImpl->world);
+}
+
 void ScriptHost::broadcast(const std::string& name)
 {
     mImpl->broadcastEvent(name, sol::lua_nil);

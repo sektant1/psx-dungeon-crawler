@@ -8,6 +8,11 @@
 #include <string>
 #include <vector>
 
+namespace eng {
+class Input;
+class Physics;
+}
+
 namespace eng::ecs {
 class World;
 class ComponentRegistry;
@@ -38,6 +43,14 @@ public:
     ~ScriptHost();
     ScriptHost(const ScriptHost&) = delete;
     ScriptHost& operator=(const ScriptHost&) = delete;
+
+    // --- optional subsystems ---------------------------------------------
+    // Both references must outlive the host. A host given neither still runs
+    // every script that only touches the World -- which is what makes the
+    // headless tests real, and lets a combat sim run scripted behaviour with
+    // no window and no physics world.
+    void bindInput(Input& input);
+    void bindPhysics(Physics& physics);
 
     // --- frame -----------------------------------------------------------
     // Creates instances for entities whose Scripts have none, runs start() on
