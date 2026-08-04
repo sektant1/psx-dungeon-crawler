@@ -119,7 +119,9 @@ struct ScriptProp {
     std::string key;
     Type type = Type::Number;
     bool  b{};
-    double n{};
+    float n{};       // f32, not double: ByteWriter's vocabulary is f32 and so
+                     // is every other component's. A Lua number narrows on the
+                     // way in, which costs nothing for authored tuning values.
     glm::vec3 v{};
     std::string s;   // String's value; also Entity's target entity name
 };
@@ -141,8 +143,14 @@ struct Scripts {
 ```
 
 `Scripts` is an **engine** component. Stable type id **33** — the next id above
-the highest in use (32, `PrimitiveMesh`). Ids 24, 29, 30 and 31 are gaps in the
-engine block and are deliberately not reused, per the registry's rule.
+the highest in use (32, `PrimitiveMesh`). There are no gaps: 24 is
+`FirstPersonController` and 29–31 are the game's `Actor`, `ActorSounds` and
+`ViewmodelRig`, taken while the engine's block ended at 28. Applications start
+at `kFirstApplicationTypeId` = 64, so 33 is unambiguously the engine's.
+
+`ComponentRegistry.cpp`'s trailing comment currently reads "The next application
+type takes 33", which contradicts the header's `kFirstApplicationTypeId = 64`.
+It is stale and gets corrected in the same change.
 
 It **cannot** be a reflected POD component: `Field{type, offset}` describes a
 fixed layout, and this is a variable-length list of heterogeneous values. So it
@@ -205,12 +213,19 @@ Cooked `.map` payload, written by the component's own serialiser:
 
 ```
 u16 itemCount
-  per item:  string path
-             u8     enabled
-             u16    propCount
-               per prop: string key, u8 type, then the value in its natural
-                         encoding (bool / f64 / vec3 / string)
+  per item:  str path
+             u8  enabled
+             u16 propCount
+               per prop: str key, u8 type, then the value in the encoding that
+                         type names:  Bool -> u8
+                                      Number -> f32
+                                      Vec3 -> vec3
+                                      String, Entity -> str
 ```
+
+`ByteWriter` interns strings into a pool and writes a `u32` index, so repeating
+the same script path across a hundred entities costs a hundred indices and one
+string.
 
 Appending trailing fields later follows the registry's append-only rule: a
 short payload decodes with defaults.
