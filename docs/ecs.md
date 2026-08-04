@@ -106,7 +106,8 @@ one, so a file needing `Transform` does not pull Jolt's layer enum in through
 | `Collider` | a shape that occupies space |
 | `RigidBody` | …and the simulation moves it |
 | `KinematicControl` | …but gameplay steers it |
-| `NodeRef` / `BodyRef` / `ParticlesRef` / `MaterialApplied` | runtime handles, written by reconcilers, never by callers |
+| `Scripts` | Lua behaviours attached here: paths plus per-instance props |
+| `NodeRef` / `BodyRef` / `ParticlesRef` / `MaterialApplied` / `ScriptState` | runtime handles, written by reconcilers and the script host, never by callers |
 
 Two splits worth the words:
 
@@ -162,7 +163,20 @@ a frame wants them. Call it **before** `World::sync()`; `sync()` deliberately
 does not, because the editor syncs its preview world every frame and would
 otherwise watch authored entities spin and expire while placing them.
 
-Two rules these follow, and any new one should:
+### The one system that is not a free function
+
+`eng::script::ScriptHost` is a stateful object, and deliberately so. A system's
+contract here is a single `(World&, dt)` call; this host's callbacks land at
+**three** different places in a frame — `fixed_update` before the physics step,
+contacts after it, `update` with presentation — and a generic `update(dt)` would
+hide the one thing a reader needs to know about it. It also owns a Lua state and
+a pool of live instances, which is not something a free function can carry.
+
+It follows the same authored-versus-derived split as everything else: `Scripts`
+is the authored component, `ScriptState` is the runtime handle the host writes.
+See [scripting.md](scripting.md).
+
+Two rules the free-function systems follow, and any new one should:
 
 - **Modulation reads the authored value and writes a derived one.**
   `lightAnimationSystem` computes `LightColour` from `LightRef::desc.colour`

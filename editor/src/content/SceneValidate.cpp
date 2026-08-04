@@ -1,10 +1,17 @@
 #include <editor/content/SceneValidate.h>
 
+extern "C" {
+#include <lauxlib.h>
+#include <lua.h>
+}
+
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -14,6 +21,37 @@ namespace {
 bool finite(const glm::vec3& v)
 {
     return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+// Whether a .lua file compiles. Compiled with luaL_loadbuffer and never run:
+// validating a script must not require a world, and a cooker that executes
+// authored content is a cooker that can be made to do anything. No libraries
+// are opened, because a chunk that is only compiled needs none.
+bool luaChunkParses(const std::string& file, std::string& error)
+{
+    std::ifstream in(file, std::ios::binary);
+    if (!in) {
+        error = "cannot open the file";
+        return false;
+    }
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    const std::string source = ss.str();
+
+    lua_State* L = luaL_newstate();
+    if (L == nullptr) {
+        error = "out of memory";
+        return false;
+    }
+    const std::string chunkName = "@" + file;
+    const int status =
+        luaL_loadbuffer(L, source.data(), source.size(), chunkName.c_str());
+    if (status != LUA_OK) {
+        const char* message = lua_tostring(L, -1);
+        error = message != nullptr ? message : "syntax error";
+    }
+    lua_close(L);
+    return status == LUA_OK;
 }
 
 void add(std::vector<Issue>& issues, Severity severity, std::string code,
@@ -146,6 +184,17 @@ std::vector<Issue> validate(const SceneDocument& document,
     const Entity* spawnEntity = nullptr;
     const Entity* exitEntity = nullptr;
 
+    // Every name an Entity-typed script prop could legitimately point at.
+    // Gathered up front because a lever may reference a door authored after it,
+    // and a check that walked the list in order would call that a dangling
+    // reference. Both id and name: the host resolves by Name at runtime, and
+    // authors reach for whichever reads better in the inspector.
+    std::set<std::string> entityNames;
+    for (const Entity& entity : document.entities) {
+        if (!entity.id.empty()) entityNames.insert(entity.id);
+        if (!entity.name.empty()) entityNames.insert(entity.name);
+    }
+
     for (const Entity& entity : document.entities) {
         if (entity.playerSpawn) {
             ++playerSpawns;
@@ -192,6 +241,63 @@ std::vector<Issue> validate(const SceneDocument& document,
             add(issues, Severity::Error, "scale.zero",
                 "scale must be positive on every axis", entity.id,
                 QuickFix::ResetTransform);
+        }
+
+        // --- scripts ------------------------------------------------------
+        // Three checks, in the order they can fail. All errors: a script that
+        // does not resolve or does not parse produces an entity that silently
+        // does nothing at runtime, which is exactly the class of bug the
+        // content checks exist to turn into a build failure.
+        for (const ScriptAuthor& script : entity.scripts) {
+            if (script.path.empty()) {
+                add(issues, Severity::Error, "script.no_path",
+                    "a script entry has no path", entity.id);
+                continue;
+            }
+            if (assetRoot.empty())
+                continue; // no tree to resolve against (unit tests)
+
+            std::error_code code;
+            std::filesystem::path file = script.path;
+            if (!std::filesystem::exists(file, code))
+                file = std::filesystem::path(assetRoot) / script.path;
+            if (!std::filesystem::exists(file, code)) {
+                add(issues, Severity::Error, "script.missing",
+                    "script '" + script.path + "' is not on disk", entity.id);
+                continue;
+            }
+
+            // Compiled, never run. Validating a script must not require a
+            // world, a renderer or a physics system -- and a cooker that
+            // executes authored content is a cooker that can be made to do
+            // anything.
+            std::string parseError;
+            if (!luaChunkParses(file.string(), parseError)) {
+                add(issues, Severity::Error, "script.syntax",
+                    "script '" + script.path + "' does not parse: " + parseError,
+                    entity.id);
+            }
+
+            // An Entity prop naming nothing in this scene. A warning rather
+            // than an error: the host already logs it and hands the script nil,
+            // and a level may legitimately ship with the collaborator cut. It
+            // is still worth saying at build time, because the runtime symptom
+            // is a door that simply never opens.
+            for (const ScriptPropAuthor& prop : script.props) {
+                if (prop.type != ScriptPropAuthor::Type::Entity) continue;
+                if (prop.stringValue.empty()) {
+                    add(issues, Severity::Warning, "script.prop_empty",
+                        "script '" + script.path + "' prop '" + prop.key +
+                            "' names no entity",
+                        entity.id);
+                } else if (entityNames.count(prop.stringValue) == 0) {
+                    add(issues, Severity::Warning, "script.prop_unresolved",
+                        "script '" + script.path + "' prop '" + prop.key +
+                            "' names entity '" + prop.stringValue +
+                            "', which this scene does not contain",
+                        entity.id);
+                }
+            }
         }
 
         const KitPiece* piece = nullptr;

@@ -11,11 +11,19 @@ dependency that points upward is a **link error**, not a review comment.
 | Target | Owns | May link |
 |---|---|---|
 | `game` (exe) | combat, dungeon generation, player, bosses, items, UI | `eng` |
-| `eng` | application lifetime (`Engine`), the facade consumers link | `eng_framework` |
+| `eng` | application lifetime (`Engine`), the facade consumers link | `eng_script` |
+| `eng_script` | Lua scripting: the VM, the bindings, the script host | `eng_framework` |
 | `eng_framework` | the ECS world, its components and reconcilers, controllers | `eng_systems` |
 | `eng_systems` | renderer, physics, audio, particles — the only layer that sees Vulkan/Jolt/SDL/miniaudio | `eng_platform` |
 | `eng_platform` | window, input, config | `eng_core` |
 | `eng_core` | log, io, geometry, events, profiling, clocks, string ids | glm only |
+
+`eng_script` sits *at* the framework layer rather than above it — the lint files
+`engine/src/script` as `framework`, so its bindings may reach `World`, `Physics`
+and `Input`, and an upward include is still an error. It is a separate target
+because `eng_framework` is linked by every engine test and by the editor's
+preview world, and keeping the VM out of that makes "who depends on Lua" a link
+fact instead of a habit. See [docs/scripting.md](docs/scripting.md).
 
 `eng` is the only target an application names. Everything else arrives
 transitively.

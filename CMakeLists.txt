@@ -510,8 +510,10 @@ add_library(
 target_include_directories(game_content PUBLIC game/src game/src/scene
                                                engine/include
                             PRIVATE editor/include third_party)
+# lua, not eng_script: SceneValidate only *compiles* authored scripts to check
+# their syntax. It never runs one, so it needs the parser and none of the host.
 target_link_libraries(game_content PUBLIC glm::glm EnTT::EnTT
-                      PRIVATE eng_toml nlohmann_json::nlohmann_json)
+                      PRIVATE eng_toml nlohmann_json::nlohmann_json lua)
 eng_target_hardening(game_content)
 
 # The placement editor: ImGui + ImGuizmo over the engine's offscreen viewport.

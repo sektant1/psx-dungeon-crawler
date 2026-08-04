@@ -24,6 +24,7 @@ assets/assets.toml). Run standalone or as the `assetlint` ctest.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 import tomllib
@@ -97,6 +98,10 @@ def collect(roots: list[Path]):
     meshes: set[str] = set()
     materials: dict[str, list[Path]] = defaultdict(list)
     scripts: dict[str, list[Path]] = defaultdict(list)
+    # Lua scripts, by path relative to the pack root -- which is exactly how a
+    # scene names them ("scripts/door.lua"), so the check below is a lookup
+    # rather than a search.
+    lua: set[str] = set()
 
     for root in roots:
         if not root.is_dir():
@@ -108,16 +113,18 @@ def collect(roots: list[Path]):
                 textures[path.name].append(path)
             elif path.suffix == ".obj":
                 meshes.add(path.name)
+            elif path.suffix == ".lua":
+                lua.add(path.relative_to(root).as_posix())
             elif path.suffix == ".mat":
                 scripts[path.name].append(path)
                 for quoted, bare in MATERIAL_DEF_RE.findall(
                         path.read_text(errors="replace")):
                     materials[quoted or bare].append(path)
-    return textures, meshes, materials, scripts
+    return textures, meshes, materials, scripts, lua
 
 
 def lint(roots: list[Path]) -> tuple[list[str], str]:
-    textures, meshes, materials, scripts = collect(roots)
+    textures, meshes, materials, scripts, lua = collect(roots)
     errors: list[str] = []
 
     # 4/5: ambiguity in the flat namespaces Ogre actually resolves against.
@@ -168,9 +175,30 @@ def lint(roots: list[Path]) -> tuple[list[str], str]:
                             "defined by any .material"
                         )
 
+    # 6: scripts named by .scn scenes. A dangling script path is exactly as
+    # broken as a dangling mesh, and the runtime cannot tell you: an entity
+    # whose script failed to load simply sits there doing nothing.
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for doc in sorted(root.rglob("*.scn")):
+            if skipped(doc, root):
+                continue
+            try:
+                scene = json.loads(doc.read_text(errors="replace"))
+            except json.JSONDecodeError:
+                continue  # the schema check owns malformed scenes
+            for entity in scene.get("entities", []):
+                for script in entity.get("scripts", []):
+                    path = script.get("path", "")
+                    if path and path not in lua:
+                        errors.append(
+                            f"{doc.relative_to(ROOT)}: script '{path}' not found"
+                        )
+
     summary = (
         f"{len(materials)} materials, {len(textures)} textures, "
-        f"{len(meshes)} meshes"
+        f"{len(meshes)} meshes, {len(lua)} scripts"
     )
     return errors, summary
 

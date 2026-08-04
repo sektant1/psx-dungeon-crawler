@@ -496,7 +496,7 @@ Sections are grouped and always in the same order, whatever the entity carries:
 | *(identity + transform)* | id, name, parent, position/rotation/scale |
 | **appearance** | Mesh (and its material), Shader, Particles, Light |
 | **physical** | Collider, Trigger |
-| **gameplay** | Camera, First-Person Controller, Viewmodel Rig, Spin, Player Spawn, Exit, Marker, Enemy Spawn, Pickup |
+| **gameplay** | Camera, First-Person Controller, Viewmodel Rig, Scripts, Spin, Player Spawn, Exit, Marker, Enemy Spawn, Pickup |
 | **placement** | Grid Cell |
 
 Before, sections came out in whatever order the component table happened to be
@@ -509,6 +509,27 @@ hand-picked order inside a band survives.
 Each section is a collapsing header with an **x** to remove it. **Ctrl+A** over
 the panel opens the add menu, which is grouped into the same bands — so the menu
 is a map of where the thing you are adding will appear.
+
+### Attaching a script
+
+**Scripts** is the one section that is a *list* rather than a fixed set of
+fields: an entity may run several, and the order they are listed in is the order
+their callbacks run, so the arrows reorder them and the checkbox disables one
+without deleting what you authored.
+
+Each row is a path — logical, like `scripts/door.lua`, which is what keeps a
+scene portable — plus a table of **props**. A prop is a per-instance value the
+script reads as `self.props`, and it is what makes one `door.lua` serve every
+door in the level instead of one script per door. Pick its type from the combo:
+`bool`, `number`, `string`, `vec3`, or `entity`.
+
+An **entity** prop names another entity, which the script receives as a ready
+handle rather than a string it has to look up. That is how a lever finds its
+door. The cooker warns when the name matches nothing in the scene, so a typo
+surfaces at build time rather than as a door that never opens.
+
+A path that does not resolve, or a script that does not parse, **fails the
+cook** — with the Lua error and its line. See [scripting.md](scripting.md).
 
 ### The right column is the Inspector
 
