@@ -379,7 +379,8 @@ target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_sys
 # and Input, and an upward include is still a lint failure.
 add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
                               engine/src/script/ScriptError.cpp
-                              engine/src/script/ScriptChunkCache.cpp)
+                              engine/src/script/ScriptChunkCache.cpp
+                              engine/src/script/ScriptInstance.cpp)
 target_include_directories(eng_script PRIVATE third_party engine/src)
 target_link_libraries(eng_script
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>"
@@ -840,6 +841,11 @@ if(BUILD_TESTING)
   target_include_directories(script_error_tests PRIVATE engine/include engine/src)
   target_link_libraries(script_error_tests PRIVATE eng_script eng_sol2 glm::glm)
   add_test(NAME script_error COMMAND script_error_tests)
+
+  add_executable(script_host_tests engine/tests/ScriptHostTests.cpp)
+  target_include_directories(script_host_tests PRIVATE engine/include engine/src)
+  target_link_libraries(script_host_tests PRIVATE eng_script glm::glm EnTT::EnTT)
+  add_test(NAME script_host COMMAND script_host_tests)
 
   add_executable(scene_tests engine/tests/SceneTests.cpp
                              engine/src/ecs/World.cpp)
