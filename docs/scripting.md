@@ -269,8 +269,8 @@ return Pulse
 
 ### 2. Attach it
 
-In the editor: select the entity, **Add Component → Scripts**, type the path,
-add props. Or by hand in the `.scn`:
+In the editor: select the entity, **Add Component → Scripts**, pick the file
+from the drop-down, add props. Or by hand in the `.scn`:
 
 ```json
 {

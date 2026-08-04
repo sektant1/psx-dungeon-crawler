@@ -235,6 +235,10 @@ private:
     void drawViewportToolbar();
     void drawViewportStats(const eng::FrameContext& f);
     void refreshAudioAssets();
+    // Re-reads the .lua files on disk into mScriptPaths. Cheap, and called from
+    // the Scripts picker, so writing a script in another window and attaching it
+    // does not mean restarting the editor.
+    void rescanScriptPaths();
     void refreshAudioCues();
     void previewAudio(const game::content::AuthorId& entity);
     void stopAudioPreview();
@@ -427,6 +431,10 @@ private:
     // survivable: the inspector falls back to free text and says so.
     std::vector<std::string> mEnemyIds;
     std::vector<std::string> mPickupIds;
+    // The .lua files on disk, as logical paths. Rescanned on demand, because
+    // unlike the TOML vocabularies this one changes while the editor is open --
+    // writing a new script is exactly the moment you want to attach it.
+    std::vector<std::string> mScriptPaths;
     // The looks palettes.toml defines, and where it is. Resolved once: the
     // combo is drawn every frame the inspector is open with nothing selected.
     std::vector<std::string> mPalettes;

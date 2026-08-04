@@ -328,6 +328,7 @@ bool EditorApp::onStart(eng::Engine& engine)
             eng::assets::resolve("config/prototypes.toml");
         !pickups.empty())
         mPickupIds = tomlSectionIds(pickups.string(), "pickup");
+    rescanScriptPaths();
     if (const std::filesystem::path palettes =
             eng::assets::resolve("config/palettes.toml");
         !palettes.empty()) {
@@ -445,6 +446,15 @@ bool EditorApp::onStart(eng::Engine& engine)
             addComponentToSelection(*type);
 
     return true;
+}
+
+void EditorApp::rescanScriptPaths()
+{
+    // Through the mount list like every other content lookup, so the picker
+    // offers exactly what the cooker and the runtime will resolve.
+    const std::filesystem::path dir = eng::assets::resolve("scripts");
+    mScriptPaths = luaScriptPaths(dir.string(), "scripts");
+    eng::log::info("Editor: %zu scripts", mScriptPaths.size());
 }
 
 void EditorApp::refreshAudioAssets()
@@ -5124,6 +5134,8 @@ void EditorApp::drawInspector()
     context.grid = &mState.grid;
     context.materialNames = &mMaterialNames;
     context.enemyIds = &mEnemyIds;
+    context.scriptPaths = &mScriptPaths;
+    context.rescanScripts = [this] { rescanScriptPaths(); };
     context.pickupIds = &mPickupIds;
     context.materials = &materialCatalog();
     context.meshKind = selectionMeshKind();

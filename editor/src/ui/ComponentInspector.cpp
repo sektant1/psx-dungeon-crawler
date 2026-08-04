@@ -955,6 +955,62 @@ void drawAudioListener(Entity& entity, InspectorContext& context)
               "this entity's transform");
 }
 
+// The script a row runs, picked from what is on disk.
+//
+// A combo and not a text field, for the reason vocabularyField already gives
+// about enemy ids: a path spelled from memory is a component that silently does
+// nothing, found minutes later in the game with nothing pointing at the cause.
+// The picker also spares the author the one detail they cannot guess -- that the
+// stored path is *logical* ("scripts/door.lua"), not wherever the file sits on
+// this machine.
+//
+// Falls back to a typed path only when nothing is on disk to offer, which is
+// survivable rather than good: a first script has to be nameable before the
+// list it would come from exists.
+void drawScriptPathPicker(std::string& path, InspectorContext& context)
+{
+    const bool haveList =
+        context.scriptPaths != nullptr && !context.scriptPaths->empty();
+
+    if (!haveList) {
+        char buffer[96];
+        std::snprintf(buffer, sizeof(buffer), "%s", path.c_str());
+        if (ImGui::InputText("##path", buffer, sizeof(buffer)))
+            path = buffer;
+        track(context);
+        ImGui::TextDisabled("no scripts found under assets/scripts");
+        return;
+    }
+
+    const bool onDisk = std::find(context.scriptPaths->begin(),
+                                  context.scriptPaths->end(),
+                                  path) != context.scriptPaths->end();
+
+    // An empty path reads as a prompt rather than a blank box: a fresh row is
+    // the one moment the author has no idea what the widget wants.
+    const char* preview = path.empty() ? "pick a script" : path.c_str();
+    if (ImGui::BeginCombo("##path", preview)) {
+        // Rescanned on open, so a file written since the editor started is in
+        // the list the first time you go looking for it.
+        if (context.rescanScripts)
+            context.rescanScripts();
+        for (const std::string& option : *context.scriptPaths) {
+            if (ImGui::Selectable(option.c_str(), option == path)) {
+                path = option;
+                context.track(true, true);
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    if (!path.empty() && !onDisk) {
+        // Said here rather than left for the cook. The scene still names it, so
+        // the value is not thrown away -- it is just called out.
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                           "'%s' is not on disk", path.c_str());
+    }
+}
+
 // Scripts get a hand-written block for the same reason they hand-write their
 // serialiser: every other component is a fixed set of typed rows, and this is a
 // reorderable list whose rows each carry a variable table of values.
@@ -1047,11 +1103,7 @@ void drawScripts(Entity& entity, InspectorContext& context)
         ImGui::TextDisabled("%d.", i + 1);
         ImGui::SameLine();
         ImGui::SetNextItemWidth(-90.0f);
-        char path[96];
-        std::snprintf(path, sizeof(path), "%s", script.path.c_str());
-        if (ImGui::InputText("##path", path, sizeof(path)))
-            script.path = path;
-        track(context);
+        drawScriptPathPicker(script.path, context);
 
         ImGui::SameLine();
         if (ImGui::ArrowButton("##up", ImGuiDir_Up) && i > 0) {
@@ -1068,9 +1120,6 @@ void drawScripts(Entity& entity, InspectorContext& context)
         if (ImGui::SmallButton("remove"))
             removeAt = i;
 
-        if (script.path.empty())
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                               "a script with no path does nothing");
         drawScriptProps(script.props, context);
         ImGui::PopID();
     }
@@ -1089,8 +1138,7 @@ void drawScripts(Entity& entity, InspectorContext& context)
         entity.scripts.emplace_back();
         track(context);
     }
-    ImGui::TextDisabled("paths are logical, e.g. scripts/door.lua\n"
-                        "props reach the script as self.props");
+    ImGui::TextDisabled("props reach the script as self.props");
 }
 
 void drawSpin(Entity& entity, InspectorContext& context)

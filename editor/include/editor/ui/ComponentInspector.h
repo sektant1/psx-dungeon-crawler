@@ -45,6 +45,12 @@ struct InspectorContext {
     // get right by having read a TOML is not authorable.
     const std::vector<std::string>* enemyIds = nullptr;
     const std::vector<std::string>* pickupIds = nullptr;
+    // The .lua files on disk, as the logical paths a scene names them by. Null
+    // or empty falls back to a typed path, which is only survivable, not good.
+    const std::vector<std::string>* scriptPaths = nullptr;
+    // Rescan the above. Offered next to the picker: a script written after the
+    // editor started must be attachable without restarting it.
+    std::function<void()> rescanScripts;
     // What the classified catalogue says about the material offered here, and
     // what this entity's mesh can take. Null leaves the combo unfiltered, which
     // is what it always was.

@@ -517,11 +517,21 @@ fields: an entity may run several, and the order they are listed in is the order
 their callbacks run, so the arrows reorder them and the checkbox disables one
 without deleting what you authored.
 
-Each row is a path — logical, like `scripts/door.lua`, which is what keeps a
-scene portable — plus a table of **props**. A prop is a per-instance value the
-script reads as `self.props`, and it is what makes one `door.lua` serve every
-door in the level instead of one script per door. Pick its type from the combo:
-`bool`, `number`, `string`, `vec3`, or `entity`.
+Each row is a script **picked from a drop-down** of what is on disk, plus a
+table of **props**. The list is rescanned when you open it, so a file written
+while the editor is running is there the first time you go looking for it.
+
+The picker exists for the reason the enemy-id one does: a path spelled from
+memory is a component that silently does nothing, found minutes later in the
+game with nothing pointing at the cause. It also spares you the one detail you
+could not guess — that what gets stored is the *logical* path
+(`scripts/door.lua`), not wherever the file happens to sit on your machine. A
+value that is no longer on disk is called out in red rather than discarded.
+
+A prop is a per-instance value the script reads as `self.props`, and it is what
+makes one `door.lua` serve every door in the level instead of one script per
+door. Pick its type from the combo: `bool`, `number`, `string`, `vec3`, or
+`entity`.
 
 An **entity** prop names another entity, which the script receives as a ready
 handle rather than a string it has to look up. That is how a lever finds its
