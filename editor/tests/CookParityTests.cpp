@@ -107,6 +107,70 @@ int main()
                 "sword is attached and inherits subject shader parameters");
     }
 
+    // The two non-kit ways to be geometry, cooked.
+    //
+    // Both end as the same pair of runtime components a prefab produces -- a
+    // MeshRenderer saying what it wears, plus whatever says where the geometry
+    // comes from -- so nothing downstream of the cooker has to know which of
+    // the three an author chose. That equivalence is the whole design; without
+    // this test it is a comment.
+    {
+        SceneDocument scene;
+        Entity chair;
+        chair.id = "chair";
+        chair.mesh = MeshAuthor{"meshes/props/Chair.obj", 0.5f};
+        chair.material = "Game/PropTerracotta";
+        chair.transform.scale = glm::vec3(2.0f);
+        scene.add(chair);
+
+        Entity block;
+        block.id = "block";
+        block.primitive = PrimitiveAuthor{};
+        block.primitive->kind = eng::ecs::PrimitiveMesh::Capsule;
+        block.primitive->radius = 0.35f;
+        block.material = "Game/Kit/Dungeon";
+        scene.add(block);
+
+        entt::registry registry;
+        require(buildRegistry(scene, catalog, registry, error), error.c_str());
+
+        entt::entity chairEntity = entt::null;
+        entt::entity blockEntity = entt::null;
+        int renderers = 0;
+        for (const entt::entity e : registry.view<eng::ecs::MeshRenderer>()) {
+            ++renderers;
+            if (registry.all_of<eng::ecs::MeshSource>(e))
+                chairEntity = e;
+            else if (registry.all_of<eng::ecs::PrimitiveMesh>(e))
+                blockEntity = e;
+        }
+        require(renderers == 2, "both entities cook to a MeshRenderer");
+        require(chairEntity != entt::null,
+                "a mesh entity cooks to MeshSource, the same component a "
+                "prefab produces");
+        require(blockEntity != entt::null,
+                "a primitive entity cooks to PrimitiveMesh instead");
+        require(registry.get<eng::ecs::MeshSource>(chairEntity).path ==
+                    "meshes/props/Chair.obj",
+                "carrying the authored path unchanged");
+        require(registry.get<eng::ecs::MeshRenderer>(chairEntity).material ==
+                    "Game/PropTerracotta",
+                "and the authored material");
+        // The import scale multiplies the transform rather than replacing it,
+        // exactly as a kit piece's does: it is a fact about the file, and an
+        // author who fixes it once should not have to redo it per instance.
+        require(registry.get<eng::ecs::Transform>(chairEntity).scale.x == 1.0f,
+                "import scale multiplies the authored transform scale");
+        require(registry.get<eng::ecs::PrimitiveMesh>(blockEntity).kind ==
+                    eng::ecs::PrimitiveMesh::Capsule,
+                "the primitive's parameters survive the cook");
+        require(registry.get<eng::ecs::PrimitiveMesh>(blockEntity).radius ==
+                    0.35f,
+                "including its dimensions");
+        require(!registry.all_of<eng::ecs::MeshSource>(blockEntity),
+                "and a generated mesh names no file");
+    }
+
     // Architecture collides by virtue of being architecture. A .scn authors a
     // `collider` only as an exception, so without this the cooked map is a
     // room the player falls straight through -- which is exactly what every

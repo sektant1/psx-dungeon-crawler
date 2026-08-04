@@ -92,7 +92,8 @@ gizmo is being dragged.
 ## Placing: the brush
 
 The Place tool holds a **brush** (`ed::Brush`, `editor/include/editor/scene/EntityComponents.h`)
--- either a kit piece or a gameplay kind, plus the quarter turn it will land at.
+-- a kit piece, a gameplay kind, a particle effect, a mesh file or a generated
+primitive, plus the quarter turn it will land at.
 
 That it can be either is the point. A light and a wall are the same gesture to
 an author: point at the level, click. They used to be two different ones,
@@ -751,16 +752,74 @@ Two of the entries are what turn a scene into a shot:
 A chain with a Spin or an Orbit above it is the one case the cooker does *not*
 bake flat -- a live parent has to stay a parent.
 
-Two components are special, and the table says so rather than a panel doing:
+### The three ways to be geometry
 
-- **Mesh** is only addable when the Catalog has a brush selected -- prefab ids
-  come from `kit.toml`, so the table cannot invent one. The add menu greys the
-  row and says why.
+An entity draws a mesh by carrying exactly one of three components. All three
+cook to the same `MeshRenderer` -- what a mesh *wears* and whether it casts a
+shadow is one question -- and differ only in where the geometry comes from.
+
+| Component | `.scn` field | Cooks to | For |
+|---|---|---|---|
+| **Kit Piece** | `prefab` | `MeshSource` + `MeshRenderer` | the modular kit: comes with a material, a socket and grid snapping |
+| **Mesh** | `mesh` | `MeshSource` + `MeshRenderer` | any file under `assets/meshes` -- an imported model, a one-off prop |
+| **Primitive Mesh** | `primitive` | `PrimitiveMesh` + `MeshRenderer` | a box, sphere, capsule, cylinder, cone, plane or disc the engine generates |
+
+They are **mutually exclusive**, and enforced twice: the component table only
+offers each while the other two are absent, and `parseSceneSource` refuses a
+document whose entity carries more than one. An entity with two would be a
+`MeshRenderer` with two answers about what it draws, and finding out which one
+won in the viewport is not authoring.
+
+Which to reach for:
+
+- A kit piece, when the geometry is part of the level's vocabulary. The Meshes
+  browser says so on any row whose file is already in `kit.toml`, and offers a
+  **Place as Kit Piece** button, because placing the raw file instead loses the
+  material and the grid snapping.
+- A mesh file, for the ~160 meshes that are *not* kit pieces. Before this, the
+  only way to put an imported model in a level was to write a `kit.toml` entry
+  describing it as architecture.
+- A primitive, for blockout. A greybox room is boxes and cylinders, and until
+  now the eight generators the renderer has always had were reachable only from
+  C++.
+
+Three components are special, and the table says so rather than a panel doing:
+
+- **Kit Piece** is only addable when the Placeables tab has a brush selected --
+  prefab ids come from `kit.toml`, so the table cannot invent one.
+- **Mesh** likewise needs a path, which comes from the Meshes tab. The add menu
+  greys either row and says why.
 - **Grid Cell** cannot be added by hand at all. It is produced by placement, and
   removing it is what unpins a piece from the grid.
 
-Removing Mesh also clears the material override and the grid cell, because
-neither means anything without it.
+Removing any of the three also clears the material, and removing a Kit Piece
+clears the grid cell: a material is chosen *for* a mesh (an atlas material tuned
+to a wall means nothing on the sphere that replaces it), and a cell without a
+piece means nothing.
+
+#### Primitive parameters
+
+The `primitive` block names a `kind` and only the fields that kind reads --
+`size` for a box, `radius`/`height`/`segments` for anything round. Every field
+is optional, so `"primitive": {}` is a valid unit box, and the writer emits only
+what differs from the defaults so a capsule never spells out a box's `bevel`.
+
+```json
+{ "id": "pillar_0001",
+  "primitive": { "kind": "cylinder", "radius": 0.4, "height": 3.0,
+                 "segments": 10 },
+  "material": "Game/Kit/Dungeon",
+  "transform": { "position": [3.0, 1.5, 3.0] } }
+```
+
+`inward_facing` flips the winding and the normals: a box you stand inside rather
+than one you walk around, which is how a room is blocked out.
+
+At load time `eng::ecs::resolvePrimitiveMeshes` (`eng/ecs/MeshResolve.h`) turns
+each `PrimitiveMesh` into a `MeshHandle` through a `PrimitiveMeshCache` keyed on
+the parameters, so a hundred identical greybox blocks are one vertex buffer. The
+editor preview calls the same function, which is what makes the box in the
+viewport the box the game builds rather than a second implementation of "box".
 
 ## Editing components
 

@@ -184,6 +184,7 @@ protected:
             return r.prototypeMesh(path);
         });
 
+        rt.resolvePrimitives(r);
         rt.buildAll();
 
         // If the map authored no lights, give the scene a directional key light

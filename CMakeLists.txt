@@ -357,6 +357,7 @@ target_link_libraries(eng_systems
 add_library(
   eng_framework STATIC engine/src/ecs/World.cpp engine/src/ecs/SceneSync.cpp
                         engine/src/ecs/AudioSync.cpp
+                       engine/src/ecs/MeshResolve.cpp
                        engine/src/ecs/PhysicsSync.cpp
                        engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
@@ -504,6 +505,8 @@ add_executable(
   editor/src/assets/FileBrowser.cpp
   editor/src/assets/GameVocabulary.cpp
   editor/src/assets/MaterialCatalog.cpp
+  editor/src/assets/MeshCatalog.cpp
+  editor/src/ui/EditorUi.cpp
   editor/src/assets/ModelImportPipeline.cpp
   editor/src/commands/Clipboard.cpp
   editor/src/commands/CommandPalette.cpp
@@ -1332,6 +1335,17 @@ if(BUILD_TESTING)
                                                           engine/include)
   target_link_libraries(editor_command_tests PRIVATE glm::glm)
   add_test(NAME editor_command COMMAND editor_command_tests)
+
+  # The .scn geometry blocks: mesh files and generated primitives. Its own
+  # binary rather than more of SceneRoundTripTests, because it asserts on
+  # documents built in the test and must not fail when a shipped scene is
+  # edited.
+  add_executable(scene_geometry_tests editor/tests/SceneGeometryTests.cpp)
+  target_include_directories(scene_geometry_tests PRIVATE editor/include game/src
+                                                          engine/include)
+  target_link_libraries(scene_geometry_tests PRIVATE game_content
+                        eng_ecs_headless)
+  add_test(NAME scene_geometry COMMAND scene_geometry_tests)
 
   add_executable(editor_component_tests editor/tests/EditorComponentTests.cpp
                                         editor/src/scene/EntityComponents.cpp

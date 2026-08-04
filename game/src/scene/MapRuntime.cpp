@@ -72,6 +72,11 @@ void MapRuntime::resolveMeshes(const LoadMeshFn& loadFn)
     }
 }
 
+void MapRuntime::resolvePrimitives(eng::Renderer& renderer)
+{
+    eng::ecs::resolvePrimitiveMeshes(mWorld.registry(), renderer, mPrimitives);
+}
+
 void MapRuntime::buildAll()
 {
     materialiseTriggers(mWorld.registry());

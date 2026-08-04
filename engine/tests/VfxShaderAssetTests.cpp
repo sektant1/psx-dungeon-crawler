@@ -156,8 +156,22 @@ int main()
                 "the portal profile has no entry point of its own");
     requireText(portalVertex, "cameraPositionObject",
                 "portal vertex stage cannot feed the depth parallax");
-    requireText(program, "camera_position_object_space",
-                "portal program does not bind the camera for parallax");
+    // The eye, in the same frame as the field it shears. Asserted against the
+    // Vulkan stage rather than a .program declaration: the camera used to be an
+    // Ogre auto-param bound by name, and is now a member of the scene uniform
+    // block, so the binding IS the shader reading it. Both halves are named
+    // because the parallax silently flattens if either goes: without the
+    // inverse the eye stays in world space, and without the subtraction there
+    // is no view vector at all.
+    const std::string vkSurfaceVertex =
+        read("assets/shaders/vulkan/surface.vert");
+    requireText(vkSurfaceVertex, "scene.cameraPositionAndLightCount.xyz",
+                "portal vertex stage does not read the camera for parallax");
+    requireText(vkSurfaceVertex, "inverse(drawData.model)",
+                "the eye is not brought into object space, so the parallax "
+                "shear is expressed in the wrong frame");
+    requireText(vkSurfaceVertex, "surfaceView",
+                "portal vertex stage does not pass the view vector on");
     // The scrolling family. Deliberately NOT the surface kernel: this look
     // comes from sliding tiling art, not from a field evaluated per pixel.
     const std::string scrollCommon =

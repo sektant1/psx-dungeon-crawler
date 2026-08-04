@@ -59,7 +59,13 @@ namespace {
 const std::vector<ComponentType>& table()
 {
     static const std::vector<ComponentType> kTypes = {
-        {"mesh", "Mesh", "kit piece drawn in the world",
+        // Three ways to be geometry, in the order an author reaches for them:
+        // a kit piece is the level's own vocabulary, a mesh file is anything
+        // else in the project, a primitive is generated on the spot. Each `has`
+        // is exclusive of the other two, so the add menu offers whichever the
+        // entity is not already, and a click can never produce an entity
+        // carrying two -- which the .scn format refuses to load.
+        {"prefab", "Kit Piece", "a piece of the modular kit, from kit.toml",
          [](const Entity& e) { return !e.prefab.empty(); },
          [](Entity& e, const ComponentDefaults& d) { e.prefab = d.prefab; },
          [](Entity& e) {
@@ -68,7 +74,39 @@ const std::vector<ComponentType>& table()
              e.cell.reset(); // a grid cell without a piece means nothing
          },
          [](const ComponentDefaults& d) { return !d.prefab.empty(); },
-         ComponentGroup::Appearance},
+         ComponentGroup::Appearance,
+         [](const Entity& e) { return !e.mesh && !e.primitive; }},
+
+        {"mesh", "Mesh", "any mesh file in the project, chosen from Meshes",
+         [](const Entity& e) { return e.mesh.has_value(); },
+         [](Entity& e, const ComponentDefaults& d) {
+             e.mesh = game::content::MeshAuthor{d.meshPath, 1.0f};
+         },
+         [](Entity& e) {
+             e.mesh.reset();
+             e.material.clear();
+         },
+         // A path is not invented here for the same reason a prefab is not: the
+         // catalogue knows what exists and this table does not. The Meshes tab
+         // arms the brush, exactly as Placeables arms it for a kit piece.
+         [](const ComponentDefaults& d) { return !d.meshPath.empty(); },
+         ComponentGroup::Appearance,
+         [](const Entity& e) { return e.prefab.empty() && !e.primitive; }},
+
+        {"primitive", "Primitive Mesh",
+         "a box, sphere or capsule the engine generates",
+         [](const Entity& e) { return e.primitive.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // The unit box, which is what every greybox starts as and the one
+             // primitive whose defaults need no explanation.
+             e.primitive = game::content::PrimitiveAuthor{};
+         },
+         [](Entity& e) {
+             e.primitive.reset();
+             e.material.clear();
+         },
+         always, ComponentGroup::Appearance,
+         [](const Entity& e) { return e.prefab.empty() && !e.mesh; }},
 
         {"cell", "Grid Cell", "pinned to a cell or edge of the level grid",
          [](const Entity& e) { return e.cell.has_value(); }, nullptr,
@@ -363,7 +401,7 @@ bool isGeometry(const Entity& entity)
         return false;
     for (const ComponentType& type : table()) {
         const std::string_view id = type.id;
-        if (id == "mesh" || id == "cell" || id == "collider")
+        if (id == "prefab" || id == "cell" || id == "collider")
             continue; // a wall with a collider is still a wall
         if (type.has(entity))
             return false;

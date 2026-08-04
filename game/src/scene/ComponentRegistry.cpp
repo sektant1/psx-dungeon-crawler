@@ -246,6 +246,9 @@ ComponentRegistry buildCore()
     // continues at 29. A stable id is a file format and a duplicate is not a
     // warning: writeMap refuses to emit a map whose registry has two types on
     // one id, which is a cook that fails with no bad entity to point at.
+    //
+    // 32 is the engine's again (PrimitiveMesh), taken after 29-31 were already
+    // spent here. The next game type takes 33.
     reg.add({"Actor", 29, addDefault<game::Actor>, has<game::Actor>,
              remove<game::Actor>, serActor, deActor});
     reg.add({"ActorSounds", 30, addDefault<game::ActorSounds>,

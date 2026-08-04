@@ -11,6 +11,7 @@
 
 #include <filesystem>
 #include <chrono>
+#include <cstdio>
 #include <glm/gtc/quaternion.hpp>
 #include <limits>
 #include <unordered_set>
@@ -46,8 +47,15 @@ struct PreviewBridge::Impl
     // Meshes are cached across rebuilds: a full rebuild happens on every edit,
     // and re-parsing an OBJ per keystroke would make the editor unusable.
     std::unordered_map<std::string, eng::MeshHandle> meshCache;
+    // Generated meshes, cached the same way and for the same reason. The same
+    // cache the runtime uses, so an authored primitive is the same geometry in
+    // the viewport and in the game rather than two implementations of "box".
+    eng::ecs::PrimitiveMeshCache primitives;
     std::unordered_map<std::string, eng::NodeHandle> ghostNodes;
     std::string visibleGhost;
+    // What the visible ghost is wearing, so its bounds can be asked of the
+    // renderer rather than recomputed from a kit piece the brush may not have.
+    eng::MeshHandle ghostMesh;
     eng::NodeHandle particleGhostNode;
     eng::ParticlesHandle particleGhost;
     std::string particleGhostEffect;
@@ -115,6 +123,10 @@ struct PreviewBridge::Impl
             renderer.despawnParticles(particleGhost);
         if (particleGhostNode.valid())
             renderer.destroyNode(particleGhostNode);
+        // The generated meshes are this preview's, not the renderer's: nothing
+        // else holds a handle to them, so closing the editor's document has to
+        // give the buffers back.
+        primitives.clear(renderer);
     }
 };
 
@@ -170,6 +182,11 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
         const std::string& path = view.get<eng::ecs::MeshSource>(entity).path;
         view.get<eng::ecs::MeshRenderer>(entity).mesh = mImpl->meshFor(path);
     }
+    // And the generated half, through the engine's own resolver rather than a
+    // second copy of it -- the editor showing a different box from the one the
+    // game builds is exactly the class of bug this preview exists to prevent.
+    eng::ecs::resolvePrimitiveMeshes(registry, mImpl->renderer,
+                                     mImpl->primitives);
 
     mImpl->world.sync();
 
@@ -209,21 +226,34 @@ void PreviewBridge::showPlacementGhost(
     const game::content::KitPiece& piece,
     const game::content::XformAuthor& transform, float importScale)
 {
-    if (!mImpl->visible || piece.meshPath.empty()) {
+    showMeshPlacementGhost(piece.meshPath, transform, importScale);
+}
+
+// The ghost, for any mesh the brush can be holding.
+//
+// A kit piece, a mesh file and a primitive differ only in where the handle
+// comes from -- exactly the distinction MeshResolve draws on the runtime side.
+// `key` is what the node is cached under; it is the mesh path for a file and a
+// synthetic description for a primitive, because two boxes of different sizes
+// are two ghosts and two entities naming one .obj are one.
+void PreviewBridge::showGhostMesh(const std::string& key, eng::MeshHandle mesh,
+                                  const game::content::XformAuthor& transform,
+                                  float importScale)
+{
+    if (!mImpl->visible || !mesh.valid()) {
         mImpl->hideGhost();
         return;
     }
 
-    if (mImpl->visibleGhost != piece.meshPath)
+    if (mImpl->visibleGhost != key)
         mImpl->hideGhost();
 
-    auto found = mImpl->ghostNodes.find(piece.meshPath);
+    auto found = mImpl->ghostNodes.find(key);
     if (found == mImpl->ghostNodes.end()) {
         const eng::NodeHandle node = mImpl->renderer.createNode(
             eng::kRootNode, glm::vec3(0.0f), "editor_placement_ghost");
-        mImpl->renderer.attachMesh(node, mImpl->meshFor(piece.meshPath),
-                                   "Editor/PlacementGhost", false);
-        found = mImpl->ghostNodes.emplace(piece.meshPath, node).first;
+        mImpl->renderer.attachMesh(node, mesh, "Editor/PlacementGhost", false);
+        found = mImpl->ghostNodes.emplace(key, node).first;
     }
 
     const eng::NodeHandle node = found->second;
@@ -232,7 +262,55 @@ void PreviewBridge::showPlacementGhost(
         node, game::content::authorOrientation(transform.rotationDegrees));
     mImpl->renderer.setScale(node, transform.scale * importScale);
     mImpl->renderer.setNodeVisible(node, true);
-    mImpl->visibleGhost = piece.meshPath;
+    mImpl->visibleGhost = key;
+    mImpl->ghostMesh = mesh;
+}
+
+void PreviewBridge::showMeshPlacementGhost(
+    const std::string& meshPath, const game::content::XformAuthor& transform,
+    float importScale)
+{
+    if (meshPath.empty()) {
+        mImpl->hideGhost();
+        return;
+    }
+    showGhostMesh(meshPath, mImpl->meshFor(meshPath), transform, importScale);
+}
+
+void PreviewBridge::showPrimitivePlacementGhost(
+    const eng::ecs::PrimitiveMesh& primitive,
+    const game::content::XformAuthor& transform)
+{
+    showGhostMesh(primitiveGhostKey(primitive),
+                  mImpl->primitives.get(mImpl->renderer, primitive), transform,
+                  1.0f);
+}
+
+bool PreviewBridge::ghostBounds(glm::vec3& min, glm::vec3& max) const
+{
+    if (mImpl->visibleGhost.empty() || !mImpl->ghostMesh.valid())
+        return false;
+    eng::MeshBounds bounds;
+    if (!mImpl->renderer.meshBounds(mImpl->ghostMesh, bounds))
+        return false;
+    min = bounds.min;
+    max = bounds.max;
+    return true;
+}
+
+std::string primitiveGhostKey(const eng::ecs::PrimitiveMesh& p)
+{
+    // Not a hash: a collision here would silently show the wrong ghost, and the
+    // string is built once per frame at most. The prefix keeps it out of the
+    // mesh paths sharing the same map.
+    char buffer[192];
+    std::snprintf(buffer, sizeof(buffer),
+                  "primitive:%s:%g,%g,%g:%g:%g:%g:%g:%d:%d:%d:%d",
+                  eng::ecs::primitiveKindName(p.kind), double(p.size.x),
+                  double(p.size.y), double(p.size.z), double(p.radius),
+                  double(p.height), double(p.bevel), double(p.thickness),
+                  p.rings, p.segments, p.subdivisions, p.inwardFacing ? 1 : 0);
+    return buffer;
 }
 
 void PreviewBridge::showParticlePlacementGhost(

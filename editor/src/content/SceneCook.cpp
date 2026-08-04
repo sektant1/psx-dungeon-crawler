@@ -162,6 +162,29 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             renderer.castShadows = authored.castShadows;
             built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
         }
+        // The two non-kit ways to be a mesh. Both end in the same pair of
+        // runtime components as a prefab does -- a MeshRenderer saying what it
+        // wears, plus whatever says where the geometry comes from -- so nothing
+        // downstream of the cooker has to know which of the three an author
+        // chose. .scn parsing already refused an entity carrying more than one.
+        else if (authored.mesh) {
+            // Same rule as the kit's import scale: a fact about the file
+            // multiplies the authored transform rather than replacing it.
+            transform.scale *= authored.mesh->importScale;
+            built.emplace<eng::ecs::MeshSource>(
+                entity, eng::ecs::MeshSource{authored.mesh->path});
+            eng::ecs::MeshRenderer renderer;
+            renderer.material = authored.material;
+            renderer.castShadows = authored.castShadows;
+            built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
+        }
+        else if (authored.primitive) {
+            built.emplace<eng::ecs::PrimitiveMesh>(entity, *authored.primitive);
+            eng::ecs::MeshRenderer renderer;
+            renderer.material = authored.material;
+            renderer.castShadows = authored.castShadows;
+            built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
+        }
         built.emplace<eng::ecs::Transform>(entity, transform);
 
         if (authored.playerSpawn)

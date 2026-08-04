@@ -4,6 +4,9 @@
 #include <editor/content/GridMath.h>
 #include <editor/content/KitCatalog.h>
 #include <editor/assets/MaterialCatalog.h>
+#include <editor/ui/EditorUi.h>
+
+#include <eng/ecs/components/PrimitiveMesh.h>
 
 #include <string>
 #include <vector>
@@ -75,6 +78,21 @@ struct InspectorContext {
         closed = closed || itemClosed;
     }
 };
+
+// The generated-mesh parameters, as property-grid rows.
+//
+// Shared by the inspector's Primitive Mesh drawer and the Meshes browser's
+// parameter strip, because they are the same question asked in two places: the
+// browser sets the size a primitive will be painted at, the inspector corrects
+// one that already exists. Two copies of "which fields does a capsule have"
+// would disagree the first time a kind gained one.
+//
+// Only the fields the chosen kind actually reads are drawn -- a sphere has no
+// `size` and a box has no `segments`, and showing them anyway presents settings
+// that do nothing. `context`, when given, receives the drag/commit tracking the
+// inspector needs; the browser passes null and reads the return value.
+bool drawPrimitiveFields(eng::ecs::PrimitiveMesh& mesh, ui::PropertyGrid& grid,
+                         InspectorContext* context = nullptr);
 
 // id, name and transform: what every entity has, drawn above the components.
 void drawEntityIdentity(game::content::Entity& entity,

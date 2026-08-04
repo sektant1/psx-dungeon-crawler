@@ -82,7 +82,14 @@ void deTransform(entt::registry& r, entt::entity e, ByteReader& b, uint32_t byte
 void serMesh(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
     const auto& m = r.get<MeshRenderer>(e);
-    w.str(r.get<MeshSource>(e).path);
+    // A MeshRenderer no longer implies a MeshSource. A PrimitiveMesh entity
+    // draws a mesh the engine generates, so it carries the renderer and no
+    // path -- and `get` on an absent component is undefined behaviour, which
+    // showed up as a cook that failed with no bad entity to point at. An empty
+    // path is unambiguous: no map has ever contained one, because a path was
+    // the only way to be a mesh when this format was written.
+    const auto* source = r.try_get<MeshSource>(e);
+    w.str(source ? source->path : std::string());
     w.str(m.material);
     w.u8(m.castShadows ? 1 : 0);
 }
@@ -92,7 +99,11 @@ void deMesh(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
     const std::string path = b.str();
     const std::string material = b.str();
     const bool shadows = b.u8() != 0;
-    r.emplace_or_replace<MeshSource>(e, MeshSource{path});
+    // Only when there is one. Adding an empty MeshSource would make every
+    // generated mesh look like a mesh file whose path is missing, and the
+    // resolvers key off the component's presence, not its contents.
+    if (!path.empty())
+        r.emplace_or_replace<MeshSource>(e, MeshSource{path});
     MeshRenderer m;
     m.material = material;
     m.castShadows = shadows;
@@ -253,6 +264,31 @@ template <> FieldSpan fieldsOf<ecs::ParticleEmitter>()
         ENG_FIELD(ecs::ParticleEmitter, offset, FieldType::Vec3),
         ENG_FIELD(ecs::ParticleEmitter, playing, FieldType::Bool),
         ENG_FIELD_RANGE(ecs::ParticleEmitter, scale, FieldType::Float, 0.01f, 16.0f),
+    };
+    return {f, int(std::size(f))};
+}
+
+// The generated-mesh description. Ranges are what the generators stay sane
+// within rather than what they technically accept: a sphere with two segments
+// is a triangle, and a bevel wider than the box eats it. `kind` declares its
+// range as the enum, the same trick Orbit::facing uses -- a value outside it
+// decodes to a number buildPrimitiveGeometry rejects, which is a missing mesh
+// rather than a corrupt one.
+template <> FieldSpan fieldsOf<ecs::PrimitiveMesh>()
+{
+    using P = ecs::PrimitiveMesh;
+    static const Field f[] = {
+        ENG_FIELD_RANGE(P, kind, FieldType::Int, 0.0f,
+                        float(P::KindCount - 1)),
+        ENG_FIELD(P, size, FieldType::Vec3),
+        ENG_FIELD_RANGE(P, radius, FieldType::Float, 0.001f, 100.0f),
+        ENG_FIELD_RANGE(P, height, FieldType::Float, 0.001f, 100.0f),
+        ENG_FIELD_RANGE(P, bevel, FieldType::Float, 0.0f, 0.5f),
+        ENG_FIELD_RANGE(P, thickness, FieldType::Float, 0.001f, 10.0f),
+        ENG_FIELD_RANGE(P, rings, FieldType::Int, 2.0f, 64.0f),
+        ENG_FIELD_RANGE(P, segments, FieldType::Int, 3.0f, 128.0f),
+        ENG_FIELD_RANGE(P, subdivisions, FieldType::Int, 0.0f, 5.0f),
+        ENG_FIELD(P, inwardFacing, FieldType::Bool),
     };
     return {f, int(std::size(f))};
 }
@@ -500,6 +536,12 @@ void registerEngineComponents(ComponentRegistry& reg)
     reg.add(reflectedComponent<PortalParams>("PortalParams", 26));
     reg.add(reflectedComponent<AudioEmitter>("AudioEmitter", 27));
     reg.add(reflectedComponent<AudioListener>("AudioListener", 28));
+    // 29-31 are the game's (Actor, ActorSounds, ViewmodelRig), taken while the
+    // engine's block ended at 28. The engine continues above them for the same
+    // reason it once continued above 10-17: a stable id is a file format, and
+    // renumbering the game's three would reinterpret every .map on disk. The
+    // next application type takes 33.
+    reg.add(reflectedComponent<PrimitiveMesh>("PrimitiveMesh", 32));
 }
 
 } // namespace ecs

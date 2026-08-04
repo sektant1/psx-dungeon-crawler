@@ -388,19 +388,56 @@ void MaterialPreview::buildThumbnailRig(Renderer& renderer)
         return;
     }
 
-    PrimitiveMeshDesc sphere;
-    sphere.kind = PrimitiveKind::Sphere;
-    sphere.radius = 0.5f;
-    sphere.rings = 24;
-    sphere.segments = 32;
-    mThumbSubject = renderer.createNode(kRootNode, kThumbOrigin,
-                                        "material_thumbnail_sphere");
-    renderer.attachMesh(mThumbSubject, renderer.createPrimitiveMesh(sphere),
-                        mThumbMaterial, false);
-    // Visible in the thumbnail target and nowhere else.
-    renderer.setNodeThumbnailOnly(mThumbSubject, true);
-    renderer.setOrientation(mThumbSubject,
-                            glm::angleAxis(mThumbSpin, glm::vec3(0, 1, 0)));
+    // The subject: the material sphere, or the mesh a browser handed us.
+    //
+    // A mesh is centred and scaled onto the same half-metre the sphere occupies,
+    // because the rig's lights, its camera and its framing were all chosen for
+    // a subject that size. Fitting the subject to the rig rather than the rig to
+    // the subject is what lets one square show a wall and a candle without
+    // re-aiming anything.
+    if (mThumbMesh.valid()) {
+        // Two nodes, not one. The turntable rotates the subject, and a mesh
+        // recentred by moving the node it is attached to would swing around the
+        // rig's origin instead of turning on the spot -- the model authored
+        // around its base (which is most of the kit) would orbit out of frame.
+        // The parent carries the fit and the spin; the child carries the
+        // recentring, inside that rotation.
+        mThumbSubject = renderer.createNode(kRootNode, kThumbOrigin,
+                                            "material_thumbnail_mesh");
+        MeshBounds bounds;
+        glm::vec3 centre(0.0f);
+        float fit = 1.0f;
+        if (renderer.meshBounds(mThumbMesh, bounds)) {
+            const glm::vec3 extent = bounds.max - bounds.min;
+            const float longest =
+                std::max({extent.x, extent.y, extent.z, 1e-4f});
+            fit = 1.0f / longest;
+            centre = (bounds.min + bounds.max) * 0.5f;
+        }
+        renderer.setScale(mThumbSubject, glm::vec3(fit));
+        renderer.setOrientation(mThumbSubject,
+                                glm::angleAxis(mThumbSpin, glm::vec3(0, 1, 0)));
+        mThumbMeshNode = renderer.createNode(mThumbSubject, -centre,
+                                             "material_thumbnail_mesh_pivot");
+        renderer.attachMesh(mThumbMeshNode, mThumbMesh, mThumbMaterial, false);
+        renderer.setNodeThumbnailOnly(mThumbSubject, true);
+        renderer.setNodeThumbnailOnly(mThumbMeshNode, true);
+    }
+    else {
+        PrimitiveMeshDesc sphere;
+        sphere.kind = PrimitiveKind::Sphere;
+        sphere.radius = 0.5f;
+        sphere.rings = 24;
+        sphere.segments = 32;
+        mThumbSubject = renderer.createNode(kRootNode, kThumbOrigin,
+                                            "material_thumbnail_sphere");
+        renderer.attachMesh(mThumbSubject, renderer.createPrimitiveMesh(sphere),
+                            mThumbMaterial, false);
+        // Visible in the thumbnail target and nowhere else.
+        renderer.setNodeThumbnailOnly(mThumbSubject, true);
+        renderer.setOrientation(mThumbSubject,
+                                glm::angleAxis(mThumbSpin, glm::vec3(0, 1, 0)));
+    }
 
     // A compact three-point rig, scaled to a subject half a metre across. Same
     // reasoning as the big stage: key describes the form, fill keeps the shadow
@@ -422,6 +459,12 @@ void MaterialPreview::buildThumbnailRig(Renderer& renderer)
 
 void MaterialPreview::destroyThumbnailRig(Renderer& renderer)
 {
+    // Child before parent: destroyNode on the parent may or may not cascade,
+    // and a rig torn down half-way is how the swatch sphere has leaked into the
+    // level before.
+    if (mThumbMeshNode.valid())
+        renderer.destroyNode(mThumbMeshNode);
+    mThumbMeshNode = NodeHandle{};
     if (mThumbSubject.valid())
         renderer.destroyNode(mThumbSubject);
     mThumbSubject = NodeHandle{};
@@ -457,6 +500,14 @@ void MaterialPreview::setThumbnailMaterial(Renderer& renderer,
 {
     if (material.empty() || !thumbnailBuilt() || material == mThumbMaterial)
         return;
+    // Naming a material is also how a caller says "show me a material": the
+    // material browser and the mesh browser share this swatch, and one of them
+    // asking for a subject has to take it away from the other. Without this,
+    // hovering a material after visiting the Meshes tab redressed the mesh.
+    if (mThumbMesh.valid()) {
+        setThumbnailMesh(renderer, MeshHandle{}, material);
+        return;
+    }
     mThumbMaterial = material;
 
     const StagePreview mode = mCatalog.modeFor(material);
@@ -478,6 +529,36 @@ void MaterialPreview::setThumbnailMaterial(Renderer& renderer,
     // thumbnail target filters on. Without this the swatch subject reappears in
     // the level the moment you preview a material.
     renderer.setNodeThumbnailOnly(mThumbSubject, true);
+}
+
+void MaterialPreview::setThumbnailMesh(Renderer& renderer, MeshHandle mesh,
+                                       const std::string& material)
+{
+    if (!thumbnailBuilt() && !mThumbSubject.valid()) {
+        // Remembered so a caller may set the subject before the swatch is
+        // built; buildThumbnail then produces the right rig first time.
+        mThumbMesh = mesh;
+        if (!material.empty())
+            mThumbMaterial = material;
+        return;
+    }
+    const std::string wanted = material.empty() ? mThumbMaterial : material;
+    if (mesh.id == mThumbMesh.id && wanted == mThumbMaterial)
+        return;
+
+    // A full rebuild rather than a re-attach, for the reason the mode switch
+    // above states: the mesh subject is two nodes and the sphere is one, and a
+    // rig patched half-way is how this preview has previously leaked geometry
+    // into the level.
+    mThumbMesh = mesh;
+    mThumbMaterial = wanted;
+    // A mesh is judged as a solid, so it always gets the lit rig. The quad mode
+    // is a statement about a *material* with no lighting response, which a mesh
+    // browser is never asking about.
+    mThumbMode =
+        mesh.valid() ? StagePreview::Sphere : mCatalog.modeFor(mThumbMaterial);
+    destroyThumbnailRig(renderer);
+    buildThumbnailRig(renderer);
 }
 
 void MaterialPreview::spinThumbnail(Renderer& renderer, float radians)

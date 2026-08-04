@@ -1,5 +1,6 @@
 #pragma once
 
+#include <eng/ecs/MeshResolve.h>
 #include <eng/ecs/World.h>
 #include <eng/ecs/components/FirstPersonController.h>
 
@@ -48,6 +49,14 @@ public:
     bool load(const std::string& path);
     using LoadMeshFn = std::function<eng::MeshHandle(const std::string& path)>;
     void resolveMeshes(const LoadMeshFn& loadFn);
+    // The generated half of the same job: entities carrying a PrimitiveMesh get
+    // geometry built for them rather than loaded.
+    //
+    // A renderer rather than a callback, because unlike a mesh path there is
+    // nothing for a caller to disagree about -- the description IS the geometry,
+    // and the engine's own resolver builds it. The cache lives here so a level
+    // transition releases exactly the meshes that level generated.
+    void resolvePrimitives(eng::Renderer& renderer);
     // Turn authored Triggers into sensor colliders, then reconcile the world.
     void buildAll();
     glm::vec3 playerSpawn() const;
@@ -93,6 +102,10 @@ public:
 private:
     eng::ecs::World& mWorld;
     uint32_t mGroup = 0;
+    // Generated meshes this map's entities share. Two hundred greybox blocks
+    // with four distinct sizes between them are four vertex buffers, not two
+    // hundred.
+    eng::ecs::PrimitiveMeshCache mPrimitives;
 };
 
 } // namespace game

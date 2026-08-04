@@ -94,6 +94,7 @@ one, so a file needing `Transform` does not pull Jolt's layer enum in through
 | `RenderNode` | give me a node though I draw nothing |
 | `MeshRenderer` | a mesh to draw |
 | `MeshSource` | the path it was loaded from |
+| `PrimitiveMesh` | …or the parameters it was generated from |
 | `MaterialOverride` | draw it with a different material |
 | `ShaderParams` | tint, rim light and cutout, for this entity alone |
 | `Visibility` | drawn or not — hiding is not destroying |
@@ -114,6 +115,20 @@ Two splits worth the words:
 something that already collides, not a different kind of object. A dynamic
 body's pose then flows *out* of physics — PhysicsSync stops writing the
 Transform onto it — unless `KinematicControl` says gameplay is steering.
+
+**`MeshRenderer` vs `MeshSource` vs `PrimitiveMesh`.** A `MeshRenderer` holds a
+`MeshHandle` and nothing else, deliberately: resolving an asset is a load-time
+job and the hot path must not carry a path. What it does *not* say is where that
+handle came from, and there are two answers — a `MeshSource` names a file, a
+`PrimitiveMesh` describes geometry the engine builds (box, sphere, capsule,
+cylinder, cone, plane, disc, beveled box). An entity carrying both is a mesh
+file; the path wins, because a file is the more specific statement.
+
+Resolution is one seam, `eng/ecs/MeshResolve.h`, so the three consumers — the
+game's map loader, the editor's preview and the demo — cannot grow three subtly
+different answers. `PrimitiveMeshCache` keys on the parameters, so a hundred
+identical greybox blocks share one vertex buffer, and one cache per level means
+tearing a level down releases exactly the meshes that level generated.
 
 **`MeshRenderer` vs `MaterialOverride` vs `ShaderParams`.** The mesh and its
 material come from the asset. An override is a scene decision — *this* pillar is

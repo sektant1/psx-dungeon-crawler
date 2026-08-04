@@ -2,7 +2,9 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <optional>
 #include <string>
+#include <string_view>
 
 using namespace eng::assets;
 
@@ -14,34 +16,66 @@ static void require(bool condition, const std::string& message)
     }
 }
 
+// The name is accepted.
+static void accepts(AssetNameKind kind, std::string_view name,
+                    const std::string& why)
+{
+    const std::optional<AssetNameIssue> issue = validateAssetName(kind, name);
+    if (issue) {
+        std::cerr << "AssetNameTests: " << why << " -- but '" << name
+                  << "' was reported as " << issue->code << ": "
+                  << issue->message << '\n';
+        std::exit(1);
+    }
+}
+
+// The name is reported, AND for the stated reason.
+//
+// Naming the code rather than asserting "something was wrong" is what makes
+// this a contract rather than a smoke test: a validator that rejects
+// "Game/PropTerracotta" for having a lowercase segment would pass a bare
+// has_value() check while saying something false about the name. The codes are
+// what tools show the author, so they are part of the interface.
+static void reports(AssetNameKind kind, std::string_view name,
+                    const std::string& code, const std::string& why)
+{
+    const std::optional<AssetNameIssue> issue = validateAssetName(kind, name);
+    if (!issue) {
+        std::cerr << "AssetNameTests: " << why << " -- but '" << name
+                  << "' was accepted\n";
+        std::exit(1);
+    }
+    if (issue->code != code) {
+        std::cerr << "AssetNameTests: " << why << " -- '" << name
+                  << "' was reported as " << issue->code << ", expected "
+                  << code << '\n';
+        std::exit(1);
+    }
+}
+
 int main()
 {
-    require(!validateAssetName(AssetNameKind::LocalId, "hollow_soldier"),
+    accepts(AssetNameKind::LocalId, "hollow_soldier",
             "local ids accept lower snake case");
-    require(validateAssetName(AssetNameKind::LocalId, "Hollow Soldier"),
+    reports(AssetNameKind::LocalId, "Hollow Soldier", "id.local",
             "display text is not a stable id");
-    require(!validateAssetName(AssetNameKind::QualifiedId,
-                               "game.particle.fireball_trail"),
+    accepts(AssetNameKind::QualifiedId, "game.particle.fireball_trail",
             "qualified ids carry registry ownership");
-    require(validateAssetName(AssetNameKind::QualifiedId, "fireball_trail"),
+    reports(AssetNameKind::QualifiedId, "fireball_trail", "id.namespace",
             "qualified ids require a namespace");
-    require(!validateAssetName(AssetNameKind::RuntimePath,
-                               "textures/vfx/flame_01.png"),
+    accepts(AssetNameKind::RuntimePath, "textures/vfx/flame_01.png",
             "runtime paths are relative lower snake case");
-    require(validateAssetName(AssetNameKind::RuntimePath,
-                              "textures/vfx/Flame 01.PNG"),
+    reports(AssetNameKind::RuntimePath, "textures/vfx/Flame 01.PNG",
+            "path.filename",
             "runtime paths reject platform-sensitive spelling");
-    require(!validateAssetName(AssetNameKind::MaterialId,
-                               "Game/Kit/DungeonTwoSided"),
+    accepts(AssetNameKind::MaterialId, "Game/Kit/DungeonTwoSided",
             "materials use three PascalCase segments");
-    require(validateAssetName(AssetNameKind::MaterialId, "Game/PropTerracotta"),
+    reports(AssetNameKind::MaterialId, "Game/PropTerracotta", "material.shape",
             "flattened material ids are reported");
-    require(!validateAssetName(AssetNameKind::ShaderPath,
-                               "shaders/particle_sprite.vert"),
+    accepts(AssetNameKind::ShaderPath, "shaders/particle_sprite.vert",
             "shader paths use stage extensions");
-    require(validateAssetName(AssetNameKind::ShaderPath,
-                              "shaders/particle_sprite.txt"),
-            "non-shader extensions are rejected");
+    reports(AssetNameKind::ShaderPath, "shaders/particle_sprite.txt",
+            "shader.extension", "non-shader extensions are rejected");
 
     require(canonicalToken("AC Vixen-Part 02") == "ac_vixen_part_02",
             "producer canonicalization handles source spelling");

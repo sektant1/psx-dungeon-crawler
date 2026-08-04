@@ -47,6 +47,7 @@ int main()
     // --- add / remove round-trips for every addable component --------------
     ComponentDefaults defaults;
     defaults.prefab = "kit.wall";
+    defaults.meshPath = "meshes/props/Chair.obj";
     for (const ComponentType& type : types) {
         if (!type.add || (type.addable && !type.addable(defaults)))
             continue;
@@ -61,12 +62,65 @@ int main()
                 std::string(type.id) + " is gone once removed");
     }
 
-    // --- mesh needs a brush, and says so -----------------------------------
+    // --- the three ways to be geometry ------------------------------------
+    //
+    // A kit piece, a mesh file and a primitive all end as one MeshRenderer, and
+    // an entity carrying two of them is refused by the scene format. The table
+    // is what stops one being authored: each of the three only applies while
+    // the other two are absent.
+    const ComponentType* prefab = findComponentType("prefab");
     const ComponentType* mesh = findComponentType("mesh");
-    require(mesh && mesh->addable, "mesh gates on the defaults");
-    require(!mesh->addable(ComponentDefaults{}),
-            "mesh cannot be added without a brush prefab");
-    require(mesh->addable(defaults), "mesh can be added with one");
+    const ComponentType* primitive = findComponentType("primitive");
+    require(prefab && mesh && primitive, "all three geometry components exist");
+
+    require(prefab->addable, "the kit piece gates on the defaults");
+    require(!prefab->addable(ComponentDefaults{}),
+            "a kit piece cannot be added without a brush prefab");
+    require(prefab->addable(defaults), "it can be added with one");
+    require(mesh->addable && !mesh->addable(ComponentDefaults{}),
+            "a mesh cannot be added without a path from the catalogue");
+    require(mesh->addable(defaults), "it can be added with one");
+    require(primitive->addable && primitive->addable(ComponentDefaults{}),
+            "a primitive needs nothing: the engine generates it");
+
+    // Mutual exclusion, in both directions and for every pair.
+    const ComponentType* geometry[] = {prefab, mesh, primitive};
+    for (const ComponentType* held : geometry) {
+        Entity entity;
+        entity.id = "geometry";
+        held->add(entity, defaults);
+        require(held->has(entity), std::string(held->id) + " is present");
+        for (const ComponentType* other : geometry) {
+            if (other == held)
+                continue;
+            require(other->applies && !other->applies(entity),
+                    std::string(other->id) + " is not offered beside " +
+                        held->id);
+        }
+        require(held->applies && held->applies(entity),
+                std::string(held->id) + " still applies to itself");
+        // And it is not offered a second time, nor are its rivals.
+        for (const ComponentType* offered : missingComponents(entity))
+            require(offered != held, "a component already held is not offered");
+    }
+
+    // A primitive added from the menu is the unit box: the one shape whose
+    // defaults need no explanation, and the thing every greybox starts as.
+    Entity block;
+    primitive->add(block, defaults);
+    require(block.primitive &&
+                block.primitive->kind == eng::ecs::PrimitiveMesh::Box,
+            "a fresh primitive is a box");
+    require(block.primitive->size == glm::vec3(1.0f),
+            "and a unit one, so adding it changes nothing on screen");
+
+    // A mesh takes the browser's path rather than inventing one.
+    Entity chair;
+    mesh->add(chair, defaults);
+    require(chair.mesh && chair.mesh->path == defaults.meshPath,
+            "a fresh mesh names what the catalogue selected");
+    require(chair.mesh->importScale == 1.0f,
+            "and is not silently rescaled");
 
     const ComponentType* portal = findComponentType("portal");
     require(portal && portal->group == ComponentGroup::Appearance,
@@ -79,7 +133,7 @@ int main()
     // --- components compose freely on one entity ---------------------------
     Entity wall;
     wall.id = "wall_0001";
-    mesh->add(wall, defaults);
+    prefab->add(wall, defaults);
     findComponentType("light")->add(wall, defaults);
     findComponentType("trigger")->add(wall, defaults);
     require(componentsOf(wall).size() == 3,
@@ -108,22 +162,38 @@ int main()
     // --- geometry is a kit piece and nothing else --------------------------
     Entity plain;
     plain.id = "wall_0002";
-    mesh->add(plain, defaults);
+    prefab->add(plain, defaults);
     require(isGeometry(plain), "a bare kit piece is geometry");
     findComponentType("collider")->add(plain, defaults);
     require(isGeometry(plain), "a collider on it is still geometry");
     findComponentType("marker")->add(plain, defaults);
     require(!isGeometry(plain), "a marker on it is not");
 
-    // --- dropping a mesh drops what only made sense with it ----------------
+    // --- dropping geometry drops what only made sense with it --------------
     Entity pinned;
     pinned.id = "wall_0003";
-    mesh->add(pinned, defaults);
+    prefab->add(pinned, defaults);
     pinned.material = "Kit/Other";
     pinned.cell = game::content::CellPlacement{};
-    mesh->remove(pinned);
+    prefab->remove(pinned);
     require(pinned.prefab.empty() && pinned.material.empty() && !pinned.cell,
-            "removing the mesh clears the material override and the grid cell");
+            "removing the kit piece clears the material override and the cell");
+
+    // The same rule for the other two. A material is chosen for a mesh -- an
+    // atlas material tuned to a wall means nothing on the sphere that replaces
+    // it -- so it goes with the geometry rather than outliving it.
+    Entity dropped;
+    dropped.id = "prop_0001";
+    mesh->add(dropped, defaults);
+    dropped.material = "Game/PropTerracotta";
+    mesh->remove(dropped);
+    require(!dropped.mesh && dropped.material.empty(),
+            "removing a mesh clears the material it was wearing");
+    primitive->add(dropped, defaults);
+    dropped.material = "Game/PropTerracotta";
+    primitive->remove(dropped);
+    require(!dropped.primitive && dropped.material.empty(),
+            "removing a primitive clears the material it was wearing");
 
     std::cout << "EditorComponentTests: ok\n";
     return 0;

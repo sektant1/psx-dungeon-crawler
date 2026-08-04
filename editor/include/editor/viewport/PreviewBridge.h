@@ -3,7 +3,11 @@
 #include <editor/content/SceneDocument.h>
 
 #include <eng/Handles.h>
+#include <eng/ecs/MeshResolve.h>
 #include <eng/ecs/World.h>
+#include <eng/ecs/components/PrimitiveMesh.h>
+
+#include <glm/glm.hpp>
 
 #include <memory>
 #include <string>
@@ -53,6 +57,19 @@ public:
     void showPlacementGhost(const game::content::KitPiece& piece,
                             const game::content::XformAuthor& transform,
                             float importScale);
+    // The same, for the two brushes that are not kit pieces. A mesh file and a
+    // generated primitive are as placeable as a wall is, and the ghost is what
+    // makes placing anything judgeable before the click rather than after it.
+    void showMeshPlacementGhost(const std::string& meshPath,
+                                const game::content::XformAuthor& transform,
+                                float importScale);
+    void showPrimitivePlacementGhost(
+        const eng::ecs::PrimitiveMesh& primitive,
+        const game::content::XformAuthor& transform);
+    // Local bounds of whatever the ghost is currently showing, for the wire box
+    // the viewport draws around it. Asked of the renderer rather than derived
+    // from a kit piece, because two of the three brushes have no kit piece.
+    bool ghostBounds(glm::vec3& min, glm::vec3& max) const;
     // A real live effect at the brush position. A wire box cannot communicate
     // spread, direction, lifetime, or scale, which are the values an author is
     // choosing when placing particles.
@@ -79,9 +96,18 @@ public:
     const std::string& lastError() const { return mError; }
 
 private:
+    void showGhostMesh(const std::string& key, eng::MeshHandle mesh,
+                       const game::content::XformAuthor& transform,
+                       float importScale);
+
     struct Impl;
     std::unique_ptr<Impl> mImpl;
     std::string mError;
 };
+
+// The cache key a generated mesh's ghost node is stored under: everything that
+// changes its geometry, in one string. Exposed for the test that checks two
+// different boxes do not share a ghost.
+std::string primitiveGhostKey(const eng::ecs::PrimitiveMesh& primitive);
 
 } // namespace ed

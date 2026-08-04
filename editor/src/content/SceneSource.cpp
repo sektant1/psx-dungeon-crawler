@@ -547,6 +547,120 @@ bool parseOrbit(const Json& source, OrbitAuthor& out,
     return true;
 }
 
+bool parseMesh(const Json& source, MeshAuthor& out, const std::string& location,
+               std::string& error)
+{
+    if (!source.is_object()) {
+        error = location + " must be an object";
+        return false;
+    }
+    if (!source.contains("path") || !source["path"].is_string() ||
+        source["path"].get<std::string>().empty()) {
+        error = location + "/path must be a non-empty asset path";
+        return false;
+    }
+    out.path = source["path"].get<std::string>();
+    // Absolute paths parse, but they do not travel: a map that names
+    // /home/someone/meshes/x.obj is a map only that machine can load. The
+    // resolver takes pack-relative paths, so that is what the format states.
+    if (out.path.front() == '/' || out.path.find(':') != std::string::npos) {
+        error = location + "/path must be relative to the asset root";
+        return false;
+    }
+    if (source.contains("import_scale")) {
+        if (!source["import_scale"].is_number()) {
+            error = location + "/import_scale must be a number";
+            return false;
+        }
+        out.importScale = source["import_scale"].get<float>();
+    }
+    if (!std::isfinite(out.importScale) || out.importScale <= 0.0f) {
+        error = location + "/import_scale must be a positive finite number";
+        return false;
+    }
+    return true;
+}
+
+// The generated-mesh block. Every field is optional and defaults to the
+// component's own, so `"primitive": {"kind": "sphere"}` is a valid half-metre
+// sphere -- the shortest thing an author can write that means something.
+bool parsePrimitive(const Json& source, PrimitiveAuthor& out,
+                    const std::string& location, std::string& error)
+{
+    if (!source.is_object()) {
+        error = location + " must be an object";
+        return false;
+    }
+    if (source.contains("kind")) {
+        if (!source["kind"].is_string()) {
+            error = location + "/kind must be a primitive name";
+            return false;
+        }
+        const std::string kind = source["kind"].get<std::string>();
+        out.kind = eng::ecs::primitiveKindFromName(kind);
+        // primitiveKindFromName answers Box for anything it does not know,
+        // which is right for a damaged .map and wrong for a hand-edited .scn:
+        // a typo would silently become a box and the author would be left
+        // wondering why "sphre" is square.
+        if (kind != eng::ecs::primitiveKindName(out.kind)) {
+            error = location + "/kind '" + kind + "' is not a primitive";
+            return false;
+        }
+    }
+    const auto number = [&](const char* key, float& value) {
+        if (!source.contains(key))
+            return true;
+        if (!source[key].is_number() || !std::isfinite(source[key].get<float>())) {
+            error = location + "/" + key + " must be a finite number";
+            return false;
+        }
+        value = source[key].get<float>();
+        return true;
+    };
+    const auto count = [&](const char* key, int& value) {
+        if (!source.contains(key))
+            return true;
+        if (!source[key].is_number_integer()) {
+            error = location + "/" + key + " must be an integer";
+            return false;
+        }
+        value = source[key].get<int>();
+        return true;
+    };
+    if (source.contains("size") && !readVec3(source["size"], out.size)) {
+        error = location + "/size must be three finite numbers";
+        return false;
+    }
+    if (!number("radius", out.radius) || !number("height", out.height) ||
+        !number("bevel", out.bevel) || !number("thickness", out.thickness))
+        return false;
+    if (!count("rings", out.rings) || !count("segments", out.segments) ||
+        !count("subdivisions", out.subdivisions))
+        return false;
+    if (source.contains("inward_facing")) {
+        if (!source["inward_facing"].is_boolean()) {
+            error = location + "/inward_facing must be a boolean";
+            return false;
+        }
+        out.inwardFacing = source["inward_facing"].get<bool>();
+    }
+    // The bounds the generators need, checked here so a bad number is a parse
+    // error naming the field rather than an entity that silently draws nothing.
+    if (out.size.x <= 0.0f || out.size.y <= 0.0f || out.size.z <= 0.0f) {
+        error = location + "/size must be positive";
+        return false;
+    }
+    if (out.radius <= 0.0f || out.height <= 0.0f || out.thickness <= 0.0f) {
+        error = location + " needs positive radius, height and thickness";
+        return false;
+    }
+    if (out.rings < 2 || out.segments < 3 || out.subdivisions < 0) {
+        error = location + " needs rings >= 2, segments >= 3, subdivisions >= 0";
+        return false;
+    }
+    return true;
+}
+
 bool parseCollider(const Json& source, ColliderAuthor& out,
                    const std::string& location, std::string& error)
 {
@@ -611,6 +725,29 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
             return false;
         }
         out.prefab = source["prefab"].get<std::string>();
+    }
+    if (source.contains("mesh")) {
+        MeshAuthor mesh;
+        if (!parseMesh(source["mesh"], mesh, location + "/mesh", error))
+            return false;
+        out.mesh = mesh;
+    }
+    if (source.contains("primitive")) {
+        PrimitiveAuthor primitive;
+        if (!parsePrimitive(source["primitive"], primitive,
+                            location + "/primitive", error))
+            return false;
+        out.primitive = primitive;
+    }
+    // Three ways to be a mesh, one entity. Refused rather than silently
+    // resolved: the cooker has an order, but an author who wrote both meant one
+    // of them and finding out which in the viewport is not authoring.
+    if ((!out.prefab.empty() ? 1 : 0) + (out.mesh ? 1 : 0) +
+            (out.primitive ? 1 : 0) >
+        1) {
+        error = location +
+                " may carry only one of prefab, mesh and primitive";
+        return false;
     }
     if (source.contains("material")) {
         if (!source["material"].is_string() ||

@@ -51,6 +51,7 @@
 #include <eng/ecs/components/MeshRenderer.h>
 #include <eng/ecs/components/MeshSource.h>
 #include <eng/ecs/components/NodeRef.h>
+#include <eng/ecs/components/PrimitiveMesh.h>
 #include <eng/ecs/components/RenderNode.h>
 #include <eng/ecs/components/ShaderParams.h>
 #include <eng/ecs/components/ShaderParamsApplied.h>
