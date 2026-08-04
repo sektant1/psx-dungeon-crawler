@@ -179,6 +179,75 @@ int main()
         require(host.luaGlobalBool("started"), "and its start ran");
     }
 
+    // --- fixed_update is separate from update ------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "fixed.lua",
+            "local M = {}\n"
+            "function M:update(dt) u = (u or 0) + 1 end\n"
+            "function M:fixed_update(dt) f = (f or 0) + 1; fdt = dt end\n"
+            "return M\n");
+        attach(world, world.create("f"), path);
+
+        // A fixed step before the first tick has no started instance to run on.
+        host.fixedTick(0.008f);
+        require(host.luaGlobalNumber("f") == 0.0,
+                "fixed_update does not run before start");
+
+        host.tick(0.016f);
+        host.fixedTick(0.008f);
+        host.fixedTick(0.008f);
+        require(host.luaGlobalNumber("u") == 1.0, "update ran once");
+        require(host.luaGlobalNumber("f") == 2.0,
+                "fixed_update runs once per physics step, not per frame");
+        require(host.luaGlobalNumber("fdt") < 0.01,
+                "and receives the fixed delta, not the frame delta");
+    }
+
+    // --- on_destroy fires, and the entity is still readable ----------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "bye.lua",
+            "local M = {}\n"
+            "function M:start() end\n"
+            "function M:on_destroy() gone = true end\n"
+            "return M\n");
+        const entt::entity e = world.create("doomed");
+        attach(world, e, path);
+        host.tick(0.016f);
+        require(host.instanceCount() == 1, "instance exists");
+
+        world.destroyHierarchy(e);
+        require(host.luaGlobalBool("gone"), "on_destroy fired");
+        require(host.instanceCount() == 0,
+                "and the slot was released -- no leak per destroyed entity");
+    }
+
+    // --- destroying a parent takes the child's scripts with it -------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "count_destroy.lua",
+            "local M = {}\n"
+            "function M:on_destroy() destroyed = (destroyed or 0) + 1 end\n"
+            "return M\n");
+        const entt::entity parent = world.create("rig");
+        const entt::entity child = world.create("attachment");
+        world.setParent(child, parent);
+        attach(world, parent, path);
+        attach(world, child, path);
+        host.tick(0.016f);
+        world.destroyHierarchy(parent);
+        require(host.luaGlobalNumber("destroyed") == 2.0,
+                "both halves of a rig get on_destroy");
+        require(host.instanceCount() == 0, "and both slots are released");
+    }
+
     std::cout << "ScriptHostTests: ok\n";
     return 0;
 }

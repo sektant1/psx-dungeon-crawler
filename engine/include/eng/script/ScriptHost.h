@@ -1,6 +1,8 @@
 #pragma once
 #include <eng/script/ScriptConfig.h>
 
+#include <entt/entity/fwd.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -43,6 +45,21 @@ public:
     // Call once per frame after gameplay has mutated components and BEFORE
     // World::sync() -- the same slot tickComponentSystems() occupies.
     void tick(float dt);
+
+    // Runs fixed_update(dt) on every started instance.
+    //
+    // Defined as "immediately before a physics step", not "on the fixed clock".
+    // That keeps the contract true in a mode with no fixed loop -- MapPlay steps
+    // physics from onPresent -- where the caller simply calls this first.
+    void fixedTick(float dt);
+
+    // --- errors ----------------------------------------------------------
+    // Un-quarantines every instance that errored. Returns how many. Called by
+    // the console and by a successful hot reload.
+    std::size_t revive();
+
+    // Whether this entity's instance of `path` is currently quarantined.
+    bool isQuarantined(entt::entity e, const std::string& path) const;
 
     // --- test and tooling seams ------------------------------------------
     std::size_t instanceCount() const;

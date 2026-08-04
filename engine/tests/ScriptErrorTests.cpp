@@ -1,6 +1,12 @@
 #include "script/ScriptChunkCache.h"
 #include "script/ScriptError.h"
 
+#include <eng/ecs/ComponentRegistry.h>
+#include <eng/ecs/World.h>
+#include <eng/ecs/components/Scripts.h>
+#include <eng/script/ScriptConfig.h>
+#include <eng/script/ScriptHost.h>
+
 #include <sol/sol.hpp>
 
 #include <cstdlib>
@@ -24,6 +30,23 @@ static std::string writeScript(const std::string& name, const std::string& body)
     const std::filesystem::path file = dir / name;
     std::ofstream(file) << body;
     return file.string();
+}
+
+static const eng::ecs::ComponentRegistry& engineRegistry()
+{
+    static eng::ecs::ComponentRegistry reg = [] {
+        eng::ecs::ComponentRegistry r;
+        eng::ecs::registerEngineComponents(r);
+        return r;
+    }();
+    return reg;
+}
+
+// Attaches one script with no props.
+static void attach(eng::ecs::World& w, entt::entity e, const std::string& path)
+{
+    w.registry().get_or_emplace<eng::ecs::Scripts>(e).items.push_back(
+        {path, {}, true});
 }
 
 int main()
@@ -131,6 +154,79 @@ int main()
         require(cache.classFor(file)->get<std::string>("tag") == "second",
                 "and keeps the previous class live -- a half-typed save must "
                 "not kill a running level");
+    }
+
+    // --- a runtime error quarantines exactly one instance ------------------
+    {
+        eng::ecs::World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript("boom.lua",
+                                             "local M = {}\n"
+                                             "function M:update(dt)\n"
+                                             "  ticks = (ticks or 0) + 1\n"
+                                             "  error('kaboom')\n"
+                                             "end\n"
+                                             "return M\n");
+        const entt::entity a = world.create("a");
+        const entt::entity b = world.create("b");
+        attach(world, a, path);
+        attach(world, b, path);
+
+        host.tick(0.016f);
+        require(host.luaGlobalNumber("ticks") == 2.0,
+                "both instances ran and both failed");
+        require(host.isQuarantined(a, path) && host.isQuarantined(b, path),
+                "each failing instance is quarantined on its own");
+
+        host.tick(0.016f);
+        require(host.luaGlobalNumber("ticks") == 2.0,
+                "a quarantined instance does not run again -- no per-frame "
+                "spam of the same traceback");
+
+        require(host.revive() == 2, "revive reports how many it restored");
+        host.tick(0.016f);
+        require(host.luaGlobalNumber("ticks") == 4.0, "and they run again");
+    }
+
+    // --- one broken instance does not stop its siblings --------------------
+    {
+        eng::ecs::World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string bad = writeScript("bad_sibling.lua",
+                                            "local M = {}\n"
+                                            "function M:update(dt) error('no') end\n"
+                                            "return M\n");
+        const std::string good =
+            writeScript("good_sibling.lua",
+                        "local M = {}\n"
+                        "function M:update(dt) fine = (fine or 0) + 1 end\n"
+                        "return M\n");
+        const entt::entity e = world.create("mixed");
+        auto& s = world.registry().get_or_emplace<eng::ecs::Scripts>(e);
+        s.items.push_back({bad, {}, true});
+        s.items.push_back({good, {}, true});
+
+        host.tick(0.016f);
+        host.tick(0.016f);
+        require(host.luaGlobalNumber("fine") == 2.0,
+                "the healthy script keeps ticking after its neighbour died");
+    }
+
+    // --- a failing start does not retry every frame ------------------------
+    {
+        eng::ecs::World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path =
+            writeScript("badstart.lua",
+                        "local M = {}\n"
+                        "function M:start() starts = (starts or 0) + 1\n"
+                        "  error('bad start') end\n"
+                        "return M\n");
+        attach(world, world.create("s"), path);
+        host.tick(0.016f);
+        host.tick(0.016f);
+        require(host.luaGlobalNumber("starts") == 1.0,
+                "start is attempted once, even when it throws");
     }
 
     std::cout << "ScriptErrorTests: ok\n";

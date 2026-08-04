@@ -26,6 +26,45 @@ struct ScriptHost::Impl {
         lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string,
                            sol::lib::table, sol::lib::debug);
         installTracebackHandler(lua);
+
+        // on_destroy fires from here rather than from World::destroy, because
+        // the World must not know scripting exists. entt calls this while the
+        // entity is still valid, so a script can read its own components one
+        // last time.
+        world.registry().on_destroy<ScriptState>().connect<&Impl::onStateDestroyed>(
+            this);
+    }
+
+    ~Impl()
+    {
+        // The registry outlives this host in the editor's preview world, and a
+        // dangling listener would call through freed memory on the next level
+        // teardown.
+        world.registry()
+            .on_destroy<ScriptState>()
+            .disconnect<&Impl::onStateDestroyed>(this);
+        instances.clear();
+        chunks.clear();
+    }
+
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
+
+    void onStateDestroyed(entt::registry& reg, entt::entity e)
+    {
+        const ScriptState& state = reg.get<ScriptState>(e);
+        // Teardown: a script spawning from on_destroy would be spawning into a
+        // registry that is mid-mutation. The flag is read by the world bindings,
+        // which refuse and log instead.
+        const bool wasTearingDown = tearingDown;
+        tearingDown = true;
+        for (const uint32_t slot : state.instances) {
+            if (ScriptInstance* inst = instances.get(slot)) {
+                call(*inst, "on_destroy");
+                instances.release(slot);
+            }
+        }
+        tearingDown = wasTearingDown;
     }
 
     // How an entity reads in an error report. Built on demand: an error is
@@ -119,6 +158,9 @@ struct ScriptHost::Impl {
     sol::state lua;
     ScriptChunkCache chunks;
     ScriptInstancePool instances;
+    // True while on_destroy handlers are running. Structural changes from Lua
+    // are refused during that window.
+    bool tearingDown = false;
 };
 
 ScriptHost::ScriptHost(ecs::World& world, const ScriptConfig& config,
@@ -150,6 +192,40 @@ void ScriptHost::tick(float dt)
         if (!inst || !inst->started) continue;
         mImpl->call(*inst, "update", dt);
     }
+}
+
+void ScriptHost::fixedTick(float dt)
+{
+    for (const uint32_t slot : mImpl->liveSlots()) {
+        ScriptInstance* inst = mImpl->instances.get(slot);
+        // Not started means start() has not run: a fixed step that beat the
+        // first frame must not call fixed_update on an uninitialised self.
+        if (!inst || !inst->started) continue;
+        mImpl->call(*inst, "fixed_update", dt);
+    }
+}
+
+std::size_t ScriptHost::revive()
+{
+    std::size_t revived = 0;
+    mImpl->instances.forEach([&](uint32_t, ScriptInstance& inst) {
+        if (inst.quarantined) {
+            inst.quarantined = false;
+            ++revived;
+        }
+    });
+    return revived;
+}
+
+bool ScriptHost::isQuarantined(entt::entity e, const std::string& path) const
+{
+    const auto& reg = mImpl->world.registry();
+    if (!reg.valid(e) || !reg.all_of<ScriptState>(e)) return false;
+    for (const uint32_t slot : reg.get<ScriptState>(e).instances) {
+        const ScriptInstance* inst = mImpl->instances.get(slot);
+        if (inst && inst->path == path) return inst->quarantined;
+    }
+    return false;
 }
 
 std::size_t ScriptHost::instanceCount() const
