@@ -1220,8 +1220,16 @@ struct Renderer::Impl {
         glm::vec3 sunDirection{0.0f};
         for (uint32_t i = 0; i < count; ++i)
             if (uniforms.lightColourType[i].w < 0.5f) {
-                // Directional entries store the direction TO the light.
-                sunDirection = glm::vec3(uniforms.lightPositionRange[i]);
+                // Directional entries store the direction the light TRAVELS --
+                // the node's forward axis, as written above and as scene.frag
+                // reads it (it negates to get the vector toward the light).
+                //
+                // This used to take the stored value as "the direction to the
+                // light" and place the shadow eye along it, which put the
+                // shadow camera on the far side of the scene looking back: for
+                // a sun overhead the eye ended up UNDER the floor, and every
+                // shadow landed on the ceiling instead of the ground.
+                sunDirection = -glm::vec3(uniforms.lightPositionRange[i]);
                 break;
             }
         const bool haveSun = glm::dot(sunDirection, sunDirection) > 1e-6f &&

@@ -10,7 +10,6 @@
 #   meshes/       .obj geometry (kit/, props/, and loose primitives)
 #   textures/     .png, by subject (dungeon/, props/, prototype/, surfaces/, vfx/)
 #   shaders/      GLSL
-#   programs/     Ogre .program declarations binding the GLSL
 #   compositors/  Ogre .compositor scripts
 #   particles/    particle texture atlases + the sheet/flipbook descriptions
 #   fonts/        bitmap + TTF
@@ -39,7 +38,6 @@ dir = "."
 # sheet-backed particle textures all fall back to PINKY.
 resources = [
     "materials",
-    "programs",
     "shaders",
     "compositors",
     "fonts",
