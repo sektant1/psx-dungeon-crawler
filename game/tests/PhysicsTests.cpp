@@ -249,7 +249,7 @@ static void test_debug_draw_filters_and_matches_character_shape() {
 static void test_fast_projectile_does_not_tunnel_thin_wall() {
     eng::Physics phys; phys.init(game::layer::physicsSetup());
     int contacts = 0;
-    phys.setContactCallback([&](const eng::HitEvent&){ contacts++; });
+    phys.addContactCallback([&](const eng::HitEvent&){ contacts++; });
     eng::BodyDesc wall; wall.halfExtents={0.02f,2,2}; wall.position={5,0,0}; // 4cm thin
     wall.layer=game::layer::Static; wall.dynamic=false; phys.createBody(wall);
     eng::BodyDesc arrow; arrow.kind=eng::ShapeKind::Capsule; arrow.radius=0.03f; arrow.halfHeight=0.2f;
@@ -329,7 +329,44 @@ static void test_teardown_frees_all_bodies() {
     std::puts("test_teardown_frees_all_bodies OK");
 }
 
+// The contact seam is multi-subscriber: the game's combat system and the script
+// host's trigger bridge both want every contact, and the single slot this
+// replaced let whichever registered second silently unregister the first.
+static void test_contact_callbacks_are_multi_subscriber() {
+    eng::Physics phys; phys.init(game::layer::physicsSetup());
+    int first = 0, second = 0;
+    const eng::ContactToken t1 =
+        phys.addContactCallback([&](const eng::HitEvent&){ first++; });
+    const eng::ContactToken t2 =
+        phys.addContactCallback([&](const eng::HitEvent&){ second++; });
+    CHECK(t1 != 0 && t2 != 0 && t1 != t2,
+          "every subscription gets its own non-zero token");
+
+    eng::BodyDesc floor; floor.kind = eng::ShapeKind::Box;
+    floor.halfExtents = {10, 0.5f, 10}; floor.position = {0,-0.5f,0};
+    floor.layer = game::layer::Static; floor.dynamic = false;
+    phys.createBody(floor);
+    eng::BodyDesc box; box.kind = eng::ShapeKind::Box;
+    box.halfExtents = {0.5f,0.5f,0.5f}; box.position = {0,3,0};
+    box.layer = game::layer::Prop; box.dynamic = true;
+    phys.createBody(box);
+
+    for (int i = 0; i < 180 && first == 0; ++i) phys.update(1.0f/60.0f);
+    CHECK(first > 0, "the first subscriber saw the landing");
+    CHECK(second == first,
+          "and the second saw exactly the same contacts -- one subscriber must "
+          "not be able to starve another");
+
+    const int before = first;
+    phys.removeContactCallback(t1);
+    for (int i = 0; i < 60; ++i) phys.update(1.0f/60.0f);
+    CHECK(first == before, "a removed subscriber stops receiving");
+    phys.shutdown();
+    std::puts("test_contact_callbacks_are_multi_subscriber OK");
+}
+
 int main() {
+    test_contact_callbacks_are_multi_subscriber();
     test_box_falls_and_rests_on_floor();
     test_raycast_hits_static_box();
     test_mesh_body_is_solid();

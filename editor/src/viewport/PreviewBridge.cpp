@@ -2,6 +2,11 @@
 
 #include <editor/content/SceneCook.h>
 
+#include <FirstPersonHands.h>
+#include <HandsDefinition.h>
+#include <PlayerWeapons.h>
+#include <ViewmodelRig.h>
+
 #include <eng/Renderer.h>
 #include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
@@ -11,6 +16,7 @@
 
 #include <filesystem>
 #include <chrono>
+#include <cstdio>
 #include <glm/gtc/quaternion.hpp>
 #include <limits>
 #include <unordered_set>
@@ -46,10 +52,69 @@ struct PreviewBridge::Impl
     // Meshes are cached across rebuilds: a full rebuild happens on every edit,
     // and re-parsing an OBJ per keystroke would make the editor unusable.
     std::unordered_map<std::string, eng::MeshHandle> meshCache;
+    // Generated meshes, cached the same way and for the same reason. The same
+    // cache the runtime uses, so an authored primitive is the same geometry in
+    // the viewport and in the game rather than two implementations of "box".
+    eng::ecs::PrimitiveMeshCache primitives;
     std::unordered_map<std::string, eng::NodeHandle> ghostNodes;
     std::string visibleGhost;
+    // What the visible ghost is wearing, so its bounds can be asked of the
+    // renderer rather than recomputed from a kit piece the brush may not have.
+    eng::MeshHandle ghostMesh;
     eng::NodeHandle particleGhostNode;
     eng::ParticlesHandle particleGhost;
+
+    // --- the first-person viewmodel preview -------------------------------
+    // The real rig, the real socket set, the real weapon presentation -- the
+    // same classes the game runs, not an editor approximation of them. That is
+    // the whole value: an approximation would tell you about the editor.
+    //
+    // It hangs off a node this bridge owns rather than off the previewed
+    // entity's node, because the ECS preview is torn down and rebuilt on every
+    // keystroke and reloading a skeleton and a skinned mesh at that rate would
+    // make the editor unusable. The node is placed to match the authored
+    // camera instead, which is the same transform by a cheaper route.
+    eng::NodeHandle viewmodelRoot;
+    game::PlayerWeaponLibrary weapons;
+    game::HandsDefinition handsDefinition = game::defaultHandsDefinition();
+    game::FirstPersonHands hands;
+    bool viewmodelLoaded = false;
+    bool handsBuilt = false;
+    // Set once the rig has been tried and refused to come up. Without it a
+    // checkout missing the cooked arms re-parses the skeleton on every
+    // keystroke, which is the one place this preview could make the editor
+    // slower than it was before it existed.
+    bool handsFailed = false;
+    std::string builtWeapon;   // the id currently in the hands
+    bool viewmodelShown = false;
+    // The entity carrying the Viewmodel Preview component, so isolation can
+    // decide whether the hands belong on screen with the rest of the subtree.
+    AuthorId viewmodelHost;
+
+    // Loads weapons.toml and viewmodel_hands.toml once, lazily: an editor
+    // session that never opens a scene with a preview should not pay for them.
+    void loadViewmodelContent()
+    {
+        if (viewmodelLoaded)
+            return;
+        viewmodelLoaded = true;
+        if (const std::filesystem::path path =
+                eng::assets::resolve("config/weapons.toml");
+            !path.empty())
+            weapons.load(path.string());
+        if (const std::filesystem::path path =
+                eng::assets::resolve("config/viewmodel_hands.toml");
+            !path.empty())
+            game::loadHandsDefinition(path.string(), handsDefinition);
+    }
+
+    void hideViewmodel()
+    {
+        if (viewmodelShown && viewmodelRoot.valid())
+            renderer.setNodeVisible(viewmodelRoot, false);
+        viewmodelShown = false;
+    }
+
     std::string particleGhostEffect;
     std::chrono::steady_clock::time_point particleGhostRestart;
     uint64_t builtRevision = ~uint64_t(0);
@@ -61,10 +126,22 @@ struct PreviewBridge::Impl
     // must survive that.
     std::unordered_set<AuthorId> hidden;
 
-    // Everything that keeps an entity off screen, in one place: the ceiling
-    // cut, and the author's own choice.
+    // The isolated subtree: the root and its descendants, or empty when the
+    // viewport is showing the whole level. Inverted sense from `hidden` -- this
+    // is what stays, not what goes -- because an isolated object is a handful
+    // of entities and the level around it is hundreds.
+    std::unordered_set<AuthorId> isolated;
+    bool isolating = false;
+
+    // Everything that keeps an entity off screen, in one place: isolation, the
+    // ceiling cut, and the author's own choice. Picking asks the same function,
+    // so an entity hidden by any of them cannot be clicked through either.
     bool cutAway(const AuthorId& id) const
     {
+        // First, because it is the strongest: an entity outside the isolated
+        // subtree is gone regardless of what the other two think.
+        if (isolating && isolated.count(id) == 0)
+            return true;
         if (hidden.count(id) != 0)
             return true;
         const auto found = authorToHeight.find(id);
@@ -115,6 +192,10 @@ struct PreviewBridge::Impl
             renderer.despawnParticles(particleGhost);
         if (particleGhostNode.valid())
             renderer.destroyNode(particleGhostNode);
+        // The generated meshes are this preview's, not the renderer's: nothing
+        // else holds a handle to them, so closing the editor's document has to
+        // give the buffers back.
+        primitives.clear(renderer);
     }
 };
 
@@ -170,6 +251,11 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
         const std::string& path = view.get<eng::ecs::MeshSource>(entity).path;
         view.get<eng::ecs::MeshRenderer>(entity).mesh = mImpl->meshFor(path);
     }
+    // And the generated half, through the engine's own resolver rather than a
+    // second copy of it -- the editor showing a different box from the one the
+    // game builds is exactly the class of bug this preview exists to prevent.
+    eng::ecs::resolvePrimitiveMeshes(registry, mImpl->renderer,
+                                     mImpl->primitives);
 
     mImpl->world.sync();
 
@@ -183,6 +269,92 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
                 mImpl->renderer.setNodeVisible(node->handle, false);
         }
     }
+
+    syncViewmodel(document);
+}
+
+// Places and equips the previewed hands from whichever entity carries a
+// Viewmodel Preview component.
+//
+// One entity wins -- the first in document order. Two cameras both previewing
+// hands would be two rigs in the viewport with no way to tell which is which,
+// and the question the preview answers ("does this weapon sit right in the
+// hand") is not one that gets clearer with a second answer on screen.
+void PreviewBridge::syncViewmodel(const game::content::SceneDocument& document)
+{
+    const game::content::Entity* host = nullptr;
+    for (const game::content::Entity& entity : document.entities) {
+        if (entity.viewmodelPreview && entity.viewmodelPreview->visible) {
+            host = &entity;
+            break;
+        }
+    }
+    if (!host || !mImpl->visible) {
+        mImpl->hideViewmodel();
+        return;
+    }
+
+    mImpl->loadViewmodelContent();
+    if (!mImpl->viewmodelRoot.valid()) {
+        mImpl->viewmodelRoot = mImpl->renderer.createNode(
+            eng::kRootNode, glm::vec3(0.0f), "editor-viewmodel-preview");
+        if (!mImpl->viewmodelRoot.valid())
+            return;
+    }
+    // The authored camera's place in the world. The rig's own socket offset is
+    // expressed in this node's space, exactly as it is against the head node in
+    // the game, so what the editor frames is what the player will see.
+    const game::content::XformAuthor& xf = host->transform;
+    mImpl->renderer.setPosition(mImpl->viewmodelRoot, xf.position);
+    mImpl->renderer.setOrientation(
+        mImpl->viewmodelRoot, glm::quat(glm::radians(xf.rotationDegrees)));
+
+    if (!mImpl->handsBuilt) {
+        if (mImpl->handsFailed) {
+            mError = "viewmodel preview: the cooked hand rig is unavailable";
+            return;
+        }
+        mImpl->handsBuilt = mImpl->hands.init(
+            mImpl->renderer, mImpl->viewmodelRoot, mImpl->handsDefinition);
+        mImpl->builtWeapon.clear();
+        if (!mImpl->handsBuilt) {
+            mImpl->handsFailed = true;
+            mError = "viewmodel preview: the cooked hand rig is unavailable";
+            return;
+        }
+    }
+
+    // The level's rig override if it authored one, otherwise the shipped
+    // framing -- the same precedence the game applies on entering a level.
+    mImpl->hands.setRig(host->viewmodelRig ? *host->viewmodelRig
+                                           : game::ViewmodelRig{});
+
+    const std::vector<game::PlayerWeaponDef>& defs = mImpl->weapons.defs();
+    const game::PlayerWeaponDef* weapon = nullptr;
+    if (!host->viewmodelPreview->weapon.empty())
+        weapon = mImpl->weapons.find(host->viewmodelPreview->weapon);
+    if (!weapon && !defs.empty())
+        weapon = &defs.front(); // slot 0: what the player starts holding
+    if (weapon && weapon->id != mImpl->builtWeapon) {
+        mImpl->hands.setWeapon(mImpl->renderer, weapon->viewmodel, false);
+        mImpl->builtWeapon = weapon->id;
+    }
+
+    mImpl->hands.applyPose(mImpl->renderer);
+    mImpl->viewmodelHost = host->id;
+    mImpl->renderer.setNodeVisible(mImpl->viewmodelRoot,
+                                   !mImpl->cutAway(host->id));
+    mImpl->viewmodelShown = true;
+}
+
+void PreviewBridge::tickViewmodel(float dt)
+{
+    if (!mImpl->viewmodelShown || !mImpl->handsBuilt)
+        return;
+    // Both channels get the frame delta here rather than the game's stepped
+    // viewmodel rate: the editor is judging placement, and a 24 Hz clip in a
+    // viewport reads as a dropped-frame editor rather than as the shipped look.
+    mImpl->hands.update(mImpl->renderer, dt, dt, {});
 }
 
 void PreviewBridge::setVisible(eng::Renderer& renderer, bool visible)
@@ -192,6 +364,36 @@ void PreviewBridge::setVisible(eng::Renderer& renderer, bool visible)
     if (!visible)
         mImpl->hideGhost();
     mImpl->visible = visible;
+}
+
+void PreviewBridge::setIsolation(eng::Renderer& renderer, bool active,
+                                 const std::vector<AuthorId>& members)
+{
+    // Compared before doing anything, like the hidden set: this is called every
+    // frame, and re-walking every node per frame would cost more than the mode
+    // saves.
+    if (mImpl->isolating == active && mImpl->isolated.size() == members.size()) {
+        bool same = true;
+        for (const AuthorId& id : members)
+            same = same && mImpl->isolated.count(id) != 0;
+        if (same)
+            return;
+    }
+    mImpl->isolating = active;
+    mImpl->isolated.clear();
+    for (const AuthorId& id : members)
+        mImpl->isolated.insert(id);
+    if (!mImpl->visible)
+        return;
+    for (const auto& [id, node] : mImpl->authorToNode)
+        renderer.setNodeVisible(node, !mImpl->cutAway(id));
+    // The previewed hands belong to whichever entity carries the component; if
+    // that entity is outside the isolated subtree it goes with the rest.
+    if (mImpl->viewmodelShown && mImpl->viewmodelRoot.valid())
+        renderer.setNodeVisible(mImpl->viewmodelRoot,
+                                !mImpl->isolating ||
+                                    mImpl->isolated.count(
+                                        mImpl->viewmodelHost) != 0);
 }
 
 void PreviewBridge::setCeilingCut(eng::Renderer& renderer, float height)
@@ -209,21 +411,34 @@ void PreviewBridge::showPlacementGhost(
     const game::content::KitPiece& piece,
     const game::content::XformAuthor& transform, float importScale)
 {
-    if (!mImpl->visible || piece.meshPath.empty()) {
+    showMeshPlacementGhost(piece.meshPath, transform, importScale);
+}
+
+// The ghost, for any mesh the brush can be holding.
+//
+// A kit piece, a mesh file and a primitive differ only in where the handle
+// comes from -- exactly the distinction MeshResolve draws on the runtime side.
+// `key` is what the node is cached under; it is the mesh path for a file and a
+// synthetic description for a primitive, because two boxes of different sizes
+// are two ghosts and two entities naming one .obj are one.
+void PreviewBridge::showGhostMesh(const std::string& key, eng::MeshHandle mesh,
+                                  const game::content::XformAuthor& transform,
+                                  float importScale)
+{
+    if (!mImpl->visible || !mesh.valid()) {
         mImpl->hideGhost();
         return;
     }
 
-    if (mImpl->visibleGhost != piece.meshPath)
+    if (mImpl->visibleGhost != key)
         mImpl->hideGhost();
 
-    auto found = mImpl->ghostNodes.find(piece.meshPath);
+    auto found = mImpl->ghostNodes.find(key);
     if (found == mImpl->ghostNodes.end()) {
         const eng::NodeHandle node = mImpl->renderer.createNode(
             eng::kRootNode, glm::vec3(0.0f), "editor_placement_ghost");
-        mImpl->renderer.attachMesh(node, mImpl->meshFor(piece.meshPath),
-                                   "Editor/PlacementGhost", false);
-        found = mImpl->ghostNodes.emplace(piece.meshPath, node).first;
+        mImpl->renderer.attachMesh(node, mesh, "Editor/PlacementGhost", false);
+        found = mImpl->ghostNodes.emplace(key, node).first;
     }
 
     const eng::NodeHandle node = found->second;
@@ -232,7 +447,55 @@ void PreviewBridge::showPlacementGhost(
         node, game::content::authorOrientation(transform.rotationDegrees));
     mImpl->renderer.setScale(node, transform.scale * importScale);
     mImpl->renderer.setNodeVisible(node, true);
-    mImpl->visibleGhost = piece.meshPath;
+    mImpl->visibleGhost = key;
+    mImpl->ghostMesh = mesh;
+}
+
+void PreviewBridge::showMeshPlacementGhost(
+    const std::string& meshPath, const game::content::XformAuthor& transform,
+    float importScale)
+{
+    if (meshPath.empty()) {
+        mImpl->hideGhost();
+        return;
+    }
+    showGhostMesh(meshPath, mImpl->meshFor(meshPath), transform, importScale);
+}
+
+void PreviewBridge::showPrimitivePlacementGhost(
+    const eng::ecs::PrimitiveMesh& primitive,
+    const game::content::XformAuthor& transform)
+{
+    showGhostMesh(primitiveGhostKey(primitive),
+                  mImpl->primitives.get(mImpl->renderer, primitive), transform,
+                  1.0f);
+}
+
+bool PreviewBridge::ghostBounds(glm::vec3& min, glm::vec3& max) const
+{
+    if (mImpl->visibleGhost.empty() || !mImpl->ghostMesh.valid())
+        return false;
+    eng::MeshBounds bounds;
+    if (!mImpl->renderer.meshBounds(mImpl->ghostMesh, bounds))
+        return false;
+    min = bounds.min;
+    max = bounds.max;
+    return true;
+}
+
+std::string primitiveGhostKey(const eng::ecs::PrimitiveMesh& p)
+{
+    // Not a hash: a collision here would silently show the wrong ghost, and the
+    // string is built once per frame at most. The prefix keeps it out of the
+    // mesh paths sharing the same map.
+    char buffer[192];
+    std::snprintf(buffer, sizeof(buffer),
+                  "primitive:%s:%g,%g,%g:%g:%g:%g:%g:%d:%d:%d:%d",
+                  eng::ecs::primitiveKindName(p.kind), double(p.size.x),
+                  double(p.size.y), double(p.size.z), double(p.radius),
+                  double(p.height), double(p.bevel), double(p.thickness),
+                  p.rings, p.segments, p.subdivisions, p.inwardFacing ? 1 : 0);
+    return buffer;
 }
 
 void PreviewBridge::showParticlePlacementGhost(

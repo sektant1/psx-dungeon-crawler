@@ -255,3 +255,87 @@ target_include_directories(eng_imguizmo INTERFACE "${imguizmo_SOURCE_DIR}/src")
 # was by far the heaviest dependency in the tree -- its fetch and build
 # dominated a first configure. The Vulkan RHI replaced it; the engine now
 # talks to Vulkan through eng_rhi and needs no renderer package at all.
+
+# --- Lua 5.4 -----------------------------------------------------------------
+# This project is declared CXX-only. Lua is C, and unlike SDL or Jolt -- which
+# call their own project() with C enabled inside their subdirectory -- the Lua
+# target below is built in OUR scope, so the C toolchain has to be turned on
+# here. Enabled at the point of need rather than in project(), so the reason is
+# next to the only thing that requires it.
+enable_language(C)
+#
+# PUC-Rio ships no CMake, so the recipe lives here rather than in a stranger's
+# fork of the build system. Explicit source list, not a glob: a CMake glob does
+# not re-run when a file appears, which turns a version bump into a link error
+# nobody can explain.
+#
+# lua.c and luac.c are deliberately absent -- they are the standalone
+# interpreter and compiler, both define main(), and linking either into a game
+# is a duplicate-symbol error.
+CPMAddPackage(
+    NAME lua
+    GITHUB_REPOSITORY lua/lua
+    GIT_TAG v5.4.7
+    DOWNLOAD_ONLY YES
+)
+add_library(lua STATIC
+    "${lua_SOURCE_DIR}/lapi.c"     "${lua_SOURCE_DIR}/lcode.c"
+    "${lua_SOURCE_DIR}/lctype.c"   "${lua_SOURCE_DIR}/ldebug.c"
+    "${lua_SOURCE_DIR}/ldo.c"      "${lua_SOURCE_DIR}/ldump.c"
+    "${lua_SOURCE_DIR}/lfunc.c"    "${lua_SOURCE_DIR}/lgc.c"
+    "${lua_SOURCE_DIR}/llex.c"     "${lua_SOURCE_DIR}/lmem.c"
+    "${lua_SOURCE_DIR}/lobject.c"  "${lua_SOURCE_DIR}/lopcodes.c"
+    "${lua_SOURCE_DIR}/lparser.c"  "${lua_SOURCE_DIR}/lstate.c"
+    "${lua_SOURCE_DIR}/lstring.c"  "${lua_SOURCE_DIR}/ltable.c"
+    "${lua_SOURCE_DIR}/ltm.c"      "${lua_SOURCE_DIR}/lundump.c"
+    "${lua_SOURCE_DIR}/lvm.c"      "${lua_SOURCE_DIR}/lzio.c"
+    "${lua_SOURCE_DIR}/lauxlib.c"  "${lua_SOURCE_DIR}/lbaselib.c"
+    "${lua_SOURCE_DIR}/lcorolib.c" "${lua_SOURCE_DIR}/ldblib.c"
+    "${lua_SOURCE_DIR}/liolib.c"   "${lua_SOURCE_DIR}/lmathlib.c"
+    "${lua_SOURCE_DIR}/loadlib.c"  "${lua_SOURCE_DIR}/loslib.c"
+    "${lua_SOURCE_DIR}/lstrlib.c"  "${lua_SOURCE_DIR}/ltablib.c"
+    "${lua_SOURCE_DIR}/lutf8lib.c" "${lua_SOURCE_DIR}/linit.c")
+target_include_directories(lua PUBLIC "${lua_SOURCE_DIR}")
+target_compile_definitions(lua PUBLIC LUA_USE_LINUX)
+target_link_libraries(lua PUBLIC ${CMAKE_DL_LIBS} m)
+# Third-party C: build it without our warning set.
+target_compile_options(lua PRIVATE -w)
+
+# --- sol2 (C++ <-> Lua binding) ----------------------------------------------
+# The multi-header distribution, not single/include: the single header is one
+# enormous translation unit that defeats the precompiled header.
+CPMAddPackage(
+    NAME sol2
+    GITHUB_REPOSITORY ThePhD/sol2
+    GIT_TAG v3.3.0
+    DOWNLOAD_ONLY YES
+)
+add_library(eng_sol2 INTERFACE)
+target_include_directories(eng_sol2 INTERFACE "${sol2_SOURCE_DIR}/include")
+target_link_libraries(eng_sol2 INTERFACE lua)
+# SOL_NO_LUA_HPP is load-bearing, not a preference.
+#
+# sol2 decides how to include Lua with `__has_include(<lua.hpp>)`. The lua/lua
+# repository does not ship lua.hpp -- that header is added by distro packaging
+# -- so the probe skipped our pinned 5.4.7 entirely and resolved against
+# /usr/include/lua.hpp, i.e. whatever Lua the build machine happens to have.
+# Here that is 5.5, whose lua_newstate takes a third argument, and the build
+# failed inside sol2's own headers.
+#
+# This forces the extern "C" #include <lua.h> path, which our include directory
+# answers, so the build depends on the pin and not on a system package.
+target_compile_definitions(eng_sol2 INTERFACE SOL_NO_LUA_HPP=1)
+# v3.3.0 is from 2022 and GCC 16 now diagnoses template *definitions* eagerly
+# rather than at instantiation. sol2's optional<T&>::emplace has a genuine typo
+# in a member template that nothing instantiates, and that is now a hard error
+# in every file including <sol/sol.hpp>. This restores the older behaviour; a
+# body that really is instantiated still errors at the point of use, so the
+# suppression cannot hide a bug we would actually hit.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15)
+    target_compile_options(eng_sol2 INTERFACE -Wno-template-body)
+endif()
+# Safeties trade a little speed for real error messages on a bad call from Lua.
+# Worth it while scripts are being written; off in Release.
+target_compile_definitions(eng_sol2 INTERFACE
+    $<$<CONFIG:Debug>:SOL_ALL_SAFETIES_ON=1>)

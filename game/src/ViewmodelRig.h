@@ -27,7 +27,7 @@ struct ViewmodelRig {
     // own rather than as a model held out in front of them, which is what the
     // 0.75 m stand-off looked like once the cooked rig replaced the placeholder
     // it was dialled against.
-    glm::vec3 offset{0.0f, -0.855f, -0.08f};
+    glm::vec3 offset{0.0f, -0.880f, -0.055f};
     // The source rig faces glTF +z; the camera faces -z, hence the half turn.
     glm::vec3 rotation{0.0f, 180.0f, 0.0f}; // degrees: pitch, yaw, roll
     float scale = 0.50f;

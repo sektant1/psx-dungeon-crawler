@@ -357,6 +357,7 @@ target_link_libraries(eng_systems
 add_library(
   eng_framework STATIC engine/src/ecs/World.cpp engine/src/ecs/SceneSync.cpp
                         engine/src/ecs/AudioSync.cpp
+                       engine/src/ecs/MeshResolve.cpp
                        engine/src/ecs/PhysicsSync.cpp
                        engine/src/ecs/ComponentRegistry.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
@@ -370,16 +371,39 @@ target_include_directories(eng_framework PRIVATE third_party engine/src)
 target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_systems>"
                                            EnTT::EnTT)
 
+# Lua scripting. Its own target rather than part of eng_framework: that library
+# is linked by every engine test and by the editor's preview world, and keeping
+# the VM in a separate target makes "who depends on Lua" a link fact instead of
+# a habit. It sits AT the framework layer -- check_layering.py maps
+# engine/src/script to "framework" -- so its bindings may reach World, Physics
+# and Input, and an upward include is still a lint failure.
+add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
+                              engine/src/script/ScriptError.cpp
+                              engine/src/script/ScriptChunkCache.cpp
+                              engine/src/script/ScriptInstance.cpp
+                              engine/src/script/bind/BindMath.cpp
+                              engine/src/script/bind/BindEntity.cpp
+                              engine/src/script/bind/BindComponents.cpp
+                              engine/src/script/bind/BindWorld.cpp
+                              engine/src/script/bind/BindInput.cpp
+                              engine/src/script/bind/BindPhysics.cpp
+                              engine/src/script/ScriptContactBridge.cpp
+                              engine/src/script/ScriptConsole.cpp)
+target_include_directories(eng_script PRIVATE third_party engine/src)
+target_link_libraries(eng_script
+  PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>"
+  PRIVATE eng_sol2)
+
 # Facade: owns application lifetime and is the only target consumers name.
 add_library(eng STATIC engine/src/app/Engine.cpp engine/src/app/Application.cpp
                        engine/src/app/FpsGameApp.cpp)
 target_include_directories(eng PRIVATE third_party engine/src)
-target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
+target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_script>")
   target_compile_definitions(eng_platform PRIVATE ENG_RENDERER_RHI=1)
   target_compile_definitions(eng PRIVATE ENG_RENDERER_RHI=1)
 
 foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_model_import eng_systems
-               eng_framework eng)
+               eng_framework eng_script eng)
   eng_target_hardening(${_layer})
 endforeach()
 # imgui is third-party: build it without our warning set.
@@ -404,6 +428,9 @@ if(ENABLE_PCH)
     target_precompile_headers(
       eng_systems PRIVATE <imgui.h> <glm/glm.hpp> <glm/gtc/quaternion.hpp>)
   target_precompile_headers(eng_framework PRIVATE <entt/entt.hpp>
+                            <glm/glm.hpp>)
+  # sol2 is the most expensive header in the tree and every binding TU needs it.
+  target_precompile_headers(eng_script PRIVATE <sol/sol.hpp> <entt/entt.hpp>
                             <glm/glm.hpp>)
   target_precompile_headers(eng PRIVATE <imgui.h> <glm/glm.hpp>)
 endif()
@@ -483,8 +510,10 @@ add_library(
 target_include_directories(game_content PUBLIC game/src game/src/scene
                                                engine/include
                             PRIVATE editor/include third_party)
+# lua, not eng_script: SceneValidate only *compiles* authored scripts to check
+# their syntax. It never runs one, so it needs the parser and none of the host.
 target_link_libraries(game_content PUBLIC glm::glm EnTT::EnTT
-                      PRIVATE eng_toml nlohmann_json::nlohmann_json)
+                      PRIVATE eng_toml nlohmann_json::nlohmann_json lua)
 eng_target_hardening(game_content)
 
 # The placement editor: ImGui + ImGuizmo over the engine's offscreen viewport.
@@ -504,6 +533,8 @@ add_executable(
   editor/src/assets/FileBrowser.cpp
   editor/src/assets/GameVocabulary.cpp
   editor/src/assets/MaterialCatalog.cpp
+  editor/src/assets/MeshCatalog.cpp
+  editor/src/ui/EditorUi.cpp
   editor/src/assets/ModelImportPipeline.cpp
   editor/src/commands/Clipboard.cpp
   editor/src/commands/CommandPalette.cpp
@@ -531,6 +562,15 @@ add_executable(
   game/src/ui/GameHud.cpp
   game/src/ui/GameHudStyle.cpp
   game/src/HudModel.cpp
+  # The first-person rig, shared rather than approximated for the same reason
+  # the palette and the HUD are: the viewport must show the weapon where the
+  # game will put it, and a second implementation of "where" would not.
+  game/src/FirstPersonHands.cpp
+  game/src/HandsDefinition.cpp
+  game/src/ViewmodelSocket.cpp
+  game/src/WeaponViewmodel.cpp
+  game/src/ViewmodelMotion.cpp
+  game/src/PlayerWeapons.cpp
   editor/src/project/RunGame.cpp)
 target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/src third_party
@@ -608,6 +648,9 @@ add_executable(
   game/src/ViewModel.cpp
   game/src/ViewmodelMotion.cpp
   game/src/FirstPersonHands.cpp
+  game/src/ViewmodelSocket.cpp
+  game/src/HandsDefinition.cpp
+  game/src/WeaponViewmodel.cpp
   game/src/MapPlay.cpp
   game/src/scene/MapRuntime.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
@@ -805,6 +848,48 @@ if(BUILD_TESTING)
   target_link_libraries(component_reflect_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME component_reflect COMMAND component_reflect_tests)
 
+  # No VM here: this asserts the component's payload format, which is a file
+  # format, so it builds the two sources that decide it and nothing else.
+  add_executable(script_serialize_tests
+                 engine/tests/ScriptSerializeTests.cpp
+                 engine/src/ecs/ComponentRegistry.cpp
+                 engine/src/io/ByteStream.cpp)
+  target_include_directories(script_serialize_tests
+                             PRIVATE engine/include third_party)
+  target_link_libraries(script_serialize_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME script_serialize COMMAND script_serialize_tests)
+
+  add_executable(script_error_tests engine/tests/ScriptErrorTests.cpp)
+  target_include_directories(script_error_tests PRIVATE engine/include engine/src)
+  target_link_libraries(script_error_tests PRIVATE eng_script eng_sol2 glm::glm)
+  add_test(NAME script_error COMMAND script_error_tests)
+
+  add_executable(script_host_tests engine/tests/ScriptHostTests.cpp)
+  target_include_directories(script_host_tests PRIVATE engine/include engine/src)
+  target_link_libraries(script_host_tests PRIVATE eng_script glm::glm EnTT::EnTT)
+  add_test(NAME script_host COMMAND script_host_tests)
+
+  add_executable(script_binding_tests engine/tests/ScriptBindingTests.cpp)
+  target_include_directories(script_binding_tests
+                             PRIVATE engine/include engine/src)
+  target_link_libraries(script_binding_tests PRIVATE eng_script glm::glm
+                                                     EnTT::EnTT)
+  add_test(NAME script_binding COMMAND script_binding_tests)
+
+  add_executable(script_contact_tests engine/tests/ScriptContactTests.cpp)
+  target_include_directories(script_contact_tests
+                             PRIVATE engine/include engine/src)
+  target_link_libraries(script_contact_tests PRIVATE eng_script glm::glm
+                                                     EnTT::EnTT)
+  add_test(NAME script_contact COMMAND script_contact_tests)
+
+  add_executable(script_reload_tests engine/tests/ScriptReloadTests.cpp)
+  target_include_directories(script_reload_tests
+                             PRIVATE engine/include engine/src)
+  target_link_libraries(script_reload_tests PRIVATE eng_script glm::glm
+                                                    EnTT::EnTT)
+  add_test(NAME script_reload COMMAND script_reload_tests)
+
   add_executable(scene_tests engine/tests/SceneTests.cpp
                              engine/src/ecs/World.cpp)
   target_include_directories(scene_tests PRIVATE engine/include engine/src
@@ -986,6 +1071,18 @@ if(BUILD_TESTING)
   target_link_libraries(viewmodel_rig_tests PRIVATE eng_toml eng_core glm::glm
                                                     EnTT::EnTT)
   add_test(NAME viewmodel_rig COMMAND viewmodel_rig_tests)
+
+  # Socket maths and the hands definition that names them. Links the full
+  # engine only because ViewmodelSocketSet holds renderer nodes; the functions
+  # under test here are free functions over a joint matrix, which is what makes
+  # "where does a weapon sit in the hand" answerable without a GPU.
+  add_executable(viewmodel_socket_tests game/tests/ViewmodelSocketTests.cpp
+                                        game/src/ViewmodelSocket.cpp
+                                        game/src/HandsDefinition.cpp)
+  target_include_directories(viewmodel_socket_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(viewmodel_socket_tests PRIVATE eng eng_toml glm::glm)
+  add_test(NAME viewmodel_socket COMMAND viewmodel_socket_tests)
 
   add_executable(bullet_pattern_tests game/tests/BulletPatternTests.cpp
                                       game/src/combat/BulletPattern.cpp)
@@ -1333,6 +1430,17 @@ if(BUILD_TESTING)
   target_link_libraries(editor_command_tests PRIVATE glm::glm)
   add_test(NAME editor_command COMMAND editor_command_tests)
 
+  # The .scn geometry blocks: mesh files and generated primitives. Its own
+  # binary rather than more of SceneRoundTripTests, because it asserts on
+  # documents built in the test and must not fail when a shipped scene is
+  # edited.
+  add_executable(scene_geometry_tests editor/tests/SceneGeometryTests.cpp)
+  target_include_directories(scene_geometry_tests PRIVATE editor/include game/src
+                                                          engine/include)
+  target_link_libraries(scene_geometry_tests PRIVATE game_content
+                        eng_ecs_headless)
+  add_test(NAME scene_geometry COMMAND scene_geometry_tests)
+
   add_executable(editor_component_tests editor/tests/EditorComponentTests.cpp
                                         editor/src/scene/EntityComponents.cpp
                                         editor/src/content/SceneDocument.cpp)
@@ -1367,6 +1475,18 @@ if(BUILD_TESTING)
                              engine/include third_party)
   add_test(NAME editor_material_catalog COMMAND editor_material_catalog_tests
            ${CMAKE_SOURCE_DIR}/assets/materials)
+
+  # The inspector's layout arithmetic, on a headless ImGui context: no window,
+  # no backend. Widget sizing is the part that was measured by hand and drifted,
+  # and it is checkable without drawing anything.
+  add_executable(editor_inspector_layout_tests
+                 editor/tests/EditorInspectorLayoutTests.cpp
+                 editor/src/ui/EditorUi.cpp)
+  target_link_libraries(editor_inspector_layout_tests PRIVATE eng_imgui eng)
+  target_include_directories(editor_inspector_layout_tests
+                             PRIVATE editor/include engine/include)
+  add_test(NAME editor_inspector_layout
+           COMMAND editor_inspector_layout_tests)
 
   add_executable(editor_vocabulary_tests editor/tests/EditorVocabularyTests.cpp
                                          editor/src/assets/GameVocabulary.cpp)

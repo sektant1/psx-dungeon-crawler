@@ -11,7 +11,7 @@
       "transform": {
         "position": [
           0.5,
-          5.449999809265137,
+          6.219600200653076,
           1.3016999959945679
         ],
         "rotation_degrees": [
@@ -21,7 +21,7 @@
         ]
       },
       "camera": {
-        "fov_degrees": 62.20000076293945,
+        "fov_degrees": 54.70000076293945,
         "near_clip": 0.10000000149011612,
         "far_clip": 24.0,
         "priority": 10
@@ -196,9 +196,11 @@
           0.699999988079071
         ]
       },
-      "spin": {
-        "degrees_per_second": 60.0
-      }
+      "scripts": [
+        {
+          "path": "scripts/spin.lua"
+        }
+      ]
     },
     {
       "id": "import_corsair_0001",

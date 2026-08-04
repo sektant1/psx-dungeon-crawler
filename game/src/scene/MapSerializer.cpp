@@ -105,9 +105,22 @@ bool writeMap(const std::string& path, const entt::registry& reg,
     w.u32(uint32_t(order.size()));
     for (uint32_t i = 0; i < order.size(); ++i) {
         const entt::entity e = order[i];
+        // A MeshRenderer has to say where its geometry comes from -- a file
+        // path or a generated description. Neither is an entity that will draw
+        // the prototype box in the shipped game, which is exactly the class of
+        // content bug a cook should refuse rather than pass on.
+        //
+        // It used to demand a MeshSource specifically, from when a path was the
+        // only answer. A PrimitiveMesh is the other one.
         if (reg.all_of<eng::ecs::MeshRenderer>(e) &&
-            !reg.all_of<eng::ecs::MeshSource>(e))
+            !reg.all_of<eng::ecs::MeshSource>(e) &&
+            !reg.all_of<eng::ecs::PrimitiveMesh>(e)) {
+            eng::log::error("map: entity %u has a MeshRenderer with neither a "
+                            "MeshSource nor a PrimitiveMesh, so nothing says "
+                            "what it draws",
+                            unsigned(i));
             return false;
+        }
         w.u32(i);
         w.u32(parentOf[i]);
 

@@ -4,7 +4,9 @@
 #include <eng/ecs/components/FirstPersonController.h>
 #include <eng/ecs/components/ParticleEmitter.h>
 #include <eng/ecs/components/PortalParams.h>
+#include <eng/ecs/components/PrimitiveMesh.h>
 
+#include "ViewmodelPreview.h"
 #include "ViewmodelRig.h"
 #include "audio/ActorSounds.h"
 
@@ -218,11 +220,65 @@ using ActorSoundsAuthor = game::ActorSoundSet;
 // defaults, which is every level authored before they existed.
 using FirstPersonAuthor = eng::ecs::FirstPersonController;
 using ViewmodelRigAuthor = game::ViewmodelRig;
+// Editor-only: which weapon the viewport shows in the hands. Dropped at cook
+// (see game/src/ViewmodelPreview.h) -- it is how a placement is judged, not
+// something the level carries.
+using ViewmodelPreviewAuthor = game::ViewmodelPreview;
+
+// One authored value on a script instance. Mirrors eng::ecs::ScriptProp; kept
+// as its own type because the editor's author structs are the document's
+// vocabulary, and the cooker is what translates them into components.
+struct ScriptPropAuthor {
+    enum class Type { Bool, Number, String, Vec3, Entity };
+    std::string key;
+    Type type = Type::Number;
+    bool boolValue = false;
+    float numberValue = 0.0f;
+    glm::vec3 vecValue{0.0f};
+    // String's value, and also Entity's target entity name.
+    std::string stringValue;
+};
+
+// One script attached to an entity. A list of these is the only component the
+// document carries as a vector rather than an optional: an entity may run
+// several scripts, and their order is the order they tick in.
+struct ScriptAuthor {
+    std::string path; // logical asset path, "scripts/door.lua"
+    std::vector<ScriptPropAuthor> props;
+    bool enabled = true;
+};
 
 struct SpinAuthor {
     glm::vec3 axis{0.0f, 1.0f, 0.0f};
     float degreesPerSecond = 45.0f;
 };
+
+// A mesh file named directly, rather than through a kit prefab.
+//
+// `prefab` covers the modular kit -- a wall is "kit.wall" and everything about
+// it (its mesh, its material, its socket, the grid it snaps to) comes from
+// kit.toml. That is right for a kit and wrong for everything else: the 200
+// meshes under assets/meshes are not all kit pieces, and putting one in a level
+// meant adding a kit.toml entry for a thing with no socket and no span, or not
+// putting it in a level at all.
+//
+// The path is pack-relative ("meshes/props/Chair.obj"), which is exactly what
+// eng::assets::resolve takes and what MeshSource carries, so the cook is a copy
+// and the map stays portable.
+struct MeshAuthor {
+    std::string path;
+    // Multiplies the entity's transform scale, the way KitPiece::importScale
+    // does for a prefab. Kept separate from the transform because it is a fact
+    // about the *file* -- what units it was authored in -- and an author who
+    // fixes it once should not have to redo it on every instance.
+    float importScale = 1.0f;
+};
+
+// A mesh the engine generates. Mirror-not-translate again: the authored type IS
+// the runtime component, so the cook is a field-by-field copy with nothing to
+// get wrong in between, and the accepted .scn keys are the component's own
+// field names.
+using PrimitiveAuthor = eng::ecs::PrimitiveMesh;
 
 struct Entity {
     AuthorId id;
@@ -238,9 +294,21 @@ struct Entity {
     // transform, so nothing downstream of the editor knows hierarchies exist.
     AuthorId parent;
     std::string prefab; // "kit.wall", or empty for a marker/light/trigger
+    // The two other ways to be a mesh. Exactly one of the three should be set:
+    // a prefab is a kit piece, `mesh` is any file, `primitive` is generated.
+    // The cooker resolves them in that order, so an entity that somehow carries
+    // more than one draws the most specific thing rather than two overlapping
+    // meshes; the editor's component table stops that happening by hand.
+    std::optional<MeshAuthor> mesh;
+    std::optional<PrimitiveAuthor> primitive;
     // Overrides the kit piece's own material. Empty means "use the kit's",
     // which is what almost every piece should do -- an override is for the
     // one-off, not for a look a whole level shares (change kit.toml for that).
+    //
+    // For a `mesh` or a `primitive` there is no kit entry to fall back on, so
+    // this is the material outright and an empty one leaves the entity wearing
+    // the renderer's default. Same field either way: what a mesh wears is one
+    // question, and a second field for it would be a second answer.
     std::string material;
     XformAuthor transform;
     bool castShadows = true;
@@ -251,6 +319,8 @@ struct Entity {
     std::optional<CameraAuthor> camera;
     std::optional<FirstPersonAuthor> firstPerson;
     std::optional<ViewmodelRigAuthor> viewmodelRig;
+    std::optional<ViewmodelPreviewAuthor> viewmodelPreview;
+    std::vector<ScriptAuthor> scripts;
     std::optional<SpinAuthor> spin;
     std::optional<OrbitAuthor> orbit;
     std::optional<ShaderAuthor> shader;

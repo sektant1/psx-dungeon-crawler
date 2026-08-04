@@ -71,6 +71,7 @@ LiveLevel buildLevel(eng::ecs::World& world, eng::Renderer& r,
                                 path.c_str());
                 return r.prototypeMesh(path);
             });
+        lv.authoredMap->resolvePrimitives(r);
         lv.authoredMap->buildAll();
         lv.spawn = lv.authoredMap->playerSpawn();
         lv.exit = lv.authoredMap->levelExit();

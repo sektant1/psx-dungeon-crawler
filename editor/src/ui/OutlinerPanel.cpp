@@ -95,6 +95,17 @@ void applyClick(const game::content::AuthorId& id, SelectMode mode,
         actions.selectNode(id, mode != SelectMode::Replace);
 }
 
+// What a double-click on a row does: take the viewport into that object, or --
+// for a caller with no isolation mode -- what the gesture always did, which is
+// frame the camera on it.
+void openRow(const game::content::AuthorId& id, const OutlinerActions& actions)
+{
+    if (actions.isolate)
+        actions.isolate(id);
+    else if (actions.focus)
+        actions.focus();
+}
+
 // Scrolls to the row just submitted, once, when it is the one the caller asked
 // to reveal. Called after the row's item so GetItemRect is this row's.
 void revealRow(const game::content::AuthorId& id,
@@ -451,7 +462,7 @@ void drawComposedNode(const OutlinerNode& node, const OutlinerActions& actions,
     if (input.clicked && !toggled)
         applyClick(node.id, input.mode, actions, orders.previous);
     if (input.doubleClicked && !toggled)
-        actions.focus();
+        openRow(node.id, actions);
     if (menuOpen) {
         if (!selected)
             applyClick(node.id, SelectMode::Replace, actions, orders.previous);
@@ -615,8 +626,14 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
             else
                 actions.selectGroup(group, input.mode);
         }
-        if (input.doubleClicked && !toggled)
-            actions.focus();
+        if (input.doubleClicked && !toggled) {
+            // A group row stands for many entities, and isolating "these forty
+            // walls" is not a thing -- only a single row names one object.
+            if (single)
+                openRow(group.nodes.front().id, actions);
+            else
+                actions.focus();
+        }
         if (menuOpen) {
             // Right-click acts on the row under the cursor, selecting it first
             // so the menu can never act on something else.

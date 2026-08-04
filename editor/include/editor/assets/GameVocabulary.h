@@ -34,4 +34,18 @@ std::vector<std::string> enemyIdsFromToml(const std::string& enemiesToml);
 std::vector<std::string> tomlSectionIds(const std::string& path,
                                         const std::string& section);
 
+// Every `.lua` under `scriptsDir`, as the *logical* paths a scene names them by
+// ("scripts/door.lua"), sorted, recursive.
+//
+// The same argument as enemy ids, for the same reason: a script path typed from
+// memory is a component that silently does nothing, discovered minutes later in
+// the game with nothing pointing at the cause. The list is what turns that into
+// a pick.
+//
+// `prefix` is the logical directory the paths are named under -- "scripts" --
+// so the returned strings are exactly what the cooker and the host resolve,
+// not filesystem paths that happen to work on the authoring machine.
+std::vector<std::string> luaScriptPaths(const std::string& scriptsDir,
+                                        const std::string& prefix);
+
 } // namespace ed

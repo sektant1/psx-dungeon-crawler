@@ -32,6 +32,10 @@ public:
     // attachLoadout afterwards; callers may drive preview view angles in between.
     void spawnAt(GameContext& ctx, glm::vec3 pos);
     bool loadWeapons(const std::string& definitionsPath);
+    // The hands rig and its socket vocabulary (assets/config/viewmodel_hands.toml).
+    // Read before attachLoadout; a missing or rejected file keeps the shipped
+    // arms rather than leaving the player with nothing to hold a weapon with.
+    bool loadHands(const std::string& definitionsPath);
     // (Re)attach the carried light + viewmodels to the fresh head node (the old
     // one is destroyed by clearScene) and apply active-weapon visibility.
     void attachLoadout(GameContext& ctx);
@@ -65,8 +69,13 @@ public:
     FirstPersonHands& hands() { return mHands; }
     const FirstPersonHands& hands() const { return mHands; }
     // Re-applies the selected weapon's feel numbers after a live edit, and
-    // re-poses the rig so a frozen viewmodel still tracks the sliders.
+    // re-poses the rig so a frozen viewmodel still tracks the sliders. Also
+    // re-seats the held weapon, so dragging its attach offset moves it.
     void refreshViewmodel(GameContext& ctx);
+    // Rebuilds the held weapon's geometry. Needed only when the presentation
+    // itself changed -- a different model, or a different socket -- not for the
+    // offsets, which refreshViewmodel handles without a reload.
+    void rebuildWeaponViewmodel(GameContext& ctx);
 
     int weapon() const { return int(mWeapons.selectedIndex()); }
     const PlayerWeaponDef* selectedWeapon() const { return mWeapons.selected(); }
@@ -84,6 +93,7 @@ private:
     PlayerWeaponLibrary mWeaponLibrary;
     WeaponController mWeapons;
     FirstPersonHands mHands;
+    HandsDefinition mHandsDefinition = defaultHandsDefinition();
     eng::ecs::FirstPersonController mTuning{};
     float mFootstepFxCooldown = 0.0f;
     glm::vec2 mLastLookDelta{0.0f};

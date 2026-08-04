@@ -4,6 +4,9 @@
 #include <editor/content/GridMath.h>
 #include <editor/content/KitCatalog.h>
 #include <editor/assets/MaterialCatalog.h>
+#include <editor/ui/EditorUi.h>
+
+#include <eng/ecs/components/PrimitiveMesh.h>
 
 #include <string>
 #include <vector>
@@ -42,6 +45,21 @@ struct InspectorContext {
     // get right by having read a TOML is not authorable.
     const std::vector<std::string>* enemyIds = nullptr;
     const std::vector<std::string>* pickupIds = nullptr;
+    // Player weapon ids from weapons.toml, for the viewmodel preview. Null
+    // leaves the field typed, which is survivable but unguided.
+    const std::vector<std::string>* weaponIds = nullptr;
+    // The .lua files on disk, as the logical paths a scene names them by. Null
+    // or empty falls back to a typed path, which is only survivable, not good.
+    const std::vector<std::string>* scriptPaths = nullptr;
+    // Rescan the above. Offered next to the picker: a script written after the
+    // editor started must be attachable without restarting it.
+    std::function<void()> rescanScripts;
+    // Every author id in the open scene, for a script prop that names another
+    // entity. Rebuilt per frame by the panel, because an entity added this
+    // frame is a legitimate target and a cached list would not offer it. The
+    // cooker fails the build on a name that is not here, so picking beats
+    // typing by exactly the margin that check is worth.
+    const std::vector<std::string>* sceneEntityIds = nullptr;
     // What the classified catalogue says about the material offered here, and
     // what this entity's mesh can take. Null leaves the combo unfiltered, which
     // is what it always was.
@@ -75,6 +93,21 @@ struct InspectorContext {
         closed = closed || itemClosed;
     }
 };
+
+// The generated-mesh parameters, as property-grid rows.
+//
+// Shared by the inspector's Primitive Mesh drawer and the Meshes browser's
+// parameter strip, because they are the same question asked in two places: the
+// browser sets the size a primitive will be painted at, the inspector corrects
+// one that already exists. Two copies of "which fields does a capsule have"
+// would disagree the first time a kind gained one.
+//
+// Only the fields the chosen kind actually reads are drawn -- a sphere has no
+// `size` and a box has no `segments`, and showing them anyway presents settings
+// that do nothing. `context`, when given, receives the drag/commit tracking the
+// inspector needs; the browser passes null and reads the return value.
+bool drawPrimitiveFields(eng::ecs::PrimitiveMesh& mesh, ui::PropertyGrid& grid,
+                         InspectorContext* context = nullptr);
 
 // id, name and transform: what every entity has, drawn above the components.
 void drawEntityIdentity(game::content::Entity& entity,

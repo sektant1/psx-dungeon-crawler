@@ -26,6 +26,11 @@ struct ComponentDefaults {
     // The Place tool's current brush, which is the only sane default for a
     // mesh: prefab ids come from kit.toml, so the table cannot invent one.
     std::string prefab;
+    // The same for a mesh file: the Meshes tab arms the brush with a path out
+    // of the mesh catalogue, and a table that made one up would be inventing an
+    // asset. Empty means Add Component cannot offer "Mesh" yet, which is the
+    // honest state and the one the brush readout explains.
+    std::string meshPath;
 };
 
 // The entities the game defines that are not kit pieces.
@@ -75,18 +80,24 @@ const std::vector<Gameplay>& paintableGameplay();
 // a stray member on the app it was writable by nobody and read by three
 // callers.
 struct Brush {
-    enum class Kind { Piece, Gameplay, Particles };
+    enum class Kind { Piece, Gameplay, Particles, Mesh, Primitive };
 
     Kind kind = Kind::Piece;
     std::string prefab;                    // Kind::Piece -- a kit.toml id
     Gameplay gameplay = Gameplay::Marker;  // Kind::Gameplay
     std::string effect;                    // Kind::Particles -- particles.toml id
+    std::string meshPath;                  // Kind::Mesh -- a pack-relative path
+    // Kind::Primitive. Carried whole rather than as a kind, because the size of
+    // the box being painted is part of the brush: painting six identical
+    // greybox blocks and then resizing each one is not authoring.
+    eng::ecs::PrimitiveMesh primitive;
     int yawQuarters = 0;                   // quarter turns about Y
 
     bool empty() const
     {
         return (kind == Kind::Piece && prefab.empty()) ||
-               (kind == Kind::Particles && effect.empty());
+               (kind == Kind::Particles && effect.empty()) ||
+               (kind == Kind::Mesh && meshPath.empty());
     }
     // Quarter turns wrap; there is no "past three quarters".
     void rotate(int quarters)

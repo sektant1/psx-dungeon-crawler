@@ -46,6 +46,11 @@ bool PlayerSystem::loadWeapons(const std::string& definitionsPath)
     return loaded;
 }
 
+bool PlayerSystem::loadHands(const std::string& definitionsPath)
+{
+    return loadHandsDefinition(definitionsPath, mHandsDefinition);
+}
+
 void PlayerSystem::attachLoadout(GameContext& ctx)
 {
     eng::Renderer& r = ctx.renderer;
@@ -55,8 +60,9 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
     carry.range = 6.0f;
     r.attachLight(mPlayer.headNode(), carry);
     mWeapons.resetRuntime();
-    if (mHands.init(r, mPlayer.headNode()) && mWeapons.selected())
-        mHands.setWeapon(mWeapons.selected()->viewmodel, false);
+    if (mHands.init(r, mPlayer.headNode(), mHandsDefinition) &&
+        mWeapons.selected())
+        mHands.setWeapon(r, mWeapons.selected()->viewmodel, false);
 }
 
 void PlayerSystem::look(GameContext& ctx)
@@ -112,7 +118,7 @@ std::optional<std::size_t> PlayerSystem::fixedStepWeapons(
         mWeapons.fixedUpdate(fixedDt, arc, canFire);
     if (mWeapons.consumeSelectionChanged()) {
         if (mWeapons.selected())
-            mHands.setWeapon(mWeapons.selected()->viewmodel, true);
+            mHands.setWeapon(ctx.renderer, mWeapons.selected()->viewmodel, true);
     }
     if (fired)
         mHands.triggerFire(ctx.renderer);
@@ -139,8 +145,17 @@ void PlayerSystem::setViewmodelRig(const ViewmodelRig& tuning)
 
 void PlayerSystem::refreshViewmodel(GameContext& ctx)
 {
-    if (const PlayerWeaponDef* weapon = mWeapons.selected())
+    if (const PlayerWeaponDef* weapon = mWeapons.selected()) {
         mHands.refreshFeel(weapon->viewmodel);
+        mHands.refreshAttachment(ctx.renderer, weapon->viewmodel);
+    }
+    mHands.applyPose(ctx.renderer);
+}
+
+void PlayerSystem::rebuildWeaponViewmodel(GameContext& ctx)
+{
+    if (const PlayerWeaponDef* weapon = mWeapons.selected())
+        mHands.setWeapon(ctx.renderer, weapon->viewmodel, false);
     mHands.applyPose(ctx.renderer);
 }
 

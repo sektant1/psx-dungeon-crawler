@@ -1,7 +1,9 @@
 #include <editor/assets/GameVocabulary.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 
 namespace ed {
 namespace {
@@ -60,6 +62,39 @@ std::vector<std::string> tomlSectionIds(const std::string& path,
 std::vector<std::string> enemyIdsFromToml(const std::string& enemiesToml)
 {
     return tomlSectionIds(enemiesToml, "enemy");
+}
+
+std::vector<std::string> luaScriptPaths(const std::string& scriptsDir,
+                                        const std::string& prefix)
+{
+    std::vector<std::string> paths;
+    std::error_code code;
+    if (scriptsDir.empty() || !std::filesystem::is_directory(scriptsDir, code))
+        return paths; // no scripts yet leaves the field free text, not broken
+
+    // Recursive: scripts group into subdirectories as a level grows, and a
+    // picker that only saw the top level would quietly hide half of them.
+    std::filesystem::recursive_directory_iterator it(
+        scriptsDir, std::filesystem::directory_options::skip_permission_denied,
+        code);
+    const std::filesystem::recursive_directory_iterator end;
+    for (; !code && it != end; it.increment(code)) {
+        if (!it->is_regular_file(code) || it->path().extension() != ".lua")
+            continue;
+        // Rebuilt as a logical path rather than handed back as a filesystem
+        // one: what a scene stores has to resolve on every machine, not just
+        // the one that authored it.
+        const std::filesystem::path rel =
+            std::filesystem::relative(it->path(), scriptsDir, code);
+        if (code || rel.empty())
+            continue;
+        paths.push_back(prefix.empty() ? rel.generic_string()
+                                       : prefix + "/" + rel.generic_string());
+    }
+
+    std::sort(paths.begin(), paths.end());
+    paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+    return paths;
 }
 
 } // namespace ed

@@ -13,6 +13,9 @@
 #include "DungeonMap.h"
 #include "LevelResource.h"
 #include "LiveLevel.h"
+#include "scene/ComponentRegistry.h"
+
+#include <eng/script/ScriptHost.h>
 #include "MapPlay.h"
 #include "SceneFactory.h"
 #include <eng/particles/ParticleLibrary.h>
@@ -216,6 +219,10 @@ private:
     // destroyed by group on a transition.
     std::optional<eng::ecs::RendererSceneBackend> mBackend;
     eng::ecs::World mWorld;
+    // Constructed in onStartGame once the world and physics exist; reset in
+    // onStopGame before either goes, because the host holds a contact
+    // subscription on physics and an on_destroy hook on the registry.
+    std::optional<eng::script::ScriptHost> mScripts;
     LiveLevel mLevel;
     game::PlayerSystem mPlayerSys;
     game::GameHud mHud;
@@ -337,6 +344,10 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mPlayerSys.setControllerTuning(mConfigController);
     mPlayerSys.controller().setDashTuning(mDashTuning);
     mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
+    // The hands rig and the socket names weapons hang off. Before the weapons,
+    // in load order but not in dependency: a weapon naming a socket this file
+    // does not define is warned about when it is equipped, not here.
+    mPlayerSys.loadHands(game::assetPath("config/viewmodel_hands.toml"));
     // Shared first-person rig framing. Read from the file rather than through
     // eng::Config because the socket and rotation are arrays, which the
     // flattened config has no getter for (see eng/Config.h).
@@ -366,6 +377,16 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // through the World without competing for it.
     mWorld.attachAudio(audio(), /*drivesListener=*/false);
 
+    // Scripting over the same World. mapio::coreRegistry() is the table the
+    // serialiser and the editor inspector already share, so every component
+    // this game registers is reachable from Lua without a line of binding code.
+    eng::script::ScriptConfig scriptConfig;
+    scriptConfig.hotReload = true; // dev builds; see docs/scripting.md
+    mScripts.emplace(mWorld, scriptConfig, mapio::coreRegistry());
+    mScripts->bindInput(engine.input());
+    mScripts->bindPhysics(physics());
+    eng::script::registerScriptCommands(devConsole(), *mScripts);
+
     enterLevel(engine, false); // depth 0, spawn at entry
 
     mCombat.init(*mCtx);
@@ -391,7 +412,9 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // that ask to bounce or to leave a decal fall straight through the level.
     mParticleCollider.emplace(physics(), eng::kAllLayers);
     mCtx->renderer.setParticleCollider(&*mParticleCollider);
-    physics().setContactCallback(
+    // Token discarded deliberately: this subscription lives as long as the
+    // physics world does.
+    physics().addContactCallback(
         [this](const eng::HitEvent& e) { mCombat.onContact(*mCtx, e); });
     mCombat.projectiles().setImpactCallback(
         [this](eng::BodyHandle victim, const std::string& payload,
@@ -862,6 +885,10 @@ void DungeonApp::onInput(const eng::FrameContext& f)
 
 void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
 {
+    // Immediately before the base's Physics::update, which is what makes
+    // fixed_update the right place for a script to push a body.
+    if (mScripts) mScripts->fixedTick(fixedDt);
+
     if (playerDriven()) {
         mPlayerSys.fixedStep(*mCtx, fixedDt);
         entt::registry& registry = mCombat.director().registry();
@@ -897,6 +924,10 @@ void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
 
 void DungeonApp::onPostSimulate(const eng::FrameContext&, float fixedDt)
 {
+    // Right after the step that produced them, so a script reacts to a hit in
+    // the same frame it happened rather than the next one.
+    if (mScripts) mScripts->drainContacts();
+
     eng::FpsController& player = mPlayerSys.controller();
     mCombat.fixedStep(*mCtx, player.eyePosition(), player.forward(), fixedDt);
     // Strictly after combat: actionstate::advance sets activeFiredThisStep, and
@@ -998,6 +1029,13 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // drift, and it re-bases correctly if the rate is changed live.
     {
         const auto timed = stats().time(PhaseWorld);
+        // Before LiveLevel::update, which ends in World::sync(): everything a
+        // script writes this frame is then pushed at the renderer in the same
+        // frame it was written.
+        if (mScripts) {
+            mScripts->pollReload();
+            mScripts->tick(f.dt);
+        }
         mLevel.update(r, steps.time(eng::StepChannel::World), f.dt);
         mLevel.updateVisibility(r, player.eyePosition());
     }
@@ -1213,6 +1251,9 @@ void DungeonApp::onStopGame(eng::Engine&)
         mCombat.clear(*mCtx);
     // Nodes and bodies go before the renderer and the physics world they came
     // from; the registry itself outlives both.
+    // Before the world and physics go: the host holds a contact subscription on
+    // one and an on_destroy hook on the other.
+    mScripts.reset();
     mWorld.detachAll();
     mBackend.reset();
 }

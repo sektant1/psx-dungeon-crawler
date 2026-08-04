@@ -131,6 +131,52 @@ const char* audioPriorityName(int value)
     return "critical";
 }
 
+// The generated mesh, written as its kind plus only the parameters that kind
+// actually uses.
+//
+// Not reflectedNode: `kind` is a name in the file and an int in the component,
+// and writing every field that differs from the defaults would spell out a
+// sphere's `size` and a box's `segments` -- numbers the generator never reads,
+// which read as settings that do nothing.
+Json writePrimitive(const PrimitiveAuthor& p)
+{
+    using P = eng::ecs::PrimitiveMesh;
+    const P defaults;
+    Json node = Json::object();
+    node["kind"] = eng::ecs::primitiveKindName(p.kind);
+
+    const bool usesSize = p.kind == P::Box || p.kind == P::BeveledBox ||
+                          p.kind == P::Plane;
+    const bool round = p.kind == P::Sphere || p.kind == P::Capsule ||
+                       p.kind == P::Cylinder || p.kind == P::Cone ||
+                       p.kind == P::Disc;
+    const bool usesHeight = p.kind == P::Capsule || p.kind == P::Cylinder ||
+                            p.kind == P::Cone;
+    const auto number = [&](const char* key, float value, float was) {
+        if (canonical(value) != canonical(was))
+            node[key] = canonical(value);
+    };
+    if (usesSize && !nearlyEqual(p.size, defaults.size))
+        node["size"] = vec3(p.size);
+    if (round)
+        number("radius", p.radius, defaults.radius);
+    if (usesHeight)
+        number("height", p.height, defaults.height);
+    if (p.kind == P::BeveledBox)
+        number("bevel", p.bevel, defaults.bevel);
+    if (canonical(p.thickness) != canonical(defaults.thickness))
+        node["thickness"] = canonical(p.thickness);
+    if (round && p.rings != defaults.rings)
+        node["rings"] = p.rings;
+    if (round && p.segments != defaults.segments)
+        node["segments"] = p.segments;
+    if (p.subdivisions != defaults.subdivisions)
+        node["subdivisions"] = p.subdivisions;
+    if (p.inwardFacing)
+        node["inward_facing"] = true;
+    return node;
+}
+
 Json writeEntity(const Entity& entity)
 {
     Json out = Json::object();
@@ -143,6 +189,15 @@ Json writeEntity(const Entity& entity)
         out["parent"] = entity.parent;
     if (!entity.prefab.empty())
         out["prefab"] = entity.prefab;
+    if (entity.mesh) {
+        Json mesh = Json::object();
+        mesh["path"] = entity.mesh->path;
+        if (canonical(entity.mesh->importScale) != 1.0f)
+            mesh["import_scale"] = canonical(entity.mesh->importScale);
+        out["mesh"] = std::move(mesh);
+    }
+    if (entity.primitive)
+        out["primitive"] = writePrimitive(*entity.primitive);
     if (!entity.material.empty())
         out["material"] = entity.material;
     if (!entity.castShadows)
@@ -223,6 +278,48 @@ Json writeEntity(const Entity& entity)
         if (!camera.active)
             node["active"] = false;
         out["camera"] = std::move(node);
+    }
+    if (!entity.scripts.empty()) {
+        // Written in full rather than as a diff against defaults, unlike
+        // reflectedNode: there is no meaningful "default script list", and a
+        // half-written entry would be a scene that silently lost a prop.
+        Json list = Json::array();
+        for (const ScriptAuthor& script : entity.scripts) {
+            Json node = Json::object();
+            node["path"] = script.path;
+            if (!script.enabled)
+                node["enabled"] = false; // true is the default
+            if (!script.props.empty()) {
+                Json props = Json::object();
+                for (const ScriptPropAuthor& p : script.props) {
+                    switch (p.type) {
+                    case ScriptPropAuthor::Type::Bool:
+                        props[p.key] = p.boolValue;
+                        break;
+                    case ScriptPropAuthor::Type::Number:
+                        props[p.key] = canonical(p.numberValue);
+                        break;
+                    case ScriptPropAuthor::Type::String:
+                        props[p.key] = p.stringValue;
+                        break;
+                    case ScriptPropAuthor::Type::Vec3:
+                        props[p.key] = vec3(p.vecValue);
+                        break;
+                    case ScriptPropAuthor::Type::Entity: {
+                        // Tagged, so the type survives the round trip: a bare
+                        // string would read back as a String prop.
+                        Json target = Json::object();
+                        target["entity"] = p.stringValue;
+                        props[p.key] = std::move(target);
+                        break;
+                    }
+                    }
+                }
+                node["props"] = std::move(props);
+            }
+            list.push_back(std::move(node));
+        }
+        out["scripts"] = std::move(list);
     }
     if (entity.spin) {
         const SpinAuthor& spin = *entity.spin;
@@ -312,6 +409,8 @@ Json writeEntity(const Entity& entity)
         out["first_person"] = reflectedNode(*entity.firstPerson);
     if (entity.viewmodelRig)
         out["viewmodel_rig"] = reflectedNode(*entity.viewmodelRig);
+    if (entity.viewmodelPreview)
+        out["viewmodel_preview"] = reflectedNode(*entity.viewmodelPreview);
     if (entity.shader) {
         const ShaderAuthor& shader = *entity.shader;
         const ShaderAuthor defaults;

@@ -94,25 +94,25 @@ blood = "human"
 [player_viewmodel]
 # Camera space: right / up / forward, with -z ahead. Close to the eye and only
 # slightly low, so the hands read as the player's own.
-offset = [0.0, -0.855, -0.08]
-rotation = [0.0, 180.0, 0.0]
-scale = 0.5
+offset = [0.0000, -0.8800, -0.0550]
+rotation = [0.00, 180.00, 0.00]
+scale = 0.5000
 # Multipliers over the per-weapon feel numbers; 0 mutes a layer everywhere.
-bob_scale = 1.0
-sway_scale = 1.0
-recoil_scale = 1.0
+bob_scale = 1.000
+sway_scale = 1.000
+recoil_scale = 1.000
 # Bob is normalised against this speed, so retuning player.speed does not
 # silently retune the walk cycle.
-bob_reference_speed = 6.0
-bob_roll_degrees = 1.4
+bob_reference_speed = 6.000
+bob_roll_degrees = 1.400
 # Look sway: the hands lag a mouse flick, clamped so they cannot leave frame,
 # then are pulled back to centre at sway_return per second.
-sway_return = 9.0
-sway_max = 0.05
-sway_roll_degrees = 3.0
+sway_return = 9.000
+sway_max = 0.0500
+sway_roll_degrees = 3.000
 # Touchdown dip. The camera itself is deliberately left alone here.
-landing_dip = 0.055
-landing_recovery = 9.0
+landing_dip = 0.0550
+landing_recovery = 9.000
 # false freezes every layer at the socket pose -- how you author a placement.
 motion_enabled = true
 

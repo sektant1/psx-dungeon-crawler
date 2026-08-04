@@ -94,6 +94,7 @@ one, so a file needing `Transform` does not pull Jolt's layer enum in through
 | `RenderNode` | give me a node though I draw nothing |
 | `MeshRenderer` | a mesh to draw |
 | `MeshSource` | the path it was loaded from |
+| `PrimitiveMesh` | …or the parameters it was generated from |
 | `MaterialOverride` | draw it with a different material |
 | `ShaderParams` | tint, rim light and cutout, for this entity alone |
 | `Visibility` | drawn or not — hiding is not destroying |
@@ -105,7 +106,8 @@ one, so a file needing `Transform` does not pull Jolt's layer enum in through
 | `Collider` | a shape that occupies space |
 | `RigidBody` | …and the simulation moves it |
 | `KinematicControl` | …but gameplay steers it |
-| `NodeRef` / `BodyRef` / `ParticlesRef` / `MaterialApplied` | runtime handles, written by reconcilers, never by callers |
+| `Scripts` | Lua behaviours attached here: paths plus per-instance props |
+| `NodeRef` / `BodyRef` / `ParticlesRef` / `MaterialApplied` / `ScriptState` | runtime handles, written by reconcilers and the script host, never by callers |
 
 Two splits worth the words:
 
@@ -114,6 +116,20 @@ Two splits worth the words:
 something that already collides, not a different kind of object. A dynamic
 body's pose then flows *out* of physics — PhysicsSync stops writing the
 Transform onto it — unless `KinematicControl` says gameplay is steering.
+
+**`MeshRenderer` vs `MeshSource` vs `PrimitiveMesh`.** A `MeshRenderer` holds a
+`MeshHandle` and nothing else, deliberately: resolving an asset is a load-time
+job and the hot path must not carry a path. What it does *not* say is where that
+handle came from, and there are two answers — a `MeshSource` names a file, a
+`PrimitiveMesh` describes geometry the engine builds (box, sphere, capsule,
+cylinder, cone, plane, disc, beveled box). An entity carrying both is a mesh
+file; the path wins, because a file is the more specific statement.
+
+Resolution is one seam, `eng/ecs/MeshResolve.h`, so the three consumers — the
+game's map loader, the editor's preview and the demo — cannot grow three subtly
+different answers. `PrimitiveMeshCache` keys on the parameters, so a hundred
+identical greybox blocks share one vertex buffer, and one cache per level means
+tearing a level down releases exactly the meshes that level generated.
 
 **`MeshRenderer` vs `MaterialOverride` vs `ShaderParams`.** The mesh and its
 material come from the asset. An override is a scene decision — *this* pillar is
@@ -147,7 +163,20 @@ a frame wants them. Call it **before** `World::sync()`; `sync()` deliberately
 does not, because the editor syncs its preview world every frame and would
 otherwise watch authored entities spin and expire while placing them.
 
-Two rules these follow, and any new one should:
+### The one system that is not a free function
+
+`eng::script::ScriptHost` is a stateful object, and deliberately so. A system's
+contract here is a single `(World&, dt)` call; this host's callbacks land at
+**three** different places in a frame — `fixed_update` before the physics step,
+contacts after it, `update` with presentation — and a generic `update(dt)` would
+hide the one thing a reader needs to know about it. It also owns a Lua state and
+a pool of live instances, which is not something a free function can carry.
+
+It follows the same authored-versus-derived split as everything else: `Scripts`
+is the authored component, `ScriptState` is the runtime handle the host writes.
+See [scripting.md](scripting.md).
+
+Two rules the free-function systems follow, and any new one should:
 
 - **Modulation reads the authored value and writes a derived one.**
   `lightAnimationSystem` computes `LightColour` from `LightRef::desc.colour`

@@ -105,6 +105,10 @@ std::vector<PlayerWeaponDef> defaults()
     arbalest.viewmodel.handsFireAnimation = "push.R";
     arbalest.viewmodel.handsMuzzleJoint = "f_middle.03.R";
     arbalest.viewmodel.handsMuzzleOffset = {0.0f, 0.03f, 0.0f};
+    arbalest.viewmodel.socket = "right_hand";
+    arbalest.viewmodel.attachOffset = {0.0f, 0.09f, 0.0f};
+    arbalest.viewmodel.attachScale = 0.5f;
+    arbalest.viewmodel.muzzleSocket = "right_middle_tip";
 
     PlayerWeaponDef talon;
     talon.id = "riven_talon";
@@ -149,6 +153,10 @@ std::vector<PlayerWeaponDef> defaults()
     talon.viewmodel.handsFireAnimation = "finger_gun_fire";
     talon.viewmodel.handsMuzzleJoint = "f_index.03.R";
     talon.viewmodel.handsMuzzleOffset = {0.0f, 0.025f, 0.0f};
+    talon.viewmodel.socket = "right_hand";
+    talon.viewmodel.attachOffset = {0.0f, 0.065f, 0.0f};
+    talon.viewmodel.attachScale = 0.55f;
+    talon.viewmodel.muzzleSocket = "right_index_tip";
 
     // Talon first: it is what the player starts with in hand.
     return {std::move(talon), std::move(arbalest)};
@@ -201,7 +209,17 @@ bool valid(const PlayerWeaponDef& def)
         def.viewmodel.movementBob < 0.0f ||
         def.viewmodel.movementBobSpeed < 0.0f ||
         def.viewmodel.idleSway < 0.0f || def.viewmodel.lookSway < 0.0f ||
-        def.projectile.material.empty() || def.viewmodel.parts.empty() ||
+        def.projectile.material.empty() ||
+        // A weapon must present *something*: a model, or the placeholder
+        // primitives. Neither is an empty hand, which is what shipped before
+        // this and what the requirement is here to prevent recurring.
+        (def.viewmodel.parts.empty() && def.viewmodel.model.empty()) ||
+        (!def.viewmodel.model.empty() && def.viewmodel.modelMaterial.empty()) ||
+        def.viewmodel.socket.empty() ||
+        !finiteVec(def.viewmodel.attachOffset) ||
+        !finiteVec(def.viewmodel.attachRotationDegrees) ||
+        !std::isfinite(def.viewmodel.attachScale) ||
+        def.viewmodel.attachScale <= 0.0f ||
         def.viewmodel.handsIdleAnimation.empty() ||
         def.viewmodel.handsDrawAnimation.empty() ||
         def.viewmodel.handsFireAnimation.empty() ||
@@ -331,10 +349,32 @@ bool parseDefinitions(const toml::table& root,
         def.viewmodel.lookSway =
             number(*viewmodel, "look_sway", def.viewmodel.lookSway);
 
+        // Attachment: which socket on the hand rig holds this weapon, and what
+        // hangs there. See game/src/WeaponViewmodel.h for why `model` empty
+        // falls back to the primitives below rather than rendering nothing.
+        def.viewmodel.socket =
+            (*viewmodel)["socket"].value_or(def.viewmodel.socket);
+        def.viewmodel.model = (*viewmodel)["model"].value_or(std::string{});
+        def.viewmodel.modelMaterial =
+            (*viewmodel)["material"].value_or(def.viewmodel.modelMaterial);
+        def.viewmodel.attachOffset =
+            vector3(*viewmodel, "attach_offset", def.viewmodel.attachOffset);
+        def.viewmodel.attachRotationDegrees =
+            vector3(*viewmodel, "attach_rotation",
+                    def.viewmodel.attachRotationDegrees);
+        def.viewmodel.attachScale =
+            number(*viewmodel, "attach_scale", def.viewmodel.attachScale);
+        def.viewmodel.muzzleSocket =
+            (*viewmodel)["muzzle_socket"].value_or(std::string{});
+
+        // A weapon with a model needs no primitives. One without still does --
+        // valid() enforces that, because the alternative is an empty hand with
+        // nothing in the console saying why.
         const toml::array* parts = (*viewmodel)["part"].as_array();
-        if (!parts)
+        if (!parts && def.viewmodel.model.empty())
             return false;
-        for (const toml::node& partNode : *parts) {
+        static const toml::array kNoParts;
+        for (const toml::node& partNode : parts ? *parts : kNoParts) {
             const toml::table* partTable = partNode.as_table();
             if (!partTable)
                 return false;

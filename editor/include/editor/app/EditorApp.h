@@ -10,7 +10,9 @@
 #include <editor/viewport/EntityGizmos.h>
 #include <editor/assets/GameVocabulary.h>
 #include <editor/assets/MaterialCatalog.h>
+#include <editor/assets/MeshCatalog.h>
 #include <editor/assets/ModelImportPipeline.h>
+#include <editor/ui/EditorUi.h>
 #include "RenderPalette.h"
 #include <editor/viewport/ViewportOverlay.h>
 #include <editor/project/SceneBrowser.h>
@@ -33,6 +35,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -123,7 +126,24 @@ private:
     void drawCatalog();
     void drawIssues();
     void drawMaterialPanel();
+    void drawMeshPanel();
     void drawParticlePanel();
+    // Every mesh file in the project, scanned once on first use. Separate from
+    // the kit catalogue on purpose: the kit is the level's vocabulary, this is
+    // everything that exists.
+    const MeshCatalog& meshCatalog();
+    // Arms the Place tool with a mesh file or a generated primitive, the way
+    // the Placeables tab arms it with a kit piece.
+    void useMeshBrush(const std::string& meshPath);
+    void usePrimitiveBrush(const eng::ecs::PrimitiveMesh& primitive);
+    // Puts a mesh in the shared swatch. Deduplicated like the material and
+    // effect requests, so calling it for a hovered row every frame is free.
+    void requestMeshPreview(const std::string& meshPath,
+                            const std::string& material);
+    // Applies the browser's current subject to the selection, replacing
+    // whichever of prefab/mesh/primitive each entity carried.
+    void applyMeshToSelection(const std::string& meshPath);
+    void applyPrimitiveToSelection(const eng::ecs::PrimitiveMesh& primitive);
     void applyMaterialToSelection(const std::string& material);
     // The shipped .material scripts, classified by what geometry they need.
     // Loaded once, on first use.
@@ -132,7 +152,37 @@ private:
     // What the selected entities' meshes offer a material, taken from the
     // material their kit pieces were authored with.
     MeshKind selectionMeshKind();
-    void setMode(bool material);
+    // Switches what the 3D view shows. Isolation is entered through
+    // enterIsolation instead, because it needs an entity to isolate on.
+    void setMode(ViewportMode mode);
+    // Arming a brush leaves the material stage -- you cannot place onto a
+    // sphere -- but must not leave isolation: choosing something to put inside
+    // an object is exactly what an author does while editing one.
+    void leaveMaterialStage()
+    {
+        if (materialMode())
+            setMode(ViewportMode::Level);
+    }
+    bool materialMode() const
+    {
+        return mState.mode == ViewportMode::Material;
+    }
+
+    // Takes the viewport into `id` and its descendants: the level is hidden,
+    // the grid drops to the entity's own height, and the hierarchy scopes to
+    // its tree. Leaving restores all three. A view of the document, never a
+    // copy -- see docs/superpowers/specs/2026-08-04-entity-isolation-design.md.
+    void enterIsolation(const game::content::AuthorId& id);
+    void leaveIsolation();
+    // The isolated subtree, rebuilt when the document revision moves. Also
+    // leaves the mode when the root has gone (an undo can delete it).
+    void refreshIsolation();
+    // Where a newly placed entity belongs: the isolated root while that mode is
+    // on, nothing otherwise. Isolating an object to add a part to it and having
+    // the part appear beside it in the level is the mode being read-only in
+    // practice.
+    game::content::AuthorId parentForNewEntity() const;
+    void frameIsolated(const glm::vec3& min, const glm::vec3& max);
     // Selection and manipulation, both driven from inside the viewport panel so
     // they share its rect with ImGuizmo.
     void handleViewportPicking(const eng::FrameContext& f);
@@ -215,6 +265,10 @@ private:
     void drawViewportToolbar();
     void drawViewportStats(const eng::FrameContext& f);
     void refreshAudioAssets();
+    // Re-reads the .lua files on disk into mScriptPaths. Cheap, and called from
+    // the Scripts picker, so writing a script in another window and attaching it
+    // does not mean restarting the editor.
+    void rescanScriptPaths();
     void refreshAudioCues();
     void previewAudio(const game::content::AuthorId& entity);
     void stopAudioPreview();
@@ -385,7 +439,8 @@ private:
     // Material staging mode. A separate scene rather than a panel over the
     // level: the point of a reference stage is that nothing else is in it.
     MaterialStage mStage;
-    bool mMaterialMode = false;
+    // The mode itself lives in mState (EditorState::mode) with the camera and
+    // the tool, because it is session state the panels also read.
     bool mStageAutoSpin = true;
     float mStageSpinSpeed = 0.35f;
     std::vector<std::string> mMaterialNames;
@@ -394,8 +449,9 @@ private:
     // Off by default: the catalogue is mostly materials that cannot go on an
     // entity, and offering them is how a compositor pass ends up on a wall.
     bool mShowAllMaterials = false;
-    // 0 placeables, 1 materials, 2 effects. Request is consumed after one tab
-    // frame and exists for screenshot hooks and entering material stage.
+    // 0 placeables, 1 meshes, 2 materials, 3 effects. Request is consumed after
+    // one tab frame and exists for screenshot hooks and entering material
+    // stage.
     int mAssetBrowserModeRequest = -1;
     // A docked panel to bring forward for the first few frames, named by
     // RAVEN_EDITOR_PANEL. Verification only: panels share tabs, and a screenshot
@@ -406,11 +462,45 @@ private:
     // survivable: the inspector falls back to free text and says so.
     std::vector<std::string> mEnemyIds;
     std::vector<std::string> mPickupIds;
+    // Player weapon ids from weapons.toml, for the viewmodel preview picker.
+    std::vector<std::string> mWeaponIds;
+    // The .lua files on disk, as logical paths. Rescanned on demand, because
+    // unlike the TOML vocabularies this one changes while the editor is open --
+    // writing a new script is exactly the moment you want to attach it.
+    std::vector<std::string> mScriptPaths;
+    // Scratch for the inspector's entity-reference picker, refilled per frame
+    // from the open document. A member rather than a local so the vector keeps
+    // its capacity instead of reallocating every frame the panel is open.
+    std::vector<std::string> mSceneEntityIds;
     // The looks palettes.toml defines, and where it is. Resolved once: the
     // combo is drawn every frame the inspector is open with nothing selected.
     std::vector<std::string> mPalettes;
     std::string mPalettesPath;
     char mMaterialFilter[64] = {};
+
+    // The mesh browser. The catalogue is scanned lazily -- two hundred stat()
+    // calls at startup for a panel that may never be opened is two hundred
+    // stat() calls too many.
+    MeshCatalog mMeshCatalog;
+    char mMeshFilter[64] = {};
+    // The row the panel is showing. A mesh path, or empty when a primitive
+    // preset is selected instead; the two are one selection because the panel
+    // shows one subject at a time.
+    std::string mSelectedMesh;
+    int mSelectedPrimitive = -1; // index into ed::primitivePresets(), -1 = none
+    // The parameters the primitive rows are previewed and placed with. Edited
+    // in the panel, so "a two-metre pillar" is authored once and painted, not
+    // painted and then resized forty times.
+    eng::ecs::PrimitiveMesh mPrimitiveDraft;
+    // Meshes loaded for the swatch, kept across frames: re-parsing an OBJ per
+    // hovered row would make scrubbing the list unusable.
+    std::unordered_map<std::string, eng::MeshHandle> mMeshPreviewCache;
+    eng::ecs::PrimitiveMeshCache mPrimitivePreviewMeshes;
+    // Hides the meshes kit.toml already covers. On by default: a kit piece is
+    // nearly always better placed as its prefab, which brings the right
+    // material, socket and grid snapping with it.
+    bool mHideKitMeshes = true;
+    std::string mMeshPreviewName; // what the swatch currently holds
 
     // Particle authoring. The library owns the descs; the panel edits them in
     // place and re-registers, so a change is visible in the viewport on the
@@ -427,7 +517,7 @@ private:
     // Both deduplicate, so calling them every frame for a hovered row is free.
     void requestMaterialPreview(const std::string& material);
     void requestEffectPreview(const std::string& effect);
-    enum class PreviewSubject { None, Material, Effect };
+    enum class PreviewSubject { None, Material, Effect, Mesh };
     PreviewSubject mPreviewSubject = PreviewSubject::None;
     std::string mPreviewName;
 

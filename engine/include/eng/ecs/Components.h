@@ -32,6 +32,7 @@
 #include <eng/ecs/components/Name.h>
 #include <eng/ecs/components/Orbit.h>
 #include <eng/ecs/components/Parent.h>
+#include <eng/ecs/components/Scripts.h>
 #include <eng/ecs/components/Spin.h>
 #include <eng/ecs/components/Transform.h>
 #include <eng/ecs/components/WorldTransform.h>
@@ -51,6 +52,7 @@
 #include <eng/ecs/components/MeshRenderer.h>
 #include <eng/ecs/components/MeshSource.h>
 #include <eng/ecs/components/NodeRef.h>
+#include <eng/ecs/components/PrimitiveMesh.h>
 #include <eng/ecs/components/RenderNode.h>
 #include <eng/ecs/components/ShaderParams.h>
 #include <eng/ecs/components/ShaderParamsApplied.h>

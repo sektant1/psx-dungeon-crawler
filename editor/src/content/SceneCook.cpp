@@ -162,6 +162,29 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             renderer.castShadows = authored.castShadows;
             built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
         }
+        // The two non-kit ways to be a mesh. Both end in the same pair of
+        // runtime components as a prefab does -- a MeshRenderer saying what it
+        // wears, plus whatever says where the geometry comes from -- so nothing
+        // downstream of the cooker has to know which of the three an author
+        // chose. .scn parsing already refused an entity carrying more than one.
+        else if (authored.mesh) {
+            // Same rule as the kit's import scale: a fact about the file
+            // multiplies the authored transform rather than replacing it.
+            transform.scale *= authored.mesh->importScale;
+            built.emplace<eng::ecs::MeshSource>(
+                entity, eng::ecs::MeshSource{authored.mesh->path});
+            eng::ecs::MeshRenderer renderer;
+            renderer.material = authored.material;
+            renderer.castShadows = authored.castShadows;
+            built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
+        }
+        else if (authored.primitive) {
+            built.emplace<eng::ecs::PrimitiveMesh>(entity, *authored.primitive);
+            eng::ecs::MeshRenderer renderer;
+            renderer.material = authored.material;
+            renderer.castShadows = authored.castShadows;
+            built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
+        }
         built.emplace<eng::ecs::Transform>(entity, transform);
 
         if (authored.playerSpawn)
@@ -279,6 +302,45 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             built.emplace<eng::ecs::Spin>(
                 entity, eng::ecs::Spin{authored.spin->axis,
                                        authored.spin->degreesPerSecond});
+        }
+        if (!authored.scripts.empty()) {
+            eng::ecs::Scripts scripts;
+            scripts.items.reserve(authored.scripts.size());
+            for (const ScriptAuthor& src : authored.scripts) {
+                eng::ecs::ScriptRef ref;
+                ref.path = src.path;
+                ref.enabled = src.enabled;
+                ref.props.reserve(src.props.size());
+                for (const ScriptPropAuthor& p : src.props) {
+                    eng::ecs::ScriptProp out;
+                    out.key = p.key;
+                    switch (p.type) {
+                    case ScriptPropAuthor::Type::Bool:
+                        out.type = eng::ecs::ScriptProp::Type::Bool;
+                        out.b = p.boolValue;
+                        break;
+                    case ScriptPropAuthor::Type::Number:
+                        out.type = eng::ecs::ScriptProp::Type::Number;
+                        out.n = p.numberValue;
+                        break;
+                    case ScriptPropAuthor::Type::String:
+                        out.type = eng::ecs::ScriptProp::Type::String;
+                        out.s = p.stringValue;
+                        break;
+                    case ScriptPropAuthor::Type::Vec3:
+                        out.type = eng::ecs::ScriptProp::Type::Vec3;
+                        out.v = p.vecValue;
+                        break;
+                    case ScriptPropAuthor::Type::Entity:
+                        out.type = eng::ecs::ScriptProp::Type::Entity;
+                        out.s = p.stringValue;
+                        break;
+                    }
+                    ref.props.push_back(std::move(out));
+                }
+                scripts.items.push_back(std::move(ref));
+            }
+            built.emplace<eng::ecs::Scripts>(entity, std::move(scripts));
         }
 
         // Compound prefabs own their attached parts. Scenes author only the

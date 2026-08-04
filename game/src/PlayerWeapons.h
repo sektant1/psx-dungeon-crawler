@@ -52,6 +52,27 @@ struct WeaponViewmodelDef {
     glm::vec3 rotationDegrees{0.0f};
     std::vector<WeaponViewmodelPart> parts;
     std::string glowSchool = "arcane";
+
+    // --- attachment: which socket on the hand rig this weapon hangs off, and
+    // what hangs there. See game/src/ViewmodelSocket.h and WeaponViewmodel.h.
+    //
+    // `model` set  -> that mesh is loaded and attached.
+    // `model` empty -> the `parts` primitives above are generated instead.
+    // That is the whole presentation seam: adding a weapon with a real model is
+    // a path in a TOML, and the placeholder stays authorable until one exists.
+    std::string socket = "right_hand";
+    std::string model;
+    std::string modelMaterial = "Game/ViewModelVesper";
+    // Socket space, applied on top of the socket's own offset. This is the pair
+    // of numbers a designer drags with the gizmo to seat a weapon in the hand.
+    glm::vec3 attachOffset{0.0f};
+    glm::vec3 attachRotationDegrees{0.0f};
+    float attachScale = 1.0f;
+    // Where its shots leave from, preferred over hands_muzzle_joint when set:
+    // a socket is named once in viewmodel_hands.toml and reused, a joint name
+    // is a Blender detail every weapon otherwise has to repeat.
+    std::string muzzleSocket;
+
     std::string handsIdleAnimation = "relax";
     std::string handsDrawAnimation = "relax";
     std::string handsFireAnimation = "grab.R";

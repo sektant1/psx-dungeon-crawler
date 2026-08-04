@@ -642,8 +642,12 @@ bool importStaticModel(const std::filesystem::path& path,
         if (normalizedObj) {
             scene = importer.ReadFileFromMemory(objSource.data(),
                                                 objSource.size(), flags, "obj");
-            warn(report,
-                 "normalized nonstandard OBJ RGBA vertices for Assimp");
+            // Deliberately silent. Normalising RGBA vertex colours is a
+            // complete, automatic accommodation of a common exporter quirk:
+            // nothing is lost and there is nothing for a reader to do about it.
+            // It fired once per affected model on every load, and the only
+            // thing it accomplished was burying the ambiguous-alpha warning
+            // directly below -- which IS actionable.
             if (ambiguousObjAlpha)
                 warn(report,
                      "ambiguous OBJ vertex alpha could not be preserved; use glTF");

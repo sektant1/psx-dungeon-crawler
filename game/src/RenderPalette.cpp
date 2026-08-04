@@ -103,11 +103,23 @@ void applyRenderPalette(eng::Renderer& r, const RenderPalette& p,
     };
 
     r.setAmbient(lin3(p.ambientSrgb) * p.ambientScale);
-    r.setOrientation(sunNode,
-                     glm::angleAxis(glm::radians(p.sunYawDeg), glm::vec3(0, 1, 0)) *
-                         glm::angleAxis(glm::radians(p.sunPitchDeg),
-                                        glm::vec3(1, 0, 0)));
-    r.setLightColour(sunLight, lin3(p.sunColourSrgb) * p.sunScale);
+
+    // A palette describes a sun, but not every scene has one: a level whose
+    // authored map carries only point lights reaches here with null handles,
+    // and both of these used to be called anyway -- reporting "invalid node
+    // handle 0 in setOrientation" and "invalid light handle 0" on every load,
+    // and then dropping the palette's sun settings on the floor regardless.
+    //
+    // Guarded rather than fixed by inventing a sun: whether a scene is lit by
+    // one is a content decision, and the renderer conjuring a light nobody
+    // authored would change how every sunless level looks.
+    if (sunNode.valid())
+        r.setOrientation(sunNode,
+                         glm::angleAxis(glm::radians(p.sunYawDeg), glm::vec3(0, 1, 0)) *
+                             glm::angleAxis(glm::radians(p.sunPitchDeg),
+                                            glm::vec3(1, 0, 0)));
+    if (sunLight.valid())
+        r.setLightColour(sunLight, lin3(p.sunColourSrgb) * p.sunScale);
     r.setFog(lin3(p.fogSrgb), p.fogDensity);
     r.setBackground(p.backgroundSrgb); // raw sRGB, matches old applyPalette()
     r.setLightSteps(p.lightSteps);

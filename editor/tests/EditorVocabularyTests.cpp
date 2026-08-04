@@ -149,6 +149,30 @@ damage = 5
                 "garbage entry");
     }
 
+    // --- lua script paths ----------------------------------------------------
+    {
+        const std::filesystem::path scripts = root / "scripts";
+        std::filesystem::create_directories(scripts / "traps", ec);
+        std::ofstream(scripts / "door.lua") << "return {}\n";
+        std::ofstream(scripts / "lever.lua") << "return {}\n";
+        std::ofstream(scripts / "traps" / "spike.lua") << "return {}\n";
+        std::ofstream(scripts / "notes.txt") << "not a script\n";
+
+        const std::vector<std::string> found =
+            luaScriptPaths(scripts.string(), "scripts");
+        require(found.size() == 3, "only .lua files are offered");
+        require(found[0] == "scripts/door.lua" && found[1] == "scripts/lever.lua",
+                "sorted, and named by the logical path a scene stores -- not "
+                "the filesystem path of the machine that authored it");
+        require(has(found, "scripts/traps/spike.lua"),
+                "subdirectories are included: scripts group as a level grows, "
+                "and a picker that hid them would hide half the list");
+
+        require(luaScriptPaths((root / "no_such_dir").string(), "scripts").empty(),
+                "a missing directory leaves the field free text rather than "
+                "refusing to open the editor");
+    }
+
     std::filesystem::remove_all(root, ec);
     std::cout << "EditorVocabularyTests: ok\n";
     return 0;

@@ -66,7 +66,11 @@ struct OutlinerActions {
     // the panel follows the world instead of the author hunting for the row.
     // Empty means "nothing to reveal".
     game::content::AuthorId reveal;
-    std::function<void()> focus; // double-click, and the menu's Focus item
+    std::function<void()> focus; // the F key, and the menu's Focus item
+    // Double-click: take the viewport into this entity and its descendants.
+    // Null falls back to `focus`, which is what the gesture used to do and what
+    // a caller with no isolation mode still wants.
+    std::function<void(const game::content::AuthorId&)> isolate;
     std::function<void()>
         contextMenu; // draws the menu items, popup already open
     // Dragging a row onto another parents it there; an empty `parent` detaches

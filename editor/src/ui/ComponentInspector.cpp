@@ -94,16 +94,38 @@ void drawVec3Property(const char* id, const char* label, const char* units,
     ImGui::PopID();
 }
 
-// std::string field through a fixed buffer, which is what ImGui wants. 96 is
-// wider than any id the scene format holds.
-void stringField(const char* label, std::string& value,
-                 InspectorContext& context)
+// std::string through the fixed buffer ImGui wants. 96 is wider than any id the
+// scene format holds.
+//
+// The one place that marshals a std::string into an InputText. It was three --
+// stringField, this, and stringRow -- each with its own copy of the buffer, the
+// snprintf and the write-back, which is three places to fix when the width or
+// the tracking changes and three chances to miss one.
+void stringInput(const char* id, std::string& value, InspectorContext& context)
 {
     char buffer[96];
     std::snprintf(buffer, sizeof(buffer), "%s", value.c_str());
-    if (ImGui::InputText(label, buffer, sizeof(buffer)))
+    if (ImGui::InputText(id, buffer, sizeof(buffer)))
         value = buffer;
     track(context);
+}
+
+// A labelled field outside a grid: ImGui draws the name to the right itself.
+void stringField(const char* label, std::string& value,
+                 InspectorContext& context)
+{
+    stringInput(label, value, context);
+}
+
+// The same inside a property grid: the name is already in the left column, so
+// the widget takes a "##" label and fills the right one.
+void stringRow(ui::PropertyGrid& grid, const char* label, std::string& value,
+               InspectorContext& context)
+{
+    grid.row(label);
+    char id[64];
+    std::snprintf(id, sizeof(id), "##%s", label);
+    stringInput(id, value, context);
 }
 
 // Hovering a row previews its subject in the shared swatch and shows it in the
@@ -129,35 +151,22 @@ void previewTooltip(InspectorContext& context,
     ImGui::EndTooltip();
 }
 
-void drawMesh(Entity& entity, InspectorContext& context)
+// The material combo, shared by all three geometry drawers.
+//
+// A kit piece has a material to fall back on and the other two do not, which is
+// the only difference between them: what a mesh wears is one question, and it
+// used to be answered only for prefabs -- so a mesh file or a primitive placed
+// in a level had no way to be dressed at all.
+void drawMaterialChoice(Entity& entity, InspectorContext& context,
+                        const char* emptyLabel)
 {
-    const KitPiece* piece =
-        context.catalog ? context.catalog->find(entity.prefab) : nullptr;
-    ImGui::Text("prefab  %s", entity.prefab.c_str());
-    if (!piece) {
-        // Resolver state, visible: a missing piece is an authoring signal, not
-        // something to paper over with a default cube.
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                           "mesh    UNRESOLVED");
-        return;
-    }
-    ImGui::TextDisabled("mesh    %s", piece->meshPath.c_str());
-    ImGui::TextDisabled("socket  %s  span %d", socketName(piece->socket),
-                        piece->span);
-
-    // Material override. Empty means the kit piece's own, which is what nearly
-    // everything should use; the override is for the one-off.
-    const std::string current = entity.material.empty()
-                                    ? piece->material + "  (from kit)"
-                                    : entity.material;
-    if (ImGui::BeginCombo("material", current.c_str())) {
-        if (ImGui::Selectable("(from kit)", entity.material.empty())) {
+    const std::string current =
+        entity.material.empty() ? emptyLabel : entity.material;
+    if (ImGui::BeginCombo("##material", current.c_str())) {
+        if (ImGui::Selectable(emptyLabel, entity.material.empty())) {
             entity.material.clear();
             context.track(true, true);
         }
-        // The classified catalogue when it is available: the combo used to
-        // offer every material the renderer holds, including the compositor
-        // passes and particle materials that cannot draw an entity at all.
         if (context.materials) {
             for (const MaterialInfo& info : *context.materials) {
                 if (!isEntityMaterial(info.klass))
@@ -192,42 +201,130 @@ void drawMesh(Entity& entity, InspectorContext& context)
         }
         ImGui::EndCombo();
     }
-    // What the override is doing to this piece, stated on the panel that set
-    // it. An override that renders wrongly is otherwise invisible until the
-    // level is looked at from the right angle.
-    if (!entity.material.empty() && context.materials) {
-        for (const MaterialInfo& info : *context.materials) {
-            if (info.name != entity.material)
-                continue;
-            const MaterialAdvice advice =
-                materialFits(info.klass, context.meshKind);
-            if (advice.fit != Fit::Good) {
-                ImGui::PushStyleColor(ImGuiCol_Text,
-                                      ImVec4(0.95f, 0.82f, 0.38f, 1.0f));
-                ImGui::TextWrapped("%s", advice.reason.c_str());
-                ImGui::PopStyleColor();
-            } else {
-                ImGui::TextDisabled("%s material", materialClassName(info.klass));
-            }
-            break;
+}
+
+// What the chosen material is doing to this mesh, stated on the panel that set
+// it. An override that renders wrongly is otherwise invisible until the level
+// is looked at from the right angle.
+void drawMaterialAdvice(const Entity& entity, InspectorContext& context)
+{
+    if (entity.material.empty() || !context.materials)
+        return;
+    for (const MaterialInfo& info : *context.materials) {
+        if (info.name != entity.material)
+            continue;
+        const MaterialAdvice advice = materialFits(info.klass, context.meshKind);
+        if (advice.fit != Fit::Good) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(0.95f, 0.82f, 0.38f, 1.0f));
+            ImGui::TextWrapped("%s", advice.reason.c_str());
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::TextDisabled("%s material", materialClassName(info.klass));
         }
+        break;
     }
-    if (ImGui::Checkbox("cast shadows", &entity.castShadows))
+}
+
+// A mesh file named directly. Everything about it is in the entity, which is
+// the point: no kit.toml entry, no socket, no grid -- just geometry.
+void drawMeshAsset(Entity& entity, InspectorContext& context)
+{
+    ui::PropertyGrid grid("##mesh_asset");
+    grid.row("path");
+    // Read-only, and deliberately: a mesh path is chosen from a list of what
+    // exists, and a text field here is how a level acquires a reference to a
+    // file nobody ever had. The Meshes tab is the picker.
+    ImGui::TextUnformatted(entity.mesh->path.c_str());
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s\n\nPick a different one in the Asset Browser's "
+                          "Meshes tab, then press Apply to Selection.",
+                          entity.mesh->path.c_str());
+
+    grid.row("import scale", nullptr, "editor.inspector.import_scale",
+             "Multiplies this entity's transform scale. For a file authored in "
+             "units other than metres.");
+    ImGui::DragFloat("##import_scale", &entity.mesh->importScale, 0.01f, 0.001f,
+                     100.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+    track(context);
+
+    grid.row("material");
+    drawMaterialChoice(entity, context, "(renderer default)");
+
+    grid.row("cast shadows");
+    if (ImGui::Checkbox("##cast_shadows", &entity.castShadows))
         context.track(true, true);
+    drawMaterialAdvice(entity, context);
+}
+
+// The generated mesh.
+void drawPrimitive(Entity& entity, InspectorContext& context)
+{
+    ui::PropertyGrid grid("##primitive");
+    drawPrimitiveFields(*entity.primitive, grid, &context);
+
+    grid.row("material");
+    drawMaterialChoice(entity, context, "(renderer default)");
+
+    grid.row("cast shadows");
+    if (ImGui::Checkbox("##cast_shadows", &entity.castShadows))
+        context.track(true, true);
+    drawMaterialAdvice(entity, context);
+}
+
+// The kit piece. Its mesh, socket and material all come from kit.toml, so most
+// of this is read-only: what an author decides here is the one-off override.
+void drawMesh(Entity& entity, InspectorContext& context)
+{
+    const KitPiece* piece =
+        context.catalog ? context.catalog->find(entity.prefab) : nullptr;
+    ui::PropertyGrid grid("##kit_piece");
+
+    grid.row("prefab");
+    ImGui::TextUnformatted(entity.prefab.c_str());
+    if (!piece) {
+        // Resolver state, visible: a missing piece is an authoring signal, not
+        // something to paper over with a default cube.
+        grid.row("mesh");
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "UNRESOLVED");
+        return;
+    }
+    grid.row("mesh");
+    ImGui::TextDisabled("%s", piece->meshPath.c_str());
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", piece->meshPath.c_str());
+    grid.row("socket");
+    ImGui::TextDisabled("%s  |  span %d", socketName(piece->socket),
+                        piece->span);
+
+    // Material override. Empty means the kit piece's own, which is what nearly
+    // everything should use; the override is for the one-off. The combo is the
+    // shared one -- what a mesh wears is one question, asked identically of a
+    // kit piece, a mesh file and a primitive.
+    grid.row("material");
+    const std::string fromKit = piece->material + "  (from kit)";
+    drawMaterialChoice(entity, context, fromKit.c_str());
+    grid.row("cast shadows");
+    if (ImGui::Checkbox("##kit_shadows", &entity.castShadows))
+        context.track(true, true);
+    drawMaterialAdvice(entity, context);
 }
 
 void drawCell(Entity& entity, InspectorContext& context)
 {
-    ImGui::Text("cell %d,%d  edge %d  span %d", entity.cell->col,
+    ui::PropertyGrid grid("##cell");
+    grid.row("cell");
+    ImGui::Text("%d, %d  |  edge %d  |  span %d", entity.cell->col,
                 entity.cell->row, int(entity.cell->edge), entity.cell->span);
-    bool placementChanged = ImGui::DragInt(
-        "Yaw (quarter turns)", &entity.cell->yawQuarters, 0.1f, 0, 3, "%d",
-        ImGuiSliderFlags_AlwaysClamp);
+    grid.row("yaw", "quarter turns");
+    bool placementChanged =
+        ImGui::DragInt("##yaw", &entity.cell->yawQuarters, 0.1f, 0, 3, "%d",
+                       ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    placementChanged =
-        ImGui::DragFloat("Level", &entity.cell->level, 0.05f, 0.0f, 0.0f,
-                         "%.2f m") ||
-        placementChanged;
+    grid.row("level", "m");
+    placementChanged = ImGui::DragFloat("##level", &entity.cell->level, 0.05f,
+                                        0.0f, 0.0f, "%.2f") ||
+                       placementChanged;
     track(context);
     if (placementChanged && context.grid && context.catalog) {
         if (const KitPiece* piece = context.catalog->find(entity.prefab)) {
@@ -237,7 +334,7 @@ void drawCell(Entity& entity, InspectorContext& context)
             entity.transform.scale = scale;
         }
     }
-    ImGui::TextDisabled("Grid placement drives position and yaw.");
+    grid.full("grid placement drives position and yaw");
 }
 
 void drawCollider(Entity& entity, InspectorContext& context)
@@ -257,13 +354,16 @@ void drawCollider(Entity& entity, InspectorContext& context)
 // the picker and multiplying three numbers by hand, and the hue drifted every
 // time. Hue and energy are separated here and recombined on the way out, which
 // is how every engine that has an HDR light exposes one.
-void drawLightAnimation(LightAuthor& light, InspectorContext& context);
+void drawLightAnimation(LightAuthor& light, InspectorContext& context,
+                        ui::PropertyGrid& grid);
 
 void drawLight(Entity& entity, InspectorContext& context)
 {
     LightAuthor& light = *entity.light;
+    ui::PropertyGrid grid("##light");
+    grid.row("type");
     int type = light.type == LightAuthor::Type::Directional ? 0 : 1;
-    if (ImGui::Combo("type", &type, "directional\0point\0"))
+    if (ImGui::Combo("##type", &type, "directional\0point\0"))
         light.type = type == 0 ? LightAuthor::Type::Directional
                                : LightAuthor::Type::Point;
     track(context);
@@ -295,10 +395,12 @@ void drawLight(Entity& entity, InspectorContext& context)
     }
 
     bool recombine = false;
-    if (ImGui::ColorEdit3("colour", &sHue.x, ImGuiColorEditFlags_Float))
+    grid.row("colour");
+    if (ImGui::ColorEdit3("##colour", &sHue.x, ImGuiColorEditFlags_Float))
         recombine = true;
     track(context);
-    if (ImGui::DragFloat("brightness", &sEnergy, 0.02f, 0.0f, 20.0f, "%.2f",
+    grid.row("brightness");
+    if (ImGui::DragFloat("##brightness", &sEnergy, 0.02f, 0.0f, 20.0f, "%.2f",
                          ImGuiSliderFlags_AlwaysClamp))
         recombine = true;
     track(context);
@@ -307,7 +409,7 @@ void drawLight(Entity& entity, InspectorContext& context)
         light.colour = sHue * sEnergy;
     }
     if (sEnergy > 1.0f)
-        ImGui::TextDisabled("above 1.0 -- feeds the bloom pass");
+        grid.full("above 1.0 -- feeds the bloom pass");
 
     // The presets are the values the game's own lights use. A level author
     // reaching for "a torch" should get the torch this game has, not a guess
@@ -325,7 +427,8 @@ void drawLight(Entity& entity, InspectorContext& context)
         {"fel", {0.22f, 1.05f, 0.10f}, 8.5f},
         {"moon", {0.55f, 0.65f, 1.00f}, 14.0f},
     };
-    if (ImGui::BeginCombo("preset", "pick a look")) {
+    grid.row("preset");
+    if (ImGui::BeginCombo("##preset", "pick a look")) {
         for (const Preset& preset : kPresets) {
             ImGui::PushID(preset.label);
             if (ImGui::Selectable(preset.label)) {
@@ -345,21 +448,25 @@ void drawLight(Entity& entity, InspectorContext& context)
     }
 
     if (light.type == LightAuthor::Type::Point) {
-        ImGui::DragFloat("range", &light.range, 0.25f, 0.001f, 200.0f,
-                         "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+        grid.row("range", "m");
+        ImGui::DragFloat("##range", &light.range, 0.25f, 0.001f, 200.0f, "%.2f",
+                         ImGuiSliderFlags_AlwaysClamp);
         track(context);
         // The kit's cell is 4 m and its rooms are 3 m tall, so a reach stated
         // in cells is the number that answers "does this cross the doorway".
-        ImGui::TextDisabled("%.1f cells across", double(light.range * 2.0f / 4.0f));
+        char reach[64];
+        std::snprintf(reach, sizeof(reach), "%.1f cells across",
+                      double(light.range * 2.0f / 4.0f));
+        grid.full(reach);
     } else {
-        ImGui::TextDisabled("aimed by the entity's rotation, not placed");
+        grid.full("aimed by the entity's rotation, not placed");
     }
-    if (ImGui::Checkbox("light casts shadows", &light.castShadows))
+    grid.row("cast shadows");
+    if (ImGui::Checkbox("##shadows", &light.castShadows))
         context.track(true, true);
     if (light.castShadows)
-        ImGui::TextDisabled("stencil shadows, from opted-in casters only");
-    ImGui::Separator();
-    drawLightAnimation(light, context);
+        grid.full("stencil shadows, from opted-in casters only");
+    drawLightAnimation(light, context, grid);
 }
 
 void drawPlayerSpawn(Entity&, InspectorContext&)
@@ -369,7 +476,10 @@ void drawPlayerSpawn(Entity&, InspectorContext&)
 
 void drawExit(Entity& entity, InspectorContext& context)
 {
-    ImGui::DragFloat("exit yaw", &*entity.exitYawDegrees, 1.0f);
+    ui::PropertyGrid grid("##exit");
+    grid.row("yaw", "deg", "editor.inspector.exit_yaw",
+             "Which way the player is facing when the next level starts.");
+    ImGui::DragFloat("##exit_yaw", &*entity.exitYawDegrees, 1.0f);
     track(context);
 }
 
@@ -377,7 +487,10 @@ void drawExit(Entity& entity, InspectorContext& context)
 // of them is inert -- valid, saved, cooked, and read by nothing.
 void drawMarker(Entity& entity, InspectorContext& context)
 {
-    stringField("marker", *entity.marker, context);
+    {
+        ui::PropertyGrid grid("##marker");
+        stringRow(grid, "name", *entity.marker, context);
+    }
 
     struct Known {
         const char* prefix;
@@ -401,22 +514,45 @@ void drawMarker(Entity& entity, InspectorContext& context)
         ImGui::TextDisabled("  %s", known.prefix);
 }
 
-// A field whose valid values the game defines. Falls back to free text when
-// the list is unavailable -- a missing enemies.toml must not make the field
-// uneditable, only unguided.
-void vocabularyField(const char* label, std::string& value,
-                     const std::vector<std::string>* options,
-                     InspectorContext& context)
+// Everything that differs between one pick-from-a-list field and another.
+// Enemy ids, pickup ids and script paths are the same widget wearing three
+// vocabularies; before this they were two near-identical copies, and the second
+// one drifted the moment it was written (its own placeholder, its own warning,
+// no shared notion of what "unknown" means).
+struct PickerSpec {
+    const std::vector<std::string>* options = nullptr;
+    // Shown in the closed combo when the value is empty. A fresh row is the one
+    // moment the author cannot guess what the widget wants.
+    const char* placeholder = "pick one";
+    // printf format taking the value, shown when it is not in the list.
+    const char* unknownFormat = "'%s' is not one the game defines";
+    const char* emptyNote = "no list loaded -- typed values are not checked";
+    // Called when the combo opens. Lets a list backed by the filesystem pick up
+    // a file written since the editor started.
+    std::function<void()> refresh;
+};
+
+// The widget half of a picker: assumes the caller has positioned the cursor and
+// set the item width (a PropertyGrid row does both). Returns false when the
+// value is not one the list knows, so the caller can place the warning where
+// its own layout wants it.
+bool pickerWidget(const char* id, std::string& value, const PickerSpec& spec,
+                  InspectorContext& context)
 {
-    if (!options || options->empty()) {
-        stringField(label, value, context);
-        ImGui::TextDisabled("no list loaded -- typed ids are not checked");
-        return;
+    // A missing list must leave the field editable, only unguided: a broken
+    // enemies.toml is not a reason the inspector cannot be typed into.
+    if (!spec.options || spec.options->empty()) {
+        stringInput(id, value, context);
+        return true; // nothing to check against, so nothing to call unknown
     }
-    const bool known =
-        std::find(options->begin(), options->end(), value) != options->end();
-    if (ImGui::BeginCombo(label, value.c_str())) {
-        for (const std::string& option : *options) {
+
+    const bool known = std::find(spec.options->begin(), spec.options->end(),
+                                 value) != spec.options->end();
+    const char* preview = value.empty() ? spec.placeholder : value.c_str();
+    if (ImGui::BeginCombo(id, preview)) {
+        if (spec.refresh)
+            spec.refresh();
+        for (const std::string& option : *spec.options) {
             if (ImGui::Selectable(option.c_str(), option == value)) {
                 value = option;
                 context.track(true, true);
@@ -424,11 +560,32 @@ void vocabularyField(const char* label, std::string& value,
         }
         ImGui::EndCombo();
     }
-    if (!known) {
+    return known || value.empty();
+}
+
+// A labelled row whose valid values the game defines.
+void vocabularyField(const char* label, std::string& value,
+                     const std::vector<std::string>* options,
+                     InspectorContext& context)
+{
+    PickerSpec spec;
+    spec.options = options;
+    const bool haveList = options && !options->empty();
+
+    ui::PropertyGrid grid("##vocabulary");
+    grid.row(label);
+    char id[64];
+    std::snprintf(id, sizeof(id), "##%s", label);
+    const bool known = pickerWidget(id, value, spec, context);
+
+    if (!haveList) {
+        grid.full(spec.emptyNote);
+    } else if (!known) {
         // Said here rather than left for the playtest. An id the game does not
         // know spawns nothing, silently, minutes later.
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                           "'%s' is not one the game defines", value.c_str());
+        grid.row("");
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), spec.unknownFormat,
+                           value.c_str());
     }
 }
 
@@ -447,15 +604,18 @@ void drawTrigger(Entity& entity, InspectorContext& context)
     drawVec3Property("half_extents", "Half Extents", "m",
                      entity.trigger->size, glm::vec3(1.0f), 0.05f, context,
                      0.001f, 50.0f);
-    stringField("event", entity.trigger->event, context);
+    ui::PropertyGrid grid("##trigger");
+    stringRow(grid, "event", entity.trigger->event, context);
 }
 
 // Whether the light moves, drawn inside the light's own section: it is a
 // property of this light, not a second thing an author has to remember to add.
-void drawLightAnimation(LightAuthor& light, InspectorContext& context)
+void drawLightAnimation(LightAuthor& light, InspectorContext& context,
+                        ui::PropertyGrid& grid)
 {
+    grid.row("animated");
     bool animated = light.animation.has_value();
-    if (ImGui::Checkbox("animated", &animated)) {
+    if (ImGui::Checkbox("##animated", &animated)) {
         if (animated)
             light.animation = game::content::LightAnimAuthor{};
         else
@@ -466,24 +626,27 @@ void drawLightAnimation(LightAuthor& light, InspectorContext& context)
         return;
 
     game::content::LightAnimAuthor& animation = *light.animation;
+    grid.row("motion");
     int mode = int(animation.mode);
-    if (ImGui::Combo("motion", &mode, "steady\0flicker\0pulse\0"))
+    if (ImGui::Combo("##motion", &mode, "steady\0flicker\0pulse\0"))
         animation.mode = game::content::LightAnimAuthor::Mode(mode);
     track(context);
-    ImGui::DragFloat("rate", &animation.speed, 0.05f, 0.0f, 30.0f, "%.2f /s",
+    grid.row("rate", "/s");
+    ImGui::DragFloat("##rate", &animation.speed, 0.05f, 0.0f, 30.0f, "%.2f",
                      ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    ImGui::DragFloat("depth", &animation.amount, 0.005f, 0.0f, 1.0f, "%.2f",
+    grid.row("depth");
+    ImGui::DragFloat("##depth", &animation.amount, 0.005f, 0.0f, 1.0f, "%.2f",
                      ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    ImGui::DragFloat("phase", &animation.phase, 0.05f, 0.0f, 10.0f, "%.2f",
+    grid.row("phase", nullptr, "editor.inspector.light_phase",
+             "Give each torch a different phase, or a row of them flickers in "
+             "lockstep.");
+    ImGui::DragFloat("##phase", &animation.phase, 0.05f, 0.0f, 10.0f, "%.2f",
                      ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("give each torch a different phase, or a row of them "
-                          "flickers in lockstep");
-    ImGui::TextDisabled("modulation only darkens -- the colour above is the "
-                        "brightest it gets");
+    grid.full("modulation only darkens -- the colour above is the brightest it "
+              "gets");
 }
 
 // The lens, and nothing about where the camera is: position and facing are the
@@ -491,9 +654,13 @@ void drawLightAnimation(LightAuthor& light, InspectorContext& context)
 void drawCamera(Entity& entity, InspectorContext& context)
 {
     CameraAuthor& camera = *entity.camera;
-    ImGui::DragFloat("fov", &camera.fovDegrees, 0.25f, 10.0f, 140.0f,
-                     "%.1f deg", ImGuiSliderFlags_AlwaysClamp);
+    ui::PropertyGrid grid("##camera");
+
+    grid.row("fov", "deg");
+    ImGui::DragFloat("##fov", &camera.fovDegrees, 0.25f, 10.0f, 140.0f, "%.1f",
+                     ImGuiSliderFlags_AlwaysClamp);
     track(context);
+
     // The framings this engine already uses. "60 degrees" means nothing until
     // it is next to the number the game itself is played at.
     struct Preset {
@@ -507,7 +674,8 @@ void drawCamera(Entity& entity, InspectorContext& context)
         {"portrait", 45.0f, "tight on one prop"},
         {"establishing", 90.0f, "the whole room"},
     };
-    if (ImGui::BeginCombo("framing", "pick a framing")) {
+    grid.row("framing");
+    if (ImGui::BeginCombo("##framing", "pick a framing")) {
         for (const Preset& preset : kPresets) {
             if (ImGui::Selectable(preset.label)) {
                 camera.fovDegrees = preset.fov;
@@ -519,53 +687,65 @@ void drawCamera(Entity& entity, InspectorContext& context)
         ImGui::EndCombo();
     }
 
-    ImGui::DragFloat("near", &camera.nearClip, 0.005f, 0.01f, 5.0f, "%.3f",
+    grid.row("near clip", "m");
+    ImGui::DragFloat("##near", &camera.nearClip, 0.005f, 0.01f, 5.0f, "%.3f",
                      ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    ImGui::DragFloat("far", &camera.farClip, 1.0f, 1.0f, 5000.0f, "%.0f",
+    grid.row("far clip", "m");
+    ImGui::DragFloat("##far", &camera.farClip, 1.0f, 1.0f, 5000.0f, "%.0f",
                      ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    if (camera.farClip <= camera.nearClip)
+    if (camera.farClip <= camera.nearClip) {
+        grid.row("");
         ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
                            "far must be beyond near, or nothing draws");
+    }
 
-    if (ImGui::Checkbox("active", &camera.active))
+    grid.row("active", nullptr, "editor.inspector.camera_active",
+             "Unchecked parks this framing: it stays in the scene and the game "
+             "will not look through it.");
+    if (ImGui::Checkbox("##active", &camera.active))
         context.track(true, true);
-    ImGui::SameLine();
-    ImGui::TextDisabled("(uncheck to park this framing)");
-    ImGui::DragInt("priority", &camera.priority, 0.1f, -100, 100, "%d",
+    grid.row("priority", nullptr, "editor.inspector.camera_priority",
+             "The highest active camera in the scene is the one the game looks "
+             "through.");
+    ImGui::DragInt("##priority", &camera.priority, 0.1f, -100, 100, "%d",
                    ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("the highest active camera in the scene is the one "
-                          "the game looks through");
 }
 
 void drawAudio(Entity& entity, InspectorContext& context)
 {
     game::content::AudioEmitterAuthor& audio = *entity.audio;
 
-    stringField("source", audio.source, context);
-    if (context.audioAssets && !context.audioAssets->empty()) {
-        const std::string current = audio.source.empty() ? "pick a clip"
-                                                        : audio.source;
-        if (ImGui::BeginCombo("clip browser", current.c_str())) {
-            for (const std::string& path : *context.audioAssets) {
-                if (ImGui::Selectable(path.c_str(), path == audio.source)) {
-                    audio.source = path;
-                    context.track(true, true);
+    {
+        ui::PropertyGrid grid("##audio_source");
+        stringRow(grid, "source", audio.source, context);
+        if (context.audioAssets && !context.audioAssets->empty()) {
+            const std::string current =
+                audio.source.empty() ? "pick a clip" : audio.source;
+            grid.row("browse");
+            if (ImGui::BeginCombo("##clip_browser", current.c_str())) {
+                for (const std::string& path : *context.audioAssets) {
+                    if (ImGui::Selectable(path.c_str(),
+                                          path == audio.source)) {
+                        audio.source = path;
+                        context.track(true, true);
+                    }
                 }
+                ImGui::EndCombo();
             }
-            ImGui::EndCombo();
+            if (!audio.source.empty() &&
+                std::find(context.audioAssets->begin(),
+                          context.audioAssets->end(),
+                          audio.source) == context.audioAssets->end()) {
+                grid.row("");
+                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                                   "clip is not in mounted audio assets");
+            }
+        } else {
+            grid.full("no runtime audio clips found under assets/audio");
         }
-        if (!audio.source.empty() &&
-            std::find(context.audioAssets->begin(), context.audioAssets->end(),
-                      audio.source) == context.audioAssets->end()) {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                               "clip is not in mounted audio assets");
-        }
-    } else {
-        ImGui::TextDisabled("no runtime audio clips found under assets/audio");
     }
 
     const bool canPreview = !audio.source.empty() && context.requestAudioPreview;
@@ -590,7 +770,9 @@ void drawAudio(Entity& entity, InspectorContext& context)
                 audio.bus < static_cast<int>(eng::AudioBus::Count)
             ? static_cast<eng::AudioBus>(audio.bus)
             : eng::AudioBus::Sfx;
-    if (ImGui::BeginCombo("bus", eng::audioBusName(selectedBus))) {
+    ui::PropertyGrid grid("##audio");
+    grid.row("bus");
+    if (ImGui::BeginCombo("##bus", eng::audioBusName(selectedBus))) {
         for (eng::AudioBus bus : kBuses) {
             if (ImGui::Selectable(eng::audioBusName(bus), bus == selectedBus)) {
                 audio.bus = static_cast<int>(bus);
@@ -600,31 +782,43 @@ void drawAudio(Entity& entity, InspectorContext& context)
         ImGui::EndCombo();
     }
 
-    ImGui::SliderFloat("gain", &audio.gainDb, -80.0f, 12.0f, "%.1f dB");
+    grid.row("gain", "dB");
+    ImGui::SliderFloat("##gain", &audio.gainDb, -80.0f, 12.0f, "%.1f");
     track(context);
-    ImGui::SliderFloat("pitch", &audio.pitch, 0.25f, 4.0f, "%.2fx");
+    grid.row("pitch");
+    ImGui::SliderFloat("##pitch", &audio.pitch, 0.25f, 4.0f, "%.2fx");
     track(context);
 
-    if (ImGui::Checkbox("3D spatial", &audio.spatialized))
+    grid.row("3D spatial");
+    if (ImGui::Checkbox("##spatial", &audio.spatialized))
         context.track(true, true);
     if (audio.spatialized) {
-        drawVec3Property("offset", "Offset", "m", audio.offset,
-                         glm::vec3(0.0f), 0.02f, context);
-        ImGui::DragFloat("full volume to", &audio.minDistance, 0.05f, 0.0f,
-                         1000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+        grid.row("offset", "m");
+        ImGui::DragFloat3("##offset", &audio.offset.x, 0.02f);
         track(context);
-        ImGui::DragFloat("inaudible after", &audio.maxDistance, 0.25f, 0.01f,
-                         10000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+        grid.row("full volume to", "m");
+        ImGui::DragFloat("##min_distance", &audio.minDistance, 0.05f, 0.0f,
+                         1000.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
         track(context);
-        if (audio.maxDistance <= audio.minDistance)
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                               "inaudible distance must exceed full-volume distance");
-        ImGui::SliderFloat("rolloff", &audio.rolloff, 0.0f, 8.0f, "%.2f");
+        grid.row("inaudible after", "m");
+        ImGui::DragFloat("##max_distance", &audio.maxDistance, 0.25f, 0.01f,
+                         10000.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
         track(context);
-        ImGui::SliderFloat("doppler", &audio.dopplerFactor, 0.0f, 4.0f,
+        if (audio.maxDistance <= audio.minDistance) {
+            grid.row("");
+            ImGui::TextColored(
+                ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                "inaudible distance must exceed full-volume distance");
+        }
+        grid.row("rolloff");
+        ImGui::SliderFloat("##rolloff", &audio.rolloff, 0.0f, 8.0f, "%.2f");
+        track(context);
+        grid.row("doppler");
+        ImGui::SliderFloat("##doppler", &audio.dopplerFactor, 0.0f, 4.0f,
                            "%.2f");
         track(context);
-        ImGui::TextDisabled("selected emitter shows its maximum reach in viewport");
+        grid.full("the selected emitter shows its maximum reach in the "
+                  "viewport");
     }
 
     int priorityIndex = 2;
@@ -638,24 +832,29 @@ void drawAudio(Entity& entity, InspectorContext& context)
     for (int index = 0; index < 5; ++index)
         if (audio.priority == kPriorities[index])
             priorityIndex = index;
-    if (ImGui::Combo("priority", &priorityIndex,
+    grid.row("priority");
+    if (ImGui::Combo("##priority", &priorityIndex,
                      "background\0low\0normal\0important\0critical\0")) {
         audio.priority = kPriorities[priorityIndex];
         context.track(true, true);
     }
 
-    if (ImGui::Checkbox("Loop", &audio.loop))
+    grid.row("loop");
+    if (ImGui::Checkbox("##loop", &audio.loop))
         context.track(true, true);
-    if (ImGui::Checkbox("Stream from disk", &audio.streaming))
+    grid.row("stream from disk");
+    if (ImGui::Checkbox("##streaming", &audio.streaming))
         context.track(true, true);
     if (audio.streaming)
-        ImGui::TextDisabled("use for long ambience/music, not repeated short SFX");
-    if (ImGui::Checkbox("Autostart", &audio.playing))
+        grid.full("for long ambience and music, not repeated short SFX");
+    grid.row("autostart");
+    if (ImGui::Checkbox("##autostart", &audio.playing))
         context.track(true, true);
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Starts when the runtime scene materialises. Disable "
                           "when gameplay will control the component.");
-    if (ImGui::Checkbox("May be voice-stolen", &audio.stealable))
+    grid.row("may be voice-stolen");
+    if (ImGui::Checkbox("##stealable", &audio.stealable))
         context.track(true, true);
 }
 
@@ -667,7 +866,9 @@ void drawActor(Entity& entity, InspectorContext& context)
     static const game::ActorKind kKinds[] = {
         game::ActorKind::Player, game::ActorKind::Npc, game::ActorKind::Enemy};
     const game::ActorKind current = *entity.actor;
-    if (ImGui::BeginCombo("kind", game::actorKindName(current))) {
+    ui::PropertyGrid grid("##actor");
+    grid.row("kind");
+    if (ImGui::BeginCombo("##kind", game::actorKindName(current))) {
         for (game::ActorKind kind : kKinds) {
             if (ImGui::Selectable(game::actorKindName(kind), kind == current)) {
                 entity.actor = kind;
@@ -788,21 +989,251 @@ void drawSounds(Entity& entity, InspectorContext& context)
 void drawAudioListener(Entity& entity, InspectorContext& context)
 {
     game::content::AudioListenerAuthor& listener = *entity.audioListener;
-    if (ImGui::Checkbox("active", &listener.active))
+    ui::PropertyGrid grid("##listener");
+    grid.row("active");
+    if (ImGui::Checkbox("##active", &listener.active))
         context.track(true, true);
-    ImGui::DragInt("priority", &listener.priority, 0.1f, -100, 100, "%d",
+    grid.row("priority");
+    ImGui::DragInt("##priority", &listener.priority, 0.1f, -100, 100, "%d",
                    ImGuiSliderFlags_AlwaysClamp);
     track(context);
-    ImGui::TextDisabled("highest active listener wins; position and facing come "
-                        "from this entity's transform");
+    grid.full("highest active listener wins; position and facing come from "
+              "this entity's transform");
+}
+
+// The script a row runs, picked from what is on disk.
+//
+// A combo and not a text field, for the reason vocabularyField already gives
+// about enemy ids: a path spelled from memory is a component that silently does
+// nothing, found minutes later in the game with nothing pointing at the cause.
+// The picker also spares the author the one detail they cannot guess -- that the
+// stored path is *logical* ("scripts/door.lua"), not wherever the file sits on
+// this machine.
+//
+// Falls back to a typed path only when nothing is on disk to offer, which is
+// survivable rather than good: a first script has to be nameable before the
+// list it would come from exists.
+// The scripts vocabulary: the same picker the enemy and pickup fields use,
+// pointed at the .lua files on disk.
+PickerSpec scriptPickerSpec(InspectorContext& context)
+{
+    PickerSpec spec;
+    spec.options = context.scriptPaths;
+    spec.placeholder = "pick a script";
+    spec.unknownFormat = "'%s' is not on disk";
+    spec.emptyNote = "no scripts found under assets/scripts";
+    spec.refresh = context.rescanScripts;
+    return spec;
+}
+
+// A script prop that names another entity. The list is the open scene, so the
+// picker offers exactly what the cooker will accept -- it fails the build on a
+// name that is not in the document.
+PickerSpec entityPickerSpec(InspectorContext& context)
+{
+    PickerSpec spec;
+    spec.options = context.sceneEntityIds;
+    spec.placeholder = "pick an entity";
+    spec.unknownFormat = "'%s' is not in this scene";
+    spec.emptyNote = "no entities to reference";
+    return spec;
+}
+
+// The script path picker. Returns whether the path names something on disk;
+// the caller places the warning, because only it knows where its row ends.
+bool drawScriptPathPicker(std::string& path, InspectorContext& context)
+{
+    return pickerWidget("##path", path, scriptPickerSpec(context), context);
+}
+
+// Scripts get a hand-written block for the same reason they hand-write their
+// serialiser: every other component is a fixed set of typed rows, and this is a
+// reorderable list whose rows each carry a variable table of values.
+void drawScriptProps(std::vector<game::content::ScriptPropAuthor>& props,
+                     InspectorContext& context)
+{
+    using Prop = game::content::ScriptPropAuthor;
+    static const char* kTypeNames[] = {"bool", "number", "string", "vec3",
+                                       "entity"};
+    int removeAt = -1;
+
+    // A table, not SameLine with pixel widths. Props are a LIST of rows, and
+    // the previous hand-measured 110/78/150 layout meant every row's key, type
+    // and value started wherever the last one happened to end -- ragged down
+    // the column, and crushed or overflowing at any dock width but the one it
+    // was measured at. Stretch columns line them up at every width, which is
+    // the same reason PropertyGrid is a table.
+    constexpr ImGuiTableFlags kPropFlags = ImGuiTableFlags_SizingStretchProp |
+                                           ImGuiTableFlags_NoSavedSettings |
+                                           ImGuiTableFlags_PadOuterX;
+    if (ImGui::BeginTable("##script_props", 4, kPropFlags)) {
+        ImGui::TableSetupColumn("key", ImGuiTableColumnFlags_WidthStretch, 0.34f);
+        ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthStretch, 0.22f);
+        ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 0.38f);
+        // The remove button is the one column with a real fixed size: it holds
+        // one glyph and stretching it would leave a button the width of a name.
+        ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight());
+
+        for (int i = 0; i < int(props.size()); ++i) {
+            Prop& p = props[i];
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            char key[96];
+            std::snprintf(key, sizeof(key), "%s", p.key.c_str());
+            if (ImGui::InputText("##key", key, sizeof(key)))
+                p.key = key;
+            track(context);
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            int typeIndex = int(p.type);
+            if (ImGui::Combo("##type", &typeIndex, kTypeNames,
+                             IM_ARRAYSIZE(kTypeNames)))
+                p.type = Prop::Type(typeIndex);
+            track(context);
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            switch (p.type) {
+            case Prop::Type::Bool:
+                // Checkbox ignores item width, so it would sit at the cell's
+                // left edge while every other row's value box fills it. Centred
+                // instead, so the column still reads as one column.
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                                     (ImGui::GetContentRegionAvail().x -
+                                      ImGui::GetFrameHeight()) *
+                                         0.5f);
+                ImGui::Checkbox("##v", &p.boolValue);
+                break;
+            case Prop::Type::Number:
+                ImGui::DragFloat("##v", &p.numberValue, 0.01f);
+                break;
+            case Prop::Type::Vec3:
+                ImGui::DragFloat3("##v", &p.vecValue.x, 0.01f);
+                break;
+            case Prop::Type::String:
+                stringInput("##v", p.stringValue, context);
+                break;
+            case Prop::Type::Entity:
+                // An entity reference is a string with a different meaning: it
+                // names another entity, which the cooker checks and the host
+                // resolves at start(). Picked from the scene rather than typed,
+                // for the same reason the script path is.
+                pickerWidget("##v", p.stringValue, entityPickerSpec(context),
+                             context);
+                break;
+            }
+            track(context);
+
+            ImGui::TableNextColumn();
+            if (ImGui::Button("x", ImVec2(-FLT_MIN, 0.0f)))
+                removeAt = i;
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+
+    // Applied after the loop: erasing inside it would invalidate the reference
+    // the current row is still holding.
+    if (removeAt >= 0) {
+        props.erase(props.begin() + removeAt);
+        track(context);
+    }
+    if (ImGui::SmallButton("add prop")) {
+        props.emplace_back();
+        track(context);
+    }
+}
+
+void drawScripts(Entity& entity, InspectorContext& context)
+{
+    int removeAt = -1;
+    int moveFrom = -1;
+    int moveTo = -1;
+
+    // The row's controls, sized from the font rather than from four measured
+    // constants. `-90.0f` for the path was a guess that left the arrows and the
+    // remove button hanging off the edge in a narrow dock and floating in a
+    // wide one; asking the style how big a button is works at any width and
+    // survives a font change.
+    const float button = ImGui::GetFrameHeight();
+    const float gap = ImGui::GetStyle().ItemSpacing.x;
+    const float removeWidth = ImGui::CalcTextSize("remove").x +
+                              ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float controls = button * 3.0f + removeWidth + gap * 4.0f;
+
+    for (int i = 0; i < int(entity.scripts.size()); ++i) {
+        game::content::ScriptAuthor& script = entity.scripts[i];
+        ImGui::PushID(i);
+        ImGui::Separator();
+
+        // The order is the order callbacks run in, so it is worth being able to
+        // see and change.
+        ImGui::Checkbox("##enabled", &script.enabled);
+        track(context);
+        ImGui::SameLine();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%d.", i + 1);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-controls);
+        const bool pathKnown = drawScriptPathPicker(script.path, context);
+
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##up", ImGuiDir_Up) && i > 0) {
+            moveFrom = i;
+            moveTo = i - 1;
+        }
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##down", ImGuiDir_Down) &&
+            i + 1 < int(entity.scripts.size())) {
+            moveFrom = i;
+            moveTo = i + 1;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("remove"))
+            removeAt = i;
+
+        // Under the row rather than beside it: a warning on the same line would
+        // push the controls around as it appeared and disappeared.
+        if (!pathKnown)
+            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                               "'%s' is not on disk", script.path.c_str());
+
+        drawScriptProps(script.props, context);
+        ImGui::PopID();
+    }
+
+    // Both applied after the loop, for the same reason as the props above.
+    if (removeAt >= 0) {
+        entity.scripts.erase(entity.scripts.begin() + removeAt);
+        track(context);
+    } else if (moveFrom >= 0) {
+        std::swap(entity.scripts[moveFrom], entity.scripts[moveTo]);
+        track(context);
+    }
+
+    ImGui::Separator();
+    if (ImGui::Button("add script")) {
+        entity.scripts.emplace_back();
+        track(context);
+    }
+    ImGui::TextDisabled("props reach the script as self.props");
 }
 
 void drawSpin(Entity& entity, InspectorContext& context)
 {
     SpinAuthor& spin = *entity.spin;
-    ImGui::DragFloat("deg/s", &spin.degreesPerSecond, 1.0f, -720.0f, 720.0f,
-                     "%.0f", ImGuiSliderFlags_AlwaysClamp);
-    track(context);
+    {
+        ui::PropertyGrid grid("##spin");
+        grid.row("rate", "deg/s");
+        ImGui::DragFloat("##rate", &spin.degreesPerSecond, 1.0f, -720.0f,
+                         720.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
+    }
     drawVec3Property("axis", "Axis", "direction", spin.axis,
                      glm::vec3(0.0f, 1.0f, 0.0f), 0.02f, context, -1.0f,
                      1.0f);
@@ -828,20 +1259,28 @@ void drawShader(Entity& entity, InspectorContext& context)
         ImGui::TextDisabled("the material shown here");
         ImGui::EndGroup();
     }
-    ImGui::ColorEdit3("tint", &sh.tint.x);
-    track(context);
-    ImGui::SliderFloat("opacity", &sh.opacity, 0.0f, 1.0f, "%.2f");
-    track(context);
-    ImGui::Separator();
-    ImGui::ColorEdit3("rim", &sh.rimColour.x);
-    track(context);
-    ImGui::SliderFloat("rim strength", &sh.rimStrength, 0.0f, 4.0f, "%.2f");
-    track(context);
-    ImGui::SliderFloat("rim power", &sh.rimPower, 0.25f, 16.0f, "%.2f");
-    track(context);
-    ImGui::Separator();
-    ImGui::SliderFloat("cutout", &sh.alphaScissor, 0.0f, 1.0f, "%.2f");
-    track(context);
+    {
+        ui::PropertyGrid grid("##shader");
+        grid.row("tint");
+        ImGui::ColorEdit3("##tint", &sh.tint.x);
+        track(context);
+        grid.row("opacity");
+        ImGui::SliderFloat("##opacity", &sh.opacity, 0.0f, 1.0f, "%.2f");
+        track(context);
+        grid.row("rim colour");
+        ImGui::ColorEdit3("##rim", &sh.rimColour.x);
+        track(context);
+        grid.row("rim strength");
+        ImGui::SliderFloat("##rim_strength", &sh.rimStrength, 0.0f, 4.0f,
+                           "%.2f");
+        track(context);
+        grid.row("rim power");
+        ImGui::SliderFloat("##rim_power", &sh.rimPower, 0.25f, 16.0f, "%.2f");
+        track(context);
+        grid.row("cutout");
+        ImGui::SliderFloat("##cutout", &sh.alphaScissor, 0.0f, 1.0f, "%.2f");
+        track(context);
+    }
 
     // The cost, stated where the decision is made. This is the one component
     // whose price is a draw call rather than a few bytes, and an author who
@@ -860,9 +1299,11 @@ void drawParticles(Entity& entity, InspectorContext& context)
     // A combo over the library rather than a text field: an effect name that
     // does not resolve plays nothing, silently, and the author has no way to
     // find out which names exist.
+    ui::PropertyGrid effectGrid("##fx_effect");
     if (context.particleEffects && !context.particleEffects->empty()) {
         const std::string current = fx.effect.empty() ? "(none)" : fx.effect;
-        if (ImGui::BeginCombo("effect", current.c_str())) {
+        effectGrid.row("effect");
+        if (ImGui::BeginCombo("##effect", current.c_str())) {
             if (ImGui::Selectable("(none)", fx.effect.empty())) {
                 fx.effect.clear();
                 context.track(true, true);
@@ -878,8 +1319,8 @@ void drawParticles(Entity& entity, InspectorContext& context)
             ImGui::EndCombo();
         }
     } else {
-        stringField("effect", fx.effect, context);
-        ImGui::TextDisabled("no effect library loaded");
+        stringRow(effectGrid, "effect", fx.effect, context);
+        effectGrid.full("no effect library loaded");
     }
     // The assigned effect, running. A particle is motion, so a still frame of
     // the name tells an author nothing about whether it is the one they meant.
@@ -891,25 +1332,37 @@ void drawParticles(Entity& entity, InspectorContext& context)
     }
     drawVec3Property("offset", "Offset", "m", fx.offset, glm::vec3(0.0f),
                      0.02f, context);
-    ImGui::TextDisabled("local to the entity; viewport mark shows the emission origin");
-    ImGui::SliderFloat("Size scale", &fx.scale, 0.01f, 16.0f, "%.2fx");
+    ui::PropertyGrid grid("##fx");
+    grid.full("local to the entity; the viewport mark shows the emission "
+              "origin");
+    grid.row("size scale");
+    ImGui::SliderFloat("##fx_scale", &fx.scale, 0.01f, 16.0f, "%.2fx");
     track(context);
-    ImGui::Checkbox("Autostart", &fx.playing);
+    grid.row("autostart", nullptr, "editor.inspector.fx_autostart",
+             "Starts when the scene materialises. Disable for an effect that "
+             "gameplay will trigger explicitly.");
+    ImGui::Checkbox("##fx_autostart", &fx.playing);
     track(context);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Starts when the scene materialises. Disable for an "
-                          "effect that gameplay will trigger explicitly.");
 }
 
 void drawPortal(Entity& entity, InspectorContext& context)
 {
     PortalAuthor& portal = *entity.portal;
+    // Driven straight off the component's field table, so a uniform the shader
+    // gains appears here with no edit to this function -- the whole point of
+    // the reflection layer. The grid gives it the same two columns everything
+    // else has; a generic drawer that looked different from the hand-written
+    // ones would announce that it is generated, which is nobody's business.
+    ui::PropertyGrid grid("##portal", 0.46f);
     const eng::FieldSpan fields = eng::fieldsOf<PortalAuthor>();
     for (int i = 0; i < fields.count; ++i) {
         const eng::Field& field = fields.data[i];
         void* value = eng::fieldPtr(&portal, field);
+        char id[80];
+        std::snprintf(id, sizeof(id), "##%s", field.name);
         if (field.type == eng::FieldType::Colour) {
-            ImGui::ColorEdit3(field.name, &static_cast<glm::vec3*>(value)->x,
+            grid.row(field.name);
+            ImGui::ColorEdit3(id, &static_cast<glm::vec3*>(value)->x,
                               ImGuiColorEditFlags_Float);
             track(context);
             continue;
@@ -917,11 +1370,12 @@ void drawPortal(Entity& entity, InspectorContext& context)
         if (field.type != eng::FieldType::Float)
             continue;
         float& number = *static_cast<float*>(value);
+        grid.row(field.name);
         if (field.max > field.min)
-            ImGui::DragFloat(field.name, &number, 0.01f, field.min, field.max,
-                             "%.3f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat(id, &number, 0.01f, field.min, field.max, "%.3f",
+                             ImGuiSliderFlags_AlwaysClamp);
         else
-            ImGui::DragFloat(field.name, &number, 0.01f);
+            ImGui::DragFloat(id, &number, 0.01f);
         track(context);
     }
 }
@@ -934,31 +1388,76 @@ void drawPortal(Entity& entity, InspectorContext& context)
 void drawFirstPerson(Entity& entity, InspectorContext& context)
 {
     game::content::FirstPersonAuthor& player = *entity.firstPerson;
-    ImGui::Checkbox("Active", &player.active);
-    track(context);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Off keeps the tuning in the scene without applying "
-                          "it -- the game falls back to its config defaults.");
+    {
+        ui::PropertyGrid grid("##fp_active");
+        grid.row("active", nullptr, "editor.inspector.fp_active",
+                 "Off keeps the tuning in the scene without applying it -- the "
+                 "game falls back to its config defaults.");
+        ImGui::Checkbox("##active", &player.active);
+        track(context);
+    }
 
-    ImGui::SeparatorText("Movement");
-    ImGui::SliderFloat("Move speed", &player.moveSpeed, 0.5f, 20.0f, "%.2f m/s");
-    track(context);
-    ImGui::SliderFloat("Mouse sensitivity", &player.mouseSensitivity, 0.0002f,
-                       0.02f, "%.4f rad/px");
-    track(context);
+    ImGui::SeparatorText("movement");
+    {
+        ui::PropertyGrid grid("##fp_move");
+        grid.row("move speed", "m/s");
+        ImGui::SliderFloat("##move_speed", &player.moveSpeed, 0.5f, 20.0f,
+                           "%.2f");
+        track(context);
+        grid.row("mouse sensitivity", "rad/px");
+        ImGui::SliderFloat("##sensitivity", &player.mouseSensitivity, 0.0002f,
+                           0.02f, "%.4f");
+        track(context);
+    }
 
-    ImGui::SeparatorText("Lens");
-    ImGui::SliderFloat("Base FOV", &player.baseFovDegrees, 40.0f, 130.0f,
-                       "%.1f deg");
+    ImGui::SeparatorText("lens");
+    {
+        ui::PropertyGrid grid("##fp_lens");
+        grid.row("base fov", "deg");
+        ImGui::SliderFloat("##base_fov", &player.baseFovDegrees, 40.0f, 130.0f,
+                           "%.1f");
+        track(context);
+        grid.row("sprint fov kick", "deg");
+        ImGui::SliderFloat("##sprint_fov", &player.sprintFovKick, 0.0f, 25.0f,
+                           "%.1f");
+        track(context);
+        grid.row("head bob", "m");
+        ImGui::SliderFloat("##bob", &player.bobAmount, 0.0f, 0.2f, "%.3f");
+        track(context);
+        grid.row("head bob speed");
+        ImGui::SliderFloat("##bob_speed", &player.bobSpeed, 0.0f, 25.0f);
+        track(context);
+        grid.full("the camera moves subtly; the viewmodel moves loudly");
+    }
+}
+
+// The preview is the answer to "is the weapon actually in the hand": a question
+// nobody could ask in the editor before, because the hands were not drawn here
+// at all. Deliberately two fields -- it selects what to look at, it does not
+// tune anything. The seating numbers belong to the weapon (weapons.toml), and
+// the framing belongs to the rig above.
+void drawViewmodelPreview(Entity& entity, InspectorContext& context)
+{
+    game::content::ViewmodelPreviewAuthor& preview = *entity.viewmodelPreview;
+    ui::PropertyGrid grid("##viewmodel_preview");
+    grid.row("weapon");
+    PickerSpec spec;
+    spec.options = context.weaponIds;
+    spec.placeholder = "slot 0";
+    spec.unknownFormat = "'%s' is not a weapon weapons.toml defines";
+    spec.emptyNote = "weapons.toml not found -- typed ids are not checked";
+    const bool known =
+        pickerWidget("##vm_weapon", preview.weapon, spec, context);
+    grid.row("visible");
+    ImGui::Checkbox("##vm_visible", &preview.visible);
     track(context);
-    ImGui::SliderFloat("Sprint FOV kick", &player.sprintFovKick, 0.0f, 25.0f,
-                       "%.1f deg");
-    track(context);
-    ImGui::SliderFloat("Head bob", &player.bobAmount, 0.0f, 0.2f, "%.3f m");
-    track(context);
-    ImGui::SliderFloat("Head bob speed", &player.bobSpeed, 0.0f, 25.0f);
-    track(context);
-    ImGui::TextDisabled("The camera moves subtly; the viewmodel moves loudly.");
+    if (!known) {
+        grid.row("");
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), spec.unknownFormat,
+                           preview.weapon.c_str());
+    }
+    grid.full("editor only -- the cook drops this, the map never carries it");
+    grid.full("seat the weapon in the hand with the game's F1 Viewmodel panel");
 }
 
 void drawViewmodelRig(Entity& entity, InspectorContext& context)
@@ -969,49 +1468,76 @@ void drawViewmodelRig(Entity& entity, InspectorContext& context)
                      game::content::ViewmodelRigAuthor{}.offset, 0.005f, context);
     drawVec3Property("rotation", "Rotation", "deg", rig.rotation,
                      game::content::ViewmodelRigAuthor{}.rotation, 0.25f, context);
-    ImGui::SliderFloat("Scale", &rig.scale, 0.05f, 3.0f, "%.3f");
-    track(context);
-    ImGui::Checkbox("Motion enabled", &rig.motionEnabled);
-    track(context);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Off freezes bob, sway, recoil and the landing dip "
-                          "at the socket pose.");
+    {
+        ui::PropertyGrid grid("##rig");
+        grid.row("scale");
+        ImGui::SliderFloat("##scale", &rig.scale, 0.05f, 3.0f, "%.3f");
+        track(context);
+        grid.row("motion enabled", nullptr, "editor.inspector.rig_motion",
+                 "Off freezes bob, sway, recoil and the landing dip at the "
+                 "socket pose.");
+        ImGui::Checkbox("##motion", &rig.motionEnabled);
+        track(context);
+    }
 
-    ImGui::SeparatorText("Layer strength");
-    ImGui::TextDisabled("Multipliers over each weapon's own feel numbers.");
-    ImGui::SliderFloat("Bob", &rig.bobScale, 0.0f, 4.0f, "x%.2f");
-    track(context);
-    ImGui::SliderFloat("Sway", &rig.swayScale, 0.0f, 4.0f, "x%.2f");
-    track(context);
-    ImGui::SliderFloat("Recoil", &rig.recoilScale, 0.0f, 4.0f, "x%.2f");
-    track(context);
+    ImGui::SeparatorText("layer strength");
+    {
+        ui::PropertyGrid grid("##rig_layers");
+        grid.full("multipliers over each weapon's own feel numbers");
+        grid.row("bob");
+        ImGui::SliderFloat("##bob_scale", &rig.bobScale, 0.0f, 4.0f, "x%.2f");
+        track(context);
+        grid.row("sway");
+        ImGui::SliderFloat("##sway_scale", &rig.swayScale, 0.0f, 4.0f, "x%.2f");
+        track(context);
+        grid.row("recoil");
+        ImGui::SliderFloat("##recoil_scale", &rig.recoilScale, 0.0f, 4.0f,
+                           "x%.2f");
+        track(context);
+    }
 
-    ImGui::SeparatorText("Bob");
-    ImGui::SliderFloat("Reference speed", &rig.bobReferenceSpeed, 1.0f, 14.0f,
-                       "%.1f m/s");
-    track(context);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Player speed the walk cycle is normalised against, "
-                          "so retuning move speed does not retune the bob.");
-    ImGui::SliderFloat("Roll", &rig.bobRollDegrees, 0.0f, 12.0f, "%.2f deg");
-    track(context);
+    ImGui::SeparatorText("bob");
+    {
+        ui::PropertyGrid grid("##rig_bob");
+        grid.row("reference speed", "m/s", "editor.inspector.rig_reference",
+                 "Player speed the walk cycle is normalised against, so "
+                 "retuning move speed does not retune the bob.");
+        ImGui::SliderFloat("##reference_speed", &rig.bobReferenceSpeed, 1.0f,
+                           14.0f, "%.1f");
+        track(context);
+        grid.row("roll", "deg");
+        ImGui::SliderFloat("##bob_roll", &rig.bobRollDegrees, 0.0f, 12.0f,
+                           "%.2f");
+        track(context);
+    }
 
-    ImGui::SeparatorText("Look sway");
-    ImGui::SliderFloat("Return speed", &rig.swayReturn, 0.0f, 30.0f);
-    track(context);
-    ImGui::SliderFloat("Max offset", &rig.swayMax, 0.0f, 0.25f, "%.3f m");
-    track(context);
-    ImGui::SliderFloat("Sway roll", &rig.swayRollDegrees, 0.0f, 15.0f,
-                       "%.2f deg");
-    track(context);
+    ImGui::SeparatorText("look sway");
+    {
+        ui::PropertyGrid grid("##rig_sway");
+        grid.row("return speed");
+        ImGui::SliderFloat("##sway_return", &rig.swayReturn, 0.0f, 30.0f);
+        track(context);
+        grid.row("max offset", "m");
+        ImGui::SliderFloat("##sway_max", &rig.swayMax, 0.0f, 0.25f, "%.3f");
+        track(context);
+        grid.row("roll", "deg");
+        ImGui::SliderFloat("##sway_roll", &rig.swayRollDegrees, 0.0f, 15.0f,
+                           "%.2f");
+        track(context);
+    }
 
-    ImGui::SeparatorText("Landing");
-    ImGui::SliderFloat("Dip", &rig.landingDip, 0.0f, 0.3f, "%.3f m");
-    track(context);
-    ImGui::SliderFloat("Recovery", &rig.landingRecovery, 0.5f, 30.0f);
-    track(context);
-    ImGui::TextDisabled("Tune live in the game's Viewmodel panel (F1), then "
-                        "pin the result here or in game.toml.");
+    ImGui::SeparatorText("landing");
+    {
+        ui::PropertyGrid grid("##rig_landing");
+        grid.row("dip", "m");
+        ImGui::SliderFloat("##dip", &rig.landingDip, 0.0f, 0.3f, "%.3f");
+        track(context);
+        grid.row("recovery");
+        ImGui::SliderFloat("##recovery", &rig.landingRecovery, 0.5f, 30.0f);
+        track(context);
+        grid.full("tune live in the game's Viewmodel panel (F1), then pin the "
+                  "result here or in game.toml");
+    }
 }
 
 void drawOrbit(Entity& entity, InspectorContext& context)
@@ -1026,27 +1552,35 @@ void drawOrbit(Entity& entity, InspectorContext& context)
     ImGui::SameLine();
     ImGui::TextDisabled("(in this entity's own frame)");
 
-    ImGui::DragFloat("radius", &orbit.radius, 0.05f, 0.0f, 200.0f, "%.2f m",
-                     ImGuiSliderFlags_AlwaysClamp);
-    track(context);
-    ImGui::DragFloat("deg/s", &orbit.degreesPerSecond, 1.0f, -720.0f, 720.0f,
-                     "%.0f", ImGuiSliderFlags_AlwaysClamp);
-    track(context);
-    // A rate an author can judge: "one turn every twelve seconds" is a decision
-    // about pacing, where "30 deg/s" is arithmetic.
-    if (orbit.degreesPerSecond != 0.0f) {
-        ImGui::TextDisabled("one lap every %.1f s",
-                            double(360.0f / std::abs(orbit.degreesPerSecond)));
+    {
+        ui::PropertyGrid grid("##orbit");
+        grid.row("radius", "m");
+        ImGui::DragFloat("##radius", &orbit.radius, 0.05f, 0.0f, 200.0f,
+                         "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
+        grid.row("rate", "deg/s");
+        ImGui::DragFloat("##rate", &orbit.degreesPerSecond, 1.0f, -720.0f,
+                         720.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
+        // A rate an author can judge: "one turn every twelve seconds" is a
+        // decision about pacing, where "30 deg/s" is arithmetic.
+        if (orbit.degreesPerSecond != 0.0f) {
+            char lap[64];
+            std::snprintf(lap, sizeof(lap), "one lap every %.1f s",
+                          double(360.0f / std::abs(orbit.degreesPerSecond)));
+            grid.full(lap);
+        }
+        grid.row("height", "m");
+        ImGui::DragFloat("##height", &orbit.height, 0.05f, -50.0f, 50.0f,
+                         "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
+        grid.row("phase", "deg", "editor.inspector.orbit_phase",
+                 "Where on the ring it starts. Two things on one ring with no "
+                 "phase sit on top of each other.");
+        ImGui::DragFloat("##phase", &orbit.phaseDegrees, 1.0f, 0.0f, 360.0f,
+                         "%.0f", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
     }
-    ImGui::DragFloat("height", &orbit.height, 0.05f, -50.0f, 50.0f, "%.2f m",
-                     ImGuiSliderFlags_AlwaysClamp);
-    track(context);
-    ImGui::DragFloat("phase", &orbit.phaseDegrees, 1.0f, 0.0f, 360.0f, "%.0f",
-                     ImGuiSliderFlags_AlwaysClamp);
-    track(context);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("where on the ring it starts -- two things on one "
-                          "ring with no phase sit on top of each other");
 
     ImGui::Separator();
     drawVec3Property("axis", "Axis", "direction", orbit.axis,
@@ -1057,7 +1591,10 @@ void drawOrbit(Entity& entity, InspectorContext& context)
                            "a zero axis is not a ring");
 
     int facing = int(orbit.facing);
-    if (ImGui::Combo("facing", &facing, "free\0look at centre\0look along travel\0"))
+    ui::PropertyGrid facingGrid("##orbit_facing");
+    facingGrid.row("facing");
+    if (ImGui::Combo("##facing", &facing,
+                     "free\0look at centre\0look along travel\0"))
         orbit.facing = OrbitAuthor::Facing(facing);
     track(context);
     switch (orbit.facing) {
@@ -1082,17 +1619,21 @@ struct Drawer {
 };
 
 constexpr Drawer kDrawers[] = {
-    {"mesh", drawMesh},
+    {"prefab", drawMesh},
+    {"mesh", drawMeshAsset},
+    {"primitive", drawPrimitive},
     {"cell", drawCell},
     {"collider", drawCollider},
     {"light", drawLight},
     {"camera", drawCamera},
     {"first_person", drawFirstPerson},
     {"viewmodel_rig", drawViewmodelRig},
+    {"viewmodel_preview", drawViewmodelPreview},
     {"audio", drawAudio},
     {"audio_listener", drawAudioListener},
     {"actor", drawActor},
     {"sounds", drawSounds},
+    {"scripts", drawScripts},
     {"spin", drawSpin},
     {"orbit", drawOrbit},
     {"shader", drawShader},
@@ -1107,6 +1648,91 @@ constexpr Drawer kDrawers[] = {
 };
 
 } // namespace
+
+bool drawPrimitiveFields(eng::ecs::PrimitiveMesh& mesh, ui::PropertyGrid& grid,
+                         InspectorContext* context)
+{
+    using P = eng::ecs::PrimitiveMesh;
+    bool edited = false;
+    // One place to close over both callers' notions of "something changed": the
+    // inspector needs the drag/commit pair so a scrub is one undo entry, the
+    // browser only needs to know the draft moved.
+    const auto committed = [&] {
+        if (context)
+            track(*context);
+        edited = edited || ImGui::IsItemEdited();
+    };
+
+    grid.row("kind");
+    const char* const* names = eng::ecs::primitiveKindNames();
+    if (ImGui::BeginCombo("##kind", eng::ecs::primitiveKindName(mesh.kind))) {
+        for (int i = 0; i < P::KindCount; ++i) {
+            if (ImGui::Selectable(names[i], mesh.kind == i)) {
+                mesh.kind = i;
+                if (context)
+                    context->track(true, true);
+                edited = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    // Which parameters exist is a property of the kind, and the generators
+    // ignore the rest. Drawing them all would offer a sphere a `size` that does
+    // nothing, which is worse than not offering it.
+    const bool usesSize =
+        mesh.kind == P::Box || mesh.kind == P::BeveledBox || mesh.kind == P::Plane;
+    const bool round = mesh.kind == P::Sphere || mesh.kind == P::Capsule ||
+                       mesh.kind == P::Cylinder || mesh.kind == P::Cone ||
+                       mesh.kind == P::Disc;
+    const bool usesHeight = mesh.kind == P::Capsule ||
+                            mesh.kind == P::Cylinder || mesh.kind == P::Cone;
+
+    if (usesSize) {
+        grid.row("size", "m");
+        ImGui::DragFloat3("##size", &mesh.size.x, 0.02f, 0.001f, 200.0f, "%.3f",
+                          ImGuiSliderFlags_AlwaysClamp);
+        committed();
+    }
+    if (round) {
+        grid.row("radius", "m");
+        ImGui::DragFloat("##radius", &mesh.radius, 0.01f, 0.001f, 100.0f,
+                         "%.3f", ImGuiSliderFlags_AlwaysClamp);
+        committed();
+    }
+    if (usesHeight) {
+        grid.row("height", "m");
+        ImGui::DragFloat("##height", &mesh.height, 0.01f, 0.001f, 100.0f,
+                         "%.3f", ImGuiSliderFlags_AlwaysClamp);
+        committed();
+    }
+    if (mesh.kind == P::BeveledBox) {
+        grid.row("bevel", nullptr, "editor.inspector.bevel",
+                 "How far the edges are cut back, as a share of the box. Above "
+                 "0.5 there is no box left.");
+        ImGui::SliderFloat("##bevel", &mesh.bevel, 0.0f, 0.5f);
+        committed();
+    }
+    if (round) {
+        grid.row("segments", nullptr, "editor.inspector.segments",
+                 "Radial subdivisions. This engine renders low-poly on "
+                 "purpose -- 8 to 16 usually reads better than 64.");
+        ImGui::SliderInt("##segments", &mesh.segments, 3, 128);
+        committed();
+        grid.row("rings");
+        ImGui::SliderInt("##rings", &mesh.rings, 2, 64);
+        committed();
+    }
+    grid.row("inward facing", nullptr, "editor.inspector.inward_facing",
+             "Flips the winding and the normals: a box you stand inside rather "
+             "than one you walk around. How a room is blocked out.");
+    if (ImGui::Checkbox("##inward", &mesh.inwardFacing)) {
+        if (context)
+            context->track(true, true);
+        edited = true;
+    }
+    return edited;
+}
 
 void drawEntityIdentity(Entity& entity, InspectorContext& context)
 {

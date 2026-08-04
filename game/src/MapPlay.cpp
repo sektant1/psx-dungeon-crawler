@@ -8,6 +8,7 @@
 #include "GameCollision.h"
 #include "ParticleCollider.h"
 #include "SceneFactory.h"
+#include "scene/ComponentRegistry.h"
 #include "scene/GameComponents.h"
 #include "scene/MapRuntime.h"
 #include "scene/MapSerializer.h"
@@ -24,6 +25,7 @@
 #include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
 #include <eng/ecs/Systems.h>
+#include <eng/script/ScriptHost.h>
 #include <ecs/RendererSceneBackend.h>
 
 #include <entt/entt.hpp>
@@ -184,6 +186,7 @@ protected:
             return r.prototypeMesh(path);
         });
 
+        rt.resolvePrimitives(r);
         rt.buildAll();
 
         // If the map authored no lights, give the scene a directional key light
@@ -245,6 +248,20 @@ protected:
         // Last, so the clip's first frame is a fully built level: recording
         // pins the frame delta, and a load hitch would otherwise be baked into
         // the timing of the whole clip.
+        // Scripts last, so start() sees the fully built level. The registry is
+        // mapio::coreRegistry() -- the same table the serialiser and the editor
+        // inspector use -- so every component the game registers is reachable
+        // from Lua without a line of binding code.
+        eng::script::ScriptConfig scriptConfig;
+        scriptConfig.hotReload = true; // dev builds; see docs/scripting.md
+        mScripts.emplace(mWorld, scriptConfig, mapio::coreRegistry());
+        mScripts->bindInput(engine.input());
+        mScripts->bindPhysics(physics());
+        eng::script::registerScriptCommands(devConsole(), *mScripts);
+
+        // Last, so the clip's first frame is a fully built level: recording
+        // pins the frame delta, and a load hitch would otherwise be baked into
+        // the timing of the whole clip.
         if (mRecording)
             engine.startRecording(*mRecording);
         return true;
@@ -253,12 +270,34 @@ protected:
     // Exactly one physics.update per frame, after the controller has posted
     // its velocity, then one world sync to push the results at the renderer and
     // the bodies.
+    //
+    // The script callbacks bracket that step, and the order is the contract:
+    //
+    //   fixed_update              immediately before the step it influences
+    //   Physics::update
+    //   on_collision/on_trigger   right after, so a script reacts to a hit in
+    //                             the same frame it happened
+    //   update                    with the rest of presentation
+    //   tickComponentSystems      then sync, so everything a script wrote this
+    //   World::sync               frame is what gets pushed at the renderer
+    //
+    // This mode has no fixed loop -- it steps physics from here -- which is
+    // exactly why fixedTick is defined as "before a physics step" rather than
+    // "on the fixed clock".
     void onPresent(const eng::FrameContext& f) override
     {
         eng::Renderer& r = f.engine.renderer();
         if (!mCinematic)
             mPlayer.update(f.engine.input(), r, f.dt);
+
+        if (mScripts) mScripts->fixedTick(f.dt);
         physics().update(f.dt);
+        if (mScripts) {
+            mScripts->drainContacts();
+            mScripts->pollReload();
+            mScripts->tick(f.dt);
+        }
+
         // Component-driven motion -- spin, light animation, lifetimes -- before
         // the sync that pushes it. This is what makes an authored scene move
         // without a line of C++ per scene.
@@ -271,6 +310,9 @@ protected:
     void onStopGame(eng::Engine& engine) override
     {
         engine.renderer().setParticleCollider(nullptr);
+        // Before the world and physics go: the host holds a contact
+        // subscription on one and an on_destroy hook on the other.
+        mScripts.reset();
         mRuntime.reset();
         // Nodes and bodies die before the renderer and the physics world do.
         mWorld.detachAll();
@@ -283,6 +325,10 @@ private:
     std::optional<eng::ecs::RendererSceneBackend> mBackend;
     eng::ecs::World mWorld;
     std::optional<MapRuntime> mRuntime;
+    // Constructed in onStartGame, once the world and physics exist. optional
+    // rather than a plain member because a ScriptHost binds to a World for its
+    // whole life.
+    std::optional<eng::script::ScriptHost> mScripts;
     eng::ParticleLibrary mParticles;
     std::optional<game::JoltParticleCollider> mParticleCollider;
     bool mParticlesReady = false;

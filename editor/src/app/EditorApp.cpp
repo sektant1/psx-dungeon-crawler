@@ -114,16 +114,9 @@ void toolbarSameLine(float nextWidth)
         ImGui::SameLine();
 }
 
-bool filterMatches(std::string_view text, std::string_view query)
-{
-    if (query.empty())
-        return true;
-    return std::search(text.begin(), text.end(), query.begin(), query.end(),
-                       [](char a, char b) {
-                           return std::tolower(static_cast<unsigned char>(a)) ==
-                                  std::tolower(static_cast<unsigned char>(b));
-                       }) != text.end();
-}
+// filterMatches moved to ed::ui: all four asset tabs, the outliner and the
+// command palette were each carrying their own copy of "does this row match
+// what was typed", and two of them disagreed about case.
 
 // The one place the editor decides how wide its view is. Walk mode deliberately
 // uses the game's field of view rather than the editor's, because framing the
@@ -335,6 +328,14 @@ bool EditorApp::onStart(eng::Engine& engine)
             eng::assets::resolve("config/prototypes.toml");
         !pickups.empty())
         mPickupIds = tomlSectionIds(pickups.string(), "pickup");
+    // The player loadout, for the viewmodel preview's weapon picker. Same
+    // argument as enemies and pickups: an id you can only get right by having
+    // read a TOML is not authorable.
+    if (const std::filesystem::path weapons =
+            eng::assets::resolve("config/weapons.toml");
+        !weapons.empty())
+        mWeaponIds = tomlSectionIds(weapons.string(), "player_weapon");
+    rescanScriptPaths();
     if (const std::filesystem::path palettes =
             eng::assets::resolve("config/palettes.toml");
         !palettes.empty()) {
@@ -360,7 +361,7 @@ bool EditorApp::onStart(eng::Engine& engine)
     // Verification hook: start in the staging scene so a screenshot run can
     // capture it without driving the UI.
     if (std::getenv("RAVEN_EDITOR_MATERIAL"))
-        setMode(true);
+        setMode(ViewportMode::Material);
     // Verification hook: stage one material by name. Without it a screenshot
     // run can only cycle the whole list and hope, which cannot show a specific
     // rig (the quad is only reachable through a handful of names).
@@ -452,6 +453,15 @@ bool EditorApp::onStart(eng::Engine& engine)
             addComponentToSelection(*type);
 
     return true;
+}
+
+void EditorApp::rescanScriptPaths()
+{
+    // Through the mount list like every other content lookup, so the picker
+    // offers exactly what the cooker and the runtime will resolve.
+    const std::filesystem::path dir = eng::assets::resolve("scripts");
+    mScriptPaths = luaScriptPaths(dir.string(), "scripts");
+    eng::log::info("Editor: %zu scripts", mScriptPaths.size());
 }
 
 void EditorApp::refreshAudioAssets()
@@ -698,6 +708,112 @@ void EditorApp::frameCamera(const glm::vec3& min, const glm::vec3& max)
     const float pitch = -1.15f;
     const glm::vec3 back{0.0f, -std::sin(pitch), std::cos(pitch)};
     mState.camera.setYawPitch(0.0f, pitch);
+    mState.camera.setFlyPosition(centre + back * distance);
+    mState.camera.frame(centre, distance);
+}
+
+// --- isolation -------------------------------------------------------------
+
+void EditorApp::enterIsolation(const AuthorId& id)
+{
+    if (!mState.document.find(id))
+        return;
+    if (mState.isolating() && mState.isolation.root == id)
+        return; // already here; a second double-click is not a toggle
+
+    // You cannot edit an object on the material stage, so that mode yields.
+    if (materialMode())
+        setMode(ViewportMode::Level);
+
+    // Saved on the FIRST entry only. Isolating a child from inside an object
+    // -- which is how you work down a chandelier to one candle -- must still
+    // return to the level on the way out, not to the parent's framing.
+    if (!mState.isolating()) {
+        mState.isolation.cameraBefore = mState.camera;
+        mState.isolation.gridLevelBefore = mState.gridState.level;
+        mState.isolation.gridCutBefore = mState.gridState.cutAboveLevel;
+    }
+
+    mState.mode = ViewportMode::Isolate;
+    mState.isolation.root = id;
+    mState.isolation.membersRevision = ~uint64_t(0);
+    refreshIsolation();
+
+    // The grid becomes the ground the object stands on. This is the whole of
+    // the "superflat sandbox": the level is hidden, and the one plane left is
+    // at the object's own height rather than at whatever the level's work
+    // plane happened to be.
+    mState.gridState.level = mState.document.worldTransform(id).position.y;
+    mState.gridState.cutAboveLevel = false;
+
+    mState.select(id);
+    mOutlinerReveal = id;
+
+    glm::vec3 min, max;
+    if (boundsOf({id}, min, max))
+        frameIsolated(min, max);
+}
+
+void EditorApp::leaveIsolation()
+{
+    if (!mState.isolating())
+        return;
+    const AuthorId was = mState.isolation.root;
+    mState.mode = ViewportMode::Level;
+    mState.isolation.root.clear();
+    mState.isolation.members.clear();
+    mState.isolation.membersRevision = ~uint64_t(0);
+    mState.camera = mState.isolation.cameraBefore;
+    mState.gridState.level = mState.isolation.gridLevelBefore;
+    mState.gridState.cutAboveLevel = mState.isolation.gridCutBefore;
+    // Reveal what was being edited, so the level comes back with the object
+    // still under the cursor rather than somewhere in three hundred rows.
+    if (!was.empty() && mState.document.find(was))
+        mOutlinerReveal = was;
+}
+
+void EditorApp::refreshIsolation()
+{
+    if (!mState.isolating())
+        return;
+    // An undo can delete the entity being edited. A mode pinned to an id that
+    // no longer exists is an empty viewport with no way out of it, so leaving
+    // is not optional -- and it has to be checked against the document rather
+    // than trusted from entry.
+    if (!mState.document.find(mState.isolation.root)) {
+        leaveIsolation();
+        return;
+    }
+    if (mState.isolation.membersRevision == mState.document.revision)
+        return;
+    mState.isolation.membersRevision = mState.document.revision;
+    mState.isolation.members.assign(1, mState.isolation.root);
+    for (const AuthorId& id :
+         mState.document.descendantsOf(mState.isolation.root))
+        mState.isolation.members.push_back(id);
+}
+
+AuthorId EditorApp::parentForNewEntity() const
+{
+    return mState.isolating() ? mState.isolation.root : AuthorId{};
+}
+
+// A gentler pitch than frameSelectionOrAll's. That one looks steeply down
+// because a dungeon is a closed box seen from above; an isolated object is a
+// thing on a table, and a three-quarter view is how you judge one.
+void EditorApp::frameIsolated(const glm::vec3& min, const glm::vec3& max)
+{
+    const glm::vec3 centre = (min + max) * 0.5f;
+    const float radius = glm::max(glm::length(max - min) * 0.5f, 0.5f);
+    const float distance =
+        radius / std::tan(glm::radians(EditorCamera::kEditorFovDeg * 0.5f)) *
+        1.9f;
+    const float pitch = -0.42f;
+    const float yaw = 0.6f;
+    const glm::vec3 back{std::sin(yaw) * std::cos(pitch), -std::sin(pitch),
+                         std::cos(yaw) * std::cos(pitch)};
+    mState.camera.leaveWalk();
+    mState.camera.setYawPitch(yaw, pitch);
     mState.camera.setFlyPosition(centre + back * distance);
     mState.camera.frame(centre, distance);
 }
@@ -1694,8 +1810,13 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
     else if (mPalette.open) {
         mPalette.open = false;
     }
-    else if (mMaterialMode) {
-        setMode(false);
+    else if (materialMode()) {
+        setMode(ViewportMode::Level);
+    }
+    else if (mState.isolating()) {
+        // Esc walks out one layer at a time, and isolation is the outermost
+        // thing it can be in once the popups and the brush are dealt with.
+        leaveIsolation();
     }
     else if (!mState.selection.empty()) {
         finishInspectorEdit();
@@ -1795,7 +1916,7 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
         const std::string& name = mMaterialNames[mCycleIndex];
         mSelectedMaterial = name;
         mStage.setThumbnailMaterial(renderer, name);
-        if (mMaterialMode)
+        if (materialMode())
             mStage.setMaterial(renderer, name);
     }
 
@@ -1804,12 +1925,15 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
     if (mThumbAutoSpin && mStage.thumbnailBuilt())
         mStage.spinThumbnail(renderer, mStage.thumbnailSpin() + 0.6f * f.dt);
 
-    if (mMaterialMode) {
+    if (materialMode()) {
         if (mStageAutoSpin)
             mStage.setSpin(renderer, mStage.spin() + mStageSpinSpeed * f.dt);
     }
     else {
         mPreview->sync(mState.document, mState.catalog);
+        // The previewed hands animate on the frame clock; the document has not
+        // changed, so this cannot ride the revision-guarded sync above.
+        mPreview->tickViewmodel(f.dt);
         // The whole scene, every storey, unless the author asks for the cut.
         // The cut is still here because a ceiling becomes a lid over a
         // top-down view, but it is opt-in now: the work plane is a placement
@@ -1820,6 +1944,12 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
                           ? mState.gridState.level + mState.grid.cell * 0.5f
                           : std::numeric_limits<float>::infinity());
         mPreview->setHiddenEntities(renderer, mState.hidden);
+        // After the document is synced, so a member added this frame is in the
+        // set before the visibility pass reads it -- otherwise a part placed
+        // inside an object flickers into view a frame late.
+        refreshIsolation();
+        mPreview->setIsolation(renderer, mState.isolating(),
+                               mState.isolation.members);
     }
     // Walk mode hands the renderer the player's eye and the game's field of
     // view, so the viewport shows exactly the frame the player will get.
@@ -1853,7 +1983,7 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
         }
         mAudio->update(f.dt);
     }
-    if (mMaterialMode)
+    if (materialMode())
         renderer.setDebugLines({}); // the checkerboard is the reference here
     else
         updateGridLines(renderer);
@@ -2080,8 +2210,19 @@ std::vector<PaletteAction> EditorApp::paletteActions()
             if (mEngine)
                 applySceneEnvironment(mEngine->renderer());
         });
-    add(mMaterialMode ? "Leave material stage" : "Material stage", "view", "",
-        true, [this] { setMode(!mMaterialMode); });
+    add(materialMode() ? "Leave material stage" : "Material stage", "view", "",
+        true, [this] {
+            setMode(materialMode() ? ViewportMode::Level
+                                   : ViewportMode::Material);
+        });
+    add(mState.isolating() ? "Leave isolation" : "Isolate selection", "view",
+        "Esc", mState.isolating() || mState.primary() != nullptr, [this] {
+            if (mState.isolating())
+                leaveIsolation();
+            else if (const AuthorId* id = mState.primary())
+                enterIsolation(*id);
+        },
+        "edit one object alone on the grid");
     add("Console", "view", "`", true, [this] { mConsole.toggle(); });
     add("Shortcuts", "view", "F1", true, [this] { mHelpOpen = !mHelpOpen; });
     add("Settings", "view", "", true,
@@ -2180,8 +2321,8 @@ void EditorApp::onGui(const eng::FrameContext& f)
                              ImGui::DockBuilderGetNode(dock)->IsEmpty();
         if (missing || mResetLayoutRequested) {
             buildEditorWorkspace(dock, dockSize.x, dockSize.y, mAppliedUiScale);
-            if (mMaterialMode)
-                mAssetBrowserModeRequest = 1;
+            if (materialMode())
+                mAssetBrowserModeRequest = 2; // Materials
         }
         mLayoutBuilt = true;
         mResetLayoutRequested = false;
@@ -2222,7 +2363,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // GUI widgets mutate authored data after onUpdate() has already mirrored
     // the document. A final revision-aware sync removes the otherwise visible
     // one-frame delay between an inspector/gizmo edit and the 3D viewport.
-    if (!mMaterialMode && mPreview)
+    if (!materialMode() && mPreview)
         mPreview->sync(mState.document, mState.catalog);
 }
 
@@ -2507,7 +2648,7 @@ void EditorApp::drawToolbar()
                             toolbarIconWidth(18.0f, 3));
             ImGui::TextDisabled("|  TRANSFORM");
             ImGui::SameLine();
-            ImGui::BeginDisabled(mMaterialMode || mGizmoDragging);
+            ImGui::BeginDisabled(materialMode() || mGizmoDragging);
             if (iconButton(Icon::Move, "##gizmo_move",
                            "Move  [W]\nTranslate the selection",
                            mState.tool == Tool::Select && mGizmoOperation == 0,
@@ -2551,13 +2692,27 @@ void EditorApp::drawToolbar()
                 ImGui::TextDisabled("(drawn x%d)", mGridMultiple);
             }
             ImGui::SameLine();
+            // The keys are the gesture; the buttons exist so the shortcut is
+            // discoverable. Their labels ARE the keys, which is why they are
+            // bracket glyphs and not arrows -- and why each says so on hover,
+            // because a bare "[" on a toolbar means nothing.
             if (ImGui::SmallButton("["))
                 mState.gridState.coarser();
+            eng::imguihint::hover("editor.grid.coarser",
+                                  "Coarser grid  [ [ ]\nDoubles the step new "
+                                  "pieces snap to.");
             ImGui::SameLine();
             if (ImGui::SmallButton("]"))
                 mState.gridState.finer();
+            eng::imguihint::hover("editor.grid.finer",
+                                  "Finer grid  [ ] ]\nHalves the step new "
+                                  "pieces snap to.");
             ImGui::SameLine();
             ImGui::Checkbox("snap", &mState.gridState.snap);
+            eng::imguihint::hover(
+                "editor.grid.snap",
+                "Snap placement to the grid. Off, pieces land exactly where "
+                "the cursor is.");
             toolbarSameLine(toolbarTextWidth("| level 0.0 m") +
                             toolbarButtonWidth("-") + toolbarButtonWidth("+") +
                             toolbarButtonWidth("cut above"));
@@ -2565,9 +2720,14 @@ void EditorApp::drawToolbar()
             ImGui::SameLine();
             if (ImGui::SmallButton("-"))
                 mState.gridState.level -= mState.grid.cell;
+            eng::imguihint::hover("editor.grid.level_down",
+                                  "Work plane down one storey.");
             ImGui::SameLine();
             if (ImGui::SmallButton("+"))
                 mState.gridState.level += mState.grid.cell;
+            eng::imguihint::hover("editor.grid.level_up",
+                                  "Work plane up one storey. New pieces land "
+                                  "on this height.");
             ImGui::SameLine();
             ImGui::Checkbox("cut above", &mState.gridState.cutAboveLevel);
             eng::imguihint::hover(
@@ -2580,7 +2740,7 @@ void EditorApp::drawToolbar()
                             toolbarButtonWidth("world (multi)"));
             ImGui::TextDisabled("|");
             ImGui::SameLine();
-            if (mMaterialMode) {
+            if (materialMode()) {
                 ImGui::TextDisabled("stage Y rotate");
             }
             else {
@@ -2757,7 +2917,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             ImGui::IsWindowHovered(
                 ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
             ImGui::IsMouseHoveringRect(pos, imageMax, false);
-        if (mMaterialMode || mState.tool != Tool::Place || !mViewportHovered ||
+        if (materialMode() || mState.tool != Tool::Place || !mViewportHovered ||
             mFlying)
             mPreview->hidePlacementGhost();
 
@@ -2774,7 +2934,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
         // scene, this badge answers whether a click will pick, paint or drag.
         if (validViewport) {
             std::string mode;
-            if (mMaterialMode) {
+            if (materialMode()) {
                 mode = "MATERIAL STAGE";
             }
             else if (mState.tool == Tool::Place) {
@@ -2827,7 +2987,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
                                   ImGui::GetColorU32(ImGuiCol_Text),
                                   mode.c_str());
         }
-        if (mMaterialMode) {
+        if (materialMode()) {
             // Only the test shape may be manipulated: a reference stage whose
             // floor and lights can be dragged out of alignment has stopped
             // being a reference.
@@ -2936,7 +3096,7 @@ const std::vector<GizmoMark>& EditorApp::entityGizmoMarks()
 
 void EditorApp::drawEntityGizmos()
 {
-    if (!mShowEntityGizmos || mMaterialMode || mViewportW < 8.0f)
+    if (!mShowEntityGizmos || materialMode() || mViewportW < 8.0f)
         return;
     glm::mat4 view, projection;
     cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
@@ -3386,6 +3546,25 @@ void EditorApp::placeAt(const Placement& placement)
         particles.scale = mParticlePreviewScale;
         entity.particles = std::move(particles);
     }
+    // The two non-kit geometry brushes. They place exactly as a prop does --
+    // free position, no cell -- because neither carries a socket to snap with.
+    else if (mState.brush.kind == Brush::Kind::Mesh) {
+        const std::string stem =
+            std::filesystem::path(mState.brush.meshPath).stem().string();
+        entity.id = mState.document.allocateId(stem.empty() ? "mesh" : stem);
+        entity.name = entity.id;
+        entity.transform = placement.transform;
+        entity.mesh = game::content::MeshAuthor{mState.brush.meshPath, 1.0f};
+        if (const MeshAsset* asset = meshCatalog().find(mState.brush.meshPath))
+            entity.material = asset->material;
+    }
+    else if (mState.brush.kind == Brush::Kind::Primitive) {
+        entity.id = mState.document.allocateId(
+            eng::ecs::primitiveKindName(mState.brush.primitive.kind));
+        entity.name = entity.id;
+        entity.transform = placement.transform;
+        entity.primitive = mState.brush.primitive;
+    }
     else {
         entity.id = mState.document.allocateId(mState.brush.prefab);
         entity.name = entity.id;
@@ -3529,6 +3708,22 @@ void EditorApp::drawPlacementGhost()
         mPreview->showPlacementGhost(*piece, placement.transform,
                                      mState.catalog.scale());
         piece->localBoundsMeters(mState.catalog.scale(), localMin, localMax);
+    }
+    else if (mState.brush.kind == Brush::Kind::Mesh) {
+        mPreview->showMeshPlacementGhost(mState.brush.meshPath,
+                                         placement.transform, 1.0f);
+        if (!mPreview->ghostBounds(localMin, localMax)) {
+            localMin = glm::vec3(-0.5f);
+            localMax = glm::vec3(0.5f);
+        }
+    }
+    else if (mState.brush.kind == Brush::Kind::Primitive) {
+        mPreview->showPrimitivePlacementGhost(mState.brush.primitive,
+                                              placement.transform);
+        if (!mPreview->ghostBounds(localMin, localMax)) {
+            localMin = glm::vec3(-0.5f);
+            localMax = glm::vec3(0.5f);
+        }
     }
     else if (mState.brush.kind == Brush::Kind::Particles) {
         float repeatSeconds = 0.0f;
@@ -3815,12 +4010,16 @@ const OutlinerTree& EditorApp::outlinerTree()
     OutlinerOptions options;
     options.filter = mOutlinerFilter;
     options.showGeometry = mOutlinerShowGeometry;
+    // While isolated the panel is the object's own tree, not the level with one
+    // object visible in it. That is the difference between a mode and a filter.
+    options.root = mState.isolating() ? mState.isolation.root : AuthorId{};
     // Grouping walks and sorts every entity, and this panel is open while the
     // gizmo is dragged -- so it is rebuilt on a document revision or an option
     // change, never per frame.
     if (mOutlinerRevision != mState.document.revision ||
         options.filter != mOutlinerOptions.filter ||
-        options.showGeometry != mOutlinerOptions.showGeometry) {
+        options.showGeometry != mOutlinerOptions.showGeometry ||
+        options.root != mOutlinerOptions.root) {
         mOutlinerRevision = mState.document.revision;
         mOutlinerOptions = options;
         mOutliner = buildOutliner(mState.document, mState.catalog, options);
@@ -4445,6 +4644,7 @@ void EditorApp::drawOutliner()
             }
         };
         actions.focus = [this] { frameSelectionOrAll(); };
+        actions.isolate = [this](const AuthorId& id) { enterIsolation(id); };
         actions.contextMenu = [this] { drawSelectionContextMenu(); };
         actions.reparent = [this](const AuthorId& child,
                                   const AuthorId& parent) {
@@ -4574,6 +4774,13 @@ ComponentDefaults EditorApp::componentDefaults() const
     defaults.prefab = mState.brush.kind == Brush::Kind::Piece
                           ? mState.brush.prefab
                           : std::string();
+    // The Meshes tab's selection, whether or not it armed the brush: picking a
+    // row there and then adding a Mesh component in the inspector is the same
+    // intent as painting one, and requiring the brush would make Add Component
+    // offer "Mesh" only after a click somewhere else.
+    defaults.meshPath = mState.brush.kind == Brush::Kind::Mesh
+                            ? mState.brush.meshPath
+                            : mSelectedMesh;
     return defaults;
 }
 
@@ -4759,12 +4966,13 @@ void EditorApp::drawAssetBrowser()
 {
     const bool requested =
         mFocusPanelFrames > 0 &&
-        (mFocusPanel == "catalog" || mFocusPanel == "material" ||
-         mFocusPanel == "particles");
+        (mFocusPanel == "catalog" || mFocusPanel == "meshes" ||
+         mFocusPanel == "material" || mFocusPanel == "particles");
     if (requested) {
         ImGui::SetNextWindowFocus();
-        mAssetBrowserModeRequest = mFocusPanel == "material"    ? 1
-                                   : mFocusPanel == "particles" ? 2
+        mAssetBrowserModeRequest = mFocusPanel == "meshes"      ? 1
+                                   : mFocusPanel == "material"  ? 2
+                                   : mFocusPanel == "particles" ? 3
                                                                 : 0;
     }
     if (!ImGui::Begin(workspace_window::kAssetBrowser, nullptr, kPanelFlags)) {
@@ -4776,35 +4984,31 @@ void EditorApp::drawAssetBrowser()
         mMaterialNames = mEngine->renderer().materialNames();
         std::sort(mMaterialNames.begin(), mMaterialNames.end());
     }
-    std::size_t pieceCount = 0;
-    for (const std::string& role : mState.catalog.roles())
-        pieceCount += mState.catalog.byRole(role).size();
-    ImGui::TextDisabled("PROJECT ASSETS");
-    if (ImGui::GetContentRegionAvail().x >= 420.0f)
-        ImGui::SameLine();
-    ImGui::TextDisabled("%zu pieces  |  %zu materials  |  %zu effects",
-                        pieceCount, materialCatalog().size(),
-                        mParticles.descs().size());
-
     if (ImGui::BeginTabBar("##asset_modes",
                            ImGuiTabBarFlags_FittingPolicyScroll)) {
-        const ImGuiTabItemFlags placeFlags =
-            mAssetBrowserModeRequest == 0 ? ImGuiTabItemFlags_SetSelected : 0;
-        if (ImGui::BeginTabItem("Placeables", nullptr, placeFlags)) {
+        const auto flagsFor = [this](int mode) -> ImGuiTabItemFlags {
+            return mAssetBrowserModeRequest == mode
+                       ? ImGuiTabItemFlags_SetSelected
+                       : 0;
+        };
+        if (ImGui::BeginTabItem("Placeables", nullptr, flagsFor(0))) {
             drawCatalog();
             ImGui::EndTabItem();
         }
-        const ImGuiTabItemFlags materialFlags =
-            mAssetBrowserModeRequest == 1 ? ImGuiTabItemFlags_SetSelected : 0;
-        if (ImGui::BeginTabItem("Materials", nullptr, materialFlags)) {
+        // Meshes sits between Placeables and Materials because that is the
+        // order the questions come in: what is this level made of, what
+        // geometry can I add, what does it wear, what moves on it.
+        if (ImGui::BeginTabItem("Meshes", nullptr, flagsFor(1))) {
+            drawMeshPanel();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Materials", nullptr, flagsFor(2))) {
             drawMaterialPanel();
             ImGui::EndTabItem();
         }
         const std::string effectsLabel =
             mParticlesDirty ? "Effects *" : "Effects";
-        const ImGuiTabItemFlags effectsFlags =
-            mAssetBrowserModeRequest == 2 ? ImGuiTabItemFlags_SetSelected : 0;
-        if (ImGui::BeginTabItem(effectsLabel.c_str(), nullptr, effectsFlags)) {
+        if (ImGui::BeginTabItem(effectsLabel.c_str(), nullptr, flagsFor(3))) {
             drawParticlePanel();
             ImGui::EndTabItem();
         }
@@ -4814,31 +5018,105 @@ void EditorApp::drawAssetBrowser()
     ImGui::End();
 }
 
+// Placeables: the level's own vocabulary -- the kit pieces and the gameplay
+// entities the Place tool can paint.
+//
+// Same layout as every other asset tab (preview, metadata, actions, toggles,
+// list), which it did not have before: it was a filter box and two collapsing
+// headers, with no way to see what a piece looked like before placing it. The
+// preview is the shared swatch showing the piece's own mesh in the piece's own
+// material, which is what "kit.wall" actually means.
 void EditorApp::drawCatalog()
 {
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##placeable_filter", "Search placeables...",
-                             mCatalogFilter, sizeof(mCatalogFilter));
-    const std::string brushLabel =
-        mState.brush.kind == Brush::Kind::Gameplay
-            ? gameplayName(mState.brush.gameplay)
-        : mState.brush.kind == Brush::Kind::Particles
-            ? (mState.brush.effect.empty() ? "(no particle effect)"
-                                           : mState.brush.effect + " [fx]")
-            : (mState.brush.prefab.empty() ? "(none)" : mState.brush.prefab);
-    ImGui::TextDisabled("brush: %s", brushLabel.c_str());
-    ImGui::SameLine();
-    // Wheel is the gesture; the readout is here because the number is only
-    // legible once something is already selected.
-    ImGui::TextDisabled("| rot %d deg (wheel)", mState.brush.yawQuarters * 90);
-    ImGui::Separator();
+    eng::Renderer& renderer = mEngine->renderer();
+    if (!mStage.thumbnailBuilt())
+        mStage.buildThumbnail(renderer, 256);
+    if (mParticleThumbnailNode.valid())
+        renderer.setNodeVisible(mParticleThumbnailNode, false);
+    mStage.setThumbnailVisible(renderer, true);
 
-    // Gameplay entities are authored here too: they are part of the level's
-    // vocabulary even though they have no mesh, and selecting one arms the
-    // Place tool exactly as selecting a wall does.
-    if (ImGui::CollapsingHeader("gameplay", ImGuiTreeNodeFlags_DefaultOpen)) {
+    const KitPiece* piece = mState.brush.kind == Brush::Kind::Piece
+                                ? mState.catalog.find(mState.brush.prefab)
+                                : nullptr;
+    if (piece)
+        requestMeshPreview(piece->meshPath, piece->material);
+
+    ed::ui::AssetPanelView view;
+    // A gameplay brush has no mesh, so it has no swatch either. The space goes
+    // to the metadata rather than showing the last piece hovered, which would
+    // claim a marker looks like a barrel.
+    view.previewTexture = piece ? renderer.materialThumbnailTextureId() : 0;
+    view.previewTooltip = "The piece the brush is holding, in its own material.";
+    view.onPreviewDrag = [&](float dx) {
+        mThumbAutoSpin = false;
+        mStage.spinThumbnail(renderer, mStage.thumbnailSpin() + dx * 0.01f);
+    };
+
+    view.metadata = [&] {
+        switch (mState.brush.kind) {
+        case Brush::Kind::Gameplay:
+            ImGui::TextUnformatted(gameplayName(mState.brush.gameplay));
+            ImGui::TextDisabled("gameplay entity | no mesh");
+            break;
+        case Brush::Kind::Particles:
+            ImGui::TextUnformatted(mState.brush.effect.empty()
+                                       ? "(no particle effect)"
+                                       : mState.brush.effect.c_str());
+            ImGui::TextDisabled("particle effect");
+            break;
+        case Brush::Kind::Mesh:
+            ImGui::TextUnformatted(mState.brush.meshPath.c_str());
+            ImGui::TextDisabled("mesh file");
+            break;
+        case Brush::Kind::Primitive:
+            ImGui::TextUnformatted(
+                eng::ecs::primitiveKindName(mState.brush.primitive.kind));
+            ImGui::TextDisabled("generated primitive");
+            break;
+        case Brush::Kind::Piece:
+            if (!piece) {
+                ImGui::TextUnformatted("(nothing selected)");
+                ImGui::TextDisabled("pick a piece below to arm the Place tool");
+                break;
+            }
+            ImGui::TextUnformatted(piece->id.c_str());
+            ImGui::TextDisabled("%s | socket %s | span %d", piece->role.c_str(),
+                                socketName(piece->socket), piece->span);
+            ImGui::TextDisabled("%s", piece->material.c_str());
+            break;
+        }
+        // The rotation applies to every brush kind, so it is stated once here
+        // rather than per section. Wheel is the gesture; the number is only
+        // legible once something is armed.
+        ImGui::TextDisabled("rot %d deg (mouse wheel)",
+                            mState.brush.yawQuarters * 90);
+    };
+
+    view.toggles = [&] {
+        ImGui::Checkbox("spin", &mThumbAutoSpin);
+        ImGui::SameLine();
+        ImGui::TextDisabled("| a click arms the brush");
+    };
+
+    view.filter = mCatalogFilter;
+    view.filterCapacity = sizeof(mCatalogFilter);
+    view.filterHint = "Search placeables...";
+
+    std::size_t pieceCount = 0;
+    for (const std::string& role : mState.catalog.roles())
+        pieceCount += mState.catalog.byRole(role).size();
+    view.footer = std::to_string(pieceCount) + " pieces  |  " +
+                  std::to_string(paintableGameplay().size()) + " gameplay";
+
+    view.list = [&] {
+        const std::string filter = mCatalogFilter;
+
+        // Gameplay entities are authored here too: they are part of the level's
+        // vocabulary even though they have no mesh, and selecting one arms the
+        // Place tool exactly as selecting a wall does.
+        ImGui::SeparatorText("gameplay");
         for (const Gameplay kind : paintableGameplay()) {
-            if (!filterMatches(gameplayName(kind), mCatalogFilter))
+            if (!ed::ui::filterMatches(gameplayName(kind), filter))
                 continue;
             const bool active = mState.brush.kind == Brush::Kind::Gameplay &&
                                 mState.brush.gameplay == kind;
@@ -4848,59 +5126,54 @@ void EditorApp::drawCatalog()
                 mState.tool = Tool::Place;
             }
         }
-        // The one exception: a key light is aimed rather than positioned,
-        // so painting a row of them down a corridor is not a thing anyone
-        // means to do. It stays a button.
-        if (filterMatches("directional light", mCatalogFilter)) {
+        // The one exception: a key light is aimed rather than positioned, so
+        // painting a row of them down a corridor is not a thing anyone means to
+        // do. It stays a button.
+        if (ed::ui::filterMatches("directional light", filter)) {
             if (ImGui::Button("directional light (one-shot)",
                               ImVec2(-1.0f, 0.0f)))
                 addGameplayEntity(Gameplay::DirectionalLight);
         }
-    }
 
-    if (ImGui::BeginChild("##pieces")) {
-        const std::string filter = mCatalogFilter;
-        // Grouped by role, which is how kit.toml is authored and how an
-        // author thinks: "I need a wall", not "I need piece 17".
+        // Grouped by role, which is how kit.toml is authored and how an author
+        // thinks: "I need a wall", not "I need piece 17".
         for (const std::string& role : mState.catalog.roles()) {
-            std::vector<const KitPiece*> pieces = mState.catalog.byRole(role);
             std::vector<const KitPiece*> shown;
-            for (const KitPiece* piece : pieces) {
-                if (filterMatches(piece->id, filter) ||
-                    filterMatches(role, filter))
-                    shown.push_back(piece);
+            for (const KitPiece* candidate : mState.catalog.byRole(role)) {
+                if (ed::ui::filterMatches(candidate->id, filter) ||
+                    ed::ui::filterMatches(role, filter))
+                    shown.push_back(candidate);
             }
             if (shown.empty())
                 continue;
-                const std::string roleLabel =
-                    eng::assets::friendlyAssetLabel(role) + "###" + role;
-                if (!ImGui::CollapsingHeader(
-                        roleLabel.c_str(),
-                        filter.empty() ? 0 : ImGuiTreeNodeFlags_DefaultOpen))
-                    continue;
-                for (const KitPiece* piece : shown) {
+            ImGui::SeparatorText(
+                eng::assets::friendlyAssetLabel(role).c_str());
+            for (const KitPiece* candidate : shown) {
                 const bool active = mState.brush.kind == Brush::Kind::Piece &&
-                                    mState.brush.prefab == piece->id;
-                    const std::string label =
-                        eng::assets::friendlyAssetLabel(piece->id) + "###" +
-                        piece->id;
-                    if (ImGui::Selectable(label.c_str(), active)) {
+                                    mState.brush.prefab == candidate->id;
+                const std::string label =
+                    eng::assets::friendlyAssetLabel(candidate->id) + "###" +
+                    candidate->id;
+                if (ImGui::Selectable(label.c_str(), active)) {
                     mState.brush.kind = Brush::Kind::Piece;
-                    mState.brush.prefab = piece->id;
+                    mState.brush.prefab = candidate->id;
                     mState.tool = Tool::Place;
                 }
-                // Per-piece detail is inherently dynamic, so it goes
-                // through the ad-hoc path with the shared styling rather
-                // than through the hint table.
+                // Hovering previews, selecting commits -- the same split the
+                // Meshes and Materials lists use.
+                if (ImGui::IsItemHovered())
+                    requestMeshPreview(candidate->meshPath,
+                                       candidate->material);
                 char detail[512];
                 std::snprintf(detail, sizeof(detail), "socket %s  span %d\n%s",
-                              socketName(piece->socket), piece->span,
-                              piece->meshPath.c_str());
-                eng::imguihint::showText(piece->id.c_str(), detail);
+                              socketName(candidate->socket), candidate->span,
+                              candidate->meshPath.c_str());
+                eng::imguihint::showText(candidate->id.c_str(), detail);
             }
         }
-    }
-    ImGui::EndChild();
+    };
+
+    ed::ui::drawAssetPanel(view);
 }
 
 // The level's own properties: what it is called, what it costs, and the look it
@@ -5004,7 +5277,16 @@ void EditorApp::drawInspector()
     context.grid = &mState.grid;
     context.materialNames = &mMaterialNames;
     context.enemyIds = &mEnemyIds;
+    context.scriptPaths = &mScriptPaths;
+    context.rescanScripts = [this] { rescanScriptPaths(); };
+    // Rebuilt per frame: an entity added this frame is a legitimate target for
+    // a script prop, and a cached list would not offer it.
+    mSceneEntityIds.clear();
+    for (const Entity& e : mState.document.entities)
+        mSceneEntityIds.push_back(e.id);
+    context.sceneEntityIds = &mSceneEntityIds;
     context.pickupIds = &mPickupIds;
+    context.weaponIds = &mWeaponIds;
     context.materials = &materialCatalog();
     context.meshKind = selectionMeshKind();
     // Rebuilt each frame from the live library: the Particles panel can add and
@@ -5319,13 +5601,24 @@ void EditorApp::drawIssues()
 
 // --- material staging mode ---------------------------------------------------
 
-void EditorApp::setMode(bool material)
+void EditorApp::setMode(ViewportMode mode)
 {
-    if (mMaterialMode == material)
+    if (mState.mode == mode)
         return;
-    mMaterialMode = material;
+    // Leaving isolation is not optional when another mode is entered: the two
+    // both decide what the viewport draws, and a level hidden by one and
+    // restored by the other is a viewport nobody can get back.
+    if (mState.mode == ViewportMode::Isolate)
+        leaveIsolation();
+    if (mode == ViewportMode::Isolate) {
+        // Entered through enterIsolation, which has an entity to isolate on.
+        // Reaching here means a caller asked for the mode without one.
+        return;
+    }
+    const bool material = mode == ViewportMode::Material;
+    mState.mode = mode;
     if (material)
-        mAssetBrowserModeRequest = 1;
+        mAssetBrowserModeRequest = 2; // Materials
     eng::Renderer& renderer = mEngine->renderer();
 
     if (material) {
@@ -5388,9 +5681,8 @@ void EditorApp::drawMaterialPanel()
     // The swatch exists in both modes. Picking a material for a wall is the
     // common case, and it should not require leaving the level to see what the
     // material looks like.
-    if (!mStage.thumbnailBuilt()) {
+    if (!mStage.thumbnailBuilt())
         mStage.buildThumbnail(renderer, 256);
-    }
     if (mMaterialNames.empty()) {
         mMaterialNames = renderer.materialNames();
         std::sort(mMaterialNames.begin(), mMaterialNames.end());
@@ -5428,129 +5720,117 @@ void EditorApp::drawMaterialPanel()
         }
     }
 
-    // --- preview -----------------------------------------------------------
-    const uint64_t thumbnail = renderer.materialThumbnailTextureId();
-    const float available = ImGui::GetContentRegionAvail().x;
-    const float thumbSize = std::clamp(available * 0.38f, 96.0f, 128.0f);
-    const bool previewBesideDetails = available >= 300.0f;
-    if (thumbnail != 0) {
-        ImGui::Image(static_cast<ImTextureID>(thumbnail),
-                     ImVec2(thumbSize, thumbSize));
-        // Drag on the swatch to turn the sphere: the cheapest way to check how
-        // a material behaves at a different angle without changing anything.
-        if (ImGui::IsItemActive() &&
-            ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-            mThumbAutoSpin = false;
-            mStage.spinThumbnail(renderer,
-                                 mStage.thumbnailSpin() +
-                                     ImGui::GetIO().MouseDelta.x * 0.01f);
-        }
-        if (previewBesideDetails)
-            ImGui::SameLine();
-    }
-    else {
-        ImGui::Dummy(ImVec2(thumbSize, thumbSize));
-        ImGui::SetItemTooltip("material preview target is unavailable");
-        if (previewBesideDetails)
-            ImGui::SameLine();
-    }
-    ImGui::BeginGroup();
     const std::string& previewMaterial = mStage.thumbnailMaterial().empty()
                                              ? mSelectedMaterial
                                              : mStage.thumbnailMaterial();
-    ImGui::TextUnformatted(previewMaterial.empty() ? "(no material)"
-                                                   : previewMaterial.c_str());
-    ImGui::TextDisabled("preview: %s",
-                        mStage.thumbnailPreviewMode() == StagePreview::Quad
-                            ? "animated quad"
-                            : "lit sphere");
-    if (const MaterialInfo* info = materialInfo(previewMaterial)) {
-        ImGui::TextDisabled("%s%s", materialClassName(info->klass),
-                            info->twoSided ? " | two-sided" : "");
-        if (!info->texture.empty())
-            ImGui::TextDisabled("texture: %s", info->texture.c_str());
-    }
-    ImGui::TextDisabled("%zu materials", mMaterialNames.size());
-    ImGui::Checkbox("spin", &mThumbAutoSpin);
-    // Applying to the selection is the reason the panel exists in scene mode.
-    const AuthorId* primary = mState.primary();
-    bool canApply = primary != nullptr && !mSelectedMaterial.empty();
-    std::string cannotApply;
-    if (const MaterialInfo* info = materialInfo(mSelectedMaterial)) {
-        const MaterialAdvice advice =
-            materialFits(info->klass, selectionMeshKind());
-        if (advice.fit == Fit::Broken) {
-            canApply = false;
-            cannotApply = advice.reason;
-        }
-    }
-    ImGui::BeginDisabled(!canApply);
-    if (ImGui::Button("Apply to Selection"))
-        applyMaterialToSelection(mSelectedMaterial);
-    ImGui::EndDisabled();
-    if (!canApply && !cannotApply.empty() &&
-        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Cannot apply: %s", cannotApply.c_str());
-    ImGui::EndGroup();
-
-    ImGui::Separator();
-    bool material = mMaterialMode;
-    if (ImGui::Checkbox("Material Stage", &material))
-        setMode(material);
-    ImGui::SameLine();
-    eng::imguihint::marker(
-        "editor.staging_mode",
-        "Shows one material on a sphere over a reference floor, lit by the "
-        "game's own shaders -- not a PBR preview, because the game does not "
-        "render PBR. What you see here is what the dungeon will show.");
-
-    if (mMaterialMode) {
-        ImGui::SetNextItemWidth(110.0f);
-        ImGui::SliderFloat("turntable", &mStageSpinSpeed, -2.0f, 2.0f);
-        ImGui::SameLine();
-        ImGui::Checkbox("##autospin", &mStageAutoSpin);
-        if (ImGui::RadioButton("grey", mFloorVariant == 0)) {
-            mFloorVariant = 0;
-            mStage.setFloorMaterial(renderer, "Editor/Checkerboard");
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("dark", mFloorVariant == 1)) {
-            mFloorVariant = 1;
-            mStage.setFloorMaterial(renderer, "Editor/CheckerboardDark");
-        }
-        ImGui::SameLine();
-        if (ImGui::SmallButton("re-frame")) {
-            mState.camera.setFlyPosition(mStage.cameraPosition());
-            mState.camera.setYawPitch(mStage.cameraYaw(), mStage.cameraPitch());
-        }
-    }
-
-    // --- the list ----------------------------------------------------------
-    ImGui::Separator();
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##materialfilter", "Search materials...",
-                             mMaterialFilter, sizeof(mMaterialFilter));
-    // Most of the shipped catalogue cannot go on an entity at all: compositor
-    // passes, particle materials, sprite and decal materials. Listing them
-    // beside the ones an author is choosing between is how a bloom pass ends
-    // up on a wall.
-    ImGui::Checkbox("show non-surface materials", &mShowAllMaterials);
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip(
-            "particle, sprite and compositor materials -- they "
-            "need geometry the engine generates, not an entity's");
-
     // What the selection would take, so the list can say what will happen
     // before the click rather than after the cook.
     const MeshKind targetMesh = selectionMeshKind();
+
+    ed::ui::AssetPanelView view;
+    view.previewTexture = renderer.materialThumbnailTextureId();
+    view.previewTooltip = "Drag to turn the sphere. Hovering a row previews it.";
+    view.onPreviewDrag = [&](float dx) {
+        mThumbAutoSpin = false;
+        mStage.spinThumbnail(renderer, mStage.thumbnailSpin() + dx * 0.01f);
+    };
+
+    view.metadata = [&] {
+        ImGui::TextUnformatted(previewMaterial.empty() ? "(no material)"
+                                                       : previewMaterial.c_str());
+        ImGui::TextDisabled("preview: %s",
+                            mStage.thumbnailPreviewMode() == StagePreview::Quad
+                                ? "animated quad"
+                                : "lit sphere");
+        if (const MaterialInfo* info = materialInfo(previewMaterial)) {
+            ImGui::TextDisabled("%s%s", materialClassName(info->klass),
+                                info->twoSided ? " | two-sided" : "");
+            if (!info->texture.empty())
+                ImGui::TextDisabled("texture: %s", info->texture.c_str());
+        }
+    };
+
+    view.actions = [&] {
+        // Applying to the selection is the reason the panel exists in scene
+        // mode.
+        const AuthorId* primary = mState.primary();
+        bool canApply = primary != nullptr && !mSelectedMaterial.empty();
+        std::string cannotApply;
+        if (const MaterialInfo* info = materialInfo(mSelectedMaterial)) {
+            const MaterialAdvice advice = materialFits(info->klass, targetMesh);
+            if (advice.fit == Fit::Broken) {
+                canApply = false;
+                cannotApply = advice.reason;
+            }
+        }
+        ImGui::BeginDisabled(!canApply);
+        if (ImGui::Button("Apply to Selection"))
+            applyMaterialToSelection(mSelectedMaterial);
+        ImGui::EndDisabled();
+        if (!canApply && !cannotApply.empty() &&
+            ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Cannot apply: %s", cannotApply.c_str());
+    };
+
+    view.toggles = [&] {
+        ImGui::Checkbox("spin", &mThumbAutoSpin);
+        ImGui::SameLine();
+        bool material = materialMode();
+        if (ImGui::Checkbox("Material Stage", &material))
+            setMode(material ? ViewportMode::Material : ViewportMode::Level);
+        ImGui::SameLine();
+        eng::imguihint::marker(
+            "editor.staging_mode",
+            "Shows one material on a sphere over a reference floor, lit by the "
+            "game's own shaders -- not a PBR preview, because the game does not "
+            "render PBR. What you see here is what the dungeon will show.");
+
+        // Most of the shipped catalogue cannot go on an entity at all:
+        // compositor passes, particle materials, sprite and decal materials.
+        // Listing them beside the ones an author is choosing between is how a
+        // bloom pass ends up on a wall.
+        ImGui::Checkbox("show non-surface materials", &mShowAllMaterials);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "particle, sprite and compositor materials -- they "
+                "need geometry the engine generates, not an entity's");
+
+        if (materialMode()) {
+            ImGui::SetNextItemWidth(110.0f);
+            ImGui::SliderFloat("turntable", &mStageSpinSpeed, -2.0f, 2.0f);
+            ImGui::SameLine();
+            ImGui::Checkbox("##autospin", &mStageAutoSpin);
+            if (ImGui::RadioButton("grey", mFloorVariant == 0)) {
+                mFloorVariant = 0;
+                mStage.setFloorMaterial(renderer, "Editor/Checkerboard");
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("dark", mFloorVariant == 1)) {
+                mFloorVariant = 1;
+                mStage.setFloorMaterial(renderer, "Editor/CheckerboardDark");
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("re-frame")) {
+                mState.camera.setFlyPosition(mStage.cameraPosition());
+                mState.camera.setYawPitch(mStage.cameraYaw(),
+                                          mStage.cameraPitch());
+            }
+        }
+    };
+
+    view.filter = mMaterialFilter;
+    view.filterCapacity = sizeof(mMaterialFilter);
+    view.filterHint = "Search materials...";
+    view.footer = std::to_string(mMaterialNames.size()) + " materials";
+
     bool hoveredMaterial = false;
-    if (ImGui::BeginChild("##materials")) {
+    view.list = [&] {
         const std::string filter = mMaterialFilter;
         MaterialClass section = MaterialClass::Unknown;
         bool first = true;
         for (const MaterialInfo& info : materialCatalog()) {
             const std::string& name = info.name;
-            if (!filterMatches(name, filter))
+            if (!ed::ui::filterMatches(name, filter))
                 continue;
             if (!mShowAllMaterials && !isEntityMaterial(info.klass))
                 continue;
@@ -5573,15 +5853,15 @@ void EditorApp::drawMaterialPanel()
             }
             const std::string label =
                 eng::assets::friendlyAssetLabel(name) + "###" + name;
-            const bool picked = ImGui::Selectable(
-                label.c_str(), name == mSelectedMaterial);
+            const bool picked =
+                ImGui::Selectable(label.c_str(), name == mSelectedMaterial);
             if (warn)
                 ImGui::PopStyleColor();
 
             if (picked) {
                 mSelectedMaterial = name;
                 mStage.setThumbnailMaterial(renderer, name);
-                if (mMaterialMode)
+                if (materialMode())
                     mStage.setMaterial(renderer, name);
             }
             // Hovering previews. Selecting commits. That split is what makes
@@ -5613,8 +5893,10 @@ void EditorApp::drawMaterialPanel()
                 applyMaterialToSelection(name);
             }
         }
-    }
-    ImGui::EndChild();
+    };
+
+    ed::ui::drawAssetPanel(view);
+
     // Hover is a temporary comparison, not a selection. Leaving the list must
     // restore the named swatch; otherwise its image and title disagree until
     // another row is clicked.
@@ -5689,14 +5971,32 @@ MeshKind EditorApp::selectionMeshKind()
     bool any = false;
     for (const AuthorId& id : mState.selection) {
         const Entity* entity = mState.document.find(id);
-        if (!entity || entity->prefab.empty())
+        if (!entity)
             continue;
-        const KitPiece* piece = mState.catalog.find(entity->prefab);
-        if (!piece)
+        // A generated primitive states its own UVs: the generators lay 0..1
+        // over each face, which is exactly what Generated means. No kit piece
+        // to ask, and no guessing -- this is the one case the answer is certain.
+        MeshKind one = MeshKind::Unknown;
+        if (entity->primitive) {
+            one = MeshKind::Generated;
+        }
+        else if (entity->mesh) {
+            // A mesh file authored outside the kit has ordinary wrapping UVs
+            // until something says otherwise. Tiling is the honest default:
+            // it is what an imported model has, and the advice it produces
+            // ("this atlas material will smear") is the one worth giving.
+            one = MeshKind::Tiling;
+        }
+        else if (!entity->prefab.empty()) {
+            const KitPiece* piece = mState.catalog.find(entity->prefab);
+            if (!piece)
+                continue;
+            const MaterialInfo* info = materialInfo(piece->material);
+            one = info ? meshKindForMaterial(info->klass) : MeshKind::Unknown;
+        }
+        else {
             continue;
-        const MaterialInfo* info = materialInfo(piece->material);
-        const MeshKind one =
-            info ? meshKindForMaterial(info->klass) : MeshKind::Unknown;
+        }
         if (!any) {
             kind = one;
             any = true;
@@ -5706,6 +6006,377 @@ MeshKind EditorApp::selectionMeshKind()
         }
     }
     return kind;
+}
+
+// Every mesh file in the project, scanned on first use and then kept.
+//
+// Two hundred files, one stat() each: fast enough to do lazily and far too slow
+// to do at startup for a panel that may never be opened. Cross-referenced with
+// the kit so a row can say "this is already kit.wall" -- the same crossing the
+// material catalogue does against the renderer, and for the same reason: a list
+// that offers the worse of two routes without saying so is a trap.
+const MeshCatalog& EditorApp::meshCatalog()
+{
+    if (!mMeshCatalog.loaded()) {
+        std::vector<std::string> extensions;
+        for (const std::string& ext : eng::Renderer::supportedModelExtensions())
+            extensions.push_back(ext.front() == '.' ? ext : "." + ext);
+        mMeshCatalog.load(eng::assets::resolve("meshes").string(), extensions);
+
+        std::vector<std::pair<std::string, std::string>> prefabs;
+        std::vector<std::pair<std::string, std::string>> materials;
+        for (const KitPiece& piece : mState.catalog.all()) {
+            prefabs.emplace_back(piece.meshPath, piece.id);
+            materials.emplace_back(piece.meshPath, piece.material);
+        }
+        mMeshCatalog.annotate(prefabs, materials);
+        eng::log::info("Editor: %zu meshes catalogued",
+                       mMeshCatalog.all().size());
+    }
+    return mMeshCatalog;
+}
+
+void EditorApp::requestMeshPreview(const std::string& meshPath,
+                                   const std::string& material)
+{
+    if (!mEngine)
+        return;
+    eng::Renderer& renderer = mEngine->renderer();
+    if (!mStage.thumbnailBuilt())
+        mStage.buildThumbnail(renderer, 256);
+
+    const std::string subject = meshPath + "|" + material;
+    if (mPreviewSubject == PreviewSubject::Mesh && mMeshPreviewName == subject)
+        return;
+    mPreviewSubject = PreviewSubject::Mesh;
+    mMeshPreviewName = subject;
+
+    // Cached across frames: hovering down a list re-enters this every frame,
+    // and re-parsing an OBJ each time is the difference between a browsable
+    // list and an unusable one.
+    auto cached = mMeshPreviewCache.find(meshPath);
+    if (cached == mMeshPreviewCache.end()) {
+        const std::filesystem::path full = eng::assets::resolve(meshPath);
+        eng::ModelImportOptions options;
+        options.pivot = eng::PivotMode::Source;
+        const eng::MeshHandle mesh =
+            full.empty() ? renderer.prototypeMesh(meshPath)
+                         : renderer.loadMesh(full.string(), options);
+        cached = mMeshPreviewCache.emplace(meshPath, mesh).first;
+    }
+    // A material the mesh was never authored against says more about the
+    // material than the mesh, so the kit's own is preferred and the fallback is
+    // a neutral surface rather than whatever the last material row left behind.
+    mStage.setThumbnailMesh(renderer, cached->second,
+                            material.empty() ? std::string("Game/Kit/Dungeon")
+                                             : material);
+}
+
+void EditorApp::useMeshBrush(const std::string& meshPath)
+{
+    leaveMaterialStage();
+    mState.brush.kind = Brush::Kind::Mesh;
+    mState.brush.meshPath = meshPath;
+    mState.tool = Tool::Place;
+    mStatus = "mesh brush: " + meshPath +
+              " -- move over Viewport to preview, click to place";
+}
+
+void EditorApp::usePrimitiveBrush(const eng::ecs::PrimitiveMesh& primitive)
+{
+    leaveMaterialStage();
+    mState.brush.kind = Brush::Kind::Primitive;
+    mState.brush.primitive = primitive;
+    mState.tool = Tool::Place;
+    mStatus = std::string("primitive brush: ") +
+              eng::ecs::primitiveKindName(primitive.kind) +
+              " -- move over Viewport to preview, click to place";
+}
+
+// Swapping what the selection is made of, as one undo entry.
+//
+// Replacing rather than adding: the three ways to be a mesh are exclusive, and
+// an entity that ended up with two would be refused by its own file format on
+// the next load. The material is cleared with the old geometry because a
+// material is chosen for a mesh -- a wall's atlas coordinates mean nothing on
+// a generated sphere.
+void EditorApp::applyMeshToSelection(const std::string& meshPath)
+{
+    if (meshPath.empty() || mState.selection.empty())
+        return;
+    std::vector<Command> parts;
+    for (const AuthorId& id : mState.selection) {
+        const Entity* entity = mState.document.find(id);
+        if (!entity)
+            continue;
+        Entity after = *entity;
+        after.prefab.clear();
+        after.cell.reset();
+        after.primitive.reset();
+        after.mesh = game::content::MeshAuthor{meshPath, 1.0f};
+        if (const MeshAsset* asset = meshCatalog().find(meshPath))
+            after.material = asset->material;
+        parts.push_back(makeEditEntity("mesh", id, *entity, after));
+    }
+    if (parts.empty())
+        return;
+    runCommand(makeComposite("set mesh", std::move(parts)));
+    mPreview->invalidate();
+    mStatus = "set mesh " + meshPath + " on " +
+              std::to_string(mState.selection.size()) + " entity(s)";
+}
+
+void EditorApp::applyPrimitiveToSelection(
+    const eng::ecs::PrimitiveMesh& primitive)
+{
+    if (mState.selection.empty())
+        return;
+    std::vector<Command> parts;
+    for (const AuthorId& id : mState.selection) {
+        const Entity* entity = mState.document.find(id);
+        if (!entity)
+            continue;
+        Entity after = *entity;
+        after.prefab.clear();
+        after.cell.reset();
+        after.mesh.reset();
+        after.primitive = primitive;
+        parts.push_back(makeEditEntity("primitive", id, *entity, after));
+    }
+    if (parts.empty())
+        return;
+    runCommand(makeComposite("set primitive", std::move(parts)));
+    mPreview->invalidate();
+    mStatus = std::string("set primitive ") +
+              eng::ecs::primitiveKindName(primitive.kind) + " on " +
+              std::to_string(mState.selection.size()) + " entity(s)";
+}
+
+// The mesh browser: every piece of geometry in the project, plus the eight the
+// engine can generate, in the layout every other asset tab uses.
+void EditorApp::drawMeshPanel()
+{
+    eng::Renderer& renderer = mEngine->renderer();
+    if (!mStage.thumbnailBuilt())
+        mStage.buildThumbnail(renderer, 256);
+    // The swatch is shared. Whichever tab is drawing owns it, and the particle
+    // emitter has to be put away or it keeps rendering into the square.
+    if (mParticleThumbnailNode.valid())
+        renderer.setNodeVisible(mParticleThumbnailNode, false);
+    mStage.setThumbnailVisible(renderer, true);
+
+    const MeshCatalog& catalog = meshCatalog();
+    const MeshAsset* selected =
+        mSelectedMesh.empty() ? nullptr : catalog.find(mSelectedMesh);
+    const bool primitiveSelected =
+        mSelectedPrimitive >= 0 &&
+        mSelectedPrimitive < int(primitivePresets().size());
+
+    // Nothing chosen yet: take the first row, so the panel opens showing
+    // something rather than an empty square that reads as broken.
+    if (!selected && !primitiveSelected && !catalog.all().empty()) {
+        mSelectedMesh = catalog.all().front().path;
+        selected = catalog.find(mSelectedMesh);
+    }
+
+    // Keep the swatch on the selection unless a row is being hovered, which the
+    // list below re-requests every frame while the cursor is over it.
+    if (primitiveSelected) {
+        const eng::MeshHandle mesh =
+            mPrimitivePreviewMeshes.get(renderer, mPrimitiveDraft);
+        mStage.setThumbnailMesh(renderer, mesh, "Game/Kit/Dungeon");
+        mPreviewSubject = PreviewSubject::Mesh;
+        mMeshPreviewName = primitiveGhostKey(mPrimitiveDraft);
+    }
+    else if (selected) {
+        requestMeshPreview(selected->path, selected->material);
+    }
+
+    ed::ui::AssetPanelView view;
+    view.previewTexture = renderer.materialThumbnailTextureId();
+    view.previewTooltip =
+        "Drag to turn. Hovering a row previews it; clicking selects it.";
+    view.onPreviewDrag = [&](float dx) {
+        mThumbAutoSpin = false;
+        mStage.spinThumbnail(renderer, mStage.thumbnailSpin() + dx * 0.01f);
+    };
+
+    view.metadata = [&] {
+        if (primitiveSelected) {
+            const PrimitivePreset& preset =
+                primitivePresets()[std::size_t(mSelectedPrimitive)];
+            ImGui::TextUnformatted(preset.label);
+            ImGui::TextDisabled("generated | %s", preset.hint);
+            ImGui::TextDisabled("no file -- built by the engine at load");
+            return;
+        }
+        if (!selected) {
+            ImGui::TextUnformatted("(no mesh)");
+            return;
+        }
+        ImGui::TextUnformatted(selected->name.c_str());
+        ImGui::TextDisabled("%s", selected->path.c_str());
+        ImGui::TextDisabled("%s | %s", selected->extension.c_str(),
+                            ed::ui::humanBytes(selected->sizeBytes).c_str());
+        // Triangle count and bounds come from the loaded mesh rather than the
+        // file, because that is the geometry the game will actually draw --
+        // after the importer's welding, splitting and pivot handling.
+        const auto found = mMeshPreviewCache.find(selected->path);
+        if (found != mMeshPreviewCache.end() && found->second.valid()) {
+            eng::MeshBounds bounds;
+            if (renderer.meshBounds(found->second, bounds)) {
+                const glm::vec3 extent = bounds.max - bounds.min;
+                ImGui::TextDisabled("%.2f x %.2f x %.2f m", double(extent.x),
+                                    double(extent.y), double(extent.z));
+            }
+            ImGui::TextDisabled("%zu submesh(es)",
+                                renderer.meshSubmeshCount(found->second));
+        }
+        if (!selected->kitPrefab.empty()) {
+            ImGui::TextColored(kUiWarning, "in the kit as %s",
+                               selected->kitPrefab.c_str());
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Placing the kit piece instead brings its material, socket "
+                    "and grid snapping with it. Place the raw mesh only when "
+                    "you want none of that.");
+        }
+    };
+
+    view.actions = [&] {
+        const bool haveSelection = !mState.selection.empty();
+        if (primitiveSelected) {
+            if (ImGui::Button("Use as Brush"))
+                usePrimitiveBrush(mPrimitiveDraft);
+            ImGui::SameLine();
+            ImGui::BeginDisabled(!haveSelection);
+            if (ImGui::Button("Apply to Selection"))
+                applyPrimitiveToSelection(mPrimitiveDraft);
+            ImGui::EndDisabled();
+            return;
+        }
+        ImGui::BeginDisabled(!selected);
+        if (ImGui::Button("Use as Brush") && selected)
+            useMeshBrush(selected->path);
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!haveSelection);
+        if (ImGui::Button("Apply to Selection") && selected)
+            applyMeshToSelection(selected->path);
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        // The route back to the kit, for the common case where the mesh IS a
+        // kit piece and the piece is what the author actually wants.
+        if (selected && !selected->kitPrefab.empty()) {
+            ImGui::SameLine();
+            if (ImGui::Button("Place as Kit Piece")) {
+                leaveMaterialStage();
+                mState.brush.kind = Brush::Kind::Piece;
+                mState.brush.prefab = selected->kitPrefab;
+                mState.tool = Tool::Place;
+                mAssetBrowserModeRequest = 0;
+                mStatus = "kit brush: " + selected->kitPrefab;
+            }
+        }
+    };
+
+    view.toggles = [&] {
+        ImGui::Checkbox("spin", &mThumbAutoSpin);
+        ImGui::SameLine();
+        ImGui::Checkbox("hide kit meshes", &mHideKitMeshes);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Most of assets/meshes is the kit. Placing those as raw "
+                "meshes loses their material and their grid snapping.");
+        // The primitive's own parameters, edited here so a size is authored
+        // once and painted, rather than painted and then corrected per entity.
+        if (primitiveSelected) {
+            ed::ui::PropertyGrid grid("##primitive_draft", 0.34f);
+            drawPrimitiveFields(mPrimitiveDraft, grid);
+        }
+    };
+
+    view.filter = mMeshFilter;
+    view.filterCapacity = sizeof(mMeshFilter);
+    view.filterHint = "Search meshes...";
+
+    std::size_t hidden = 0;
+    for (const MeshAsset& asset : catalog.all())
+        if (mHideKitMeshes && !asset.kitPrefab.empty())
+            ++hidden;
+    view.footer = std::to_string(catalog.all().size() - hidden) + " of " +
+                  std::to_string(catalog.all().size()) + " meshes";
+
+    view.list = [&] {
+        const std::string filter = mMeshFilter;
+
+        // Generated first: they need no file, they are the fastest way to block
+        // out a room, and a browser that buries them under two hundred OBJs is
+        // a browser nobody finds them in.
+        ImGui::SeparatorText("generated");
+        const std::vector<PrimitivePreset>& presets = primitivePresets();
+        for (int i = 0; i < int(presets.size()); ++i) {
+            const PrimitivePreset& preset = presets[std::size_t(i)];
+            if (!ed::ui::filterMatches(preset.label, filter) &&
+                !ed::ui::filterMatches(preset.id, filter))
+                continue;
+            if (ImGui::Selectable(preset.label, mSelectedPrimitive == i)) {
+                mSelectedPrimitive = i;
+                mSelectedMesh.clear();
+                // The preset's parameters become the draft, so selecting
+                // "Capsule" gives a person-shaped one rather than whatever the
+                // last kind left in the fields.
+                mPrimitiveDraft = preset.mesh;
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s\n%s", preset.label, preset.hint);
+            if (ImGui::IsItemHovered() &&
+                ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                mSelectedPrimitive = i;
+                mPrimitiveDraft = preset.mesh;
+                applyPrimitiveToSelection(mPrimitiveDraft);
+            }
+        }
+
+        std::string group = "\x01"; // no group can equal this
+        for (const MeshAsset& asset : catalog.all()) {
+            if (mHideKitMeshes && !asset.kitPrefab.empty())
+                continue;
+            if (!ed::ui::filterMatches(asset.name, filter) &&
+                !ed::ui::filterMatches(asset.path, filter))
+                continue;
+            if (asset.group != group) {
+                group = asset.group;
+                ImGui::SeparatorText(group.empty() ? "meshes" : group.c_str());
+            }
+            const std::string label = asset.name + "###" + asset.path;
+            if (ImGui::Selectable(label.c_str(),
+                                  asset.path == mSelectedMesh)) {
+                mSelectedMesh = asset.path;
+                mSelectedPrimitive = -1;
+            }
+            // Hovering previews, selecting commits -- the same split the
+            // material list uses, and the only thing that makes scrubbing two
+            // hundred filenames work.
+            if (ImGui::IsItemHovered()) {
+                requestMeshPreview(asset.path, asset.material);
+                ImGui::SetTooltip("%s\n%s%s", asset.path.c_str(),
+                                  asset.material.empty()
+                                      ? "no authored material"
+                                      : asset.material.c_str(),
+                                  asset.kitPrefab.empty()
+                                      ? ""
+                                      : "\nalso a kit piece");
+            }
+            if (ImGui::IsItemHovered() &&
+                ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                mSelectedMesh = asset.path;
+                mSelectedPrimitive = -1;
+                applyMeshToSelection(asset.path);
+            }
+        }
+    };
+
+    ed::ui::drawAssetPanel(view);
 }
 
 // Live tuning for particle effects.
@@ -5734,67 +6405,6 @@ void EditorApp::drawParticlePanel()
         mSelectedEffect = descs.front().name;
     }
 
-    // --- catalog -----------------------------------------------------------
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##fxfilter", "Search effects...", mParticleFilter,
-                             sizeof(mParticleFilter));
-    const std::string filter = mParticleFilter;
-
-    ImGui::BeginChild("##fxlist", ImVec2(0.0f, 150.0f), true);
-    for (int i = 0; i < int(descs.size()); ++i) {
-        if (!filterMatches(descs[size_t(i)].name, filter))
-            continue;
-        const std::string label =
-            eng::assets::friendlyAssetLabel(descs[size_t(i)].name) + "###" +
-            descs[size_t(i)].name;
-        if (ImGui::Selectable(label.c_str(),
-                              mSelectedEffect == descs[size_t(i)].name)) {
-            mSelectedEffect = descs[size_t(i)].name;
-            selectedIndex = size_t(i);
-        }
-        if (ImGui::IsItemHovered()) {
-            const eng::ParticleEffectDesc& effect = descs[size_t(i)];
-            ImGui::SetTooltip("%s\n%s | %zu emitter(s) | %s", effect.name.c_str(),
-                              effect.renderMode == eng::ParticleRenderMode::Voxel
-                                  ? "voxel"
-                                  : "sprite",
-                              effect.emitters.size(),
-                              effect.loop ? "loop" : "burst");
-        }
-    }
-    ImGui::EndChild();
-
-    const std::string particleFile =
-        std::filesystem::path(mParticles.path()).filename().string();
-    ImGui::TextDisabled("%zu effects | %s", descs.size(), particleFile.c_str());
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", mParticles.path().c_str());
-    if (mParticlesDirty)
-        ImGui::TextColored(kUiWarning, "Unsaved particle changes");
-
-    eng::ParticleEffectDesc& d = descs[selectedIndex];
-    bool dirty = false;
-
-    const auto clearPreviews = [&] {
-        for (eng::ParticlesHandle h : mParticlePreviews)
-            renderer.despawnParticles(h);
-        mParticlePreviews.clear();
-    };
-    const auto preview = [&] {
-        clearPreviews();
-        eng::ParticleSpawnOptions options;
-        options.sizeScale = mParticlePreviewScale;
-        const eng::ParticlesHandle h =
-            renderer.spawnParticles(d.name, mState.camera.target(), options);
-        if (h.valid()) {
-            mParticlePreviews.push_back(h);
-            mStatus = "previewing " + d.name + " at the viewport focus";
-        }
-        else {
-            mStatus = "could not preview " + d.name;
-        }
-    };
-
     // The material swatch RTT is a generic isolated square despite its legacy
     // name. Hide the material subject, put a real particle system at its camera
     // focus, and mark that system thumbnail-only so it cannot leak into the
@@ -5808,6 +6418,10 @@ void EditorApp::drawParticlePanel()
                                 "particle_catalog_thumbnail");
     }
     renderer.setNodeVisible(mParticleThumbnailNode, true);
+
+    eng::ParticleEffectDesc& d = descs[selectedIndex];
+    bool dirty = false;
+
     const double now = ImGui::GetTime();
     const float period = particlePreviewPeriod(d);
     const bool thumbnailChanged =
@@ -5829,64 +6443,124 @@ void EditorApp::drawParticlePanel()
             period > 0.0f ? now + period : std::numeric_limits<double>::max();
     }
 
-    ImGui::Separator();
+    const auto clearPreviews = [&] {
+        for (eng::ParticlesHandle h : mParticlePreviews)
+            renderer.despawnParticles(h);
+        mParticlePreviews.clear();
+    };
 
-    // --- preview and placement --------------------------------------------
-    const uint64_t thumbnail = renderer.materialThumbnailTextureId();
-    const float thumbSize =
-        std::clamp(ImGui::GetContentRegionAvail().x * 0.42f, 112.0f, 160.0f);
-    if (thumbnail != 0) {
-        ImGui::Image(static_cast<ImTextureID>(thumbnail),
-                     ImVec2(thumbSize, thumbSize));
-        ImGui::SetItemTooltip("Live isolated preview. One-shot effects replay "
-                              "automatically while this tab is visible.");
-    }
-    ImGui::TextUnformatted(eng::assets::friendlyAssetLabel(d.name).c_str());
-    ImGui::TextDisabled("%s", d.name.c_str());
-    ImGui::SameLine();
-    ImGui::TextDisabled(
-        "%s | %s | %zu emitter(s)",
-        d.renderMode == eng::ParticleRenderMode::Voxel ? "voxel" : "sprite",
-        d.loop ? "loop" : "burst", d.emitters.size());
-    ImGui::SetNextItemWidth(std::min(180.0f, ImGui::GetContentRegionAvail().x));
-    ImGui::SliderFloat("Preview size", &mParticlePreviewScale, 0.05f, 8.0f,
-                       "%.2fx");
-    // Spawning at camera focus rather than world origin makes selection work
-    // like the material swatch: the result is immediately in the view being
-    // worked in, and selection restarts one clean preview instead of piling up.
-    if (ImGui::Button("Preview at Focus"))
-        preview();
-    ImGui::SameLine();
-    ImGui::BeginDisabled(mParticlePreviews.empty());
-    if (ImGui::Button("Clear Preview"))
-        clearPreviews();
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    if (ImGui::Button("Use as Brush")) {
-        setMode(false);
-        mState.brush.kind = Brush::Kind::Particles;
-        mState.brush.effect = d.name;
-        mState.tool = Tool::Place;
-        mStatus = "particle brush: " + d.name +
-                  " -- move over Viewport to preview, click to place";
-    }
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Places a ParticleEmitter entity; the viewport brush "
-                          "shows the real live effect before the click");
+    ed::ui::AssetPanelView view;
+    view.previewTexture = renderer.materialThumbnailTextureId();
+    view.previewTooltip = "Live isolated preview. One-shot effects replay "
+                          "automatically while this tab is visible.";
 
-    if (ImGui::Button("Save Effects")) {
-        if (mParticles.save(mParticles.path())) {
-            mParticlesDirty = false;
-            mStatus = "saved " + mParticles.path();
+    view.metadata = [&] {
+        ImGui::TextUnformatted(eng::assets::friendlyAssetLabel(d.name).c_str());
+        ImGui::TextDisabled("%s", d.name.c_str());
+        ImGui::TextDisabled(
+            "%s | %s | %zu emitter(s)",
+            d.renderMode == eng::ParticleRenderMode::Voxel ? "voxel" : "sprite",
+            d.loop ? "loop" : "burst", d.emitters.size());
+        ImGui::TextDisabled(
+            "focus %.1f, %.1f, %.1f", double(mState.camera.target().x),
+            double(mState.camera.target().y), double(mState.camera.target().z));
+    };
+
+    view.actions = [&] {
+        // Spawning at camera focus rather than world origin makes selection
+        // work like the material swatch: the result is immediately in the view
+        // being worked in, and selection restarts one clean preview instead of
+        // piling up.
+        if (ImGui::Button("Preview at Focus")) {
+            clearPreviews();
+            eng::ParticleSpawnOptions options;
+            options.sizeScale = mParticlePreviewScale;
+            const eng::ParticlesHandle h = renderer.spawnParticles(
+                d.name, mState.camera.target(), options);
+            if (h.valid()) {
+                mParticlePreviews.push_back(h);
+                mStatus = "previewing " + d.name + " at the viewport focus";
+            }
+            else {
+                mStatus = "could not preview " + d.name;
+            }
         }
-        else {
-            mStatus = "could not write " + mParticles.path();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(mParticlePreviews.empty());
+        if (ImGui::Button("Clear Preview"))
+            clearPreviews();
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Use as Brush")) {
+            leaveMaterialStage();
+            mState.brush.kind = Brush::Kind::Particles;
+            mState.brush.effect = d.name;
+            mState.tool = Tool::Place;
+            mStatus = "particle brush: " + d.name +
+                      " -- move over Viewport to preview, click to place";
         }
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled(
-        "focus %.1f, %.1f, %.1f", double(mState.camera.target().x),
-        double(mState.camera.target().y), double(mState.camera.target().z));
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Places a ParticleEmitter entity; the viewport brush "
+                "shows the real live effect before the click");
+        if (ImGui::Button("Save Effects")) {
+            if (mParticles.save(mParticles.path())) {
+                mParticlesDirty = false;
+                mStatus = "saved " + mParticles.path();
+            }
+            else {
+                mStatus = "could not write " + mParticles.path();
+            }
+        }
+    };
+
+    view.toggles = [&] {
+        ImGui::SetNextItemWidth(
+            std::min(180.0f, ImGui::GetContentRegionAvail().x));
+        ImGui::SliderFloat("preview size", &mParticlePreviewScale, 0.05f, 8.0f,
+                           "%.2fx");
+        if (mParticlesDirty)
+            ImGui::TextColored(kUiWarning, "Unsaved particle changes");
+    };
+
+    view.filter = mParticleFilter;
+    view.filterCapacity = sizeof(mParticleFilter);
+    view.filterHint = "Search effects...";
+    view.footer = std::to_string(descs.size()) + " effects  |  " +
+                  std::filesystem::path(mParticles.path()).filename().string();
+
+    view.list = [&] {
+        const std::string filter = mParticleFilter;
+        for (int i = 0; i < int(descs.size()); ++i) {
+            eng::ParticleEffectDesc& effect = descs[std::size_t(i)];
+            if (!ed::ui::filterMatches(effect.name, filter))
+                continue;
+            const std::string label =
+                eng::assets::friendlyAssetLabel(effect.name) + "###" +
+                effect.name;
+            if (ImGui::Selectable(label.c_str(),
+                                  mSelectedEffect == effect.name))
+                mSelectedEffect = effect.name;
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "%s\n%s | %zu emitter(s) | %s", effect.name.c_str(),
+                    effect.renderMode == eng::ParticleRenderMode::Voxel
+                        ? "voxel"
+                        : "sprite",
+                    effect.emitters.size(), effect.loop ? "loop" : "burst");
+            }
+        }
+    };
+
+    ed::ui::drawAssetPanel(view);
+
+    // The selected effect's own parameters, below the shared layout. Every tab
+    // shares the top half -- preview, metadata, toggles, list -- and Effects is
+    // the one that also *edits* its subject, so the editor hangs under it
+    // rather than displacing the arrangement the other three establish.
+    if (!ImGui::CollapsingHeader("tune this effect",
+                                 ImGuiTreeNodeFlags_DefaultOpen))
+        return;
 
     ImGui::SeparatorText("appearance");
 
@@ -6206,11 +6880,11 @@ void EditorApp::drawOpenScenePopup()
     const bool enter = ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
                        ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false);
     ImGui::BeginDisabled(mOpenSceneSelection.empty());
-    if (ImGui::Button("Open", ImVec2(120.0f, 0.0f)) || enter)
+    if (ImGui::Button("Open", ImVec2(ui::dialogButtonWidth(), 0.0f)) || enter)
         activate = mOpenSceneSelection;
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+    if (ImGui::Button("Cancel", ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         mOpenSceneOpen = false;
         ImGui::CloseCurrentPopup();
@@ -6231,14 +6905,7 @@ void EditorApp::drawSettings()
 {
     if (!mSettingsOpen)
         return;
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
-                            ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(520.0f, 560.0f), ImGuiCond_Appearing);
-    ImGui::SetNextWindowSizeConstraints(
-        ImVec2(360.0f, 320.0f),
-        ImVec2(std::max(viewport->WorkSize.x - 32.0f, 360.0f),
-               std::max(viewport->WorkSize.y - 32.0f, 320.0f)));
+    ui::centreNextModal(34.0f, 37.0f, 24.0f, 21.0f);
     if (!ImGui::Begin("Settings", &mSettingsOpen, ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
         return;
@@ -6364,14 +7031,7 @@ void EditorApp::drawHelp()
 {
     if (!mHelpOpen)
         return;
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
-                            ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(460.0f, 520.0f), ImGuiCond_Appearing);
-    ImGui::SetNextWindowSizeConstraints(
-        ImVec2(340.0f, 280.0f),
-        ImVec2(std::max(viewport->WorkSize.x - 32.0f, 340.0f),
-               std::max(viewport->WorkSize.y - 32.0f, 280.0f)));
+    ui::centreNextModal(30.0f, 34.0f, 22.0f, 18.0f);
     if (!ImGui::Begin("Keyboard Shortcuts###Shortcuts", &mHelpOpen,
                       ImGuiWindowFlags_NoDocking)) {
         ImGui::End();
@@ -6515,7 +7175,7 @@ void EditorApp::drawSaveAsPopup()
     };
     ImGui::BeginDisabled(!validation.empty());
     const char* saveLabel = replacing ? "Replace..." : "Save";
-    const bool clickedSave = ImGui::Button(saveLabel, ImVec2(120.0f, 0.0f));
+    const bool clickedSave = ImGui::Button(saveLabel, ImVec2(ui::dialogButtonWidth(), 0.0f));
     if (clickedSave || (entered && validation.empty())) {
         const std::string path = candidate.string();
         if (replacing) {
@@ -6544,7 +7204,7 @@ void EditorApp::drawSaveAsPopup()
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+    if (ImGui::Button("Cancel", ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         mContinueDiscardAfterSave = false;
         mSaveAsOpen = false;
@@ -6782,13 +7442,13 @@ void EditorApp::drawImportModelPopup()
                             : mImportModelPath.c_str());
 
     ImGui::BeginDisabled(mImportModelPath.empty());
-    if (ImGui::Button("Import", ImVec2(120.0f, 0.0f))) {
+    if (ImGui::Button("Import", ImVec2(ui::dialogButtonWidth(), 0.0f))) {
         if (importModel(mImportModelPath))
             ImGui::CloseCurrentPopup();
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) ||
+    if (ImGui::Button("Cancel", ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
         ImGui::IsKeyPressed(ImGuiKey_Escape))
         ImGui::CloseCurrentPopup();
     ImGui::EndPopup();

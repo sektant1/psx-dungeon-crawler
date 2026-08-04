@@ -124,6 +124,22 @@ public:
     // shader shows the animated square rather than a confusing lit sphere.
     void buildThumbnail(Renderer& renderer, int size);
     void setThumbnailMaterial(Renderer& renderer, const std::string& material);
+
+    // Puts an arbitrary mesh in the swatch instead of the sphere.
+    //
+    // The mesh browser needs the same square the material browser has, and for
+    // the same reason: a list of two hundred filenames says nothing about what
+    // any of them is. It reuses this rig rather than building a second one --
+    // the three-point lighting, the offset origin that keeps its lights off the
+    // level, and the thumbnail-only flag are all already right here, and a
+    // parallel rig is how one of them ends up wrong.
+    //
+    // Framed by the mesh's own bounds: a four-metre wall and a twenty-centimetre
+    // candle both fill the square, which is the only way a list of mixed scales
+    // is browsable. Pass an invalid handle to go back to the material sphere.
+    void setThumbnailMesh(Renderer& renderer, MeshHandle mesh,
+                          const std::string& material);
+    MeshHandle thumbnailMesh() const { return mThumbMesh; }
     const std::string& thumbnailMaterial() const { return mThumbMaterial; }
     StagePreview thumbnailPreviewMode() const { return mThumbMode; }
     // The thumbnail target is shared by editor asset tabs. Particles hide the
@@ -176,7 +192,15 @@ private:
 
     StagePreview mThumbMode = StagePreview::Sphere;
     int mThumbSize = 256;
+    // The mesh standing in for the sphere, when the mesh browser asked for one.
+    // Invalid means the swatch is showing a material, which is every other
+    // caller and the state buildThumbnailRig produces.
+    MeshHandle mThumbMesh;
     NodeHandle mThumbSubject;
+    // Child of mThumbSubject, offset so the mesh's centre sits on the parent's
+    // origin. Only used in mesh mode; the sphere and the quad are already
+    // centred on theirs.
+    NodeHandle mThumbMeshNode;
     std::vector<NodeHandle> mThumbLightNodes;
     std::string mThumbMaterial;
     float mThumbSpin = 0.0f;

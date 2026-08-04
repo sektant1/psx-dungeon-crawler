@@ -249,6 +249,20 @@
         }
       }
     },
+    "viewmodel_preview": {
+      "description": "Editor-only: show the first-person hands holding a weapon at this entity, so a placement can be judged in the viewport instead of by launching the game. The cook drops it; no runtime component corresponds to it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "weapon": {
+          "description": "A player_weapon id from assets/config/weapons.toml. Empty shows slot 0, which is what the player starts the level holding.",
+          "type": "string"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      }
+    },
     "viewmodel_rig": {
       "description": "Where the first-person hands sit in front of the eye and how strongly each procedural layer moves them. Every weapon inherits this framing and only leans out of it. Same fields as game.toml's [player_viewmodel]; a scene carrying this overrides that default.",
       "type": "object",
@@ -415,6 +429,81 @@
         }
       }
     },
+    "mesh": {
+      "description": "A mesh file named directly, for geometry that is not part of the modular kit. The path is relative to the asset root, the same form MeshSource carries, so the cooked map stays portable. Mutually exclusive with prefab and primitive.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/]"
+        },
+        "import_scale": {
+          "description": "Multiplies the entity's transform scale, for a file authored in units other than metres. A fact about the file, so fixing it once fixes every instance.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "primitive": {
+      "description": "A mesh the engine generates from parameters. Every field is optional: an omitted one takes eng::ecs::PrimitiveMesh's default, and the generators read only the fields their kind uses. Mutually exclusive with prefab and mesh.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "box",
+            "beveled_box",
+            "sphere",
+            "capsule",
+            "cylinder",
+            "cone",
+            "plane",
+            "disc"
+          ]
+        },
+        "size": {
+          "$ref": "#/$defs/vec3"
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "bevel": {
+          "type": "number",
+          "minimum": 0
+        },
+        "thickness": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rings": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "segments": {
+          "type": "integer",
+          "minimum": 3
+        },
+        "subdivisions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inward_facing": {
+          "description": "Flips the winding and the normals, for a box used as a room rather than as a crate.",
+          "type": "boolean"
+        }
+      }
+    },
     "entity": {
       "type": "object",
       "additionalProperties": false,
@@ -433,8 +522,14 @@
           "type": "string",
           "pattern": "^kit\\."
         },
+        "mesh": {
+          "$ref": "#/$defs/mesh"
+        },
+        "primitive": {
+          "$ref": "#/$defs/primitive"
+        },
         "material": {
-          "description": "Overrides the material the prefab's kit piece would otherwise use. For one-off dressing (a scorched wall, a mossy floor) without adding a kit entry.",
+          "description": "What the entity's mesh wears. On a prefab this overrides the kit piece's own material, for one-off dressing (a scorched wall, a mossy floor) without adding a kit entry. On a mesh or a primitive there is no kit entry to fall back on, so this is the material outright.",
           "type": "string",
           "minLength": 1
         },
@@ -499,11 +594,76 @@
         "viewmodel_rig": {
           "$ref": "#/$defs/viewmodel_rig"
         },
+        "viewmodel_preview": {
+          "$ref": "#/$defs/viewmodel_preview"
+        },
         "audio": {
           "$ref": "#/$defs/audio"
         },
         "audio_listener": {
           "$ref": "#/$defs/audio_listener"
+        },
+        "scripts": {
+          "type": "array",
+          "description": "Lua scripts attached to this entity, in the order their callbacks run.",
+          "items": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Logical asset path, e.g. scripts/door.lua",
+                "pattern": "\\.lua$"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "A disabled script is never instantiated."
+              },
+              "props": {
+                "type": "object",
+                "description": "Per-instance authored values, reachable as self.props.",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "description": "a vec3"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "entity"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "entity": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "a reference to another entity, by name"
+                    }
+                  ]
+                }
+              }
+            }
+          }
         },
         "spin": {
           "$ref": "#/$defs/spin"
