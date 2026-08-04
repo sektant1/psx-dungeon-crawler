@@ -42,6 +42,7 @@ SOURCE_RULES: list[tuple[str, str]] = [
     ("src/systems/", "core"),  # Ease/Actions/Events are core utilities
     ("src/render/PrimitiveGeometry.cpp", "core"),  # pure geometry, no renderer
     ("src/ecs/", "framework"),
+    ("src/script/", "framework"),  # lua host + bindings; sees World/Physics/Input
     ("src/controllers/", "framework"),
     ("src/debug/", "framework"),  # imgui debug console, drives fps/ecs
     ("src/", "systems"),  # renderer, physics, audio, particles
@@ -86,6 +87,7 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("assets/", "core"),
     ("rhi/", "platform"),
     ("ecs/", "framework"),
+    ("script/", "framework"),
     ("controllers/", "framework"),
     ("DebugTools.h", "framework"),  # imgui debug console over the fps/ecs layer
     # The panels that dock into it. Same layer for the same reason: they are

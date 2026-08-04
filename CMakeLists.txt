@@ -371,16 +371,28 @@ target_include_directories(eng_framework PRIVATE third_party engine/src)
 target_link_libraries(eng_framework PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_systems>"
                                            EnTT::EnTT)
 
+# Lua scripting. Its own target rather than part of eng_framework: that library
+# is linked by every engine test and by the editor's preview world, and keeping
+# the VM in a separate target makes "who depends on Lua" a link fact instead of
+# a habit. It sits AT the framework layer -- check_layering.py maps
+# engine/src/script to "framework" -- so its bindings may reach World, Physics
+# and Input, and an upward include is still a lint failure.
+add_library(eng_script STATIC engine/src/script/ScriptHost.cpp)
+target_include_directories(eng_script PRIVATE third_party engine/src)
+target_link_libraries(eng_script
+  PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>"
+  PRIVATE eng_sol2)
+
 # Facade: owns application lifetime and is the only target consumers name.
 add_library(eng STATIC engine/src/app/Engine.cpp engine/src/app/Application.cpp
                        engine/src/app/FpsGameApp.cpp)
 target_include_directories(eng PRIVATE third_party engine/src)
-target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>")
+target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_script>")
   target_compile_definitions(eng_platform PRIVATE ENG_RENDERER_RHI=1)
   target_compile_definitions(eng PRIVATE ENG_RENDERER_RHI=1)
 
 foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_model_import eng_systems
-               eng_framework eng)
+               eng_framework eng_script eng)
   eng_target_hardening(${_layer})
 endforeach()
 # imgui is third-party: build it without our warning set.
@@ -405,6 +417,9 @@ if(ENABLE_PCH)
     target_precompile_headers(
       eng_systems PRIVATE <imgui.h> <glm/glm.hpp> <glm/gtc/quaternion.hpp>)
   target_precompile_headers(eng_framework PRIVATE <entt/entt.hpp>
+                            <glm/glm.hpp>)
+  # sol2 is the most expensive header in the tree and every binding TU needs it.
+  target_precompile_headers(eng_script PRIVATE <sol/sol.hpp> <entt/entt.hpp>
                             <glm/glm.hpp>)
   target_precompile_headers(eng PRIVATE <imgui.h> <glm/glm.hpp>)
 endif()
