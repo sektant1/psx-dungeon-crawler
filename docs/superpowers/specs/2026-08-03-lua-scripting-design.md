@@ -190,24 +190,32 @@ authored data, so rebuilding a script is "drop `ScriptState`, rebuild from
 
 ### Scene format
 
-Source `.scn` (TOML), an array of tables per entity:
+Source `.scn` is **JSON** (nlohmann, validated by
+`assets/schemas/scene.schema.json`) — not TOML. Weapon, projectile and
+viewmodel definitions elsewhere in this repository are TOML; the *scene* format
+is JSON, and scripts follow the scene. A `"scripts"` array per entity:
 
-```toml
-[[entity]]
-name = "iron_door"
-
-  [[entity.script]]
-  path = "scripts/door.lua"
-  props = { speed = 2.0, target = "lever_a", starts_open = false }
+```json
+{
+  "id": "iron_door",
+  "name": "Iron Door",
+  "scripts": [
+    {
+      "path": "scripts/door.lua",
+      "props": {
+        "speed": 2.0,
+        "starts_open": false,
+        "target": { "entity": "lever_a" }
+      }
+    }
+  ]
+}
 ```
 
-Prop types are inferred on read from the TOML value — boolean, number, string,
-a 3-element array as `Vec3` — except `Entity`, which the writer emits as a
-tagged form so the type survives a round trip:
-
-```toml
-  props = { target = { entity = "lever_a" } }
-```
+Prop types are inferred on read from the JSON value — boolean, number, string,
+a 3-element array as `Vec3` — except `Entity`, which is written as the tagged
+object above so the type survives a round trip and the schema can require the
+picker's shape.
 
 Cooked `.map` payload, written by the component's own serialiser:
 
@@ -531,9 +539,10 @@ the same reason the component hand-writes its serialiser.
 
 ### Scene I/O
 
-Hand-written read and write for the `[[entity.script]]` array of tables in
+Hand-written read and write for the entity's `"scripts"` array in
 `editor/src/content/SceneSource.cpp` and `SceneWriter.cpp`, beside the existing
-`FieldType` switch, as a component-name special case.
+generic `parseFields` / `reflectedNode` helpers — which are driven by
+`FieldSpan` and so cannot express a variable-length list.
 `assets/schemas/scene.schema.json` gains the matching shape.
 
 ### Cook-time validation
@@ -671,8 +680,8 @@ game/tests/PhysicsTests.cpp             migrate to addContactCallback
 game/src/MapPlay.cpp                    host construction + tick order
 game/src/LiveLevel.cpp                  host construction + tick order
 editor/src/ui/ComponentInspector.cpp    Scripts block
-editor/src/content/SceneSource.cpp      read [[entity.script]]
-editor/src/content/SceneWriter.cpp      write [[entity.script]]
+editor/src/content/SceneSource.cpp      read the entity "scripts" array (JSON)
+editor/src/content/SceneWriter.cpp      write the entity "scripts" array (JSON)
 editor/src/content/SceneValidate.cpp    path + syntax + entity-prop checks
 assets/schemas/scene.schema.json        script array shape
 assets/assets.toml                      scripts/ in the directory map comment
