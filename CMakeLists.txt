@@ -1452,6 +1452,15 @@ if(BUILD_TESTING)
   add_test(NAME editor_material_catalog COMMAND editor_material_catalog_tests
            ${CMAKE_SOURCE_DIR}/assets/materials)
 
+  # The inspector's layout arithmetic, on a headless ImGui context: no window,
+  # no backend. Widget sizing is the part that was measured by hand and drifted,
+  # and it is checkable without drawing anything.
+  add_executable(editor_inspector_layout_tests
+                 editor/tests/EditorInspectorLayoutTests.cpp)
+  target_link_libraries(editor_inspector_layout_tests PRIVATE eng_imgui)
+  add_test(NAME editor_inspector_layout
+           COMMAND editor_inspector_layout_tests)
+
   add_executable(editor_vocabulary_tests editor/tests/EditorVocabularyTests.cpp
                                          editor/src/assets/GameVocabulary.cpp)
   target_include_directories(editor_vocabulary_tests PRIVATE editor/include

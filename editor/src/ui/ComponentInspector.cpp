@@ -94,16 +94,27 @@ void drawVec3Property(const char* id, const char* label, const char* units,
     ImGui::PopID();
 }
 
-// std::string field through a fixed buffer, which is what ImGui wants. 96 is
-// wider than any id the scene format holds.
-void stringField(const char* label, std::string& value,
-                 InspectorContext& context)
+// std::string through the fixed buffer ImGui wants. 96 is wider than any id the
+// scene format holds.
+//
+// The one place that marshals a std::string into an InputText. It was three --
+// stringField, this, and stringRow -- each with its own copy of the buffer, the
+// snprintf and the write-back, which is three places to fix when the width or
+// the tracking changes and three chances to miss one.
+void stringInput(const char* id, std::string& value, InspectorContext& context)
 {
     char buffer[96];
     std::snprintf(buffer, sizeof(buffer), "%s", value.c_str());
-    if (ImGui::InputText(label, buffer, sizeof(buffer)))
+    if (ImGui::InputText(id, buffer, sizeof(buffer)))
         value = buffer;
     track(context);
+}
+
+// A labelled field outside a grid: ImGui draws the name to the right itself.
+void stringField(const char* label, std::string& value,
+                 InspectorContext& context)
+{
+    stringInput(label, value, context);
 }
 
 // The same inside a property grid: the name is already in the left column, so
@@ -112,13 +123,9 @@ void stringRow(ui::PropertyGrid& grid, const char* label, std::string& value,
                InspectorContext& context)
 {
     grid.row(label);
-    char buffer[96];
-    std::snprintf(buffer, sizeof(buffer), "%s", value.c_str());
     char id[64];
     std::snprintf(id, sizeof(id), "##%s", label);
-    if (ImGui::InputText(id, buffer, sizeof(buffer)))
-        value = buffer;
-    track(context);
+    stringInput(id, value, context);
 }
 
 // Hovering a row previews its subject in the shared swatch and shows it in the
@@ -535,11 +542,7 @@ bool pickerWidget(const char* id, std::string& value, const PickerSpec& spec,
     // A missing list must leave the field editable, only unguided: a broken
     // enemies.toml is not a reason the inspector cannot be typed into.
     if (!spec.options || spec.options->empty()) {
-        char buffer[96];
-        std::snprintf(buffer, sizeof(buffer), "%s", value.c_str());
-        if (ImGui::InputText(id, buffer, sizeof(buffer)))
-            value = buffer;
-        track(context);
+        stringInput(id, value, context);
         return true; // nothing to check against, so nothing to call unknown
     }
 
@@ -1036,32 +1039,11 @@ PickerSpec entityPickerSpec(InspectorContext& context)
     return spec;
 }
 
-// The widget half of a string field, with no label and no grid row: for the
-// cells of a table that has already placed the cursor and set the item width.
-void stringInput(const char* id, std::string& value, InspectorContext& context)
+// The script path picker. Returns whether the path names something on disk;
+// the caller places the warning, because only it knows where its row ends.
+bool drawScriptPathPicker(std::string& path, InspectorContext& context)
 {
-    char buffer[96];
-    std::snprintf(buffer, sizeof(buffer), "%s", value.c_str());
-    if (ImGui::InputText(id, buffer, sizeof(buffer)))
-        value = buffer;
-    track(context);
-}
-
-// The script path row: the picker, plus the warning under it when the path
-// names nothing on disk. Said here rather than left for the playtest -- a
-// script that does not load is an entity that silently does nothing, and the
-// cooker will refuse the build for it.
-void drawScriptPathPicker(std::string& path, InspectorContext& context)
-{
-    const PickerSpec spec = scriptPickerSpec(context);
-    const bool known = pickerWidget("##path", path, spec, context);
-    if (path.empty()) {
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                           "a script with no path does nothing");
-    } else if (!known) {
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), spec.unknownFormat,
-                           path.c_str());
-    }
+    return pickerWidget("##path", path, scriptPickerSpec(context), context);
 }
 
 // Scripts get a hand-written block for the same reason they hand-write their
@@ -1173,6 +1155,17 @@ void drawScripts(Entity& entity, InspectorContext& context)
     int moveFrom = -1;
     int moveTo = -1;
 
+    // The row's controls, sized from the font rather than from four measured
+    // constants. `-90.0f` for the path was a guess that left the arrows and the
+    // remove button hanging off the edge in a narrow dock and floating in a
+    // wide one; asking the style how big a button is works at any width and
+    // survives a font change.
+    const float button = ImGui::GetFrameHeight();
+    const float gap = ImGui::GetStyle().ItemSpacing.x;
+    const float removeWidth = ImGui::CalcTextSize("remove").x +
+                              ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float controls = button * 3.0f + removeWidth + gap * 4.0f;
+
     for (int i = 0; i < int(entity.scripts.size()); ++i) {
         game::content::ScriptAuthor& script = entity.scripts[i];
         ImGui::PushID(i);
@@ -1183,10 +1176,11 @@ void drawScripts(Entity& entity, InspectorContext& context)
         ImGui::Checkbox("##enabled", &script.enabled);
         track(context);
         ImGui::SameLine();
+        ImGui::AlignTextToFramePadding();
         ImGui::TextDisabled("%d.", i + 1);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(-90.0f);
-        drawScriptPathPicker(script.path, context);
+        ImGui::SetNextItemWidth(-controls);
+        const bool pathKnown = drawScriptPathPicker(script.path, context);
 
         ImGui::SameLine();
         if (ImGui::ArrowButton("##up", ImGuiDir_Up) && i > 0) {
@@ -1200,8 +1194,14 @@ void drawScripts(Entity& entity, InspectorContext& context)
             moveTo = i + 1;
         }
         ImGui::SameLine();
-        if (ImGui::SmallButton("remove"))
+        if (ImGui::Button("remove"))
             removeAt = i;
+
+        // Under the row rather than beside it: a warning on the same line would
+        // push the controls around as it appeared and disappeared.
+        if (!pathKnown)
+            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
+                               "'%s' is not on disk", script.path.c_str());
 
         drawScriptProps(script.props, context);
         ImGui::PopID();
