@@ -51,6 +51,12 @@ struct InspectorContext {
     // Rescan the above. Offered next to the picker: a script written after the
     // editor started must be attachable without restarting it.
     std::function<void()> rescanScripts;
+    // Every author id in the open scene, for a script prop that names another
+    // entity. Rebuilt per frame by the panel, because an entity added this
+    // frame is a legitimate target and a cached list would not offer it. The
+    // cooker fails the build on a name that is not here, so picking beats
+    // typing by exactly the margin that check is worth.
+    const std::vector<std::string>* sceneEntityIds = nullptr;
     // What the classified catalogue says about the material offered here, and
     // what this entity's mesh can take. Null leaves the combo unfiltered, which
     // is what it always was.

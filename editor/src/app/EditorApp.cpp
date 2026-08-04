@@ -5136,6 +5136,12 @@ void EditorApp::drawInspector()
     context.enemyIds = &mEnemyIds;
     context.scriptPaths = &mScriptPaths;
     context.rescanScripts = [this] { rescanScriptPaths(); };
+    // Rebuilt per frame: an entity added this frame is a legitimate target for
+    // a script prop, and a cached list would not offer it.
+    mSceneEntityIds.clear();
+    for (const Entity& e : mState.document.entities)
+        mSceneEntityIds.push_back(e.id);
+    context.sceneEntityIds = &mSceneEntityIds;
     context.pickupIds = &mPickupIds;
     context.materials = &materialCatalog();
     context.meshKind = selectionMeshKind();

@@ -196,9 +196,11 @@
           0.699999988079071
         ]
       },
-      "spin": {
-        "degrees_per_second": 60.0
-      }
+      "scripts": [
+        {
+          "path": "scripts/spin.lua"
+        }
+      ]
     },
     {
       "id": "import_corsair_0001",

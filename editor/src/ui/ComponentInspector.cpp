@@ -507,26 +507,49 @@ void drawMarker(Entity& entity, InspectorContext& context)
         ImGui::TextDisabled("  %s", known.prefix);
 }
 
-// A field whose valid values the game defines. Falls back to free text when
-// the list is unavailable -- a missing enemies.toml must not make the field
-// uneditable, only unguided.
-void vocabularyField(const char* label, std::string& value,
-                     const std::vector<std::string>* options,
-                     InspectorContext& context)
+// Everything that differs between one pick-from-a-list field and another.
+// Enemy ids, pickup ids and script paths are the same widget wearing three
+// vocabularies; before this they were two near-identical copies, and the second
+// one drifted the moment it was written (its own placeholder, its own warning,
+// no shared notion of what "unknown" means).
+struct PickerSpec {
+    const std::vector<std::string>* options = nullptr;
+    // Shown in the closed combo when the value is empty. A fresh row is the one
+    // moment the author cannot guess what the widget wants.
+    const char* placeholder = "pick one";
+    // printf format taking the value, shown when it is not in the list.
+    const char* unknownFormat = "'%s' is not one the game defines";
+    const char* emptyNote = "no list loaded -- typed values are not checked";
+    // Called when the combo opens. Lets a list backed by the filesystem pick up
+    // a file written since the editor started.
+    std::function<void()> refresh;
+};
+
+// The widget half of a picker: assumes the caller has positioned the cursor and
+// set the item width (a PropertyGrid row does both). Returns false when the
+// value is not one the list knows, so the caller can place the warning where
+// its own layout wants it.
+bool pickerWidget(const char* id, std::string& value, const PickerSpec& spec,
+                  InspectorContext& context)
 {
-    ui::PropertyGrid grid("##vocabulary");
-    if (!options || options->empty()) {
-        stringRow(grid, label, value, context);
-        grid.full("no list loaded -- typed ids are not checked");
-        return;
+    // A missing list must leave the field editable, only unguided: a broken
+    // enemies.toml is not a reason the inspector cannot be typed into.
+    if (!spec.options || spec.options->empty()) {
+        char buffer[96];
+        std::snprintf(buffer, sizeof(buffer), "%s", value.c_str());
+        if (ImGui::InputText(id, buffer, sizeof(buffer)))
+            value = buffer;
+        track(context);
+        return true; // nothing to check against, so nothing to call unknown
     }
-    const bool known =
-        std::find(options->begin(), options->end(), value) != options->end();
-    grid.row(label);
-    char id[64];
-    std::snprintf(id, sizeof(id), "##%s", label);
-    if (ImGui::BeginCombo(id, value.c_str())) {
-        for (const std::string& option : *options) {
+
+    const bool known = std::find(spec.options->begin(), spec.options->end(),
+                                 value) != spec.options->end();
+    const char* preview = value.empty() ? spec.placeholder : value.c_str();
+    if (ImGui::BeginCombo(id, preview)) {
+        if (spec.refresh)
+            spec.refresh();
+        for (const std::string& option : *spec.options) {
             if (ImGui::Selectable(option.c_str(), option == value)) {
                 value = option;
                 context.track(true, true);
@@ -534,12 +557,32 @@ void vocabularyField(const char* label, std::string& value,
         }
         ImGui::EndCombo();
     }
-    if (!known) {
+    return known || value.empty();
+}
+
+// A labelled row whose valid values the game defines.
+void vocabularyField(const char* label, std::string& value,
+                     const std::vector<std::string>* options,
+                     InspectorContext& context)
+{
+    PickerSpec spec;
+    spec.options = options;
+    const bool haveList = options && !options->empty();
+
+    ui::PropertyGrid grid("##vocabulary");
+    grid.row(label);
+    char id[64];
+    std::snprintf(id, sizeof(id), "##%s", label);
+    const bool known = pickerWidget(id, value, spec, context);
+
+    if (!haveList) {
+        grid.full(spec.emptyNote);
+    } else if (!known) {
         // Said here rather than left for the playtest. An id the game does not
         // know spawns nothing, silently, minutes later.
         grid.row("");
-        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                           "'%s' is not one the game defines", value.c_str());
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), spec.unknownFormat,
+                           value.c_str());
     }
 }
 
@@ -967,47 +1010,57 @@ void drawAudioListener(Entity& entity, InspectorContext& context)
 // Falls back to a typed path only when nothing is on disk to offer, which is
 // survivable rather than good: a first script has to be nameable before the
 // list it would come from exists.
+// The scripts vocabulary: the same picker the enemy and pickup fields use,
+// pointed at the .lua files on disk.
+PickerSpec scriptPickerSpec(InspectorContext& context)
+{
+    PickerSpec spec;
+    spec.options = context.scriptPaths;
+    spec.placeholder = "pick a script";
+    spec.unknownFormat = "'%s' is not on disk";
+    spec.emptyNote = "no scripts found under assets/scripts";
+    spec.refresh = context.rescanScripts;
+    return spec;
+}
+
+// A script prop that names another entity. The list is the open scene, so the
+// picker offers exactly what the cooker will accept -- it fails the build on a
+// name that is not in the document.
+PickerSpec entityPickerSpec(InspectorContext& context)
+{
+    PickerSpec spec;
+    spec.options = context.sceneEntityIds;
+    spec.placeholder = "pick an entity";
+    spec.unknownFormat = "'%s' is not in this scene";
+    spec.emptyNote = "no entities to reference";
+    return spec;
+}
+
+// The widget half of a string field, with no label and no grid row: for the
+// cells of a table that has already placed the cursor and set the item width.
+void stringInput(const char* id, std::string& value, InspectorContext& context)
+{
+    char buffer[96];
+    std::snprintf(buffer, sizeof(buffer), "%s", value.c_str());
+    if (ImGui::InputText(id, buffer, sizeof(buffer)))
+        value = buffer;
+    track(context);
+}
+
+// The script path row: the picker, plus the warning under it when the path
+// names nothing on disk. Said here rather than left for the playtest -- a
+// script that does not load is an entity that silently does nothing, and the
+// cooker will refuse the build for it.
 void drawScriptPathPicker(std::string& path, InspectorContext& context)
 {
-    const bool haveList =
-        context.scriptPaths != nullptr && !context.scriptPaths->empty();
-
-    if (!haveList) {
-        char buffer[96];
-        std::snprintf(buffer, sizeof(buffer), "%s", path.c_str());
-        if (ImGui::InputText("##path", buffer, sizeof(buffer)))
-            path = buffer;
-        track(context);
-        ImGui::TextDisabled("no scripts found under assets/scripts");
-        return;
-    }
-
-    const bool onDisk = std::find(context.scriptPaths->begin(),
-                                  context.scriptPaths->end(),
-                                  path) != context.scriptPaths->end();
-
-    // An empty path reads as a prompt rather than a blank box: a fresh row is
-    // the one moment the author has no idea what the widget wants.
-    const char* preview = path.empty() ? "pick a script" : path.c_str();
-    if (ImGui::BeginCombo("##path", preview)) {
-        // Rescanned on open, so a file written since the editor started is in
-        // the list the first time you go looking for it.
-        if (context.rescanScripts)
-            context.rescanScripts();
-        for (const std::string& option : *context.scriptPaths) {
-            if (ImGui::Selectable(option.c_str(), option == path)) {
-                path = option;
-                context.track(true, true);
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    if (!path.empty() && !onDisk) {
-        // Said here rather than left for the cook. The scene still names it, so
-        // the value is not thrown away -- it is just called out.
+    const PickerSpec spec = scriptPickerSpec(context);
+    const bool known = pickerWidget("##path", path, spec, context);
+    if (path.empty()) {
         ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),
-                           "'%s' is not on disk", path.c_str());
+                           "a script with no path does nothing");
+    } else if (!known) {
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), spec.unknownFormat,
+                           path.c_str());
     }
 }
 
@@ -1022,54 +1075,84 @@ void drawScriptProps(std::vector<game::content::ScriptPropAuthor>& props,
                                        "entity"};
     int removeAt = -1;
 
-    for (int i = 0; i < int(props.size()); ++i) {
-        Prop& p = props[i];
-        ImGui::PushID(i);
+    // A table, not SameLine with pixel widths. Props are a LIST of rows, and
+    // the previous hand-measured 110/78/150 layout meant every row's key, type
+    // and value started wherever the last one happened to end -- ragged down
+    // the column, and crushed or overflowing at any dock width but the one it
+    // was measured at. Stretch columns line them up at every width, which is
+    // the same reason PropertyGrid is a table.
+    constexpr ImGuiTableFlags kPropFlags = ImGuiTableFlags_SizingStretchProp |
+                                           ImGuiTableFlags_NoSavedSettings |
+                                           ImGuiTableFlags_PadOuterX;
+    if (ImGui::BeginTable("##script_props", 4, kPropFlags)) {
+        ImGui::TableSetupColumn("key", ImGuiTableColumnFlags_WidthStretch, 0.34f);
+        ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthStretch, 0.22f);
+        ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 0.38f);
+        // The remove button is the one column with a real fixed size: it holds
+        // one glyph and stretching it would leave a button the width of a name.
+        ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight());
 
-        ImGui::SetNextItemWidth(110.0f);
-        char key[96];
-        std::snprintf(key, sizeof(key), "%s", p.key.c_str());
-        if (ImGui::InputText("##key", key, sizeof(key)))
-            p.key = key;
-        track(context);
+        for (int i = 0; i < int(props.size()); ++i) {
+            Prop& p = props[i];
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
 
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(78.0f);
-        int typeIndex = int(p.type);
-        if (ImGui::Combo("##type", &typeIndex, kTypeNames,
-                         IM_ARRAYSIZE(kTypeNames)))
-            p.type = Prop::Type(typeIndex);
-        track(context);
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            char key[96];
+            std::snprintf(key, sizeof(key), "%s", p.key.c_str());
+            if (ImGui::InputText("##key", key, sizeof(key)))
+                p.key = key;
+            track(context);
 
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(150.0f);
-        switch (p.type) {
-        case Prop::Type::Bool:
-            ImGui::Checkbox("##v", &p.boolValue);
-            break;
-        case Prop::Type::Number:
-            ImGui::DragFloat("##v", &p.numberValue, 0.01f);
-            break;
-        case Prop::Type::Vec3:
-            ImGui::DragFloat3("##v", &p.vecValue.x, 0.01f);
-            break;
-        case Prop::Type::String:
-        case Prop::Type::Entity: {
-            // Entity is a string with a different meaning: it names another
-            // entity, which the cooker checks and the host resolves at start().
-            char value[96];
-            std::snprintf(value, sizeof(value), "%s", p.stringValue.c_str());
-            if (ImGui::InputText("##v", value, sizeof(value)))
-                p.stringValue = value;
-            break;
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            int typeIndex = int(p.type);
+            if (ImGui::Combo("##type", &typeIndex, kTypeNames,
+                             IM_ARRAYSIZE(kTypeNames)))
+                p.type = Prop::Type(typeIndex);
+            track(context);
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            switch (p.type) {
+            case Prop::Type::Bool:
+                // Checkbox ignores item width, so it would sit at the cell's
+                // left edge while every other row's value box fills it. Centred
+                // instead, so the column still reads as one column.
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                                     (ImGui::GetContentRegionAvail().x -
+                                      ImGui::GetFrameHeight()) *
+                                         0.5f);
+                ImGui::Checkbox("##v", &p.boolValue);
+                break;
+            case Prop::Type::Number:
+                ImGui::DragFloat("##v", &p.numberValue, 0.01f);
+                break;
+            case Prop::Type::Vec3:
+                ImGui::DragFloat3("##v", &p.vecValue.x, 0.01f);
+                break;
+            case Prop::Type::String:
+                stringInput("##v", p.stringValue, context);
+                break;
+            case Prop::Type::Entity:
+                // An entity reference is a string with a different meaning: it
+                // names another entity, which the cooker checks and the host
+                // resolves at start(). Picked from the scene rather than typed,
+                // for the same reason the script path is.
+                pickerWidget("##v", p.stringValue, entityPickerSpec(context),
+                             context);
+                break;
+            }
+            track(context);
+
+            ImGui::TableNextColumn();
+            if (ImGui::Button("x", ImVec2(-FLT_MIN, 0.0f)))
+                removeAt = i;
+            ImGui::PopID();
         }
-        }
-        track(context);
-
-        ImGui::SameLine();
-        if (ImGui::SmallButton("x"))
-            removeAt = i;
-        ImGui::PopID();
+        ImGui::EndTable();
     }
 
     // Applied after the loop: erasing inside it would invalidate the reference

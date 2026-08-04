@@ -435,6 +435,10 @@ private:
     // unlike the TOML vocabularies this one changes while the editor is open --
     // writing a new script is exactly the moment you want to attach it.
     std::vector<std::string> mScriptPaths;
+    // Scratch for the inspector's entity-reference picker, refilled per frame
+    // from the open document. A member rather than a local so the vector keeps
+    // its capacity instead of reallocating every frame the panel is open.
+    std::vector<std::string> mSceneEntityIds;
     // The looks palettes.toml defines, and where it is. Resolved once: the
     // combo is drawn every frame the inspector is open with nothing selected.
     std::vector<std::string> mPalettes;
