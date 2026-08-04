@@ -32,6 +32,7 @@
 #include <eng/ecs/components/Name.h>
 #include <eng/ecs/components/Orbit.h>
 #include <eng/ecs/components/Parent.h>
+#include <eng/ecs/components/Scripts.h>
 #include <eng/ecs/components/Spin.h>
 #include <eng/ecs/components/Transform.h>
 #include <eng/ecs/components/WorldTransform.h>

@@ -823,6 +823,17 @@ if(BUILD_TESTING)
   target_link_libraries(component_reflect_tests PRIVATE glm::glm EnTT::EnTT)
   add_test(NAME component_reflect COMMAND component_reflect_tests)
 
+  # No VM here: this asserts the component's payload format, which is a file
+  # format, so it builds the two sources that decide it and nothing else.
+  add_executable(script_serialize_tests
+                 engine/tests/ScriptSerializeTests.cpp
+                 engine/src/ecs/ComponentRegistry.cpp
+                 engine/src/io/ByteStream.cpp)
+  target_include_directories(script_serialize_tests
+                             PRIVATE engine/include third_party)
+  target_link_libraries(script_serialize_tests PRIVATE glm::glm EnTT::EnTT)
+  add_test(NAME script_serialize COMMAND script_serialize_tests)
+
   add_executable(scene_tests engine/tests/SceneTests.cpp
                              engine/src/ecs/World.cpp)
   target_include_directories(scene_tests PRIVATE engine/include engine/src

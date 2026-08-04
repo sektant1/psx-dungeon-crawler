@@ -60,6 +60,77 @@ void deName(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
     r.emplace_or_replace<Name>(e, Name{b.str()});
 }
 
+// Scripts cannot be a reflected component: Field{type, offset} describes a
+// fixed layout, and this is a variable-length list of heterogeneous values. So
+// it hand-writes its payload, like the five above and below it.
+//
+//   u16 itemCount
+//     per item: str path, u8 enabled, u16 propCount
+//       per prop: str key, u8 type, then the value in the encoding that type
+//                 names -- Bool u8, Number f32, Vec3 vec3, String/Entity str.
+//
+// ByteWriter interns strings, so a hundred entities carrying the same script
+// path cost a hundred u32 indices and one string.
+void serScripts(const entt::registry& r, entt::entity e, ByteWriter& w)
+{
+    const auto& s = r.get<Scripts>(e);
+    w.u16(uint16_t(s.items.size()));
+    for (const ScriptRef& item : s.items) {
+        w.str(item.path);
+        w.u8(item.enabled ? 1u : 0u);
+        w.u16(uint16_t(item.props.size()));
+        for (const ScriptProp& p : item.props) {
+            w.str(p.key);
+            w.u8(uint8_t(p.type));
+            switch (p.type) {
+            case ScriptProp::Type::Bool:   w.u8(p.b ? 1u : 0u); break;
+            case ScriptProp::Type::Number: w.f32(p.n); break;
+            case ScriptProp::Type::Vec3:   w.vec3(p.v); break;
+            case ScriptProp::Type::String:
+            case ScriptProp::Type::Entity: w.str(p.s); break;
+            }
+        }
+    }
+}
+
+void deScripts(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    Scripts s;
+    // The reader is bounded to this component and yields zeros past its end,
+    // so a truncated payload produces fewer items rather than reading into the
+    // next component's bytes.
+    if (bytes >= 2) {
+        const uint16_t count = b.u16();
+        for (uint16_t i = 0; i < count && b.ok(); ++i) {
+            ScriptRef item;
+            item.path = b.str();
+            item.enabled = b.u8() != 0;
+            const uint16_t propCount = b.u16();
+            for (uint16_t j = 0; j < propCount && b.ok(); ++j) {
+                ScriptProp p;
+                p.key = b.str();
+                p.type = ScriptProp::Type(b.u8());
+                switch (p.type) {
+                case ScriptProp::Type::Bool:   p.b = b.u8() != 0; break;
+                case ScriptProp::Type::Number: p.n = b.f32(); break;
+                case ScriptProp::Type::Vec3:   p.v = b.vec3(); break;
+                case ScriptProp::Type::String:
+                case ScriptProp::Type::Entity: p.s = b.str(); break;
+                default:
+                    // A type id from a newer build. Everything after it is
+                    // unparseable from here, so stop rather than guess a width
+                    // and desynchronise the whole payload.
+                    b.invalidate();
+                    break;
+                }
+                if (b.ok()) item.props.push_back(std::move(p));
+            }
+            if (b.ok()) s.items.push_back(std::move(item));
+        }
+    }
+    r.emplace_or_replace<Scripts>(e, std::move(s));
+}
+
 void serTransform(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
     const auto& t = r.get<Transform>(e);
@@ -539,9 +610,14 @@ void registerEngineComponents(ComponentRegistry& reg)
     // 29-31 are the game's (Actor, ActorSounds, ViewmodelRig), taken while the
     // engine's block ended at 28. The engine continues above them for the same
     // reason it once continued above 10-17: a stable id is a file format, and
-    // renumbering the game's three would reinterpret every .map on disk. The
-    // next application type takes 33.
+    // renumbering the game's three would reinterpret every .map on disk. New
+    // application types take kFirstApplicationTypeId (64) and up, which is
+    // where the two blocks stop being able to meet at all.
     reg.add(reflectedComponent<PrimitiveMesh>("PrimitiveMesh", 32));
+    // Hand-written for the same reason as the five at the top of this file: a
+    // variable-length list of heterogeneous values is not a field table.
+    reg.add({"Scripts", 33, addDefault<Scripts>, has<Scripts>, remove<Scripts>,
+             serScripts, deScripts});
 }
 
 } // namespace ecs
