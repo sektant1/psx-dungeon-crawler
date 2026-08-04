@@ -67,6 +67,17 @@ public:
     // physics from onPresent -- where the caller simply calls this first.
     void fixedTick(float dt);
 
+    // Dispatches on_collision / on_trigger for the contacts the last physics
+    // step produced. Call immediately AFTER Physics::update(), before tick(),
+    // so a script reacts in the same frame the collision happened. A no-op
+    // unless bindPhysics() was called.
+    //
+    // Collider::sensor decides which callback fires: a sensor body reports
+    // through on_trigger, a solid one through on_collision. That is a component
+    // read, not a second mechanism, so a trigger volume and a wall are the same
+    // kind of object with one flag between them.
+    void drainContacts();
+
     // --- messaging -------------------------------------------------------
     // Delivers on_event(name, nil) to every live instance. The C++ side of what
     // Lua reaches through event.broadcast, for a game that wants to announce

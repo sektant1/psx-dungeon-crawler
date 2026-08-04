@@ -1,6 +1,7 @@
 #include <eng/script/ScriptHost.h>
 
 #include "script/ScriptChunkCache.h"
+#include "script/ScriptContactBridge.h"
 #include "script/ScriptError.h"
 #include "script/ScriptInstance.h"
 #include "script/bind/Bindings.h"
@@ -284,6 +285,9 @@ struct ScriptHost::Impl {
     // Held so binders that need the host's internals can add methods to the
     // entity usertype after it is registered.
     sol::usertype<LuaEntity> entityType;
+    // Only when bindPhysics was called. Destroyed with the host, before the
+    // Lua state, so the subscription cannot outlive the queue it fills.
+    std::unique_ptr<ScriptContactBridge> contacts;
     // True while on_destroy handlers are running. Structural changes from Lua
     // are refused during that window.
     bool tearingDown = false;
@@ -330,6 +334,39 @@ void ScriptHost::bindInput(Input& input)
 void ScriptHost::bindPhysics(Physics& physics)
 {
     eng::script::bindPhysics(mImpl->lua, physics, mImpl->world);
+    mImpl->contacts =
+        std::make_unique<ScriptContactBridge>(physics, mImpl->world);
+}
+
+void ScriptHost::drainContacts()
+{
+    if (!mImpl->contacts) return;
+    auto& reg = mImpl->world.registry();
+
+    for (const ScriptContact& c : mImpl->contacts->drain()) {
+        if (!reg.valid(c.self) || !reg.all_of<ScriptState>(c.self)) continue;
+        // Copied: a handler may destroy an entity, which releases slots.
+        const std::vector<uint32_t> slots = reg.get<ScriptState>(c.self).instances;
+        const LuaEntity other{&mImpl->world, c.other};
+
+        for (const uint32_t slot : slots) {
+            ScriptInstance* inst = mImpl->instances.get(slot);
+            // Not started means start() has not run; delivering a contact to an
+            // uninitialised self would hand the script state it never set up.
+            if (!inst || !inst->started) continue;
+
+            if (c.sensor) {
+                mImpl->call(*inst, "on_trigger", other);
+            } else {
+                sol::table hit = mImpl->lua.create_table();
+                hit["point"] = c.point;
+                hit["normal"] = c.normal;
+                hit["impulse"] = c.impulse;
+                mImpl->call(*inst, "on_collision", other, hit);
+            }
+        }
+    }
+    mImpl->flushDestroys();
 }
 
 void ScriptHost::broadcast(const std::string& name)
