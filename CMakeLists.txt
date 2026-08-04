@@ -382,7 +382,8 @@ add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
                               engine/src/script/ScriptChunkCache.cpp
                               engine/src/script/ScriptInstance.cpp
                               engine/src/script/bind/BindMath.cpp
-                              engine/src/script/bind/BindEntity.cpp)
+                              engine/src/script/bind/BindEntity.cpp
+                              engine/src/script/bind/BindComponents.cpp)
 target_include_directories(eng_script PRIVATE third_party engine/src)
 target_link_libraries(eng_script
   PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_framework>"

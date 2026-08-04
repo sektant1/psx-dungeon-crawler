@@ -30,6 +30,8 @@ struct ScriptHost::Impl {
 
         bindMath(lua);
         entityType = bindEntity(lua);
+        setComponentRegistry(&registry);
+        bindComponents(lua, entityType);
 
         // on_destroy fires from here rather than from World::destroy, because
         // the World must not know scripting exists. entt calls this while the
@@ -258,6 +260,26 @@ std::string ScriptHost::luaGlobalString(const char* name) const
     const sol::object o = mImpl->lua[name];
     return (o.valid() && o.is<std::string>()) ? o.as<std::string>()
                                               : std::string();
+}
+
+bool ScriptHost::luaGlobalNil(const char* name) const
+{
+    const sol::object o = mImpl->lua[name];
+    return !o.valid() || o.get_type() == sol::type::lua_nil;
+}
+
+void ScriptHost::luaSetGlobalNil(const char* name)
+{
+    mImpl->lua[name] = sol::lua_nil;
+}
+
+void ScriptHost::luaSetGlobalEntityArray(
+    const char* name, const std::vector<entt::entity>& entities)
+{
+    sol::table array = mImpl->lua.create_table();
+    for (std::size_t i = 0; i < entities.size(); ++i)
+        array[i + 1] = LuaEntity{&mImpl->world, entities[i]}; // Lua is 1-based
+    mImpl->lua[name] = array;
 }
 
 } // namespace eng::script

@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace eng::ecs {
 class World;
@@ -66,6 +67,12 @@ public:
     bool luaGlobalBool(const char* name) const;
     double luaGlobalNumber(const char* name) const;
     std::string luaGlobalString(const char* name) const;
+    bool luaGlobalNil(const char* name) const;
+    void luaSetGlobalNil(const char* name);
+    // Publishes entity handles as a 1-based Lua array. Exists so a test can
+    // hand the VM entities it built in C++ before world.spawn is bound.
+    void luaSetGlobalEntityArray(const char* name,
+                                 const std::vector<entt::entity>& entities);
 
 private:
     struct Impl;

@@ -3,7 +3,10 @@
 
 #include <entt/entt.hpp>
 
-namespace eng::ecs { class World; }
+namespace eng::ecs {
+class World;
+class ComponentRegistry;
+}
 
 namespace eng::script {
 
@@ -28,5 +31,14 @@ void bindMath(sol::state& lua);
 // accessors and the messaging calls need the host's internals and so cannot be
 // registered from here.
 sol::usertype<LuaEntity> bindEntity(sol::state& lua);
+
+// The registry the generic component accessors walk. Must be set before
+// bindComponents and must outlive the state.
+void setComponentRegistry(const ecs::ComponentRegistry* reg);
+
+// entity:get/set/has/add/remove, driven entirely by the registry's field table.
+// This is what makes a component registered later scriptable with no Lua-side
+// work, which is the property the engine's component table already prizes.
+void bindComponents(sol::state& lua, sol::usertype<LuaEntity>& entity);
 
 } // namespace eng::script

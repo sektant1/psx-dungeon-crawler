@@ -3,6 +3,7 @@
 #include <eng/ecs/components/Dirty.h>
 #include <eng/ecs/components/Name.h>
 #include <eng/ecs/components/Scripts.h>
+#include <eng/ecs/components/Spin.h>
 #include <eng/ecs/components/Transform.h>
 #include <eng/ecs/components/WorldTransform.h>
 #include <eng/script/ScriptConfig.h>
@@ -225,6 +226,139 @@ int main()
                 "and reading through it yields a default, not a crash");
         require(host.luaGlobalNumber("stale_pos") == 0.0,
                 "including its transform");
+    }
+
+    // --- the proxy reads and writes any reflected component ----------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "reflect.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  has_before = self.entity:has('Spin')\n"
+            "  self.entity:add('Spin')\n"
+            "  has_after = self.entity:has('Spin')\n"
+            "  local s = self.entity:get('Spin')\n"
+            "  read_default = s.degrees_per_second\n"
+            "  s.degrees_per_second = 45\n"
+            "  after_field_write = self.entity:get('Spin').degrees_per_second\n"
+            "  self.entity:set('Spin', { degrees_per_second = 180 })\n"
+            "  missing = self.entity:get('Orbit')\n"
+            "end\n"
+            "return M\n");
+        const entt::entity e = scripted(world, "spinner", path);
+        host.tick(0.016f);
+
+        require(!host.luaGlobalBool("has_before"), "has() is false before add");
+        require(host.luaGlobalBool("has_after"), "add() emplaces the component");
+        require(host.luaGlobalNumber("read_default") == 90.0,
+                "a field reads the component's own default");
+        require(host.luaGlobalNumber("after_field_write") == 45.0,
+                "assigning a field writes through to the live component");
+        require(world.registry().get<Spin>(e).degreesPerSecond == 180.0f,
+                "set() with a table writes named fields");
+        require(host.luaGlobalNil("missing"),
+                "get() on an absent component is nil, not an error -- a script "
+                "should be able to probe");
+    }
+
+    // --- vec3 fields go through the proxy too ------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "reflect_vec.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  self.entity:set('Spin', { axis = vec3(1, 0, 0) })\n"
+            "  axis_x = self.entity:get('Spin').axis.x\n"
+            "end\n"
+            "return M\n");
+        const entt::entity e = scripted(world, "axis", path);
+        host.tick(0.016f);
+        require(host.luaGlobalNumber("axis_x") == 1.0, "vec3 field round-trips");
+        require(world.registry().get<Spin>(e).axis.x == 1.0f,
+                "and lands on the component");
+    }
+
+    // --- remove, and the proxy after it ------------------------------------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "remove.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  self.entity:add('Spin')\n"
+            "  held = self.entity:get('Spin')\n"
+            "  self.entity:remove('Spin')\n"
+            "  gone = self.entity:has('Spin')\n"
+            "  after = held.degrees_per_second\n"
+            "end\n"
+            "return M\n");
+        scripted(world, "r", path);
+        host.tick(0.016f);
+        require(!host.luaGlobalBool("gone"), "remove() removes it");
+        require(host.luaGlobalNumber("after") == 0.0,
+                "a proxy to a removed component reads a default rather than "
+                "through a dangling pointer");
+    }
+
+    // --- THE invalidation case: a proxy held across a pool-moving emplace ---
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "invalidate.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  self.entity:add('Spin')\n"
+            "  local s = self.entity:get('Spin')\n"
+            "  s.degrees_per_second = 10\n"
+            "  -- Emplacing Spin on 512 other entities reallocates the pool. A\n"
+            "  -- proxy caching a component pointer is now dangling.\n"
+            "  for i = 1, 512 do fillers[i]:add('Spin') end\n"
+            "  s.degrees_per_second = 20\n"
+            "  readback = s.degrees_per_second\n"
+            "end\n"
+            "return M\n");
+        const entt::entity e = scripted(world, "survivor", path);
+
+        // Built from C++ rather than Lua: world.spawn does not exist yet, and
+        // this case is about the proxy, not about spawning.
+        host.luaSetGlobalEntityArray("fillers", [&] {
+            std::vector<entt::entity> made;
+            made.reserve(512);
+            for (int i = 0; i < 512; ++i) made.push_back(world.create("filler"));
+            return made;
+        }());
+
+        host.tick(0.016f);
+        require(host.luaGlobalNumber("readback") == 20.0,
+                "the proxy re-resolved after the pool moved");
+        require(world.registry().get<Spin>(e).degreesPerSecond == 20.0f,
+                "and it wrote the RIGHT entity's component, not whatever "
+                "occupies the address the old one used to have");
+    }
+
+    // --- an unknown component name is an error, not a silent no-op ---------
+    {
+        World world;
+        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        const std::string path = writeScript(
+            "typo.lua",
+            "local M = {}\n"
+            "function M:start()\n"
+            "  local ok = pcall(function() self.entity:add('Spinn') end)\n"
+            "  refused = not ok\n"
+            "end\n"
+            "return M\n");
+        scripted(world, "t", path);
+        host.tick(0.016f);
+        require(host.luaGlobalBool("refused"),
+                "a misspelled component name fails loudly -- silently doing "
+                "nothing is how a typo becomes an afternoon");
     }
 
     std::cout << "ScriptBindingTests: ok\n";
