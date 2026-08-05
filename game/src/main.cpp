@@ -28,6 +28,7 @@
 #include "GameContext.h"
 #include "ui/GameHud.h"
 #include "ui/TooltipBuilder.h"
+#include "HitFeel.h"
 #include "HudModel.h"
 #include "InteractionSystem.h"
 #include "PlayerSystem.h"
@@ -187,6 +188,11 @@ private:
     eng::FpsController::DashTuning mDashTuning;
     float mDodgeIframes = 0.22f;
     float mDodgeStamina = 25.0f;
+
+    // Screen shake and hit-stop. Driven from the UNSCALED wall delta, because
+    // the thing a hit-stop slows is the clock it would otherwise be reading.
+    game::HitFeel mHitFeel;
+    bool mHitStopDrivingClock = false;
 
     game::CombatVocabulary mVocabulary;
     std::optional<game::GameContext> mCtx;
@@ -351,6 +357,17 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // Shared first-person rig framing. Read from the file rather than through
     // eng::Config because the socket and rotation are arrays, which the
     // flattened config has no getter for (see eng/Config.h).
+    // Feedback tuning, read from the same file for the same reason the rig is:
+    // the tier tables are arrays, which the flattened eng::Config has no getter
+    // for. A missing [feel] keeps the shipped numbers.
+    {
+        game::HitFeelTuning tuning = mHitFeel.tuning();
+        if (game::loadHitFeelTuningFile(game::assetPath("config/game.toml"),
+                                        tuning))
+            mHitFeel.setTuning(tuning);
+        else
+            eng::log::warn("game.toml [feel] was rejected; keeping defaults");
+    }
     game::loadViewmodelRig(game::assetPath("config/game.toml"), mConfigRig);
     mPlayerSys.setViewmodelRig(mConfigRig);
     mHud.initialise();
@@ -474,6 +491,14 @@ void DungeonApp::teardownDummy()
 
 void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
 {
+    // A shake that survived a transition would be the camera shaking for
+    // something in a level the player has left, and a hit-stop that survived
+    // one would slow the arrival.
+    mHitFeel.reset();
+    if (mHitStopDrivingClock) {
+        engine.gameClock().setScale(1.0f);
+        mHitStopDrivingClock = false;
+    }
     eng::Renderer& r = engine.renderer();
     // Destroy dynamic prop + enemy + dummy bodies before clearScene wipes their
     // nodes. Enemies go first: their bodies and nodes are both ours, and a node
@@ -688,6 +713,14 @@ void DungeonApp::playerHit(eng::BodyHandle body, const char* weaponId,
     if (!result.hitLanded)
         return;
     mCtx->renderer.spawnParticles("weapon_hit_confirm", point);
+    // Heavy when the blow is one that staggers -- the tier is the weapon's own
+    // poise damage, so a wand tap and a crossbow bolt differ without this
+    // knowing either weapon by name.
+    mHitFeel.impact(result.killed ? game::ImpactTier::Kill
+                    : mCombat.director().weapons().get(weaponId).timing
+                                  .poiseDamage >= 10.0f
+                        ? game::ImpactTier::Heavy
+                        : game::ImpactTier::Solid);
     // Blood. The profile is the victim's own -- an undead sheds ichor, a
     // construct sheds nothing -- and the severity is what the blow took off it,
     // so a graze spatters and a killing blow gibs without this knowing either
@@ -801,6 +834,8 @@ void DungeonApp::wireEnemies()
             wd.makePacket(enemy, dir, 0.5f); // no crits against the player
         const game::DamageResult result =
             game::damage::apply(reg, mPlayerEntity, packet);
+            // Being hit outranks landing one: the player has to notice.
+            mHitFeel.impact(game::ImpactTier::Heavy);
         if (poiseDamage > 0.0f)
             game::feel::poise::apply(reg, mPlayerEntity, poiseDamage);
         mCtx->renderer.spawnParticles("engine.hit_sparks", point);
@@ -907,6 +942,13 @@ void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
                     mCombat.fireWeapon(
                         *mCtx, *weapon, player.eyePosition(), player.forward(),
                         mPlayerSys.projectileMuzzle(mCtx->renderer));
+                    // Deliberately NO camera feedback on firing. The
+                    // viewmodel already kicks, and it is the loud half by
+                    // design (docs/fps-viewmodel.md). Shaking the camera per
+                    // shot does not survive an automatic weapon: the talon
+                    // fires every 0.09s, so even a small trauma is added
+                    // faster than it decays and the view never settles --
+                    // which reads as a broken camera, not as a powerful gun.
                     // The weapon's own fire cue over the player's Attack row,
                     // for the same reason the impact one wins: a wand and a
                     // crossbow do not sound alike, and the actor's row is the
@@ -1038,6 +1080,26 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         }
         mLevel.update(r, steps.time(eng::StepChannel::World), f.dt);
         mLevel.updateVisibility(r, player.eyePosition());
+    }
+
+    // Feedback, before the present that reads it. On the wall clock so a
+    // hit-stop can end itself and the shake keeps moving while time is slowed
+    // -- a frozen frame with a still camera reads as a hitch, not a punch.
+    {
+        mHitFeel.update(f.realDt);
+        // The clock is only touched while a stop is live, and released exactly
+        // once. Driving it every frame would stomp the console's own
+        // slow-motion the moment anything was hit.
+        const float wanted = mHitFeel.clockScale();
+        if (wanted != 1.0f) {
+            f.engine.gameClock().setScale(wanted);
+            mHitStopDrivingClock = true;
+        } else if (mHitStopDrivingClock) {
+            f.engine.gameClock().setScale(1.0f);
+            mHitStopDrivingClock = false;
+        }
+        mPlayerSys.controller().setViewShake(mHitFeel.shakeOffset(),
+                                             mHitFeel.shakeRotationDegrees());
     }
 
     // Present only: the simulation for this frame already ran in onFixedStep.

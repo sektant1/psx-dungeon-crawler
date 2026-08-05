@@ -204,3 +204,46 @@ radius = 0.50
 impulse = 6.0
 windup = 0.12
 active = 0.13
+
+# --- feedback ----------------------------------------------------------------
+# Screen shake and hit-stop: the two channels that read as *impact* rather than
+# as decoration. Everything else a hit throws (particles, blood, the poise chip,
+# the grunt) is authored elsewhere; these two are here because they act on the
+# camera and the clock, which belong to nobody in particular.
+#
+# The two scales at the top are accessibility masters, and 0 switches a channel
+# off outright. Screen shake and time distortion are settings people turn down
+# for real reasons, so they are one number each and not buried per tier.
+[feel]
+shake_scale = 1.0
+hit_stop_scale = 1.0
+
+# Trauma decays linearly and the shake is trauma SQUARED, so a graze barely
+# moves the view and a kill punches. Raise the decay for a snappier settle.
+trauma_decay = 3.0
+shake_frequency = 22.0
+# Metres at full shake, camera space: right, up, forward. Small on purpose --
+# the viewmodel moves loudly, the camera moves subtly.
+shake_offset = [0.045, 0.036, 0.022]
+shake_pitch_degrees = 0.75
+shake_roll_degrees = 1.10
+# What the game clock runs at during a stop. Not 0: a fully frozen frame reads
+# as a hitch, a very slow one reads as weight.
+hit_stop_time_scale = 0.08
+
+# Per tier. `light` is a shot leaving the barrel, `solid` a landed hit, `heavy`
+# a staggering blow or one the player takes, `kill` a death.
+# light carries no hit-stop deliberately: stopping time on a routine action --
+# and automatic fire is routine -- is the fastest way to feel broken.
+[feel.light]
+trauma = 0.10
+hit_stop = 0.0
+[feel.solid]
+trauma = 0.20
+hit_stop = 0.035
+[feel.heavy]
+trauma = 0.45
+hit_stop = 0.060
+[feel.kill]
+trauma = 0.75
+hit_stop = 0.110

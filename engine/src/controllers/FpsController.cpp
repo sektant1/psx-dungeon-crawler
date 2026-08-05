@@ -438,13 +438,18 @@ void FpsController::present(eng::Renderer& r, float alpha)
     mLastAppliedFov = desiredFov;
 
     const float t = glm::clamp(alpha, 0.0f, 1.0f);
-    r.setPosition(mHead, glm::mix(mPrevHeadOffset, mHeadOffset, t));
+    // Shake is added here and nowhere else. mHeadOffset and mPos keep the
+    // simulated values, so aiming, collision and the muzzle all read a steady
+    // pose while the view moves.
+    r.setPosition(mHead, glm::mix(mPrevHeadOffset, mHeadOffset, t) +
+                             mShakeOffset);
     r.setPosition(mBody, glm::mix(mPrevPos, mPos, t));
     r.setOrientation(mBody, glm::angleAxis(mYaw, glm::vec3(0, 1, 0)));
     const float dashRoll = glm::mix(mPrevDashRoll, mDashRoll, t);
+    const glm::vec3 shake = glm::radians(mShakeRotationDegrees);
     r.setOrientation(
-        mHead, glm::angleAxis(mPitch, glm::vec3(1, 0, 0)) *
-                   glm::angleAxis(dashRoll, glm::vec3(0, 0, 1)));
+        mHead, glm::angleAxis(mPitch + shake.x, glm::vec3(1, 0, 0)) *
+                   glm::angleAxis(dashRoll + shake.z, glm::vec3(0, 0, 1)));
 }
 
 } // namespace eng

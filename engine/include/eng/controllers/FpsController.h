@@ -49,6 +49,17 @@ public:
     // current one (Physics::interpolationAlpha). Position is interpolated
     // between them; orientation is already current.
     void present(eng::Renderer& r, float alpha = 1.0f);
+    // Camera shake, in camera space, applied at presentation only.
+    //
+    // Deliberately NOT part of the simulated pose: eyePosition(), the physics
+    // body and everything that aims read the unshaken transform, so a shake can
+    // never desync collision or send a shot somewhere the player did not point.
+    // The caller recomputes it every frame and never reads it back.
+    void setViewShake(glm::vec3 offset, glm::vec3 rotationDegrees)
+    {
+        mShakeOffset = offset;
+        mShakeRotationDegrees = rotationDegrees;
+    }
 
     // Reads input, looks, simulates one step and presents. For callers with no
     // fixed-step loop of their own -- tests and tools. The game drives the
@@ -164,6 +175,8 @@ private:
     glm::vec3 mHeadOffset{0.0f, 1.7f, 0.0f};
     float mBaseFov = 70.0f;
     float mLastAppliedFov = 70.0f;
+    glm::vec3 mShakeOffset{0.0f};
+    glm::vec3 mShakeRotationDegrees{0.0f};
     float mFovKick = 0.0f;
     float mSprintFovKick = 4.0f; // degrees added at full sprint
     float mBobAmount = 0.025f;   // head-bob vertical amplitude (m)

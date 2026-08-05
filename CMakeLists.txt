@@ -616,6 +616,7 @@ add_executable(
   game/src/ui/GameHudStyle.cpp
   game/src/ui/TooltipBuilder.cpp
   game/src/HudModel.cpp
+  game/src/HitFeel.cpp
   game/src/combat/DamageSystem.cpp
   game/src/combat/BulletPattern.cpp
   game/src/combat/StatusEffectSystem.cpp
@@ -1085,6 +1086,15 @@ if(BUILD_TESTING)
                              PRIVATE game/src engine/include third_party)
   target_link_libraries(viewmodel_socket_tests PRIVATE eng eng_toml glm::glm)
   add_test(NAME viewmodel_socket COMMAND viewmodel_socket_tests)
+
+  # Screen shake and hit-stop. Renderer-free, so the decay curve, the tier
+  # ordering and the hit-stop lifetime are testable at all.
+  add_executable(hit_feel_tests game/tests/HitFeelTests.cpp
+                                game/src/HitFeel.cpp)
+  target_include_directories(hit_feel_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(hit_feel_tests PRIVATE eng_toml glm::glm)
+  add_test(NAME hit_feel COMMAND hit_feel_tests)
 
   add_executable(bullet_pattern_tests game/tests/BulletPatternTests.cpp
                                       game/src/combat/BulletPattern.cpp)
