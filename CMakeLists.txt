@@ -1496,9 +1496,13 @@ if(BUILD_TESTING)
   add_test(NAME editor_vocabulary COMMAND editor_vocabulary_tests
            ${CMAKE_SOURCE_DIR}/assets/config/enemies.toml)
 
+  # Picker.cpp comes along for projectToViewport: the sandbox grid projects
+  # world lines to the viewport, which is the same maths picking already owns
+  # rather than a second copy of it.
   add_executable(editor_viewport_overlay_tests
                  editor/tests/EditorViewportOverlayTests.cpp
-                 editor/src/viewport/ViewportOverlay.cpp)
+                 editor/src/viewport/ViewportOverlay.cpp
+                 editor/src/scene/Picker.cpp)
   target_include_directories(editor_viewport_overlay_tests PRIVATE editor/include
                              engine/include)
   target_link_libraries(editor_viewport_overlay_tests PRIVATE eng_imgui)

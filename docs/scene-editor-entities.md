@@ -771,6 +771,16 @@ Two of the entries are what turn a scene into a shot:
   to the eye, for the same reason it draws the frustum. Tuning them live is the
   game console's Viewmodel panel (F1) -- see
   [fps-viewmodel.md](fps-viewmodel.md).
+- **Unpack attachments** (context menu, on a compound kit piece) -- a piece like
+  `kit.prop_boss_placeholder` declares its sword in kit.toml, and the cooker
+  emits that sword at build time. It renders, but it is not in the document: it
+  cannot be selected, moved, re-materialled or scripted, and isolating the boss
+  reports "0 parts" while a sword is plainly in its hand. Unpacking writes the
+  parts out as real child entities and marks the root so the cooker stops
+  generating its own. Recursive, and a part that is itself compound carries the
+  flag too -- guarding only the root left every nested level drawn twice, which
+  is what `scene_unpack_tests` pins. What is drawn does not change; what you can
+  reach does.
 - **Viewmodel Preview** -- the hands, drawn here, holding a weapon picked from
   `weapons.toml`. The real rig and the real weapon presentation, not a marker
   for them: whether a weapon sits in the grip or through the fingers is a
@@ -943,3 +953,52 @@ Tests:
 | `editor_material_catalog` | classifying materials by what they need from a mesh |
 | `editor_vocabulary` | the enemy ids the drop-downs are filled from |
 | `scene_environment` | the palette a level names, through save, load and cook |
+
+
+## Isolation: editing one object alone
+
+**Double-click any row in the hierarchy.** The level disappears, the grid drops
+to that entity's own height, the camera frames it in three-quarter view, and the
+hierarchy narrows to that entity and its descendants. A banner across the top of
+the viewport names what is being edited and how many parts it has; Esc, the
+banner, or the command palette leaves and puts back the camera, the work plane
+and the ceiling cut exactly as they were.
+
+It is a **view of the open document**, never a copy. Nothing is extracted, no
+second file is opened, and an edit made here is the same edit made in the level
+-- so undo, save and cook are unaffected and cannot be surprised by it.
+
+Three details that make it usable rather than merely present:
+
+- **Anything placed while isolated is parented to the isolated root**, with its
+  transform converted into the parent's frame. Without that the mode is
+  read-only in practice: you would isolate an object to add a part and the part
+  would appear as a sibling out in the level, invisible.
+- **Overlay gizmos of hidden entities go too.** A camera frustum or a light
+  radius is drawn by ImGui, not by the renderer, so the preview's visibility
+  filter never saw them -- and a frustum drawn around an object being edited
+  alone is the level leaking back into the mode that exists to exclude it.
+- **A deleted root leaves the mode.** Undo can remove the entity being edited,
+  and a mode pinned to an id that no longer exists is an empty viewport with no
+  way out.
+
+World coordinates stay true: the subtree is shown where it is, not moved to the
+origin. The sandbox reading comes from hiding everything else and dropping the
+grid plane under the object. Moving it to the origin would look more
+prefab-like and would be a lie -- gizmos, snapping, picking and the transform
+fields all work in world space, and every one of them would need a
+compensating offset.
+
+The grid in this mode is drawn as viewport overlay strokes rather than through
+`Renderer::setDebugLines`, because the RHI backend does not draw debug lines yet
+(it warns once and discards them). That is a renderer gap with its own fix; it
+is not a reason for the mode to be a black void.
+
+### Working on a compound object, end to end
+
+1. Double-click the object in the hierarchy.
+2. If it is a kit piece whose parts are baked in, right-click it and **Unpack
+   attachments** -- they become children you can select.
+3. Select a part, move it with the gizmo, change its material, give it a script.
+4. Place new parts; they land inside the object automatically.
+5. **Esc** to return to the level.

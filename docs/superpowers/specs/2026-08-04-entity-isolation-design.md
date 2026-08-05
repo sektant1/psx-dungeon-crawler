@@ -130,6 +130,44 @@ a level.
 | Tests | `editor/tests/` — subtree collection, scoped outliner, auto-parent transform |
 | Docs | `docs/scene-editor-entities.md` |
 
+## As built
+
+Shipped as designed, plus two things the design did not anticipate.
+
+**Kit attachments are not sub-entities at all.** The design assumed "sub-entity"
+meant `Entity::parent`. It does for imported models -- the dwight model in
+cozy_lair isolates to twelve editable children. But a *compound kit piece*
+(`kit.prop_boss_placeholder` and its sword) declares its parts in kit.toml and
+the cooker emits them at build time, so they are not in the document at all.
+Isolating that boss reported **"0 parts"** with a sword plainly visible in its
+hand, which is exactly the workflow complaint that started this work.
+
+That produced a second feature, **Unpack attachments**: write the parts out as
+real child entities and set `unpacked_attachments` so the cooker stops
+generating its own. `scene_unpack_tests` pins the property that makes it safe --
+the built registry is identical either way.
+
+**Guarding only the root double-drew every nested level.** A part may itself be
+a compound piece; its own attachments are authored by the recursion, so it needs
+the flag too. Caught by the generality half of the test (a synthetic kit with
+several attachments per parent, three levels deep) rather than by the shipped
+boss, which has exactly one attachment at one level and would have passed
+either way.
+
+**The grid is an overlay, not debug lines.** `Renderer::setDebugLines` is a
+no-op in the RHI backend -- it warns once and discards -- so the editor's grid
+has been invisible in this build all along. The sandbox grid is drawn as
+viewport overlay strokes instead, the way frustums and wire boxes already are.
+Implementing a line pass in the RHI renderer would fix the level grid too and is
+worth doing; it is renderer work with its own risk and does not belong bolted
+onto this.
+
+Verified: isolation on a 12-child imported model and on the boss placeholder
+(screenshots -- banner, scoped hierarchy, level hidden, framed camera, gizmos of
+hidden entities gone); unpack turning the boss's sword into a selectable child
+while still drawing it once; `scene_unpack_tests` proving drawn-set equality on
+both the shipped piece and a synthetic three-level tree.
+
 ## Non-goals
 
 - **No separate prefab files.** Isolation is a view of the open document. An
