@@ -42,6 +42,7 @@
 #include "enemy/EnemySpawner.h"
 #include "enemy/EnemySystem.h"
 #include "combat/ActionStateSystem.h"
+#include "rpg/RpgRuntime.h"
 #include "combat/DefenseSystem.h"
 #include "combat/FeelComponents.h"
 #include "combat/PoiseSystem.h"
@@ -163,6 +164,8 @@ private:
                const game::DamageResult& result);
     // Once a frame: everything still standing that is hurt enough to drip.
     void updateBleeders();
+    // Souls-style lock-on: who the player is holding, once per rendered frame.
+    void updateLockOn(const eng::FrameContext& f);
 
     static constexpr float kFixedDt = 1.0f / 60.0f;
     // Matches eng::CharacterDesc::height as the player is created with it.
@@ -185,6 +188,10 @@ private:
     // FirstPersonController or a ViewmodelRig overrides these for as long as
     // it is loaded; leaving the level restores them.
     eng::ecs::FirstPersonController mConfigController{};
+    // The over-the-shoulder framing and the lock-on rules, same story: the
+    // game's defaults until a level authors a ThirdPersonCamera of its own.
+    eng::ecs::ThirdPersonCamera mConfigCamera{};
+    game::CameraMode mConfigCameraMode = game::CameraMode::FirstPerson;
     game::ViewmodelRig mConfigRig{};
     std::string mPlayerBlood = "human";
     eng::FpsController::DashTuning mDashTuning;
@@ -243,6 +250,12 @@ private:
 
     game::DebugPanels mPanels;
     game::InteractionSystem mInteraction;
+
+    // The RPG layer: skills, items, inventory, loot, quests, dialogue, trading,
+    // the safehouse and the raid state machine. One object, wired in
+    // onStartGame and driven from the same four callbacks as everything else.
+    game::rpg::RpgRuntime mRpg;
+    bool mRpgReady = false;
 
     glm::vec3 mLastPlayerHitDirection{0.0f, 0.0f, -1.0f};
 };
@@ -349,6 +362,61 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
         float(cfg.getNumber("player.sprint_fov_kick", 4.0));
     mConfigController.bobAmount = float(cfg.getNumber("player.bob_amount", 0.025));
     mConfigController.bobSpeed = float(cfg.getNumber("player.bob_speed", 8.5));
+
+    // The third-person camera and its lock-on. Defaults live in the component
+    // and in game::LockOnTuning, so [camera] only has to name what it changes.
+    const eng::ecs::ThirdPersonCamera cameraDefaults;
+    mConfigCamera.distance =
+        float(cfg.getNumber("camera.distance", cameraDefaults.distance));
+    mConfigCamera.pivotHeight =
+        float(cfg.getNumber("camera.pivot_height", cameraDefaults.pivotHeight));
+    mConfigCamera.shoulderOffset = float(
+        cfg.getNumber("camera.shoulder_offset", cameraDefaults.shoulderOffset));
+    mConfigCamera.followRate =
+        float(cfg.getNumber("camera.follow_rate", cameraDefaults.followRate));
+    mConfigCamera.followRateVertical = float(cfg.getNumber(
+        "camera.follow_rate_vertical", cameraDefaults.followRateVertical));
+    mConfigCamera.pitchMinDegrees = float(
+        cfg.getNumber("camera.pitch_min_degrees", cameraDefaults.pitchMinDegrees));
+    mConfigCamera.pitchMaxDegrees = float(
+        cfg.getNumber("camera.pitch_max_degrees", cameraDefaults.pitchMaxDegrees));
+    mConfigCamera.mouseSensitivity = float(cfg.getNumber(
+        "camera.mouse_sensitivity", cameraDefaults.mouseSensitivity));
+    mConfigCamera.collisionRadius = float(
+        cfg.getNumber("camera.collision_radius", cameraDefaults.collisionRadius));
+    mConfigCamera.pushOutSpeed =
+        float(cfg.getNumber("camera.push_out_speed", cameraDefaults.pushOutSpeed));
+    mConfigCamera.minDistance =
+        float(cfg.getNumber("camera.min_distance", cameraDefaults.minDistance));
+    mConfigCamera.turnRateDegrees = float(
+        cfg.getNumber("camera.turn_rate_degrees", cameraDefaults.turnRateDegrees));
+    mConfigCamera.fovDegrees =
+        float(cfg.getNumber("camera.fov", cameraDefaults.fovDegrees));
+    mConfigCamera.lockFramingBias = float(
+        cfg.getNumber("camera.lock_framing_bias", cameraDefaults.lockFramingBias));
+    mConfigCamera.lockBlendRate =
+        float(cfg.getNumber("camera.lock_blend_rate", cameraDefaults.lockBlendRate));
+    mConfigCamera.lockPitchDegrees = float(
+        cfg.getNumber("camera.lock_pitch_degrees", cameraDefaults.lockPitchDegrees));
+    mConfigCamera.lockDistanceBoost = float(cfg.getNumber(
+        "camera.lock_distance_boost", cameraDefaults.lockDistanceBoost));
+    mConfigCameraMode = cfg.getString("camera.mode", "first_person") ==
+                                "third_person"
+                            ? game::CameraMode::ThirdPerson
+                            : game::CameraMode::FirstPerson;
+    game::LockOnTuning lock;
+    lock.acquireRange =
+        float(cfg.getNumber("camera.lock_on.acquire_range", lock.acquireRange));
+    lock.breakRange =
+        float(cfg.getNumber("camera.lock_on.break_range", lock.breakRange));
+    lock.acquireConeDegrees = float(cfg.getNumber(
+        "camera.lock_on.acquire_cone_degrees", lock.acquireConeDegrees));
+    lock.switchThresholdPixels = float(cfg.getNumber(
+        "camera.lock_on.switch_threshold_pixels", lock.switchThresholdPixels));
+    lock.occlusionGrace = float(
+        cfg.getNumber("camera.lock_on.occlusion_grace", lock.occlusionGrace));
+    mPlayerSys.lockOn().setTuning(lock);
+    mPlayerSys.setCameraTuning(mConfigCamera);
     mPlayerSys.setControllerTuning(mConfigController);
     mPlayerSys.controller().setDashTuning(mDashTuning);
     mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
@@ -356,6 +424,12 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // in load order but not in dependency: a weapon naming a socket this file
     // does not define is warned about when it is equipped, not here.
     mPlayerSys.loadHands(game::assetPath("config/viewmodel_hands.toml"));
+    // The RPG layer. After the vocabulary, because item resistance channels
+    // resolve against it; before the level, because a level's authored pickups
+    // are spawned from its item table.
+    mRpgReady = mRpg.load({}, mVocabulary);
+    if (mRpgReady)
+        mRpg.newGame();
     // Shared first-person rig framing. Read from the file rather than through
     // eng::Config because the socket and rotation are arrays, which the
     // flattened config has no getter for (see eng/Config.h).
@@ -516,6 +590,8 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // the next one.
     mPanels.releaseParticleSpawns();
     if (mCtx)
+        mRpg.pickups().clear(*mCtx);
+    if (mCtx)
         mEnemies.clear(*mCtx);
     if (mCtx)
         mCombat.clear(*mCtx);
@@ -552,6 +628,15 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // spawning builds the controller out of the movement numbers.
     {
         const game::MapRuntime::AuthoredPlayerRig authored = mLevel.playerRig();
+        // The camera shape first: it decides what the movement numbers below
+        // are pushed into, and it has to be chosen before the spawn builds the
+        // rig. A level that authors a ThirdPersonCamera plays over the
+        // shoulder; one that does not runs on the game's configured default.
+        mPlayerSys.setCameraTuning(authored.thirdPerson ? *authored.thirdPerson
+                                                        : mConfigCamera);
+        mPlayerSys.selectCameraMode(authored.thirdPerson
+                                        ? game::CameraMode::ThirdPerson
+                                        : mConfigCameraMode);
         mPlayerSys.setControllerTuning(authored.controller ? *authored.controller
                                                            : mConfigController);
         mPlayerSys.setViewmodelRig(authored.viewmodel ? *authored.viewmodel
@@ -586,6 +671,25 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
             markers.push_back(std::move(m));
         }
         mSpawner.addFromMarkers(markers);
+    }
+
+    // Authored `pickup.<id>` placements become world pickups. Before this,
+    // the editor could place an item, SceneCook wrote it into the .map and
+    // MapRuntime reported it -- and nothing read that call, so the item simply
+    // did not exist. This is the consumer that closes that path.
+    if (mRpgReady && mCtx)
+        mRpg.setPickupsForLevel(*mCtx, mLevel.pickupPlacements());
+
+    // Depth 0 is the threshold, which is the safehouse side of the loop;
+    // anything deeper is a live raid, where the profile may not be written.
+    if (mRpgReady) {
+        if (mDepth == 0) {
+            mRpg.returnToSafehouse();
+        } else {
+            if (mRpg.raid().phase() == game::rpg::RaidPhase::Safehouse)
+                mRpg.beginRaid(mDepth);
+            mRpg.enterRaidLevel(mDepth);
+        }
     }
 
     engine.input().setMouseGrab(!portalPreview);
@@ -628,6 +732,13 @@ void DungeonApp::wireCombatModel()
         // sound panel tune a footstep without a player-only code path.
         creg.emplace<game::Actor>(mPlayerEntity,
                                   game::Actor{game::ActorKind::Player});
+        // The sheet decides how big the pools are; combat stays the authority
+        // on what a hit does to them. This writes the derived maxima onto the
+        // components just created, preserving each pool's ratio -- so a
+        // character with 22 Vigour starts the level with the health that
+        // implies rather than the component default.
+        if (mRpgReady)
+            mRpg.applyToPlayer(creg, mPlayerEntity);
 
         creg.emplace<game::Stamina>(mDummyEntity);
         creg.emplace<game::ActionState>(mDummyEntity);
@@ -907,6 +1018,18 @@ void DungeonApp::wireEnemies()
         if (motion && mActorAudio)
             mActorAudio->play(e, game::ActorAction::Death,
                               motion->feet + glm::vec3(0.0f, 0.8f, 0.0f));
+        // What the kill was worth: character experience, a skill credit, and
+        // whatever its table drops -- all read off the enemy's own definition,
+        // so a new enemy type is still just a row in enemies.toml.
+        if (mRpgReady && motion) {
+            if (const game::EnemyTag* tag =
+                    reg.try_get<game::EnemyTag>(e); tag && tag->def) {
+                mRpg.onEnemyKilled(*mCtx, tag->def->id, tag->def->xp,
+                                   tag->def->loot, motion->feet);
+                if (!tag->def->trains.empty())
+                    mRpg.train(tag->def->trains, tag->def->xp);
+            }
+        }
         mCombat.blood().stopDrip(mCtx->renderer, entt::to_integral(e));
         mEnemies.onKilled(*mCtx, e, mLastPlayerHitDirection);
         if (motion)
@@ -923,8 +1046,59 @@ void DungeonApp::onInput(const eng::FrameContext& f)
     // class documents that split; this is the game's half of it.
     if (playerDriven())
         mPlayerSys.look(*mCtx);
+    // Live camera swap. One key rather than a menu because the two shapes are
+    // meant to be compared: the feel of a camera is not a thing anybody can
+    // judge from a screenshot or from a value in a file.
+    if (playerDriven() && mCtx->input.wasPressed("camera_toggle"))
+        mPlayerSys.setCameraMode(*mCtx,
+                                 mPlayerSys.cameraMode() ==
+                                         game::CameraMode::FirstPerson
+                                     ? game::CameraMode::ThirdPerson
+                                     : game::CameraMode::FirstPerson);
+    updateLockOn(f);
     mPlayerSys.sampleWeaponInput(
         *mCtx, playerDriven() && mCtx->input.mouseGrabbed());
+}
+
+// Who the player is locked onto, once per rendered frame. The candidate list is
+// rebuilt every frame on purpose: enemies die, spawn and walk out of range, and
+// a lock that outlives its enemy is a camera pointing at a corpse.
+void DungeonApp::updateLockOn(const eng::FrameContext& f)
+{
+    const glm::vec3 eye = mPlayerSys.controller().eyePosition();
+    std::vector<game::LockCandidate> candidates;
+    for (const game::EnemySystem::Snapshot& s : mEnemies.snapshot(eye)) {
+        if (s.health <= 0.0f)
+            continue;
+        // The torso, not the feet: a camera framing feet points at the floor.
+        // A boss is framed a little higher and treated as a bigger thing.
+        candidates.push_back({int(entt::to_integral(s.entity)),
+                              s.position + glm::vec3(0.0f, s.boss ? 1.4f : 1.0f,
+                                                     0.0f),
+                              s.boss ? 1.1f : 0.6f});
+    }
+    game::LockOnSystem::Input input;
+    input.enabled = playerDriven() && mCtx->input.mouseGrabbed();
+    input.togglePressed = input.enabled &&
+                          (mCtx->input.wasPressed("lock_on") ||
+                           mCtx->input.wasMousePressed(eng::MouseButton::Middle));
+    // A flick of the mouse switches target, which is the souls gesture with the
+    // stick. The system decays this, so only a flick counts.
+    input.switchAxis = input.enabled ? mCtx->input.mouseDelta().x : 0.0f;
+    mPlayerSys.lockOn().update(
+        candidates, eye, mPlayerSys.controller().forward(), input, f.realDt,
+        [this](glm::vec3 from, glm::vec3 to) {
+            const glm::vec3 delta = to - from;
+            const float distance = glm::length(delta);
+            if (distance < 0.01f)
+                return true;
+            eng::RayHit hit;
+            // Only the level itself blocks a lock. Bodies, props and the
+            // target's own collider would each drop it for a frame at a time.
+            return !physics().rayCast(from, delta / distance, distance, hit,
+                                      config().staticLayers);
+        });
+    mPlayerSys.applyLockOn(*mCtx);
 }
 
 void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
@@ -948,8 +1122,13 @@ void DungeonApp::onPreSimulate(const eng::FrameContext&, float fixedDt)
                 if (const game::PlayerWeaponDef* weapon =
                         mPlayerSys.weaponDefinition(*fired)) {
                     const eng::FpsController& player = mPlayerSys.controller();
+                    // Aim comes from the player system, not from the view:
+                    // under a lock-on the shot goes at the target, and in
+                    // third person the boom is metres behind a wall as often
+                    // as not.
                     mCombat.fireWeapon(
-                        *mCtx, *weapon, player.eyePosition(), player.forward(),
+                        *mCtx, *weapon, mPlayerSys.aimOrigin(),
+                        mPlayerSys.aimDirection(),
                         mPlayerSys.projectileMuzzle(mCtx->renderer));
                     // Deliberately NO camera feedback on firing. The
                     // viewmodel already kicks, and it is the loud half by
@@ -1116,7 +1295,8 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // camera/FOV tweaks so the debug sliders take effect live.
     {
         const auto timed = stats().time(PhasePlayer);
-        mPlayerSys.present(*mCtx, playerDriven() ? f.alpha : 1.0f);
+        mPlayerSys.present(*mCtx, playerDriven() ? f.alpha : 1.0f,
+                           f.realDt);
         if (eng::telemetry::enabled("player", eng::telemetry::Level::Trace)) {
             const glm::vec3 eye = mPlayerSys.controller().eyePosition();
             eng::telemetry::watchf("player", "pos", "%.2f %.2f %.2f", eye.x,
@@ -1159,6 +1339,20 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
              s.position + glm::vec3(0.0f, 1.0f, 0.0f), 12.0f, 0.6f,
              int(entt::to_integral(s.entity))});
     }
+    // World pickups: their idle bob, and their place in the one aim test.
+    // They go in through the external seam for the same reason enemies do --
+    // they are not owned by the level.
+    if (mRpgReady) {
+        mRpg.pickups().update(*mCtx, f.dt);
+        std::vector<GameplayTarget> items;
+        mRpg.pickups().appendTargets(items);
+        for (const GameplayTarget& t : items)
+            mInteraction.pushTarget(t);
+        // The extraction countdown runs on the real delta: a hit-stop must not
+        // buy the player extra time on the threshold.
+        mRpg.tickRaid(f.realDt);
+    }
+
     mInteraction.update(
         *mCtx, mLevel, mDepth, player.eyePosition(), player.forward(),
         /*onDescend=*/[&] {
@@ -1171,6 +1365,16 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
             --mDepth;
             enterLevel(engine, true);
         });
+
+    // Taking what is under the crosshair. The interaction system resolves the
+    // target and stops there for an item, because it does not own an
+    // inventory; the app does, so the verb lives here.
+    if (mRpgReady && in.mouseGrabbed() &&
+        mInteraction.focus().available &&
+        mInteraction.focus().kind == TargetKind::Item &&
+        in.wasPressed("interact")) {
+        mRpg.takePickup(*mCtx, mInteraction.focus().id);
+    }
 
     // Defensive actions remain independent from selected ranged weapon.
     if (in.mouseGrabbed()) {
@@ -1252,6 +1456,28 @@ eng::ui::TooltipContent DungeonApp::lookTooltip()
             ? mLevel.dungeon().propInfo(focus.catalogIndex)
             : nullptr;
 
+    // An item under the crosshair, flattened for the tooltip. The builder never
+    // sees an ItemLibrary; it is handed values.
+    game::PickupLook pickup;
+    if (mRpgReady && focus.kind == TargetKind::Item) {
+        if (const game::rpg::PickupSystem::Entry* entry =
+                mRpg.pickups().find(focus.id)) {
+            if (const game::rpg::ItemLibrary::Ref def =
+                    mRpg.items().find(entry->item)) {
+                pickup.valid = true;
+                pickup.name = def->name;
+                pickup.description = def->description;
+                pickup.rarity = game::rpg::nameOf(def->rarity);
+                pickup.count = entry->count;
+                char category[96];
+                std::snprintf(category, sizeof(category), "%s - %.1f kg",
+                              game::rpg::nameOf(def->category), def->weight);
+                pickup.category = category;
+                pickup.takeable = mRpg.canTake(focus.id);
+            }
+        }
+    }
+
     game::ActorLook actor;
     // Enemy targets carry their entity id in catalogIndex (see onPresent); a
     // zero index is the training dummy, which predates enemies and has none.
@@ -1271,7 +1497,8 @@ eng::ui::TooltipContent DungeonApp::lookTooltip()
                 actor.healthMax = hp->max;
             }
         }
-        return game::buildTooltip(focus, prop, actor, mHud.interactKey());
+        return game::buildTooltip(focus, prop, actor, mHud.interactKey(),
+                                  pickup);
     }
     if (focus.kind == TargetKind::Actor && mDummyAlive && mDummy.alive()) {
         actor.valid = true;
@@ -1286,7 +1513,7 @@ eng::ui::TooltipContent DungeonApp::lookTooltip()
         }
     }
 
-    return game::buildTooltip(focus, prop, actor, mHud.interactKey());
+    return game::buildTooltip(focus, prop, actor, mHud.interactKey(), pickup);
 }
 
 void DungeonApp::onGameGui(const eng::FrameContext& f)
@@ -1327,6 +1554,8 @@ void DungeonApp::onStopGame(eng::Engine&)
     mGameAudio.stopAll(eng::StopMode::Immediate);
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
     mProps.teardown(physics());
+    if (mCtx)
+        mRpg.pickups().clear(*mCtx);
     if (mCtx)
         mEnemies.clear(*mCtx);
     teardownDummy();

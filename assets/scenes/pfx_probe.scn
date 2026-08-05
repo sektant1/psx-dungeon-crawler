@@ -1,0 +1,77 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.pfx_probe",
+  "entities": [
+    {
+      "id": "player_start",
+      "name": "Player Start",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          4.0
+        ]
+      },
+      "player_spawn": true
+    },
+    {
+      "id": "cam",
+      "name": "Probe Camera",
+      "transform": {
+        "position": [
+          0.0,
+          1.5,
+          4.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 60.0,
+        "priority": 20
+      }
+    },
+    {
+      "id": "fire_a",
+      "name": "Fire A",
+      "transform": {
+        "position": [
+          -1.2,
+          1.2,
+          0.0
+        ]
+      },
+      "particles": {
+        "effect": "torch_fire"
+      }
+    },
+    {
+      "id": "fire_b",
+      "name": "Fire B",
+      "transform": {
+        "position": [
+          1.2,
+          1.2,
+          0.0
+        ]
+      },
+      "particles": {
+        "effect": "torch_fire"
+      }
+    },
+    {
+      "id": "dust",
+      "name": "Dust",
+      "transform": {
+        "position": [
+          0.0,
+          1.4,
+          1.0
+        ]
+      },
+      "particles": {
+        "effect": "hall_dust"
+      }
+    }
+  ]
+}

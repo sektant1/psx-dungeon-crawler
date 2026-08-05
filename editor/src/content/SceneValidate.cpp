@@ -1,5 +1,7 @@
 #include <editor/content/SceneValidate.h>
 
+#include <eng/assets/AssetRoot.h>
+
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -17,6 +19,62 @@ extern "C" {
 
 namespace game::content {
 namespace {
+
+// Top-level `[<section>.<id>]` keys in a TOML file, without parsing it.
+//
+// The same one line of file shape ed::tomlSectionIds knows, reimplemented here
+// rather than depended on because game_content must not link the editor's own
+// library -- the cooker runs headless in CI and this check has to run there
+// too, which is the whole point of it.
+std::set<std::string> tomlIds(const std::string& path, const std::string& section)
+{
+    std::set<std::string> ids;
+    std::ifstream in(path);
+    if (!in)
+        return ids;
+    const std::string prefix = "[" + section + ".";
+    std::string line;
+    while (std::getline(in, line)) {
+        const std::size_t start = line.find_first_not_of(" \t");
+        if (start == std::string::npos || line[start] != '[')
+            continue;
+        const std::size_t close = line.find(']', start);
+        if (close == std::string::npos)
+            continue;
+        std::string header = line.substr(start, close - start + 1);
+        if (header.rfind(prefix, 0) != 0)
+            continue;
+        // "[item.ashen_moss]" -> "ashen_moss"; a sub-table
+        // ("[item.x.use]") is skipped, because it is not an id.
+        std::string id = header.substr(prefix.size(),
+                                       header.size() - prefix.size() - 1);
+        if (id.find('.') == std::string::npos && !id.empty())
+            ids.insert(std::move(id));
+    }
+    return ids;
+}
+
+// The ids the game defines, read once per validate() call. Empty when the file
+// is missing, which downgrades the check to nothing rather than failing every
+// scene -- a content tree being worked on must still cook.
+struct GameIds {
+    std::set<std::string> items;
+    std::set<std::string> enemies;
+
+    static GameIds load()
+    {
+        GameIds ids;
+        if (const std::filesystem::path p =
+                eng::assets::resolve("config/items.toml");
+            !p.empty())
+            ids.items = tomlIds(p.string(), "item");
+        if (const std::filesystem::path p =
+                eng::assets::resolve("config/enemies.toml");
+            !p.empty())
+            ids.enemies = tomlIds(p.string(), "enemy");
+        return ids;
+    }
+};
 
 bool finite(const glm::vec3& v)
 {
@@ -168,6 +226,7 @@ std::vector<Issue> validate(const SceneDocument& document,
                             const std::string& assetRoot)
 {
     std::vector<Issue> issues;
+    const GameIds gameIds = GameIds::load();
     const GridConfig grid = GridConfig::fromCatalog(catalog);
 
     int playerSpawns = 0;
@@ -307,7 +366,7 @@ std::vector<Issue> validate(const SceneDocument& document,
                 add(issues, Severity::Error, "prefab.unresolved",
                     "prefab '" + entity.prefab + "' is not in the kit catalogue",
                     entity.id);
-            } else if (!assetRoot.empty()) {
+            } else if (!assetRoot.empty() && !piece->isGroup()) {
                 std::error_code code;
                 const std::filesystem::path mesh =
                     std::filesystem::path(assetRoot) / piece->meshPath;
@@ -469,6 +528,25 @@ std::vector<Issue> validate(const SceneDocument& document,
                     "collider half-extents must be positive on every axis",
                     entity.id, QuickFix::SetDefaultHalfExtents);
             }
+        }
+        // An id the game does not define is the silent-hole failure this whole
+        // file exists to catch: the entity is in the scene, in the outliner and
+        // in the cooked map, and at runtime nothing appears. Errors rather than
+        // warnings, because the cooker refuses errors and a level that ships
+        // with a hole in it is worse than one that will not cook.
+        if (entity.pickup && !gameIds.items.empty() &&
+            !gameIds.items.count(*entity.pickup)) {
+            add(issues, Severity::Error, "pickup.unknown_item",
+                "pickup '" + *entity.pickup +
+                    "' is not an item items.toml defines; nothing will be here",
+                entity.id);
+        }
+        if (entity.enemySpawn && !gameIds.enemies.empty() &&
+            !gameIds.enemies.count(*entity.enemySpawn)) {
+            add(issues, Severity::Error, "enemy.unknown_id",
+                "enemy '" + *entity.enemySpawn +
+                    "' is not one enemies.toml defines; nothing will spawn",
+                entity.id);
         }
         if (entity.trigger && entity.trigger->event.empty()) {
             add(issues, Severity::Error, "trigger.no_event",

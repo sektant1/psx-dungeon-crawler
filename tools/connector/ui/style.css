@@ -288,3 +288,117 @@ button.on {
   background: #201a1a;
 }
 .row.event .msg { color: #e8a0a0; letter-spacing: 0.06em; }
+
+/* --- memory --------------------------------------------------------------
+ * Its own view rather than a strip above the log, because a treemap is read by
+ * comparing areas and the areas have to be big enough to compare. Both views
+ * cover .main and only one is shown; the log keeps its scroll position while
+ * the memory view is up, which is why this switches rather than rebuilds.
+ *
+ * Area is bytes, so the big rectangle IS the problem and you do not have to
+ * read and compare fourteen figures to find it. Tiles are laid out toward the
+ * golden ratio rather than toward squares (see squarify() in app.js), which
+ * gives the map a consistent grain and keeps the eye reading area rather than
+ * shape. */
+.memory {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.main:not(.showing-memory) .memory { display: none; }
+.main.showing-memory > #log,
+.main.showing-memory > .empty-state,
+.main.showing-memory > .framebar { display: none; }
+
+/* The view switch, at the far left of the toolbar where it reads as "which
+   pane is this" rather than as another filter. */
+.views { display: flex; gap: 4px; margin-right: 4px; }
+.views button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 11px;
+  cursor: pointer;
+}
+.views button:hover { color: var(--text); }
+.views button.on { color: var(--text); background: var(--bg-raised); border-color: var(--text-faint); }
+.views button[hidden] { display: none; }
+
+.memhead {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.memtabs { display: flex; align-items: center; gap: 18px; }
+/* One budget per group, with its unit named once instead of repeated in every
+   button label. */
+.memgroup { display: flex; align-items: center; gap: 0; }
+.memgroup-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-right: 8px;
+}
+.memgroup button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-right-width: 0;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.memgroup button:first-of-type { border-radius: 2px 0 0 2px; }
+.memgroup button:last-child {
+  border-right-width: 1px;
+  border-radius: 0 2px 2px 0;
+}
+.memgroup button:hover { color: var(--text); background: var(--bg); }
+.memgroup button.on {
+  color: var(--bg);
+  background: var(--text-dim);
+  border-color: var(--text-dim);
+  font-weight: 600;
+}
+.memtotal {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The chart is 96px of a full-height view: enough to read the shape of a spike,
+   little enough that the treemap keeps the area it needs. */
+.membody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr 96px;
+  gap: 1px;
+  background: var(--line);
+}
+.membody canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--bg);
+  min-height: 0;
+}
+#treemap { cursor: crosshair; }
+
+/* A static view (code size) has no time axis, so the chart yields its row and
+   the treemap takes the whole pane. */
+.membody.nochart { grid-template-rows: 1fr 0; }
+.membody.nochart #memChart { display: none; }

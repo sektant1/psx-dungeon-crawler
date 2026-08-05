@@ -229,6 +229,62 @@ int main()
                 "hovering over the table it was dropped on");
     }
 
+    // --- the brush's own size reaches the placement ------------------------
+    //
+    // The ghost is drawn at this scale, so the placed entity has to land at it
+    // too, or the preview is a lie about the thing it is previewing. Both
+    // representations again: a grid piece and a free prop.
+    {
+        Brush big = floorBrush;
+        big.scale = 2.5f;
+        const Placement out =
+            resolvePlacement(grid, catalog, big, queryAt(6.0f, 6.0f));
+        require(nearly(out.transform.scale.x, 2.5f) &&
+                    nearly(out.transform.scale.y, 2.5f) &&
+                    nearly(out.transform.scale.z, 2.5f),
+                "a grid piece lands at the brush's scale");
+
+        Brush bigProp = propBrush;
+        bigProp.scale = 0.5f;
+        const Placement prop =
+            resolvePlacement(grid, catalog, bigProp, queryAt(6.0f, 6.0f));
+        require(nearly(prop.transform.scale.x, 0.5f),
+                "and so does a free prop");
+    }
+    {
+        // The pivot lift is a distance in the mesh's own frame, so it scales
+        // with the mesh: a centre-authored barrel at 2x needs twice the lift or
+        // it stands half through the floor it was dropped on.
+        PlacementQuery query = queryAt(6.0f, 6.0f);
+        query.surface = surfaceAt({6.0f, 1.0f, 6.0f}, 1.0f);
+        query.baseOffset = 0.4f;
+        Brush mesh;
+        mesh.kind = Brush::Kind::Mesh;
+        mesh.meshPath = "meshes/props/prop_malenia.obj";
+        mesh.scale = 3.0f;
+        const Placement out = resolvePlacement(grid, catalog, mesh, query);
+        require(nearly(out.transform.position.y, 1.0f + 0.4f * 3.0f),
+                "the base lift scales with the brush");
+    }
+    {
+        Brush brush;
+        brush.resize(2.0f);
+        require(nearly(brush.scale, 2.0f), "resize multiplies");
+        brush.resize(0.5f);
+        require(nearly(brush.scale, 1.0f), "and is reversible");
+        for (int i = 0; i < 200; ++i)
+            brush.resize(1.5f);
+        require(brush.scale <= Brush::kMaxScale,
+                "and clamps, so a wheel that overshot needs no gizmo to "
+                "recover from");
+        for (int i = 0; i < 400; ++i)
+            brush.resize(0.5f);
+        require(brush.scale >= Brush::kMinScale, "at both ends");
+        brush.resize(0.0f);
+        require(brush.scale >= Brush::kMinScale,
+                "and a zero factor is refused rather than collapsing the brush");
+    }
+
     std::cout << "EditorPlacementTests: ok\n";
     return 0;
 }

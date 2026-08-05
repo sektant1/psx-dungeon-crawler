@@ -14,6 +14,7 @@
 #endif
 
 #if ENG_MEMPROF && (defined(__linux__) || defined(__APPLE__))
+#    include <cxxabi.h>
 #    include <execinfo.h>
 #    define ENG_MEMPROF_BACKTRACE 1
 #else
@@ -30,34 +31,9 @@ constexpr int kMaxTags = 64;
 constexpr int kMaxStacks = 4096; // power of two: the probe masks with it
 constexpr int kMaxTagDepth = 32;
 constexpr int kMaxStackDepth = 16;
-// backtrace(), captureStack(), allocate(), operator new. The first frames are
-// this file and are never what you want to read.
-constexpr int kSkipFrames = 4;
-
-constexpr std::uint32_t kMagic = 0x5241564EU; // 'RAVN'
-
-std::uint32_t cookieFor(std::uint64_t size)
-{
-    return kMagic ^ static_cast<std::uint32_t>(size) ^
-           static_cast<std::uint32_t>(size >> 32);
-}
-
-// Sits immediately before the pointer handed to the caller. 16 bytes exactly,
-// so a malloc block that was 16-aligned stays 16-aligned after it -- which is
-// the default new alignment on every platform this engine builds for, and the
-// reason this is not 24 or 32 bytes of more comfortable fields.
-struct Header {
-    std::uint64_t size;   // bytes the caller asked for
-    std::uint32_t cookie; // validates the header, and catches an underrun
-    std::uint16_t tag;    // frame-phase slot
-    std::uint16_t stack;  // sampled stack id, 1-based; 0 = not sampled
-};
-static_assert(sizeof(Header) == 16, "the header must preserve 16-byte alignment");
-
-Header* headerOf(void* user)
-{
-    return reinterpret_cast<Header*>(static_cast<char*>(user) - sizeof(Header));
-}
+// Always worth a stack, whatever the rate: one 8 MB allocation is not something
+// to learn about one time in 128.
+constexpr std::uint64_t kAlwaysSampleBytes = 64u * 1024u;
 
 using Counter = std::atomic<std::uint64_t>;
 
@@ -95,12 +71,35 @@ struct StackSlot {
     std::atomic<int> ready{0};          // frames are readable once this is 1
     void* frames[kMaxStackDepth]{};
     int depth = 0;
-    Counter liveBytes{0}, liveBlocks{0};
-    Counter totalBytes{0}, totalBlocks{0};
+    // Two currencies, and conflating them is how a sampled profiler reports
+    // more live bytes than the exact counter says exist. A block caught by the
+    // 1-in-N sample stands for N blocks and must be scaled up; a block caught
+    // because it was large was NOT sampled -- every one of them is seen -- and
+    // scaling it multiplies a number that is already right.
+    Counter liveSampled{0}, liveSampledBlocks{0};
+    Counter liveExact{0}, liveExactBlocks{0};
+    Counter totalSampled{0}, totalSampledBlocks{0};
+    Counter totalExact{0}, totalExactBlocks{0};
 };
 StackSlot gStackSlots[kMaxStacks];
 std::atomic<std::uint32_t> gStacksTracked{0};
 std::atomic<bool> gStackTableFull{false};
+
+// Resolved labels, one per slot, filled the first time a slot is reported.
+//
+// Kept beside the slots rather than in them because these are touched only by
+// the reporter, never by the allocation path -- so a std::string here cannot
+// slow down an allocation, and the unused ones cost nothing. A slot's frames
+// never change once interned, so a name resolved once stays correct for the
+// life of the process (which is why reset() leaves these alone: the stacks they
+// describe are still there).
+//
+// Deliberately NOT atomic, unlike everything else in this file: siteName() is
+// reporting, and reporting happens on one thread -- the frame loop's publisher
+// or a console command, never a worker and never the allocation path. Guarding
+// them would be a lock that only ever has one caller.
+std::string gStackNames[kMaxStacks];
+bool gStackNamed[kMaxStacks] = {false};
 
 std::atomic<std::uint32_t> gSampleRate{128};
 
@@ -113,23 +112,6 @@ std::atomic<int> gHistoryHead{0};
 // happened to be doing.
 thread_local std::uint16_t tTagStack[kMaxTagDepth];
 thread_local int tTagDepth = 0;
-// backtrace() can allocate on its first call (it dlopens the unwinder). Without
-// this, that allocation re-enters here and tries to take a backtrace.
-thread_local bool tInside = false;
-thread_local std::uint32_t tSampleTick = 0;
-
-void bumpPeak(Counter& peak, std::uint64_t value)
-{
-    std::uint64_t seen = peak.load(std::memory_order_relaxed);
-    while (value > seen &&
-           !peak.compare_exchange_weak(seen, value, std::memory_order_relaxed))
-        ;
-}
-
-std::uint16_t currentTag()
-{
-    return tTagDepth > 0 ? tTagStack[tTagDepth - 1] : std::uint16_t(0);
-}
 
 std::uint16_t internTag(const char* name)
 {
@@ -161,7 +143,92 @@ std::uint16_t internTag(const char* name)
     return id; // 0 when the table is full: those bytes fall to "untagged"
 }
 
+#if ENG_MEMPROF_BACKTRACE
+// Characters of leading return type in a demangled name, including the space.
+// Zero when there is none (constructors, and anything the ABI left mangled).
+std::size_t returnTypeLength(const std::string& name)
+{
+    int depth = 0;
+    for (std::size_t i = 0; i < name.size(); ++i) {
+        const char c = name[i];
+        if (c == '<' || c == '(' || c == '[')
+            ++depth;
+        else if (c == '>' || c == ')' || c == ']')
+            --depth;
+        else if (c == ' ' && depth == 0)
+            return i + 1;
+        // Past the parameter list there is no return type left to find.
+        if (depth > 0 && c == '(')
+            break;
+    }
+    return 0;
+}
+
+std::string demangle(const std::string& mangled)
+{
+    int status = 0;
+    // Allocates with malloc, not operator new, so demangling a name does not
+    // add to the numbers being reported.
+    char* out = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
+    std::string result = (status == 0 && out) ? out : mangled;
+    std::free(out);
+    return result;
+}
+#endif
+
 #if ENG_MEMPROF
+
+// backtrace(), captureStack(), allocate(), operator new. The first frames are
+// this file and are never what you want to read.
+constexpr int kSkipFrames = 4;
+
+constexpr std::uint32_t kMagic = 0x5241564EU; // 'RAVN'
+
+std::uint32_t cookieFor(std::uint64_t size)
+{
+    return kMagic ^ static_cast<std::uint32_t>(size) ^
+           static_cast<std::uint32_t>(size >> 32);
+}
+
+// Sits immediately before the pointer handed to the caller. 16 bytes exactly,
+// so a malloc block that was 16-aligned stays 16-aligned after it -- which is
+// the default new alignment on every platform this engine builds for, and the
+// reason this is not 24 or 32 bytes of more comfortable fields.
+struct Header {
+    std::uint64_t size;   // bytes the caller asked for
+    std::uint32_t cookie; // validates the header, and catches an underrun
+    std::uint16_t tag;    // frame-phase slot
+    // Sampled stack id, 1-based; 0 = not sampled. kMaxStacks is 4096, so the
+    // id needs 13 bits and the top one is free to record WHY this block was
+    // sampled -- which is what keeps the two currencies apart on free.
+    std::uint16_t stack;
+};
+constexpr std::uint16_t kStackExactFlag = 0x8000;
+static_assert(sizeof(Header) == 16,
+              "the header must preserve 16-byte alignment");
+
+Header* headerOf(void* user)
+{
+    return reinterpret_cast<Header*>(static_cast<char*>(user) - sizeof(Header));
+}
+
+// backtrace() can allocate on its first call (it dlopens the unwinder). Without
+// this, that allocation re-enters here and tries to take a backtrace.
+thread_local bool tInside = false;
+thread_local std::uint32_t tSampleTick = 0;
+
+void bumpPeak(Counter& peak, std::uint64_t value)
+{
+    std::uint64_t seen = peak.load(std::memory_order_relaxed);
+    while (value > seen &&
+           !peak.compare_exchange_weak(seen, value, std::memory_order_relaxed))
+        ;
+}
+
+std::uint16_t currentTag()
+{
+    return tTagDepth > 0 ? tTagStack[tTagDepth - 1] : std::uint16_t(0);
+}
 
 // Interns a call stack into the fixed table and returns its 1-based id, or 0
 // when the table is full. Open addressing, claimed with one CAS; a loser of the
@@ -248,11 +315,13 @@ void* allocate(std::size_t size, std::size_t front)
     // so the rate applies to the small ones that dominate by count.
     const std::uint32_t rate = gSampleRate.load(std::memory_order_relaxed);
     if (rate != 0 && !tInside) {
-        const bool large = size >= (64u * 1024u);
+        const bool large = size >= kAlwaysSampleBytes;
         if (large || (++tSampleTick % rate) == 0) {
             tInside = true;
             h->stack = captureStack();
             tInside = false;
+            if (h->stack != 0 && large)
+                h->stack |= kStackExactFlag;
         }
     }
 
@@ -276,12 +345,17 @@ void* allocate(std::size_t size, std::size_t front)
     tag.frameBlocks.fetch_add(1, std::memory_order_relaxed);
     tag.totalBytes.fetch_add(size, std::memory_order_relaxed);
 
-    if (h->stack != 0) {
-        StackSlot& slot = gStackSlots[h->stack - 1];
-        slot.liveBytes.fetch_add(size, std::memory_order_relaxed);
-        slot.liveBlocks.fetch_add(1, std::memory_order_relaxed);
-        slot.totalBytes.fetch_add(size, std::memory_order_relaxed);
-        slot.totalBlocks.fetch_add(1, std::memory_order_relaxed);
+    if (const std::uint16_t id = h->stack & ~kStackExactFlag; id != 0) {
+        StackSlot& slot = gStackSlots[id - 1];
+        const bool exact = (h->stack & kStackExactFlag) != 0;
+        (exact ? slot.liveExact : slot.liveSampled)
+            .fetch_add(size, std::memory_order_relaxed);
+        (exact ? slot.liveExactBlocks : slot.liveSampledBlocks)
+            .fetch_add(1, std::memory_order_relaxed);
+        (exact ? slot.totalExact : slot.totalSampled)
+            .fetch_add(size, std::memory_order_relaxed);
+        (exact ? slot.totalExactBlocks : slot.totalSampledBlocks)
+            .fetch_add(1, std::memory_order_relaxed);
     }
     return user;
 }
@@ -324,10 +398,13 @@ void deallocate(void* user, std::size_t front)
     tag.liveBytes.fetch_sub(size, std::memory_order_relaxed);
     tag.liveBlocks.fetch_sub(1, std::memory_order_relaxed);
 
-    if (h->stack != 0) {
-        StackSlot& slot = gStackSlots[h->stack - 1];
-        slot.liveBytes.fetch_sub(size, std::memory_order_relaxed);
-        slot.liveBlocks.fetch_sub(1, std::memory_order_relaxed);
+    if (const std::uint16_t id = h->stack & ~kStackExactFlag; id != 0) {
+        StackSlot& slot = gStackSlots[id - 1];
+        const bool exact = (h->stack & kStackExactFlag) != 0;
+        (exact ? slot.liveExact : slot.liveSampled)
+            .fetch_sub(size, std::memory_order_relaxed);
+        (exact ? slot.liveExactBlocks : slot.liveSampledBlocks)
+            .fetch_sub(1, std::memory_order_relaxed);
     }
 
     h->cookie = 0; // a double free now reports as a corruption rather than
@@ -458,23 +535,34 @@ Stats stats()
     return s;
 }
 
+int tagCount()
+{
+    return gTagCount.load(std::memory_order_acquire);
+}
+
+bool tagAt(int index, TagStat& out)
+{
+    if (index < 0 || index >= tagCount())
+        return false;
+    const TagSlot& slot = gTagSlots[index];
+    const char* name = slot.name.load(std::memory_order_relaxed);
+    out.name = (index == 0 || !name) ? "untagged" : name;
+    out.liveBytes = slot.liveBytes.load(std::memory_order_relaxed);
+    out.liveBlocks = slot.liveBlocks.load(std::memory_order_relaxed);
+    out.frameBytes = slot.pubFrameBytes.load(std::memory_order_relaxed);
+    out.frameBlocks = slot.pubFrameBlocks.load(std::memory_order_relaxed);
+    out.totalBytes = slot.totalBytes.load(std::memory_order_relaxed);
+    return true;
+}
+
 std::vector<TagStat> tags()
 {
-    const int count = gTagCount.load(std::memory_order_acquire);
+    const int count = tagCount();
     std::vector<TagStat> out;
     out.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i) {
-        const char* name = gTagSlots[i].name.load(std::memory_order_relaxed);
         TagStat t;
-        t.name = (i == 0 || !name) ? "untagged" : name;
-        t.liveBytes = gTagSlots[i].liveBytes.load(std::memory_order_relaxed);
-        t.liveBlocks = gTagSlots[i].liveBlocks.load(std::memory_order_relaxed);
-        t.frameBytes =
-            gTagSlots[i].pubFrameBytes.load(std::memory_order_relaxed);
-        t.frameBlocks =
-            gTagSlots[i].pubFrameBlocks.load(std::memory_order_relaxed);
-        t.totalBytes = gTagSlots[i].totalBytes.load(std::memory_order_relaxed);
-        if (t.liveBytes != 0 || t.totalBytes != 0)
+        if (tagAt(i, t) && (t.liveBytes != 0 || t.totalBytes != 0))
             out.push_back(t);
     }
     std::sort(out.begin(), out.end(), [](const TagStat& a, const TagStat& b) {
@@ -490,13 +578,27 @@ std::vector<StackStat> stacks(int limit)
         StackSlot& slot = gStackSlots[i];
         if (slot.ready.load(std::memory_order_acquire) == 0)
             continue;
+        // Combined here, once, so every caller reports the same number: the
+        // large blocks are counted as they are, the rate-sampled ones stand for
+        // `rate` blocks each. Reporting the raw sampled count instead is what
+        // made this claim more live bytes than the exact counter said existed.
+        const std::uint64_t rate =
+            std::max<std::uint64_t>(gSampleRate.load(std::memory_order_relaxed),
+                                    1);
         StackStat s;
-        s.liveBytes = slot.liveBytes.load(std::memory_order_relaxed);
-        s.liveBlocks = slot.liveBlocks.load(std::memory_order_relaxed);
-        s.totalBytes = slot.totalBytes.load(std::memory_order_relaxed);
-        s.totalBlocks = slot.totalBlocks.load(std::memory_order_relaxed);
+        s.liveBytes = slot.liveExact.load(std::memory_order_relaxed) +
+                      slot.liveSampled.load(std::memory_order_relaxed) * rate;
+        s.liveBlocks =
+            slot.liveExactBlocks.load(std::memory_order_relaxed) +
+            slot.liveSampledBlocks.load(std::memory_order_relaxed) * rate;
+        s.totalBytes = slot.totalExact.load(std::memory_order_relaxed) +
+                       slot.totalSampled.load(std::memory_order_relaxed) * rate;
+        s.totalBlocks =
+            slot.totalExactBlocks.load(std::memory_order_relaxed) +
+            slot.totalSampledBlocks.load(std::memory_order_relaxed) * rate;
         s.frames = slot.frames;
         s.depth = slot.depth;
+        s.id = i;
         out.push_back(s);
     }
     std::sort(out.begin(), out.end(),
@@ -535,6 +637,99 @@ std::string symbolize(const StackStat& stack, int maxFrames)
     return out;
 }
 
+namespace {
+// The uncached resolve. Internal: everything outside goes through the memo.
+std::string resolveSiteName(const StackStat& stack);
+} // namespace
+
+std::string siteName(const StackStat& stack, int* budget)
+{
+    // The memo, and the reason it exists: resolving is a backtrace_symbols plus
+    // a demangle per frame, far too expensive to repeat every time a tile is
+    // drawn. A cached hit never touches the budget.
+    const bool cacheable = stack.id >= 0 && stack.id < kMaxStacks;
+    if (cacheable && gStackNamed[stack.id])
+        return gStackNames[stack.id];
+    // Out of budget: the caller gets nothing this time and asks again later,
+    // rather than resolving a burst of new stacks on one frame.
+    if (budget && *budget <= 0)
+        return {};
+    if (budget)
+        --*budget;
+
+    std::string resolved = resolveSiteName(stack);
+    if (cacheable) {
+        gStackNames[stack.id] = resolved;
+        gStackNamed[stack.id] = true;
+    }
+    return resolved;
+}
+
+namespace {
+std::string resolveSiteName(const StackStat& stack)
+{
+#if ENG_MEMPROF_BACKTRACE
+    char** names =
+        ::backtrace_symbols(const_cast<void* const*>(stack.frames), stack.depth);
+    if (!names)
+        return "?";
+    std::string best;
+    for (int i = 0; i < stack.depth; ++i) {
+        // backtrace_symbols gives "path/bin(_ZN3eng6Thing2doEv+0x1c) [0xaddr]".
+        const char* line = names[i];
+        const char* open = std::strchr(line, '(');
+        const char* plus = open ? std::strchr(open, '+') : nullptr;
+        if (!open || !plus || plus == open + 1)
+            continue;
+        std::string mangled(open + 1, static_cast<std::size_t>(plus - open - 1));
+        std::string readable = demangle(mangled);
+        // A demangled template function leads with its return type -- `void
+        // std::__cxx11::basic_string<...>::_M_construct(...)` -- so matching on
+        // the start of the string lets the whole standard library through under
+        // a `void ` prefix. That is how "std::basic_string" ended up the single
+        // largest allocation site in the first real capture: it is true, and it
+        // is not an answer.
+        //
+        // The split has to be the first space at depth ZERO. Template arguments
+        // are full of spaces (`std::_Vector_base<float, std::allocator<float> >`)
+        // and cutting at one of those leaves a fragment like "float, " as the
+        // name of an allocation site.
+        readable.erase(0, returnTypeLength(readable));
+        // Skip the plumbing. These frames are always true and never the answer:
+        // the question is which of *our* functions asked for the memory.
+        if (readable.rfind("std::", 0) == 0 ||
+            readable.rfind("__gnu_cxx::", 0) == 0 ||
+            readable.rfind("__cxx", 0) == 0 ||
+            readable.rfind("operator new", 0) == 0 ||
+            readable.rfind("void*", 0) == 0 ||
+            readable.rfind("eng::memprof::", 0) == 0)
+            continue;
+        best = std::move(readable);
+        break;
+    }
+    if (best.empty())
+        best = names[0] ? names[0] : "?";
+    std::free(names);
+    // Template arguments make every name 400 characters and identical for the
+    // first 300. The signature is not what identifies a tile; the name is.
+    const std::size_t angle = best.find('<');
+    if (angle != std::string::npos)
+        best.resize(angle);
+    const std::size_t paren = best.find('(');
+    if (paren != std::string::npos)
+        best.resize(paren);
+    if (best.size() > 48)
+        best.resize(48);
+    return best.empty() ? std::string("?") : best;
+#else
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%p",
+                  stack.depth > 0 ? stack.frames[0] : nullptr);
+    return buf;
+#endif
+}
+} // namespace
+
 void reset()
 {
     gTotals.totalBytes.store(0, std::memory_order_relaxed);
@@ -552,8 +747,10 @@ void reset()
     // zeroed underneath them would underflow on the next free and report a
     // nonsense number for the rest of the session.
     for (int i = 0; i < kMaxStacks; ++i) {
-        gStackSlots[i].totalBytes.store(0, std::memory_order_relaxed);
-        gStackSlots[i].totalBlocks.store(0, std::memory_order_relaxed);
+        gStackSlots[i].totalSampled.store(0, std::memory_order_relaxed);
+        gStackSlots[i].totalSampledBlocks.store(0, std::memory_order_relaxed);
+        gStackSlots[i].totalExact.store(0, std::memory_order_relaxed);
+        gStackSlots[i].totalExactBlocks.store(0, std::memory_order_relaxed);
     }
 }
 
@@ -620,12 +817,8 @@ std::string report(int topStacks)
         // Scaled: the sample saw one allocation in N, so the estimate of the
         // real figure is N times what it counted. Reported as an estimate
         // because that is what it is.
-        std::snprintf(buf, sizeof(buf),
-                      "   ~%.2f MB live in ~%llu blocks (sampled %llu)\n",
-                      double(stack.liveBytes) * s.sampleRate /
-                          (1024.0 * 1024.0),
-                      static_cast<unsigned long long>(stack.liveBlocks) *
-                          s.sampleRate,
+        std::snprintf(buf, sizeof(buf), "   ~%.2f MB live in ~%llu blocks\n",
+                      double(stack.liveBytes) / (1024.0 * 1024.0),
                       static_cast<unsigned long long>(stack.liveBlocks));
         out += buf;
         out += symbolize(stack, 6);

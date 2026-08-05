@@ -60,9 +60,16 @@ int main()
     // Every optional field set, so nothing the writer can emit is skipped.
     SceneDocument document;
     document.id = "scene.schema_sync";
+    // The writer has emitted a root palette and an entity parent for a while,
+    // and neither was set here -- so the schema quietly lacked both until a
+    // scene that used them was written and the "contract" turned out not to
+    // cover them. That is precisely the rot this file exists to catch, so both
+    // are exercised now.
+    document.palette = "dungeon";
     Entity entity;
     entity.id = "everything";
     entity.name = "Every Field";
+    entity.parent = "some_pivot";
     entity.prefab = "kit.wall";
     entity.material = "Game/Kit/Stone";
     entity.castShadows = false;

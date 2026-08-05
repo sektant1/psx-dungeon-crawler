@@ -190,6 +190,24 @@ public:
                     const std::string& materialName,
                     const std::string& fallbackMaterial,
                     bool castShadows = false, bool renderOnTop = false);
+    // The same call with a string-literal fallback, and it exists because
+    // without it that call silently means something else.
+    //
+    // `attachMesh(node, mesh, material, "Game/Prototype/Floor", castShadows)`
+    // has a `const char*` in the fourth slot. Converting that to `bool` is a
+    // standard conversion and converting it to `std::string` is a user-defined
+    // one, so overload resolution prefers the overload ABOVE this pair: the
+    // literal becomes `castShadows = true` and the caller's castShadows slides
+    // into `renderOnTop`. Every enemy in the game was attached that way, and
+    // because enemies.toml sets cast_shadows = true they all rendered in the
+    // viewmodel pass -- through walls, over particles, over the hands.
+    //
+    // An exact match for `const char*` outranks both, so this overload takes
+    // the call and forwards it where it was always meant to go.
+    void attachMesh(NodeHandle node, MeshHandle mesh,
+                    const std::string& materialName,
+                    const char* fallbackMaterial, bool castShadows = false,
+                    bool renderOnTop = false);
     void attachMesh(NodeHandle node, MeshHandle mesh,
                     const ResolvedModelMaterial& material,
                     bool castShadows = false, bool renderOnTop = false);

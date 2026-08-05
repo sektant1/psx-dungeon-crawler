@@ -86,16 +86,26 @@ bool KitCatalog::load(const std::string& tomlPath, KitCatalog& out,
         const std::string mesh = (*piece)["mesh"].value_or(std::string());
         entry.material = (*piece)["material"].value_or(std::string());
         entry.role = (*piece)["role"].value_or(std::string());
-        if (id.empty() || mesh.empty() || entry.material.empty()) {
+        // A piece with parts and no mesh of its own is a GROUP: the root of a
+        // multi-part model, whose whole geometry lives in its attachments. The
+        // importer writes one for every source model that arrives as more than
+        // one submesh, because otherwise a twenty-four-part model is
+        // twenty-four unrelated placeables and no way to place the model.
+        const bool group =
+            mesh.empty() && (*piece)["attachments"].as_array() != nullptr;
+        if (id.empty() || (!group && (mesh.empty() || entry.material.empty()))) {
             error = tomlPath + ": piece '" + id +
-                    "' needs id, mesh and material";
+                    "' needs id, mesh and material (or attachments, for a "
+                    "mesh-less group)";
             return false;
         }
         entry.id = "kit." + id;
         // A bare filename lives in the kit's mesh dir; a path with a separator
         // is pack-relative, which is how the prop and set-dressing meshes join
-        // the catalogue without a second one.
-        entry.meshPath = mesh.find('/') == std::string::npos
+        // the catalogue without a second one. A group has none, and every
+        // consumer of meshPath already asks whether it is empty.
+        entry.meshPath = mesh.empty() ? std::string()
+                         : mesh.find('/') == std::string::npos
                              ? catalog.mMeshDir + "/" + mesh
                              : mesh;
         entry.importScale = float((*piece)["import_scale"].value_or(0.0));

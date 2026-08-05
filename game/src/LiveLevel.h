@@ -58,6 +58,12 @@ public:
     // Both mean the same thing, so both arrive here.
     std::vector<game::ScenePlacement> enemyPlacements() const;
 
+    // Items an authored level placed, the same way and for the same reason:
+    // a hand-written marker ("pickup.ashen_moss") and the editor's own Pickup
+    // component mean the same thing, so both arrive here already prefixed and
+    // the RPG layer cannot tell them apart.
+    std::vector<game::ScenePlacement> pickupPlacements() const;
+
     // The player tuning this level authored, if any. Empty for a procedural
     // dungeon, which has no .scn to carry components: the caller then applies
     // the game's own config, so a transition from an authored level back into

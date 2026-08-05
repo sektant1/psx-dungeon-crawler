@@ -135,19 +135,48 @@ struct TagStat {
 // command, not from the frame.
 std::vector<TagStat> tags();
 
+// The same data without allocating, in registration order, for the per-frame
+// publisher -- a reporter that allocates to report allocations adds itself to
+// its own numbers. `tagAt` returns false past the end.
+int tagCount();
+bool tagAt(int index, TagStat& out);
+
 // --- sampled call stacks ---------------------------------------------------
 struct StackStat {
-    std::uint64_t liveBytes = 0; // sampled subset -- multiply by sampleRate for
-    std::uint64_t liveBlocks = 0; // the estimate of the whole
+    // Already scaled: blocks caught by the 1-in-N sample stand for N each,
+    // blocks caught for being large are counted whole. Estimates -- but
+    // estimates of the heap, not of the sample.
+    std::uint64_t liveBytes = 0;
+    std::uint64_t liveBlocks = 0;
     std::uint64_t totalBytes = 0;
     std::uint64_t totalBlocks = 0;
     const void* const* frames = nullptr;
     int depth = 0;
+    int id = -1; // slot index; what siteName() memoises against
 };
 // Aggregated stacks, live bytes first, capped at `limit` (0 = all).
 std::vector<StackStat> stacks(int limit = 0);
 // Frame addresses resolved to names where the platform can, one per line.
 std::string symbolize(const StackStat& stack, int maxFrames = 8);
+
+// The single most useful frame of a stack, demangled and trimmed: the first one
+// that is not engine allocator plumbing or a std:: container growing itself.
+// `std::vector<Foo>::push_back` is true and useless -- what you want to know is
+// which of your functions was doing the pushing. This is what labels a treemap
+// tile, so it has to fit in one.
+//
+// Memoised per stack, because a stack's frames never change once interned and
+// resolving one is expensive: a backtrace_symbols plus a demangle per frame.
+// Re-resolving sixteen of them once a second was a 100 ms hitch once a second
+// -- the profiler causing precisely the stutter it exists to find.
+//
+// `budget`, when given, is a counter this DECREMENTS each time it resolves a
+// name that was not already cached, and refuses to resolve once it hits zero
+// (returning empty). Pass the same int across a loop and it caps how many new
+// stacks that loop may resolve, so the first publish after a burst of them does
+// not pay for all of them on one frame. A cached name costs nothing and never
+// touches the budget.
+std::string siteName(const StackStat& stack, int* budget = nullptr);
 
 // --- control ---------------------------------------------------------------
 // 1-in-N allocations capture a stack; 0 turns capture off and leaves the exact

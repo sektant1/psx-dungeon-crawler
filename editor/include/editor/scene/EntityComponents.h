@@ -1,6 +1,7 @@
 #pragma once
 #include <editor/content/SceneDocument.h>
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <cstddef>
@@ -92,6 +93,15 @@ struct Brush {
     // greybox blocks and then resizing each one is not authoring.
     eng::ecs::PrimitiveMesh primitive;
     int yawQuarters = 0;                   // quarter turns about Y
+    // Uniform scale the next piece lands at, and the scale the ghost is drawn
+    // at -- the same number, which is the whole point of it living here.
+    //
+    // Sizing used to be something that happened after placing: drop the prop,
+    // select it, drag the scale gizmo, look, repeat. For set dressing that is
+    // the wrong order -- "a slightly bigger barrel" is a decision about the
+    // brush, not about the barrel that was just placed -- and painting a row of
+    // them meant doing it once per piece.
+    float scale = 1.0f;
 
     bool empty() const
     {
@@ -105,6 +115,20 @@ struct Brush {
         yawQuarters = ((yawQuarters + quarters) % 4 + 4) % 4;
     }
     float yawDegrees() const { return float(yawQuarters) * 90.0f; }
+
+    // The limits are what a placement tool can still draw and still pick:
+    // beyond them the ghost is either a speck or the whole viewport, and a
+    // wheel gesture that overshot to 400x used to need a scale gizmo to
+    // recover from. Multiplicative, so a step is the same *proportion* whether
+    // the brush is at 0.2 or at 20.
+    static constexpr float kMinScale = 0.05f;
+    static constexpr float kMaxScale = 50.0f;
+    void resize(float factor)
+    {
+        if (!(factor > 0.0f))
+            return;
+        scale = std::clamp(scale * factor, kMinScale, kMaxScale);
+    }
 };
 
 // What an entity is made of, in the order it should always be read.

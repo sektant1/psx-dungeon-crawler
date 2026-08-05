@@ -61,3 +61,19 @@ shader = "unlit.light_volume"
 cull = "none"
 blend = "additive"
 depth_write = false
+
+# What the turntable showroom puts on a bare mesh that has no material of its
+# own -- drop an .obj in assets/ and `make demo MODEL=<path>` and this is what
+# it wears. Mid-grey rather than white on purpose: the showroom's key light is
+# strong enough that a white albedo clips flat and the model becomes its own
+# silhouette, which is exactly what an inspection shot must not do. Two-sided,
+# because a mesh being looked at for the first time is often one that has some
+# of its winding backwards.
+[material."Game/Demo/TurntableNeutral"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+cull = "none"
+
+[material."Game/Demo/TurntableNeutral".params]
+modulateColor = [0.46, 0.45, 0.48, 1.0]

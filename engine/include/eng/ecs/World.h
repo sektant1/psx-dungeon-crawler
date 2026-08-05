@@ -85,6 +85,11 @@ public:
     // than looked *through*: the editor previews documents whose cameras are
     // content, and a preview that took the viewport would fight the author.
     void attachRenderer(SceneBackend& backend, bool drivesCamera = true);
+    // The same choice, after the fact. What the scene *is* is only known once
+    // it has been loaded -- a scene carrying a ScreenCamera is a 2D screen and
+    // its camera belongs to the rig that fits the page, not to the entity
+    // transform -- and the renderer is attached before the load.
+    void setDrivesCamera(bool drives);
     void attachPhysics(Physics& physics);
     // `drivesListener=false` lets a player/editor camera keep listener control
     // while entity emitters still follow their WorldTransforms.

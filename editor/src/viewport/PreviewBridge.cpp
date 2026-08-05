@@ -56,11 +56,28 @@ struct PreviewBridge::Impl
     // cache the runtime uses, so an authored primitive is the same geometry in
     // the viewport and in the game rather than two implementations of "box".
     eng::ecs::PrimitiveMeshCache primitives;
-    std::unordered_map<std::string, eng::NodeHandle> ghostNodes;
+    // The brush under the cursor, as renderer nodes.
+    //
+    // A rig rather than a node, because a placeable is not always one mesh: a
+    // compound piece is a root plus its attachments, and an imported model is a
+    // mesh-less root plus every submesh it arrived as. Drawing only the root
+    // showed a boss with no sword and an imported model as nothing at all --
+    // and "what will land here" is the entire job of a ghost.
+    //
+    // The parts hang off the root as child nodes, at the same local offsets and
+    // local scales the cooker gives their ECS children, so the ghost and the
+    // placed object are the same arrangement by construction.
+    struct GhostRig {
+        eng::NodeHandle root;
+        std::vector<eng::NodeHandle> parts;
+        // Union of every part's bounds, in the root's own frame, for the wire
+        // box and for callers asking how big the brush is.
+        glm::vec3 min{0.0f};
+        glm::vec3 max{0.0f};
+        bool hasBounds = false;
+    };
+    std::unordered_map<std::string, GhostRig> ghostNodes;
     std::string visibleGhost;
-    // What the visible ghost is wearing, so its bounds can be asked of the
-    // renderer rather than recomputed from a kit piece the brush may not have.
-    eng::MeshHandle ghostMesh;
     eng::NodeHandle particleGhostNode;
     eng::ParticlesHandle particleGhost;
 
@@ -167,12 +184,25 @@ struct PreviewBridge::Impl
         return meshCache.emplace(path, mesh).first->second;
     }
 
+    // Puts a rig where the brush is. Shared by every ghost kind, because where
+    // a ghost goes has nothing to do with what it is made of.
+    void showRig(const GhostRig& rig,
+                 const game::content::XformAuthor& transform, float importScale)
+    {
+        renderer.setPosition(rig.root, transform.position);
+        renderer.setOrientation(
+            rig.root,
+            game::content::authorOrientation(transform.rotationDegrees));
+        renderer.setScale(rig.root, transform.scale * importScale);
+        renderer.setNodeVisible(rig.root, true);
+    }
+
     void hideGhost()
     {
         if (!visibleGhost.empty()) {
             const auto found = ghostNodes.find(visibleGhost);
             if (found != ghostNodes.end())
-                renderer.setNodeVisible(found->second, false);
+                renderer.setNodeVisible(found->second.root, false);
             visibleGhost.clear();
         }
         if (particleGhost.valid()) {
@@ -184,9 +214,10 @@ struct PreviewBridge::Impl
 
     ~Impl()
     {
-        for (const auto& [path, node] : ghostNodes) {
+        for (const auto& [path, rig] : ghostNodes) {
             (void)path;
-            renderer.destroyNode(node);
+            // Parts are children of the root; destroying the root takes them.
+            renderer.destroyNode(rig.root);
         }
         if (particleGhost.valid())
             renderer.despawnParticles(particleGhost);
@@ -407,18 +438,93 @@ void PreviewBridge::setCeilingCut(eng::Renderer& renderer, float height)
         renderer.setNodeVisible(node, !mImpl->cutAway(id));
 }
 
+// The ghost for a kit piece, parts and all.
+//
+// The scale is the piece's OWN import scale, not the catalogue's. That
+// distinction is the bug this signature was changed for: the ghost was drawn at
+// `catalog.scale()` (0.2 -- the kit's units-to-metres factor) for every piece,
+// while a prop authored in metres declares `import_scale = 1.0` and is placed
+// at that. Every imported model therefore previewed at a fifth of the size it
+// landed at, and the wire box around it -- which did ask the piece -- was
+// correct, so the ghost disagreed with its own outline.
 void PreviewBridge::showPlacementGhost(
+    const game::content::KitCatalog& catalog,
     const game::content::KitPiece& piece,
-    const game::content::XformAuthor& transform, float importScale)
+    const game::content::XformAuthor& transform)
 {
-    showMeshPlacementGhost(piece.meshPath, transform, importScale);
+    if (!mImpl->visible) {
+        mImpl->hideGhost();
+        return;
+    }
+    // Keyed on the piece rather than on its mesh: two pieces can share a mesh
+    // and differ in what hangs off it.
+    const std::string& key = piece.id;
+    if (mImpl->visibleGhost != key)
+        mImpl->hideGhost();
+
+    auto found = mImpl->ghostNodes.find(key);
+    if (found == mImpl->ghostNodes.end()) {
+        Impl::GhostRig rig;
+        rig.root = mImpl->renderer.createNode(eng::kRootNode, glm::vec3(0.0f),
+                                              "editor_placement_ghost");
+        // The parts, at the local offsets and local scales the cooker gives
+        // their ECS children -- see SceneCook's attachment expansion, which
+        // this mirrors deliberately.
+        const auto attach = [&](auto&& self, eng::NodeHandle parent,
+                                const game::content::KitPiece& current,
+                                const glm::vec3& offsetFromRoot,
+                                float scaleFromRoot) -> void {
+            if (!current.isGroup()) {
+                const eng::MeshHandle mesh = mImpl->meshFor(current.meshPath);
+                if (mesh.valid()) {
+                    mImpl->renderer.attachMesh(parent, mesh,
+                                               "Editor/PlacementGhost", false);
+                    eng::MeshBounds bounds;
+                    if (mImpl->renderer.meshBounds(mesh, bounds)) {
+                        const glm::vec3 min =
+                            offsetFromRoot + bounds.min * scaleFromRoot;
+                        const glm::vec3 max =
+                            offsetFromRoot + bounds.max * scaleFromRoot;
+                        rig.min = rig.hasBounds ? glm::min(rig.min, min) : min;
+                        rig.max = rig.hasBounds ? glm::max(rig.max, max) : max;
+                        rig.hasBounds = true;
+                    }
+                }
+            }
+            for (const game::content::KitAttachment& attachment :
+                 current.attachments) {
+                const game::content::KitPiece* part =
+                    catalog.find(attachment.prefab);
+                if (!part)
+                    continue;
+                const float partScale = part->meshScale(catalog.scale());
+                const eng::NodeHandle node = mImpl->renderer.createNode(
+                    parent, attachment.position, "editor_placement_ghost_part");
+                mImpl->renderer.setScale(node, glm::vec3(partScale));
+                rig.parts.push_back(node);
+                self(self, node,
+                     *part, offsetFromRoot + attachment.position * scaleFromRoot,
+                     scaleFromRoot * partScale);
+            }
+        };
+        attach(attach, rig.root, piece, glm::vec3(0.0f), 1.0f);
+        found = mImpl->ghostNodes.emplace(key, std::move(rig)).first;
+    }
+    if (!found->second.hasBounds && found->second.parts.empty()) {
+        // Nothing loaded -- a piece whose mesh is missing from the pack. The
+        // wire box still has the catalogue's size to fall back on.
+        mImpl->hideGhost();
+        return;
+    }
+
+    mImpl->showRig(found->second, transform,
+                   piece.meshScale(catalog.scale()));
+    mImpl->visibleGhost = key;
 }
 
-// The ghost, for any mesh the brush can be holding.
+// The ghost, for the two brushes that are not kit pieces.
 //
-// A kit piece, a mesh file and a primitive differ only in where the handle
-// comes from -- exactly the distinction MeshResolve draws on the runtime side.
-// `key` is what the node is cached under; it is the mesh path for a file and a
+// `key` is what the rig is cached under; it is the mesh path for a file and a
 // synthetic description for a primitive, because two boxes of different sizes
 // are two ghosts and two entities naming one .obj are one.
 void PreviewBridge::showGhostMesh(const std::string& key, eng::MeshHandle mesh,
@@ -435,20 +541,22 @@ void PreviewBridge::showGhostMesh(const std::string& key, eng::MeshHandle mesh,
 
     auto found = mImpl->ghostNodes.find(key);
     if (found == mImpl->ghostNodes.end()) {
-        const eng::NodeHandle node = mImpl->renderer.createNode(
-            eng::kRootNode, glm::vec3(0.0f), "editor_placement_ghost");
-        mImpl->renderer.attachMesh(node, mesh, "Editor/PlacementGhost", false);
-        found = mImpl->ghostNodes.emplace(key, node).first;
+        Impl::GhostRig rig;
+        rig.root = mImpl->renderer.createNode(eng::kRootNode, glm::vec3(0.0f),
+                                              "editor_placement_ghost");
+        mImpl->renderer.attachMesh(rig.root, mesh, "Editor/PlacementGhost",
+                                   false);
+        eng::MeshBounds bounds;
+        if (mImpl->renderer.meshBounds(mesh, bounds)) {
+            rig.min = bounds.min;
+            rig.max = bounds.max;
+            rig.hasBounds = true;
+        }
+        found = mImpl->ghostNodes.emplace(key, std::move(rig)).first;
     }
 
-    const eng::NodeHandle node = found->second;
-    mImpl->renderer.setPosition(node, transform.position);
-    mImpl->renderer.setOrientation(
-        node, game::content::authorOrientation(transform.rotationDegrees));
-    mImpl->renderer.setScale(node, transform.scale * importScale);
-    mImpl->renderer.setNodeVisible(node, true);
+    mImpl->showRig(found->second, transform, importScale);
     mImpl->visibleGhost = key;
-    mImpl->ghostMesh = mesh;
 }
 
 void PreviewBridge::showMeshPlacementGhost(
@@ -471,15 +579,56 @@ void PreviewBridge::showPrimitivePlacementGhost(
                   1.0f);
 }
 
+namespace {
+// Shared by both offsets below: the lift that puts `bounds.min.y` at zero.
+float baseLift(const eng::MeshBounds& bounds, float scale)
+{
+    // Never pushes anything DOWN. A mesh whose geometry starts above its own
+    // origin (a hanging lamp, a ceiling boss) is authored that way on purpose,
+    // and dropping it to the floor would be a worse bug than the one this
+    // fixes.
+    return bounds.min.y < 0.0f ? -bounds.min.y * scale : 0.0f;
+}
+} // namespace
+
+float PreviewBridge::meshBaseOffset(const std::string& meshPath,
+                                    float importScale) const
+{
+    if (meshPath.empty())
+        return 0.0f;
+    // meshFor caches, so this is the same handle the ghost draws -- the
+    // preview and the committed entity cannot disagree about where the mesh
+    // sits, which is the property that made this bug so confusing to report.
+    const eng::MeshHandle mesh = mImpl->meshFor(meshPath);
+    eng::MeshBounds bounds;
+    if (!mesh.valid() || !mImpl->renderer.meshBounds(mesh, bounds))
+        return 0.0f;
+    return baseLift(bounds, importScale > 0.0f ? importScale : 1.0f);
+}
+
+float PreviewBridge::primitiveBaseOffset(
+    const eng::ecs::PrimitiveMesh& primitive) const
+{
+    const eng::MeshHandle mesh =
+        mImpl->primitives.get(mImpl->renderer, primitive);
+    eng::MeshBounds bounds;
+    if (!mesh.valid() || !mImpl->renderer.meshBounds(mesh, bounds))
+        return 0.0f;
+    return baseLift(bounds, 1.0f);
+}
+
 bool PreviewBridge::ghostBounds(glm::vec3& min, glm::vec3& max) const
 {
-    if (mImpl->visibleGhost.empty() || !mImpl->ghostMesh.valid())
+    if (mImpl->visibleGhost.empty())
         return false;
-    eng::MeshBounds bounds;
-    if (!mImpl->renderer.meshBounds(mImpl->ghostMesh, bounds))
+    const auto found = mImpl->ghostNodes.find(mImpl->visibleGhost);
+    if (found == mImpl->ghostNodes.end() || !found->second.hasBounds)
         return false;
-    min = bounds.min;
-    max = bounds.max;
+    // The union the rig recorded when it was built: for a compound piece that
+    // is the whole object, sword included, which is what an author is judging
+    // when they ask whether it fits.
+    min = found->second.min;
+    max = found->second.max;
     return true;
 }
 
@@ -512,7 +661,7 @@ void PreviewBridge::showParticlePlacementGhost(
     if (!mImpl->visibleGhost.empty()) {
         const auto found = mImpl->ghostNodes.find(mImpl->visibleGhost);
         if (found != mImpl->ghostNodes.end())
-            mImpl->renderer.setNodeVisible(found->second, false);
+            mImpl->renderer.setNodeVisible(found->second.root, false);
         mImpl->visibleGhost.clear();
     }
     if (!mImpl->particleGhostNode.valid())

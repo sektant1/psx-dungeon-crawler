@@ -957,6 +957,21 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
             return false;
         out.firstPerson = player;
     }
+    if (source.contains("third_person")) {
+        ThirdPersonAuthor camera;
+        if (!parseFields(source["third_person"],
+                         eng::fieldsOf<ThirdPersonAuthor>(), &camera,
+                         location + "/third_person", error))
+            return false;
+        out.thirdPerson = camera;
+    }
+    if (source.contains("screen")) {
+        ScreenAuthor screen;
+        if (!parseFields(source["screen"], eng::fieldsOf<ScreenAuthor>(),
+                         &screen, location + "/screen", error))
+            return false;
+        out.screen = screen;
+    }
     if (source.contains("viewmodel_rig")) {
         ViewmodelRigAuthor rig;
         if (!parseFields(source["viewmodel_rig"],

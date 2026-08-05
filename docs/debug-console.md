@@ -264,8 +264,8 @@ the room and the wisps drifting in front of it — which is level state, not
 shader state, and is the only part of that tab the engine must not know about.
 
 The demo registers its showcase portal and its three liquid pools the same way,
-which is what makes `make demo` a place to tune a surface shader against every
-render profile in turn.
+which is what makes `make psx-demo` a place to tune a surface shader against
+every render profile in turn.
 
 ### Particles is an engine panel too
 

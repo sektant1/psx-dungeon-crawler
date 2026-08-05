@@ -49,6 +49,23 @@ UI_DIR = Path(__file__).resolve().parent / "ui"
 HISTORY_PER_CHANNEL = 2000
 
 
+def _watch_key(payload: str) -> tuple[str, str] | None:
+    """(channel, name) for a watch record, or None for anything that scrolls.
+
+    Samples are deliberately NOT watches here: a sample is a point on a graph
+    and its value over time is the whole content, so it belongs in the ring
+    where the history lives.
+    """
+    try:
+        record = json.loads(payload)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(record, dict) or record.get("kind") != "watch":
+        return None
+    name = record.get("name") or record.get("msg") or ""
+    return (str(record.get("ch", "")), str(name))
+
+
 class Hub:
     """Fan-out from the collector to every connected browser.
 
@@ -61,6 +78,15 @@ class Hub:
     def __init__(self, history: int = HISTORY_PER_CHANNEL) -> None:
         self._lock = threading.Lock()
         self._history: dict[str, collections.deque] = {}
+        # The latest value of every watch, which is NOT scrollback and must not
+        # age out of one. A watch means "the current value of X"; the log ring
+        # holds the last N records regardless of what they are, so a value the
+        # engine republishes every few seconds -- code size, a slow counter --
+        # is evicted by a busy channel long before anyone opens the browser, and
+        # its pane is then empty for no reason the reader can see. Keyed by
+        # channel and name, so it is bounded by how many distinct values exist
+        # rather than by how often they arrive.
+        self._watches: dict[tuple[str, str], str] = {}
         self._channels: set[str] = set()
         self._subscribers: list[queue.Queue] = []
         self._history_size = history
@@ -71,11 +97,15 @@ class Hub:
         with self._lock:
             self.received += 1
             self._channels.add(channel)
-            bucket = self._history.get(channel)
-            if bucket is None:
-                bucket = collections.deque(maxlen=self._history_size)
-                self._history[channel] = bucket
-            bucket.append(payload)
+            key = _watch_key(payload)
+            if key is not None:
+                self._watches[key] = payload
+            else:
+                bucket = self._history.get(channel)
+                if bucket is None:
+                    bucket = collections.deque(maxlen=self._history_size)
+                    self._history[channel] = bucket
+                bucket.append(payload)
             subscribers = list(self._subscribers)
         for q in subscribers:
             try:
@@ -111,6 +141,7 @@ class Hub:
             rows: list[str] = []
             for name in wanted:
                 rows.extend(self._history.get(name, ()))
+            watches = list(self._watches.values())
         # Chronological across channels. The payloads carry a monotonic `t`, so
         # this is a real ordering rather than an interleave of arrival order.
         def stamp(row: str) -> float:
@@ -120,11 +151,16 @@ class Hub:
                 return 0.0
 
         rows.sort(key=stamp)
-        return rows[-limit:] if limit > 0 else rows
+        # Trim the log first, then append every current watch: the limit is
+        # about how much scrollback to send, and dropping a current value to
+        # make room for an older log line gets that backwards.
+        rows = rows[-limit:] if limit > 0 else rows
+        return rows + watches
 
     def clear(self) -> None:
         with self._lock:
             self._history.clear()
+            self._watches.clear()
             self._channels.clear()
 
     def stats(self) -> dict:

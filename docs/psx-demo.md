@@ -7,7 +7,7 @@ an `eng::Application` on the same engine as the game and the editor, so every
 debug surface below is the shared one.
 
 ```sh
-make demo                                  # or ./build/psx_demo
+make psx-demo                              # or ./build/psx_demo
 RAVEN_RENDER_PRESET=ps1 ./build/psx_demo     # start on a specific profile
 RAVEN_TUNE=1 RAVEN_CONSOLE=1 ./build/psx_demo  # open the panels on frame 1
 ```

@@ -182,6 +182,8 @@ add_library(
   engine/src/diagnostics/Trace.cpp
   engine/src/diagnostics/Profiler.cpp
   engine/src/diagnostics/FrameStats.cpp
+  engine/src/diagnostics/MemoryProfiler.cpp
+  engine/src/diagnostics/CodeSize.cpp
   engine/src/systems/Ease.cpp
   engine/src/systems/Actions.cpp
   engine/src/systems/Events.cpp
@@ -195,6 +197,43 @@ target_include_directories(eng_core PUBLIC engine/include PRIVATE third_party)
 # the bottom layer does not point a dependency upward. AssetRoot.cpp reads the
 # content manifest with it.
 target_link_libraries(eng_core PUBLIC glm::glm PRIVATE eng_toml)
+
+# Heap accounting (engine/src/diagnostics/MemoryProfiler.cpp): replaces global
+# operator new with a counting one. Two relaxed atomic adds and a 16-byte header
+# per allocation, which is cheap enough to leave on for development and not
+# something to hand to a player -- so this is the switch to throw for a shipping
+# build, and it is deliberately NOT tied to CMAKE_BUILD_TYPE: this repo builds
+# Release by default, and a profiler that silently disables itself in the only
+# configuration anyone runs is worse than no profiler.
+#
+# PUBLIC, because the header's enabled() and the operator new overrides have to
+# agree in every translation unit that links this. A TU compiled with 0 next to
+# one compiled with 1 means a block allocated with a header and freed without
+# one, which frees the wrong pointer.
+# A development build turns the development tools on without being asked:
+# Connector attaches by default (RAVEN_CONNECTOR=0 opts out). Nothing here
+# changes what is rendered -- the sink drops records when nobody is collecting
+# them, so a dev run with no Connector open costs one idle thread and a socket
+# that keeps failing to connect.
+#
+# Both Debug and RelWithDebInfo count: RelWithDebInfo is this tree's default and
+# is what anyone actually plays while developing, so tying the debug channels to
+# Debug alone would mean they were off in the build where the bug showed up.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  target_compile_definitions(eng_core PUBLIC ENG_CONNECTOR_DEFAULT=1)
+else()
+  target_compile_definitions(eng_core PUBLIC ENG_CONNECTOR_DEFAULT=0)
+endif()
+
+option(ENG_MEMPROF "instrument global operator new for heap profiling" ON)
+if(ENG_MEMPROF)
+  target_compile_definitions(eng_core PUBLIC ENG_MEMPROF=1)
+  # backtrace() resolves names out of the dynamic symbol table; without this the
+  # sampled call stacks are addresses and nothing else.
+  target_link_options(eng_core INTERFACE -rdynamic)
+else()
+  target_compile_definitions(eng_core PUBLIC ENG_MEMPROF=0)
+endif()
 # Last resort in the root-discovery chain (D5), so `make run` keeps working
 # straight out of the build tree. An installed build finds its root through the
 # three runtime candidates ahead of this one and never reads it.
@@ -405,6 +444,9 @@ add_library(
                        engine/src/ecs/RendererSceneBackend.cpp
                        engine/src/ecs/Systems.cpp
                        engine/src/controllers/FpsController.cpp
+                       engine/src/camera/FirstPersonCameraRig.cpp
+                       engine/src/camera/ThirdPersonCameraRig.cpp
+                       engine/src/camera/ScreenCameraRig.cpp
                        engine/src/debug/DebugTools.cpp
                        engine/src/debug/SurfacePanels.cpp
                        engine/src/debug/ParticlePanel.cpp
@@ -560,12 +602,44 @@ target_link_libraries(game_content PUBLIC glm::glm EnTT::EnTT
                       PRIVATE eng_toml nlohmann_json::nlohmann_json lua)
 eng_target_hardening(game_content)
 
+# The RPG layer: skills, items, inventory, loot, quests, dialogue, trading, the
+# safehouse, the raid state machine and the save codec.
+#
+# A static library rather than sources compiled into `game`, for the same reason
+# game_content is one: the pure half must compile with no renderer, no physics
+# and no registry so the tests can exercise it exhaustively and cheaply, and a
+# link error is a better guard on that than a convention. PickupSystem and
+# RpgRuntime are the two files that need a world, and they are here because the
+# alternative was a second library for two files.
+add_library(
+  game_rpg STATIC
+  game/src/rpg/RpgTypes.cpp
+  game/src/rpg/Skills.cpp
+  game/src/rpg/Stats.cpp
+  game/src/rpg/Items.cpp
+  game/src/rpg/Inventory.cpp
+  game/src/rpg/WorldState.cpp
+  game/src/rpg/Quests.cpp
+  game/src/rpg/Dialogue.cpp
+  game/src/rpg/Trading.cpp
+  game/src/rpg/Hideout.cpp
+  game/src/rpg/RaidState.cpp
+  game/src/rpg/RpgSave.cpp
+  game/src/rpg/PickupSystem.cpp
+  game/src/rpg/RpgRuntime.cpp)
+target_include_directories(game_rpg PUBLIC game/src engine/include
+                           PRIVATE third_party)
+target_link_libraries(game_rpg PUBLIC glm::glm EnTT::EnTT eng
+                      PRIVATE eng_toml)
+eng_target_hardening(game_rpg)
+
 # The placement editor: ImGui + ImGuizmo over the engine's offscreen viewport.
 # Owns UI and commands only -- the scene format, the catalogue and the cooker
 # compile into game_content, so there is no second serializer.
 add_executable(
   scene_editor
   editor/src/app/main.cpp
+  editor/src/scene/Attachments.cpp
   editor/src/scene/BrushPlacement.cpp
   editor/src/scene/DocumentRaycast.cpp
   editor/src/app/EditorApp.cpp
@@ -707,6 +781,9 @@ add_executable(
   game/src/PlayerWeapons.cpp
   game/src/PlayerSystem.cpp
   game/src/InteractionSystem.cpp
+  # Written, used by main.cpp and DebugOverlay.cpp, and never added here, so
+  # every link failed on four undefined LockOnSystem symbols.
+  game/src/LockOn.cpp
   game/src/LiveLevel.cpp
   game/src/LevelDocument.cpp
   game/src/LevelResource.cpp
@@ -728,7 +805,7 @@ add_executable(
   game/src/scene/MapRuntime.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
                                         game/src game/src/scene)
-target_link_libraries(game PRIVATE demo_scene game_content)
+target_link_libraries(game PRIVATE demo_scene game_content game_rpg)
 eng_target_hardening(game)
 
 # Explicit source-asset cook. Normal builds consume checked-in cooked content
@@ -865,6 +942,18 @@ if(BUILD_TESTING)
   target_include_directories(log_backlog_tests PRIVATE engine/include)
   add_test(NAME log_backlog COMMAND log_backlog_tests)
 
+  # Compiled from source rather than linked against eng_core, so the test binary
+  # gets the operator new overrides whatever the rest of the tree was built
+  # with, and -rdynamic for readable stacks. Everything it asserts is a property
+  # of those overrides.
+  add_executable(memory_profiler_tests engine/tests/MemoryProfilerTests.cpp
+                 engine/src/diagnostics/MemoryProfiler.cpp
+                 engine/src/core/Log.cpp)
+  target_include_directories(memory_profiler_tests PRIVATE engine/include)
+  target_compile_definitions(memory_profiler_tests PRIVATE ENG_MEMPROF=1)
+  target_link_options(memory_profiler_tests PRIVATE -rdynamic)
+  add_test(NAME memory_profiler COMMAND memory_profiler_tests)
+
   add_executable(ui_layout_tests engine/tests/UiLayoutTests.cpp
                                  engine/src/ui/UiLayout.cpp)
   target_include_directories(ui_layout_tests PRIVATE engine/include)
@@ -918,6 +1007,20 @@ if(BUILD_TESTING)
     skeletal_animation_tests
     PRIVATE PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME skeletal_animation COMMAND skeletal_animation_tests)
+
+  # The camera rigs' framing model: follow smoothing, the pitch clamp, the
+  # lock-on blend, the spring arm and the screen fit. No renderer, no window --
+  # solve()/boomLength()/fitDistance() are split out of present() precisely so
+  # this can be arithmetic.
+  add_executable(camera_rig_tests engine/tests/CameraRigTests.cpp)
+  target_link_libraries(camera_rig_tests PRIVATE eng)
+  add_test(NAME camera_rig COMMAND camera_rig_tests)
+
+  # Who the lock-on grabs, what it refuses, and what makes it let go.
+  add_executable(lock_on_tests game/tests/LockOnTests.cpp game/src/LockOn.cpp)
+  target_include_directories(lock_on_tests PRIVATE game/src engine/include)
+  target_link_libraries(lock_on_tests PRIVATE glm::glm)
+  add_test(NAME lock_on COMMAND lock_on_tests)
 
   add_executable(physics_tests game/tests/PhysicsTests.cpp)
   target_include_directories(physics_tests PRIVATE game/src)
@@ -1178,6 +1281,50 @@ if(BUILD_TESTING)
 
   # Screen shake and hit-stop. Renderer-free, so the decay curve, the tier
   # ordering and the hit-stop lifetime are testable at all.
+  # The RPG layer. Each links only the pure modules it exercises -- no renderer,
+  # no physics, no registry -- which is the property that makes the library
+  # worth having as a separate target.
+  add_executable(
+    rpg_progression_tests game/tests/RpgProgressionTests.cpp
+                          game/src/rpg/Skills.cpp game/src/rpg/Stats.cpp
+                          game/src/rpg/RpgTypes.cpp)
+  target_include_directories(rpg_progression_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(rpg_progression_tests PRIVATE eng_toml eng_core glm::glm)
+  add_test(NAME rpg_progression COMMAND rpg_progression_tests)
+
+  add_executable(
+    rpg_inventory_tests game/tests/RpgInventoryTests.cpp
+                        game/src/rpg/Inventory.cpp game/src/rpg/Items.cpp
+                        game/src/rpg/RpgTypes.cpp
+                        game/src/combat/CombatVocabulary.cpp)
+  target_include_directories(rpg_inventory_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(rpg_inventory_tests PRIVATE eng_toml eng_core glm::glm
+                                                    EnTT::EnTT)
+  add_test(NAME rpg_inventory COMMAND rpg_inventory_tests)
+
+  add_executable(
+    rpg_quest_tests game/tests/RpgQuestTests.cpp game/src/rpg/Quests.cpp
+                    game/src/rpg/Dialogue.cpp game/src/rpg/RpgTypes.cpp)
+  target_include_directories(rpg_quest_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(rpg_quest_tests PRIVATE eng_toml eng_core glm::glm)
+  add_test(NAME rpg_quest COMMAND rpg_quest_tests)
+
+  add_executable(
+    rpg_economy_tests
+    game/tests/RpgEconomyTests.cpp game/src/rpg/Trading.cpp
+    game/src/rpg/RaidState.cpp game/src/rpg/RpgSave.cpp game/src/rpg/Items.cpp
+    game/src/rpg/Inventory.cpp game/src/rpg/Quests.cpp game/src/rpg/Skills.cpp
+    game/src/rpg/Stats.cpp game/src/rpg/WorldState.cpp game/src/rpg/Hideout.cpp
+    game/src/rpg/RpgTypes.cpp game/src/combat/CombatVocabulary.cpp)
+  target_include_directories(rpg_economy_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(rpg_economy_tests PRIVATE eng_toml eng_core glm::glm
+                                                  EnTT::EnTT)
+  add_test(NAME rpg_economy COMMAND rpg_economy_tests)
+
   add_executable(hit_feel_tests game/tests/HitFeelTests.cpp
                                 game/src/HitFeel.cpp)
   target_include_directories(hit_feel_tests
@@ -1293,10 +1440,15 @@ if(BUILD_TESTING)
   target_include_directories(trace_tests PRIVATE engine/include)
   add_test(NAME trace COMMAND trace_tests)
 
+  # MemoryProfiler.cpp because Profiler::push/pop drive the heap tagger: one
+  # annotation, both budgets. Built with ENG_MEMPROF=0 so this stays a test of
+  # the timing tree and does not replace the test binary's operator new.
   add_executable(profiler_tests engine/tests/ProfilerTests.cpp
                                 engine/src/diagnostics/Profiler.cpp
+                                engine/src/diagnostics/MemoryProfiler.cpp
                                 engine/src/core/StringId.cpp
                                 engine/src/core/Log.cpp)
+  target_compile_definitions(profiler_tests PRIVATE ENG_MEMPROF=0)
   target_include_directories(profiler_tests PRIVATE engine/include)
   add_test(NAME profiler COMMAND profiler_tests)
 
@@ -1669,6 +1821,15 @@ if(BUILD_TESTING)
                                                        eng_ecs_headless
                                                        glm::glm)
   add_test(NAME editor_placement COMMAND editor_placement_tests)
+
+  add_executable(editor_attachment_tests editor/tests/EditorAttachmentTests.cpp
+                                         editor/src/scene/Attachments.cpp)
+  target_include_directories(editor_attachment_tests PRIVATE editor/include
+                             game/src game/tests engine/include)
+  target_link_libraries(editor_attachment_tests PRIVATE game_content
+                                                        eng_ecs_headless
+                                                        glm::glm)
+  add_test(NAME editor_attachment COMMAND editor_attachment_tests)
 
   add_executable(
     editor_model_import_tests editor/tests/EditorModelImportTests.cpp

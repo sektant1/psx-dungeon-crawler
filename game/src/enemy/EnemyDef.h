@@ -214,6 +214,19 @@ struct EnemyDef {
     int tier = 1;
     bool boss = false;
 
+    // What killing it is worth. Both are read by the RPG layer and by nothing
+    // else, which is why they are plain fields here rather than a struct: the
+    // enemy system does not know what experience is, it only carries the number
+    // to whoever does.
+    //
+    // `xp` feeds the character level (the Tarkov number the world gates on);
+    // `trains` names a skill that also gets it, so a bow-using enemy can be
+    // worth Marksmanship and a warded one worth Thaumaturgy. `loot` names a
+    // table in loot.toml, and empty means this thing drops nothing.
+    int64_t xp = 0;
+    std::string trains;
+    std::string loot;
+
     EnemyBody body;
     EnemyVisual visual;
     EnemyStats stats;

@@ -3,6 +3,8 @@
 #include <eng/ecs/MeshResolve.h>
 #include <eng/ecs/World.h>
 #include <eng/ecs/components/FirstPersonController.h>
+#include <eng/ecs/components/ScreenCamera.h>
+#include <eng/ecs/components/ThirdPersonCamera.h>
 
 #include "ViewmodelRig.h"
 #include "audio/ActorSounds.h"
@@ -93,6 +95,15 @@ public:
     struct AuthoredPlayerRig {
         std::optional<eng::ecs::FirstPersonController> controller;
         std::optional<ViewmodelRig> viewmodel;
+        // The camera shape this level asks for. Present means "play me over
+        // the shoulder"; absent means the game's own default, which is first
+        // person. A level that authors both gets third person -- the shape is
+        // the more specific statement, and the first-person block still
+        // supplies the movement numbers both shapes share.
+        std::optional<eng::ecs::ThirdPersonCamera> thirdPerson;
+        // Present means this scene is not a world at all but a 2D screen: a
+        // menu, a HUD plate, a dialogue page.
+        std::optional<eng::ecs::ScreenCamera> screen;
     };
     AuthoredPlayerRig playerRig() const;
 

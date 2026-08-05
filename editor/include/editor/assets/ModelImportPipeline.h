@@ -34,6 +34,15 @@ struct ImportedPart {
 struct ModelImportResult {
     bool ok = false;
     std::string error;
+    // The placeable that IS the model: "kit.import_foo", a mesh-less group
+    // whose attachments are `parts`, at the offsets that reassemble it.
+    //
+    // Written whenever the source arrives as more than one submesh. Without it
+    // a twenty-four-part model is twenty-four unrelated rows in the Placeables
+    // list and no way to place the model itself -- which is how an imported
+    // model used to be findable only in the scene it was imported into.
+    // Single-part models are their own root, and `root` is that one piece.
+    std::string root;
     // Written only when a part needed a material of its own. Empty means every
     // part used a stock engine material and nothing needs loading.
     std::string materialScript;
@@ -49,7 +58,9 @@ struct ModelImportResult {
 //
 //   meshes/props/<id>.obj      one per submesh
 //   materials/<prefix>.material  only if a part needed its own material
-//   config/kit.toml            a marked block, replaced wholesale on reimport
+//   config/kit.toml            a marked block, replaced wholesale on reimport,
+//                              holding one piece per part plus -- for a
+//                              multi-part model -- the group that owns them
 //
 // The kit block is delimited by "# BEGIN editor import: <slug>" so importing
 // the same model twice replaces its pieces instead of accumulating them.

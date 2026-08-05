@@ -84,3 +84,51 @@ grade_tint_strength = 0.08
 grade_black_lift    = 0.045
 bloom_threshold     = 0.78
 bloom_intensity     = 0.34
+
+# The model turntable's look: a PS2-era JRPG chamber. Where [palette.dungeon] is
+# a survival look that hides things, this is a *screenshot* look whose job is to
+# show one object well, so every dial moves the other way -- ambient up, fog
+# reach long, vignette restrained, saturation above 1.
+#
+# What makes it read as sixth-generation rather than as PS1: the colour is
+# saturated and split warm-against-teal, the bloom threshold is low enough that
+# torch flames and gold trim actually bleed, and the shadows are tinted rather
+# than crushed to black. The engine's faint depth outline stays on but quiet --
+# the era did not draw ink lines, and at 0.16 it only firms up a silhouette
+# against the far wall.
+[palette.turntable]
+ambient_srgb        = [0.46, 0.52, 0.70]  # cool stone bounce
+ambient_scale       = 0.070               # a showroom has to show, not flood
+sun_yaw_deg         = 172.0               # down through the clerestory window,
+sun_pitch_deg       = -46.0               # from behind the subject
+sun_colour_srgb     = [0.92, 0.94, 1.00]
+sun_scale           = 0.09
+fog_srgb            = [0.075, 0.082, 0.115]
+fog_density         = 0.019   # 16 m of room stays legible, and still recedes
+background_srgb     = [0.022, 0.024, 0.040]
+fog_desat_boost     = 0.40    # distance cools rather than going flat grey
+light_steps         = 0.0
+light_step_softness = 0.28
+light_shaft_colour  = [0.80, 0.82, 0.95, 0.22]  # cold daylight, not torchlight
+grade_desaturate    = 0.03
+grade_contrast      = 1.09
+grade_shadow_tint   = [0.070, 0.100, 0.165]  # teal shadow
+grade_mid_tint      = [0.80, 0.70, 0.58]     # warm stone
+grade_saturation    = 1.12    # the era's colour, not a modern desaturated grade
+grade_tint_strength = 0.13    # the warm/cool split is the whole grade
+grade_black_lift    = 0.042
+col_depth           = 63.0
+dither_banding      = 0.014
+dither_dark_fade    = 0.30
+shadow_colour       = [0.020, 0.026, 0.048]
+shadow_strength     = 0.26    # contact darkening: the plinth sits on the floor
+highlight_colour    = [1.00, 0.80, 0.52]
+highlight_strength  = 0.14
+outline_colour      = [0.020, 0.024, 0.040]
+outline_opacity     = 0.16
+outline_depth_sens  = 9.0
+outline_normal_sens = 0.18
+vignette_strength   = 0.16    # framing, not claustrophobia
+vignette_colour     = [0.050, 0.060, 0.100]
+bloom_threshold     = 0.68    # flames and gold trim are supposed to bleed
+bloom_intensity     = 0.52

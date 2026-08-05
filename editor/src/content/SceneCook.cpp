@@ -153,14 +153,21 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
             // The kit is authored on a 20-unit grid and imported at `scale`;
             // the authored scale multiplies that rather than replacing it.
             transform.scale *= piece->meshScale(catalog.scale());
-            built.emplace<eng::ecs::MeshSource>(
-                entity, eng::ecs::MeshSource{piece->meshPath});
-            eng::ecs::MeshRenderer renderer;
-            // The entity's own material wins over the kit piece's.
-            renderer.material = authored.material.empty() ? piece->material
-                                                          : authored.material;
-            renderer.castShadows = authored.castShadows;
-            built.emplace<eng::ecs::MeshRenderer>(entity, std::move(renderer));
+            // A group piece has no geometry of its own -- it is the frame its
+            // attachments hang in. Emitting a MeshSource with an empty path
+            // would ask the resolver for a mesh called "" once per frame.
+            if (!piece->isGroup()) {
+                built.emplace<eng::ecs::MeshSource>(
+                    entity, eng::ecs::MeshSource{piece->meshPath});
+                eng::ecs::MeshRenderer renderer;
+                // The entity's own material wins over the kit piece's.
+                renderer.material = authored.material.empty()
+                                        ? piece->material
+                                        : authored.material;
+                renderer.castShadows = authored.castShadows;
+                built.emplace<eng::ecs::MeshRenderer>(entity,
+                                                      std::move(renderer));
+            }
         }
         // The two non-kit ways to be a mesh. Both end in the same pair of
         // runtime components as a prefab does -- a MeshRenderer saying what it
@@ -275,6 +282,11 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
         if (authored.firstPerson)
             built.emplace<eng::ecs::FirstPersonController>(
                 entity, *authored.firstPerson);
+        if (authored.thirdPerson)
+            built.emplace<eng::ecs::ThirdPersonCamera>(entity,
+                                                       *authored.thirdPerson);
+        if (authored.screen)
+            built.emplace<eng::ecs::ScreenCamera>(entity, *authored.screen);
         if (authored.viewmodelRig)
             built.emplace<game::ViewmodelRig>(entity, *authored.viewmodelRig);
         if (authored.orbit) {
@@ -372,13 +384,18 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                     childTransform.position = attachment.position;
                     childTransform.scale *= attached->meshScale(catalog.scale());
                     built.emplace<eng::ecs::Transform>(child, childTransform);
-                    built.emplace<eng::ecs::MeshSource>(
-                        child, eng::ecs::MeshSource{attached->meshPath});
-                    eng::ecs::MeshRenderer childRenderer;
-                    childRenderer.material = attached->material;
-                    childRenderer.castShadows = authored.castShadows;
-                    built.emplace<eng::ecs::MeshRenderer>(child,
-                                                          childRenderer);
+                    // A part may itself be a group -- a model whose submeshes
+                    // were themselves grouped. It contributes a frame, and its
+                    // own attachments below it, but no geometry.
+                    if (!attached->isGroup()) {
+                        built.emplace<eng::ecs::MeshSource>(
+                            child, eng::ecs::MeshSource{attached->meshPath});
+                        eng::ecs::MeshRenderer childRenderer;
+                        childRenderer.material = attached->material;
+                        childRenderer.castShadows = authored.castShadows;
+                        built.emplace<eng::ecs::MeshRenderer>(child,
+                                                              childRenderer);
+                    }
                     if (authored.shader) {
                         const ShaderAuthor& shader = *authored.shader;
                         built.emplace<eng::ecs::ShaderParams>(

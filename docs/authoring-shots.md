@@ -9,8 +9,8 @@ point: the thing you record is the thing the game renders.
 
 ## The example
 
-`assets/scenes/cozy_lair.scn` is the editor's default scene and the one to
-copy. It is 36 entities and the whole of it is:
+`assets/scenes/cozy_lair.scn` is the one to copy. It is 36 entities and the
+whole of it is:
 
 | Entity | Carries | Doing |
 |---|---|---|
@@ -56,7 +56,7 @@ A pivot is still right when a *group* has to revolve as one: a parent is how
 several things share a motion.
 
 ```sh
-make editor                      # opens cozy_lair.scn
+make editor SCENE=assets/scenes/cozy_lair.scn
 make scene SCENE=assets/scenes/spin_portal.scn   # cook and play it
 ```
 
@@ -155,3 +155,12 @@ Both overrides exist for when it is wrong:
 
 That difference is what separates recording a clip from filming someone
 playing.
+
+## A worked example
+
+[levels/turntable.md](levels/turntable.md) is this page applied to one shot: the
+model showroom `make demo` runs. It is worth reading for the parts that only
+show up once you are composing rather than describing — why the camera has to
+stay on the room's axis, why the opening behind the subject has to be wider than
+the subject, and why the framing is *derived* from the thing on the plinth
+rather than typed in.

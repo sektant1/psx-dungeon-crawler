@@ -4,6 +4,10 @@
 
 #include "MapPlay.h"
 
+#include <eng/camera/ScreenCameraRig.h>
+
+#include <imgui.h>
+
 #include "GameAssets.h"
 #include "GameCollision.h"
 #include "ParticleCollider.h"
@@ -244,6 +248,23 @@ protected:
         mCinematic = !mWorld.registry().view<eng::ecs::Camera>().empty();
         if (mCinematic)
             eng::log::info("Level: authored camera -- playing as a shot");
+
+        // A scene carrying a ScreenCamera is not a world at all: it is a 2D
+        // screen -- a menu, a HUD plate, a dialogue page -- and the camera
+        // belongs to the rig that fits the page rather than to the authored
+        // entity transform. So the scene stops driving the camera and the rig
+        // takes it, which is the whole difference between the two kinds of
+        // scene at runtime.
+        if (const auto& screen = rt.playerRig().screen) {
+            mScreen.emplace();
+            mScreen->setPage(*screen);
+            mWorld.setDrivesCamera(false);
+            mScreen->attach(r);
+            mCinematic = true;
+            engine.input().setMouseGrab(false);
+            eng::log::info("Level: screen scene -- %.0fx%.0f virtual pixels",
+                           double(screen->pageWidth), double(screen->pageHeight));
+        }
         engine.input().setMouseGrab(!mCinematic);
         // Last, so the clip's first frame is a fully built level: recording
         // pins the frame delta, and a load hitch would otherwise be baked into
@@ -303,8 +324,21 @@ protected:
         // without a line of C++ per scene.
         eng::ecs::tickComponentSystems(mWorld, f.dt);
         mWorld.sync();
-        if (!mCinematic)
-            mPlayer.present(r);
+        if (mScreen) {
+            // The page is fitted every frame rather than once: a window resize
+            // changes the aspect, and with Fit::Contain that changes how far
+            // back the camera has to stand.
+            // The display size the UI canvas already runs on -- a screen scene
+            // and the HUD painted over it have to agree on what the window is,
+            // and imgui's copy is the one this project has always used
+            // (game/src/ui/GameHud.cpp does the same).
+            const ImVec2 display = ImGui::GetIO().DisplaySize;
+            if (display.y > 0.0f)
+                mScreen->setViewportAspect(display.x / display.y);
+            mScreen->present(r, eng::CameraPose{}, f.realDt);
+        } else if (!mCinematic) {
+            mPlayer.present(r, 1.0f, f.realDt);
+        }
     }
 
     void onStopGame(eng::Engine& engine) override
@@ -322,6 +356,9 @@ protected:
 
 private:
     std::string mMapPath;
+    // Present only for a screen scene; its presence is what "this map is a
+    // screen" means at runtime.
+    std::optional<eng::ScreenCameraRig> mScreen;
     std::optional<eng::ecs::RendererSceneBackend> mBackend;
     eng::ecs::World mWorld;
     std::optional<MapRuntime> mRuntime;

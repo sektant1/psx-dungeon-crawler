@@ -10,6 +10,15 @@ namespace eng::ecs {
 
 // Defined here rather than in World.cpp so a target that links only World.cpp
 // -- a headless test, the combat sim -- never has to pull the renderer in.
+void World::setDrivesCamera(bool drives)
+{
+    // static_cast rather than dynamic: World's render reconciler is a SceneSync
+    // and nothing else constructs one -- attachRenderer above is the only place
+    // mRender is assigned.
+    if (mRender)
+        static_cast<SceneSync*>(mRender.get())->setDrivesCamera(drives);
+}
+
 void World::attachRenderer(SceneBackend& backend, bool drivesCamera)
 {
     auto sync = std::make_unique<SceneSync>(*this, backend);

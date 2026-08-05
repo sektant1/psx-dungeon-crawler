@@ -10,7 +10,6 @@
 namespace {
 constexpr float kEyeHeight = 1.7f;
 constexpr float kCrouchEyeHeight = 1.18f;
-const float kMaxPitch = glm::radians(89.0f);
 // Snappy, high-agility locomotion: near-instant ground response and strong
 // air control so direction changes read as deliberate, weighty dashes rather
 // than sluggish drift.
@@ -54,11 +53,14 @@ namespace eng {
 
 glm::vec3 FpsController::eyePosition() const
 {
-    // mHead is parented to the yaw-only body node, so reproduce that local
-    // offset here. This keeps interaction raycasts aligned with the actual
-    // camera and carried light while crouching/bobbing.
-    const float c = std::cos(mYaw);
-    const float s = std::sin(mYaw);
+    // The head offset is expressed in the body's frame, so reproduce that
+    // rotation here. This keeps interaction raycasts aligned with the actual
+    // head -- and therefore with the carried light -- while crouching/bobbing.
+    // Deliberately the character's head in both camera shapes: in third person
+    // the eye is metres behind on a boom, and aiming from there would let the
+    // player shoot through the wall they are standing against.
+    const float c = std::cos(mFacingYaw);
+    const float s = std::sin(mFacingYaw);
     return mPos + glm::vec3(c * mHeadOffset.x + s * mHeadOffset.z,
                             mHeadOffset.y,
                             -s * mHeadOffset.x + c * mHeadOffset.z);
@@ -72,8 +74,13 @@ glm::vec3 FpsController::forward() const
 
 void FpsController::setViewAngles(float yawRadians, float pitchRadians)
 {
+    const glm::vec2 limits = cameraRig().pitchLimitsRadians();
     mYaw = yawRadians;
-    mPitch = glm::clamp(pitchRadians, -kMaxPitch, kMaxPitch);
+    mPitch = glm::clamp(pitchRadians, limits.x, limits.y);
+    if (mFacing == Facing::View) {
+        mFacingYaw = yawRadians;
+        mPrevFacingYaw = yawRadians;
+    }
 }
 
 void FpsController::init(eng::Renderer& r, eng::Physics& physics,
@@ -92,9 +99,25 @@ void FpsController::init(eng::Renderer& r, eng::Physics& physics,
     mCharacter = physics.createCharacter(cd);
     mCharGrounded = false;
     mLastCrouch = false;
-    mBody = r.createNode(eng::kRootNode, mPos);
-    mHead = r.createNode(mBody, {0.0f, kEyeHeight, 0.0f});
-    r.attachCamera(mHead);
+    cameraRig().attach(r);
+}
+
+void FpsController::setCameraRig(eng::Renderer& r, CameraRig* rig)
+{
+    CameraRig* next = rig ? rig : &mDefaultRig;
+    if (next == &cameraRig())
+        return;
+    // Order matters: the outgoing rig drops its nodes before the incoming one
+    // takes the camera, so the camera is never parented to a node that is about
+    // to be destroyed.
+    cameraRig().detach(r);
+    mRig = rig;
+    cameraRig().attach(r);
+    // The view angles are the controller's, not the rig's, so the new shape
+    // starts looking where the old one left off -- but its pitch range may be
+    // narrower, and an angle outside it would be unwindable.
+    const glm::vec2 limits = cameraRig().pitchLimitsRadians();
+    mPitch = glm::clamp(mPitch, limits.x, limits.y);
 }
 
 void FpsController::reset(glm::vec3 startPos, float speed, float sensitivity,
@@ -129,6 +152,10 @@ void FpsController::reset(glm::vec3 startPos, float speed, float sensitivity,
     mSliding = false;
     mCoyoteTime = kCoyoteDuration;
     mJumpBufferTime = 0.0f;
+    mFacingYaw = mYaw;
+    mPrevFacingYaw = mYaw;
+    mFacingTarget.reset();
+    mLandingImpact = 0.0f;
 }
 
 void FpsController::setBaseFov(float degrees)
@@ -174,7 +201,7 @@ void FpsController::update(eng::Input& in, eng::Renderer& r, float dt)
     const Command command = readCommand(in);
     applyLook(command);
     simulate(command, dt);
-    present(r);
+    present(r, 1.0f, dt);
 }
 
 glm::vec2 FpsController::inputDirection(const Command& command) const
@@ -218,9 +245,13 @@ void FpsController::applyLook(const Command& command)
 {
     if (!command.mouseLook)
         return;
+    // The rig owns the pitch range -- a neck and a boom are not constrained by
+    // the same thing -- and the controller enforces it on the authoritative
+    // angle, so pushing past the limit never banks an angle to unwind.
+    const glm::vec2 limits = cameraRig().pitchLimitsRadians();
     mYaw -= command.lookDelta.x * mSens;
-    mPitch = glm::clamp(mPitch - command.lookDelta.y * mSens,
-                        -kMaxPitch, kMaxPitch);
+    mPitch = glm::clamp(mPitch - command.lookDelta.y * mSens, limits.x,
+                        limits.y);
 }
 
 void FpsController::simulate(const Command& command, float dt)
@@ -228,6 +259,12 @@ void FpsController::simulate(const Command& command, float dt)
     mPrevPos = mPos;
     mPrevHeadOffset = mHeadOffset;
     mPrevDashRoll = mDashRoll;
+    mPrevFacingYaw = mFacingYaw;
+    const bool wasGrounded = grounded();
+    // Downward speed on the way in, kept because both movement paths zero it
+    // the moment they notice the floor -- and the speed it was zeroed *from* is
+    // exactly what a landing is worth.
+    float fallSpeed = 0.0f;
 
     // Camera looks down -Z at yaw 0; forward/right on the ground plane.
     const glm::vec3 fwd(-std::sin(mYaw), 0.0f, -std::cos(mYaw));
@@ -343,6 +380,7 @@ void FpsController::simulate(const Command& command, float dt)
         if (mVerticalVelocity < kTerminalVelocity)
             mVerticalVelocity = kTerminalVelocity;
 
+        fallSpeed = mVerticalVelocity;
         const glm::vec3 vel(mVelocity.x, mVerticalVelocity, mVelocity.y);
         mPhysics->characterSetVelocity(mCharacter, vel);
         mPhysics->characterUpdate(mCharacter, dt, mCollisionMask);
@@ -367,6 +405,7 @@ void FpsController::simulate(const Command& command, float dt)
                                (mPos.z - beforeMove.z) / safeDt);
     } else {
         // No physics (test fallback): manual gravity + AABB clamp.
+        fallSpeed = mVerticalVelocity;
         if (!grounded() || mVerticalVelocity > 0.0f) {
             mVerticalVelocity -= kGravity * dt;
             mPos.y += mVerticalVelocity * dt;
@@ -409,6 +448,37 @@ void FpsController::simulate(const Command& command, float dt)
         mDashCameraDrop = 0.0f;
     }
 
+    // Touchdown, for the camera's landing dip. Recorded rather than acted on:
+    // what a landing looks like is the rig's business, and only the simulation
+    // knows the frame it happened on.
+    if (!wasGrounded && grounded())
+        mLandingImpact = std::max(mLandingImpact, -std::min(0.0f, fallSpeed));
+
+    // Where the body points. In first person there is nothing to decide -- the
+    // body is the view. In third person it turns towards a lock-on target if
+    // there is one, else towards travel, and holds its last facing when the
+    // player stops, so standing still does not snap the character to north.
+    if (mFacing == Facing::View) {
+        mFacingYaw = mYaw;
+    } else {
+        float desired = mFacingYaw;
+        if (mFacingTarget) {
+            const glm::vec3 delta = *mFacingTarget - mPos;
+            const glm::vec3 flat(delta.x, 0.0f, delta.z);
+            if (glm::length(flat) > 1e-3f)
+                desired = yawOfDirection(glm::normalize(flat));
+        } else if (glm::length(mVelocity) > 0.05f) {
+            desired = yawOfDirection(glm::normalize(
+                glm::vec3(mVelocity.x, 0.0f, mVelocity.y)));
+        }
+        mFacingYaw = turnTowards(mFacingYaw, desired,
+                                 glm::radians(mTurnRateDegrees) * dt);
+        // Interpolating across the wrap would spin the character the long way
+        // round once per revolution; keep both ends on the same branch.
+        if (std::abs(mFacingYaw - mPrevFacingYaw) > glm::pi<float>())
+            mPrevFacingYaw = mFacingYaw;
+    }
+
     // The authored templates pair locomotion state with camera feedback.
     const float horizontalSpeed = glm::length(mVelocity);
     const float speedRatio = glm::clamp(horizontalSpeed / std::max(mSpeed, 0.001f),
@@ -426,9 +496,11 @@ void FpsController::simulate(const Command& command, float dt)
     mFovKick = mSprinting ? mSprintFovKick * speedRatio : 0.0f;
 }
 
-void FpsController::present(eng::Renderer& r, float alpha)
+void FpsController::present(eng::Renderer& r, float alpha, float dt)
 {
-    // The debug camera panel can revise the locomotion base FOV.
+    // The debug camera panel can revise the locomotion base FOV. FOV stays
+    // here rather than moving into a rig: there is one camera, one lens, and
+    // sprint feedback means the same thing whichever shape is framing it.
     const float rendererFov = r.envState().fovDeg;
     if (std::abs(rendererFov - mLastAppliedFov) > 0.001f)
         mBaseFov = rendererFov;
@@ -438,18 +510,46 @@ void FpsController::present(eng::Renderer& r, float alpha)
     mLastAppliedFov = desiredFov;
 
     const float t = glm::clamp(alpha, 0.0f, 1.0f);
-    // Shake is added here and nowhere else. mHeadOffset and mPos keep the
-    // simulated values, so aiming, collision and the muzzle all read a steady
-    // pose while the view moves.
-    r.setPosition(mHead, glm::mix(mPrevHeadOffset, mHeadOffset, t) +
-                             mShakeOffset);
-    r.setPosition(mBody, glm::mix(mPrevPos, mPos, t));
-    r.setOrientation(mBody, glm::angleAxis(mYaw, glm::vec3(0, 1, 0)));
-    const float dashRoll = glm::mix(mPrevDashRoll, mDashRoll, t);
-    const glm::vec3 shake = glm::radians(mShakeRotationDegrees);
-    r.setOrientation(
-        mHead, glm::angleAxis(mPitch + shake.x, glm::vec3(1, 0, 0)) *
-                   glm::angleAxis(dashRoll + shake.z, glm::vec3(0, 0, 1)));
+    // Everything the camera is allowed to know, interpolated between the last
+    // two fixed steps. The simulated values are left alone: aiming, collision
+    // and the muzzle all read a steady pose while the view moves.
+    CameraPose pose;
+    pose.focus = glm::mix(mPrevPos, mPos, t);
+    pose.headOffset = glm::mix(mPrevHeadOffset, mHeadOffset, t);
+    pose.viewYaw = mYaw;
+    pose.viewPitch = mPitch;
+    pose.facingYaw = mFacing == Facing::View
+                         ? mYaw
+                         : mPrevFacingYaw +
+                               wrapAngle(mFacingYaw - mPrevFacingYaw) * t;
+    pose.rollRadians = glm::mix(mPrevDashRoll, mDashRoll, t);
+    const float horizontalSpeed = glm::length(mVelocity);
+    pose.speedRatio =
+        glm::clamp(horizontalSpeed / std::max(mSpeed, 0.001f), 0.0f, 1.0f);
+    // Signed lateral fraction, in the *view's* frame: which way the body is
+    // sliding across the screen is what a lean and a boom lag react to, not
+    // which way it is travelling in the world.
+    if (horizontalSpeed > 0.01f) {
+        const glm::vec2 right(std::cos(mYaw), -std::sin(mYaw));
+        pose.strafeRatio =
+            glm::clamp(glm::dot(mVelocity, right) / std::max(mSpeed, 0.001f),
+                       -1.0f, 1.0f);
+    }
+    pose.grounded = grounded();
+    pose.landingImpact = mLandingImpact;
+    mLandingImpact = 0.0f; // a one-frame event, consumed exactly once
+
+    CameraRig& rig = cameraRig();
+    rig.present(r, pose, dt);
+    // A rig that frames a target owns the view angles while it does. Adopting
+    // them here is what keeps movement camera-relative under a lock-on and what
+    // makes releasing one continuous instead of a snap back to the mouse.
+    float overrideYaw = mYaw;
+    float overridePitch = mPitch;
+    if (rig.viewOverride(overrideYaw, overridePitch)) {
+        mYaw = overrideYaw;
+        mPitch = overridePitch;
+    }
 }
 
 } // namespace eng

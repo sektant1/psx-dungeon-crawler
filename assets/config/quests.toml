@@ -1,0 +1,145 @@
+# What people ask you for.
+#
+# `type` picks the C++ class that owns the progression logic; the rest of the
+# row parameterises it. Adding the eleventh fetch quest is a table here; adding
+# a genuinely new *kind* of goal is one class in game/src/rpg/Quests.h and one
+# line in makeQuest.
+#
+# types:
+#   collect  have `amount` of `target` in the pack (tests the holding, so
+#            spending it un-satisfies until you collect again)
+#   deliver  hand `amount` of `target` to `extra` (or to the giver) in
+#            conversation
+#   defeat   kill `amount` of enemy `target` (empty target = anything)
+#   depth    reach depth `amount`; extra = "extract" to require getting out
+#   talk     speak to `target`
+#   flag     wait for world flag `target`
+#
+# `requirement` gates the offer, `reward` is handed out on turn-in by whoever
+# subscribes to QuestChannel::turnedIn -- never by the quest itself.
+#
+# reward.xp is character experience (the Tarkov number). To train a *skill*,
+# use an effect: kind = "give_xp", subject = "<skill>", value = <amount>.
+
+[quest.first_light]
+type = "collect"
+title = "Something to Burn"
+summary = """
+Mother Ilsabet keeps the lamps on the lower road. She is out of candles, and \
+the road is where people walk home."""
+objective = "Bring Ilsabet six candles"
+giver = "ilsabet"
+target = "tallow_candle"
+amount = 6
+[quest.first_light.reward]
+xp = 400
+currency = 60
+[[quest.first_light.reward.effect]]
+kind = "add_standing"
+subject = "ilsabet"
+value = 8
+[[quest.first_light.reward.effect]]
+kind = "give_xp"
+subject = "bartering"
+value = 200
+
+[quest.thin_the_dark]
+type = "defeat"
+title = "Thin the Dark"
+summary = """
+Corvin will not say why he counts them. He will say what he pays."""
+objective = "Put down eight of the thralls below"
+giver = "corvin"
+target = ""
+amount = 8
+[[quest.thin_the_dark.requirement]]
+kind = "level_at_least"
+value = 2
+[quest.thin_the_dark.reward]
+xp = 900
+currency = 120
+[[quest.thin_the_dark.reward.item]]
+id = "bandage_linen"
+count = 3
+[[quest.thin_the_dark.reward.effect]]
+kind = "give_xp"
+subject = "blades"
+value = 600
+
+[quest.the_physicians_moss]
+type = "deliver"
+title = "What Grows Down There"
+summary = """
+The physician has a theory about the lichen and about what it does to the \
+people who breathe near it. She needs enough of it to be wrong."""
+objective = "Deliver ten grave lichen to Alder"
+giver = "alder"
+target = "grave_lichen"
+amount = 10
+[[quest.the_physicians_moss.requirement]]
+kind = "standing_at_least"
+subject = "alder"
+value = 0
+[quest.the_physicians_moss.reward]
+xp = 1200
+currency = 200
+[[quest.the_physicians_moss.reward.item]]
+id = "salts_waking"
+count = 2
+[[quest.the_physicians_moss.reward.effect]]
+kind = "give_xp"
+subject = "alchemy"
+value = 900
+[[quest.the_physicians_moss.reward.effect]]
+kind = "set_flag"
+subject = "alder.trusts_you"
+
+# The one that opens the lodge. It gates on a flag rather than on a kill or a
+# count, which is the escape hatch every other system uses to talk to quests:
+# a trigger volume, a script or a boss sets the flag and this notices.
+[quest.the_temple_door]
+type = "flag"
+title = "The Door Under the Temple"
+summary = """
+You heard it in the tavern, then in the chapel, then from a man who would not \
+look at you. There is a door. You should not have found it."""
+objective = "Find the door beneath the old temple"
+giver = "magus"
+target = "found.temple_door"
+amount = 1
+auto_turn_in = true
+[quest.the_temple_door.reward]
+xp = 1500
+[[quest.the_temple_door.reward.effect]]
+kind = "set_flag"
+subject = "lodge.known"
+[[quest.the_temple_door.reward.effect]]
+kind = "start_quest"
+subject = "the_apprentices_errand"
+
+[quest.the_apprentices_errand]
+type = "depth"
+title = "The Apprentice's Errand"
+summary = """
+The magus wants to know whether you come back. He is not pretending otherwise."""
+objective = "Reach the third depth and return alive"
+giver = "magus"
+target = ""
+amount = 3
+extra = "extract"
+[[quest.the_apprentices_errand.requirement]]
+kind = "flag_set"
+subject = "lodge.known"
+[quest.the_apprentices_errand.reward]
+xp = 3000
+currency = 300
+[[quest.the_apprentices_errand.reward.item]]
+id = "lodge_sigil"
+count = 1
+[[quest.the_apprentices_errand.reward.effect]]
+kind = "set_flag"
+subject = "lodge.initiate"
+[[quest.the_apprentices_errand.reward.effect]]
+kind = "add_standing"
+subject = "magus"
+value = 20

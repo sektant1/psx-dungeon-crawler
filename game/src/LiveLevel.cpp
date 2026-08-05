@@ -394,6 +394,17 @@ LiveLevel::markerPlacements(const std::string& prefix) const
     return authoredMap->placements(prefix);
 }
 
+std::vector<game::ScenePlacement> LiveLevel::pickupPlacements() const
+{
+    if (!authoredMap)
+        return {};
+    std::vector<game::ScenePlacement> all = authoredMap->placements("pickup.");
+    const std::vector<game::ScenePlacement> components =
+        authoredMap->pickupPlacements();
+    all.insert(all.end(), components.begin(), components.end());
+    return all;
+}
+
 std::vector<game::ScenePlacement> LiveLevel::enemyPlacements() const
 {
     if (!authoredMap)

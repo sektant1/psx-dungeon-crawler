@@ -54,8 +54,9 @@ The first build compiles the dependencies, so it will take longer than later bui
 make editor SCENE=path/to/scene.scn  # edit, then press F5 to playtest
 make editor                          # run default scene
 make scene SCENE=path/to/scene.scn   # cook and run a scene
-make prefab-viewer PREFAB=prefab     # inspect a model
-make demo                            # run the renderer demo
+make demo                            # the model showroom (MODEL=<kit.id|mesh path>)
+make prefab-viewer PREFAB=prefab     # inspect a model, bare stage
+make psx-demo                        # run the renderer demo
 make test                            # run the test suite
 make help                            # show every target and option
 ```

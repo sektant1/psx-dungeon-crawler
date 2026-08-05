@@ -1,0 +1,121 @@
+# What falls out of what.
+#
+# A table is rolled `rolls` times against the weighted entries, plus every
+# `guaranteed` entry separately. `chance` gates an entry independently of its
+# weight, so a table can hold a 1-in-50 relic beside three commons without the
+# relic distorting the weights or stealing a whole roll.
+#
+# Rolls are seeded and deterministic: one RNG stream runs through an entire
+# expedition, so a run is reproducible from its seed.
+#
+# An enemy names its table with `loot = "<id>"` in enemies.toml.
+
+[table.vermin]
+rolls = 1
+coin_min = 0
+coin_max = 4
+[[table.vermin.entry]]
+item = "bone_shard"
+weight = 6
+min = 1
+max = 3
+[[table.vermin.entry]]
+item = "grave_lichen"
+weight = 2
+chance = 0.5
+
+[table.thrall]
+rolls = 2
+coin_min = 3
+coin_max = 14
+[[table.thrall.entry]]
+item = "rusted_fitting"
+weight = 5
+min = 1
+max = 2
+[[table.thrall.entry]]
+item = "tallow_candle"
+weight = 4
+min = 1
+max = 2
+[[table.thrall.entry]]
+item = "ashen_moss"
+weight = 3
+[[table.thrall.entry]]
+item = "bandage_linen"
+weight = 2
+chance = 0.6
+[[table.thrall.entry]]
+item = "tincture_ash"
+weight = 1
+chance = 0.25
+
+[table.warden]
+rolls = 3
+coin_min = 20
+coin_max = 60
+[[table.warden.entry]]
+item = "quicksilver_dram"
+weight = 4
+chance = 0.7
+[[table.warden.entry]]
+item = "ashen_moss"
+weight = 4
+min = 2
+max = 4
+[[table.warden.entry]]
+item = "draught_clarity"
+weight = 2
+chance = 0.4
+[[table.warden.entry]]
+item = "tinder_ring"
+weight = 1
+chance = 0.15
+[[table.warden.entry]]
+item = "pilgrim_hood"
+weight = 2
+chance = 0.3
+
+# Bosses drop their relic every time -- a guaranteed entry, outside the
+# weighted pool, so it is never competing with a handful of reagents.
+[table.deep_warden]
+rolls = 2
+coin_min = 80
+coin_max = 200
+[[table.deep_warden.entry]]
+item = "sealed_reliquary"
+guaranteed = true
+chance = 1.0
+[[table.deep_warden.entry]]
+item = "ashwarden_hauberk"
+weight = 2
+chance = 0.35
+[[table.deep_warden.entry]]
+item = "quicksilver_dram"
+weight = 5
+min = 2
+max = 5
+
+# What a chest holds. Same format, different caller: the pickup system does not
+# know whether a table was rolled by a corpse or a container.
+[table.chest_common]
+rolls = 2
+coin_min = 10
+coin_max = 40
+[[table.chest_common.entry]]
+item = "bandage_linen"
+weight = 4
+[[table.chest_common.entry]]
+item = "tallow_candle"
+weight = 4
+min = 2
+max = 5
+[[table.chest_common.entry]]
+item = "rusted_fitting"
+weight = 3
+min = 2
+max = 4
+[[table.chest_common.entry]]
+item = "salts_waking"
+weight = 2
+chance = 0.5

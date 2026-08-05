@@ -56,6 +56,11 @@ Placement resolvePlacement(const GridConfig& grid, const KitCatalog& catalog,
     out.cell.level = level;
     out.cell.yawQuarters = brush.yawQuarters;
 
+    // The brush's own size. Every lift below is a distance in the mesh's own
+    // frame, so it scales with the mesh: a barrel at 2x whose pivot is its
+    // centre needs twice the lift to stand on the same floor.
+    const float brushScale = brush.scale > 0.0f ? brush.scale : 1.0f;
+
     if (grids) {
         out.cell.span = piece->span;
         if (piece->socket == Socket::Wall || piece->socket == Socket::Opening) {
@@ -68,6 +73,12 @@ Placement resolvePlacement(const GridConfig& grid, const KitCatalog& catalog,
             pointToCell(grid, hit, out.cell.col, out.cell.row);
         }
         out.transform = placementToTransform(grid, catalog, *piece, out.cell);
+        // placementToTransform has already applied the piece's own pivot at 1x;
+        // a scaled piece needs the rest of it, or an arch at 2x hangs at half
+        // its own height.
+        out.transform.position.y +=
+            piece->yOffsetMeters(catalog.scale()) * (brushScale - 1.0f);
+        out.transform.scale = glm::vec3(brushScale);
         return out;
     }
 
@@ -81,9 +92,15 @@ Placement resolvePlacement(const GridConfig& grid, const KitCatalog& catalog,
     }
     out.transform = XformAuthor{};
     out.transform.position = hit;
+    // Both branches answer the same question -- how far above the surface does
+    // this thing's origin belong -- and differ only in who knows the answer.
     if (piece)
-        out.transform.position.y += piece->yOffsetMeters(catalog.scale());
+        out.transform.position.y +=
+            piece->yOffsetMeters(catalog.scale()) * brushScale;
+    else
+        out.transform.position.y += query.baseOffset * brushScale;
     out.transform.rotationDegrees.y = brush.yawDegrees();
+    out.transform.scale = glm::vec3(brushScale);
     return out;
 }
 

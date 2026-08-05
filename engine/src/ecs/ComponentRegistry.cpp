@@ -451,6 +451,47 @@ template <> FieldSpan fieldsOf<ecs::FirstPersonController>()
     return {f, int(std::size(f))};
 }
 
+template <> FieldSpan fieldsOf<ecs::ThirdPersonCamera>()
+{
+    using C = ecs::ThirdPersonCamera;
+    static const Field f[] = {
+        ENG_FIELD_RANGE(C, distance, FieldType::Float, 0.5f, 12.0f),
+        ENG_FIELD_RANGE(C, pivotHeight, FieldType::Float, 0.0f, 3.0f),
+        ENG_FIELD_RANGE(C, shoulderOffset, FieldType::Float, -2.0f, 2.0f),
+        ENG_FIELD_RANGE(C, followRate, FieldType::Float, 1.0f, 60.0f),
+        ENG_FIELD_RANGE(C, followRateVertical, FieldType::Float, 1.0f, 60.0f),
+        ENG_FIELD_RANGE(C, pitchMinDegrees, FieldType::Float, -89.0f, 0.0f),
+        ENG_FIELD_RANGE(C, pitchMaxDegrees, FieldType::Float, 0.0f, 89.0f),
+        ENG_FIELD_RANGE(C, mouseSensitivity, FieldType::Float, 0.0002f, 0.02f),
+        ENG_FIELD_RANGE(C, collisionRadius, FieldType::Float, 0.0f, 1.0f),
+        ENG_FIELD_RANGE(C, pushOutSpeed, FieldType::Float, 0.5f, 30.0f),
+        ENG_FIELD_RANGE(C, minDistance, FieldType::Float, 0.1f, 4.0f),
+        ENG_FIELD_RANGE(C, turnRateDegrees, FieldType::Float, 90.0f, 2000.0f),
+        ENG_FIELD_RANGE(C, fovDegrees, FieldType::Float, 40.0f, 130.0f),
+        ENG_FIELD_RANGE(C, lockFramingBias, FieldType::Float, 0.0f, 1.0f),
+        ENG_FIELD_RANGE(C, lockBlendRate, FieldType::Float, 1.0f, 30.0f),
+        ENG_FIELD_RANGE(C, lockPitchDegrees, FieldType::Float, -45.0f, 15.0f),
+        ENG_FIELD_RANGE(C, lockDistanceBoost, FieldType::Float, 0.0f, 6.0f),
+        ENG_FIELD(C, active, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+template <> FieldSpan fieldsOf<ecs::ScreenCamera>()
+{
+    using C = ecs::ScreenCamera;
+    static const Field f[] = {
+        ENG_FIELD_RANGE(C, pageWidth, FieldType::Float, 16.0f, 4096.0f),
+        ENG_FIELD_RANGE(C, pageHeight, FieldType::Float, 16.0f, 4096.0f),
+        ENG_FIELD_RANGE(C, fit, FieldType::Int, 0.0f, 1.0f),
+        ENG_FIELD_RANGE(C, layerSpacing, FieldType::Float, 0.0f, 8.0f),
+        ENG_FIELD_RANGE(C, origin, FieldType::Int, 0.0f, 1.0f),
+        ENG_FIELD_RANGE(C, fovDegrees, FieldType::Float, 5.0f, 120.0f),
+        ENG_FIELD(C, active, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
 template <> FieldSpan fieldsOf<ecs::AudioEmitter>()
 {
     using E = ecs::AudioEmitter;
@@ -618,6 +659,14 @@ void registerEngineComponents(ComponentRegistry& reg)
     // variable-length list of heterogeneous values is not a field table.
     reg.add({"Scripts", 33, addDefault<Scripts>, has<Scripts>, remove<Scripts>,
              serScripts, deScripts});
+    // The other two camera shapes, beside FirstPersonController at 24 in
+    // meaning if not in number: which of the three a scene carries is what
+    // decides whether it plays in first person, over the shoulder, or as a flat
+    // screen. New ids rather than a mode field on one component, because a
+    // camera shape brings its own tuning and a union of three sets of numbers
+    // is not a component anybody can author.
+    reg.add(reflectedComponent<ThirdPersonCamera>("ThirdPersonCamera", 34));
+    reg.add(reflectedComponent<ScreenCamera>("ScreenCamera", 35));
 }
 
 } // namespace ecs

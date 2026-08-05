@@ -637,11 +637,14 @@ moment they mean anything.
 
 ## The scene the editor opens
 
-`assets/scenes/cozy_lair.scn` -- what `make editor` shows with no `SCENE=`.
+`assets/scenes/turntable.scn` -- what `make editor` shows with no `SCENE=`. It
+is the model showroom; see [levels/turntable.md](levels/turntable.md).
 
-A *shot* rather than a level: two props turning at their own rates in a small
-lit room, a portal behind them, and a camera orbiting on a pivot. 36 entities in
-a 12 x 12 m room -- it opens in under a second, and every component that
+`assets/scenes/cozy_lair.scn` is the other scene worth opening to learn the
+components, and the one the rest of this section describes. A *shot* rather than
+a level: two props turning at their own rates in a small lit room, a portal
+behind them, and a camera orbiting on a pivot. 36 entities in a 12 x 12 m room
+-- it opens in under a second, and every component that
 animates is visible at once: **Spin** on each prop *and* on the camera pivot,
 **Camera** on two framings (one parked), **Shader** rim lights, a pulsing key
 light and four torches flickering out of phase. It is also the thing to copy when making a clip; see

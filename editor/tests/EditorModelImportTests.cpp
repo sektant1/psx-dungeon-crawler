@@ -115,6 +115,36 @@ int main()
     require(kit.find("scale = 0.2") != std::string::npos,
             "and the file's existing content survived the rewrite");
 
+    // --- the model itself is a placeable -----------------------------------
+    //
+    // mecha-dl arrives as two submeshes, so the parts alone would leave the
+    // Placeables list holding two halves of a mech and no mech. The group is
+    // what an author places; its attachments are what reassemble it, and the
+    // editor turns those into child entities so the halves stay reachable.
+    require(result.root == "kit.import_mechademonlord",
+            "a multi-part model reports the group as its root: " + result.root);
+    require(kit.find("id = \"import_mechademonlord\"\n") != std::string::npos,
+            "and the group is in the catalogue");
+    require(kit.find("attachments = [") != std::string::npos,
+            "declaring its parts");
+    for (const ImportedPart& part : result.parts) {
+        require(kit.find("prefab = \"" + part.prefab + "\"") != std::string::npos,
+                "every part is attached to the group: " + part.prefab);
+        require(part.prefab != result.root,
+                "and the group is not one of its own parts");
+    }
+    // The group names no mesh: its geometry IS its parts. The piece before it
+    // in the block is a part, and every part has one, so counting mesh lines
+    // against piece lines is the check that the group has none.
+    {
+        const std::size_t at = kit.find("id = \"import_mechademonlord\"\n");
+        const std::size_t nextPiece = kit.find("[[piece]]", at);
+        const std::size_t mesh = kit.find("mesh = ", at);
+        require(mesh == std::string::npos || mesh > nextPiece ||
+                    nextPiece == std::string::npos,
+                "the group declares no mesh of its own");
+    }
+
     // --- reimport replaces, never accumulates ------------------------------
     const ModelImportResult again =
         importModelToKit(model.string(), root.string());

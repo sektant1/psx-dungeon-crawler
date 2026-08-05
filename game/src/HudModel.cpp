@@ -26,6 +26,13 @@ const char* hudInteractionAction(const InteractionFocus& focus)
             return "CROSS THE THRESHOLD";
         case TargetKind::PortalUp:
             return "RETURN BY THE KNOWN WAY";
+        case TargetKind::Item:
+            return "TAKE IT";
+        case TargetKind::Npc:
+            return "SPEAK";
+        case TargetKind::Prop:
+        case TargetKind::Actor:
+            break; // described by the tooltip, not by a verb here
     }
     return "INTERACT";
 }

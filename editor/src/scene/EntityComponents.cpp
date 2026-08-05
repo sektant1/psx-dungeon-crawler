@@ -77,7 +77,7 @@ const std::vector<ComponentType>& table()
          ComponentGroup::Appearance,
          [](const Entity& e) { return !e.mesh && !e.primitive; }},
 
-        {"mesh", "Mesh", "any mesh file in the project, chosen from Meshes",
+        {"mesh", "Mesh", "any mesh file in the project, chosen from Placeables",
          [](const Entity& e) { return e.mesh.has_value(); },
          [](Entity& e, const ComponentDefaults& d) {
              e.mesh = game::content::MeshAuthor{d.meshPath, 1.0f};
@@ -87,8 +87,8 @@ const std::vector<ComponentType>& table()
              e.material.clear();
          },
          // A path is not invented here for the same reason a prefab is not: the
-         // catalogue knows what exists and this table does not. The Meshes tab
-         // arms the brush, exactly as Placeables arms it for a kit piece.
+         // catalogue knows what exists and this table does not. Placeables
+         // arms the brush with a mesh file exactly as it does with a kit piece.
          [](const ComponentDefaults& d) { return !d.meshPath.empty(); },
          ComponentGroup::Appearance,
          [](const Entity& e) { return e.prefab.empty() && !e.primitive; }},
@@ -181,6 +181,27 @@ const std::vector<ComponentType>& table()
              e.firstPerson = game::content::FirstPersonAuthor{};
          },
          [](Entity& e) { e.firstPerson.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        // The other two shapes a scene's camera can take. Adding one is how a
+        // level says "play me over the shoulder" or "this scene is a menu";
+        // the game reads whichever is present and installs the matching rig.
+        {"third_person", "Third-Person Camera",
+         "over-the-shoulder orbit with a spring arm and a lock-on",
+         [](const Entity& e) { return e.thirdPerson.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.thirdPerson = game::content::ThirdPersonAuthor{};
+         },
+         [](Entity& e) { e.thirdPerson.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        {"screen", "2D Screen",
+         "make this scene a flat screen: menu, HUD plate, dialogue page",
+         [](const Entity& e) { return e.screen.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             e.screen = game::content::ScreenAuthor{};
+         },
+         [](Entity& e) { e.screen.reset(); }, always,
          ComponentGroup::Gameplay},
 
         {"viewmodel_rig", "Viewmodel Rig",

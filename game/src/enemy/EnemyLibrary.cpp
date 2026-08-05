@@ -244,6 +244,9 @@ void readInto(const toml::table& t, EnemyDef& def)
     def.category = t["category"].value_or(def.category);
     def.tier = t["tier"].value_or(def.tier);
     def.boss = t["boss"].value_or(def.boss);
+    def.xp = t["xp"].value_or(def.xp);
+    def.trains = t["trains"].value_or(def.trains);
+    def.loot = t["loot"].value_or(def.loot);
     if (const toml::table* s = t["body"].as_table())        readBody(*s, def.body);
     if (const toml::table* s = t["visual"].as_table())      readVisual(*s, def.visual);
     if (const toml::table* s = t["stats"].as_table())       readStats(*s, def.stats);

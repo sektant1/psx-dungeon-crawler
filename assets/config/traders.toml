@@ -1,0 +1,197 @@
+# Who deals, in what, and at what price.
+#
+# THE PRICING MODEL (game/src/rpg/Trading.h has the full derivation)
+#
+#   price = base * condition * demand * standing * margin
+#
+# `demand` is the supply/demand curve: every unit you sell a trader pushes their
+# price for it down, every unit you buy pushes it up, bounded by the item's
+# `elasticity` and decaying back toward neutral on the restock clock. It cannot
+# reach zero and it cannot run away -- an unbounded curve is how a trade economy
+# becomes an infinite money loop (AGENTS.md §15 names this explicitly).
+#
+# `categories` and `tags` are what a trader actually wants. Anything outside
+# them is bought at `disinterest`, which is how the game avoids "vendors who
+# purchase every object at a universal price".
+#
+# `purse` is coin on hand. A trader who has run out cannot absorb the rest of
+# your expedition, which is why you need to know more than one person.
+
+[trader.ilsabet]
+name = "Mother Ilsabet"
+role = "Lamps and small kindnesses"
+categories = ["junk", "consumable"]
+tags = ["medicine"]
+disinterest = 0.15
+buy_margin = 0.5
+sell_margin = 1.2
+purse = 300
+purse_restock = 300
+
+[[trader.ilsabet.rank]]
+name = "Stranger"
+at = 0
+price = 1.0
+sell = 1.0
+[[trader.ilsabet.rank]]
+name = "Neighbour"
+at = 10
+price = 0.94
+sell = 1.08
+[[trader.ilsabet.rank]]
+name = "Family, near enough"
+at = 35
+price = 0.85
+sell = 1.2
+
+[[trader.ilsabet.stock]]
+item = "tallow_candle"
+quantity = 20
+restock_days = 1
+[[trader.ilsabet.stock]]
+item = "bandage_linen"
+quantity = 6
+restock_days = 2
+
+# =============================================================================
+[trader.alder]
+name = "Alder"
+role = "Physician"
+categories = ["reagent", "consumable"]
+tags = ["medicine", "alchemy"]
+disinterest = 0.1
+buy_margin = 0.7          # pays well for what she needs
+sell_margin = 1.5         # and charges for what she has made
+purse = 800
+purse_restock = 600
+
+[[trader.alder.rank]]
+name = "A patient"
+at = 0
+price = 1.0
+sell = 1.0
+[[trader.alder.rank]]
+name = "A supplier"
+at = 15
+price = 0.9
+sell = 1.15
+[[trader.alder.rank]]
+name = "A collaborator"
+at = 40
+price = 0.78
+sell = 1.3
+
+[[trader.alder.stock]]
+item = "bandage_linen"
+quantity = 10
+restock_days = 1
+[[trader.alder.stock]]
+item = "salts_waking"
+quantity = 4
+restock_days = 2
+[[trader.alder.stock]]
+item = "draught_clarity"
+quantity = 2
+restock_days = 3
+min_standing = 15
+
+# A barter is a price paid in objects rather than in coin, which is where §15's
+# "selling should sometimes be more consequential than obtaining" actually
+# bites: you cannot buy this, and what it costs you is what you went down for.
+[[trader.alder.barter]]
+id = "tincture_for_lichen"
+gives = "tincture_ash"
+gives_count = 2
+min_standing = 10
+[[trader.alder.barter.want]]
+item = "grave_lichen"
+count = 6
+[[trader.alder.barter.want]]
+item = "ashen_moss"
+count = 3
+
+# =============================================================================
+[trader.corvin]
+name = "Corvin"
+role = "Buys what came out of the dark"
+categories = ["junk", "armour", "trinket", "relic"]
+tags = ["metal", "salvage", "bone"]
+disinterest = 0.3
+buy_margin = 0.6
+sell_margin = 1.45
+purse = 1200
+purse_restock = 900
+
+[[trader.corvin.rank]]
+name = "A seller"
+at = 0
+price = 1.0
+sell = 1.0
+[[trader.corvin.rank]]
+name = "A regular"
+at = 20
+price = 0.9
+sell = 1.12
+[[trader.corvin.rank]]
+name = "A partner"
+at = 50
+price = 0.8
+sell = 1.28
+
+[[trader.corvin.stock]]
+item = "pilgrim_hood"
+quantity = 2
+restock_days = 3
+[[trader.corvin.stock]]
+item = "porters_strap"
+quantity = 1
+restock_days = 4
+min_standing = 20
+[[trader.corvin.stock]]
+item = "ashwarden_hauberk"
+quantity = 1
+restock_days = 7
+min_standing = 45
+
+[[trader.corvin.barter]]
+id = "strap_for_iron"
+gives = "porters_strap"
+gives_count = 1
+unique = true
+[[trader.corvin.barter.want]]
+item = "rusted_fitting"
+count = 25
+
+# =============================================================================
+[trader.magus]
+name = "The Magus"
+role = "The lodge does not trade. It exchanges."
+categories = ["relic"]
+tags = ["lodge"]
+disinterest = 0.0         # he will not take anything else at all
+buy_margin = 0.9
+sell_margin = 2.0
+purse = 2000
+purse_restock = 1000
+
+[[trader.magus.rank]]
+name = "An outsider"
+at = 0
+price = 1.0
+sell = 1.0
+[[trader.magus.rank]]
+name = "An apprentice"
+at = 20
+price = 0.85
+sell = 1.25
+
+[[trader.magus.stock]]
+item = "quicksilver_dram"
+quantity = 5
+restock_days = 2
+min_standing = 20
+[[trader.magus.stock]]
+item = "tinder_ring"
+quantity = 1
+restock_days = 10
+min_standing = 40

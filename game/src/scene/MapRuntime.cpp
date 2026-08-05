@@ -190,6 +190,21 @@ MapRuntime::AuthoredPlayerRig MapRuntime::playerRig() const
         rig.viewmodel = reg.get<const ViewmodelRig>(entity);
         break;
     }
+    for (const auto entity :
+         reg.view<const eng::ecs::ThirdPersonCamera>()) {
+        const auto& authored = reg.get<const eng::ecs::ThirdPersonCamera>(entity);
+        if (!authored.active)
+            continue;
+        rig.thirdPerson = authored;
+        break;
+    }
+    for (const auto entity : reg.view<const eng::ecs::ScreenCamera>()) {
+        const auto& authored = reg.get<const eng::ecs::ScreenCamera>(entity);
+        if (!authored.active)
+            continue;
+        rig.screen = authored;
+        break;
+    }
     return rig;
 }
 
