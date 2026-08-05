@@ -103,3 +103,29 @@ automatically and writes a JSON report; the capture is for when you already know
 
 For pixel-level regressions, `make screenshot SHOT=… FRAME=…` is faster than a
 capture and is what the visual-freeze rule is enforced with.
+
+## Debug lines and vertex lighting
+
+Both were stubs in the RHI backend that warned once and discarded the request,
+which is why they are worth naming here: the symptoms looked like content bugs.
+
+**Debug lines** (`Renderer::setDebugLines`) now draw through a LineList pipeline
+(`debug_line.vert/.frag`) into a per-frame dynamic vertex buffer, after the world
+and particles and before the viewmodel pass -- where the legacy queue put them.
+The fragment writes zero to the normal/depth MRT target so the stylize pass
+leaves the pixels alone and a line keeps the exact colour the caller asked for.
+`setDebugLinesXray` selects the depth-tested or draw-over-everything variant.
+
+Until this landed **the editor's grid did not render at all**. If the viewport
+looks like a void, check this pass before suspecting the grid maths.
+
+**Vertex lighting** (`setPerPixelLightingEnabled(false)`, which the PS1 and N64
+presets ask for) evaluates the diffuse accumulation once per vertex and lets the
+rasterizer interpolate it. `clipParams.z` carries the switch -- an existing
+unused lane, because a new binding is a pipeline-layout change -- and both
+stages call the same `accumulateLighting`, which is what stops the two modes
+drifting into two looks. Shadows stay per-pixel: they are a depth-map addition
+the console never had, and Gouraud-interpolating them looks like a bug.
+
+The game runs the `dungeon` profile, which is per-pixel, so this changes nothing
+about the shipped image; the editor runs `ps1` and does take the vertex-lit path.

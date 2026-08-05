@@ -71,6 +71,20 @@ struct ParticleVertex {
 
 static_assert(sizeof(ParticleVertex) == 36);
 
+// One end of a debug line. World space already -- eng::Renderer::DebugLine
+// carries world positions, and there is no model matrix in this pass.
+struct DebugLineVertex {
+    glm::vec3 position{0.0f};
+    glm::vec4 colour{1.0f};
+};
+
+static_assert(sizeof(DebugLineVertex) == 28);
+
+// The editor's grid is the heavy caller: a 33x33 patch is ~132 vertices, and
+// the collider overlay on a dense room is a few thousand. 64k ends the question
+// without being worth streaming.
+constexpr uint32_t kMaxDebugLineVertices = 65536;
+
 // Matches ParticleSim's reserve() below; a burst past it drops the tail rather
 // than reallocating a GPU buffer mid-frame.
 constexpr uint32_t kMaxDrawnParticles = 8192;
@@ -423,6 +437,11 @@ struct Renderer::Impl {
     std::unordered_map<uint32_t, rhi::PipelineHandle> particlePipelines;
     rhi::BufferHandle particleVertices;
     rhi::BufferHandle particleIndices;
+    rhi::ShaderHandle debugLineVertexShader;
+    rhi::ShaderHandle debugLineFragmentShader;
+    rhi::BufferHandle debugLineVertices;
+    std::unordered_map<uint32_t, rhi::PipelineHandle> debugLinePipelines;
+    std::vector<DebugLineVertex> debugLineStaging;
     std::vector<ParticleVertex> particleStaging;
     std::vector<uint32_t> particleOrder;
     std::vector<ParticleEffect> particleEffects;
@@ -756,6 +775,22 @@ struct Renderer::Impl {
         vertices.debugName = "renderer.particle-vertices";
         particleVertices = core.device()->createBuffer(vertices);
 
+        // Debug lines ride the same "rebuilt every frame" arrangement: the
+        // editor's grid is recentred on the camera every frame anyway.
+        debugLineVertexShader = loadSceneShader(rhi::ShaderStage::Vertex,
+                                                ENG_RHI_DEBUG_LINE_VERT_SPV,
+                                                "renderer.debug_line.vert");
+        debugLineFragmentShader = loadSceneShader(rhi::ShaderStage::Fragment,
+                                                  ENG_RHI_DEBUG_LINE_FRAG_SPV,
+                                                  "renderer.debug_line.frag");
+        if (!debugLineVertexShader.valid() || !debugLineFragmentShader.valid())
+            return false;
+        rhi::BufferDesc lines;
+        lines.size = uint64_t(kMaxDebugLineVertices) * sizeof(DebugLineVertex);
+        lines.usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::Dynamic;
+        lines.debugName = "renderer.debug-line-vertices";
+        debugLineVertices = core.device()->createBuffer(lines);
+
         std::vector<uint32_t> quads(size_t(kMaxDrawnParticles) * 6u);
         for (uint32_t i = 0; i < kMaxDrawnParticles; ++i) {
             const uint32_t v = i * 4u;
@@ -922,6 +957,74 @@ struct Renderer::Impl {
         return pipeline;
     }
 
+    // xray = draw over everything (the editor's grid should not be buried in
+    // the floor it describes); otherwise depth-test so collider outlines
+    // occlude behind walls the way the wireframe view does.
+    rhi::PipelineHandle debugLinePipelineFor(bool withNormalDepth, bool xray)
+    {
+        const uint32_t key =
+            uint32_t(withNormalDepth) | (uint32_t(xray) << 1u);
+        if (const auto found = debugLinePipelines.find(key);
+            found != debugLinePipelines.end())
+            return found->second;
+        rhi::PipelineDesc desc;
+        desc.vertex = debugLineVertexShader;
+        desc.fragment = debugLineFragmentShader;
+        desc.topology = rhi::PrimitiveTopology::LineList;
+        desc.vertexLayout.bindings.push_back(
+            {0, sizeof(DebugLineVertex), false});
+        desc.vertexLayout.attributes.push_back(
+            {0, 0, rhi::VertexFormat::Float3,
+             offsetof(DebugLineVertex, position)});
+        desc.vertexLayout.attributes.push_back(
+            {1, 0, rhi::VertexFormat::Float4,
+             offsetof(DebugLineVertex, colour)});
+        desc.cull = rhi::CullMode::None;
+        desc.depth.testEnabled = !xray;
+        desc.depth.writeEnabled = false; // a line must not occlude geometry
+        desc.depth.compare = rhi::CompareOp::LessEqual;
+        desc.colourFormats = withNormalDepth
+                                 ? std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm,
+                                       rhi::Format::RGBA16Float}
+                                 : std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm};
+        desc.depthFormat = rhi::Format::Depth32Float;
+        desc.debugName = "renderer.debug-line-pipeline-" + std::to_string(key);
+        const rhi::PipelineHandle pipeline = core.device()->createPipeline(desc);
+        if (pipeline.valid())
+            debugLinePipelines[key] = pipeline;
+        return pipeline;
+    }
+
+    void drawDebugLines(rhi::CommandList& commands, size_t& batches,
+                        bool withNormalDepth)
+    {
+        if (debugLines.empty() || !debugLineVertices.valid())
+            return;
+        debugLineStaging.clear();
+        debugLineStaging.reserve(debugLines.size() * 2u);
+        for (const DebugLine& line : debugLines) {
+            if (debugLineStaging.size() + 2u > kMaxDebugLineVertices)
+                break; // silently clamped; the overflow is always the grid
+            debugLineStaging.push_back({line.a, glm::vec4(line.colour, 1.0f)});
+            debugLineStaging.push_back({line.b, glm::vec4(line.colour, 1.0f)});
+        }
+        if (debugLineStaging.empty())
+            return;
+        const rhi::PipelineHandle pipeline =
+            debugLinePipelineFor(withNormalDepth, debugLinesXray);
+        if (!pipeline.valid())
+            return;
+        core.device()->updateBuffer(
+            debugLineVertices, debugLineStaging.data(),
+            debugLineStaging.size() * sizeof(DebugLineVertex));
+        commands.bindPipeline(pipeline);
+        commands.bindVertexBuffer(0, debugLineVertices);
+        commands.draw(uint32_t(debugLineStaging.size()), 1, 0);
+        ++batches;
+    }
+
     void destroyMeshGpu(Mesh& resource)
     {
         if (!core.device())
@@ -1014,6 +1117,18 @@ struct Renderer::Impl {
             core.device()->destroyShader(particleVertexShader);
         particleFragmentShader = {};
         particleVertexShader = {};
+        for (auto& [key, pipeline] : debugLinePipelines)
+            core.device()->destroyPipeline(pipeline);
+        debugLinePipelines.clear();
+        if (debugLineVertices.valid())
+            core.device()->destroyBuffer(debugLineVertices);
+        debugLineVertices = {};
+        if (debugLineFragmentShader.valid())
+            core.device()->destroyShader(debugLineFragmentShader);
+        if (debugLineVertexShader.valid())
+            core.device()->destroyShader(debugLineVertexShader);
+        debugLineFragmentShader = {};
+        debugLineVertexShader = {};
         if (sceneFragment.valid()) core.device()->destroyShader(sceneFragment);
         if (skinnedSceneVertex.valid())
             core.device()->destroyShader(skinnedSceneVertex);
@@ -1176,8 +1291,13 @@ struct Renderer::Impl {
             std::max(nearClip, 0.001f), std::max(farClip, nearClip + 0.01f));
         uniforms.viewProjection = projection * view;
         uniforms.view = view;
+        // z is the vertex-lighting switch: the PS1 and N64 presets ask for it
+        // (RenderPresets, perPixel = false) and the scene shaders read it in
+        // both stages. Not a separate uniform because clipParams already had
+        // two unused lanes and a new binding is a pipeline-layout change.
         uniforms.clipParams = {std::max(nearClip, 0.001f),
-                               std::max(farClip, nearClip + 0.01f), 0.0f, 0.0f};
+                               std::max(farClip, nearClip + 0.01f),
+                               env.perPixelLighting ? 0.0f : 1.0f, 0.0f};
         // w carries fogDesatBoost: the scene shader needs it alongside fog.
         uniforms.ambient = glm::vec4(env.ambient, std::max(env.fogDesatBoost, 0.0f));
         uniforms.fogColourDensity = glm::vec4(env.fogColour, env.fogDensity);
@@ -2090,9 +2210,12 @@ struct Renderer::Impl {
         // viewmodel is RENDER_QUEUE_8 (80).
         if (!viewmodelPass)
             drawParticles(commands, view, batches, triangles, withNormalDepth);
+        // After the world and the particles, before the viewmodel pass: a
+        // diagnostic overlay belongs over the level it describes and under the
+        // hands, which is where the legacy queue put it.
+        if (!viewmodelPass)
+            drawDebugLines(commands, batches, withNormalDepth);
         core.addFrameStats(batches, triangles);
-        if (!debugLines.empty())
-            warnOnce("debug-lines", "debug lines");
     }
 };
 
@@ -3254,8 +3377,6 @@ void Renderer::setRenderResolution(int width, int height)
 void Renderer::setPerPixelLightingEnabled(bool enabled)
 {
     mImpl->env.perPixelLighting = enabled;
-    if (!enabled)
-        mImpl->warnOnce("vertex-lighting", "vertex-lighting mode (per-pixel remains active)");
 }
 void Renderer::setOmniAttenuation(float exponent)
 {

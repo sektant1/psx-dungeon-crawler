@@ -95,4 +95,29 @@ SafeFixReport applySafeQuickFixes(SceneDocument& document,
                                   const std::string& assetRoot = {},
                                   int maxPasses = 8);
 
+// Entities that are the same prefab, under the same parent, at the same
+// transform: not overlapping, *identical*.
+//
+// tech_demo shipped 68 copies of one door in one doorway, 50 of another, and
+// 191 doors and spikes where six were meant -- 183 of its 422 entities. That is
+// the Place tool stamping while the button was held, and nothing downstream
+// noticed: the level looks right, because the copies are exactly on top of each
+// other. What it costs is a draw call each, z-fighting between coplanar faces,
+// and a hierarchy nobody can read.
+//
+// Deleting an *exact* duplicate is safe in a way RemoveEntity generally is not.
+// The same mesh, at the same transform, wearing the same material, draws the
+// same pixels -- so removing all but one provably cannot change the image. That
+// is why this is its own operation rather than a member of the safe-fix set:
+// the guarantee comes from the exactness, not from the verb.
+struct DuplicateReport {
+    std::size_t groups = 0;   // distinct placements that had copies
+    std::size_t removed = 0;  // entities dropped
+};
+
+// Keeps the first of each identical group in document order and drops the rest.
+// An entity that anything else is parented to is never dropped, because that
+// would orphan the child -- the survivor may not be the one the child names.
+DuplicateReport removeDuplicatePlacements(SceneDocument& document);
+
 } // namespace game::content

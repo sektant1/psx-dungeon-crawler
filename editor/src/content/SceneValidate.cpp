@@ -484,6 +484,41 @@ std::vector<Issue> validate(const SceneDocument& document,
         }
     }
 
+    // Entities that are an exact copy of another: same prefab, same parent,
+    // same transform. Not overlapping -- identical, and therefore invisible.
+    //
+    // tech_demo carried 68 copies of one door in one doorway and 183 redundant
+    // entities out of 422, which is the Place tool stamping while the button
+    // was held. Nothing showed it: the level looked right, because the copies
+    // sit exactly on top of each other. It cost a draw call each (831 batches
+    // against 465 once removed) and z-fought between coplanar faces.
+    {
+        std::unordered_map<std::string, AuthorId> firstSeen;
+        for (const Entity& entity : document.entities) {
+            if (entity.prefab.empty())
+                continue;
+            char buffer[256];
+            std::snprintf(buffer, sizeof(buffer),
+                          "%s|%s|%.4f,%.4f,%.4f|%.3f,%.3f,%.3f|%.4f,%.4f,%.4f",
+                          entity.parent.c_str(), entity.prefab.c_str(),
+                          entity.transform.position.x,
+                          entity.transform.position.y,
+                          entity.transform.position.z,
+                          entity.transform.rotationDegrees.x,
+                          entity.transform.rotationDegrees.y,
+                          entity.transform.rotationDegrees.z,
+                          entity.transform.scale.x, entity.transform.scale.y,
+                          entity.transform.scale.z);
+            const auto inserted = firstSeen.emplace(buffer, entity.id);
+            if (!inserted.second) {
+                add(issues, Severity::Warning, "cell.duplicate_placement",
+                    "an exact copy of '" + inserted.first->second +
+                        "': same prefab, parent and transform",
+                    entity.id, QuickFix::RemoveEntity);
+            }
+        }
+    }
+
     // Walls floating with no cell to belong to: usually a leftover after
     // deleting the floor under them.
     for (const Entity& entity : document.entities) {

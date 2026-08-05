@@ -266,6 +266,7 @@ endif()
   foreach(_shader scene.vert scene.frag skinned_scene.vert skinned_shadow.vert fullscreen.vert fullscreen.frag
                   post.frag stylize.frag bloom_bright.frag bloom_blur.frag surface.vert surface.frag shadow.vert shadow.frag
                   particle.vert particle.frag
+                  debug_line.vert debug_line.frag
                   imgui.vert imgui.frag)
     get_filename_component(_stage "${_shader}" LAST_EXT)
     string(SUBSTRING "${_stage}" 1 -1 _stage)
@@ -1684,6 +1685,15 @@ if(BUILD_TESTING)
   # Unpacking a compound kit piece must change what is editable and nothing
   # about what is drawn. Reads the shipped kit, so a piece losing its
   # attachments fails the build rather than making the test pass vacuously.
+  # The mechanical repairs: cell records never move an entity, and only an
+  # exact copy is ever deleted.
+  add_executable(scene_repair_tests editor/tests/SceneRepairTests.cpp)
+  target_include_directories(scene_repair_tests PRIVATE game/tests
+                                                        editor/include)
+  target_link_libraries(scene_repair_tests PRIVATE game_content
+                                                   eng_ecs_headless)
+  add_test(NAME scene_repair COMMAND scene_repair_tests)
+
   add_executable(scene_unpack_tests editor/tests/SceneUnpackTests.cpp)
   target_include_directories(scene_unpack_tests PRIVATE game/tests
                                                         editor/include)

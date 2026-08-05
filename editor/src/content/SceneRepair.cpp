@@ -2,6 +2,12 @@
 
 #include <glm/glm.hpp>
 
+#include <ios>
+#include <map>
+#include <set>
+#include <sstream>
+#include <utility>
+
 namespace game::content {
 
 CellRepairReport repairCellRecords(SceneDocument& document,
@@ -56,6 +62,65 @@ CellRepairReport repairCellRecords(SceneDocument& document,
     }
     if (report.changed() != 0)
         document.touch();
+    return report;
+}
+
+DuplicateReport removeDuplicatePlacements(SceneDocument& document)
+{
+    DuplicateReport report;
+
+    // Anything with children stays, whatever else is true of it: the child
+    // names its parent by id, and keeping a different member of the group would
+    // leave that child pointing at an entity that no longer exists.
+    std::set<AuthorId> hasChildren;
+    for (const Entity& entity : document.entities)
+        if (!entity.parent.empty())
+            hasChildren.insert(entity.parent);
+
+    const auto key = [](const Entity& e) {
+        std::ostringstream out;
+        out.setf(std::ios::fixed);
+        out.precision(4);
+        out << e.parent << '|' << e.prefab << '|' << e.material << '|'
+            << e.transform.position.x << ',' << e.transform.position.y << ','
+            << e.transform.position.z << '|' << e.transform.rotationDegrees.x
+            << ',' << e.transform.rotationDegrees.y << ','
+            << e.transform.rotationDegrees.z << '|' << e.transform.scale.x
+            << ',' << e.transform.scale.y << ',' << e.transform.scale.z;
+        return out.str();
+    };
+
+    std::map<std::string, int> seen;
+    std::vector<Entity> kept;
+    kept.reserve(document.entities.size());
+    for (const Entity& entity : document.entities) {
+        // Only prefab-backed scenery is deduplicated. A marker, a light or a
+        // spawn carries meaning beyond its mesh, and two of them in one place
+        // is a question for an author rather than a redundancy.
+        const bool dedupable =
+            !entity.prefab.empty() && hasChildren.count(entity.id) == 0 &&
+            !entity.playerSpawn && !entity.marker && !entity.enemySpawn &&
+            !entity.pickup && !entity.light && !entity.camera &&
+            !entity.trigger && !entity.portal && !entity.exitYawDegrees &&
+            entity.scripts.empty();
+        if (!dedupable) {
+            kept.push_back(entity);
+            continue;
+        }
+        const int count = ++seen[key(entity)];
+        if (count == 1) {
+            kept.push_back(entity);
+            continue;
+        }
+        if (count == 2)
+            ++report.groups;
+        ++report.removed;
+    }
+
+    if (report.removed != 0) {
+        document.entities = std::move(kept);
+        document.touch();
+    }
     return report;
 }
 

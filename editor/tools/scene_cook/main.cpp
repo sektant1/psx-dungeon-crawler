@@ -26,8 +26,10 @@ int usage()
                  "usage: scene_cook <source.scn> --kit <kit.toml>\n"
                  "         [--out <output.map>]     cook to a runtime map\n"
                  "         [--validate-only]        parse and resolve, write nothing\n"
-                 "         [--repair]               --repair-cells, plus "
-                 "every quick fix that is safe unattended\n"
+                 "         [--dedupe]               drop entities that are an "
+                 "exact copy of another (same prefab, parent and transform)\n"
+                 "         [--repair]               --repair-cells, --dedupe, "
+                 "plus every quick fix that is safe unattended\n"
                  "         [--repair-cells]         rebase drifted `cell` "
                  "records onto where pieces actually are (never moves one)\n"
                  "         [--rewrite <out.scn>]    re-emit canonical .scn "
@@ -57,6 +59,7 @@ int main(int argc, char** argv)
     bool validateOnly = false;
     bool repairCells = false;
     bool repairIssues = false;
+    bool dedupe = false;
     for (int i = 1; i < argc; ++i) {
         const char* arg = argv[i];
         const auto value = [&](std::string& target) {
@@ -78,9 +81,12 @@ int main(int argc, char** argv)
             if (!value(rewrite)) return usage();
         } else if (std::strcmp(arg, "--repair-cells") == 0) {
             repairCells = true;
+        } else if (std::strcmp(arg, "--dedupe") == 0) {
+            dedupe = true;
         } else if (std::strcmp(arg, "--repair") == 0) {
             repairCells = true;
             repairIssues = true;
+            dedupe = true;
         } else if (std::strcmp(arg, "--validate-only") == 0) {
             validateOnly = true;
         } else if (arg[0] == '-') {
@@ -147,6 +153,16 @@ int main(int argc, char** argv)
         std::printf("scene_cook: cells -- %zu rebased, %zu detached, "
                     "%zu already correct\n",
                     repaired.rebased, repaired.detached, repaired.untouched);
+    }
+
+    // Before the quick fixes: a hundred copies of one door produce a hundred
+    // identical issues, and fixing them one by one is work thrown away.
+    if (dedupe) {
+        const game::content::DuplicateReport dropped =
+            game::content::removeDuplicatePlacements(document);
+        std::printf("scene_cook: duplicates -- %zu removed across %zu "
+                    "placements\n",
+                    dropped.removed, dropped.groups);
     }
 
     if (repairIssues) {
