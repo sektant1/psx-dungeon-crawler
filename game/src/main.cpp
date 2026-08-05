@@ -29,6 +29,8 @@
 #include "ui/GameHud.h"
 #include "ui/TooltipBuilder.h"
 #include "HitFeel.h"
+
+#include <eng/telemetry/Telemetry.h>
 #include "HudModel.h"
 #include "InteractionSystem.h"
 #include "PlayerSystem.h"
@@ -491,6 +493,7 @@ void DungeonApp::teardownDummy()
 
 void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
 {
+    eng::telemetry::event("level", "enter depth " + std::to_string(mDepth));
     // A shake that survived a transition would be the camera shaking for
     // something in a level the player has left, and a hit-stop that survived
     // one would slow the arrival.
@@ -713,6 +716,12 @@ void DungeonApp::playerHit(eng::BodyHandle body, const char* weaponId,
     if (!result.hitLanded)
         return;
     mCtx->renderer.spawnParticles("weapon_hit_confirm", point);
+    ENG_TELEMETRY("combat",
+                  result.killed ? eng::telemetry::Level::Warn
+                                : eng::telemetry::Level::Info,
+                  "%s hit for %.1f%s%s", weaponId, result.dealt,
+                  result.crit ? " CRIT" : "",
+                  result.killed ? " (killed)" : "");
     // Heavy when the blow is one that staggers -- the tier is the weapon's own
     // poise damage, so a wand tap and a crossbow bolt differ without this
     // knowing either weapon by name.
@@ -1108,6 +1117,19 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     {
         const auto timed = stats().time(PhasePlayer);
         mPlayerSys.present(*mCtx, playerDriven() ? f.alpha : 1.0f);
+        if (eng::telemetry::enabled("player", eng::telemetry::Level::Trace)) {
+            const glm::vec3 eye = mPlayerSys.controller().eyePosition();
+            eng::telemetry::watchf("player", "pos", "%.2f %.2f %.2f", eye.x,
+                                   eye.y, eye.z);
+            eng::telemetry::watchValue("player", "speed",
+                                       mPlayerSys.controller().horizontalSpeed());
+            eng::telemetry::watchValue("player", "grounded",
+                                       mPlayerSys.controller().grounded() ? 1.0
+                                                                          : 0.0);
+            if (const game::PlayerWeaponDef* weapon =
+                    mPlayerSys.selectedWeapon())
+                eng::telemetry::watch("player", "weapon", weapon->displayName);
+        }
     }
 
     // Look-interaction + portal transitions. Descend appends the next depth's

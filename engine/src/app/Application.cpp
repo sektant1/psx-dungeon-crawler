@@ -1,6 +1,7 @@
 #include <eng/app/Application.h>
 
 #include <eng/Log.h>
+#include <eng/telemetry/Telemetry.h>
 #include <eng/ui/LoadingScreen.h>
 
 #include <imgui.h>
@@ -121,6 +122,23 @@ int runApplication(Application& app, int argc, char** argv)
         // alpha is only known after the fixed loop has drained, so the context
         // is rebuilt for the phases that can actually use it.
         FrameContext f{engine, dt, 1.0f, frame, realDt};
+        // Stamped before anything writes, so every record this frame carries
+        // the frame that produced it -- which is the correlation that makes a
+        // channel worth more than a log file.
+        telemetry::setFrame(frame);
+        if (telemetry::enabled("frame", telemetry::Level::Trace)) {
+            // Watched rather than logged: these are the numbers you glance at,
+            // and sixty scrolling lines a second of "frame_ms = 16.7" is how a
+            // log becomes something you filter out rather than read.
+            telemetry::watchValue("frame", "frame_ms", realDt * 1000.0f);
+            telemetry::watchValue("frame", "fps",
+                                  realDt > 0.0f ? 1.0f / realDt : 0.0f);
+            telemetry::watchValue("frame", "game_ms", dt * 1000.0f);
+            std::size_t batches = 0, triangles = 0;
+            engine.renderer().frameStats(batches, triangles);
+            telemetry::watchValue("render", "batches", double(batches));
+            telemetry::watchValue("render", "triangles", double(triangles));
+        }
         {
             ENG_PROFILE(prof, "frame begin");
             app.onFrameBegin(f);

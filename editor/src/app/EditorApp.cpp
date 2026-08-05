@@ -20,6 +20,7 @@
 #include <eng/Input.h>
 #include <eng/Audio.h>
 #include <eng/Log.h>
+#include <eng/telemetry/Telemetry.h>
 #include <eng/render/Warmup.h>
 #include <eng/render/ImGuiHint.h>
 #include <eng/Renderer.h>
@@ -618,6 +619,7 @@ void EditorApp::stopAudioPreview()
 
 bool EditorApp::loadScene(const std::string& path)
 {
+    eng::telemetry::event("scene", "load " + path);
     finishInspectorEdit();
     stopAudioPreview();
     std::string error;
@@ -740,6 +742,7 @@ void EditorApp::enterIsolation(const AuthorId& id)
         mState.isolation.gridCutBefore = mState.gridState.cutAboveLevel;
     }
 
+    eng::telemetry::event("editor", "isolate " + id);
     mState.mode = ViewportMode::Isolate;
     mState.isolation.root = id;
     mState.isolation.membersRevision = ~uint64_t(0);
@@ -938,6 +941,8 @@ void EditorApp::frameIsolated(const glm::vec3& min, const glm::vec3& max)
 void EditorApp::runCommand(Command command)
 {
     finishInspectorEdit();
+    ENG_TELEMETRY("edit", eng::telemetry::Level::Info, "%s",
+                  command.label.empty() ? "(unlabelled)" : command.label.c_str());
     mCommands.run(mState.document, std::move(command));
     mState.dirty = !mCommands.savedStateReached();
     // Any edit invalidates the cooked map; saying so beats letting someone
@@ -2018,6 +2023,30 @@ void EditorApp::installConsoleCommands()
 
 void EditorApp::onUpdate(const eng::FrameContext& f)
 {
+    // What the editor currently IS, glanceable on a second monitor instead of
+    // occupying panel space in the editor itself.
+    if (eng::telemetry::enabled("editor", eng::telemetry::Level::Trace)) {
+        eng::telemetry::watch("editor", "scene",
+                              mState.scenePath.empty() ? "(unsaved)"
+                                                       : mState.scenePath);
+        eng::telemetry::watchValue("editor", "entities",
+                                   double(mState.document.entities.size()));
+        eng::telemetry::watchValue("editor", "selected",
+                                   double(mState.selection.size()));
+        eng::telemetry::watch("editor", "dirty", mState.dirty ? "yes" : "no");
+        eng::telemetry::watch("editor", "mode",
+                              mState.mode == ViewportMode::Isolate ? "isolate"
+                              : mState.mode == ViewportMode::Material
+                                  ? "material"
+                                  : "level");
+        if (mState.isolating())
+            eng::telemetry::watch("editor", "isolated", mState.isolation.root);
+        if (const AuthorId* primary = mState.primary())
+            eng::telemetry::watch("editor", "primary", *primary);
+        const glm::vec3 eye = mState.camera.activeEye();
+        eng::telemetry::watchf("editor", "camera", "%.1f %.1f %.1f", eye.x,
+                               eye.y, eye.z);
+    }
     tickAutosave(f.dt);
     eng::Renderer& renderer = f.engine.renderer();
     // Editing particles.toml in a text editor should land without a restart,

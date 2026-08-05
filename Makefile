@@ -421,6 +421,18 @@ VISUAL_ARGS = --frame $(if $(FRAME),$(FRAME),90) \
 editor-selftest: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_EDITOR_SELFTEST=1 ./scene_editor
 
+# Connector: the browser window onto the engine's debug channels.
+#   make connector              collect directly (no Redis needed)
+#   make connector REDIS=1      subscribe to a real Redis instead
+# Then run the game with RAVEN_CONNECTOR=1.
+connector:
+	$(PYTHON) tools/connector/server.py $(if $(REDIS),--redis,) \
+	    $(if $(PORT),--port $(PORT),) --open
+
+# The game, already pointed at a running Connector.
+run-connected: build-game
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_CONNECTOR=1 ./game
+
 visual-test: build-game
 	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
 
@@ -521,6 +533,8 @@ help:
 	@echo "Raven Engine build/run CLI"
 	@echo ""
 	@echo "Targets:"
+	@echo "  connector          browser view of the engine's debug channels"
+	@echo "  run-connected      the game, reporting into a running connector"
 	@echo "  make [build]        configure + build the game"
 	@echo "  make build-all      build every executable and test target"
 	@echo "  make run            build + run the game (alias: game)"

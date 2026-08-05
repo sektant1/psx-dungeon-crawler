@@ -308,6 +308,24 @@ add_library(eng_image_decode STATIC engine/src/platform/ImageDecode.cpp)
 target_link_libraries(eng_image_decode PUBLIC eng_stb)
 eng_target_hardening(eng_image_decode)
 
+# Debug telemetry: named channels out of the engine and into a collector.
+# Its own library because it is the only thing here that opens a socket, and
+# because the RESP encoder is worth testing without linking a renderer.
+add_library(eng_telemetry STATIC
+            engine/src/telemetry/Resp.cpp
+            engine/src/telemetry/Socket.cpp
+            engine/src/telemetry/Telemetry.cpp
+            engine/src/telemetry/RedisSink.cpp)
+target_include_directories(eng_telemetry PUBLIC engine/include)
+target_link_libraries(eng_telemetry PUBLIC eng_core)
+if(WIN32)
+  # Winsock is not linked by default, and getaddrinfo lives in ws2_32 too.
+  target_link_libraries(eng_telemetry PRIVATE ws2_32)
+endif()
+find_package(Threads REQUIRED)
+target_link_libraries(eng_telemetry PRIVATE Threads::Threads)
+eng_target_hardening(eng_telemetry)
+
 add_library(eng_platform STATIC engine/src/platform/Platform.cpp
                                 engine/src/platform/Input.cpp
                                 engine/src/platform/Config.cpp)
@@ -422,7 +440,8 @@ target_link_libraries(eng_script
 add_library(eng STATIC engine/src/app/Engine.cpp engine/src/app/Application.cpp
                        engine/src/app/FpsGameApp.cpp)
 target_include_directories(eng PRIVATE third_party engine/src)
-target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_script>")
+target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_script>"
+                      PUBLIC eng_telemetry)
   target_compile_definitions(eng_platform PRIVATE ENG_RENDERER_RHI=1)
   target_compile_definitions(eng PRIVATE ENG_RENDERER_RHI=1)
 
@@ -1165,6 +1184,12 @@ if(BUILD_TESTING)
                              PRIVATE game/src engine/include third_party)
   target_link_libraries(hit_feel_tests PRIVATE eng_toml glm::glm)
   add_test(NAME hit_feel COMMAND hit_feel_tests)
+
+  # The debug telemetry pipe, minus the socket: the wire format's binary
+  # safety, and that a full ring drops instead of blocking the game thread.
+  add_executable(telemetry_tests engine/tests/TelemetryTests.cpp)
+  target_link_libraries(telemetry_tests PRIVATE eng_telemetry)
+  add_test(NAME telemetry COMMAND telemetry_tests)
 
   add_executable(bullet_pattern_tests game/tests/BulletPatternTests.cpp
                                       game/src/combat/BulletPattern.cpp)

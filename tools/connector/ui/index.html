@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connector</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <div class="brand"><span class="mark idle" id="pulse"></span><h1>Connector</h1></div>
+
+  <div class="toolbar">
+    <input type="search" id="filter" placeholder="filter  (plain text, or /regex/)" spellcheck="false">
+    <div class="levels" id="levels">
+      <button data-level="trace">trace</button>
+      <button data-level="info" class="on">info</button>
+      <button data-level="warn" class="on">warn</button>
+      <button data-level="error" class="on">error</button>
+    </div>
+    <button id="wrap">wrap</button>
+    <button id="export" title="download what is on screen">export</button>
+    <button id="follow" class="on">follow</button>
+    <button id="pause">pause</button>
+    <button id="clear">clear</button>
+  </div>
+
+  <div class="side">
+    <h2>Watches</h2>
+    <div id="watches"><div class="empty">none yet</div></div>
+    <h2>Channels</h2>
+    <div id="channels"><div class="empty">waiting for the engine…</div></div>
+  </div>
+
+  <div class="main">
+    <div id="frameBar" class="framebar" hidden>
+      <span>frame <b id="frameNo"></b></span>
+      <button id="frameClear">show all frames</button>
+    </div>
+    <div id="log"></div>
+    <div class="empty-state" id="empty">
+      <div>No records yet.</div>
+      <div>Run the game with <code>RAVEN_CONNECTOR=1</code></div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span id="conn">connecting…</span>
+    <span><b id="count">0</b> records</span>
+    <span><b id="shown">0</b> shown</span>
+    <span class="sep"></span>
+    <span id="rate">0/s</span>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

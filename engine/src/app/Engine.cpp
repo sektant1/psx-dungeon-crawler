@@ -1,6 +1,8 @@
 #include <eng/Engine.h>
 
 #include <eng/Log.h>
+#include <eng/telemetry/RedisSink.h>
+#include <eng/telemetry/Telemetry.h>
 #include <eng/assets/AssetRoot.h>
 #include <eng/render/FrameCapture.h>
 #include <eng/render/GifRecorder.h>
@@ -109,6 +111,30 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
         shutdown();
         return false;
     }
+    // Debug telemetry, opt-in by environment so a normal run opens no socket
+    // and starts no thread. RAVEN_CONNECTOR=1 uses the defaults;
+    // RAVEN_CONNECTOR=host:port points it somewhere else.
+    if (const char* connector = std::getenv("RAVEN_CONNECTOR")) {
+        telemetry::RedisConfig redis;
+        const std::string spec = connector;
+        if (spec != "1" && spec != "on" && !spec.empty()) {
+            const std::size_t colon = spec.rfind(':');
+            if (colon == std::string::npos) {
+                redis.host = spec;
+            } else {
+                redis.host = spec.substr(0, colon);
+                redis.port = static_cast<unsigned short>(
+                    std::strtoul(spec.c_str() + colon + 1, nullptr, 10));
+            }
+        }
+        telemetry::start(telemetry::makeRedisSink(redis));
+        // Everything already written through eng::log shows up in the browser
+        // without a single call site changing.
+        telemetry::mirrorEngineLog("log");
+        ENG_TELEMETRY("engine", telemetry::Level::Info,
+                      "connector attached: %s", redis.host.c_str());
+    }
+
     detail::registerRoot(mRenderer);
     // There is no unprofiled path: the default look ("dungeon") is a profile
     // like any other, so something is always applied here. The game's per-level
