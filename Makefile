@@ -94,9 +94,10 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
               $(if $(filter psx_demo,$(APP)),psx_demo,game))
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
-        build-editor build-cook editor cook scene material prefab-viewer \
+        build-editor build-cook build-acp acp acp-check acp-clean assetdb \
+        editor cook scene material prefab-viewer \
         run game demo mapgen sim test asan bench screenshot visual-test \
-        editor-selftest clip clip-mp4 look new-clip \
+        editor-selftest clip clip-mp4 look new-clip assetformats \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
         vulkan-kit asset debug debug-run clean help
 
@@ -154,6 +155,9 @@ build-editor: configure
 build-cook: configure
 	cmake --build $(BUILD_DIR) --target scene_cook -j$(JOBS)
 
+build-acp: configure
+	cmake --build $(BUILD_DIR) --target raven_acp -j$(JOBS)
+
 # The generic app build, for the APP=-driven targets below.
 build-app: configure
 	cmake --build $(BUILD_DIR) --target $(APP_TARGET) -j$(JOBS)
@@ -183,6 +187,41 @@ editor: build-editor
 material: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_EDITOR_MATERIAL=1 \
 	    ./scene_editor $(if $(SCENE),$(abspath $(SCENE)),)
+
+# ---- asset pipeline --------------------------------------------------------
+# The Asset Conditioning Pipeline: every DCC source in assets/ through its
+# exporter, into a pack the game loads instead. Incremental -- a warm run is
+# under a second -- so this is safe to put in front of `run`.
+#
+#   make acp                     condition everything
+#   make acp TYPE=mesh           one row of the pipeline
+#   make acp FILTER=viewmodel    one subtree
+#   make acp FORCE=1             ignore the build keys
+#   make acp-check               fail if anything is stale (what CI runs)
+#   make assetdb                 the resource database: what is tracked
+#   make assetdb STAMP=1         write a .meta for every asset that lacks one
+#
+# The game picks the pack up automatically from build/cooked. To run without
+# it -- to prove the conditioned and source paths agree -- set
+# RAVEN_COOKED_DIR=/dev/null.
+acp: build-acp
+	./$(BUILD_DIR)/raven_acp build \
+	    $(if $(TYPE),--type $(TYPE)) $(if $(FILTER),--filter $(FILTER)) \
+	    $(if $(FORCE),--force) $(if $(STAMP),--stamp) $(if $(QUIET),--quiet)
+
+acp-check: build-acp
+	./$(BUILD_DIR)/raven_acp build --check
+
+acp-clean:
+	rm -rf $(BUILD_DIR)/cooked
+
+assetdb: build-acp
+	./$(BUILD_DIR)/raven_acp db $(if $(STAMP),--stamp) $(if $(LIST),--list) \
+	    $(if $(TYPE),--type $(TYPE))
+
+# Which extension belongs to which row of the pipeline.
+assetformats: build-acp
+	./$(BUILD_DIR)/raven_acp formats
 
 # Cook an authored .scn into a runtime .map -- the same cooker the editor calls
 # in-process, which is what makes the two produce identical bytes.
@@ -488,6 +527,10 @@ help:
 	@echo "  make demo           build + run the PSX shader sample"
 	@echo "  make editor         build + run the placement editor (SCENE=)"
 	@echo "  make material       editor, opened in the material staging scene"
+	@echo "  make acp            condition all assets (TYPE=, FILTER=, FORCE=1)"
+	@echo "  make acp-check      fail if any asset is stale -- what CI runs"
+	@echo "  make assetdb        the resource database (STAMP=1, LIST=1, TYPE=)"
+	@echo "  make assetformats   which extension is which pipeline row"
 	@echo "  make cook SCENE=    cook a .scn to a .map (OUT=, VALIDATE=1)"
 	@echo "  make scene SCENE=   cook a .scn and play it immediately"
 	@echo "  make prefab-viewer  compact turntable (PREFAB=<kit.id>, SUBJECT_SCALE=, VIEWER_PRESET=)"

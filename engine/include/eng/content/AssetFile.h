@@ -22,17 +22,17 @@
 // Endianness is fixed little by ByteStream. There is one target.
 namespace eng::content {
 
-// Magic is exactly 8 bytes, not NUL-terminated: "RAVENMSH", "RAVENTEX".
-using CookedMagic = char[8];
+// Magic is exactly 8 bytes, not NUL-terminated: "RAVENMSH", "RAVENTEX", ...
+using AssetMagic = char[8];
 
 // Writes header + pool + payload atomically: a temp file next to the
 // destination, then a rename. A conditioner killed mid-write therefore leaves
 // the previous output intact rather than a truncated one the game would load.
-bool writeCookedFile(const std::filesystem::path& path, const char magic[8],
+bool writeAssetFile(const std::filesystem::path& path, const char magic[8],
                      uint16_t version, const io::ByteWriter& body,
                      std::string& error);
 
-struct CookedFileBody {
+struct AssetFileBody {
     uint16_t version = 0;
     std::vector<uint8_t> bytes;
     std::vector<std::string> pool;
@@ -47,11 +47,11 @@ struct CookedFileBody {
 
 // Reads and validates magic and pool bounds. `version` is returned rather than
 // checked here: which versions a format accepts is that format's business.
-bool readCookedFile(const std::filesystem::path& path, const char magic[8],
-                    CookedFileBody& out, std::string& error);
+bool readAssetFile(const std::filesystem::path& path, const char magic[8],
+                    AssetFileBody& out, std::string& error);
 
 // True when the file exists and starts with `magic`. Used by the runtime to
-// answer "is there a cooked form of this?" without paying for a full read.
-bool cookedFileMatches(const std::filesystem::path& path, const char magic[8]);
+// answer "is there an exported form of this?" without paying for a full read.
+bool assetFileMatches(const std::filesystem::path& path, const char magic[8]);
 
 } // namespace eng::content

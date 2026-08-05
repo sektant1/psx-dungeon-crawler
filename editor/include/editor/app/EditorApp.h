@@ -11,6 +11,7 @@
 #include <editor/assets/GameVocabulary.h>
 #include <editor/assets/MaterialCatalog.h>
 #include <editor/assets/MeshCatalog.h>
+#include <editor/assets/ResourceDbPanel.h>
 #include <editor/assets/ModelImportPipeline.h>
 #include <editor/ui/EditorUi.h>
 #include "RenderPalette.h"
@@ -488,6 +489,8 @@ private:
     // calls at startup for a panel that may never be opened is two hundred
     // stat() calls too many.
     MeshCatalog mMeshCatalog;
+    // The Resource Database Management Tool, as a tab of the asset browser.
+    ResourceDbPanel mResourceDb;
     char mMeshFilter[64] = {};
     // The row the panel is showing. A mesh path, or empty when a primitive
     // preset is selected instead; the two are one selection because the panel

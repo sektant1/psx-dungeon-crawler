@@ -81,6 +81,39 @@ const std::vector<Pack>& packs();
 std::filesystem::path resolve(std::string_view logical);
 bool exists(std::string_view logical);
 
+// --- the conditioned pack ---------------------------------------------------
+//
+// What `raven_acp build` produced: a directory of exported intermediates and a
+// pack.manifest indexing them. Mounting one does NOT change resolve() -- a
+// caller asking for "meshes/props/lamp.obj" still gets the .obj, because that
+// is what the string says and half the engine does arithmetic on the answer.
+//
+// Instead a loader that can read the conditioned form asks for it BY NAME:
+//
+//     if (auto rmesh = assets::conditioned(path); !rmesh.empty())
+//         ... read the .rmesh ...
+//     else
+//         ... run Assimp ...
+//
+// which keeps "is there a faster form of this asset?" an explicit question with
+// a visible fallback, rather than a path that silently changes extension under
+// a caller that was not written for it.
+//
+// Discovery, first hit wins: `dirOverride`, then $RAVEN_COOKED_DIR, then
+// <project>/build/cooked. Absent or unreadable is not an error -- a source tree
+// with no pack is the normal state during development, and everything falls
+// back to the source loaders.
+bool mountCooked(const std::string& dirOverride = {});
+bool cookedMounted();
+const std::filesystem::path& cookedDir();
+
+// The conditioned output for a content asset, or an empty path. Takes a
+// logical path ("meshes/props/lamp.obj") or an absolute one under the content
+// root -- loaders hold the latter and should not have to reverse it, and one
+// function rather than two overloads because a std::string argument would be
+// ambiguous between them.
+std::filesystem::path conditioned(const std::filesystem::path& asset);
+
 // The absolute dir of one mounted pack, empty when that pack is not mounted.
 //
 // This is deliberately NOT resolve()'s job. resolve() answers "where is this

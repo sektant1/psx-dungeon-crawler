@@ -1,6 +1,7 @@
 #include <eng/assets/AssetRoot.h>
 
 #include <eng/Log.h>
+#include <eng/content/PackManifest.h>
 
 #include <cstdlib>
 #include <map>
@@ -28,6 +29,11 @@ struct State {
     std::map<std::string, std::vector<std::string>> mounts;
     std::vector<std::string> internalMaterials;
     std::vector<Pack> mounted;
+    // The conditioned pack, when one is mounted. Empty dir means "none", and
+    // every conditioned() query answers empty, which is what makes a source
+    // tree with no pack the normal case rather than a special one.
+    fs::path cookedDir;
+    content::PackManifest cooked;
 };
 
 State& state()
@@ -467,6 +473,89 @@ bool materialInternal(std::string_view name)
             return true;
     }
     return false;
+}
+
+bool mountCooked(const std::string& dirOverride)
+{
+    State& s = state();
+    s.cookedDir.clear();
+    s.cooked.clear();
+
+    // An explicit answer is THE answer, not a first guess -- the same rule
+    // discover() applies to the content root, and for the same reason: a tool
+    // told to use one pack and silently given another is worse than one that
+    // reports no pack at all. RAVEN_COOKED_DIR=/dev/null is how a run is made
+    // to ignore the pack entirely.
+    std::vector<fs::path> candidates;
+    const char* env = std::getenv("RAVEN_COOKED_DIR");
+    if (!dirOverride.empty())
+        candidates.emplace_back(dirOverride);
+    else if (env && *env)
+        candidates.emplace_back(env);
+    else if (!s.project.empty())
+        candidates.push_back(s.project / "build" / "cooked");
+
+    for (const fs::path& candidate : candidates) {
+        std::error_code ec;
+        if (!fs::is_regular_file(candidate / content::kPackManifestName, ec))
+            continue;
+        std::string error;
+        if (!s.cooked.load(candidate, error)) {
+            // A pack whose index cannot be read is worse than no pack: the
+            // loaders would take the fast path for the entries that parsed and
+            // the slow one for the rest, and the mixture is unexplainable.
+            log::warn("assets: ignoring cooked pack at %s: %s",
+                      candidate.string().c_str(), error.c_str());
+            s.cooked.clear();
+            continue;
+        }
+        s.cookedDir = candidate;
+        log::info("assets: cooked pack %s, %zu assets", s.cookedDir.c_str(),
+                  s.cooked.entries().size());
+        return true;
+    }
+
+    if (!dirOverride.empty())
+        log::error("assets: no cooked pack at '%s'", dirOverride.c_str());
+    return false;
+}
+
+bool cookedMounted()
+{
+    return !state().cookedDir.empty();
+}
+
+const fs::path& cookedDir()
+{
+    return state().cookedDir;
+}
+
+fs::path conditioned(const fs::path& asset)
+{
+    const State& s = state();
+    if (s.cookedDir.empty() || asset.empty())
+        return {};
+
+    std::string logical = asset.generic_string();
+    if (asset.is_absolute()) {
+        if (s.root.empty())
+            return {};
+        std::error_code ec;
+        const fs::path relative = fs::relative(asset, s.root, ec);
+        if (ec || relative.empty() || *relative.begin() == "..")
+            return {};
+        logical = relative.generic_string();
+    }
+
+    const fs::path output = s.cooked.resolve(logical);
+    if (output.empty())
+        return {};
+    // The manifest says it was produced; the file is what the loader will
+    // open. A pack whose directory was half-deleted falls back to source
+    // rather than failing -- the difference between a stale checkout that
+    // still runs and one that does not.
+    std::error_code ec;
+    return fs::is_regular_file(output, ec) ? output : fs::path{};
 }
 
 std::vector<fs::path> resourceDirs()

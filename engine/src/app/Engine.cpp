@@ -77,6 +77,11 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
         log::error("Engine: cannot mount content set '%s'", mountSet.c_str());
         return false;
     }
+    // The conditioned pack, if `raven_acp build` has produced one. Optional by
+    // design: a source checkout with no pack runs off the source loaders, which
+    // is what makes the pipeline something a project adopts rather than
+    // something it must have before it can start.
+    assets::mountCooked();
 
     const std::string configFile = assets::resolve(configPath).string();
     if (configFile.empty()) {

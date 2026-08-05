@@ -1,8 +1,7 @@
-#include <eng/content/CookedMesh.h>
+#include <eng/content/MeshAsset.h>
 
-#include <eng/content/CookedFile.h>
+#include <eng/content/AssetFile.h>
 
-#include <limits>
 
 namespace fs = std::filesystem;
 
@@ -38,8 +37,8 @@ glm::vec4 readVec4(io::ByteReader& in)
 
 } // namespace
 
-bool writeCookedMesh(const fs::path& path, const MeshData& mesh,
-                     const CookedMeshInfo& info, std::string& error)
+bool writeMeshAsset(const fs::path& path, const MeshData& mesh,
+                     const MeshAssetInfo& info, std::string& error)
 {
     if (mesh.submeshes.size() > kMaxSubmeshes) {
         error = "mesh has " + std::to_string(mesh.submeshes.size()) +
@@ -57,6 +56,8 @@ bool writeCookedMesh(const fs::path& path, const MeshData& mesh,
     out.vec3(info.boundsMin);
     out.vec3(info.boundsMax);
     out.f32(info.metresPerSourceUnit);
+    writeVec4(out, info.sourceOrientation);
+    out.vec3(info.customPivot);
     out.u8(info.pivot);
     out.u8(info.texcoordV);
     out.u8(info.canonicalPivotStandard ? 1u : 0u);
@@ -88,22 +89,22 @@ bool writeCookedMesh(const fs::path& path, const MeshData& mesh,
     for (uint32_t index : mesh.collisionIndices)
         out.u32(index);
 
-    return writeCookedFile(path, kCookedMeshMagic, kCookedMeshVersion, out,
+    return writeAssetFile(path, kMeshAssetMagic, kMeshAssetVersion, out,
                            error);
 }
 
-bool readCookedMesh(const fs::path& path, MeshData& mesh, CookedMeshInfo& info,
+bool readMeshAsset(const fs::path& path, MeshData& mesh, MeshAssetInfo& info,
                     std::string& error)
 {
     mesh = {};
     info = {};
 
-    CookedFileBody body;
-    if (!readCookedFile(path, kCookedMeshMagic, body, error))
+    AssetFileBody body;
+    if (!readAssetFile(path, kMeshAssetMagic, body, error))
         return false;
-    if (body.version != kCookedMeshVersion) {
+    if (body.version != kMeshAssetVersion) {
         error = "rmesh version " + std::to_string(body.version) +
-                ", this build reads " + std::to_string(kCookedMeshVersion);
+                ", this build reads " + std::to_string(kMeshAssetVersion);
         return false;
     }
 
@@ -117,6 +118,8 @@ bool readCookedMesh(const fs::path& path, MeshData& mesh, CookedMeshInfo& info,
     info.boundsMin = in.vec3();
     info.boundsMax = in.vec3();
     info.metresPerSourceUnit = in.f32();
+    info.sourceOrientation = readVec4(in);
+    info.customPivot = in.vec3();
     info.pivot = in.u8();
     info.texcoordV = in.u8();
     info.canonicalPivotStandard = in.u8() != 0;
@@ -196,9 +199,9 @@ bool readCookedMesh(const fs::path& path, MeshData& mesh, CookedMeshInfo& info,
     return true;
 }
 
-bool isCookedMesh(const fs::path& path)
+bool isMeshAsset(const fs::path& path)
 {
-    return cookedFileMatches(path, kCookedMeshMagic);
+    return assetFileMatches(path, kMeshAssetMagic);
 }
 
 } // namespace eng::content

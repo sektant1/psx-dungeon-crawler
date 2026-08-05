@@ -330,19 +330,32 @@ Settings defaultSettings(AssetType type)
     Settings settings;
     switch (type) {
     case AssetType::Mesh:
-        // The values eng::ModelImportOptions already defaults to, written out
-        // so an artist can see and change them without reading C++. The names
-        // match the fields one for one; MeshConditioner is the only reader.
-        settings["pivot"] = Setting::fromString("bottom_center");
+        // The names match eng::ModelImportOptions field for field, written out
+        // so an artist can see and change them without reading C++.
+        //
+        // `source`, not ModelImportOptions' own `bottom_center` default: every
+        // shipped mesh in this engine is loaded with PivotMode::Source, because
+        // the kit and prop loaders place geometry with their own bake matrix
+        // and a re-pivoted mesh would arrive somewhere else. Geometry is baked
+        // into a .rmesh, so this is not a preference -- a conditioned mesh whose
+        // pivot disagrees with the call site is refused by loadStaticModel()
+        // and quietly costs a full Assimp import instead.
+        settings["pivot"] = Setting::fromString("source");
         settings["metres_per_source_unit"] = Setting::fromNumber(1.0);
         settings["texcoord_v"] = Setting::fromString("format_default");
         settings["generate_collision"] = Setting::fromBool(true);
         break;
     case AssetType::Texture:
-        settings["generate_mips"] = Setting::fromBool(true);
-        // Nearest-neighbour sampling is the shipped look, so a texture the
-        // pipeline resized would change the image. The setting exists to be
-        // *checked*, not applied: the conditioner reports a violation.
+        // "none" publishes the source image unchanged. The shipped look is
+        // nearest-neighbour pixel art and a block codec visibly alters it, so
+        // compression is opt-in per asset -- which is where the book puts it
+        // too (1.6.4: "the animator's choice of compression technique and
+        // level"). "auto", "bc1" and "bc3" are the alternatives.
+        settings["compression"] = Setting::fromString("none");
+        settings["generate_mips"] = Setting::fromBool(false);
+        // Checked, never applied: a texture the pipeline silently resized is
+        // how a UI atlas stops lining up. Over budget is a warning to fix at
+        // the source.
         settings["max_size"] = Setting::fromInteger(2048);
         settings["srgb"] = Setting::fromBool(true);
         break;
@@ -555,6 +568,8 @@ bool ResourceDb::scan(const fs::path& root, const ScanOptions& options)
         if (!it->is_regular_file(ec))
             continue;
         if (path.extension() == kSidecarExtension)
+            continue;
+        if (ignoredContentFile(toLogical(root, path)))
             continue;
         files.push_back(path);
     }

@@ -503,6 +503,7 @@ void applyRenderPreset(Renderer& r, const RenderPresetValues& v)
         r.setRenderResolution(v.targetWidth, v.targetHeight);
     r.setGlobalMaterialParam("precisionMultiplier", v.precisionMultiplier);
     r.setGlobalMaterialParam("affineAmount", v.affineAmount);
+    r.setGlobalMaterialParam("affineSoftness", v.affineSoftness);
     r.setPerPixelLightingEnabled(v.perPixel);
     r.setLightSteps(v.bandedLightingEnabled ? v.bandedLightSteps : 0.0f);
     r.setLightStepSoftness(v.stepSoftness);

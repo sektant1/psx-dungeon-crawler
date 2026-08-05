@@ -1,6 +1,8 @@
 #include "Image.h"
 
 #include <eng/Log.h>
+#include <eng/assets/AssetRoot.h>
+#include <eng/content/TextureAsset.h>
 
 // Which decoders exist is decided in engine/src/platform/ImageDecode.cpp, the
 // translation unit that compiles stb_image. A STBI_ONLY_* here would select
@@ -13,9 +15,44 @@
 
 namespace eng::rhi_renderer {
 
+namespace {
+
+// The conditioned form, when the Asset Conditioning Pipeline produced one.
+// mip 0 only: this uploader takes a single level, and a .rtex carries the whole
+// chain for the day it does not. The win here is that stb_image stops decoding
+// a PNG per texture at load -- 286 of them in this content tree.
+bool loadConditionedImage(const std::filesystem::path& path, Image& out)
+{
+    const std::filesystem::path conditioned = assets::conditioned(path);
+    if (conditioned.empty() ||
+        conditioned.extension() != content::kTextureAssetExtension)
+        return false;
+
+    content::TextureAsset asset;
+    std::string error;
+    if (!content::readTextureAsset(conditioned, asset, error)) {
+        log::warn("acp: cannot read '%s': %s; decoding the source image",
+                  conditioned.string().c_str(), error.c_str());
+        return false;
+    }
+    if (asset.levels.empty())
+        return false;
+
+    const content::TextureLevel& level = asset.levels.front();
+    out.width = static_cast<int>(level.width);
+    out.height = static_cast<int>(level.height);
+    out.rgba = level.bytes;
+    return out.valid();
+}
+
+} // namespace
+
 bool loadImage(const std::filesystem::path& path, Image& out)
 {
     out = {};
+    if (loadConditionedImage(path, out))
+        return true;
+
     int channels = 0;
     stbi_uc* pixels = stbi_load(path.string().c_str(), &out.width, &out.height,
                                 &channels, STBI_rgb_alpha);

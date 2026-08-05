@@ -5148,13 +5148,15 @@ void EditorApp::drawAssetBrowser()
     const bool requested =
         mFocusPanelFrames > 0 &&
         (mFocusPanel == "catalog" || mFocusPanel == "meshes" ||
-         mFocusPanel == "material" || mFocusPanel == "particles");
+         mFocusPanel == "material" || mFocusPanel == "particles" ||
+         mFocusPanel == "resourcedb");
     if (requested) {
         ImGui::SetNextWindowFocus();
-        mAssetBrowserModeRequest = mFocusPanel == "meshes"      ? 1
-                                   : mFocusPanel == "material"  ? 2
-                                   : mFocusPanel == "particles" ? 3
-                                                                : 0;
+        mAssetBrowserModeRequest = mFocusPanel == "meshes"       ? 1
+                                   : mFocusPanel == "material"   ? 2
+                                   : mFocusPanel == "particles"  ? 3
+                                   : mFocusPanel == "resourcedb" ? 4
+                                                                 : 0;
     }
     if (!ImGui::Begin(workspace_window::kAssetBrowser, nullptr, kPanelFlags)) {
         ImGui::End();
@@ -5191,6 +5193,13 @@ void EditorApp::drawAssetBrowser()
             mParticlesDirty ? "Effects *" : "Effects";
         if (ImGui::BeginTabItem(effectsLabel.c_str(), nullptr, flagsFor(3))) {
             drawParticlePanel();
+            ImGui::EndTabItem();
+        }
+        // The Resource Database Management Tool. Last, because it answers a
+        // different question from the other four: not "what can I place" but
+        // "what does the engine know about, and is it built".
+        if (ImGui::BeginTabItem("Resource DB", nullptr, flagsFor(4))) {
+            mResourceDb.draw();
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();

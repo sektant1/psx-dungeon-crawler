@@ -49,6 +49,20 @@ void ByteWriter::patchU32(std::size_t at, uint32_t v)
     for (int i = 0; i < 4; ++i) mBuf[at + std::size_t(i)] = uint8_t((v >> (8 * i)) & 0xFF);
 }
 
+void ByteWriter::raw(const void* data, std::size_t n)
+{
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    mBuf.insert(mBuf.end(), bytes, bytes + n);
+}
+
+bool ByteReader::raw(void* out, std::size_t n)
+{
+    if (!take(n))
+        return false;
+    std::memcpy(out, mCur - n, n);
+    return true;
+}
+
 ByteReader::ByteReader(const uint8_t* data, std::size_t len,
                        const std::vector<std::string>& pool)
     : mCur(data), mEnd(data + len), mPool(pool)

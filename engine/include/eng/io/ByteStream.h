@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -23,6 +24,10 @@ public:
     void vec3(const glm::vec3& v);
     void quat(const glm::quat& q);
     void str(const std::string& s); // interns, writes u32 index
+    // Raw payload, appended as-is. For blobs that are already in their final
+    // byte order -- a texture mip level -- where going through u8() per byte is
+    // a bounds check and a call for every one of four million.
+    void raw(const void* data, std::size_t n);
 
     uint32_t intern(const std::string& s); // pool index, appends if new
     // Overwrite 4 bytes previously written at byte offset `at` (little-endian).
@@ -54,6 +59,8 @@ public:
     glm::vec3 vec3();
     glm::quat quat();
     const std::string& str(); // reads u32 index into the pool
+    // Bulk counterpart to raw(). False (and no write to `out`) on overrun.
+    bool raw(void* out, std::size_t n);
 
     // Returns a reader bounded to exactly the next n bytes and advances this
     // reader past that slice. A component decoder therefore cannot consume the

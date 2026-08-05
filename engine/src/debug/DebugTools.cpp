@@ -335,6 +335,14 @@ void DebugTools::drawRenderTab(const Deps& d)
             r->setGlobalMaterialParam("precisionMultiplier", v.precisionMultiplier);
         if (ImGui::SliderFloat("Affine warp", &v.affineAmount, 0.0f, 1.0f))
             r->setGlobalMaterialParam("affineAmount", v.affineAmount);
+        // How far the warp is allowed to run before it saturates. Raw affine
+        // tears on the big near-camera polygons a modern kit draws floors from;
+        // this compresses that tail and leaves the swim. Log scale because the
+        // useful range is a few hundredths and the top end is "off".
+        if (ImGui::SliderFloat("Affine softness", &v.affineSoftness, 0.01f,
+                               2.0f, "%.3f UV",
+                               ImGuiSliderFlags_Logarithmic))
+            r->setGlobalMaterialParam("affineSoftness", v.affineSoftness);
     }
 
     if (section("Lighting")) {
@@ -607,6 +615,7 @@ void DebugTools::drawShadersTab(const Deps& d)
             "[render_profile]\n"
             "pixel_size = %d\ntarget_width = %d\ntarget_height = %d\n"
             "precision_multiplier = %.4f\naffine_amount = %.4f\n"
+            "affine_softness = %.4f\n"
             "per_pixel = %s\nbanded_lighting = %s\nband_light_steps = %.3f\nstep_softness = %.4f\n"
             "bloom = %s\nbloom_threshold = %.4f\nbloom_intensity = %.4f\nbloom_pixel_snap = %.4f\n"
             "grade_desaturate = %.4f\ngrade_contrast = %.4f\ngrade_saturation = %.4f\n"
@@ -620,7 +629,7 @@ void DebugTools::drawShadersTab(const Deps& d)
             "edge_convexity = %.4f\nedge_convex_bias = %.4f\n"
             "hw_resolve_mode = %.3f\nhw_resolve_strength = %.4f\n",
             v.pixelSize, v.targetWidth, v.targetHeight,
-            v.precisionMultiplier, v.affineAmount,
+            v.precisionMultiplier, v.affineAmount, v.affineSoftness,
             v.perPixel?"true":"false", v.bandedLightingEnabled?"true":"false", v.bandedLightSteps, v.stepSoftness,
             v.bloom?"true":"false", v.bloomThreshold, v.bloomIntensity, v.bloomPixelSnap,
             v.gradeDesaturate, v.gradeContrast, v.gradeSaturation, v.gradeTintStrength, v.gradeBlackLift,

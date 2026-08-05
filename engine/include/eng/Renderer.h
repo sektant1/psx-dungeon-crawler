@@ -52,6 +52,10 @@ struct EnvState {
     float precisionMultiplier = 1.0f;
     // 0 = perspective-correct UVs, 1 = the full screen-space swim.
     float affineAmount = 0.0f;
+    // Saturation point of the affine/perspective divergence, in UV units.
+    // Keeps the warp from tearing on the big near-camera polygons a modern kit
+    // draws floors and ceilings out of.
+    float affineSoftness = 0.10f;
     float omniAttenuation = 1.0f; // Godot omni falloff exponent (1 = linear)
     float lightSteps = 0.0f; // diffuse posterization bands, 0 = smooth
     float lightStepSoftness = 0.35f; // band seam half-width, 0 = hard edges

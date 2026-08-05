@@ -146,7 +146,18 @@ without being touched.
 | `psxParams.z` | `lightStepSoftness` | band seam width |
 | `psxParams.w` | `affineAmount` | affine texture mapping |
 
-**Affine texture mapping** is the recognisable one. The console interpolated UVs
+**Affine texture mapping** is the recognisable one, and it is *softened* rather
+than applied raw -- `psxParams2.x`, `affine_softness`, in UV units. The
+divergence between the perspective and affine interpolations grows without
+bound on a polygon seen close and oblique, and the console got away with that
+because it drew a room out of many small quads. A modern kit draws a floor as
+two triangles, where raw affine stops swimming and starts *shearing* along the
+diagonal the two triangles share. A per-component soft knee
+(`d * s / (s + |d|)`) leaves small divergence untouched, so the swim reads
+exactly as before, and saturates the tail at `s` UV units so nothing tears.
+0.10 is the shipped default; raise it toward 1 for raw affine, drop it for a
+flatter warp. Live on the debug panel's Render tab beside the amount.
+ The console interpolated UVs
 linearly in screen space with no perspective divide, so textures swim and buckle
 across large polygons and a quad's two triangles crease along their shared
 diagonal. The vertex stage emits the UVs twice -- once `smooth`, once

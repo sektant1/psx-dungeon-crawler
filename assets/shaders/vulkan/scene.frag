@@ -29,6 +29,8 @@ layout(set = 0, binding = 0, std140) uniform SceneUniforms {
     vec4 lightColourType[16];
     // x precision multiplier, y light steps, z step softness, w affine amount.
     vec4 psxParams;
+    // x affine softness (UV divergence at which the warp saturates).
+    vec4 psxParams2;
 } scene;
 layout(set = 1, binding = 0) uniform sampler2D albedoTexture;
 layout(set = 1, binding = 1) uniform sampler2D shadowMap;
@@ -102,7 +104,17 @@ void main() {
     // buckle across large polygons -- the single most recognisable thing about
     // the console's output. Blended rather than switched so a profile can ask
     // for a hint of it (dungeon runs 0.12) instead of the full swim.
-    vec2 texUv = mix(uv, uvAffine, scene.psxParams.w);
+    // Softened rather than mixed straight. The divergence between the two
+    // interpolations grows without bound on a large polygon seen close and
+    // oblique -- a floor underfoot -- where raw affine stops swimming and
+    // starts tearing, because the console drew that floor as many small quads
+    // and this kit draws it as two triangles. A per-component soft knee leaves
+    // small divergence untouched (the swim reads exactly as before) and
+    // saturates the tail at `softness` UV units, so nothing buckles.
+    vec2 delta = uvAffine - uv;
+    float softness = max(scene.psxParams2.x, 1e-4);
+    delta *= softness / (softness + abs(delta));
+    vec2 texUv = uv + delta * scene.psxParams.w;
     vec4 albedo = texture(albedoTexture, texUv) * colour * drawData.tintOpacity;
     if (albedo.a < drawData.surfaceParams.x)
         discard;

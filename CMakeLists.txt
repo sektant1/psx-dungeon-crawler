@@ -167,6 +167,18 @@ add_library(
   engine/src/io/FileSystem.cpp
   engine/src/io/DirectoryWatcher.cpp
   engine/src/content/TextResource.cpp
+  # The asset pipeline's runtime-readable half: the format table, the resource
+  # database, and the readers for every intermediate the exporters write. In
+  # eng_core because the game, the editor, the pipeline and the tests must all
+  # read one definition of what a .rmesh is.
+  engine/src/content/AssetType.cpp
+  engine/src/content/ContentHash.cpp
+  engine/src/content/ResourceDb.cpp
+  engine/src/content/AssetFile.cpp
+  engine/src/content/MeshAsset.cpp
+  engine/src/content/TextureAsset.cpp
+  engine/src/content/DataAsset.cpp
+  engine/src/content/PackManifest.cpp
   engine/src/diagnostics/Trace.cpp
   engine/src/diagnostics/Profiler.cpp
   engine/src/diagnostics/FrameStats.cpp
@@ -289,20 +301,31 @@ endif()
   add_custom_target(rhi_renderer_shaders
                     DEPENDS ${_eng_renderer_shader_outputs})
 
+# The single translation unit that compiles stb_image, as its own target: the
+# renderer decodes source images at load and the pipeline's Compression row
+# decodes them at build time, and the editor links both. One definition.
+add_library(eng_image_decode STATIC engine/src/platform/ImageDecode.cpp)
+target_link_libraries(eng_image_decode PUBLIC eng_stb)
+eng_target_hardening(eng_image_decode)
+
 add_library(eng_platform STATIC engine/src/platform/Platform.cpp
-                                engine/src/platform/ImageDecode.cpp
                                 engine/src/platform/Input.cpp
                                 engine/src/platform/Config.cpp)
 target_include_directories(eng_platform PRIVATE third_party engine/src)
 target_link_libraries(eng_platform PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>"
-                      PRIVATE SDL2::SDL2 eng_stb)
+                      PRIVATE SDL2::SDL2 eng_stb eng_image_decode)
 
 # Renderer-independent source-model import. Kept as its own library so runtime,
 # validation CLI, and hermetic tests execute exactly the same Assimp path.
 add_library(eng_model_import STATIC engine/src/render/AssimpLoader.cpp
-                                    engine/src/render/SkinnedAssimpLoader.cpp)
+                                    engine/src/render/SkinnedAssimpLoader.cpp
+                                    # The seam the conditioning pipeline plugs
+                                    # into: read the .rmesh when the mounted
+                                    # pack has one, run Assimp when it does not.
+                                    engine/src/render/ConditionedModel.cpp)
 target_include_directories(eng_model_import PUBLIC engine/include engine/src)
-target_link_libraries(eng_model_import PUBLIC glm::glm PRIVATE assimp::assimp)
+target_link_libraries(eng_model_import PUBLIC glm::glm eng_core
+                      PRIVATE assimp::assimp)
 
 set(_eng_systems_sources
   engine/src/render/ImGuiTheme.cpp
@@ -538,6 +561,8 @@ add_executable(
   editor/src/assets/MeshCatalog.cpp
   editor/src/ui/EditorUi.cpp
   editor/src/assets/ModelImportPipeline.cpp
+  editor/src/assets/ResourceDbPanel.cpp
+  editor/src/content/SceneWorldExporter.cpp
   editor/src/commands/Clipboard.cpp
   editor/src/commands/CommandPalette.cpp
   editor/src/commands/Commands.cpp
@@ -578,7 +603,7 @@ target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/src third_party
                                                 engine/include)
 target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui
-                                             eng_model_import
+                                             eng_model_import eng_acp
                                              nlohmann_json::nlohmann_json)
 # No asset defines: the editor mounts the `editor` set and resolves logical
 # paths like every other app. Where it needs a directory rather than a file --
@@ -586,6 +611,32 @@ target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui
 # by name (eng::assets::packDir), and the playtest log goes next to the project
 # (eng::assets::project) instead of climbing "/../.." out of an asset path.
 eng_target_hardening(scene_editor)
+
+# The Asset Conditioning Pipeline. Above the engine, not part of it: it links
+# eng_core for the format definitions and eng_model_import for the DCC readers,
+# and nothing links it back. No renderer, no window -- CI conditions content
+# without a GPU, and the editor calls the same functions in-process.
+add_library(eng_acp STATIC
+            engine/src/acp/Pipeline.cpp
+            engine/src/acp/Registry.cpp
+            engine/src/acp/MeshExporter.cpp
+            engine/src/acp/TextureExporter.cpp
+            engine/src/acp/DataExporter.cpp
+            engine/src/acp/PassthroughExporter.cpp)
+target_include_directories(eng_acp PUBLIC engine/include
+                           PRIVATE engine/src third_party)
+target_link_libraries(eng_acp PUBLIC eng_core PRIVATE eng_model_import eng_toml
+                                     eng_stb eng_image_decode)
+eng_target_hardening(eng_acp)
+
+# raven_acp: the pipeline and the resource database, from the shell. It also
+# registers the World row, whose cooker lives in game_content -- which is why
+# the executable and not eng_acp is where the two meet.
+add_executable(raven_acp engine/tools/acp/main.cpp
+                         editor/src/content/SceneWorldExporter.cpp)
+target_include_directories(raven_acp PRIVATE editor/include)
+target_link_libraries(raven_acp PRIVATE eng_acp game_content eng_ecs_headless)
+eng_target_hardening(raven_acp)
 
 # The single .scn -> .map cooker, as a CLI. Headless: CI cooks content without a
 # GPU, and the editor calls the same function in-process.
@@ -800,6 +851,25 @@ if(BUILD_TESTING)
   target_include_directories(ui_layout_tests PRIVATE engine/include)
   target_link_libraries(ui_layout_tests PRIVATE glm::glm)
   add_test(NAME ui_layout COMMAND ui_layout_tests)
+
+  # The on-disk formats every exporter writes. A change that silently alters
+  # one is a content tree that has to be re-cooked with nothing saying so.
+  add_executable(asset_format_tests engine/tests/AssetFormatTests.cpp)
+  target_link_libraries(asset_format_tests PRIVATE eng_core)
+  add_test(NAME asset_format COMMAND asset_format_tests)
+
+  # The resource database and the pipeline's incremental behaviour, on a tree
+  # the test builds itself. Incrementality only ever fails by being too clever,
+  # and the symptom is stale data in a build hours later.
+  add_executable(acp_pipeline_tests engine/tests/AcpPipelineTests.cpp)
+  target_link_libraries(acp_pipeline_tests PRIVATE eng_acp)
+  add_test(NAME acp_pipeline COMMAND acp_pipeline_tests)
+
+  # The real content tree, conditioned end to end -- the rows that need Assimp
+  # and stb, which the unit test above cannot reach. --check, so it also fails
+  # when a committed pack has gone stale.
+  add_test(NAME acp_content
+           COMMAND raven_acp build --out ${CMAKE_BINARY_DIR}/cooked-test --quiet)
 
   add_executable(ui_canvas_tests engine/tests/UiCanvasTests.cpp)
   target_link_libraries(ui_canvas_tests PRIVATE eng)

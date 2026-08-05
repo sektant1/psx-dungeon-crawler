@@ -96,6 +96,12 @@ struct RenderPresetValues {
     float hardwareResolveStrength = 0.65f;
 
     float affineAmount = 0.0f; // 0 = perspective-correct, 1 = full affine warp
+    // How far the affine UV is allowed to run away from the perspective one,
+    // in UV units. The console had no such limit, but it also drew rooms out of
+    // many small quads; a modern kit draws a floor as two big triangles, where
+    // raw affine stops swimming and starts tearing. This compresses that tail
+    // and leaves the swim where it reads. Large values approach raw affine.
+    float affineSoftness = 0.10f;
 
     // Distance desaturate/darken before the fog mix. Negative = "leave the
     // scene's own value alone", which is the default: this one is authored

@@ -85,6 +85,13 @@ HEADER_RULES: list[tuple[str, str]] = [
     # an asset path. Only the catch-all below would otherwise file it under
     # systems and make src/core/AssetRoot.cpp an upward include.
     ("assets/", "core"),
+    # The asset pipeline's data layer: the format table, the resource database
+    # and the readers for every intermediate the exporters write. Same argument
+    # as assets/ -- <filesystem>, TOML and ByteStream, no renderer and no
+    # window, which is what lets the game, the editor, the ACP and a headless
+    # test agree on what a .rmesh contains. The conditioners that WRITE these
+    # files are not here; they are eng_acp, above the engine entirely.
+    ("content/", "core"),
     ("rhi/", "platform"),
     ("ecs/", "framework"),
     ("script/", "framework"),

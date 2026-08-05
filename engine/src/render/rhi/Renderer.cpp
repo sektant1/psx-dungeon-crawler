@@ -182,6 +182,9 @@ struct alignas(16) SceneUniforms {
     //   z lightStepSoftness    band-edge half width
     //   w affineAmount         0 = perspective UVs, 1 = full affine
     glm::vec4 psxParams{1.0f, 0.0f, 0.30f, 0.0f};
+    //   x affineSoftness  UV divergence at which the warp saturates
+    //   yzw reserved
+    glm::vec4 psxParams2{0.10f, 0.0f, 0.0f, 0.0f};
 };
 
 struct DrawConstants {
@@ -1311,6 +1314,8 @@ struct Renderer::Impl {
                               std::max(env.lightSteps, 0.0f),
                               std::clamp(env.lightStepSoftness, 0.0f, 0.5f),
                               std::clamp(env.affineAmount, 0.0f, 1.0f)};
+        uniforms.psxParams2 = {std::max(env.affineSoftness, 1e-4f), 0.0f, 0.0f,
+                               0.0f};
         // w carries fogDesatBoost: the scene shader needs it alongside fog.
         uniforms.ambient = glm::vec4(env.ambient, std::max(env.fogDesatBoost, 0.0f));
         uniforms.fogColourDensity = glm::vec4(env.fogColour, env.fogDensity);
@@ -2246,7 +2251,7 @@ MeshHandle Renderer::loadMesh(const std::string& path, const glm::mat4* bake)
     options.pivot = PivotMode::Source;
     detail::ImportedModelData imported;
     ModelImportReport report;
-    if (!detail::importStaticModel(path, options, imported, report)) {
+    if (!detail::loadStaticModel(path, options, imported, report)) {
         log::error("RHI renderer: model '%s' failed: %s; using prototype mesh",
                    path.c_str(), report.error.c_str());
         return prototypeMesh(path);
@@ -2287,7 +2292,7 @@ MeshHandle Renderer::loadMesh(const std::string& path,
     const ModelImportOptions options = sanitizeModelImportOptions(rawOptions);
     detail::ImportedModelData imported;
     ModelImportReport report;
-    if (!detail::importStaticModel(path, options, imported, report)) {
+    if (!detail::loadStaticModel(path, options, imported, report)) {
         log::error("RHI renderer: model '%s' failed: %s; using prototype mesh",
                    path.c_str(), report.error.c_str());
         return prototypeMesh(path);
@@ -3368,6 +3373,8 @@ void Renderer::setGlobalMaterialParam(const std::string& parameter, float value)
         mImpl->env.precisionMultiplier = value;
     else if (parameter == "affineAmount")
         mImpl->env.affineAmount = value;
+    else if (parameter == "affineSoftness")
+        mImpl->env.affineSoftness = value;
     for (const std::string& material : mImpl->materials.names())
         mImpl->materials.set(material, parameter, value);
 }

@@ -1,4 +1,4 @@
-#include <eng/content/CookedFile.h>
+#include <eng/content/AssetFile.h>
 
 #include <cstring>
 #include <fstream>
@@ -54,7 +54,7 @@ bool takeU32(const std::vector<uint8_t>& data, size_t& at, uint32_t& out)
 
 } // namespace
 
-bool writeCookedFile(const fs::path& path, const char magic[8], uint16_t version,
+bool writeAssetFile(const fs::path& path, const char magic[8], uint16_t version,
                      const io::ByteWriter& body, std::string& error)
 {
     std::string out;
@@ -104,8 +104,8 @@ bool writeCookedFile(const fs::path& path, const char magic[8], uint16_t version
     return true;
 }
 
-bool readCookedFile(const fs::path& path, const char magic[8],
-                    CookedFileBody& out, std::string& error)
+bool readAssetFile(const fs::path& path, const char magic[8],
+                    AssetFileBody& out, std::string& error)
 {
     out = {};
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -173,7 +173,7 @@ bool readCookedFile(const fs::path& path, const char magic[8],
     return true;
 }
 
-bool cookedFileMatches(const fs::path& path, const char magic[8])
+bool assetFileMatches(const fs::path& path, const char magic[8])
 {
     std::ifstream file(path, std::ios::binary);
     if (!file)
