@@ -965,6 +965,13 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
             return false;
         out.viewmodelRig = rig;
     }
+    if (source.contains("unpacked_attachments")) {
+        if (!source["unpacked_attachments"].is_boolean()) {
+            error = location + "/unpacked_attachments must be a boolean";
+            return false;
+        }
+        out.unpackedAttachments = source["unpacked_attachments"].get<bool>();
+    }
     if (source.contains("viewmodel_preview")) {
         ViewmodelPreviewAuthor preview;
         if (!parseFields(source["viewmodel_preview"],

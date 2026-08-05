@@ -347,7 +347,10 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
         // root prefab; attachments stay local to it and therefore follow live
         // parent chains, authored scale, and animation without extra entities
         // in every source scene.
-        if (piece) {
+        // Skipped once the author has unpacked them: the document then holds
+        // the parts as real entities, and generating them here as well would
+        // draw every attachment twice.
+        if (piece && !authored.unpackedAttachments) {
             const auto emitAttachments = [&](auto&& self, entt::entity parent,
                                              const KitPiece& parentPiece,
                                              const std::string& namePrefix)

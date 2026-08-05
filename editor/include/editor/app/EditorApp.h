@@ -183,6 +183,12 @@ private:
     // practice.
     game::content::AuthorId parentForNewEntity() const;
     void frameIsolated(const glm::vec3& min, const glm::vec3& max);
+    void adoptIntoIsolation(game::content::Entity& entity) const;
+    // Writes a compound kit piece's baked attachments out as child entities, so
+    // they can be selected and edited. See the definition for why they are not
+    // there to begin with.
+    void unpackAttachments(const game::content::AuthorId& id);
+    bool canUnpackAttachments(const game::content::AuthorId& id) const;
     // Selection and manipulation, both driven from inside the viewport panel so
     // they share its rect with ImGuizmo.
     void handleViewportPicking(const eng::FrameContext& f);
@@ -609,6 +615,8 @@ private:
     // the frame it is honoured. Set when the selection came from anywhere but
     // the panel -- a viewport pick, a command, an undo.
     game::content::AuthorId mOutlinerReveal;
+    // Part of the gizmo-mark cache key alongside the document revision.
+    game::content::AuthorId mGizmoMarksIsolation;
     // Whose material the swatch is currently showing, so the preview follows a
     // change of selection without overriding a click in the material list.
     game::content::AuthorId mPreviewedEntity;

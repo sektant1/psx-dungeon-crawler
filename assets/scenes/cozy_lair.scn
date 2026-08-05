@@ -28,6 +28,30 @@
       }
     },
     {
+      "id": "corner_pillar_0001",
+      "name": "Corner Pillar",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          -11.0
+        ]
+      }
+    },
+    {
+      "id": "corner_pillar_0002",
+      "name": "Corner Pillar",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          -11.0
+        ]
+      }
+    },
+    {
       "id": "floor_0001",
       "name": "floor_0018",
       "prefab": "kit.floor",
@@ -38,10 +62,6 @@
           0.0,
           -1.0
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": 1
       }
     },
     {
@@ -55,10 +75,6 @@
           0.0,
           -1.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": 1
       }
     },
     {
@@ -72,10 +88,6 @@
           0.0,
           -1.0
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": 1
       }
     },
     {
@@ -89,10 +101,6 @@
           0.0,
           -5.0
         ]
-      },
-      "cell": {
-        "col": 1,
-        "row": 1
       }
     },
     {
@@ -106,10 +114,6 @@
           0.0,
           -5.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": 1
       }
     },
     {
@@ -123,10 +127,6 @@
           0.0,
           -5.0
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": 1
       }
     },
     {
@@ -140,10 +140,6 @@
           0.0,
           -9.0
         ]
-      },
-      "cell": {
-        "col": 2,
-        "row": 1
       }
     },
     {
@@ -157,10 +153,6 @@
           0.0,
           -9.0
         ]
-      },
-      "cell": {
-        "col": 1,
-        "row": 1
       }
     },
     {
@@ -174,10 +166,6 @@
           0.0,
           -9.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": 1
       }
     },
     {
@@ -198,7 +186,7 @@
       },
       "scripts": [
         {
-          "path": "scripts/spin.lua"
+          "path": "scripts/trigger_volume.lua"
         }
       ]
     },
@@ -220,6 +208,162 @@
       },
       "spin": {
         "degrees_per_second": 60.0
+      }
+    },
+    {
+      "id": "import_dwight_model_p0_0001",
+      "name": "tie1",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p0",
+      "transform": {
+        "position": [
+          -0.09380000084638596,
+          0.0,
+          4.482399940490723
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p10_0001",
+      "name": "glasses_frame",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p10",
+      "transform": {
+        "position": [
+          -0.05310000106692314,
+          21.9960994720459,
+          5.060800075531006
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p11_0001",
+      "name": "glasses_sideframe",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p11",
+      "transform": {
+        "position": [
+          -0.05939999967813492,
+          23.07430076599121,
+          1.05239999294281
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p1_0001",
+      "name": "shirt",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p1",
+      "transform": {
+        "position": [
+          0.0,
+          4.657800197601318,
+          0.4830000102519989
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p2_0001",
+      "name": "hair1",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p2",
+      "transform": {
+        "position": [
+          -0.066600002348423,
+          21.766000747680664,
+          -0.8406000137329102
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p3_0001",
+      "name": "head",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p3",
+      "transform": {
+        "position": [
+          -0.06960000097751617,
+          13.139900207519531,
+          -0.27869999408721924
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p4_0001",
+      "name": "brows1",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p4",
+      "transform": {
+        "position": [
+          -0.066600002348423,
+          24.14739990234375,
+          4.445700168609619
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p5_0001",
+      "name": "eyeL",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p5",
+      "transform": {
+        "position": [
+          -1.7106000185012817,
+          22.427900314331055,
+          2.8297998905181885
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p6_0001",
+      "name": "eyeR",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p6",
+      "transform": {
+        "position": [
+          1.5773999691009521,
+          22.427900314331055,
+          2.8297998905181885
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p7_0001",
+      "name": "lensL",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p7",
+      "transform": {
+        "position": [
+          -2.1830999851226807,
+          22.063600540161133,
+          5.072000026702881
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p8_0001",
+      "name": "lensR",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p8",
+      "transform": {
+        "position": [
+          2.0499000549316406,
+          22.063600540161133,
+          5.072000026702881
+        ]
+      }
+    },
+    {
+      "id": "import_dwight_model_p9_0001",
+      "name": "glasses_mainframe",
+      "parent": "imported_model_0001",
+      "prefab": "kit.import_dwight_model_p9",
+      "transform": {
+        "position": [
+          -0.05490000173449516,
+          23.38129997253418,
+          5.178299903869629
+        ]
       }
     },
     {
@@ -261,6 +405,22 @@
       }
     },
     {
+      "id": "imported_model_0001",
+      "name": "dwight_model",
+      "transform": {
+        "position": [
+          -0.0015999999595806003,
+          0.0,
+          -8.563199996948242
+        ],
+        "scale": [
+          0.30000001192092896,
+          0.30000001192092896,
+          0.30000001192092896
+        ]
+      }
+    },
+    {
       "id": "player_start",
       "name": "Player Start",
       "transform": {
@@ -271,6 +431,121 @@
         ]
       },
       "player_spawn": true
+    },
+    {
+      "id": "sphere_0001",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -3.259500026702881,
+          0.0,
+          -6.794899940490723
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 60.0
+      }
+    },
+    {
+      "id": "sphere_0002",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 60.0
+      }
+    },
+    {
+      "id": "sphere_0003",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 60.0
+      }
+    },
+    {
+      "id": "sphere_0004",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 60.0
+      }
+    },
+    {
+      "id": "sphere_0005",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 60.0
+      }
     },
     {
       "id": "stage_fill",
@@ -349,11 +624,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -3,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -372,11 +642,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -395,11 +660,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -418,11 +678,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -441,11 +696,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -464,11 +714,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -487,11 +732,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -510,11 +750,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -527,11 +762,6 @@
           0.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -5,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -550,11 +780,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": 1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -567,11 +792,6 @@
           0.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -4,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -585,11 +805,6 @@
           4.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -602,11 +817,6 @@
           0.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -3,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -620,11 +830,6 @@
           4.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -3,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -638,11 +843,6 @@
           4.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -4,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -656,11 +856,6 @@
           8.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -674,11 +869,6 @@
           8.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -697,11 +887,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -4,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -720,11 +905,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -3,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -743,11 +923,6 @@
           90.0,
           0.0
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -761,11 +936,6 @@
           8.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -3,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -779,11 +949,6 @@
           12.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -797,11 +962,6 @@
           12.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -815,11 +975,6 @@
           12.0,
           -11.5
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -838,11 +993,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -861,11 +1011,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -884,11 +1029,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -907,11 +1047,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -930,11 +1065,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -953,11 +1083,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": 1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -976,11 +1101,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": 0,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -999,11 +1119,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": 1,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -1022,11 +1137,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": 2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -1045,11 +1155,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": -3,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -1068,11 +1173,6 @@
           -89.97200012207031,
           0.0
         ]
-      },
-      "cell": {
-        "col": -2,
-        "row": -2,
-        "edge": "north"
       }
     },
     {
@@ -1091,11 +1191,20 @@
           -89.97200012207031,
           0.0
         ]
+      }
+    },
+    {
+      "id": "lair_exit",
+      "name": "Lair Exit",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -9.0
+        ]
       },
-      "cell": {
-        "col": -1,
-        "row": -2,
-        "edge": "north"
+      "exit": {
+        "yaw_degrees": 0
       }
     }
   ]

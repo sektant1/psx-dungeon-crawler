@@ -6,6 +6,7 @@
 
 #include <editor/content/SceneCook.h>
 #include <editor/content/SceneSource.h>
+#include <editor/content/SceneRepair.h>
 #include <editor/content/SceneTemplates.h>
 #include <editor/content/SceneValidate.h>
 #include <editor/content/SceneWriter.h>
@@ -25,6 +26,10 @@ int usage()
                  "usage: scene_cook <source.scn> --kit <kit.toml>\n"
                  "         [--out <output.map>]     cook to a runtime map\n"
                  "         [--validate-only]        parse and resolve, write nothing\n"
+                 "         [--repair]               --repair-cells, plus "
+                 "every quick fix that is safe unattended\n"
+                 "         [--repair-cells]         rebase drifted `cell` "
+                 "records onto where pieces actually are (never moves one)\n"
                  "         [--rewrite <out.scn>]    re-emit canonical .scn "
                  "(formatting, v1 -> v2)\n"
                  "         [--kit/--assets]         both default to the game "
@@ -50,6 +55,8 @@ int main(int argc, char** argv)
 
     std::string source, kit, out, rewrite, assets, templateName, sceneId;
     bool validateOnly = false;
+    bool repairCells = false;
+    bool repairIssues = false;
     for (int i = 1; i < argc; ++i) {
         const char* arg = argv[i];
         const auto value = [&](std::string& target) {
@@ -69,6 +76,11 @@ int main(int argc, char** argv)
             if (!value(assets)) return usage();
         } else if (std::strcmp(arg, "--rewrite") == 0) {
             if (!value(rewrite)) return usage();
+        } else if (std::strcmp(arg, "--repair-cells") == 0) {
+            repairCells = true;
+        } else if (std::strcmp(arg, "--repair") == 0) {
+            repairCells = true;
+            repairIssues = true;
         } else if (std::strcmp(arg, "--validate-only") == 0) {
             validateOnly = true;
         } else if (arg[0] == '-') {
@@ -123,6 +135,25 @@ int main(int argc, char** argv)
     } else if (!game::content::loadSceneSource(source, document, error)) {
         std::fprintf(stderr, "scene_cook: %s\n", error.c_str());
         return 1;
+    }
+
+    // Before the rewrite and before validation, so one invocation can repair a
+    // scene, write it back and report what is left.
+    if (repairCells) {
+        const game::content::CellRepairReport repaired =
+            game::content::repairCellRecords(
+                document, catalog,
+                game::content::GridConfig::fromCatalog(catalog));
+        std::printf("scene_cook: cells -- %zu rebased, %zu detached, "
+                    "%zu already correct\n",
+                    repaired.rebased, repaired.detached, repaired.untouched);
+    }
+
+    if (repairIssues) {
+        const game::content::SafeFixReport fixed =
+            game::content::applySafeQuickFixes(document, catalog, assets);
+        std::printf("scene_cook: issues -- %zu fixed, %zu left for a human\n",
+                    fixed.applied, fixed.remaining + fixed.skipped);
     }
 
     if (!rewrite.empty()) {

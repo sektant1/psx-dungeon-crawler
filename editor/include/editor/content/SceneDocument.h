@@ -312,6 +312,16 @@ struct Entity {
     std::string material;
     XformAuthor transform;
     bool castShadows = true;
+    // A compound kit piece (kit.prop_boss_placeholder and its sword) normally
+    // emits its attached parts at cook time: they render, but they are not in
+    // the document, so the editor cannot select, move or re-material one. That
+    // is the right default -- a scene should not carry four entities for every
+    // torch bracket -- but it makes the parts unreachable.
+    //
+    // Set by "Unpack attachments", which writes the parts out as real child
+    // entities. The cook then skips its own expansion for this entity, because
+    // the document now holds what it would have generated.
+    bool unpackedAttachments = false;
 
     std::optional<CellPlacement> cell;
     std::optional<ColliderAuthor> collider;

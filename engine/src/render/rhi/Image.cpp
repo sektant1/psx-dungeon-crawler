@@ -2,7 +2,9 @@
 
 #include <eng/Log.h>
 
-#define STBI_ONLY_PNG
+// Which decoders exist is decided in engine/src/platform/ImageDecode.cpp, the
+// translation unit that compiles stb_image. A STBI_ONLY_* here would select
+// nothing and only read as though it did.
 #include <stb_image.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
@@ -18,7 +20,10 @@ bool loadImage(const std::filesystem::path& path, Image& out)
     stbi_uc* pixels = stbi_load(path.string().c_str(), &out.width, &out.height,
                                 &channels, STBI_rgb_alpha);
     if (!pixels) {
-        log::error("RHI renderer: cannot decode PNG '%s': %s",
+        // Not "cannot decode PNG": the path is whatever it is, and naming the
+        // wrong format sent the last reader looking for a corrupt PNG when the
+        // file was a perfectly good JPEG.
+        log::error("RHI renderer: cannot decode image '%s': %s",
                    path.string().c_str(), stbi_failure_reason());
         return false;
     }

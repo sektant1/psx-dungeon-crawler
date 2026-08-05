@@ -3308,6 +3308,19 @@
       }
     },
     {
+      "id": "group_0001",
+      "transform": {
+        "position": [
+          5.9670000076293945,
+          2.279599905014038,
+          8.544400215148926
+        ]
+      },
+      "camera": {
+        "fov_degrees": 60.0
+      }
+    },
+    {
       "id": "hay_0001",
       "prefab": "kit.prop_haybale",
       "transform": {
@@ -3978,18 +3991,6 @@
           0.0
         ]
       }
-    },
-    {
-      "id": "player_spawn_0001",
-      "name": "Arrival",
-      "transform": {
-        "position": [
-          6.0,
-          0.0,
-          13.399999618530273
-        ]
-      },
-      "player_spawn": true
     },
     {
       "id": "pumpkin_0001",

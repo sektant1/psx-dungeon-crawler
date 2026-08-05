@@ -362,6 +362,12 @@ bool EditorApp::onStart(eng::Engine& engine)
     // capture it without driving the UI.
     if (std::getenv("RAVEN_EDITOR_MATERIAL"))
         setMode(ViewportMode::Material);
+    // The same hook for isolation: a screenshot run can enter the mode on a
+    // named entity without anybody driving the outliner.
+    if (const char* unpack = std::getenv("RAVEN_EDITOR_UNPACK"))
+        unpackAttachments(unpack);
+    if (const char* isolate = std::getenv("RAVEN_EDITOR_ISOLATE"))
+        enterIsolation(isolate);
     // Verification hook: stage one material by name. Without it a screenshot
     // run can only cycle the whole list and hope, which cannot show a specific
     // rig (the quad is only reachable through a handful of names).
@@ -796,6 +802,117 @@ void EditorApp::refreshIsolation()
 AuthorId EditorApp::parentForNewEntity() const
 {
     return mState.isolating() ? mState.isolation.root : AuthorId{};
+}
+
+// Turns a compound kit piece's baked attachments into real child entities.
+//
+// kit.prop_boss_placeholder ships with its sword declared in kit.toml, and the
+// cook emits it as an ECS child at build time. That renders correctly and is
+// the right default -- a scene should not carry an entity per torch bracket --
+// but it means the sword is not in the document: it cannot be selected, moved,
+// re-materialled or given a component, and isolating the boss reports "0 parts"
+// while a sword is plainly visible in its hand.
+//
+// Unpacking writes those parts out where the author can reach them, and marks
+// the root so the cook stops generating its own copies. Recursive, because an
+// attachment may declare attachments of its own.
+//
+// One command, so a single undo puts it back.
+void EditorApp::unpackAttachments(const AuthorId& id)
+{
+    const Entity* root = mState.document.find(id);
+    if (!root || root->unpackedAttachments)
+        return;
+    const KitPiece* piece = mState.catalog.find(root->prefab);
+    if (!piece || piece->attachments.empty())
+        return;
+
+    // Ids are allocated against a copy that already holds the ones this loop
+    // has handed out, so two attachments of the same prefab cannot collide.
+    Doc scratch = mState.document;
+    std::vector<Command> parts;
+    std::vector<AuthorId> created;
+
+    const auto emit = [&](auto&& self, const AuthorId& parentId,
+                          const KitPiece& parentPiece) -> void {
+        for (const KitAttachment& attachment : parentPiece.attachments) {
+            const KitPiece* attached = mState.catalog.find(attachment.prefab);
+            if (!attached)
+                continue;
+            Entity child;
+            child.id = scratch.allocateId(attachment.prefab);
+            child.name = attached->id;
+            child.prefab = attachment.prefab;
+            child.parent = parentId;
+            // The attachment's offset is already expressed in the parent's
+            // frame, which is exactly what an authored child transform is --
+            // so this is a copy, not a conversion.
+            child.transform.position = attachment.position;
+            child.castShadows = root->castShadows;
+            // A part may be a compound piece itself. Its own attachments are
+            // authored by the recursion below, so it has to carry the flag too
+            // -- guarding only the root left every nested level expanded twice,
+            // once from the document and once by the cooker.
+            child.unpackedAttachments = !attached->attachments.empty();
+            created.push_back(child.id);
+            scratch.entities.push_back(child);
+            parts.push_back(makeCreateEntity(child));
+            self(self, child.id, *attached);
+        }
+    };
+    emit(emit, id, *piece);
+    if (parts.empty())
+        return;
+
+    Entity after = *root;
+    after.unpackedAttachments = true;
+    parts.push_back(makeEditEntity("unpack attachments", id, *root, after));
+    runCommand(makeComposite("unpack attachments", std::move(parts)));
+
+    mPreview->invalidate();
+    mStatus = "unpacked " + std::to_string(created.size()) +
+              (created.size() == 1 ? " part" : " parts") + " of " +
+              (root->name.empty() ? id : root->name);
+    if (!created.empty())
+        selectAndReveal(created.front(), false);
+}
+
+// True when there is anything to unpack: the entity is a compound kit piece
+// and has not been unpacked already.
+bool EditorApp::canUnpackAttachments(const AuthorId& id) const
+{
+    const Entity* entity = mState.document.find(id);
+    if (!entity || entity->unpackedAttachments)
+        return false;
+    const KitPiece* piece = mState.catalog.find(entity->prefab);
+    return piece && !piece->attachments.empty();
+}
+
+// Puts a freshly placed entity inside the object being edited.
+//
+// Without this the mode is read-only in practice: you isolate an object to add
+// a part to it, and the part appears as a sibling out in the level -- invisible,
+// because isolation is hiding everything that is not in the subtree.
+//
+// The transform has to be converted, not just reparented. Placement computes a
+// world position (that is where the cursor is); once the entity hangs under a
+// parent the file stores a local one, and localFromWorld is what keeps it where
+// it was dropped.
+void EditorApp::adoptIntoIsolation(Entity& entity) const
+{
+    const AuthorId parent = parentForNewEntity();
+    // An entity that already named a parent brought its own frame with it --
+    // a duplicate, a paste, a room piece -- and must not be re-based.
+    if (parent.empty() || !entity.parent.empty() || entity.id == parent)
+        return;
+    game::content::WorldTransform world;
+    world.position = entity.transform.position;
+    world.orientation =
+        game::content::authorOrientation(entity.transform.rotationDegrees);
+    world.scale = entity.transform.scale;
+    entity.parent = parent;
+    entity.transform = game::content::localFromWorld(
+        mState.document.worldTransform(parent), world);
 }
 
 // A gentler pitch than frameSelectionOrAll's. That one looks steeply down
@@ -2215,6 +2332,12 @@ std::vector<PaletteAction> EditorApp::paletteActions()
             setMode(materialMode() ? ViewportMode::Level
                                    : ViewportMode::Material);
         });
+    add("Unpack attachments", "edit", "",
+        mState.primary() && canUnpackAttachments(*mState.primary()), [this] {
+            if (const AuthorId* id = mState.primary())
+                unpackAttachments(*id);
+        },
+        "make a compound kit piece's parts editable");
     add(mState.isolating() ? "Leave isolation" : "Isolate selection", "view",
         "Esc", mState.isolating() || mState.primary() != nullptr, [this] {
             if (mState.isolating())
@@ -2861,6 +2984,23 @@ void EditorApp::drawViewportStats(const eng::FrameContext& f)
     drawFrameStats(ImGui::GetWindowDrawList(), mFrameStats.smoothed(),
                    mFrameBudget, mViewportX, mViewportY, mViewportW,
                    mViewportH);
+
+    if (mState.isolating()) {
+        const Entity* root = mState.document.find(mState.isolation.root);
+        const std::string label =
+            root ? (root->name.empty() ? root->id : root->name)
+                 : mState.isolation.root;
+        // Members minus the root itself: an author counts what is *in* the
+        // object, and "1 part" for an object with nothing in it reads as a
+        // miscount rather than as an empty one.
+        const std::size_t parts = mState.isolation.members.empty()
+                                      ? 0
+                                      : mState.isolation.members.size() - 1;
+        if (drawIsolationBanner(ImGui::GetWindowDrawList(), label, parts,
+                                mViewportX, mViewportY, mViewportW,
+                                mViewportHovered))
+            leaveIsolation();
+    }
 }
 
 void EditorApp::drawViewport(const eng::FrameContext& f)
@@ -3087,9 +3227,26 @@ const std::vector<GizmoMark>& EditorApp::entityGizmoMarks()
 {
     // Walks every entity, and the viewport is drawn while the gizmo is being
     // dragged -- so it follows the document's revision, like the outliner.
-    if (mGizmoMarksRevision != mState.document.revision) {
+    // The isolated root is part of the key: entering or leaving the mode
+    // changes which marks exist without touching the document.
+    if (mGizmoMarksRevision != mState.document.revision ||
+        mGizmoMarksIsolation != mState.isolation.root) {
         mGizmoMarksRevision = mState.document.revision;
+        mGizmoMarksIsolation = mState.isolation.root;
         mGizmoMarks = collectGizmoMarks(mState.document);
+        // A camera frustum or a light's radius belonging to an entity the mode
+        // is hiding must go with it. These are ImGui overlay strokes, not
+        // renderer geometry, so PreviewBridge's visibility filter never saw
+        // them -- and a frustum drawn around an object being edited alone is
+        // the level leaking back into the mode that exists to exclude it.
+        if (mState.isolating()) {
+            mGizmoMarks.erase(
+                std::remove_if(mGizmoMarks.begin(), mGizmoMarks.end(),
+                               [this](const GizmoMark& mark) {
+                                   return !mState.isolation.contains(mark.id);
+                               }),
+                mGizmoMarks.end());
+        }
     }
     return mGizmoMarks;
 }
@@ -3128,6 +3285,14 @@ void EditorApp::drawEntityGizmos()
             hovered = mark->id;
             overlay.hovered = &hovered;
         }
+    }
+    // Under the marks, so the object and its handles read on top of it.
+    if (mState.isolating() && mShowGrid) {
+        const glm::vec3 eye = mState.camera.activeEye();
+        drawSandboxGrid(ImGui::GetWindowDrawList(), viewProjection,
+                        glm::vec2(mViewportX, mViewportY),
+                        glm::vec2(mViewportW, mViewportH), eye,
+                        mState.gridState.level, mState.grid.cell, 16);
     }
     drawGizmoMarks(ImGui::GetWindowDrawList(), entityGizmoMarks(), overlay);
 }
@@ -3586,6 +3751,7 @@ void EditorApp::placeAt(const Placement& placement)
     // and pushed as one composite when the drag ends.
     mState.document.add(entity);
     mStrokeIds.push_back(entity.id);
+    adoptIntoIsolation(entity);
     mStrokeParts.push_back(makeCreateEntity(entity));
 }
 
@@ -4718,8 +4884,22 @@ void EditorApp::drawSelectionContextMenu()
 {
     if (ImGui::MenuItem("Focus", "F"))
         frameSelectionOrAll();
+    if (ImGui::MenuItem("Isolate", "double-click", false,
+                        mState.primary() != nullptr))
+        enterIsolation(*mState.primary());
     if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
         duplicateSelection();
+
+    // Only offered on a compound piece that still has its parts baked: on
+    // anything else the row would be a dead item explaining nothing.
+    if (const AuthorId* primary = mState.primary();
+        primary && canUnpackAttachments(*primary)) {
+        if (ImGui::MenuItem("Unpack attachments"))
+            unpackAttachments(*primary);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("write this piece's attached parts out as child "
+                              "entities, so they can be selected and moved");
+    }
 
     // Parenting from the menu as well as by dragging: a drag is the fast path
     // once you know it exists, and it is not a gesture anyone discovers.
@@ -4956,7 +5136,8 @@ void EditorApp::addGameplayEntity(Gameplay kind)
         transform.position.z = std::round(transform.position.z / step) * step;
     }
 
-    const Entity entity = makeGameplayEntity(kind, transform);
+    Entity entity = makeGameplayEntity(kind, transform);
+    adoptIntoIsolation(entity);
     runCommand(makeCreateEntity(entity));
     selectAndReveal(entity.id, false);
     mPreview->invalidate();

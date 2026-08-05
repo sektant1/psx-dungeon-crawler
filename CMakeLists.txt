@@ -505,6 +505,7 @@ add_library(
   editor/src/content/SceneCook.cpp
   editor/src/content/GridMath.cpp
   editor/src/content/SceneValidate.cpp
+  editor/src/content/SceneRepair.cpp
   editor/src/content/RoomBuilder.cpp
   editor/src/content/SceneTemplates.cpp)
 target_include_directories(game_content PUBLIC game/src game/src/scene
@@ -1675,6 +1676,16 @@ if(BUILD_TESTING)
   target_link_libraries(scene_hierarchy_tests PRIVATE game_content
                                                       eng_ecs_headless)
   add_test(NAME scene_hierarchy COMMAND scene_hierarchy_tests)
+
+  # Unpacking a compound kit piece must change what is editable and nothing
+  # about what is drawn. Reads the shipped kit, so a piece losing its
+  # attachments fails the build rather than making the test pass vacuously.
+  add_executable(scene_unpack_tests editor/tests/SceneUnpackTests.cpp)
+  target_include_directories(scene_unpack_tests PRIVATE game/tests
+                                                        editor/include)
+  target_link_libraries(scene_unpack_tests PRIVATE game_content
+                                                   eng_ecs_headless)
+  add_test(NAME scene_unpack COMMAND scene_unpack_tests)
 
   add_executable(scene_roundtrip_tests editor/tests/SceneRoundTripTests.cpp)
   target_link_libraries(scene_roundtrip_tests PRIVATE game_content

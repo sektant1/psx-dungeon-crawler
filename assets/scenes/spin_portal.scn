@@ -6,54 +6,6 @@
   "palette": "showroom",
   "entities": [
     {
-      "id": "camera_close",
-      "name": "Close Framing",
-      "transform": {
-        "position": [
-          2.5999999046325684,
-          1.5,
-          2.5999999046325684
-        ],
-        "rotation_degrees": [
-          -8.0,
-          42.0,
-          0.0
-        ]
-      },
-      "camera": {
-        "fov_degrees": 68.0,
-        "active": false
-      }
-    },
-    {
-      "id": "camera_main",
-      "name": "Main Camera",
-      "transform": {
-        "position": [
-          0.0,
-          3.0999999046325684,
-          5.400000095367432
-        ]
-      },
-      "camera": {
-        "fov_degrees": 55.0,
-        "far_clip": 60.0,
-        "priority": 10
-      },
-      "orbit": {
-        "centre": [
-          0.0,
-          1.899999976158142,
-          0.0
-        ],
-        "radius": 5.400000095367432,
-        "degrees_per_second": 7.0,
-        "phase_degrees": 34.0,
-        "height": 1.2000000476837158,
-        "facing": "centre"
-      }
-    },
-    {
       "id": "floor_0001",
       "prefab": "kit.floor",
       "transform": {
@@ -144,6 +96,25 @@
           4.0
         ]
       }
+    },
+    {
+      "id": "group_0001",
+      "transform": {
+        "position": [
+          0.0,
+          6.0,
+          5.0
+        ],
+        "rotation_degrees": [
+          -48.0,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 49.29999923706055
+      },
+      "player_spawn": true
     },
     {
       "id": "light_fill",
@@ -298,77 +269,1224 @@
       }
     },
     {
-      "id": "player_start",
-      "name": "Player Start",
-      "transform": {
-        "position": [
-          0.0,
-          0.0,
-          4.0
-        ]
-      },
-      "player_spawn": true
-    },
-    {
-      "id": "portal_exit",
-      "name": "Portal",
-      "transform": {
-        "position": [
-          0.0,
-          0.0,
-          -5.400000095367432
-        ]
-      },
-      "exit": {
-        "yaw_degrees": 0.0
-      }
-    },
-    {
       "id": "portal_membrane_0001",
-      "name": "Portal Membrane",
       "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
       "transform": {
         "position": [
+          -5.483500003814697,
           0.0,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
           0.0,
-          -5.400000095367432
-        ]
-      },
-      "portal": {
-        "portalArms": 6.0,
-        "portalFlowSpeed": -0.9,
-        "portalTwist": 0.55,
-        "surfaceDark": [
-          0.22,
-          0.03,
-          0.3
-        ],
-        "surfaceMid": [
-          0.75,
-          0.1,
-          1.0
-        ],
-        "surfaceBright": [
-          1.4,
-          0.45,
-          1.9
-        ],
-        "surfaceCore": [
-          2.0,
-          1.3,
-          2.4
-        ],
-        "surfaceGlowColour": [
-          1.3,
-          0.2,
-          2.1
+          270.0,
+          0.0
         ]
       }
     },
     {
-      "id": "prop_base",
-      "name": "Crystal Base",
-      "prefab": "kit.crystal_ground"
+      "id": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.454699993133545,
+          0.0,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.4475998878479,
+          0.0,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.445099830627441,
+          0.0,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0005",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.493500232696533,
+          0.0,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0006",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.52239990234375,
+          0.0,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0007",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.5295000076293945,
+          0.0,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0008",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.531899929046631,
+          0.0,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0009",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          4.231299877166748,
+          0.0,
+          5.07480001449585
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0010",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          1.409999966621399,
+          0.0,
+          5.103600025177002
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0011",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.3840999603271484,
+          0.0,
+          5.1107001304626465
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0012",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.2058000564575195,
+          0.0,
+          5.1132001876831055
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0013",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          3.731300115585327,
+          0.0,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0014",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          0.9100000262260437,
+          0.0,
+          -5.396399974822998
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0015",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.8840999603271484,
+          0.0,
+          -5.3892998695373535
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0016",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.7058000564575195,
+          0.0,
+          -5.3867998123168945
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0017",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          6.231299877166748,
+          0.0,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0018",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.483500003814697,
+          2.5,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0019",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.454699993133545,
+          2.5,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0020",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.4475998878479,
+          2.5,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0021",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.445099830627441,
+          2.5,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0022",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.493500232696533,
+          2.5,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0023",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.52239990234375,
+          2.5,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0024",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.5295000076293945,
+          2.5,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0025",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.531899929046631,
+          2.5,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0026",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          4.231299877166748,
+          2.5,
+          5.07480001449585
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0027",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          1.409999966621399,
+          2.5,
+          5.103600025177002
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0028",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.3840999603271484,
+          2.5,
+          5.1107001304626465
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0029",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.2058000564575195,
+          2.5,
+          5.1132001876831055
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0030",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          3.731300115585327,
+          2.5,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0031",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          0.9100000262260437,
+          2.5,
+          -5.396399974822998
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0032",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.8840999603271484,
+          2.5,
+          -5.3892998695373535
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0033",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.7058000564575195,
+          2.5,
+          -5.3867998123168945
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0034",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          6.231299877166748,
+          2.5,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0035",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.483500003814697,
+          5.0,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0036",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.454699993133545,
+          5.0,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0037",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.4475998878479,
+          5.0,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0038",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.445099830627441,
+          5.0,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0039",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.493500232696533,
+          5.0,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0040",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.52239990234375,
+          5.0,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0041",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.5295000076293945,
+          5.0,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0042",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.531899929046631,
+          5.0,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0043",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          4.231299877166748,
+          5.0,
+          5.07480001449585
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0044",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          1.409999966621399,
+          5.0,
+          5.103600025177002
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0045",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.3840999603271484,
+          5.0,
+          5.1107001304626465
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0046",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.2058000564575195,
+          5.0,
+          5.1132001876831055
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0047",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          3.731300115585327,
+          5.0,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0048",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          0.9100000262260437,
+          5.0,
+          -5.396399974822998
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0049",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.8840999603271484,
+          5.0,
+          -5.3892998695373535
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0050",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.7058000564575195,
+          5.0,
+          -5.3867998123168945
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0051",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          6.231299877166748,
+          5.0,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0052",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.483500003814697,
+          7.5,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0053",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.454699993133545,
+          7.5,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0054",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.4475998878479,
+          7.5,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0055",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -5.445099830627441,
+          7.5,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0056",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.493500232696533,
+          7.5,
+          -4.124599933624268
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0057",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.52239990234375,
+          7.5,
+          -1.3033000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0058",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.5295000076293945,
+          7.5,
+          1.4908000230789185
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0059",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          5.531899929046631,
+          7.5,
+          4.3125
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0060",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          4.231299877166748,
+          7.5,
+          5.07480001449585
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0061",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          1.409999966621399,
+          7.5,
+          5.103600025177002
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0062",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.3840999603271484,
+          7.5,
+          5.1107001304626465
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0063",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.2058000564575195,
+          7.5,
+          5.1132001876831055
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0064",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          3.731300115585327,
+          7.5,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0065",
+      "name": "portal_membrane_0002",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          0.9100000262260437,
+          7.5,
+          -5.396399974822998
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0066",
+      "name": "portal_membrane_0003",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -1.8840999603271484,
+          7.5,
+          -5.3892998695373535
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0067",
+      "name": "portal_membrane_0004",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -4.7058000564575195,
+          7.5,
+          -5.3867998123168945
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0068",
+      "name": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          6.231299877166748,
+          7.5,
+          -5.42519998550415
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
     },
     {
       "id": "prop_raccoon",
@@ -378,11 +1496,11 @@
         "position": [
           0.0,
           2.8499999046325684,
-          0.0
+          1.5
         ],
         "rotation_degrees": [
           0.0,
-          180.0,
+          -180.0,
           0.0
         ]
       },
@@ -391,23 +1509,359 @@
       },
       "shader": {
         "rim_colour": [
-          0.3499999940395355,
           1.0,
-          0.8500000238418579
+          0.04470000043511391,
+          0.04470000043511391
         ],
         "rim_strength": 2.200000047683716,
         "rim_power": 2.5
       }
     },
     {
-      "id": "prop_shaft",
-      "name": "God Ray",
-      "prefab": "kit.light_shaft",
+      "id": "wall_0001",
+      "name": "wall_east_0001",
+      "prefab": "kit.wall",
       "transform": {
-        "scale": [
-          0.75,
-          1.100000023841858,
-          0.75
+        "position": [
+          6.0,
+          4.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0002",
+      "name": "wall_east_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0003",
+      "name": "wall_east_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0004",
+      "name": "wall_north_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          4.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0005",
+      "name": "wall_north_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          4.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0006",
+      "name": "wall_north_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          4.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0007",
+      "name": "wall_south_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          4.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0008",
+      "name": "wall_south_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          4.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0009",
+      "name": "wall_south_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          4.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0010",
+      "name": "wall_west_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          4.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0011",
+      "name": "wall_west_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          4.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0012",
+      "name": "wall_west_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          4.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0013",
+      "name": "wall_east_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          8.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0014",
+      "name": "wall_east_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          8.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0015",
+      "name": "wall_east_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          8.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0016",
+      "name": "wall_north_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          8.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0017",
+      "name": "wall_north_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          8.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0018",
+      "name": "wall_north_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          8.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0019",
+      "name": "wall_south_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          8.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0020",
+      "name": "wall_south_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          8.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0021",
+      "name": "wall_south_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          8.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0022",
+      "name": "wall_west_0001",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          8.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0023",
+      "name": "wall_west_0002",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          8.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0024",
+      "name": "wall_west_0003",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          8.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
         ]
       }
     },

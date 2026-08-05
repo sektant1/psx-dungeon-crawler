@@ -1,8 +1,11 @@
 #include <editor/viewport/ViewportOverlay.h>
 
+#include <editor/scene/Picker.h>
+
 #include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 
@@ -111,6 +114,92 @@ void drawFrameStats(ImDrawList* list, const FrameStats& stats,
                       line.text.c_str());
         y += lineHeight;
     }
+}
+
+void drawSandboxGrid(ImDrawList* list, const glm::mat4& viewProjection,
+                     glm::vec2 viewportOrigin, glm::vec2 viewportSize,
+                     glm::vec3 centre, float level, float cell, int radius)
+{
+    if (!list || cell <= 0.0f || radius <= 0)
+        return;
+
+    // Snapped to the cell, so the lines stay put as the camera moves instead
+    // of sliding under the object being edited.
+    const float originX = std::floor(centre.x / cell) * cell;
+    const float originZ = std::floor(centre.z / cell) * cell;
+    const float far = float(radius) * cell;
+
+    const auto segment = [&](glm::vec3 a, glm::vec3 b, ImU32 colour,
+                             float thickness) {
+        glm::vec2 pa, pb;
+        if (!projectToViewport(a, viewProjection, viewportOrigin, viewportSize,
+                               pa) ||
+            !projectToViewport(b, viewProjection, viewportOrigin, viewportSize,
+                               pb))
+            return;
+        list->AddLine(ImVec2(pa.x, pa.y), ImVec2(pb.x, pb.y), colour,
+                      thickness);
+    };
+
+    for (int i = -radius; i <= radius; ++i) {
+        const float x = originX + float(i) * cell;
+        const float z = originZ + float(i) * cell;
+        // Every fourth line brighter and the axes coloured, matching the
+        // level grid's own scheme so the two read as the same surface.
+        const bool axisX = std::fabs(x) < cell * 0.5f;
+        const bool axisZ = std::fabs(z) < cell * 0.5f;
+        const bool majorX = i % 4 == 0;
+        const ImU32 colourX = axisX   ? IM_COL32(96, 130, 190, 200)
+                              : majorX ? IM_COL32(104, 112, 134, 150)
+                                       : IM_COL32(70, 76, 92, 110);
+        const ImU32 colourZ = axisZ   ? IM_COL32(180, 92, 96, 200)
+                              : majorX ? IM_COL32(104, 112, 134, 150)
+                                       : IM_COL32(70, 76, 92, 110);
+        segment({x, level, originZ - far}, {x, level, originZ + far}, colourX,
+                axisX ? 1.6f : 1.0f);
+        segment({originX - far, level, z}, {originX + far, level, z}, colourZ,
+                axisZ ? 1.6f : 1.0f);
+    }
+}
+
+bool drawIsolationBanner(ImDrawList* list, const std::string& objectLabel,
+                         std::size_t partCount, float originX, float originY,
+                         float sizeX, bool hovered)
+{
+    if (!list)
+        return false;
+
+    const std::string parts =
+        partCount == 1 ? std::string("1 part")
+                       : std::to_string(partCount) + " parts";
+    const std::string left = "EDITING   " + objectLabel;
+    const std::string right = parts + "      back to level  (Esc)";
+
+    const float padding = 8.0f;
+    const float height = ImGui::GetTextLineHeight() + padding * 2.0f;
+    // Full width, at the top edge: this is the frame around the mode, not
+    // another readout competing with the stats in the opposite corner.
+    const ImVec2 min(originX, originY);
+    const ImVec2 max(originX + sizeX, originY + height);
+
+    // Warmer than the stats panel and brighter when the pointer is on it, so
+    // "this strip is clickable" is legible without a button drawn inside it.
+    const ImU32 fill = hovered ? IM_COL32(58, 46, 26, 230)
+                               : IM_COL32(38, 31, 20, 205);
+    list->AddRectFilled(min, max, fill);
+    list->AddLine(ImVec2(min.x, max.y - 1.0f), ImVec2(max.x, max.y - 1.0f),
+                  IM_COL32(214, 168, 74, 220), 1.0f);
+
+    list->AddText(ImVec2(min.x + padding, min.y + padding),
+                  IM_COL32(246, 214, 140, 255), left.c_str());
+    const float rightWidth = ImGui::CalcTextSize(right.c_str()).x;
+    list->AddText(ImVec2(max.x - padding - rightWidth, min.y + padding),
+                  IM_COL32(190, 168, 130, 235), right.c_str());
+
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    const bool inside = mouse.x >= min.x && mouse.x <= max.x &&
+                        mouse.y >= min.y && mouse.y <= max.y;
+    return hovered && inside && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 }
 
 } // namespace ed

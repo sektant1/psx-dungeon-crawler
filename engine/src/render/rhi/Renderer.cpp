@@ -2310,7 +2310,14 @@ SkinInstanceHandle Renderer::attachSkinnedMesh(
     }
     const rhi_renderer::Material& material = mImpl->materials.resolve(
         materialName, mImpl->prototypes.materialFor(materialName));
-    if (material.name != materialName &&
+    // A blank name is not a missing material: on these string overloads it is
+    // the caller saying it has no preference, which the scene format documents
+    // as legal ("an empty one leaves the entity wearing the renderer's
+    // default"). Reporting the documented default as an error is how a console
+    // becomes something people scroll past. The submesh overload below still
+    // warns on a blank, because there it means an imported mesh named no
+    // material, which is worth knowing.
+    if (!materialName.empty() && material.name != materialName &&
         mImpl->missingMaterialWarnings.shouldLog(materialName, true))
         log::error("RHI renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), material.name.c_str());
@@ -2456,7 +2463,7 @@ void Renderer::setNodeMaterial(NodeHandle handle,
                                      : mImpl->materials.find(fallback)
                                            ? fallback
                                            : prototype::kSurfaceMaterial;
-    if (resolved != materialName &&
+    if (!materialName.empty() && resolved != materialName &&
         mImpl->missingMaterialWarnings.shouldLog(materialName, true))
         log::error("RHI renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), resolved.c_str());
@@ -2672,7 +2679,14 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     }
     const rhi_renderer::Material& material =
         mImpl->materials.resolve(materialName, fallbackMaterial);
-    if (material.name != materialName &&
+    // A blank name is not a missing material: on these string overloads it is
+    // the caller saying it has no preference, which the scene format documents
+    // as legal ("an empty one leaves the entity wearing the renderer's
+    // default"). Reporting the documented default as an error is how a console
+    // becomes something people scroll past. The submesh overload below still
+    // warns on a blank, because there it means an imported mesh named no
+    // material, which is worth knowing.
+    if (!materialName.empty() && material.name != materialName &&
         mImpl->missingMaterialWarnings.shouldLog(materialName, true))
         log::error("RHI renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), material.name.c_str());

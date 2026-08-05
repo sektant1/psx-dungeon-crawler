@@ -409,6 +409,8 @@ Json writeEntity(const Entity& entity)
         out["first_person"] = reflectedNode(*entity.firstPerson);
     if (entity.viewmodelRig)
         out["viewmodel_rig"] = reflectedNode(*entity.viewmodelRig);
+    if (entity.unpackedAttachments)
+        out["unpacked_attachments"] = true;
     if (entity.viewmodelPreview)
         out["viewmodel_preview"] = reflectedNode(*entity.viewmodelPreview);
     if (entity.shader) {

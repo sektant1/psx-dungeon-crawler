@@ -597,6 +597,10 @@
         "viewmodel_preview": {
           "$ref": "#/$defs/viewmodel_preview"
         },
+        "unpacked_attachments": {
+          "description": "This entity's compound kit piece has had its attached parts written out as real child entities, so the cook must not generate them again. Set by the editor's Unpack attachments action.",
+          "type": "boolean"
+        },
         "audio": {
           "$ref": "#/$defs/audio"
         },
