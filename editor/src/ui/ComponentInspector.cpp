@@ -234,11 +234,11 @@ void drawMeshAsset(Entity& entity, InspectorContext& context)
     grid.row("path");
     // Read-only, and deliberately: a mesh path is chosen from a list of what
     // exists, and a text field here is how a level acquires a reference to a
-    // file nobody ever had. The Meshes tab is the picker.
+    // file nobody ever had. The Placeables list is the picker.
     ImGui::TextUnformatted(entity.mesh->path.c_str());
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s\n\nPick a different one in the Asset Browser's "
-                          "Meshes tab, then press Apply to Selection.",
+                          "Placeables tab, then press Apply to Selection.",
                           entity.mesh->path.c_str());
 
     grid.row("import scale", nullptr, "editor.inspector.import_scale",
@@ -1431,6 +1431,171 @@ void drawFirstPerson(Entity& entity, InspectorContext& context)
     }
 }
 
+// The other two camera shapes. Same rule as the first-person drawer above:
+// they edit the runtime component directly, so what the inspector shows, what
+// the .scn stores and what the game reads are one set of numbers.
+void drawThirdPerson(Entity& entity, InspectorContext& context)
+{
+    game::content::ThirdPersonAuthor& camera = *entity.thirdPerson;
+    {
+        ui::PropertyGrid grid("##tp_active");
+        grid.row("active", nullptr, "editor.inspector.tp_active",
+                 "Off keeps the framing in the scene without applying it.");
+        ImGui::Checkbox("##active", &camera.active);
+        track(context);
+    }
+
+    ImGui::SeparatorText("boom");
+    {
+        ui::PropertyGrid grid("##tp_boom");
+        grid.row("distance", "m");
+        ImGui::SliderFloat("##distance", &camera.distance, 0.5f, 12.0f, "%.2f");
+        track(context);
+        grid.row("pivot height", "m");
+        ImGui::SliderFloat("##pivot", &camera.pivotHeight, 0.0f, 3.0f, "%.2f");
+        track(context);
+        grid.row("shoulder", "m");
+        ImGui::SliderFloat("##shoulder", &camera.shoulderOffset, -2.0f, 2.0f,
+                           "%.2f");
+        track(context);
+        grid.row("fov", "deg");
+        ImGui::SliderFloat("##tp_fov", &camera.fovDegrees, 40.0f, 130.0f,
+                           "%.1f");
+        track(context);
+        grid.full("chest-height pivot keeps the head off the top of the "
+                  "screen when the camera looks down");
+    }
+
+    ImGui::SeparatorText("follow");
+    {
+        ui::PropertyGrid grid("##tp_follow");
+        grid.row("horizontal", "1/s");
+        ImGui::SliderFloat("##follow", &camera.followRate, 1.0f, 60.0f, "%.1f");
+        track(context);
+        grid.row("vertical", "1/s");
+        ImGui::SliderFloat("##follow_v", &camera.followRateVertical, 1.0f,
+                           60.0f, "%.1f");
+        track(context);
+        grid.row("turn rate", "deg/s");
+        ImGui::SliderFloat("##turn", &camera.turnRateDegrees, 90.0f, 2000.0f,
+                           "%.0f");
+        track(context);
+        grid.full("vertical slower than horizontal: stairs pump a camera that "
+                  "tracks height exactly");
+    }
+
+    ImGui::SeparatorText("look");
+    {
+        ui::PropertyGrid grid("##tp_look");
+        grid.row("pitch min", "deg");
+        ImGui::SliderFloat("##pitch_min", &camera.pitchMinDegrees, -89.0f, 0.0f,
+                           "%.0f");
+        track(context);
+        grid.row("pitch max", "deg");
+        ImGui::SliderFloat("##pitch_max", &camera.pitchMaxDegrees, 0.0f, 89.0f,
+                           "%.0f");
+        track(context);
+        grid.row("sensitivity", "rad/px");
+        ImGui::SliderFloat("##tp_sens", &camera.mouseSensitivity, 0.0002f,
+                           0.02f, "%.4f");
+        track(context);
+    }
+
+    ImGui::SeparatorText("spring arm");
+    {
+        ui::PropertyGrid grid("##tp_arm");
+        grid.row("radius", "m");
+        ImGui::SliderFloat("##arm_radius", &camera.collisionRadius, 0.0f, 1.0f,
+                           "%.2f");
+        track(context);
+        grid.row("push out", "m/s");
+        ImGui::SliderFloat("##push_out", &camera.pushOutSpeed, 0.5f, 30.0f,
+                           "%.1f");
+        track(context);
+        grid.row("minimum", "m");
+        ImGui::SliderFloat("##min_distance", &camera.minDistance, 0.1f, 4.0f,
+                           "%.2f");
+        track(context);
+        grid.full("comes in instantly, goes back out at push out -- the "
+                  "asymmetry is what stops a doorway strobing");
+    }
+
+    ImGui::SeparatorText("lock-on");
+    {
+        ui::PropertyGrid grid("##tp_lock");
+        grid.row("framing bias");
+        ImGui::SliderFloat("##bias", &camera.lockFramingBias, 0.0f, 1.0f,
+                           "%.2f");
+        track(context);
+        grid.row("blend rate", "1/s");
+        ImGui::SliderFloat("##blend", &camera.lockBlendRate, 1.0f, 30.0f,
+                           "%.1f");
+        track(context);
+        grid.row("pitch", "deg");
+        ImGui::SliderFloat("##lock_pitch", &camera.lockPitchDegrees, -45.0f,
+                           15.0f, "%.1f");
+        track(context);
+        grid.row("distance boost", "m");
+        ImGui::SliderFloat("##lock_boost", &camera.lockDistanceBoost, 0.0f,
+                           6.0f, "%.2f");
+        track(context);
+        grid.full("0 frames the player, 1 frames the target");
+    }
+}
+
+void drawScreen(Entity& entity, InspectorContext& context)
+{
+    game::content::ScreenAuthor& screen = *entity.screen;
+    ImGui::TextDisabled("This scene is a 2D screen: entities are authored in\n"
+                        "virtual pixels on the page plane.");
+    {
+        ui::PropertyGrid grid("##screen_page");
+        grid.row("active");
+        ImGui::Checkbox("##screen_active", &screen.active);
+        track(context);
+        grid.row("page width", "px");
+        ImGui::DragFloat("##page_w", &screen.pageWidth, 1.0f, 16.0f, 4096.0f,
+                         "%.0f");
+        track(context);
+        grid.row("page height", "px");
+        ImGui::DragFloat("##page_h", &screen.pageHeight, 1.0f, 16.0f, 4096.0f,
+                         "%.0f");
+        track(context);
+        grid.full("the height is what always fills the screen");
+    }
+
+    ImGui::SeparatorText("fit");
+    {
+        ui::PropertyGrid grid("##screen_fit");
+        grid.row("aspect");
+        const char* fits[] = {"Height", "Contain"};
+        ImGui::Combo("##fit", &screen.fit, fits, IM_ARRAYSIZE(fits));
+        track(context);
+        grid.row("origin");
+        const char* origins[] = {"Centre", "TopLeft"};
+        ImGui::Combo("##origin", &screen.origin, origins,
+                     IM_ARRAYSIZE(origins));
+        track(context);
+        grid.full(screen.fit == eng::ecs::ScreenCamera::Contain
+                      ? "the whole page is always visible, letterboxed"
+                      : "a wide window sees past the page's sides");
+    }
+
+    ImGui::SeparatorText("depth");
+    {
+        ui::PropertyGrid grid("##screen_depth");
+        grid.row("layer spacing", "u");
+        ImGui::SliderFloat("##layer", &screen.layerSpacing, 0.0f, 8.0f, "%.2f");
+        track(context);
+        grid.row("fov", "deg");
+        ImGui::SliderFloat("##screen_fov", &screen.fovDegrees, 5.0f, 120.0f,
+                           "%.1f");
+        track(context);
+        grid.full("the projection stays perspective, so a layer off the page "
+                  "plane is very slightly scaled -- that is the depth cue");
+    }
+}
+
 // The preview is the answer to "is the weapon actually in the hand": a question
 // nobody could ask in the editor before, because the hands were not drawn here
 // at all. Deliberately two fields -- it selects what to look at, it does not
@@ -1627,6 +1792,8 @@ constexpr Drawer kDrawers[] = {
     {"light", drawLight},
     {"camera", drawCamera},
     {"first_person", drawFirstPerson},
+    {"third_person", drawThirdPerson},
+    {"screen", drawScreen},
     {"viewmodel_rig", drawViewmodelRig},
     {"viewmodel_preview", drawViewmodelPreview},
     {"audio", drawAudio},

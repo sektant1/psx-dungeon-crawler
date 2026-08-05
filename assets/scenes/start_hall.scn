@@ -3038,273 +3038,16 @@
       }
     },
     {
-      "id": "floor_0110",
-      "prefab": "kit.floor",
+      "id": "group_0001",
       "transform": {
         "position": [
-          -22.0,
-          0.0,
-          -2.0
+          5.9670000076293945,
+          2.279599905014038,
+          8.544400215148926
         ]
       },
-      "cell": {
-        "col": -6,
-        "row": -1
-      }
-    },
-    {
-      "id": "floor_0111",
-      "prefab": "kit.floor",
-      "transform": {
-        "position": [
-          -18.0,
-          0.0,
-          -2.0
-        ]
-      },
-      "cell": {
-        "col": -5,
-        "row": -1
-      }
-    },
-    {
-      "id": "floor_0112",
-      "prefab": "kit.floor",
-      "transform": {
-        "position": [
-          -14.0,
-          0.0,
-          -2.0
-        ]
-      },
-      "cell": {
-        "col": -4,
-        "row": -1
-      }
-    },
-    {
-      "id": "floor_0113",
-      "prefab": "kit.floor",
-      "transform": {
-        "position": [
-          -22.0,
-          0.0,
-          2.0
-        ]
-      },
-      "cell": {
-        "col": -6,
-        "row": 0
-      }
-    },
-    {
-      "id": "floor_0114",
-      "prefab": "kit.floor",
-      "transform": {
-        "position": [
-          -18.0,
-          0.0,
-          2.0
-        ]
-      },
-      "cell": {
-        "col": -5,
-        "row": 0
-      }
-    },
-    {
-      "id": "floor_0115",
-      "prefab": "kit.floor",
-      "transform": {
-        "position": [
-          -14.0,
-          0.0,
-          2.0
-        ]
-      },
-      "cell": {
-        "col": -4,
-        "row": 0
-      }
-    },
-    {
-      "id": "floor_0116",
-      "prefab": "kit.floor",
-      "material": "Game/Kit/DungeonTwoSided",
-      "transform": {
-        "position": [
-          -22.0,
-          4.0,
-          -2.0
-        ]
-      },
-      "cell": {
-        "col": -6,
-        "row": -1,
-        "level": 4.0
-      },
-      "collider": {
-        "shape": "box",
-        "half_extents": [
-          2.0,
-          0.05000000074505806,
-          2.0
-        ],
-        "offset": [
-          0.0,
-          0.05000000074505806,
-          0.0
-        ]
-      }
-    },
-    {
-      "id": "floor_0117",
-      "prefab": "kit.floor",
-      "material": "Game/Kit/DungeonTwoSided",
-      "transform": {
-        "position": [
-          -18.0,
-          4.0,
-          -2.0
-        ]
-      },
-      "cell": {
-        "col": -5,
-        "row": -1,
-        "level": 4.0
-      },
-      "collider": {
-        "shape": "box",
-        "half_extents": [
-          2.0,
-          0.05000000074505806,
-          2.0
-        ],
-        "offset": [
-          0.0,
-          0.05000000074505806,
-          0.0
-        ]
-      }
-    },
-    {
-      "id": "floor_0118",
-      "prefab": "kit.floor",
-      "material": "Game/Kit/DungeonTwoSided",
-      "transform": {
-        "position": [
-          -14.0,
-          4.0,
-          -2.0
-        ]
-      },
-      "cell": {
-        "col": -4,
-        "row": -1,
-        "level": 4.0
-      },
-      "collider": {
-        "shape": "box",
-        "half_extents": [
-          2.0,
-          0.05000000074505806,
-          2.0
-        ],
-        "offset": [
-          0.0,
-          0.05000000074505806,
-          0.0
-        ]
-      }
-    },
-    {
-      "id": "floor_0119",
-      "prefab": "kit.floor",
-      "material": "Game/Kit/DungeonTwoSided",
-      "transform": {
-        "position": [
-          -22.0,
-          4.0,
-          2.0
-        ]
-      },
-      "cell": {
-        "col": -6,
-        "row": 0,
-        "level": 4.0
-      },
-      "collider": {
-        "shape": "box",
-        "half_extents": [
-          2.0,
-          0.05000000074505806,
-          2.0
-        ],
-        "offset": [
-          0.0,
-          0.05000000074505806,
-          0.0
-        ]
-      }
-    },
-    {
-      "id": "floor_0120",
-      "prefab": "kit.floor",
-      "material": "Game/Kit/DungeonTwoSided",
-      "transform": {
-        "position": [
-          -18.0,
-          4.0,
-          2.0
-        ]
-      },
-      "cell": {
-        "col": -5,
-        "row": 0,
-        "level": 4.0
-      },
-      "collider": {
-        "shape": "box",
-        "half_extents": [
-          2.0,
-          0.05000000074505806,
-          2.0
-        ],
-        "offset": [
-          0.0,
-          0.05000000074505806,
-          0.0
-        ]
-      }
-    },
-    {
-      "id": "floor_0121",
-      "prefab": "kit.floor",
-      "material": "Game/Kit/DungeonTwoSided",
-      "transform": {
-        "position": [
-          -14.0,
-          4.0,
-          2.0
-        ]
-      },
-      "cell": {
-        "col": -4,
-        "row": 0,
-        "level": 4.0
-      },
-      "collider": {
-        "shape": "box",
-        "half_extents": [
-          2.0,
-          0.05000000074505806,
-          2.0
-        ],
-        "offset": [
-          0.0,
-          0.05000000074505806,
-          0.0
-        ]
+      "camera": {
+        "fov_degrees": 60.0
       }
     },
     {
@@ -3981,12 +3724,12 @@
     },
     {
       "id": "player_spawn_0001",
-      "name": "Arrival",
+      "name": "Player Start",
       "transform": {
         "position": [
-          6.0,
+          2.299999952316284,
           0.0,
-          13.399999618530273
+          8.600000381469727
         ]
       },
       "player_spawn": true

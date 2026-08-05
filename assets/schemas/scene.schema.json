@@ -28,6 +28,11 @@
       "type": "string",
       "minLength": 1
     },
+    "palette": {
+      "description": "The look this level is lit and graded with: the name of a [palette.<name>] table in assets/config/palettes.toml. Omitted means the game's default. A name rather than the values, because the palettes are tuned together and a level picking one is a level design decision, not a per-file copy of forty numbers.",
+      "type": "string",
+      "minLength": 1
+    },
     "entities": {
       "type": "array",
       "items": {
@@ -243,6 +248,143 @@
         "bobSpeed": {
           "type": "number",
           "minimum": 0
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "third_person": {
+      "description": "An over-the-shoulder orbit camera with a spring arm and a lock-on, authored on the camera that frames the player. A scene carrying this plays in third person; one carrying first_person plays from the eyes. Souls-shaped defaults: short boom, chest-height pivot, slow vertical follow.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "distance": {
+          "description": "Metres the eye sits behind the pivot with nothing in the way.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pivotHeight": {
+          "description": "Height of the pivot above the character's feet. Chest, not eye.",
+          "type": "number",
+          "minimum": 0
+        },
+        "shoulderOffset": {
+          "description": "Lateral offset of the pivot, +right: the over-the-shoulder bias.",
+          "type": "number"
+        },
+        "followRate": {
+          "description": "Horizontal exponential follow rate, per second.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "followRateVertical": {
+          "description": "Vertical follow rate. Deliberately much slower than the horizontal one: vertical is where stairs live.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pitchMinDegrees": {
+          "description": "Negative looks down, which raises the eye.",
+          "type": "number",
+          "minimum": -89,
+          "maximum": 0
+        },
+        "pitchMaxDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 89
+        },
+        "mouseSensitivity": {
+          "description": "Radians of orbit per pixel of mouse movement.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "collisionRadius": {
+          "description": "Slack the spring arm keeps between the eye and whatever it hit.",
+          "type": "number",
+          "minimum": 0
+        },
+        "pushOutSpeed": {
+          "description": "Metres per second the boom extends back out once the way is clear. It comes in instantly.",
+          "type": "number",
+          "minimum": 0
+        },
+        "minDistance": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "turnRateDegrees": {
+          "description": "How fast the body turns to face where it is going.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fovDegrees": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 180
+        },
+        "lockFramingBias": {
+          "description": "0 frames the player, 1 frames the target. A third of the way is the souls answer.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lockBlendRate": {
+          "description": "How fast the camera swings onto a target, per second.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "lockPitchDegrees": {
+          "description": "Extra downward tilt while locked, so the target sits above centre.",
+          "type": "number"
+        },
+        "lockDistanceBoost": {
+          "description": "Extra boom length at range, so a fight across a room does not shrink both fighters.",
+          "type": "number",
+          "minimum": 0
+        },
+        "active": {
+          "type": "boolean"
+        }
+      }
+    },
+    "screen": {
+      "description": "Makes the scene a 2D screen -- a menu, a HUD plate, a dialogue page. The camera stands square-on to the XY plane at the distance where pageHeight virtual pixels exactly fill the view, so entities authored in pixels stay that size at every resolution.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pageWidth": {
+          "description": "Design resolution, virtual pixels.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pageHeight": {
+          "description": "Design resolution, virtual pixels. This is the dimension that always fills the screen.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fit": {
+          "description": "0 = Height (the page height always fills the screen; a wide window sees past the page's sides). 1 = Contain (the whole page is always visible, letterboxed).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "layerSpacing": {
+          "description": "World units between authored z layers.",
+          "type": "number",
+          "minimum": 0
+        },
+        "origin": {
+          "description": "0 = Centre (menus stay centred at any aspect). 1 = TopLeft (the UI convention, y down).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fovDegrees": {
+          "description": "Only decides how far back the camera stands. Narrow keeps the perspective on off-plane layers subtle.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 180
         },
         "active": {
           "type": "boolean"
@@ -518,6 +660,11 @@
         "name": {
           "type": "string"
         },
+        "parent": {
+          "description": "The id of another entity in this scene. This entity's transform is then local to that one, and it inherits whatever the parent does -- which is how a subject is put on a spinning pivot without the subject itself carrying a Spin.",
+          "type": "string",
+          "minLength": 1
+        },
         "prefab": {
           "type": "string",
           "pattern": "^kit\\."
@@ -591,11 +738,21 @@
         "first_person": {
           "$ref": "#/$defs/first_person"
         },
+        "third_person": {
+          "$ref": "#/$defs/third_person"
+        },
+        "screen": {
+          "$ref": "#/$defs/screen"
+        },
         "viewmodel_rig": {
           "$ref": "#/$defs/viewmodel_rig"
         },
         "viewmodel_preview": {
           "$ref": "#/$defs/viewmodel_preview"
+        },
+        "unpacked_attachments": {
+          "description": "This entity's compound kit piece has had its attached parts written out as real child entities, so the cook must not generate them again. Set by the editor's Unpack attachments action.",
+          "type": "boolean"
         },
         "audio": {
           "$ref": "#/$defs/audio"

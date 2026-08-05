@@ -11,6 +11,7 @@
 #include <editor/assets/GameVocabulary.h>
 #include <editor/assets/MaterialCatalog.h>
 #include <editor/assets/MeshCatalog.h>
+#include <editor/assets/ResourceDbPanel.h>
 #include <editor/assets/ModelImportPipeline.h>
 #include <editor/ui/EditorUi.h>
 #include "RenderPalette.h"
@@ -126,7 +127,9 @@ private:
     void drawCatalog();
     void drawIssues();
     void drawMaterialPanel();
-    void drawMeshPanel();
+    // Triangle extent and submesh count for a mesh the swatch has loaded,
+    // drawn into the Placeables metadata block.
+    void drawMeshGeometryInfo(const std::string& meshPath);
     void drawParticlePanel();
     // Every mesh file in the project, scanned once on first use. Separate from
     // the kit catalogue on purpose: the kit is the level's vocabulary, this is
@@ -140,6 +143,10 @@ private:
     // effect requests, so calling it for a hovered row every frame is free.
     void requestMeshPreview(const std::string& meshPath,
                             const std::string& material);
+    // The same for a generated primitive, which has no path to key on -- the
+    // swatch is keyed on the parameters, so two boxes of different sizes are
+    // two previews.
+    void requestPrimitivePreview(const eng::ecs::PrimitiveMesh& primitive);
     // Applies the browser's current subject to the selection, replacing
     // whichever of prefab/mesh/primitive each entity carried.
     void applyMeshToSelection(const std::string& meshPath);
@@ -183,6 +190,12 @@ private:
     // practice.
     game::content::AuthorId parentForNewEntity() const;
     void frameIsolated(const glm::vec3& min, const glm::vec3& max);
+    void adoptIntoIsolation(game::content::Entity& entity) const;
+    // Writes a compound kit piece's baked attachments out as child entities, so
+    // they can be selected and edited. See the definition for why they are not
+    // there to begin with.
+    void unpackAttachments(const game::content::AuthorId& id);
+    bool canUnpackAttachments(const game::content::AuthorId& id) const;
     // Selection and manipulation, both driven from inside the viewport panel so
     // they share its rect with ImGuizmo.
     void handleViewportPicking(const eng::FrameContext& f);
@@ -449,8 +462,8 @@ private:
     // Off by default: the catalogue is mostly materials that cannot go on an
     // entity, and offering them is how a compositor pass ends up on a wall.
     bool mShowAllMaterials = false;
-    // 0 placeables, 1 meshes, 2 materials, 3 effects. Request is consumed after
-    // one tab frame and exists for screenshot hooks and entering material
+    // 0 placeables, 1 materials, 2 effects, 3 resource db. Request is consumed
+    // after one tab frame and exists for screenshot hooks and entering material
     // stage.
     int mAssetBrowserModeRequest = -1;
     // A docked panel to bring forward for the first few frames, named by
@@ -461,7 +474,17 @@ private:
     // The vocabularies the game defines, read once at startup. Empty is
     // survivable: the inspector falls back to free text and says so.
     std::vector<std::string> mEnemyIds;
+    // Item ids, from items.toml. Named "pickup" because that is the component
+    // they fill in; they are the same ids the inventory, loot and trade tables
+    // use.
     std::vector<std::string> mPickupIds;
+    // The rest of the RPG vocabulary, for the markers that name one. Read the
+    // same way and for the same reason: an id typed from memory is a marker
+    // that silently does nothing.
+    std::vector<std::string> mStationIds;
+    std::vector<std::string> mTraderIds;
+    std::vector<std::string> mQuestIds;
+    std::vector<std::string> mNpcIds;
     // Player weapon ids from weapons.toml, for the viewmodel preview picker.
     std::vector<std::string> mWeaponIds;
     // The .lua files on disk, as logical paths. Rescanned on demand, because
@@ -478,20 +501,12 @@ private:
     std::string mPalettesPath;
     char mMaterialFilter[64] = {};
 
-    // The mesh browser. The catalogue is scanned lazily -- two hundred stat()
-    // calls at startup for a panel that may never be opened is two hundred
-    // stat() calls too many.
+    // Every mesh file in the project, listed in Placeables beside the kit. The
+    // catalogue is scanned lazily -- two hundred stat() calls at startup for a
+    // panel that may never be opened is two hundred stat() calls too many.
     MeshCatalog mMeshCatalog;
-    char mMeshFilter[64] = {};
-    // The row the panel is showing. A mesh path, or empty when a primitive
-    // preset is selected instead; the two are one selection because the panel
-    // shows one subject at a time.
-    std::string mSelectedMesh;
-    int mSelectedPrimitive = -1; // index into ed::primitivePresets(), -1 = none
-    // The parameters the primitive rows are previewed and placed with. Edited
-    // in the panel, so "a two-metre pillar" is authored once and painted, not
-    // painted and then resized forty times.
-    eng::ecs::PrimitiveMesh mPrimitiveDraft;
+    // The Resource Database Management Tool, as a tab of the asset browser.
+    ResourceDbPanel mResourceDb;
     // Meshes loaded for the swatch, kept across frames: re-parsing an OBJ per
     // hovered row would make scrubbing the list unusable.
     std::unordered_map<std::string, eng::MeshHandle> mMeshPreviewCache;
@@ -500,6 +515,13 @@ private:
     // nearly always better placed as its prefab, which brings the right
     // material, socket and grid snapping with it.
     bool mHideKitMeshes = true;
+    // Whether placing a compound piece writes its parts into the document as
+    // child entities. On by default: a model made of parts is an object an
+    // author expects to be able to open, and the alternative -- parts generated
+    // at cook time, visible in the viewport, absent from the hierarchy -- is
+    // the state this defaults its way out of. Off is still honest: the cooker
+    // generates them and the .scn stays one line per object.
+    bool mPlaceUnpacksParts = true;
     std::string mMeshPreviewName; // what the swatch currently holds
 
     // Particle authoring. The library owns the descs; the panel edits them in
@@ -609,6 +631,8 @@ private:
     // the frame it is honoured. Set when the selection came from anywhere but
     // the panel -- a viewport pick, a command, an undo.
     game::content::AuthorId mOutlinerReveal;
+    // Part of the gizmo-mark cache key alongside the document revision.
+    game::content::AuthorId mGizmoMarksIsolation;
     // Whose material the swatch is currently showing, so the preview follows a
     // change of selection without overriding a click in the material list.
     game::content::AuthorId mPreviewedEntity;

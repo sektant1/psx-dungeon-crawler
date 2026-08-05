@@ -290,6 +290,19 @@ private:
     bool mUniformsUsed = false;
     bool mTexturesUsed = false;
     bool mIndexBound = false;
+    // What is already bound on this command buffer, so a redundant bind costs
+    // a compare instead of a driver call. Vertex/index/pipeline bindings are
+    // command-buffer state in Vulkan and survive render-pass boundaries, so
+    // these are cleared only in reset(), where the command buffer changes.
+    // (Uniforms and textures have had this since they were written -- see
+    // bindUniformBuffer/bindTexture; this brings the rest into line.)
+    VkPipeline mBoundPipeline = VK_NULL_HANDLE;
+    VkBuffer mBoundIndexBuffer = VK_NULL_HANDLE;
+    VkDeviceSize mBoundIndexOffset = 0;
+    VkIndexType mBoundIndexType = VK_INDEX_TYPE_MAX_ENUM;
+    static constexpr uint32_t kTrackedVertexBindings = 4;
+    std::array<VkBuffer, kTrackedVertexBindings> mBoundVertexBuffers{};
+    std::array<VkDeviceSize, kTrackedVertexBindings> mBoundVertexOffsets{};
     uint32_t mDebugDepth = 0;
 };
 

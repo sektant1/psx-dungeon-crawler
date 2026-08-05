@@ -6,6 +6,8 @@ layout(location = 2) in vec2 uv;
 layout(location = 3) in vec4 colour;
 layout(location = 4) in vec3 viewNormal;
 layout(location = 5) in float viewDepth;
+layout(location = 6) in vec3 vertexLighting;
+layout(location = 7) noperspective in vec2 uvAffine;
 layout(location = 0) out vec4 outColour;
 // MRT surface 1, consumed by the stylize pass: view-space normal encoded
 // *0.5+0.5, alpha = linear view depth / farClip. The depth sign is the
@@ -25,6 +27,10 @@ layout(set = 0, binding = 0, std140) uniform SceneUniforms {
     vec4 shadowParams;        // enabled, bias, strength, texel          // x = near, y = far
     vec4 lightPositionRange[16];
     vec4 lightColourType[16];
+    // x precision multiplier, y light steps, z step softness, w affine amount.
+    vec4 psxParams;
+    // x affine softness (UV divergence at which the warp saturates).
+    vec4 psxParams2;
 } scene;
 layout(set = 1, binding = 0) uniform sampler2D albedoTexture;
 layout(set = 1, binding = 1) uniform sampler2D shadowMap;
@@ -48,6 +54,42 @@ vec3 toSrgb(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }
 // one legible colour, not the material's own.
 const vec3 kWireColour = vec3(0.55, 0.8, 1.0);
 
+
+// The diffuse accumulation, identical whichever stage runs it. Vertex-lit mode
+// (the PS1 and N64 presets) evaluates this once per vertex and lets the
+// rasterizer interpolate; per-pixel mode evaluates it per fragment. Keeping it
+// as one function is what stops the two modes drifting into two looks.
+vec3 accumulateLighting(vec3 worldPos, vec3 normal) {
+    vec3 diffuse = vec3(0.0);
+    int lightCount = clamp(int(scene.cameraPositionAndLightCount.w + 0.5), 0, 16);
+    for (int i = 0; i < lightCount; ++i) {
+        vec3 lightVector;
+        float attenuation = 1.0;
+        if (scene.lightColourType[i].w > 0.5) {
+            vec3 delta = scene.lightPositionRange[i].xyz - worldPos;
+            float distanceToLight = length(delta);
+            float range = max(scene.lightPositionRange[i].w, 0.001);
+            lightVector = delta / max(distanceToLight, 0.0001);
+            attenuation = clamp(1.0 - distanceToLight / range, 0.0, 1.0);
+        } else {
+            lightVector = normalize(-scene.lightPositionRange[i].xyz);
+        }
+        diffuse += scene.lightColourType[i].rgb *
+                   max(dot(normal, lightVector), 0.0) * attenuation;
+    }
+    // Posterized torch pools: quantize the DIFFUSE only, so ambient never
+    // bands the whole scene toward black. Deliberately unclamped -- floor()
+    // keeps values above 1, preserving the overbright cores the bloom bright
+    // pass thresholds on. Soft-edged so band seams fade instead of snapping.
+    if (scene.psxParams.y > 0.5) {
+        float edge = clamp(scene.psxParams.z, 0.0, 0.5);
+        vec3 x = diffuse * scene.psxParams.y;
+        vec3 soft = smoothstep(vec3(0.5 - edge), vec3(0.5 + edge), fract(x));
+        diffuse = (floor(x) + soft) / scene.psxParams.y;
+    }
+    return scene.ambient.rgb + diffuse;
+}
+
 void main() {
     if (drawData.surfaceParams.w > 0.5) {
         // Debug wireframe: the rasterizer is already drawing lines, so this
@@ -57,29 +99,35 @@ void main() {
         outNormalDepth = vec4(0.0);
         return;
     }
-    vec4 albedo = texture(albedoTexture, uv) * colour * drawData.tintOpacity;
+    // Affine texture mapping. The PS1 interpolated UVs linearly in screen
+    // space with no perspective divide, which is why its textures swim and
+    // buckle across large polygons -- the single most recognisable thing about
+    // the console's output. Blended rather than switched so a profile can ask
+    // for a hint of it (dungeon runs 0.12) instead of the full swim.
+    // Softened rather than mixed straight. The divergence between the two
+    // interpolations grows without bound on a large polygon seen close and
+    // oblique -- a floor underfoot -- where raw affine stops swimming and
+    // starts tearing, because the console drew that floor as many small quads
+    // and this kit draws it as two triangles. A per-component soft knee leaves
+    // small divergence untouched (the swim reads exactly as before) and
+    // saturates the tail at `softness` UV units, so nothing buckles.
+    vec2 delta = uvAffine - uv;
+    float softness = max(scene.psxParams2.x, 1e-4);
+    delta *= softness / (softness + abs(delta));
+    vec2 texUv = uv + delta * scene.psxParams.w;
+    vec4 albedo = texture(albedoTexture, texUv) * colour * drawData.tintOpacity;
     if (albedo.a < drawData.surfaceParams.x)
         discard;
     albedo.rgb = toLinear(albedo.rgb);
 
     vec3 normal = normalize(worldNormal);
-    vec3 lighting = scene.ambient.rgb;
-    int lightCount = clamp(int(scene.cameraPositionAndLightCount.w + 0.5), 0, 16);
-    for (int i = 0; i < lightCount; ++i) {
-        vec3 lightVector;
-        float attenuation = 1.0;
-        if (scene.lightColourType[i].w > 0.5) {
-            vec3 delta = scene.lightPositionRange[i].xyz - worldPosition;
-            float distanceToLight = length(delta);
-            float range = max(scene.lightPositionRange[i].w, 0.001);
-            lightVector = delta / max(distanceToLight, 0.0001);
-            attenuation = clamp(1.0 - distanceToLight / range, 0.0, 1.0);
-        } else {
-            lightVector = normalize(-scene.lightPositionRange[i].xyz);
-        }
-        lighting += scene.lightColourType[i].rgb *
-                    max(dot(normal, lightVector), 0.0) * attenuation;
-    }
+    // Vertex-lit is what the PS1 and N64 presets ask for: the console had no
+    // per-pixel lighting, and the flat-shaded facets it produces are half of
+    // why the era reads the way it does. Interpolated from the vertex stage
+    // here rather than recomputed.
+    vec3 lighting = scene.clipParams.z > 0.5
+                        ? vertexLighting
+                        : accumulateLighting(worldPosition, normal);
 
     // Directional shadow. Ogre used stencil volumes modulatively -- one
     // darkening pass over shadowed area -- so this reproduces the RESULT

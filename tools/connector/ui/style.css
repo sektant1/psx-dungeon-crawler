@@ -1,0 +1,404 @@
+/* Connector — dark grey, one red.
+ *
+ * The restraint is functional, not taste. This window is read while something
+ * is going wrong, often for minutes at a time, next to a game that is itself
+ * mostly dark. So: one accent colour, used only for things that are actually
+ * wrong or actually selected; four greys; and log rows that differ from each
+ * other by as little as possible, because the eye is scanning for the ONE line
+ * that is not like the others and every extra colour is a false positive.
+ */
+
+:root {
+  --bg: #141416;
+  --bg-raised: #1b1b1e;
+  --bg-row: #171719;
+  --bg-row-alt: #131315;
+  --line: #2a2a2e;
+  --line-soft: #232326;
+  --text: #d6d6d8;
+  --text-dim: #85858c;
+  --text-faint: #5a5a61;
+  --red: #d03a3a;
+  --red-dim: #7d2626;
+  --red-glow: rgba(208, 58, 58, 0.14);
+  --warn: #c8913c;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo,
+    Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 var(--mono);
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  grid-template-rows: 44px 1fr 26px;
+  grid-template-areas: "brand top" "side main" "status status";
+  height: 100%;
+}
+
+/* --- brand + toolbar ---------------------------------------------------- */
+.brand {
+  grid-area: brand;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.brand .mark {
+  width: 9px; height: 9px;
+  background: var(--red);
+  /* Pulses only while records are arriving, so the page has exactly one moving
+     thing and it means "the engine is alive". */
+  box-shadow: 0 0 8px var(--red);
+}
+.brand .mark.idle { background: var(--text-faint); box-shadow: none; }
+.brand h1 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.toolbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+input[type="search"], input[type="text"] {
+  flex: 1;
+  min-width: 120px;
+  height: 26px;
+  padding: 0 9px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+input[type="search"]:focus { border-color: var(--red-dim); }
+input[type="search"]::placeholder { color: var(--text-faint); }
+
+button {
+  height: 26px;
+  padding: 0 11px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover { color: var(--text); border-color: #3a3a40; }
+button.on {
+  color: var(--text);
+  border-color: var(--red-dim);
+  background: var(--red-glow);
+}
+
+.levels { display: flex; }
+.levels button { border-right-width: 0; }
+.levels button:last-child { border-right-width: 1px; }
+
+/* --- channel rail -------------------------------------------------------- */
+.side {
+  grid-area: side;
+  border-right: 1px solid var(--line);
+  background: var(--bg-raised);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.side h2 {
+  margin: 0;
+  padding: 6px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.channel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  cursor: pointer;
+  user-select: none;
+  border-left: 2px solid transparent;
+}
+.channel:hover { background: #212124; }
+.channel.on { border-left-color: var(--red); color: var(--text); }
+.channel.off { color: var(--text-faint); }
+.channel .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.channel .count {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+/* A watch-only channel's count is dimmer and tilde-prefixed: it points at the
+   panel above, not at lines waiting in the log. */
+.channel .count.values { color: #4a4a51; font-style: italic; }
+.side .empty { padding: 10px 14px; color: var(--text-faint); font-size: 12px; }
+
+/* --- the log ------------------------------------------------------------- */
+.main { grid-area: main; overflow: hidden; position: relative; }
+#log {
+  height: 100%;
+  overflow-y: auto;
+  /* contain so a 100k-row list does not force layout of the whole page */
+  contain: strict;
+}
+.row {
+  display: grid;
+  grid-template-columns: 74px 62px 96px 1fr;
+  gap: 10px;
+  padding: 1px 14px;
+  border-left: 2px solid transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.row:nth-child(even) { background: var(--bg-row-alt); }
+.row:nth-child(odd) { background: var(--bg-row); }
+.row .t, .row .frame {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.row .ch { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+.row .msg { color: var(--text); }
+.row.warn { border-left-color: var(--warn); }
+.row.warn .msg { color: var(--warn); }
+.row.error { border-left-color: var(--red); background: var(--red-glow); }
+.row.error .msg { color: #f0908c; }
+.row.trace .msg { color: var(--text-dim); }
+.row mark { background: var(--red-dim); color: #fff; }
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-faint);
+  pointer-events: none;
+  text-align: center;
+  line-height: 1.9;
+}
+.empty-state code {
+  color: var(--text-dim);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+}
+
+/* --- status bar ---------------------------------------------------------- */
+.status {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.status .sep { flex: 1; }
+.status b { color: var(--text-dim); font-weight: 500; }
+.status .live { color: var(--red); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #303036; }
+::-webkit-scrollbar-thumb:hover { background: #3d3d44; }
+
+/* --- watches -------------------------------------------------------------
+ * The panel that made this worth building. A value that updates in place is
+ * something you glance at; the same value scrolling past sixty times a second
+ * is something you filter out. Anything that would have gone on a debug HUD
+ * belongs here, where it costs no screen space in the game.
+ */
+.watch {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 14px;
+  position: relative;
+}
+.watch .wname { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
+.watch .wval {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* The sparkline sits BEHIND the value rather than beside it: the shape of the
+ * last few seconds is context for the number, not a second thing to read. */
+.watch canvas {
+  position: absolute;
+  right: 12px; top: 3px;
+  width: 68px; height: 16px;
+  opacity: 0.42;
+  pointer-events: none;
+}
+.watch.hot .wval { color: var(--red); }
+
+/* --- frame correlation ---------------------------------------------------
+ * Every record carries the frame that produced it, so "show me everything that
+ * happened on the frame this went wrong" is one click. That is the question a
+ * log cannot answer and the reason the frame number is stamped at write time.
+ */
+/* [hidden] has to win: `display: flex` here would otherwise override the
+   attribute and pin the bar open. */
+.framebar[hidden] { display: none; }
+.framebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 14px;
+  background: var(--red-glow);
+  border-bottom: 1px solid var(--red-dim);
+  color: var(--text);
+  font-size: 12px;
+}
+.framebar b { color: var(--red); font-variant-numeric: tabular-nums; }
+.row .frame { cursor: pointer; }
+.row .frame:hover { color: var(--red); text-decoration: underline; }
+.row.event {
+  border-left-color: var(--red);
+  background: #201a1a;
+}
+.row.event .msg { color: #e8a0a0; letter-spacing: 0.06em; }
+
+/* --- memory --------------------------------------------------------------
+ * Its own view rather than a strip above the log, because a treemap is read by
+ * comparing areas and the areas have to be big enough to compare. Both views
+ * cover .main and only one is shown; the log keeps its scroll position while
+ * the memory view is up, which is why this switches rather than rebuilds.
+ *
+ * Area is bytes, so the big rectangle IS the problem and you do not have to
+ * read and compare fourteen figures to find it. Tiles are laid out toward the
+ * golden ratio rather than toward squares (see squarify() in app.js), which
+ * gives the map a consistent grain and keeps the eye reading area rather than
+ * shape. */
+.memory {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.main:not(.showing-memory) .memory { display: none; }
+.main.showing-memory > #log,
+.main.showing-memory > .empty-state,
+.main.showing-memory > .framebar { display: none; }
+
+/* The view switch, at the far left of the toolbar where it reads as "which
+   pane is this" rather than as another filter. */
+.views { display: flex; gap: 4px; margin-right: 4px; }
+.views button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 11px;
+  cursor: pointer;
+}
+.views button:hover { color: var(--text); }
+.views button.on { color: var(--text); background: var(--bg-raised); border-color: var(--text-faint); }
+.views button[hidden] { display: none; }
+
+.memhead {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.memtabs { display: flex; align-items: center; gap: 18px; }
+/* One budget per group, with its unit named once instead of repeated in every
+   button label. */
+.memgroup { display: flex; align-items: center; gap: 0; }
+.memgroup-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-right: 8px;
+}
+.memgroup button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-right-width: 0;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.memgroup button:first-of-type { border-radius: 2px 0 0 2px; }
+.memgroup button:last-child {
+  border-right-width: 1px;
+  border-radius: 0 2px 2px 0;
+}
+.memgroup button:hover { color: var(--text); background: var(--bg); }
+.memgroup button.on {
+  color: var(--bg);
+  background: var(--text-dim);
+  border-color: var(--text-dim);
+  font-weight: 600;
+}
+.memtotal {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The chart is 96px of a full-height view: enough to read the shape of a spike,
+   little enough that the treemap keeps the area it needs. */
+.membody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr 96px;
+  gap: 1px;
+  background: var(--line);
+}
+.membody canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--bg);
+  min-height: 0;
+}
+#treemap { cursor: crosshair; }
+
+/* A static view (code size) has no time axis, so the chart yields its row and
+   the treemap takes the whole pane. */
+.membody.nochart { grid-template-rows: 1fr 0; }
+.membody.nochart #memChart { display: none; }

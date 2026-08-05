@@ -54,8 +54,10 @@
 #include <eng/ecs/components/NodeRef.h>
 #include <eng/ecs/components/PrimitiveMesh.h>
 #include <eng/ecs/components/RenderNode.h>
+#include <eng/ecs/components/ScreenCamera.h>
 #include <eng/ecs/components/ShaderParams.h>
 #include <eng/ecs/components/ShaderParamsApplied.h>
+#include <eng/ecs/components/ThirdPersonCamera.h>
 #include <eng/ecs/components/Visibility.h>
 
 // --- vfx ---

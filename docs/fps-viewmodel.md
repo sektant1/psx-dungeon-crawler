@@ -321,3 +321,63 @@ skeleton, not a place in the hand**.
 | Component registration | `engine/src/ecs/ComponentRegistry.cpp`, `game/src/scene/ComponentRegistry.cpp` |
 | Editor authoring | `editor/src/ui/ComponentInspector.cpp`, `editor/src/content/Scene{Source,Writer,Cook}.cpp` |
 | Tests | `game/tests/ViewmodelRigTests.cpp`, `game/tests/ViewmodelSocketTests.cpp` |
+
+## Impact feedback: shake and hit-stop
+
+The viewmodel is the loud half of weapon feedback and the camera is the quiet
+half; this is the camera's half, and it lives in `game/src/HitFeel.{h,cpp}`.
+
+A landed hit already threw five channels before this existed — particles, blood,
+a poise chip, an AI reaction and a grunt — but nothing moved the view and nothing
+interrupted time, which are the two that read as *impact* rather than as
+decoration.
+
+**One call per event, tiered.** `mHitFeel.impact(ImpactTier::Kill)` and the
+table in `[feel]` decides how much. Four tiers — Light (a wall impact), Solid (a
+landed hit), Heavy (a staggering blow, or one the player takes), Kill — so the
+whole game stays proportional and retunes from one place.
+
+**Shake is trauma-squared and decays to rest.** Hits *add* trauma; the shake is
+its square, so a graze barely moves the view and a kill punches. It is sampled
+from sines at incommensurate frequencies, not a fresh random per frame, which
+would buzz like static and never settle.
+
+**It is presentation-only.** `FpsController::setViewShake` is applied inside
+`present()` and nowhere else, so `eyePosition()`, the physics body, the aim ray
+and the muzzle all read a steady pose. A shake can never send a shot somewhere
+the player did not point.
+
+**Hit-stop runs on the wall clock.** `HitFeel::update` takes `FrameContext::realDt`
+and drives `eng::Clock::setScale`, which `f.dt` already flows through — so every
+system slows without opting in, and the stop can always end itself. Overlapping
+requests take the longest rather than stacking, so automatic fire landing four
+hits does not queue four freezes.
+
+### Firing does not shake the camera
+
+Deliberately, and it is the one tuning decision here worth stating outright.
+The talon fires every 0.09 s; at that rate even a small per-shot trauma is added
+faster than it decays, the view saturates, and it reads as a broken camera
+rather than as a powerful gun. The viewmodel kick is the feedback for firing.
+
+The same budget applies to the tiers a repeatable action *can* raise:
+`hit_feel_tests` asserts that Light and Solid each decay faster than the fastest
+weapon can re-add them, so a stream of landed hits settles into a faint rumble
+that a kill still stands out from. Heavy and Kill are exempt — you only kill a
+thing once — which is why they carry the big numbers.
+
+### Tuning
+
+`[feel]` in `assets/config/game.toml`. `shake_scale` and `hit_stop_scale` are
+accessibility masters and **0 means off**, not merely reduced. The shipped
+envelope, per tier:
+
+| Tier | peak offset | peak angle | settles | hit-stop |
+|---|---|---|---|---|
+| Light | 0.01 cm | ~0 | 0.02 s | none |
+| Solid | 0.05 cm | 0.01° | 0.05 s | 35 ms |
+| Heavy | 0.41 cm | 0.08° | 0.13 s | 60 ms |
+| Kill | 1.44 cm | 0.32° | 0.23 s | 110 ms |
+
+A solid hit is carried by its hit-stop and its particles rather than by shake;
+the camera only really moves for a stagger or a death.

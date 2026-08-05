@@ -33,6 +33,13 @@ toggle_snap = "G"
 # while it is being lined up. These are here for keyboard-only work.
 brush_rotate_cw = "."
 brush_rotate_ccw = ","
+# Brush size. Ctrl+wheel does the same and is the gesture worth learning, for
+# the same reason: the ghost is drawn at the size, so "how big should this be"
+# is a question you answer by looking at the room rather than by placing a piece
+# and then dragging the scale gizmo.
+brush_bigger = "="
+brush_smaller = "-"
+brush_reset_size = "0"
 level_up = "PageUp"
 level_down = "PageDown"
 level_reset = "Home"

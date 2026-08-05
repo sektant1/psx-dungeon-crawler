@@ -417,7 +417,10 @@ ModelImportResult importModelToKit(const std::string& sourcePath,
 
         block << "[[piece]]\n"
               << "id = \"" << partId << "\"\n"
-              << "role = \"imported_model\"\n"
+              << "role = \""
+              << (model.submeshes.size() == 1 ? "imported_model"
+                                              : "imported_part")
+              << "\"\n"
               << "mesh = \"meshes/props/" << objName << "\"\n"
               << "material = \"" << material << "\"\n"
               << "socket = \"prop\"\n"
@@ -432,6 +435,36 @@ ModelImportResult importModelToKit(const std::string& sourcePath,
     if (result.parts.empty()) {
         result.error = source.filename().string() + " has no usable submeshes";
         return result;
+    }
+
+    // The model itself, as one placeable.
+    //
+    // A part is a piece; the model is the group of them, and without it the
+    // only trace of "these twenty-four objs are one boss" was the scene it was
+    // first imported into. The group carries no mesh -- its geometry is its
+    // attachments, at the offsets computed above -- and the editor unpacks
+    // those into real child entities when it places one, which is what puts
+    // the parts in the hierarchy where they can be moved.
+    if (result.parts.size() == 1) {
+        result.root = result.parts.front().prefab;
+    }
+    else {
+        result.root = "kit." + prefix;
+        const glm::vec3 modelSize = modelBounds.max - modelBounds.min;
+        block << "[[piece]]\n"
+              << "id = \"" << prefix << "\"\n"
+              << "role = \"imported_model\"\n"
+              << "socket = \"prop\"\n"
+              << "import_scale = 1.0\n"
+              << "size = [" << modelSize.x << ", " << modelSize.y << ", "
+              << modelSize.z << "]\n"
+              << "attachments = [\n";
+        for (const ImportedPart& part : result.parts) {
+            block << "  { prefab = \"" << part.prefab << "\", position = ["
+                  << part.offset.x << ", " << part.offset.y << ", "
+                  << part.offset.z << "] },\n";
+        }
+        block << "]\n\n";
     }
 
     if (report.embeddedTextures > 0)

@@ -91,6 +91,60 @@ blood = "human"
 # Tune live in the debug console's Viewmodel tab (F1), then paste the block it
 # copies back over this one. Nothing here changes gameplay: aim comes from the
 # camera ray, and the muzzle the projectile leaves from is a joint on the rig.
+# The camera. Which shape the game starts in, and how the over-the-shoulder one
+# is framed. A level overrides all of this by authoring a ThirdPersonCamera on
+# its camera entity (see docs/camera-systems.md); this is what every level that
+# does not gets.
+#
+# mode = "first_person" | "third_person"
+[camera]
+mode = "first_person"
+# The boom. distance is how far behind the pivot the eye sits with nothing in
+# the way; pivot_height is chest, not eye, so the head stays off the top of the
+# screen when the camera looks down; shoulder_offset moves the character off
+# centre so the space they are walking into is the space you can see.
+distance = 3.4
+pivot_height = 1.45
+shoulder_offset = 0.42
+fov = 66.0
+# Follow rates, per second. Vertical is deliberately much slower: vertical is
+# where stairs and landings live, and a camera that tracks them exactly is the
+# classic third-person pumping.
+follow_rate = 18.0
+follow_rate_vertical = 7.0
+# Orbit limits. Negative pitch looks down, which raises the eye.
+pitch_min_degrees = -62.0
+pitch_max_degrees = 32.0
+mouse_sensitivity = 0.0026
+# Spring arm: the boom comes in instantly when something blocks it and goes
+# back out at push_out_speed. The asymmetry is what stops a doorway strobing.
+collision_radius = 0.25
+push_out_speed = 5.0
+min_distance = 0.6
+# How fast the body turns to face where it is going. High: a souls character
+# pivots, it does not arc.
+turn_rate_degrees = 780.0
+# Lock-on framing. 0 frames the player, 1 frames the target; a third of the way
+# keeps both readable with the target slightly above centre.
+lock_framing_bias = 0.34
+lock_blend_rate = 9.0
+lock_pitch_degrees = -6.0
+lock_distance_boost = 1.1
+
+# Who the lock-on can grab and when it lets go. The gap between acquire and
+# break is hysteresis: without it a lock flickers as an enemy backs away at
+# exactly the limit.
+[camera.lock_on]
+acquire_range = 16.0
+break_range = 22.0
+acquire_cone_degrees = 62.0
+# Mouse pixels of flick that switch to the next target. A threshold, because
+# every tremor would otherwise change target.
+switch_threshold_pixels = 190.0
+# Seconds the target may stay out of sight before the lock drops. Not zero: an
+# enemy crossing behind a pillar mid-swing should not cost you the fight.
+occlusion_grace = 0.6
+
 [player_viewmodel]
 # Camera space: right / up / forward, with -z ahead. Close to the eye and only
 # slightly low, so the hands read as the player's own.
@@ -162,6 +216,11 @@ weapon_3 = "3"
 deflect = "V"
 dodge = "B"
 kick = "G"
+# Lock-on toggle. Middle mouse does the same thing, unbound because a mouse
+# button is not a key name.
+lock_on = "Q"
+# Switch between first and third person, live.
+camera_toggle = "F6"
 debug_ui = "F1"
 dev_console = "`"
 show_colliders = "F3"
@@ -204,3 +263,46 @@ radius = 0.50
 impulse = 6.0
 windup = 0.12
 active = 0.13
+
+# --- feedback ----------------------------------------------------------------
+# Screen shake and hit-stop: the two channels that read as *impact* rather than
+# as decoration. Everything else a hit throws (particles, blood, the poise chip,
+# the grunt) is authored elsewhere; these two are here because they act on the
+# camera and the clock, which belong to nobody in particular.
+#
+# The two scales at the top are accessibility masters, and 0 switches a channel
+# off outright. Screen shake and time distortion are settings people turn down
+# for real reasons, so they are one number each and not buried per tier.
+[feel]
+shake_scale = 1.0
+hit_stop_scale = 1.0
+
+# Trauma decays linearly and the shake is trauma SQUARED, so a graze barely
+# moves the view and a kill punches. Raise the decay for a snappier settle.
+trauma_decay = 3.0
+shake_frequency = 22.0
+# Metres at full shake, camera space: right, up, forward. Small on purpose --
+# the viewmodel moves loudly, the camera moves subtly.
+shake_offset = [0.045, 0.036, 0.022]
+shake_pitch_degrees = 0.75
+shake_roll_degrees = 1.10
+# What the game clock runs at during a stop. Not 0: a fully frozen frame reads
+# as a hitch, a very slow one reads as weight.
+hit_stop_time_scale = 0.08
+
+# Per tier. `light` is a shot leaving the barrel, `solid` a landed hit, `heavy`
+# a staggering blow or one the player takes, `kill` a death.
+# light carries no hit-stop deliberately: stopping time on a routine action --
+# and automatic fire is routine -- is the fastest way to feel broken.
+[feel.light]
+trauma = 0.10
+hit_stop = 0.0
+[feel.solid]
+trauma = 0.20
+hit_stop = 0.035
+[feel.heavy]
+trauma = 0.45
+hit_stop = 0.060
+[feel.kill]
+trauma = 0.75
+hit_stop = 0.110

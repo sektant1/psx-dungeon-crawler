@@ -53,6 +53,11 @@ void DebugPanels::install(eng::DebugTools& console)
     // them across the window made every adjustment a hunt.
     console.addPanel(
         "Viewmodel", [this] { drawViewmodelTab(); }, eng::PanelGroup::World);
+    // World group with the engine's Player tab and the Viewmodel one: where
+    // the view sits, what it is framed at and where the hands are is one
+    // tuning session.
+    console.addPanel(
+        "Camera", [this] { drawCameraTab(); }, eng::PanelGroup::World);
     console.addPanel(
         "Feel", [this] { drawFeelTab(); }, eng::PanelGroup::Gameplay);
     console.addPanel(
@@ -174,6 +179,109 @@ void copyButton(const char* label, const std::string& text, const char* hint)
 }
 
 } // namespace
+
+void DebugPanels::drawCameraTab()
+{
+    PlayerSystem* player = mCur.playerSystem;
+    if (!player || !mCur.context) {
+        ImGui::TextDisabled("Player camera unavailable.");
+        return;
+    }
+    GameContext& ctx = *mCur.context;
+
+    const bool third = player->cameraMode() == CameraMode::ThirdPerson;
+    ImGui::Text("mode: %s", third ? "third person" : "first person");
+    ImGui::SameLine();
+    if (ImGui::SmallButton(third ? "switch to first" : "switch to third")) {
+        player->setCameraMode(ctx, third ? CameraMode::FirstPerson
+                                         : CameraMode::ThirdPerson);
+    }
+    ImGui::TextDisabled("F6 does the same thing in game.");
+
+    if (section("Lock-on")) {
+        const LockOnSystem& lock = player->lockOn();
+        LockOnTuning& tuning = player->lockOn().tuning();
+        if (lock.locked())
+            ImGui::Text("holding target %d", lock.targetId());
+        else
+            ImGui::TextDisabled("no target  (Q / middle mouse)");
+        ImGui::SliderFloat("acquire range", &tuning.acquireRange, 2.0f, 40.0f,
+                           "%.1f m");
+        ImGui::SliderFloat("break range", &tuning.breakRange, 2.0f, 60.0f,
+                           "%.1f m");
+        ImGui::SliderFloat("acquire cone", &tuning.acquireConeDegrees, 5.0f,
+                           120.0f, "%.0f deg");
+        ImGui::SliderFloat("switch flick", &tuning.switchThresholdPixels, 20.0f,
+                           600.0f, "%.0f px");
+        ImGui::SliderFloat("occlusion grace", &tuning.occlusionGrace, 0.0f, 3.0f,
+                           "%.2f s");
+        ImGui::TextDisabled("break range above acquire range is the hysteresis\n"
+                            "that stops a lock flickering at the limit");
+    }
+
+    if (section("Third person")) {
+        // Edited in place and pushed straight back at the rig, so a drag is
+        // visible on the frame it happens -- which is the only way a camera can
+        // be tuned at all.
+        eng::ecs::ThirdPersonCamera tuning = player->cameraTuning();
+        bool edited = false;
+        edited |= ImGui::SliderFloat("distance", &tuning.distance, 0.5f, 12.0f,
+                                     "%.2f m");
+        edited |= ImGui::SliderFloat("pivot height", &tuning.pivotHeight, 0.0f,
+                                     3.0f, "%.2f m");
+        edited |= ImGui::SliderFloat("shoulder", &tuning.shoulderOffset, -2.0f,
+                                     2.0f, "%.2f m");
+        edited |= ImGui::SliderFloat("fov", &tuning.fovDegrees, 40.0f, 130.0f,
+                                     "%.1f deg");
+        ImGui::SeparatorText("follow");
+        edited |= ImGui::SliderFloat("horizontal", &tuning.followRate, 1.0f,
+                                     60.0f, "%.1f /s");
+        edited |= ImGui::SliderFloat("vertical", &tuning.followRateVertical,
+                                     1.0f, 60.0f, "%.1f /s");
+        edited |= ImGui::SliderFloat("turn rate", &tuning.turnRateDegrees, 90.0f,
+                                     2000.0f, "%.0f deg/s");
+        ImGui::SeparatorText("spring arm");
+        edited |= ImGui::SliderFloat("radius", &tuning.collisionRadius, 0.0f,
+                                     1.0f, "%.2f m");
+        edited |= ImGui::SliderFloat("push out", &tuning.pushOutSpeed, 0.5f,
+                                     30.0f, "%.1f m/s");
+        edited |= ImGui::SliderFloat("minimum", &tuning.minDistance, 0.1f, 4.0f,
+                                     "%.2f m");
+        ImGui::SeparatorText("lock framing");
+        edited |= ImGui::SliderFloat("bias", &tuning.lockFramingBias, 0.0f, 1.0f,
+                                     "%.2f");
+        edited |= ImGui::SliderFloat("blend rate", &tuning.lockBlendRate, 1.0f,
+                                     30.0f, "%.1f /s");
+        edited |= ImGui::SliderFloat("lock pitch", &tuning.lockPitchDegrees,
+                                     -45.0f, 15.0f, "%.1f deg");
+        edited |= ImGui::SliderFloat("distance boost", &tuning.lockDistanceBoost,
+                                     0.0f, 6.0f, "%.2f m");
+        if (edited)
+            player->setCameraTuning(tuning);
+        if (!third)
+            ImGui::TextDisabled("first person is running -- these apply the\n"
+                                "moment you switch");
+    }
+
+    if (section("First person feel")) {
+        eng::FirstPersonCameraRig::Tuning& feel =
+            player->controller().firstPersonRig().tuning();
+        ImGui::SliderFloat("step smoothing", &feel.stepSmoothRate, 1.0f, 40.0f,
+                           "%.1f /s");
+        ImGui::SliderFloat("max step", &feel.maxStepSmooth, 0.0f, 1.0f,
+                           "%.2f m");
+        ImGui::SliderFloat("landing dip", &feel.landingDipPerSpeed, 0.0f, 0.05f,
+                           "%.4f m per m/s");
+        ImGui::SliderFloat("dip cap", &feel.landingDipMax, 0.0f, 0.4f, "%.3f m");
+        ImGui::SliderFloat("dip recovery", &feel.landingRecovery, 1.0f, 30.0f,
+                           "%.1f /s");
+        ImGui::SliderFloat("strafe lean", &feel.leanDegrees, 0.0f, 8.0f,
+                           "%.2f deg");
+        ImGui::SliderFloat("lean rate", &feel.leanRate, 1.0f, 30.0f, "%.1f /s");
+        ImGui::TextDisabled("stair smoothing is the one that matters here:\n"
+                            "the capsule steps instantly, the eye should not");
+    }
+}
 
 void DebugPanels::drawViewmodelTab()
 {

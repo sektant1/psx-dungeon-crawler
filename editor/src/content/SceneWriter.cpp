@@ -407,8 +407,14 @@ Json writeEntity(const Entity& entity)
         out["portal"] = reflectedNode(*entity.portal);
     if (entity.firstPerson)
         out["first_person"] = reflectedNode(*entity.firstPerson);
+    if (entity.thirdPerson)
+        out["third_person"] = reflectedNode(*entity.thirdPerson);
+    if (entity.screen)
+        out["screen"] = reflectedNode(*entity.screen);
     if (entity.viewmodelRig)
         out["viewmodel_rig"] = reflectedNode(*entity.viewmodelRig);
+    if (entity.unpackedAttachments)
+        out["unpacked_attachments"] = true;
     if (entity.viewmodelPreview)
         out["viewmodel_preview"] = reflectedNode(*entity.viewmodelPreview);
     if (entity.shader) {

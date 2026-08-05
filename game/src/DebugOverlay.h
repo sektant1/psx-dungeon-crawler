@@ -99,6 +99,9 @@ public:
 private:
     void drawCombatTab();
     void drawViewmodelTab();
+    // The camera: which shape is running, how the third-person one is framed,
+    // and what the lock-on is currently holding.
+    void drawCameraTab();
     // The handles themselves, drawn over the game view rather than inside the
     // panel. Called from the Viewmodel tab so the controls and the gizmo they
     // configure cannot get out of step.

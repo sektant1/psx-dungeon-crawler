@@ -1,0 +1,320 @@
+# Conversations.
+#
+# A tree is one character. `entry` picks the opening node by condition, in
+# authored order, so the most specific greeting goes first and an unconditional
+# one goes last -- a tree with no unconditional fallback will refuse to open and
+# say so at load.
+#
+# A choice is hidden when its conditions fail, unless it sets
+# show_when_locked = true. Hidden is the default because a greyed-out
+# "[Bring me the ledger]" is a quest marker in disguise, and AGENTS.md §20 asks
+# for minimal markers.
+#
+# Conditions and effects are the same ones quests use. Anything a quest can
+# require, a line of dialogue can require.
+
+# =============================================================================
+[dialogue.ilsabet]
+speaker = "Mother Ilsabet"
+
+[[dialogue.ilsabet.entry]]
+node = "thanks"
+[[dialogue.ilsabet.entry.condition]]
+kind = "quest_completed"
+subject = "first_light"
+
+[[dialogue.ilsabet.entry]]
+node = "waiting"
+[[dialogue.ilsabet.entry.condition]]
+kind = "quest_active"
+subject = "first_light"
+
+[[dialogue.ilsabet.entry]]
+node = "greeting"
+
+[dialogue.ilsabet.node.greeting]
+text = """
+You are the one who came up the lower road in the dark. Nobody does that twice \
+without a reason, and nobody does it once without a light."""
+[[dialogue.ilsabet.node.greeting.choice]]
+text = "Your lamps are out."
+next = "asking"
+[[dialogue.ilsabet.node.greeting.choice]]
+text = "I was only passing."
+next = ""
+
+[dialogue.ilsabet.node.asking]
+text = """
+Six would do it. Tallow, not wax -- wax is for the chapel and the chapel does \
+not share. There are candles down there. There is a great deal down there."""
+[[dialogue.ilsabet.node.asking.choice]]
+text = "I will bring you six."
+next = "agreed"
+[[dialogue.ilsabet.node.asking.choice]]
+text = "Down where?"
+next = "down_where"
+
+[dialogue.ilsabet.node.down_where]
+text = """
+You know where. Everyone knows where. That is the trouble with it -- it is not \
+a secret, it is a thing nobody says out loud, which is worse."""
+[[dialogue.ilsabet.node.down_where.choice]]
+text = "I will bring you six."
+next = "agreed"
+[[dialogue.ilsabet.node.down_where.choice]]
+text = "Not tonight."
+next = ""
+
+[dialogue.ilsabet.node.agreed]
+text = "Then the road will be lit when you come back up it."
+[[dialogue.ilsabet.node.agreed.effect]]
+kind = "start_quest"
+subject = "first_light"
+[[dialogue.ilsabet.node.agreed.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.ilsabet.node.waiting]
+text = "Six. I have not started counting differently since you left."
+[[dialogue.ilsabet.node.waiting.choice]]
+text = "[Hand over the candles]"
+next = "handover"
+[[dialogue.ilsabet.node.waiting.condition]]
+kind = "has_item"
+subject = "tallow_candle"
+value = 6
+[[dialogue.ilsabet.node.waiting.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.ilsabet.node.handover]
+text = "Good. Sit a moment. No -- you will not. They never do."
+[[dialogue.ilsabet.node.handover.effect]]
+kind = "take_item"
+subject = "tallow_candle"
+value = 6
+[[dialogue.ilsabet.node.handover.effect]]
+kind = "turn_in_quest"
+subject = "first_light"
+[[dialogue.ilsabet.node.handover.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.ilsabet.node.thanks]
+text = "The lower road is lit. People are using it again. That was you."
+[[dialogue.ilsabet.node.thanks.choice]]
+text = "[Leave]"
+next = ""
+
+# =============================================================================
+[dialogue.corvin]
+speaker = "Corvin"
+
+[[dialogue.corvin.entry]]
+node = "counting"
+[[dialogue.corvin.entry.condition]]
+kind = "quest_active"
+subject = "thin_the_dark"
+
+[[dialogue.corvin.entry]]
+node = "greeting"
+
+[dialogue.corvin.node.greeting]
+text = """
+You have the walk of somebody who has been down and come back. I am not going \
+to ask what you saw. I am going to ask how many."""
+[[dialogue.corvin.node.greeting.choice]]
+text = "How many of what?"
+next = "offer"
+[[dialogue.corvin.node.greeting.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.corvin.node.offer]
+text = """
+Eight. Any of them. I keep a count and I do not explain the count, and the \
+coin is the same either way."""
+[[dialogue.corvin.node.offer.choice]]
+text = "Eight, then."
+next = "agreed"
+[[dialogue.corvin.node.offer.effect]]
+kind = "start_quest"
+subject = "thin_the_dark"
+[[dialogue.corvin.node.offer.choice]]
+text = "You should explain the count."
+next = "refuse"
+
+[dialogue.corvin.node.refuse]
+text = "I should. Come back when that matters less to you than the coin does."
+[[dialogue.corvin.node.refuse.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.corvin.node.agreed]
+text = "Eight."
+[[dialogue.corvin.node.agreed.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.corvin.node.counting]
+text = "Still counting."
+[[dialogue.corvin.node.counting.choice]]
+text = "[Collect]"
+next = "paid"
+[[dialogue.corvin.node.counting.condition]]
+kind = "quest_completed"
+subject = "thin_the_dark"
+[[dialogue.corvin.node.counting.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.corvin.node.paid]
+text = "Eight. Take it. Do not tell me about them."
+[[dialogue.corvin.node.paid.effect]]
+kind = "turn_in_quest"
+subject = "thin_the_dark"
+[[dialogue.corvin.node.paid.choice]]
+text = "[Leave]"
+next = ""
+
+# =============================================================================
+[dialogue.alder]
+speaker = "Alder, Physician"
+
+[[dialogue.alder.entry]]
+node = "working"
+[[dialogue.alder.entry.condition]]
+kind = "quest_active"
+subject = "the_physicians_moss"
+
+[[dialogue.alder.entry]]
+node = "greeting"
+
+[dialogue.alder.node.greeting]
+text = """
+Do not touch anything. Two of the people in this room are contagious and I am \
+not going to tell you which, because you would stand differently."""
+[[dialogue.alder.node.greeting.choice]]
+text = "What do you need?"
+next = "offer"
+[[dialogue.alder.node.greeting.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.alder.node.offer]
+text = """
+The pale lichen. It grows on the dead and it does not grow on the dead who \
+were burned, and I would like to know why before somebody makes that a rule."""
+[[dialogue.alder.node.offer.choice]]
+text = "Ten of it."
+next = "agreed"
+[[dialogue.alder.node.offer.effect]]
+kind = "start_quest"
+subject = "the_physicians_moss"
+[[dialogue.alder.node.offer.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.alder.node.agreed]
+text = "Ten. In a cloth, not in your hand."
+[[dialogue.alder.node.agreed.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.alder.node.working]
+text = "You are still upright. That is data."
+[[dialogue.alder.node.working.choice]]
+text = "[Hand over the lichen]"
+next = "delivered"
+[[dialogue.alder.node.working.condition]]
+kind = "has_item"
+subject = "grave_lichen"
+value = 10
+[[dialogue.alder.node.working.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.alder.node.delivered]
+text = """
+Ten. Good. Now go away for two days and come back and tell me if your hands \
+shake."""
+[[dialogue.alder.node.delivered.effect]]
+kind = "take_item"
+subject = "grave_lichen"
+value = 10
+[[dialogue.alder.node.delivered.effect]]
+kind = "turn_in_quest"
+subject = "the_physicians_moss"
+[[dialogue.alder.node.delivered.choice]]
+text = "[Leave]"
+next = ""
+
+# =============================================================================
+[dialogue.magus]
+speaker = "The Magus"
+
+[[dialogue.magus.entry]]
+node = "initiate"
+[[dialogue.magus.entry.condition]]
+kind = "flag_set"
+subject = "lodge.initiate"
+
+[[dialogue.magus.entry]]
+node = "known"
+[[dialogue.magus.entry.condition]]
+kind = "flag_set"
+subject = "lodge.known"
+
+[[dialogue.magus.entry]]
+node = "stranger"
+
+[dialogue.magus.node.stranger]
+text = """
+You are standing in a chapel that has a second floor nobody uses and a cellar \
+nobody mentions, and you are looking at the cellar."""
+[[dialogue.magus.node.stranger.choice]]
+text = "There is a door down there."
+next = "door"
+[[dialogue.magus.node.stranger.condition]]
+kind = "flag_set"
+subject = "found.temple_door"
+[[dialogue.magus.node.stranger.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.magus.node.door]
+text = """
+There is. You found it. I want you to hold on to that -- that you found it, \
+and nobody walked you to it. It will matter later what you believe about that."""
+[[dialogue.magus.node.door.effect]]
+kind = "set_flag"
+subject = "lodge.known"
+[[dialogue.magus.node.door.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.magus.node.known]
+text = "You came back up. Most of what I know about a person is in that."
+[[dialogue.magus.node.known.choice]]
+text = "Then send me down again."
+next = "errand"
+[[dialogue.magus.node.known.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.magus.node.errand]
+text = "Three floors. Then out. Out is the part I am interested in."
+[[dialogue.magus.node.errand.effect]]
+kind = "start_quest"
+subject = "the_apprentices_errand"
+[[dialogue.magus.node.errand.choice]]
+text = "[Leave]"
+next = ""
+
+[dialogue.magus.node.initiate]
+text = """
+You are wearing the sigil. Do not thank me for it. In eleven years nobody has \
+thanked me for it twice."""
+[[dialogue.magus.node.initiate.choice]]
+text = "[Leave]"
+next = ""

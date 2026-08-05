@@ -20,7 +20,21 @@
 
 # ---- configuration ---------------------------------------------------------
 BUILD_DIR   ?= build
-BUILD_TYPE  ?= Release
+# RelWithDebInfo by default: a development build that is still a *game*.
+#
+# It keeps everything that makes this tree debuggable -- full symbols, usable
+# gdb backtraces, the heap profiler's call-stack names, Connector attached by
+# default -- while compiling -O2. Plain Debug is -O0, which on this engine costs
+# roughly half the frame rate for no debugging benefit that RelWithDebInfo does
+# not already give: Jolt, Ogre and the RHI all spend their time in small
+# functions that only inlining makes cheap.
+#
+#   make BUILD_TYPE=Debug ...            -O0, for stepping through optimised-out
+#                                        locals or chasing an inlining bug
+#   make BUILD_TYPE=Release ...          to measure or to ship
+#
+# Switching type rebuilds the whole tree, third party included.
+BUILD_TYPE  ?= RelWithDebInfo
 JOBS        ?= $(shell nproc)
 # Ninja owns fresh project build trees by default. Existing trees keep their
 # cached generator because CMake cannot switch one in place; an explicit
@@ -94,9 +108,10 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
               $(if $(filter psx_demo,$(APP)),psx_demo,game))
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
-        build-editor build-cook editor cook scene material prefab-viewer \
-        run game demo mapgen sim test asan bench screenshot visual-test \
-        editor-selftest clip clip-mp4 look new-clip \
+        build-editor build-cook build-acp acp acp-check acp-clean assetdb \
+        editor cook scene material prefab-viewer \
+        run game demo psx-demo mapgen sim test asan bench screenshot visual-test \
+        editor-selftest clip clip-mp4 look new-clip assetformats \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
         vulkan-kit asset debug debug-run clean help
 
@@ -154,6 +169,9 @@ build-editor: configure
 build-cook: configure
 	cmake --build $(BUILD_DIR) --target scene_cook -j$(JOBS)
 
+build-acp: configure
+	cmake --build $(BUILD_DIR) --target raven_acp -j$(JOBS)
+
 # The generic app build, for the APP=-driven targets below.
 build-app: configure
 	cmake --build $(BUILD_DIR) --target $(APP_TARGET) -j$(JOBS)
@@ -168,7 +186,42 @@ deps:
 run game: build-game
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game $(RUN_ARGS)
 
-demo: build-demo
+# ---- the model showroom ----------------------------------------------------
+# A small dressed chamber whose only moving part is the model turning on the
+# plinth: three stage lights, a framed camera, and nothing else that moves. It
+# is the fastest way to look at an asset in the game's own renderer.
+#
+#   make demo                                   play what the .scn currently says
+#   make demo MODEL=kit.prop_chest              swap the model
+#   make demo MODEL=meshes/props/prop_malenia.obj FIT=2.4
+#   make demo SHOT=/tmp/x.png FRAME=200         one frame instead of playing
+#   make demo LIST=1                            what MODEL= will accept
+#
+# MODEL takes a kit prefab id from assets/config/kit.toml or any mesh path under
+# assets/; either way the model is measured, scaled to FIT metres and stood on
+# the plinth, so a prefab authored in centimetres frames like one authored in
+# metres. FIT/SPIN/YAW default to the values in tools/author_turntable.py.
+#
+# A plain `make demo` cooks and plays the checked-in scene, so anything you drag
+# in the editor survives. Passing any of MODEL/FIT/SPIN/YAW re-authors the file
+# from the script first, which discards hand edits -- move a value you liked
+# into the STAGE block at the top of the script.
+DEMO_SCENE  = assets/scenes/turntable.scn
+DEMO_AUTHOR = $(if $(MODEL),--subject "$(MODEL)",)$(if $(FIT), --fit $(FIT),)\
+$(if $(SPIN), --spin $(SPIN),)$(if $(YAW), --yaw $(YAW),)
+
+demo: build-cook build-game
+ifdef LIST
+	@$(PYTHON) tools/author_turntable.py --list-subjects
+else
+	$(if $(strip $(DEMO_AUTHOR)),$(PYTHON) tools/author_turntable.py \
+	    --output $(DEMO_SCENE) $(DEMO_AUTHOR),)
+	$(if $(SHOT),$(MAKE) look SCENE=$(DEMO_SCENE) SHOT=$(SHOT) \
+	    $(if $(FRAME),FRAME=$(FRAME),),$(MAKE) scene SCENE=$(DEMO_SCENE))
+endif
+
+# The PSX shader sample, which `demo` used to be.
+psx-demo: build-demo
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./psx_demo
 
 # ---- editor ----------------------------------------------------------------
@@ -183,6 +236,41 @@ editor: build-editor
 material: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_EDITOR_MATERIAL=1 \
 	    ./scene_editor $(if $(SCENE),$(abspath $(SCENE)),)
+
+# ---- asset pipeline --------------------------------------------------------
+# The Asset Conditioning Pipeline: every DCC source in assets/ through its
+# exporter, into a pack the game loads instead. Incremental -- a warm run is
+# under a second -- so this is safe to put in front of `run`.
+#
+#   make acp                     condition everything
+#   make acp TYPE=mesh           one row of the pipeline
+#   make acp FILTER=viewmodel    one subtree
+#   make acp FORCE=1             ignore the build keys
+#   make acp-check               fail if anything is stale (what CI runs)
+#   make assetdb                 the resource database: what is tracked
+#   make assetdb STAMP=1         write a .meta for every asset that lacks one
+#
+# The game picks the pack up automatically from build/cooked. To run without
+# it -- to prove the conditioned and source paths agree -- set
+# RAVEN_COOKED_DIR=/dev/null.
+acp: build-acp
+	./$(BUILD_DIR)/raven_acp build \
+	    $(if $(TYPE),--type $(TYPE)) $(if $(FILTER),--filter $(FILTER)) \
+	    $(if $(FORCE),--force) $(if $(STAMP),--stamp) $(if $(QUIET),--quiet)
+
+acp-check: build-acp
+	./$(BUILD_DIR)/raven_acp build --check
+
+acp-clean:
+	rm -rf $(BUILD_DIR)/cooked
+
+assetdb: build-acp
+	./$(BUILD_DIR)/raven_acp db $(if $(STAMP),--stamp) $(if $(LIST),--list) \
+	    $(if $(TYPE),--type $(TYPE))
+
+# Which extension belongs to which row of the pipeline.
+assetformats: build-acp
+	./$(BUILD_DIR)/raven_acp formats
 
 # Cook an authored .scn into a runtime .map -- the same cooker the editor calls
 # in-process, which is what makes the two produce identical bytes.
@@ -382,6 +470,18 @@ VISUAL_ARGS = --frame $(if $(FRAME),$(FRAME),90) \
 editor-selftest: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_EDITOR_SELFTEST=1 ./scene_editor
 
+# Connector: the browser window onto the engine's debug channels.
+#   make connector              collect directly (no Redis needed)
+#   make connector REDIS=1      subscribe to a real Redis instead
+# Then run the game with RAVEN_CONNECTOR=1.
+connector:
+	$(PYTHON) tools/connector/server.py $(if $(REDIS),--redis,) \
+	    $(if $(PORT),--port $(PORT),) --open
+
+# The game, already pointed at a running Connector.
+run-connected: build-game
+	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_CONNECTOR=1 ./game
+
 visual-test: build-game
 	$(PYTHON) tools/visual_test.py $(VISUAL_COMMON) screenshot $(VISUAL_ARGS)
 
@@ -482,12 +582,19 @@ help:
 	@echo "Raven Engine build/run CLI"
 	@echo ""
 	@echo "Targets:"
+	@echo "  connector          browser view of the engine's debug channels"
+	@echo "  run-connected      the game, reporting into a running connector"
 	@echo "  make [build]        configure + build the game"
 	@echo "  make build-all      build every executable and test target"
 	@echo "  make run            build + run the game (alias: game)"
-	@echo "  make demo           build + run the PSX shader sample"
+	@echo "  make demo           the model showroom (MODEL=, FIT=, SPIN=, YAW=, LIST=1, SHOT=)"
+	@echo "  make psx-demo       build + run the PSX shader sample"
 	@echo "  make editor         build + run the placement editor (SCENE=)"
 	@echo "  make material       editor, opened in the material staging scene"
+	@echo "  make acp            condition all assets (TYPE=, FILTER=, FORCE=1)"
+	@echo "  make acp-check      fail if any asset is stale -- what CI runs"
+	@echo "  make assetdb        the resource database (STAMP=1, LIST=1, TYPE=)"
+	@echo "  make assetformats   which extension is which pipeline row"
 	@echo "  make cook SCENE=    cook a .scn to a .map (OUT=, VALIDATE=1)"
 	@echo "  make scene SCENE=   cook a .scn and play it immediately"
 	@echo "  make prefab-viewer  compact turntable (PREFAB=<kit.id>, SUBJECT_SCALE=, VIEWER_PRESET=)"

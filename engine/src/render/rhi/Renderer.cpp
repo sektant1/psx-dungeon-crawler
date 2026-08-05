@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <optional>
 #include <set>
 #include <unordered_map>
@@ -71,9 +72,54 @@ struct ParticleVertex {
 
 static_assert(sizeof(ParticleVertex) == 36);
 
+// One end of a debug line. World space already -- eng::Renderer::DebugLine
+// carries world positions, and there is no model matrix in this pass.
+struct DebugLineVertex {
+    glm::vec3 position{0.0f};
+    glm::vec4 colour{1.0f};
+};
+
+static_assert(sizeof(DebugLineVertex) == 28);
+
+// The editor's grid is the heavy caller: a 33x33 patch is ~132 vertices, and
+// the collider overlay on a dense room is a few thousand. 64k ends the question
+// without being worth streaming.
+constexpr uint32_t kMaxDebugLineVertices = 65536;
+
 // Matches ParticleSim's reserve() below; a burst past it drops the tail rather
 // than reallocating a GPU buffer mid-frame.
 constexpr uint32_t kMaxDrawnParticles = 8192;
+// A preview of one effect at a fixed camera, so it needs a fraction of a scene
+// view's budget -- and it pays for what it reserves on every frame the editor
+// draws, because a dynamic update republishes the whole buffer.
+constexpr uint32_t kMaxThumbnailParticles = 512;
+
+// Particle geometry is built per view -- the billboard axes and the alpha sort
+// both come from the camera -- so each view needs a vertex buffer of its own.
+// One shared buffer is what broke the editor: a dynamic update lands in the
+// frame's mapped memory immediately, while the draws that read it are merely
+// *recorded*, so the last view to build wins and every pass recorded before it
+// draws that view's geometry. The frame order is Editor, Thumbnail, then Main,
+// which left the viewport and the effect preview drawing quads billboarded to
+// the game camera -- edge-on, and invisible.
+enum class ParticleSlice : uint32_t { Main, Editor, Thumbnail, Count };
+
+// Views that draw no particles at all (Viewmodel, Shadow) map to Count.
+constexpr ParticleSlice particleSliceFor(RenderCore::SceneTarget target)
+{
+    switch (target) {
+    case RenderCore::SceneTarget::Main:      return ParticleSlice::Main;
+    case RenderCore::SceneTarget::Editor:    return ParticleSlice::Editor;
+    case RenderCore::SceneTarget::Thumbnail: return ParticleSlice::Thumbnail;
+    default:                                 return ParticleSlice::Count;
+    }
+}
+
+constexpr uint32_t particleSliceCapacity(ParticleSlice slice)
+{
+    return slice == ParticleSlice::Thumbnail ? kMaxThumbnailParticles
+                                             : kMaxDrawnParticles;
+}
 
 // Keep in sync with the mode switch in assets/shaders/vulkan/particle.frag.
 // Ogre compiles one fragment_program per look; a runtime mode keeps the RHI
@@ -159,6 +205,18 @@ struct alignas(16) SceneUniforms {
     glm::vec4 shadowParams{0.0f};  // enabled, bias, strength, texel
     std::array<glm::vec4, 16> lightPositionRange{};
     std::array<glm::vec4, 16> lightColourType{};
+    // The era knobs, appended last on purpose: every shader that declares this
+    // block must agree on the offsets of what it *does* declare, and adding at
+    // the end leaves the ones that never look at these (shadow, particle,
+    // debug line) correct without touching them.
+    //   x precisionMultiplier  vertex snap grid
+    //   y lightSteps           0 = smooth, >0 = posterized bands
+    //   z lightStepSoftness    band-edge half width
+    //   w affineAmount         0 = perspective UVs, 1 = full affine
+    glm::vec4 psxParams{1.0f, 0.0f, 0.30f, 0.0f};
+    //   x affineSoftness  UV divergence at which the warp saturates
+    //   yzw reserved
+    glm::vec4 psxParams2{0.10f, 0.0f, 0.0f, 0.0f};
 };
 
 struct DrawConstants {
@@ -421,13 +479,28 @@ struct Renderer::Impl {
     rhi::ShaderHandle particleFragmentShader;
     // Keyed by blend mode: alpha and additive differ only in the blend state.
     std::unordered_map<uint32_t, rhi::PipelineHandle> particlePipelines;
-    rhi::BufferHandle particleVertices;
+    // One per ParticleSlice. Only Main is created up front: a game never opens
+    // an editor viewport or a thumbnail, and a dynamic buffer costs a shadow
+    // copy plus one backing per frame in flight whether or not it is written.
+    std::array<rhi::BufferHandle, size_t(ParticleSlice::Count)> particleVertices;
     rhi::BufferHandle particleIndices;
+    rhi::ShaderHandle debugLineVertexShader;
+    rhi::ShaderHandle debugLineFragmentShader;
+    rhi::BufferHandle debugLineVertices;
+    std::unordered_map<uint32_t, rhi::PipelineHandle> debugLinePipelines;
+    std::vector<DebugLineVertex> debugLineStaging;
     std::vector<ParticleVertex> particleStaging;
     std::vector<uint32_t> particleOrder;
     std::vector<ParticleEffect> particleEffects;
     std::unordered_map<std::string, uint32_t> particleByName;
     std::unordered_map<uint32_t, LiveParticles> liveParticles;
+    // Indexed by sim instance slot: does this spawn belong to the thumbnail
+    // subject rather than to the level? Refreshed in updateParticles() because
+    // the flag lives on the node, which the editor sets *after* spawning and
+    // can change at any time. A particle carries its instance slot, so this is
+    // all the draw loop needs to make the same Thumbnail/level split the mesh
+    // loops make.
+    std::vector<uint8_t> particleInstanceThumbnail;
     std::vector<DecalRequest> decalRequests;
     DecalSystem decals;
     IParticleCollider* particleCollider = nullptr;
@@ -673,6 +746,7 @@ struct Renderer::Impl {
         if (!core.device())
             return false;
         materials.loadAll(core);
+        materialConstantsCache.clear();
         sceneVertex = loadSceneShader(rhi::ShaderStage::Vertex,
                                       ENG_RHI_SCENE_VERT_SPV,
                                       "renderer.scene.vert");
@@ -750,11 +824,24 @@ struct Renderer::Impl {
         if (!particleVertexShader.valid() || !particleFragmentShader.valid())
             return false;
 
-        rhi::BufferDesc vertices;
-        vertices.size = uint64_t(kMaxDrawnParticles) * 4u * sizeof(ParticleVertex);
-        vertices.usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::Dynamic;
-        vertices.debugName = "renderer.particle-vertices";
-        particleVertices = core.device()->createBuffer(vertices);
+        if (!particleVertexBuffer(ParticleSlice::Main).valid())
+            return false;
+
+        // Debug lines ride the same "rebuilt every frame" arrangement: the
+        // editor's grid is recentred on the camera every frame anyway.
+        debugLineVertexShader = loadSceneShader(rhi::ShaderStage::Vertex,
+                                                ENG_RHI_DEBUG_LINE_VERT_SPV,
+                                                "renderer.debug_line.vert");
+        debugLineFragmentShader = loadSceneShader(rhi::ShaderStage::Fragment,
+                                                  ENG_RHI_DEBUG_LINE_FRAG_SPV,
+                                                  "renderer.debug_line.frag");
+        if (!debugLineVertexShader.valid() || !debugLineFragmentShader.valid())
+            return false;
+        rhi::BufferDesc lines;
+        lines.size = uint64_t(kMaxDebugLineVertices) * sizeof(DebugLineVertex);
+        lines.usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::Dynamic;
+        lines.debugName = "renderer.debug-line-vertices";
+        debugLineVertices = core.device()->createBuffer(lines);
 
         std::vector<uint32_t> quads(size_t(kMaxDrawnParticles) * 6u);
         for (uint32_t i = 0; i < kMaxDrawnParticles; ++i) {
@@ -768,11 +855,38 @@ struct Renderer::Impl {
         indices.usage = rhi::BufferUsage::Index;
         indices.debugName = "renderer.particle-indices";
         particleIndices = core.device()->createBuffer(indices);
-        if (!particleVertices.valid() || !particleIndices.valid())
+        if (!particleIndices.valid())
             return false;
         core.device()->updateBuffer(particleIndices, quads.data(),
                                     quads.size() * sizeof(uint32_t));
         return true;
+    }
+
+    bool instanceIsThumbnailOnly(uint16_t instance) const
+    {
+        return instance < particleInstanceThumbnail.size() &&
+               particleInstanceThumbnail[instance] != 0;
+    }
+
+    // The vertex buffer this view builds into, created on first use. The index
+    // buffer is shared: every slice starts at quad zero, so the same fixed
+    // pattern addresses all of them.
+    rhi::BufferHandle particleVertexBuffer(ParticleSlice slice)
+    {
+        rhi::BufferHandle& buffer = particleVertices[size_t(slice)];
+        if (buffer.valid())
+            return buffer;
+        static const char* const kNames[] = {
+            "renderer.particle-vertices.main",
+            "renderer.particle-vertices.editor",
+            "renderer.particle-vertices.thumbnail"};
+        rhi::BufferDesc desc;
+        desc.size = uint64_t(particleSliceCapacity(slice)) * 4u *
+                    sizeof(ParticleVertex);
+        desc.usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::Dynamic;
+        desc.debugName = kNames[size_t(slice)];
+        buffer = core.device()->createBuffer(desc);
+        return buffer;
     }
 
     // Same vertex layout and state as a scene draw -- only the fragment stage
@@ -922,6 +1036,74 @@ struct Renderer::Impl {
         return pipeline;
     }
 
+    // xray = draw over everything (the editor's grid should not be buried in
+    // the floor it describes); otherwise depth-test so collider outlines
+    // occlude behind walls the way the wireframe view does.
+    rhi::PipelineHandle debugLinePipelineFor(bool withNormalDepth, bool xray)
+    {
+        const uint32_t key =
+            uint32_t(withNormalDepth) | (uint32_t(xray) << 1u);
+        if (const auto found = debugLinePipelines.find(key);
+            found != debugLinePipelines.end())
+            return found->second;
+        rhi::PipelineDesc desc;
+        desc.vertex = debugLineVertexShader;
+        desc.fragment = debugLineFragmentShader;
+        desc.topology = rhi::PrimitiveTopology::LineList;
+        desc.vertexLayout.bindings.push_back(
+            {0, sizeof(DebugLineVertex), false});
+        desc.vertexLayout.attributes.push_back(
+            {0, 0, rhi::VertexFormat::Float3,
+             offsetof(DebugLineVertex, position)});
+        desc.vertexLayout.attributes.push_back(
+            {1, 0, rhi::VertexFormat::Float4,
+             offsetof(DebugLineVertex, colour)});
+        desc.cull = rhi::CullMode::None;
+        desc.depth.testEnabled = !xray;
+        desc.depth.writeEnabled = false; // a line must not occlude geometry
+        desc.depth.compare = rhi::CompareOp::LessEqual;
+        desc.colourFormats = withNormalDepth
+                                 ? std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm,
+                                       rhi::Format::RGBA16Float}
+                                 : std::vector<rhi::Format>{
+                                       rhi::Format::RGBA8Unorm};
+        desc.depthFormat = rhi::Format::Depth32Float;
+        desc.debugName = "renderer.debug-line-pipeline-" + std::to_string(key);
+        const rhi::PipelineHandle pipeline = core.device()->createPipeline(desc);
+        if (pipeline.valid())
+            debugLinePipelines[key] = pipeline;
+        return pipeline;
+    }
+
+    void drawDebugLines(rhi::CommandList& commands, size_t& batches,
+                        bool withNormalDepth)
+    {
+        if (debugLines.empty() || !debugLineVertices.valid())
+            return;
+        debugLineStaging.clear();
+        debugLineStaging.reserve(debugLines.size() * 2u);
+        for (const DebugLine& line : debugLines) {
+            if (debugLineStaging.size() + 2u > kMaxDebugLineVertices)
+                break; // silently clamped; the overflow is always the grid
+            debugLineStaging.push_back({line.a, glm::vec4(line.colour, 1.0f)});
+            debugLineStaging.push_back({line.b, glm::vec4(line.colour, 1.0f)});
+        }
+        if (debugLineStaging.empty())
+            return;
+        const rhi::PipelineHandle pipeline =
+            debugLinePipelineFor(withNormalDepth, debugLinesXray);
+        if (!pipeline.valid())
+            return;
+        core.device()->updateBuffer(
+            debugLineVertices, debugLineStaging.data(),
+            debugLineStaging.size() * sizeof(DebugLineVertex));
+        commands.bindPipeline(pipeline);
+        commands.bindVertexBuffer(0, debugLineVertices);
+        commands.draw(uint32_t(debugLineStaging.size()), 1, 0);
+        ++batches;
+    }
+
     void destroyMeshGpu(Mesh& resource)
     {
         if (!core.device())
@@ -1005,15 +1187,29 @@ struct Renderer::Impl {
             core.device()->destroyPipeline(pipeline);
         particlePipelines.clear();
         if (particleIndices.valid()) core.device()->destroyBuffer(particleIndices);
-        if (particleVertices.valid()) core.device()->destroyBuffer(particleVertices);
+        for (rhi::BufferHandle& buffer : particleVertices) {
+            if (buffer.valid()) core.device()->destroyBuffer(buffer);
+            buffer = {};
+        }
         particleIndices = {};
-        particleVertices = {};
         if (particleFragmentShader.valid())
             core.device()->destroyShader(particleFragmentShader);
         if (particleVertexShader.valid())
             core.device()->destroyShader(particleVertexShader);
         particleFragmentShader = {};
         particleVertexShader = {};
+        for (auto& [key, pipeline] : debugLinePipelines)
+            core.device()->destroyPipeline(pipeline);
+        debugLinePipelines.clear();
+        if (debugLineVertices.valid())
+            core.device()->destroyBuffer(debugLineVertices);
+        debugLineVertices = {};
+        if (debugLineFragmentShader.valid())
+            core.device()->destroyShader(debugLineFragmentShader);
+        if (debugLineVertexShader.valid())
+            core.device()->destroyShader(debugLineVertexShader);
+        debugLineFragmentShader = {};
+        debugLineVertexShader = {};
         if (sceneFragment.valid()) core.device()->destroyShader(sceneFragment);
         if (skinnedSceneVertex.valid())
             core.device()->destroyShader(skinnedSceneVertex);
@@ -1176,8 +1372,19 @@ struct Renderer::Impl {
             std::max(nearClip, 0.001f), std::max(farClip, nearClip + 0.01f));
         uniforms.viewProjection = projection * view;
         uniforms.view = view;
+        // z is the vertex-lighting switch: the PS1 and N64 presets ask for it
+        // (RenderPresets, perPixel = false) and the scene shaders read it in
+        // both stages. Not a separate uniform because clipParams already had
+        // two unused lanes and a new binding is a pipeline-layout change.
         uniforms.clipParams = {std::max(nearClip, 0.001f),
-                               std::max(farClip, nearClip + 0.01f), 0.0f, 0.0f};
+                               std::max(farClip, nearClip + 0.01f),
+                               env.perPixelLighting ? 0.0f : 1.0f, 0.0f};
+        uniforms.psxParams = {std::max(env.precisionMultiplier, 0.001f),
+                              std::max(env.lightSteps, 0.0f),
+                              std::clamp(env.lightStepSoftness, 0.0f, 0.5f),
+                              std::clamp(env.affineAmount, 0.0f, 1.0f)};
+        uniforms.psxParams2 = {std::max(env.affineSoftness, 1e-4f), 0.0f, 0.0f,
+                               0.0f};
         // w carries fogDesatBoost: the scene shader needs it alongside fog.
         uniforms.ambient = glm::vec4(env.ambient, std::max(env.fogDesatBoost, 0.0f));
         uniforms.fogColourDensity = glm::vec4(env.fogColour, env.fogDensity);
@@ -1260,35 +1467,65 @@ struct Renderer::Impl {
             core.setShadowView(haveSun, uniforms.lightViewProjection);
     }
 
+    // Per-material half of DrawConstants, memoised. Keyed by the material's
+    // address: materials live in the library for the life of the process and
+    // are not rebuilt per frame, so the pointer is a stable identity. Cleared
+    // whenever the library is rebuilt (see invalidateMaterialConstants).
+    mutable std::unordered_map<const rhi_renderer::Material*, DrawConstants>
+        materialConstantsCache;
+
+    // Drops one material's memo. Used by setMaterialParam, which the post and
+    // stylize passes call every frame: clearing the whole table there would
+    // discard every other material's entry to invalidate one.
+    void forgetMaterialConstants(const std::string& name)
+    {
+        if (const rhi_renderer::Material* material = materials.find(name))
+            materialConstantsCache.erase(material);
+    }
+
+    const DrawConstants& materialConstants(
+        const rhi_renderer::Material& material) const
+    {
+        const auto found = materialConstantsCache.find(&material);
+        if (found != materialConstantsCache.end())
+            return found->second;
+
+        DrawConstants base;
+        base.tintOpacity = material.modulate();
+        const auto materialValue =
+            [&](const char* name) -> const rhi_renderer::MaterialValue* {
+            const auto it = material.params.find(name);
+            return it == material.params.end() ? nullptr : &it->second;
+        };
+        if (const auto* value = materialValue("rimColour"))
+            if (const glm::vec4* rim = std::get_if<glm::vec4>(value))
+                base.rimColourStrength = *rim;
+        if (const auto* value = materialValue("rimPower"))
+            if (const float* rimPower = std::get_if<float>(value))
+                base.surfaceParams.y = *rimPower;
+        if (const auto* value = materialValue("alphaScissor"))
+            if (const float* alpha = std::get_if<float>(value))
+                base.surfaceParams.x = *alpha;
+        return materialConstantsCache.emplace(&material, base).first->second;
+    }
+
     DrawConstants drawConstants(const Node& nodeRecord,
                                 const rhi_renderer::Material& material,
                                 const glm::mat4& model) const
     {
-        DrawConstants constants;
-        constants.model = model;
-        const glm::vec4 materialTint = material.modulate();
-        constants.tintOpacity = materialTint;
-
-        // The material's own fragment_program_ref defaults come first: they are
-        // the authored look, and a node's ShaderParams or an enchantment then
+        // The material's own contribution is a pure function of the material,
+        // so it is computed once per material and reused. It used to be three
+        // string-keyed map lookups plus modulate() on every draw -- ~2400
+        // lookups a frame for the 22 distinct materials a frame actually uses.
+        //
+        // The material's fragment_program_ref defaults come first: they are the
+        // authored look, and a node's ShaderParams or an enchantment then
         // overrides them. This used to be skipped entirely, so a material that
         // states `param_named rimColour ...` -- which is how every rim-lit
         // material in the game states it, the crystals included -- rendered
         // with no rim at all.
-        const auto materialValue =
-            [&](const char* name) -> const rhi_renderer::MaterialValue* {
-            const auto found = material.params.find(name);
-            return found == material.params.end() ? nullptr : &found->second;
-        };
-        if (const auto* value = materialValue("rimColour"))
-            if (const glm::vec4* rim = std::get_if<glm::vec4>(value))
-                constants.rimColourStrength = *rim;
-        if (const auto* value = materialValue("rimPower"))
-            if (const float* rimPower = std::get_if<float>(value))
-                constants.surfaceParams.y = *rimPower;
-        if (const auto* value = materialValue("alphaScissor"))
-            if (const float* alpha = std::get_if<float>(value))
-                constants.surfaceParams.x = *alpha;
+        DrawConstants constants = materialConstants(material);
+        constants.model = model;
 
         if (nodeRecord.hasShader) {
             constants.tintOpacity *= glm::vec4(nodeRecord.shader.tint,
@@ -1336,17 +1573,34 @@ struct Renderer::Impl {
         if (!resource)
             return;
         for (size_t index = 0; index < resource->submeshes.size(); ++index) {
-            const std::string requested =
+            // By reference, and the prototype fallback computed only when it is
+            // actually needed. Both of those used to cost a heap allocation on
+            // every draw of every frame: the name was copied out of the
+            // attachment, and `prototypes.materialFor()` -- which lowercases
+            // the name into a fresh string and substring-searches every rule --
+            // was an eager argument to resolve(), so it ran even for the common
+            // case where the material is found by name and the fallback is
+            // discarded unused. At 787 draws a frame that was the single
+            // largest cost in the submit loop.
+            static const std::string kFallbackName = prototype::kSurfaceMaterial;
+            const std::string& requested =
                 attachment.materials.empty()
-                    ? prototype::kSurfaceMaterial
+                    ? kFallbackName
                     : attachment.materials[std::min(index,
                                                     attachment.materials.size() - 1)];
             // Keep the real material: the wireframe view only changes the
             // rasterizer state and the fragment colour. Substituting the
             // prototype surface here (as this used to) drew every line in the
             // placeholder's magenta rather than the flat wire tint.
+            //
+            // find() first, resolve() only on a miss: resolve() itself starts
+            // with the same find(), so this is the identical material either
+            // way -- it just does not pay for the fallback on the hit path.
+            const rhi_renderer::Material* direct = materials.find(requested);
             const rhi_renderer::Material& material =
-                materials.resolve(requested, prototypes.materialFor(requested));
+                direct ? *direct
+                       : materials.resolve(requested,
+                                           prototypes.materialFor(requested));
             // A stylised surface (water, slime, lava) is the same geometry
             // through a different fragment stage; everything else about the
             // draw -- vertex layout, blend, depth, culling -- is unchanged.
@@ -1747,8 +2001,18 @@ struct Renderer::Impl {
     void drawParticles(rhi::CommandList& commands, const RenderCore::View& view,
                        size_t& batches, size_t& triangles, bool withNormalDepth)
     {
+        const ParticleSlice slice = particleSliceFor(view.target);
+        if (slice == ParticleSlice::Count)
+            return;
         if (particleSim.liveCount() == 0 || particleEffects.empty())
             return;
+        const uint32_t capacity = particleSliceCapacity(slice);
+        // A preview shows the effect parked on the thumbnail subject and the
+        // level shows everything else, matching how the mesh loops above split
+        // the same two sets. Without it the level's fires burn inside the
+        // swatch and the swatch's fire burns inside the level.
+        const bool thumbnailView =
+            view.target == RenderCore::SceneTarget::Thumbnail;
         glm::quat cameraOrientation = view.orientation;
         glm::vec3 cameraPosition = view.position;
         if (view.target == RenderCore::SceneTarget::Main) {
@@ -1835,8 +2099,10 @@ struct Renderer::Impl {
             }
 
             for (uint32_t index : particleOrder) {
-                if (quadCount >= kMaxDrawnParticles)
+                if (quadCount >= capacity)
                     break;
+                if (instanceIsThumbnailOnly(pool.owner[index]) != thumbnailView)
+                    continue;
                 // Wall-clock cadence, not normalised life, so a flipbook keeps
                 // its authored speed however long the particle lives.
                 float frame = 0.0f;
@@ -1880,8 +2146,11 @@ struct Renderer::Impl {
 
         if (particleStaging.empty())
             return;
+        const rhi::BufferHandle vertices = particleVertexBuffer(slice);
+        if (!vertices.valid())
+            return;
         core.device()->updateBuffer(
-            particleVertices, particleStaging.data(),
+            vertices, particleStaging.data(),
             particleStaging.size() * sizeof(ParticleVertex));
 
         for (const Group& group : groups) {
@@ -1890,7 +2159,7 @@ struct Renderer::Impl {
             if (!pipeline.valid())
                 continue;
             commands.bindPipeline(pipeline);
-            commands.bindVertexBuffer(0, particleVertices);
+            commands.bindVertexBuffer(0, vertices);
             commands.bindIndexBuffer(particleIndices, 0, rhi::IndexType::UInt32);
             commands.bindTexture(0, group.texture.texture,
                                  group.texture.sampler);
@@ -2069,6 +2338,15 @@ struct Renderer::Impl {
             view.target != RenderCore::SceneTarget::Thumbnail) {
             Node neutralNode;
             neutralNode.alive = true;
+            // Hoisted out of the loop. This used to build a fresh
+            // MeshAttachment per record -- which means a std::vector<std::string>
+            // heap allocation and a string copy for every one of the several
+            // hundred static props, every frame, purely to hand drawMesh the
+            // shape it expects. Reusing one attachment and assigning into its
+            // existing vector keeps the same capacity across the whole loop, so
+            // the steady-state frame allocates nothing here at all.
+            MeshAttachment attachment;
+            attachment.materials.resize(1);
             for (const StaticBatch& batch : staticBatches) {
                 if (!batch.built || !batch.visible)
                     continue;
@@ -2077,9 +2355,8 @@ struct Renderer::Impl {
                         glm::translate(glm::mat4(1.0f), record.position) *
                         glm::rotate(glm::mat4(1.0f), glm::radians(record.yawDeg),
                                     glm::vec3(0, 1, 0));
-                    MeshAttachment attachment;
                     attachment.mesh = record.mesh;
-                    attachment.materials = {record.material};
+                    attachment.materials[0] = record.material;
                     drawMesh(commands, neutralNode, attachment, model, batches,
                              triangles, withNormalDepth);
                 }
@@ -2090,9 +2367,12 @@ struct Renderer::Impl {
         // viewmodel is RENDER_QUEUE_8 (80).
         if (!viewmodelPass)
             drawParticles(commands, view, batches, triangles, withNormalDepth);
+        // After the world and the particles, before the viewmodel pass: a
+        // diagnostic overlay belongs over the level it describes and under the
+        // hands, which is where the legacy queue put it.
+        if (!viewmodelPass)
+            drawDebugLines(commands, batches, withNormalDepth);
         core.addFrameStats(batches, triangles);
-        if (!debugLines.empty())
-            warnOnce("debug-lines", "debug lines");
     }
 };
 
@@ -2110,7 +2390,7 @@ MeshHandle Renderer::loadMesh(const std::string& path, const glm::mat4* bake)
     options.pivot = PivotMode::Source;
     detail::ImportedModelData imported;
     ModelImportReport report;
-    if (!detail::importStaticModel(path, options, imported, report)) {
+    if (!detail::loadStaticModel(path, options, imported, report)) {
         log::error("RHI renderer: model '%s' failed: %s; using prototype mesh",
                    path.c_str(), report.error.c_str());
         return prototypeMesh(path);
@@ -2151,7 +2431,7 @@ MeshHandle Renderer::loadMesh(const std::string& path,
     const ModelImportOptions options = sanitizeModelImportOptions(rawOptions);
     detail::ImportedModelData imported;
     ModelImportReport report;
-    if (!detail::importStaticModel(path, options, imported, report)) {
+    if (!detail::loadStaticModel(path, options, imported, report)) {
         log::error("RHI renderer: model '%s' failed: %s; using prototype mesh",
                    path.c_str(), report.error.c_str());
         return prototypeMesh(path);
@@ -2310,7 +2590,14 @@ SkinInstanceHandle Renderer::attachSkinnedMesh(
     }
     const rhi_renderer::Material& material = mImpl->materials.resolve(
         materialName, mImpl->prototypes.materialFor(materialName));
-    if (material.name != materialName &&
+    // A blank name is not a missing material: on these string overloads it is
+    // the caller saying it has no preference, which the scene format documents
+    // as legal ("an empty one leaves the entity wearing the renderer's
+    // default"). Reporting the documented default as an error is how a console
+    // becomes something people scroll past. The submesh overload below still
+    // warns on a blank, because there it means an imported mesh named no
+    // material, which is worth knowing.
+    if (!materialName.empty() && material.name != materialName &&
         mImpl->missingMaterialWarnings.shouldLog(materialName, true))
         log::error("RHI renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), material.name.c_str());
@@ -2456,7 +2743,7 @@ void Renderer::setNodeMaterial(NodeHandle handle,
                                      : mImpl->materials.find(fallback)
                                            ? fallback
                                            : prototype::kSurfaceMaterial;
-    if (resolved != materialName &&
+    if (!materialName.empty() && resolved != materialName &&
         mImpl->missingMaterialWarnings.shouldLog(materialName, true))
         log::error("RHI renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), resolved.c_str());
@@ -2661,6 +2948,18 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
 }
 void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
                           const std::string& materialName,
+                          const char* fallbackMaterial, bool castShadows,
+                          bool renderOnTop)
+{
+    // See the header: this overload exists so a string-literal fallback binds
+    // here instead of decaying to `bool castShadows` on the overload without a
+    // fallback, which silently shifted every later argument by one.
+    attachMesh(node, mesh, materialName,
+               std::string(fallbackMaterial ? fallbackMaterial : ""),
+               castShadows, renderOnTop);
+}
+void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
+                          const std::string& materialName,
                           const std::string& fallbackMaterial,
                           bool castShadows, bool renderOnTop)
 {
@@ -2672,7 +2971,14 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     }
     const rhi_renderer::Material& material =
         mImpl->materials.resolve(materialName, fallbackMaterial);
-    if (material.name != materialName &&
+    // A blank name is not a missing material: on these string overloads it is
+    // the caller saying it has no preference, which the scene format documents
+    // as legal ("an empty one leaves the entity wearing the renderer's
+    // default"). Reporting the documented default as an error is how a console
+    // becomes something people scroll past. The submesh overload below still
+    // warns on a blank, because there it means an imported mesh named no
+    // material, which is worth knowing.
+    if (!materialName.empty() && material.name != materialName &&
         mImpl->missingMaterialWarnings.shouldLog(materialName, true))
         log::error("RHI renderer: material '%s' is missing; using '%s'",
                    materialName.c_str(), material.name.c_str());
@@ -3032,10 +3338,21 @@ bool Renderer::spawnDecal(const std::string& profile, glm::vec3 position,
 }
 void Renderer::updateParticles(float dt)
 {
+    // Rebuilt rather than kept in step incrementally: a spawn's node can be
+    // marked for the thumbnail after the effect is already running, and this
+    // walk is already being made for the transforms.
+    std::fill(mImpl->particleInstanceThumbnail.begin(),
+              mImpl->particleInstanceThumbnail.end(), uint8_t(0));
     for (auto& [handle, live] : mImpl->liveParticles) {
-        if (live.followsNode && mImpl->node(live.parent))
+        const Impl::Node* parent = mImpl->node(live.parent);
+        if (live.followsNode && parent)
             mImpl->particleSim.setInstanceTransform(
                 live.instance, mImpl->worldMatrix(live.parent));
+        if (parent && parent->thumbnailOnly) {
+            if (live.instance >= mImpl->particleInstanceThumbnail.size())
+                mImpl->particleInstanceThumbnail.resize(live.instance + 1, 0);
+            mImpl->particleInstanceThumbnail[live.instance] = 1;
+        }
     }
     mImpl->particleTime += dt;
     mImpl->surfaceTime = mImpl->particleTime;
@@ -3067,8 +3384,6 @@ LightHandle Renderer::attachLight(NodeHandle node, const LightDesc& desc)
     const LightHandle handle{uint32_t(mImpl->lights.size())};
     mImpl->sceneRegistry.addAttachment(
         node, {NodeAttachKind::Light, handle.id, ""});
-    if (desc.castShadows)
-
     return handle;
 }
 void Renderer::setLightColour(LightHandle handle, glm::vec3 colour)
@@ -3116,12 +3431,17 @@ glm::mat4 Renderer::cameraViewProj() const
 
 bool Renderer::loadMaterialScript(const std::string& path)
 {
+    // Reloading a script can replace a material in place, so the per-material
+    // constant memo has to go with it -- otherwise a hot-reloaded material
+    // keeps rendering with the values it had at startup.
+    mImpl->materialConstantsCache.clear();
     return mImpl->materials.loadFile(mImpl->core, path);
 }
 void Renderer::refreshAssetIndex() { mImpl->materials.refreshTextures(mImpl->core); }
 void Renderer::setMaterialParam(const std::string& material,
                                 const std::string& parameter, float value)
 {
+    mImpl->forgetMaterialConstants(material);
     if (!mImpl->materials.set(material, parameter, value) &&
         mImpl->warned.insert("material:" + material).second)
         log::warn("RHI renderer: material param '%s' ignored for missing material '%s'",
@@ -3130,16 +3450,19 @@ void Renderer::setMaterialParam(const std::string& material,
 void Renderer::setMaterialParam(const std::string& material,
                                 const std::string& parameter, glm::vec2 value)
 {
+    mImpl->forgetMaterialConstants(material);
     mImpl->materials.set(material, parameter, value);
 }
 void Renderer::setMaterialParam(const std::string& material,
                                 const std::string& parameter, glm::vec3 value)
 {
+    mImpl->forgetMaterialConstants(material);
     mImpl->materials.set(material, parameter, value);
 }
 void Renderer::setMaterialParam(const std::string& material,
                                 const std::string& parameter, glm::vec4 value)
 {
+    mImpl->forgetMaterialConstants(material);
     mImpl->materials.set(material, parameter, value);
 }
 
@@ -3208,6 +3531,18 @@ void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
 }
 void Renderer::setGlobalMaterialParam(const std::string& parameter, float value)
 {
+    // Two of these are scene-wide GTE artefacts rather than per-material
+    // settings, and the scene shaders read them out of the uniform block. They
+    // still reach the material library as well: the parameter is what the
+    // render presets and the debug panel already speak, and intercepting it
+    // here is what makes the existing "Affine warp" slider drive this backend
+    // without either of them learning a new call.
+    if (parameter == "precisionMultiplier")
+        mImpl->env.precisionMultiplier = value;
+    else if (parameter == "affineAmount")
+        mImpl->env.affineAmount = value;
+    else if (parameter == "affineSoftness")
+        mImpl->env.affineSoftness = value;
     for (const std::string& material : mImpl->materials.names())
         mImpl->materials.set(material, parameter, value);
 }
@@ -3240,18 +3575,12 @@ void Renderer::setRenderResolution(int width, int height)
 void Renderer::setPerPixelLightingEnabled(bool enabled)
 {
     mImpl->env.perPixelLighting = enabled;
-    if (!enabled)
-        mImpl->warnOnce("vertex-lighting", "vertex-lighting mode (per-pixel remains active)");
 }
 void Renderer::setOmniAttenuation(float exponent)
 {
     mImpl->env.omniAttenuation = exponent;
 }
-void Renderer::setLightSteps(float steps)
-{
-    mImpl->env.lightSteps = steps;
-    if (steps > 0) mImpl->warnOnce("light-steps", "posterized light steps");
-}
+void Renderer::setLightSteps(float steps) { mImpl->env.lightSteps = steps; }
 void Renderer::setLightStepSoftness(float softness)
 {
     mImpl->env.lightStepSoftness = softness;

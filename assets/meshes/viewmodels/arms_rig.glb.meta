@@ -1,0 +1,21 @@
+# Resource database record. Authored metadata only -- the source
+# hash, the outputs and the build state are derived and live in
+# build/acp, not here.
+#
+# This .glb is the DCC file behind THREE rows of the asset pipeline, which is
+# exactly the fan-out figure 1.33 draws from the Maya/Blender box: gltf2ozz
+# reads it for the Skel. Hierarchy row (arms_rig.skeleton.ozz) and the
+# Animation Clips row (clip_*.ozz), driven by config/arms_rig.ozz.json.
+#
+# What it is NOT is a static mesh. The Mesh Exporter refuses it -- "animations
+# require skeletal/deforming model import" -- and it is right to: a skinned rig
+# baked to a static .rmesh would be the bind pose, silently.
+schema = 1
+guid = "4e9fcfe877ef4fa0"
+type = "mesh"
+name = "First-person arms rig"
+tags = ["viewmodel", "skinned"]
+
+[import]
+skip = true
+skip_reason = "skinned rig: gltf2ozz owns it (see config/arms_rig.ozz.json)"

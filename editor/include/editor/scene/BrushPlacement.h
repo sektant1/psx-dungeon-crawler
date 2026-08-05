@@ -22,6 +22,16 @@ struct PlacementQuery {
     // Where the ghost sits when the cursor points above the horizon and the
     // work plane is behind the camera.
     float fallbackDistance = 12.0f;
+    // Metres to lift a brush that carries no kit piece, so the thing rests ON
+    // the surface instead of centring its ORIGIN on it.
+    //
+    // A kit piece states this in kit.toml (`pivot` / KitPiece::yOffsetKit) and
+    // has always had it applied. A raw mesh or a primitive has no piece, so it
+    // used to get nothing -- and any mesh authored around its centre, which is
+    // most of what a modelling package exports, was placed half through the
+    // floor. The caller fills this from the mesh's own local bounds; for a mesh
+    // already authored with its base at Y=0 it is zero and nothing changes.
+    float baseOffset = 0.0f;
 };
 
 struct Placement {

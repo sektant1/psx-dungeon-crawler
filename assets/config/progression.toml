@@ -1,0 +1,206 @@
+# How a character grows.
+#
+# Two independent tracks, and they are deliberately not derived from each other:
+#
+#   SKILLS      Old-School-RuneScape style. Each skill has its own experience
+#               and its own level, 1..99, on the exact OSRS table (level 2 = 83
+#               xp, level 99 = 13,034,431). You raise a skill by *doing the
+#               thing*: swing a blade, Blades goes up. There is no point
+#               allocation. Content gates on individual skill levels.
+#
+#   CHARACTER   Escape-from-Tarkov style. Everything you earn anywhere also
+#   LEVEL       feeds one number, on a much shorter and steeper table (cap 60).
+#               That is what traders, regions and the lodge gate on -- so a
+#               player who has ground one skill is not automatically welcome
+#               everywhere, and a player who has done a bit of everything is.
+#
+# Skills reach the combat numbers through `per_level`, which is a stat modifier
+# applied once per level ABOVE 1. They go through exactly the same modifier
+# layer equipment does, so a level and a breastplate can never double-count.
+
+# --- the derived-stat curve --------------------------------------------------
+#
+# What the five intermediate attributes turn into. Skills feed the attributes;
+# the attributes feed the pools. Two stages, so an author can say "+2 vigour"
+# on a helmet and "+15 health" on a different one and have both be meaningful.
+[curve]
+health_base = 20.0
+health_per_vigour = 8.0
+stamina_base = 40.0
+stamina_per_agility = 6.0
+mana_base = 20.0
+mana_per_attunement = 8.0
+poise_base = 30.0
+poise_per_vigour = 5.0
+poise_per_might = 2.0
+carry_base = 15.0
+carry_per_might = 2.5
+melee_power_per_might = 0.05
+cast_power_per_attunement = 0.05
+crit_base = 0.02
+crit_per_fortune = 0.004
+# Small on purpose. The controller is tuned for a specific feel (AGENTS.md §4.1)
+# and a late-game character sprinting at 1.8x would be playing a different game
+# from the one the movement was designed for. 0.006 per level of Agility means
+# a 99 Agility character is about 60% faster, and every point between is felt.
+move_speed_per_agility = 0.006
+stamina_regen_base = 25.0
+stamina_regen_per_agility = 1.0
+mana_regen_base = 5.0
+mana_regen_per_attunement = 0.5
+
+# --- the skills --------------------------------------------------------------
+#
+# `order` is the panel order. `per_level` is what one level contributes.
+
+[[skill]]
+id = "blades"
+name = "Blades"
+description = "Sword, knife and the edge of anything else."
+order = 0
+[[skill.per_level]]
+stat = "might"
+flat = 0.18
+[[skill.per_level]]
+stat = "melee_power"
+flat = 0.004
+
+[[skill]]
+id = "marksmanship"
+name = "Marksmanship"
+description = "Crossbow, sling, and anything else that leaves your hand."
+order = 1
+[[skill.per_level]]
+stat = "agility"
+flat = 0.10
+[[skill.per_level]]
+stat = "crit_chance"
+flat = 0.0012
+
+[[skill]]
+id = "thaumaturgy"
+name = "Thaumaturgy"
+description = "The working of the arts the lodge will admit to teaching."
+order = 2
+[[skill.per_level]]
+stat = "attunement"
+flat = 0.22
+[[skill.per_level]]
+stat = "cast_power"
+flat = 0.004
+
+[[skill]]
+id = "vitality"
+name = "Vitality"
+description = "What is left of you after the hit lands."
+order = 3
+[[skill.per_level]]
+stat = "vigour"
+flat = 0.24
+
+[[skill]]
+id = "athletics"
+name = "Athletics"
+description = "Running, climbing, and still being able to swing afterwards."
+order = 4
+[[skill.per_level]]
+stat = "agility"
+flat = 0.20
+[[skill.per_level]]
+stat = "stamina_regen"
+flat = 0.15
+
+[[skill]]
+id = "endurance"
+name = "Endurance"
+description = "Carrying more of it back than you should be able to."
+order = 5
+[[skill.per_level]]
+stat = "might"
+flat = 0.12
+[[skill.per_level]]
+stat = "carry_capacity"
+flat = 0.35
+
+[[skill]]
+id = "alchemy"
+name = "Alchemy"
+description = "Reducing a thing to what it wanted to be."
+order = 6
+[[skill.per_level]]
+stat = "attunement"
+flat = 0.06
+
+[[skill]]
+id = "smithing"
+name = "Smithing"
+description = "Frames, edges, and the repair of both."
+order = 7
+[[skill.per_level]]
+stat = "might"
+flat = 0.06
+
+# Skills that gate content and change no stat at all are legitimate, and there
+# should be several: a number that only opens doors is easier to reason about
+# than one that also quietly changes your damage.
+[[skill]]
+id = "lockpicking"
+name = "Lockpicking"
+description = "Other people's arrangements, reconsidered."
+order = 8
+
+[[skill]]
+id = "bartering"
+name = "Bartering"
+description = "Knowing what a thing is worth to the person in front of you."
+order = 9
+
+[[skill]]
+id = "lore"
+name = "Lore"
+description = "Recognising what you are looking at before it recognises you."
+order = 10
+
+[[skill]]
+id = "construction"
+name = "Construction"
+description = "The house, and eventually the street."
+order = 11
+
+# --- where a new character starts --------------------------------------------
+#
+# Starting *experience*, not starting levels: experience is the single
+# representation of progression, and a level is a reading of it. 83 xp is
+# exactly level 2, 388 is level 5.
+[start]
+currency = 120
+
+[start.skill]
+blades = 388
+vitality = 388
+athletics = 83
+bartering = 83
+
+# The five intermediate attributes everyone opens at, before any skill or any
+# piece of equipment. Ten across the board is the baseline the movement and
+# combat numbers were tuned against, which is what makes the RPG layer
+# invisible until it is used.
+[start.attributes]
+might = 10.0
+agility = 10.0
+vigour = 10.0
+attunement = 10.0
+fortune = 10.0
+
+[[start.item]]
+id = "tallow_candle"
+count = 3
+
+[[start.item]]
+id = "bandage_linen"
+count = 2
+
+[[start.item]]
+id = "apprentice_coat"
+count = 1
+equipped = true

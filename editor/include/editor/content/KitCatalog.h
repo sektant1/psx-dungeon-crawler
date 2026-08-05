@@ -36,7 +36,9 @@ struct KitAttachment {
 struct KitPiece {
     std::string id;       // "kit.wall" -- with the prefix scenes reference
     std::string role;     // "wall", "floor_feature", "prop_light", ...
-    std::string meshPath; // RELATIVE to the asset root: "meshes/kit/Wall_01.obj"
+    // RELATIVE to the asset root: "meshes/kit/Wall_01.obj". Empty for a group
+    // -- see isGroup() below.
+    std::string meshPath;
     std::string material; // "Game/Kit/Dungeon"
     Socket socket = Socket::Prop;
 
@@ -67,6 +69,14 @@ struct KitPiece {
     // Names index the editor's component registry (ed::findComponentType), so
     // adding one is a line of kit.toml, not a line of C++.
     std::vector<std::string> components;
+
+    // A piece that IS its parts: no mesh of its own, only attachments.
+    //
+    // The root of a multi-part imported model is one. Placing it places the
+    // whole model, which is the only reason the parts of a twenty-four-piece
+    // model can be found again after import -- and, once the editor unpacks it,
+    // the only reason those parts appear in the hierarchy as an object.
+    bool isGroup() const { return meshPath.empty(); }
 
     // `kitScale` is the catalogue's scale; a piece that carries its own wins.
     // Every caller passes catalog.scale() and gets the right answer either way,

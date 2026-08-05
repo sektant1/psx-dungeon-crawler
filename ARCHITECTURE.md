@@ -1,7 +1,9 @@
 # Architecture
 
 How the code is layered, and what enforces the layering. For *what the game is*
-see `AGENTS.md`; for asset authoring see `docs/assets-pipeline.md`.
+see `AGENTS.md`; for how a file an artist made becomes something the game loads
+see [docs/assets-pipeline.md](docs/assets-pipeline.md), and for what art still
+has to be made see [docs/art-asset-checklist.md](docs/art-asset-checklist.md).
 
 ## Layers
 
@@ -68,6 +70,25 @@ The camera is one of those components, which is what makes a shot authored
 rather than coded: an orbiting camera is a `Camera` parented to a pivot with a
 `Spin`. See [docs/authoring-shots.md](docs/authoring-shots.md) for the workflow
 and how a scene becomes a GIF.
+
+## The asset pipeline
+
+`assets/` holds what artists commit; `build/cooked/` holds what the game loads.
+Between them is `raven_acp`, the Asset Conditioning Pipeline: it classifies every
+file into one row of Gregory's figure 1.33, runs that row's exporter, and
+publishes a pack indexed by `pack.manifest`.
+
+| Target | Owns |
+|---|---|
+| `eng_core` (`eng/content/`) | the format table, the resource database, and the readers for every intermediate — so the game, the editor, the pipeline and the tests share one definition of what a `.rmesh` is |
+| `eng_acp` | the exporters and the build graph. Above the engine: it links `eng_core` and `eng_model_import`, and nothing links it back |
+| `raven_acp` | the CLI, plus the World row whose cooker lives in `game_content` |
+
+The runtime cost of all this is two functions —
+`eng::detail::loadStaticModel()` and `rhi_renderer::loadImage()` — each of which
+asks `assets::conditioned()` whether a faster form exists and falls back to the
+source loader when it does not. Nothing else in the engine knows the pipeline
+exists.
 
 ## Content checks
 

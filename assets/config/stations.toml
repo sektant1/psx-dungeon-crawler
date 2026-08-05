@@ -1,0 +1,152 @@
+# The safehouse, and the village around it.
+#
+# One mechanic, two owners. `owner = "hideout"` is the house the player keeps in
+# the village; `owner = "village"` is the street outside it. Both are a project
+# with tiers, a cost and something it unlocks, which is deliberate: an NPC's
+# questline can finish by paying for a village tier, and the player watches
+# their own base and the town improve through the same system (AGENTS.md §16
+# wants each major NPC's progression to have "a visible effect on the village").
+#
+# Tiers are cumulative: each one states what it ADDS, and everything up to the
+# built level contributes. Nothing here ticks -- an upgrade completes when it is
+# paid for, and time advances through expeditions (§17).
+
+[station.strongbox]
+name = "Strongbox"
+description = "What is in here is yours whatever happens down there."
+owner = "hideout"
+
+[[station.strongbox.tier]]
+name = "A Chest with a Lock"
+description = "Twenty more places to put things."
+currency = 150
+stash_slots = 20
+[[station.strongbox.tier.material]]
+item = "rusted_fitting"
+count = 8
+
+[[station.strongbox.tier]]
+name = "A Braced Vault"
+currency = 500
+stash_slots = 40
+[[station.strongbox.tier.material]]
+item = "rusted_fitting"
+count = 25
+[[station.strongbox.tier.requirement]]
+kind = "level_at_least"
+subject = "construction"
+value = 15
+
+# =============================================================================
+[station.workbench]
+name = "Workbench"
+description = "Where a frame gets straightened and a strap gets replaced."
+owner = "hideout"
+
+[[station.workbench.tier]]
+name = "A Bench and a Vice"
+currency = 200
+carry_bonus = 4.0
+[[station.workbench.tier.material]]
+item = "rusted_fitting"
+count = 12
+[[station.workbench.tier]]
+name = "A Proper Shop"
+currency = 650
+carry_bonus = 8.0
+[[station.workbench.tier.material]]
+item = "rusted_fitting"
+count = 30
+[[station.workbench.tier.modifier]]
+stat = "might"
+flat = 1.0
+[[station.workbench.tier.requirement]]
+kind = "level_at_least"
+subject = "smithing"
+value = 20
+
+# =============================================================================
+[station.hearth]
+name = "Hearth"
+description = "Sleep, and the part of you that heals while you do."
+owner = "hideout"
+
+[[station.hearth.tier]]
+name = "A Fire That Stays In"
+currency = 120
+[[station.hearth.tier.material]]
+item = "tallow_candle"
+count = 10
+[[station.hearth.tier.modifier]]
+stat = "vigour"
+flat = 1.0
+
+[[station.hearth.tier]]
+name = "A Bed Worth Returning To"
+currency = 400
+[[station.hearth.tier.material]]
+item = "grave_lichen"
+count = 5
+[[station.hearth.tier.modifier]]
+stat = "vigour"
+flat = 2.0
+[[station.hearth.tier.modifier]]
+stat = "stamina_regen"
+percent = 0.1
+
+# =============================================================================
+[station.still]
+name = "Still"
+description = "Alder will not say where she learned this, and neither will you."
+owner = "hideout"
+
+[[station.still.tier]]
+name = "A Small Still"
+currency = 300
+grants_flags = ["hideout.still"]
+[[station.still.tier.material]]
+item = "quicksilver_dram"
+count = 2
+[[station.still.tier.material]]
+item = "ashen_moss"
+count = 10
+[[station.still.tier.modifier]]
+stat = "attunement"
+flat = 1.0
+[[station.still.tier.requirement]]
+kind = "level_at_least"
+subject = "alchemy"
+value = 10
+
+# =============================================================================
+# The village. Same rows, different owner.
+
+[station.lower_road]
+name = "The Lower Road"
+description = "Lit, and used again."
+owner = "village"
+
+[[station.lower_road.tier]]
+name = "Lamps Along the Road"
+currency = 0
+grants_flags = ["village.road_lit"]
+[[station.lower_road.tier.requirement]]
+kind = "quest_completed"
+subject = "first_light"
+
+[station.forge]
+name = "The Village Forge"
+description = "Cold for two winters. Somebody paid for the coal."
+owner = "village"
+
+[[station.forge.tier]]
+name = "Relit"
+currency = 800
+grants_flags = ["village.forge_lit"]
+[[station.forge.tier.material]]
+item = "rusted_fitting"
+count = 40
+[[station.forge.tier.requirement]]
+kind = "standing_at_least"
+subject = "corvin"
+value = 25

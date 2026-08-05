@@ -1,0 +1,1562 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.turntable",
+  "palette": "turntable",
+  "entities": [
+    {
+      "id": "alcove_back",
+      "prefab": "kit.wall_skull",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -10.0
+        ]
+      }
+    },
+    {
+      "id": "alcove_back_band",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          0.0,
+          4.0,
+          -10.0
+        ]
+      }
+    },
+    {
+      "id": "alcove_floor",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -8.0
+        ]
+      }
+    },
+    {
+      "id": "alcove_roof",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          0.0,
+          4.895999908447266,
+          -8.0
+        ]
+      }
+    },
+    {
+      "id": "alcove_side_0",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          -8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "alcove_side_1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          -8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "alcove_side_band_0",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          -2.0,
+          4.0,
+          -8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "alcove_side_band_1",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          2.0,
+          4.0,
+          -8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "camera_detail",
+      "name": "Detail Camera (parked)",
+      "transform": {
+        "position": [
+          0.8999999761581421,
+          1.4004000425338745,
+          2.536799907684326
+        ],
+        "rotation_degrees": [
+          -2.0,
+          16.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 32.0,
+        "far_clip": 40.0,
+        "priority": 10,
+        "active": false
+      }
+    },
+    {
+      "id": "camera_main",
+      "name": "Hero Camera",
+      "transform": {
+        "position": [
+          0.0,
+          1.555999994277954,
+          5.073599815368652
+        ],
+        "rotation_degrees": [
+          4.292300224304199,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 45.0,
+        "near_clip": 0.07999999821186066,
+        "far_clip": 60.0,
+        "priority": 20
+      }
+    },
+    {
+      "id": "camera_orbit",
+      "name": "Orbit Camera (parked)",
+      "transform": {
+        "position": [
+          0.0,
+          1.555999994277954,
+          4.312600135803223
+        ],
+        "rotation_degrees": [
+          4.292300224304199,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 45.0,
+        "near_clip": 0.07999999821186066,
+        "far_clip": 60.0,
+        "priority": 10,
+        "active": false
+      },
+      "orbit": {
+        "centre": [
+          0.0,
+          1.9368000030517578,
+          0.0
+        ],
+        "radius": 4.312600135803223,
+        "degrees_per_second": 9.0,
+        "height": -0.3808000087738037,
+        "facing": "centre"
+      }
+    },
+    {
+      "id": "column_1",
+      "name": "Column 1",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          -2.75,
+          0.0,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "column_2",
+      "name": "Column 2",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          2.75,
+          0.0,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "column_3",
+      "name": "Column 3",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "column_4",
+      "name": "Column 4",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "door_frame_wide_0001",
+      "prefab": "kit.door_frame_wide",
+      "transform": {
+        "position": [
+          0.003599999938160181,
+          0.0,
+          -6.0
+        ],
+        "scale": [
+          1.0199999809265137,
+          1.0,
+          1.0
+        ]
+      },
+      "cell": {
+        "col": 0,
+        "row": -2,
+        "edge": "west",
+        "yaw_quarters": 1
+      }
+    },
+    {
+      "id": "dust",
+      "name": "Dust Motes",
+      "transform": {
+        "position": [
+          0.0,
+          1.399999976158142,
+          0.5
+        ]
+      },
+      "particles": {
+        "effect": "hall_dust"
+      }
+    },
+    {
+      "id": "floor_00",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "floor_01",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "floor_02",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "floor_03",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "floor_10",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "floor_11",
+      "prefab": "kit.floor"
+    },
+    {
+      "id": "floor_12",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "floor_13",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "floor_20",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "floor_21",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "floor_22",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "floor_23",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "light_alcove",
+      "name": "Alcove Glow",
+      "transform": {
+        "position": [
+          0.0,
+          2.299999952316284,
+          -1.0
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.46000000834465027,
+          0.6000000238418579,
+          0.8999999761581421
+        ],
+        "range": 5.0,
+        "animation": {
+          "mode": "pulse",
+          "speed": 0.2199999988079071,
+          "amount": 0.14000000059604645
+        }
+      }
+    },
+    {
+      "id": "light_fill",
+      "name": "Cold Fill",
+      "transform": {
+        "position": [
+          2.1500000953674316,
+          1.850000023841858,
+          1.600000023841858
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.4399999976158142,
+          0.7200000286102295,
+          1.100000023841858
+        ],
+        "range": 3.799999952316284
+      }
+    },
+    {
+      "id": "light_hanging",
+      "name": "Hanging Flame",
+      "transform": {
+        "position": [
+          0.0,
+          4.349999904632568,
+          1.7999999523162842
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.2199999988079071,
+          1.0499999523162842,
+          0.10000000149011612
+        ],
+        "range": 8.5,
+        "animation": {
+          "mode": "flicker",
+          "speed": 4.5,
+          "amount": 0.18000000715255737,
+          "phase": 2.5999999046325684
+        }
+      }
+    },
+    {
+      "id": "light_key",
+      "name": "Warm Key",
+      "transform": {
+        "position": [
+          -2.200000047683716,
+          3.200000047683716,
+          2.299999952316284
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          2.700000047683716,
+          1.659999966621399,
+          0.9399999976158142
+        ],
+        "range": 5.599999904632568,
+        "cast_shadows": true
+      }
+    },
+    {
+      "id": "light_kick",
+      "name": "Kicker",
+      "transform": {
+        "position": [
+          0.0,
+          6.449999809265137,
+          -2.25
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.350000023841858,
+          0.5600000023841858,
+          1.600000023841858
+        ],
+        "range": 3.5999999046325684
+      }
+    },
+    {
+      "id": "light_vault",
+      "name": "Vault Bounce",
+      "transform": {
+        "position": [
+          0.0,
+          6.199999809265137,
+          0.5
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.4399999976158142,
+          0.41999998688697815,
+          0.5199999809265137
+        ],
+        "range": 16.0
+      }
+    },
+    {
+      "id": "player_start",
+      "name": "Player Start",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          7.5
+        ]
+      },
+      "player_spawn": true
+    },
+    {
+      "id": "plinth_step",
+      "name": "Plinth Step",
+      "prefab": "kit.floor_hexagon",
+      "material": "Game/Kit/Stone",
+      "transform": {
+        "scale": [
+          0.3400000035762787,
+          0.10999999940395355,
+          0.30000001192092896
+        ]
+      }
+    },
+    {
+      "id": "plinth_top",
+      "name": "Plinth",
+      "prefab": "kit.floor_hexagon",
+      "material": "Game/Kit/Dungeon",
+      "transform": {
+        "position": [
+          0.0,
+          0.17599999904632568,
+          0.0
+        ],
+        "scale": [
+          0.23999999463558197,
+          0.25999999046325684,
+          0.20999999344348907
+        ]
+      }
+    },
+    {
+      "id": "portal_membrane_0001",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/ToxicSlime",
+      "transform": {
+        "position": [
+          -0.0052999998442828655,
+          0.0,
+          -7.844299793243408
+        ],
+        "scale": [
+          1.1299999952316284,
+          1.7699999809265137,
+          1.0
+        ]
+      },
+      "portal": {}
+    },
+    {
+      "id": "prop_barrel",
+      "prefab": "kit.prop_barrel",
+      "transform": {
+        "position": [
+          -4.599999904632568,
+          0.0,
+          -3.5999999046325684
+        ],
+        "rotation_degrees": [
+          0.0,
+          18.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "prop_barrel_bands",
+      "prefab": "kit.prop_barrel_bands",
+      "transform": {
+        "position": [
+          -4.599999904632568,
+          0.0,
+          -3.5999999046325684
+        ],
+        "rotation_degrees": [
+          0.0,
+          18.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "prop_crate",
+      "prefab": "kit.prop_crate",
+      "transform": {
+        "position": [
+          -4.949999809265137,
+          0.0,
+          -4.699999809265137
+        ],
+        "rotation_degrees": [
+          0.0,
+          -34.0,
+          0.0
+        ],
+        "scale": [
+          1.600000023841858,
+          1.600000023841858,
+          1.600000023841858
+        ]
+      }
+    },
+    {
+      "id": "rubble_debris",
+      "prefab": "kit.debris",
+      "transform": {
+        "position": [
+          -4.699999809265137,
+          0.0,
+          -3.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          145.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "rubble_debris_2",
+      "prefab": "kit.debris",
+      "transform": {
+        "position": [
+          4.400000095367432,
+          0.0,
+          -4.400000095367432
+        ],
+        "rotation_degrees": [
+          0.0,
+          -70.0,
+          0.0
+        ],
+        "scale": [
+          0.699999988079071,
+          0.699999988079071,
+          0.699999988079071
+        ]
+      }
+    },
+    {
+      "id": "rubble_pillar",
+      "name": "Fallen Column",
+      "prefab": "kit.pillar_fallen",
+      "transform": {
+        "position": [
+          4.699999809265137,
+          0.0,
+          -3.200000047683716
+        ],
+        "rotation_degrees": [
+          0.0,
+          62.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "subject",
+      "name": "Import Ac Vixen",
+      "parent": "subject_pivot",
+      "prefab": "kit.import_ac_vixen",
+      "transform": {
+        "position": [
+          0.027899999171495438,
+          0.0,
+          0.09399999678134918
+        ],
+        "rotation_degrees": [
+          0.0,
+          -22.0,
+          0.0
+        ],
+        "scale": [
+          0.2574999928474426,
+          0.2574999928474426,
+          0.2574999928474426
+        ]
+      },
+      "shader": {
+        "rim_colour": [
+          1.0,
+          0.6200000047683716,
+          0.3400000035762787
+        ],
+        "rim_strength": 0.41999998688697815,
+        "rim_power": 3.5999999046325684
+      }
+    },
+    {
+      "id": "subject_pivot",
+      "name": "Turntable",
+      "transform": {
+        "position": [
+          0.0,
+          0.6000000238418579,
+          0.0
+        ]
+      },
+      "spin": {
+        "degrees_per_second": 16.0
+      }
+    },
+    {
+      "id": "torch_01",
+      "name": "Torch 1",
+      "prefab": "kit.prop_torch",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          -5.380000114440918,
+          2.3499999046325684,
+          1.399999976158142
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ],
+        "scale": [
+          1.350000023841858,
+          1.350000023841858,
+          1.350000023841858
+        ]
+      },
+      "particles": {
+        "effect": "torch_fire",
+        "offset": [
+          0.0,
+          0.7200000286102295,
+          0.0
+        ],
+        "scale": 0.800000011920929
+      }
+    },
+    {
+      "id": "torch_02",
+      "name": "Torch 2",
+      "prefab": "kit.prop_torch",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          5.380000114440918,
+          2.3499999046325684,
+          1.399999976158142
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ],
+        "scale": [
+          1.350000023841858,
+          1.350000023841858,
+          1.350000023841858
+        ]
+      },
+      "particles": {
+        "effect": "torch_fire",
+        "offset": [
+          0.0,
+          0.7200000286102295,
+          0.0
+        ],
+        "scale": 0.800000011920929
+      }
+    },
+    {
+      "id": "torch_03",
+      "name": "Torch 3",
+      "prefab": "kit.prop_torch",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          -5.380000114440918,
+          2.3499999046325684,
+          6.599999904632568
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ],
+        "scale": [
+          1.350000023841858,
+          1.350000023841858,
+          1.350000023841858
+        ]
+      },
+      "particles": {
+        "effect": "torch_fire",
+        "offset": [
+          0.0,
+          0.7200000286102295,
+          0.0
+        ],
+        "scale": 0.800000011920929
+      }
+    },
+    {
+      "id": "torch_04",
+      "name": "Torch 4",
+      "prefab": "kit.prop_torch",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          5.380000114440918,
+          2.3499999046325684,
+          6.599999904632568
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ],
+        "scale": [
+          1.350000023841858,
+          1.350000023841858,
+          1.350000023841858
+        ]
+      },
+      "particles": {
+        "effect": "torch_fire",
+        "offset": [
+          0.0,
+          0.7200000286102295,
+          0.0
+        ],
+        "scale": 0.800000011920929
+      }
+    },
+    {
+      "id": "torch_light_01",
+      "name": "Torch Light 1",
+      "transform": {
+        "position": [
+          -5.380000114440918,
+          3.200000047683716,
+          1.399999976158142
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.5499999523162842,
+          0.800000011920929,
+          0.3799999952316284
+        ],
+        "range": 5.5,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3199999928474426,
+          "phase": 2.299999952316284
+        }
+      }
+    },
+    {
+      "id": "torch_light_02",
+      "name": "Torch Light 2",
+      "transform": {
+        "position": [
+          5.380000114440918,
+          3.200000047683716,
+          1.399999976158142
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.5499999523162842,
+          0.800000011920929,
+          0.3799999952316284
+        ],
+        "range": 5.5,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3199999928474426,
+          "phase": 4.199999809265137
+        }
+      }
+    },
+    {
+      "id": "torch_light_03",
+      "name": "Torch Light 3",
+      "transform": {
+        "position": [
+          -5.380000114440918,
+          3.200000047683716,
+          6.599999904632568
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.5499999523162842,
+          0.800000011920929,
+          0.3799999952316284
+        ],
+        "range": 5.5,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3199999928474426,
+          "phase": 6.099999904632568
+        }
+      }
+    },
+    {
+      "id": "torch_light_04",
+      "name": "Torch Light 4",
+      "transform": {
+        "position": [
+          5.380000114440918,
+          3.200000047683716,
+          6.599999904632568
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.5499999523162842,
+          0.800000011920929,
+          0.3799999952316284
+        ],
+        "range": 5.5,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3199999928474426,
+          "phase": 8.0
+        }
+      }
+    },
+    {
+      "id": "vault_00",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          -4.0,
+          4.895999908447266,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "vault_01",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          -4.0,
+          4.895999908447266,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "vault_02",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          -4.0,
+          4.895999908447266,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "vault_03",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          -4.0,
+          4.895999908447266,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "vault_10",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          0.0,
+          4.895999908447266,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "vault_11",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          0.0,
+          4.895999908447266,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "vault_12",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          0.0,
+          4.895999908447266,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "vault_13",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          0.0,
+          4.895999908447266,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "vault_20",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          4.0,
+          4.895999908447266,
+          -4.0
+        ]
+      }
+    },
+    {
+      "id": "vault_21",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          4.0,
+          4.895999908447266,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "vault_22",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          4.0,
+          4.895999908447266,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "vault_23",
+      "prefab": "kit.arch_roof",
+      "cast_shadows": false,
+      "transform": {
+        "position": [
+          4.0,
+          4.895999908447266,
+          8.0
+        ]
+      }
+    },
+    {
+      "id": "votive_light",
+      "name": "Votive Flicker",
+      "transform": {
+        "position": [
+          -0.8799999952316284,
+          0.5759999752044678,
+          0.800000011920929
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.2000000476837158,
+          0.6200000047683716,
+          0.23999999463558197
+        ],
+        "range": 2.4000000953674316,
+        "animation": {
+          "mode": "flicker",
+          "speed": 9.0,
+          "amount": 0.4000000059604645,
+          "phase": 5.099999904632568
+        }
+      }
+    },
+    {
+      "id": "wall_back_0",
+      "name": "Back Wall 0",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_back_2",
+      "name": "Back Wall 2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_back_band_0",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          -4.0,
+          4.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_back_band_1",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          0.0,
+          4.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_back_band_2",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          4.0,
+          4.0,
+          -6.0
+        ]
+      }
+    },
+    {
+      "id": "wall_front_0",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_front_1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_front_2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_front_band_0",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          -4.0,
+          4.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_front_band_1",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          0.0,
+          4.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_front_band_2",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          4.0,
+          4.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_00",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_01",
+      "prefab": "kit.wall_skull",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_02",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_03",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_10",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_11",
+      "prefab": "kit.wall_skull",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_12",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_13",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_00",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          -6.0,
+          4.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_01",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          -6.0,
+          4.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_02",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          -6.0,
+          4.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_03",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          -6.0,
+          4.0,
+          8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_10",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_11",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          0.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_12",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_side_band_13",
+      "prefab": "kit.wall_border",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          -90.0,
+          0.0
+        ]
+      }
+    }
+  ]
+}

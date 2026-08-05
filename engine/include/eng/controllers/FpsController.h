@@ -1,22 +1,39 @@
 #pragma once
 #include <eng/Handles.h>
 #include <eng/Physics.h> // CollisionMask / kAllLayers used by value below
+#include <eng/camera/FirstPersonCameraRig.h>
 
 #include <glm/glm.hpp>
 #include <limits>
+#include <optional>
 
 namespace eng {
 class Input;
 class Physics;
 class Renderer;
 
-// Reusable grounded first-person controller:
+// Reusable grounded character controller:
 // acceleration/deceleration, exhaustion-safe sprint stamina, grounded jump,
-// sprint-slide, hold-to-crouch and restrained camera bob/FOV feedback. Yaw
-// lives on the body, pitch on the head.
+// sprint-slide, hold-to-crouch and restrained bob/FOV feedback.
+//
+// It simulates a body and owns the *view angles*; where the camera actually
+// sits is an eng::CameraRig it drives (first person by default, third person by
+// installing one). That split is the point: the controller never learns which
+// camera shape is in play, and a rig never touches the capsule. Everything a
+// rig needs arrives once a frame as an eng::CameraPose.
 class FpsController
 {
 public:
+    // Where the body points, which is the one thing that genuinely differs
+    // between the two camera shapes. In first person the body IS the view; in
+    // third person the camera orbits and the character turns towards where it
+    // is going -- or towards a lock-on target, which is what makes strafing
+    // round an enemy read as circling rather than as walking sideways.
+    enum class Facing {
+        View,     // body yaw follows the view yaw exactly
+        Movement, // body turns towards travel at turnRate
+    };
+
     struct Command {
         glm::vec2 move{0.0f}; // x = right, y = forward
         glm::vec2 lookDelta{0.0f};
@@ -45,10 +62,54 @@ public:
     // person, and there is no physics riding on the camera's orientation.
     void applyLook(const Command& command);
 
+    // Builds this frame's CameraPose and hands it to the installed rig.
     // `alpha` is the fraction of the way from the previous fixed step to the
-    // current one (Physics::interpolationAlpha). Position is interpolated
-    // between them; orientation is already current.
-    void present(eng::Renderer& r, float alpha = 1.0f);
+    // current one (Physics::interpolationAlpha); position and head offset are
+    // interpolated between them, orientation is already current. `dt` is the
+    // *real* frame delta the rig eases its own feel layers on -- a camera keeps
+    // settling while the world is paused.
+    void present(eng::Renderer& r, float alpha = 1.0f, float dt = 0.0f);
+
+    // --- camera rig ------------------------------------------------------
+    // Install a camera shape. Null restores the built-in first-person rig. The
+    // swap is live: the outgoing rig gives up its nodes, the incoming one
+    // builds its own and takes the camera, so a game can go from first to third
+    // person mid-frame without respawning the player.
+    //
+    // Whatever hangs off the eye (a viewmodel, a carried light) is attached to
+    // eyeNode() and must be re-attached after a swap -- the old node is gone.
+    void setCameraRig(eng::Renderer& r, CameraRig* rig);
+    CameraRig& cameraRig()
+    {
+        return mRig ? *mRig : static_cast<CameraRig&>(mDefaultRig);
+    }
+    const CameraRig& cameraRig() const
+    {
+        return mRig ? *mRig : static_cast<const CameraRig&>(mDefaultRig);
+    }
+    // The rig the controller falls back to, for tuning its feel layers.
+    FirstPersonCameraRig& firstPersonRig() { return mDefaultRig; }
+
+    // --- facing ----------------------------------------------------------
+    void setFacing(Facing facing) { mFacing = facing; }
+    Facing facing() const { return mFacing; }
+    // Degrees per second the body turns towards its desired facing.
+    float& turnRateDegrees() { return mTurnRateDegrees; }
+    // A world point the body should face regardless of where it is travelling
+    // -- the lock-on target. Empty goes back to facing the direction of travel.
+    void setFacingTarget(std::optional<glm::vec3> point) { mFacingTarget = point; }
+    float facingYaw() const { return mFacingYaw; }
+
+    // Camera shake, in camera space, applied at presentation only.
+    //
+    // Deliberately NOT part of the simulated pose: eyePosition(), the physics
+    // body and everything that aims read the unshaken transform, so a shake can
+    // never desync collision or send a shot somewhere the player did not point.
+    // The caller recomputes it every frame and never reads it back.
+    void setViewShake(glm::vec3 offset, glm::vec3 rotationDegrees)
+    {
+        cameraRig().setShake(offset, rotationDegrees);
+    }
 
     // Reads input, looks, simulates one step and presents. For callers with no
     // fixed-step loop of their own -- tests and tools. The game drives the
@@ -124,16 +185,24 @@ public:
     float& bobSpeed() { return mBobSpeed; }
 
     // Eye position (feet + eye height) and view direction, for interaction
-    // ray checks.
+    // ray checks. Simulation truth in both camera shapes: these are where the
+    // *character's* head is and what it is aimed along, never where a boom
+    // happens to have swung to.
     glm::vec3 eyePosition() const;
     glm::vec3 forward() const;
 
-    // Head node (camera parent), e.g. for attaching a player-carried light.
-    NodeHandle headNode() const { return mHead; }
+    // Head node (camera parent), e.g. for attaching a player-carried light or
+    // a first-person viewmodel. Owned by the rig, so it changes when one is
+    // installed.
+    NodeHandle headNode() const { return cameraRig().eyeNode(); }
+    // The node that tracks the body, oriented by facingYaw. Where a
+    // third-person avatar mesh belongs.
+    NodeHandle bodyNode() const { return cameraRig().characterNode(); }
 
 private:
-    NodeHandle mBody{};
-    NodeHandle mHead{};
+    // Null means the built-in first-person rig below; cameraRig() resolves it.
+    CameraRig* mRig = nullptr;
+    FirstPersonCameraRig mDefaultRig;
     glm::vec3 mPos{0.0f};
     // Where the character was at the previous fixed step. present() renders
     // between the two, so a 60 Hz simulation stays smooth on a 240 Hz display.
@@ -151,6 +220,17 @@ private:
     glm::vec3 mMax{0.0f};
     float mYaw = 0.0f;
     float mPitch = 0.0f;
+    // Body facing, and where it was at the previous fixed step so present()
+    // can interpolate it like everything else the simulation moved.
+    float mFacingYaw = 0.0f;
+    float mPrevFacingYaw = 0.0f;
+    Facing mFacing = Facing::View;
+    float mTurnRateDegrees = 780.0f;
+    std::optional<glm::vec3> mFacingTarget;
+    // Downward speed at the step the character touched down on, m/s. Set by
+    // simulate, consumed (and cleared) by present: it is a one-frame event, and
+    // a rig that ignores it must not be able to accumulate one.
+    float mLandingImpact = 0.0f;
     float mSpeed = 3.0f;
     float mSens = 0.002f;
     glm::vec2 mVelocity{0.0f};

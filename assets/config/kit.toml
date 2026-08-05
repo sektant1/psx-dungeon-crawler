@@ -1641,3 +1641,126 @@ import_scale = 1.0
 size = [1.3440, 1.4080, 1.8360]
 
 # END editor import: howl
+
+# BEGIN editor import: dwite2
+[[piece]]
+id = "import_dwite2"
+role = "imported_model"
+mesh = "meshes/props/import_dwite2.obj"
+material = "Engine/Psx/PrototypeSurface"
+socket = "prop"
+import_scale = 1.0
+size = [50.9727, 168.2601, 54.2916]
+
+# END editor import: dwite2
+
+# BEGIN editor import: dwight_model
+[[piece]]
+id = "import_dwight_model_p0"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p0.obj"
+material = "Engine/Psx/PrototypeSurface"
+socket = "prop"
+import_scale = 1.0
+size = [2.8516, 15.1551, 4.0936]
+
+[[piece]]
+id = "import_dwight_model_p1"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p1.obj"
+material = "Engine/Psx/PrototypeSurface"
+socket = "prop"
+import_scale = 1.0
+size = [25.0360, 13.5082, 10.4721]
+
+[[piece]]
+id = "import_dwight_model_p2"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p2.obj"
+material = "Game/import_dwight_model/part2"
+socket = "prop"
+import_scale = 1.0
+size = [11.4914, 9.5449, 11.3771]
+
+[[piece]]
+id = "import_dwight_model_p3"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p3.obj"
+material = "Game/import_dwight_model/part3"
+socket = "prop"
+import_scale = 1.0
+size = [11.4000, 17.0000, 12.3101]
+
+[[piece]]
+id = "import_dwight_model_p4"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p4.obj"
+material = "Engine/Psx/PrototypeSurface"
+socket = "prop"
+import_scale = 1.0
+size = [6.2064, 1.0656, 1.2311]
+
+[[piece]]
+id = "import_dwight_model_p5"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p5.obj"
+material = "Game/import_dwight_model/part5"
+socket = "prop"
+import_scale = 1.0
+size = [2.2718, 2.2718, 2.2718]
+
+[[piece]]
+id = "import_dwight_model_p6"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p6.obj"
+material = "Game/import_dwight_model/part6"
+socket = "prop"
+import_scale = 1.0
+size = [2.2718, 2.2718, 2.2718]
+
+[[piece]]
+id = "import_dwight_model_p7"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p7.obj"
+material = "Engine/Psx/PrototypeSurface"
+socket = "prop"
+import_scale = 1.0
+size = [3.1293, 2.2971, 0.2146]
+
+[[piece]]
+id = "import_dwight_model_p8"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p8.obj"
+material = "Engine/Psx/PrototypeSurface"
+socket = "prop"
+import_scale = 1.0
+size = [3.1293, 2.2971, 0.2146]
+
+[[piece]]
+id = "import_dwight_model_p9"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p9.obj"
+material = "Game/import_dwight_model/part9"
+socket = "prop"
+import_scale = 1.0
+size = [1.7005, 0.7825, 0.1165]
+
+[[piece]]
+id = "import_dwight_model_p10"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p10.obj"
+material = "Game/import_dwight_model/part10"
+socket = "prop"
+import_scale = 1.0
+size = [7.5339, 2.4405, 0.3985]
+
+[[piece]]
+id = "import_dwight_model_p11"
+role = "imported_model"
+mesh = "meshes/props/import_dwight_model_p11.obj"
+material = "Game/import_dwight_model/part11"
+socket = "prop"
+import_scale = 1.0
+size = [10.4465, 1.1363, 7.9682]
+
+# END editor import: dwight_model

@@ -1,6 +1,7 @@
 #include <eng/Profiler.h>
 
 #include <eng/Log.h>
+#include <eng/MemoryProfiler.h>
 
 #include <algorithm>
 #include <chrono>
@@ -67,6 +68,12 @@ void Profiler::beginFrame()
 
 void Profiler::push(const char* name)
 {
+    // Timing a phase and attributing the heap to it are the same annotation,
+    // so one call site drives both: every ENG_PROFILE scope in the engine is
+    // already a memory tag, and "which phase of the frame allocated this"
+    // needs no further markup anywhere. Compiled to nothing when the memory
+    // profiler is off.
+    memprof::pushTag(name);
     const int parent = mOpen.empty() ? 0 : mOpen.back();
     const int index = childNode(parent, StringId(hashString(name)), name);
     ++mNodes[std::size_t(index)].calls;
@@ -76,6 +83,10 @@ void Profiler::push(const char* name)
 
 void Profiler::pop()
 {
+    // Before the guard below, so this stays one-for-one with push() even on the
+    // unbalanced path -- a tag stack that drifts mis-attributes every later
+    // allocation in the frame, not just the one scope.
+    memprof::popTag();
     // The root is only closed by endFrame; an unbalanced pop() would otherwise
     // leave the frame with no open scope at all and send every later sample to
     // a node that is already finished.

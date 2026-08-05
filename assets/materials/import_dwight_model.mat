@@ -1,0 +1,42 @@
+[material."Game/import_dwight_model/part2"]
+shader = "lit"
+texture = "import_dwight_model_all_5_hair_BaseColor.jpg"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_dwight_model/part3"]
+shader = "lit"
+texture = "import_dwight_model_all_5_face11_BaseColor.jpg"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_dwight_model/part5"]
+shader = "lit"
+texture = "import_dwight_model_all_5_eyes_BaseColor.jpg"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_dwight_model/part6"]
+shader = "lit"
+texture = "import_dwight_model_all_5_eyes_BaseColor.jpg"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_dwight_model/part9"]
+shader = "lit"
+texture = "import_dwight_model_all_5_glasses_BaseColor.jpg"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_dwight_model/part10"]
+shader = "lit"
+texture = "import_dwight_model_all_5_glasses_BaseColor.jpg"
+filter = "nearest"
+address = "repeat"
+
+[material."Game/import_dwight_model/part11"]
+shader = "lit"
+texture = "import_dwight_model_all_5_glasses_BaseColor.jpg"
+filter = "nearest"
+address = "repeat"
+

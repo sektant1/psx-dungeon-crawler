@@ -4,7 +4,11 @@
 
 #include <vector>
 
-enum class TargetKind { Torch, PortalDown, PortalUp, Prop, Actor };
+// Item and Npc arrived with the RPG layer: an item lying on the floor and a
+// person worth talking to are look-targets exactly like a torch, and routing
+// them through the same aim test is what stops the crosshair having two
+// competing ideas of what it is on.
+enum class TargetKind { Torch, PortalDown, PortalUp, Prop, Actor, Item, Npc };
 
 struct GameplayTarget {
     TargetKind kind;

@@ -413,6 +413,12 @@ void VulkanCommandList::reset(VkCommandBuffer commandBuffer, VkExtent2D extent,
     mUniformsUsed = false;
     mTexturesUsed = false;
     mIndexBound = false;
+    mBoundPipeline = VK_NULL_HANDLE;
+    mBoundIndexBuffer = VK_NULL_HANDLE;
+    mBoundIndexOffset = 0;
+    mBoundIndexType = VK_INDEX_TYPE_MAX_ENUM;
+    mBoundVertexBuffers = {};
+    mBoundVertexOffsets = {};
     mDebugDepth = 0;
 }
 
@@ -427,8 +433,16 @@ void VulkanCommandList::bindPipeline(PipelineHandle handle)
                    handle.id);
         return;
     }
-    vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      pipeline->pipeline);
+    // Re-binding the pipeline that is already bound is a no-op to the GPU but
+    // not to the driver, and a scene draws hundreds of times through a handful
+    // of pipelines. mPipeline is still assigned unconditionally: it is what
+    // prepareDraw() validates against, and it must be right even when the
+    // VkPipeline underneath happens to be shared.
+    if (pipeline->pipeline != mBoundPipeline) {
+        vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          pipeline->pipeline);
+        mBoundPipeline = pipeline->pipeline;
+    }
     mPipeline = handle;
 }
 
@@ -481,9 +495,16 @@ void VulkanCommandList::bindVertexBuffer(uint32_t binding, BufferHandle handle,
     }
     const VkBuffer vkBuffer = mDevice.bufferForFrame(*buffer);
     const VkDeviceSize vkOffset = offset;
-    if (vkBuffer)
-        vkCmdBindVertexBuffers(mCommandBuffer, binding, 1, &vkBuffer,
-                               &vkOffset);
+    if (!vkBuffer)
+        return;
+    if (binding < kTrackedVertexBindings) {
+        if (mBoundVertexBuffers[binding] == vkBuffer &&
+            mBoundVertexOffsets[binding] == vkOffset)
+            return;
+        mBoundVertexBuffers[binding] = vkBuffer;
+        mBoundVertexOffsets[binding] = vkOffset;
+    }
+    vkCmdBindVertexBuffers(mCommandBuffer, binding, 1, &vkBuffer, &vkOffset);
 }
 
 void VulkanCommandList::bindIndexBuffer(BufferHandle handle, uint64_t offset,
@@ -499,12 +520,20 @@ void VulkanCommandList::bindIndexBuffer(BufferHandle handle, uint64_t offset,
         return;
     }
     const VkBuffer vkBuffer = mDevice.bufferForFrame(*buffer);
-    if (vkBuffer) {
-        vkCmdBindIndexBuffer(mCommandBuffer, vkBuffer, offset,
-                             type == IndexType::UInt16 ? VK_INDEX_TYPE_UINT16
-                                                       : VK_INDEX_TYPE_UINT32);
-        mIndexBound = true;
+    if (!vkBuffer)
+        return;
+    const VkIndexType vkType = type == IndexType::UInt16 ? VK_INDEX_TYPE_UINT16
+                                                         : VK_INDEX_TYPE_UINT32;
+    // mIndexBound is set either way: the buffer IS bound, which is all
+    // drawIndexed's guard is asking about.
+    if (vkBuffer != mBoundIndexBuffer || offset != mBoundIndexOffset ||
+        vkType != mBoundIndexType) {
+        vkCmdBindIndexBuffer(mCommandBuffer, vkBuffer, offset, vkType);
+        mBoundIndexBuffer = vkBuffer;
+        mBoundIndexOffset = offset;
+        mBoundIndexType = vkType;
     }
+    mIndexBound = true;
 }
 
 void VulkanCommandList::bindUniformBuffer(uint32_t slot, BufferHandle handle,

@@ -5,7 +5,6 @@
 
 #include <cstdlib>
 
-#define STBI_ONLY_PNG
 #include <stb_image.h>
 
 #if !defined(ENG_RENDERER_RHI)

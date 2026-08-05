@@ -1,6 +1,9 @@
 #include <eng/Engine.h>
 
 #include <eng/Log.h>
+#include <eng/MemoryProfiler.h>
+#include <eng/telemetry/RedisSink.h>
+#include <eng/telemetry/Telemetry.h>
 #include <eng/assets/AssetRoot.h>
 #include <eng/render/FrameCapture.h>
 #include <eng/render/GifRecorder.h>
@@ -25,6 +28,12 @@
 
 // detail::coreOf / detail::registerRoot come from eng/Renderer.h (via
 // Engine.h); their definitions live in Renderer.cpp next to Renderer::Impl.
+// Set by the build (1 in Debug, 0 otherwise). Defined here too so this file
+// still compiles in a tree that predates the option.
+#ifndef ENG_CONNECTOR_DEFAULT
+#    define ENG_CONNECTOR_DEFAULT 0
+#endif
+
 namespace eng {
 
 struct Engine::Impl {
@@ -77,6 +86,11 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
         log::error("Engine: cannot mount content set '%s'", mountSet.c_str());
         return false;
     }
+    // The conditioned pack, if `raven_acp build` has produced one. Optional by
+    // design: a source checkout with no pack runs off the source loaders, which
+    // is what makes the pipeline something a project adopts rather than
+    // something it must have before it can start.
+    assets::mountCooked();
 
     const std::string configFile = assets::resolve(configPath).string();
     if (configFile.empty()) {
@@ -104,6 +118,49 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
         shutdown();
         return false;
     }
+    // Call-stack sampling for the heap. The exact counters always run (they are
+    // two atomic adds); this only sets how often an allocation also pays for a
+    // backtrace. RAVEN_MEMPROF=0 turns capture off and leaves the counters.
+    if (const char* rate = std::getenv("RAVEN_MEMPROF")) {
+        memprof::setSampleRate(
+            static_cast<std::uint32_t>(std::strtoul(rate, nullptr, 10)));
+        log::info("memprof: call-stack sampling 1-in-%u",
+                  memprof::stats().sampleRate);
+    }
+
+    // Debug telemetry. A Debug build attaches by default -- a debug channel you
+    // have to remember to turn on is a debug channel that is off on the run
+    // where the bug appeared -- and a Release build stays opt-in, so a build to
+    // measure opens no socket and starts no thread.
+    //
+    //   RAVEN_CONNECTOR=1            defaults
+    //   RAVEN_CONNECTOR=host:port    somewhere else
+    //   RAVEN_CONNECTOR=0            off, whatever the build says
+    const char* connector = std::getenv("RAVEN_CONNECTOR");
+    std::string spec = connector ? connector : "";
+    const bool wantConnector =
+        connector ? (spec != "0" && spec != "off" && !spec.empty())
+                  : ENG_CONNECTOR_DEFAULT != 0;
+    if (wantConnector) {
+        telemetry::RedisConfig redis;
+        if (spec != "1" && spec != "on" && !spec.empty()) {
+            const std::size_t colon = spec.rfind(':');
+            if (colon == std::string::npos) {
+                redis.host = spec;
+            } else {
+                redis.host = spec.substr(0, colon);
+                redis.port = static_cast<unsigned short>(
+                    std::strtoul(spec.c_str() + colon + 1, nullptr, 10));
+            }
+        }
+        telemetry::start(telemetry::makeRedisSink(redis));
+        // Everything already written through eng::log shows up in the browser
+        // without a single call site changing.
+        telemetry::mirrorEngineLog("log");
+        ENG_TELEMETRY("engine", telemetry::Level::Info,
+                      "connector attached: %s", redis.host.c_str());
+    }
+
     detail::registerRoot(mRenderer);
     // There is no unprofiled path: the default look ("dungeon") is a profile
     // like any other, so something is always applied here. The game's per-level

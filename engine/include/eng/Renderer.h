@@ -46,6 +46,16 @@ struct EnvState {
     bool dither = false;
     int pixelSize = 3;       // PSX/Stylized RT = window / pixelSize
     bool perPixelLighting = true; // fragment vs vertex light evaluation
+    // The two GTE artefacts. 512x448 is the grid the snap is expressed
+    // against (psx.vert's base_snap_res), so 1.0 is finer than any render
+    // target here and reads as "off"; the PS1 profile runs 0.156.
+    float precisionMultiplier = 1.0f;
+    // 0 = perspective-correct UVs, 1 = the full screen-space swim.
+    float affineAmount = 0.0f;
+    // Saturation point of the affine/perspective divergence, in UV units.
+    // Keeps the warp from tearing on the big near-camera polygons a modern kit
+    // draws floors and ceilings out of.
+    float affineSoftness = 0.10f;
     float omniAttenuation = 1.0f; // Godot omni falloff exponent (1 = linear)
     float lightSteps = 0.0f; // diffuse posterization bands, 0 = smooth
     float lightStepSoftness = 0.35f; // band seam half-width, 0 = hard edges
@@ -180,6 +190,24 @@ public:
                     const std::string& materialName,
                     const std::string& fallbackMaterial,
                     bool castShadows = false, bool renderOnTop = false);
+    // The same call with a string-literal fallback, and it exists because
+    // without it that call silently means something else.
+    //
+    // `attachMesh(node, mesh, material, "Game/Prototype/Floor", castShadows)`
+    // has a `const char*` in the fourth slot. Converting that to `bool` is a
+    // standard conversion and converting it to `std::string` is a user-defined
+    // one, so overload resolution prefers the overload ABOVE this pair: the
+    // literal becomes `castShadows = true` and the caller's castShadows slides
+    // into `renderOnTop`. Every enemy in the game was attached that way, and
+    // because enemies.toml sets cast_shadows = true they all rendered in the
+    // viewmodel pass -- through walls, over particles, over the hands.
+    //
+    // An exact match for `const char*` outranks both, so this overload takes
+    // the call and forwards it where it was always meant to go.
+    void attachMesh(NodeHandle node, MeshHandle mesh,
+                    const std::string& materialName,
+                    const char* fallbackMaterial, bool castShadows = false,
+                    bool renderOnTop = false);
     void attachMesh(NodeHandle node, MeshHandle mesh,
                     const ResolvedModelMaterial& material,
                     bool castShadows = false, bool renderOnTop = false);

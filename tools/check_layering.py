@@ -44,6 +44,7 @@ SOURCE_RULES: list[tuple[str, str]] = [
     ("src/ecs/", "framework"),
     ("src/script/", "framework"),  # lua host + bindings; sees World/Physics/Input
     ("src/controllers/", "framework"),
+    ("src/camera/", "framework"),  # camera rigs; drive the renderer from a pose
     ("src/debug/", "framework"),  # imgui debug console, drives fps/ecs
     ("src/", "systems"),  # renderer, physics, audio, particles
 ]
@@ -68,6 +69,11 @@ HEADER_RULES: list[tuple[str, str]] = [
     ("DirectoryWatcher.h", "core"),
     ("Trace.h", "core"),
     ("Profiler.h", "core"),
+    # The other two diagnostics, alongside Profiler: heap accounting is an
+    # atomic counter and an operator new override, and code size is an ELF
+    # reader. Neither knows what a renderer or an entity is.
+    ("MemoryProfiler.h", "core"),
+    ("CodeSize.h", "core"),
     ("StepClock.h", "core"),
     # A 64-bit hash of a string_view and an intern table: <cstdint>,
     # <string_view> and <functional>, no renderer and no window. It is included
@@ -85,10 +91,18 @@ HEADER_RULES: list[tuple[str, str]] = [
     # an asset path. Only the catch-all below would otherwise file it under
     # systems and make src/core/AssetRoot.cpp an upward include.
     ("assets/", "core"),
+    # The asset pipeline's data layer: the format table, the resource database
+    # and the readers for every intermediate the exporters write. Same argument
+    # as assets/ -- <filesystem>, TOML and ByteStream, no renderer and no
+    # window, which is what lets the game, the editor, the ACP and a headless
+    # test agree on what a .rmesh contains. The conditioners that WRITE these
+    # files are not here; they are eng_acp, above the engine entirely.
+    ("content/", "core"),
     ("rhi/", "platform"),
     ("ecs/", "framework"),
     ("script/", "framework"),
     ("controllers/", "framework"),
+    ("camera/", "framework"),
     ("DebugTools.h", "framework"),  # imgui debug console over the fps/ecs layer
     # The panels that dock into it. Same layer for the same reason: they are
     # imgui tooling, they are built into eng_framework beside DebugTools.cpp,

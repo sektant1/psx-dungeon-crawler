@@ -1,0 +1,308 @@
+# Everything that can be in a container.
+#
+# Two kinds of row. `[archetype.<id>]` rows are templates that never exist in
+# the world; `[item.<id>]` rows do, and may name an archetype (or another item)
+# in `inherits`. Inheritance is field-wise and transitive -- exactly the shape
+# enemies.toml uses -- so an archetype supplies every value a row does not
+# state, and a row that only wants a different weight writes one line.
+#
+# ADDING AN ITEM IS ADDING A TABLE. There is no registration call and no C++.
+#
+# FIELDS
+#   category      junk | reagent | consumable | weapon | armour | trinket |
+#                 relic | key | currency
+#   rarity        common | uncommon | rare | arcane | relic  (tooltip accent)
+#   slot          none | head | body | hands | cloak | amulet | ring | sigil
+#   stack         max per stack; anything with durability must be 1
+#   weight        kg-ish, against the carry capacity
+#   size          [w, h] cells, for containers running in grid mode
+#   value         base market price; the trader's curve moves from here
+#   elasticity    how hard the price swings with supply/demand (0 pins it)
+#   durability    0 = does not wear
+#   modifier      [[item.x.modifier]] stat = "..", flat = .., percent = ..
+#   resistance    [item.x.resistance] fire = 0.25   (channels from magic.toml)
+#   use           [item.x.use] kind = "restore_health", magnitude = 40
+#   mesh/material world presentation of the dropped pickup; both optional
+
+# =============================================================================
+# archetypes
+# =============================================================================
+
+[archetype.base]
+name = "Thing"
+category = "junk"
+rarity = "common"
+stack = 1
+weight = 0.5
+value = 1
+
+[archetype.reagent]
+inherits = "base"
+category = "reagent"
+stack = 20
+weight = 0.1
+value = 6
+elasticity = 0.45          # reagents are exactly what a player floods a market with
+pickup_scale = 0.7
+tags = ["reagent"]
+
+[archetype.consumable]
+inherits = "base"
+category = "consumable"
+stack = 5
+weight = 0.25
+value = 20
+elasticity = 0.3
+
+[archetype.armour]
+inherits = "base"
+category = "armour"
+stack = 1
+weight = 4.0
+value = 120
+durability = 100.0
+worn_value_floor = 0.25
+size = [2, 2]
+elasticity = 0.2
+
+[archetype.relic]
+inherits = "base"
+category = "relic"
+rarity = "relic"
+stack = 1
+weight = 1.2
+value = 900
+elasticity = 0.1           # a relic's worth barely moves; there are not many
+drop_on_death = true
+tags = ["lodge"]
+
+# =============================================================================
+# junk and salvage -- the bulk of what a floor holds
+# =============================================================================
+
+[item.tallow_candle]
+inherits = "base"
+name = "Tallow Candle"
+description = "Burns badly, smells worse, and is the difference between a corridor and a hole."
+stack = 10
+weight = 0.08
+value = 3
+
+[item.bone_shard]
+inherits = "base"
+name = "Bone Shard"
+description = "Somebody's. The alchemist does not ask whose."
+stack = 20
+weight = 0.05
+value = 4
+elasticity = 0.5
+tags = ["reagent", "bone"]
+
+[item.rusted_fitting]
+inherits = "base"
+name = "Rusted Fitting"
+description = "Iron that remembers being part of something."
+stack = 20
+weight = 0.4
+value = 7
+tags = ["metal", "salvage"]
+
+# =============================================================================
+# reagents
+# =============================================================================
+
+[item.ashen_moss]
+inherits = "reagent"
+name = "Ashen Moss"
+description = "Grows only where something burned, and only afterwards."
+value = 14
+material = "Game/Prototype/ProjectileTalon"
+tags = ["reagent", "ash"]
+
+[item.grave_lichen]
+inherits = "reagent"
+name = "Grave Lichen"
+description = "Pale, cold to the touch, and the physician will take all of it."
+value = 18
+material = "Game/Prototype/ProjectileEidolon"
+tags = ["reagent", "medicine"]
+
+[item.quicksilver_dram]
+inherits = "reagent"
+name = "Dram of Quicksilver"
+description = "Sealed in glass. The lodge is specific about why."
+rarity = "uncommon"
+stack = 10
+value = 55
+material = "Game/Prototype/ProjectileVesper"
+tags = ["reagent", "lodge", "alchemy"]
+
+# =============================================================================
+# consumables
+# =============================================================================
+
+[item.bandage_linen]
+inherits = "consumable"
+name = "Linen Bandage"
+description = "Boiled, mostly."
+value = 24
+[item.bandage_linen.use]
+kind = "restore_health"
+magnitude = 35.0
+
+[item.tincture_ash]
+inherits = "consumable"
+name = "Tincture of Ash"
+description = "Tastes like the inside of a chimney. Steadies the hands."
+rarity = "uncommon"
+value = 60
+[item.tincture_ash.use]
+kind = "grant_effect"
+duration = 45.0
+[[item.tincture_ash.use.grant]]
+stat = "stamina_regen"
+percent = 0.35
+[[item.tincture_ash.use.grant]]
+stat = "poise_max"
+flat = 15.0
+
+[item.draught_clarity]
+inherits = "consumable"
+name = "Draught of Clarity"
+description = "The lodge's word for it is longer and means the same thing."
+rarity = "rare"
+value = 110
+[item.draught_clarity.use]
+kind = "restore_mana"
+magnitude = 60.0
+
+[item.salts_waking]
+inherits = "consumable"
+name = "Waking Salts"
+description = "Clears whatever the dark put in you."
+value = 45
+[item.salts_waking.use]
+kind = "cure_status"
+magnitude = 1.0
+
+# =============================================================================
+# armour
+# =============================================================================
+
+[item.apprentice_coat]
+inherits = "armour"
+name = "Apprentice's Coat"
+description = "Lodge issue. Warm, unremarkable, and marks you as somebody's problem."
+slot = "body"
+value = 90
+weight = 3.2
+[[item.apprentice_coat.modifier]]
+stat = "vigour"
+flat = 1.0
+[item.apprentice_coat.resistance]
+frost = 0.10
+
+[item.ashwarden_hauberk]
+inherits = "armour"
+name = "Ashwarden Hauberk"
+description = "Scale over quilt, scorched black. Somebody wore it out of a fire."
+slot = "body"
+rarity = "rare"
+value = 420
+weight = 8.5
+[[item.ashwarden_hauberk.modifier]]
+stat = "vigour"
+flat = 3.0
+[[item.ashwarden_hauberk.modifier]]
+stat = "poise_max"
+flat = 20.0
+[[item.ashwarden_hauberk.modifier]]
+stat = "move_speed"
+percent = -0.06
+[item.ashwarden_hauberk.resistance]
+fire = 0.35
+physical = 0.12
+
+[item.pilgrim_hood]
+inherits = "armour"
+name = "Pilgrim's Hood"
+description = "Wide enough to keep the rain off and the face uncertain."
+slot = "head"
+value = 70
+weight = 0.9
+size = [2, 1]
+[[item.pilgrim_hood.modifier]]
+stat = "fortune"
+flat = 2.0
+
+# =============================================================================
+# trinkets
+# =============================================================================
+
+[item.tinder_ring]
+inherits = "base"
+name = "Tinder Ring"
+category = "trinket"
+slot = "ring"
+rarity = "uncommon"
+description = "Warm, always. It was warm when they found it too."
+weight = 0.05
+value = 180
+size = [1, 1]
+[[item.tinder_ring.modifier]]
+stat = "cast_power"
+percent = 0.08
+[item.tinder_ring.resistance]
+fire = 0.15
+
+[item.porters_strap]
+inherits = "base"
+name = "Porter's Strap"
+category = "trinket"
+slot = "cloak"
+description = "Ugly, and it holds."
+weight = 0.6
+value = 140
+[[item.porters_strap.modifier]]
+stat = "carry_capacity"
+flat = 8.0
+
+# =============================================================================
+# relics and keys -- the things an expedition is actually for
+# =============================================================================
+
+[item.sealed_reliquary]
+inherits = "relic"
+name = "Sealed Reliquary"
+description = "It has not been opened. The lodge would prefer that continued."
+value = 1200
+quest_item = false
+material = "Game/Prototype/ProjectileEidolon"
+pickup_scale = 1.3
+
+[item.widows_letter]
+inherits = "base"
+name = "A Letter, Water-Damaged"
+description = "The hand is careful. The name at the bottom is not one you know yet."
+category = "key"
+rarity = "rare"
+weight = 0.02
+value = 0
+quest_item = true
+tradeable = false
+drop_on_death = false
+
+[item.lodge_sigil]
+inherits = "base"
+name = "Sigil of the Lodge"
+category = "trinket"
+slot = "sigil"
+rarity = "arcane"
+description = "You were given this. You are not sure that was a kindness."
+weight = 0.03
+value = 0
+tradeable = false
+drop_on_death = false
+[[item.lodge_sigil.modifier]]
+stat = "attunement"
+flat = 2.0

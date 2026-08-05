@@ -4,6 +4,7 @@
 #include <eng/Input.h>
 #include <eng/render/Warmup.h>
 #include <eng/Log.h>
+#include <eng/MemoryProfiler.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -195,6 +196,59 @@ void FpsGameApp::startSystems(Engine& engine)
                 mImpl->dev.print(log::Level::Info, "profile", buf);
             }
         });
+    // --- the heap (eng::memprof) ------------------------------------------
+    dev.registerCommand(
+        "mem", "print live bytes by frame phase and by allocation site",
+        [this](const DebugConsole::Args&) {
+            // report() builds one string and the console splits it, rather than
+            // printing line by line, so the whole snapshot is of one instant --
+            // printing incrementally would let the numbers move underneath it.
+            const std::string text = memprof::report(8);
+            std::size_t start = 0;
+            while (start < text.size()) {
+                const std::size_t end = text.find('\n', start);
+                mImpl->dev.print(log::Level::Info, "mem",
+                                 text.substr(start, end == std::string::npos
+                                                        ? std::string::npos
+                                                        : end - start));
+                if (end == std::string::npos)
+                    break;
+                start = end + 1;
+            }
+        });
+    dev.registerCommand(
+        "mem.reset", "zero the peak and the churn totals (live bytes stay)",
+        [this](const DebugConsole::Args&) {
+            memprof::reset();
+            mImpl->dev.print(log::Level::Info, "mem",
+                             "peak and totals reset; live blocks untouched");
+        });
+    dev.registerCommand(
+        "mem.sample", "call-stack sampling rate: 1-in-N, 0 to turn it off",
+        [this](const DebugConsole::Args& a) {
+            if (a.size() > 1)
+                memprof::setSampleRate(
+                    static_cast<std::uint32_t>(std::strtoul(a[1].c_str(),
+                                                            nullptr, 10)));
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "sampling 1-in-%u",
+                          memprof::stats().sampleRate);
+            mImpl->dev.print(log::Level::Info, "mem", buf);
+        });
+    dev.registerCommand(
+        "mem.csv", "write live bytes per frame phase to a .csv path",
+        [this](const DebugConsole::Args& a) {
+            const std::string path = a.size() > 1 ? a[1] : "memory.csv";
+            std::ofstream out(path);
+            if (!out) {
+                mImpl->dev.print(log::Level::Error, "mem",
+                                 "cannot write " + path);
+                return;
+            }
+            out << memprof::toCsv();
+            mImpl->dev.print(log::Level::Info, "mem", "wrote " + path);
+        });
+
     dev.registerCommand(
         "profile.csv", "write last frame's timing hierarchy to a .csv path",
         [this, &engine](const DebugConsole::Args& a) {

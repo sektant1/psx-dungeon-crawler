@@ -103,3 +103,86 @@ automatically and writes a JSON report; the capture is for when you already know
 
 For pixel-level regressions, `make screenshot SHOT=… FRAME=…` is faster than a
 capture and is what the visual-freeze rule is enforced with.
+
+## Debug lines and vertex lighting
+
+Both were stubs in the RHI backend that warned once and discarded the request,
+which is why they are worth naming here: the symptoms looked like content bugs.
+
+**Debug lines** (`Renderer::setDebugLines`) now draw through a LineList pipeline
+(`debug_line.vert/.frag`) into a per-frame dynamic vertex buffer, after the world
+and particles and before the viewmodel pass -- where the legacy queue put them.
+The fragment writes zero to the normal/depth MRT target so the stylize pass
+leaves the pixels alone and a line keeps the exact colour the caller asked for.
+`setDebugLinesXray` selects the depth-tested or draw-over-everything variant.
+
+Until this landed **the editor's grid did not render at all**. If the viewport
+looks like a void, check this pass before suspecting the grid maths.
+
+**Vertex lighting** (`setPerPixelLightingEnabled(false)`, which the PS1 and N64
+presets ask for) evaluates the diffuse accumulation once per vertex and lets the
+rasterizer interpolate it. `clipParams.z` carries the switch -- an existing
+unused lane, because a new binding is a pipeline-layout change -- and both
+stages call the same `accumulateLighting`, which is what stops the two modes
+drifting into two looks. Shadows stay per-pixel: they are a depth-map addition
+the console never had, and Gouraud-interpolating them looks like a bug.
+
+The game runs the `dungeon` profile, which is per-pixel, so this changes nothing
+about the shipped image; the editor runs `ps1` and does take the vertex-lit path.
+
+## The three GTE artefacts
+
+The PS1 look is not one effect. Three separate things produced it, all authored
+per profile in `RenderPresets.cpp`, all pushed at the renderer already, and all
+ignored by the Vulkan backend until they were implemented. They share one
+uniform lane, `SceneUniforms.psxParams`, appended at the end of the block so
+shaders that never look at it (shadow, particle, debug line) stay correct
+without being touched.
+
+| Lane | Knob | What it is |
+|---|---|---|
+| `psxParams.x` | `precisionMultiplier` | vertex snap |
+| `psxParams.y` | `lightSteps` | posterized diffuse |
+| `psxParams.z` | `lightStepSoftness` | band seam width |
+| `psxParams.w` | `affineAmount` | affine texture mapping |
+
+**Affine texture mapping** is the recognisable one, and it is *softened* rather
+than applied raw -- `psxParams2.x`, `affine_softness`, in UV units. The
+divergence between the perspective and affine interpolations grows without
+bound on a polygon seen close and oblique, and the console got away with that
+because it drew a room out of many small quads. A modern kit draws a floor as
+two triangles, where raw affine stops swimming and starts *shearing* along the
+diagonal the two triangles share. A per-component soft knee
+(`d * s / (s + |d|)`) leaves small divergence untouched, so the swim reads
+exactly as before, and saturates the tail at `s` UV units so nothing tears.
+0.10 is the shipped default; raise it toward 1 for raw affine, drop it for a
+flatter warp. Live on the debug panel's Render tab beside the amount.
+ The console interpolated UVs
+linearly in screen space with no perspective divide, so textures swim and buckle
+across large polygons and a quad's two triangles crease along their shared
+diagonal. The vertex stage emits the UVs twice -- once `smooth`, once
+`noperspective` -- and the fragment blends between them, so it is a dial rather
+than a compile-time variant. `psx.frag` does the same thing; this matches it.
+
+**Vertex snap** quantises clip position onto a fixed screen grid, which is why
+PS1 edges crawl. NDC spans [-1,1], so the grid is `2 * floor(512 * p)` steps
+across the screen -- p = 0.156 (the PS1 profile) gives ~158 steps over a ~533px
+target and wobbles hard, p = 1.0 is finer than any target here and reads as off.
+Vertices behind the eye are left to the clipper: the NDC divide sends them to
+infinity and `floor()` folds them back across the screen as a stray triangle.
+
+**Posterized lighting** quantises the *diffuse* term only, so ambient never
+bands the whole scene toward black, and stays unclamped so overbright torch
+cores survive for the bloom bright pass to threshold on.
+
+All three are tweakable live from the debug panel's Render tab, which already
+had the sliders -- `setGlobalMaterialParam` intercepts the two material-shaped
+ones so the existing UI drives this backend without learning a new call.
+
+### Still not implemented in this backend
+
+`Renderer` warns once for each and carries on: **world sprites**
+(`attachSprite`, `attachTextSprite`), **decal batches**, and the **enchantment
+rune overlay** (its rim tint is applied; the scrolling runes are not). These are
+subsystems rather than shader knobs -- each needs its own pipeline and pass, not
+a uniform lane.

@@ -5,6 +5,8 @@
 #include <eng/ecs/components/ParticleEmitter.h>
 #include <eng/ecs/components/PortalParams.h>
 #include <eng/ecs/components/PrimitiveMesh.h>
+#include <eng/ecs/components/ScreenCamera.h>
+#include <eng/ecs/components/ThirdPersonCamera.h>
 
 #include "ViewmodelPreview.h"
 #include "ViewmodelRig.h"
@@ -219,6 +221,13 @@ using ActorSoundsAuthor = game::ActorSoundSet;
 // in front of it. A scene that carries neither runs on the game's config
 // defaults, which is every level authored before they existed.
 using FirstPersonAuthor = eng::ecs::FirstPersonController;
+// The other two camera shapes. Same mirror-not-translate rule: the authored
+// type IS the runtime one, so a field added to the component shows up in the
+// inspector, the .scn and the cooked .map without a line of translation.
+// Which of the three a scene carries is what decides how it plays -- from the
+// eyes, over the shoulder, or as a flat 2D screen (menus, HUD, dialogue).
+using ThirdPersonAuthor = eng::ecs::ThirdPersonCamera;
+using ScreenAuthor = eng::ecs::ScreenCamera;
 using ViewmodelRigAuthor = game::ViewmodelRig;
 // Editor-only: which weapon the viewport shows in the hands. Dropped at cook
 // (see game/src/ViewmodelPreview.h) -- it is how a placement is judged, not
@@ -312,12 +321,24 @@ struct Entity {
     std::string material;
     XformAuthor transform;
     bool castShadows = true;
+    // A compound kit piece (kit.prop_boss_placeholder and its sword) normally
+    // emits its attached parts at cook time: they render, but they are not in
+    // the document, so the editor cannot select, move or re-material one. That
+    // is the right default -- a scene should not carry four entities for every
+    // torch bracket -- but it makes the parts unreachable.
+    //
+    // Set by "Unpack attachments", which writes the parts out as real child
+    // entities. The cook then skips its own expansion for this entity, because
+    // the document now holds what it would have generated.
+    bool unpackedAttachments = false;
 
     std::optional<CellPlacement> cell;
     std::optional<ColliderAuthor> collider;
     std::optional<LightAuthor> light;
     std::optional<CameraAuthor> camera;
     std::optional<FirstPersonAuthor> firstPerson;
+    std::optional<ThirdPersonAuthor> thirdPerson;
+    std::optional<ScreenAuthor> screen;
     std::optional<ViewmodelRigAuthor> viewmodelRig;
     std::optional<ViewmodelPreviewAuthor> viewmodelPreview;
     std::vector<ScriptAuthor> scripts;

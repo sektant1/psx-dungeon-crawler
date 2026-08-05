@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connector</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <div class="brand"><span class="mark idle" id="pulse"></span><h1>Connector</h1></div>
+
+  <div class="toolbar">
+    <div class="views" id="views">
+      <button data-pane="log" class="on">log</button>
+      <button data-pane="memory" id="memoryTab" hidden>memory</button>
+    </div>
+    <input type="search" id="filter" placeholder="filter  (plain text, or /regex/)" spellcheck="false">
+    <div class="levels" id="levels">
+      <button data-level="trace">trace</button>
+      <button data-level="info" class="on">info</button>
+      <button data-level="warn" class="on">warn</button>
+      <button data-level="error" class="on">error</button>
+    </div>
+    <button id="wrap">wrap</button>
+    <button id="export" title="download what is on screen">export</button>
+    <button id="follow" class="on">follow</button>
+    <button id="pause">pause</button>
+    <button id="clear">clear</button>
+  </div>
+
+  <div class="side">
+    <h2>Watches</h2>
+    <div id="watches"><div class="empty">none yet</div></div>
+    <h2>Channels</h2>
+    <div id="channels"><div class="empty">waiting for the engine…</div></div>
+  </div>
+
+  <div class="main">
+    <div id="frameBar" class="framebar" hidden>
+      <span>frame <b id="frameNo"></b></span>
+      <button id="frameClear">show all frames</button>
+    </div>
+    <div id="log"></div>
+    <div class="empty-state" id="empty">
+      <div>No records yet.</div>
+      <div>Run the game with <code>RAVEN_CONNECTOR=1</code></div>
+    </div>
+
+    <!-- The second view of .main, not a strip above the log: a treemap is read
+         by comparing areas, and the areas have to be big enough to compare.
+         Hidden until the engine sends anything on the "mem" channel, so a run
+         with the memory profiler compiled out looks exactly as it did. -->
+    <section id="memory" class="memory">
+      <div class="memhead">
+        <!-- Grouped by BUDGET, because that is the choice being made: which of
+             the three things a frame spends am I looking at. Flat tabs made
+             "per frame" and "ms per phase" look like variations of one thing
+             when they are bytes and milliseconds. -->
+        <div class="memtabs" id="memTabs">
+          <div class="memgroup">
+            <span class="memgroup-label">heap</span>
+            <button data-view="phase" class="on"
+                    title="Live bytes by the frame phase that allocated them. Exact.">live</button>
+            <button data-view="churn"
+                    title="Bytes allocated during the last frame, by phase. Exact — a steady frame should be near zero.">per&nbsp;frame</button>
+            <button data-view="site"
+                    title="Live bytes by call stack, estimated from a 1-in-N sample.">call&nbsp;site</button>
+          </div>
+          <div class="memgroup">
+            <span class="memgroup-label">cpu</span>
+            <button data-view="load"
+                    title="Self milliseconds per profiler scope. Self, not inclusive, so the parts sum to the frame.">per&nbsp;phase</button>
+          </div>
+          <div class="memgroup">
+            <span class="memgroup-label">code</span>
+            <button data-view="size"
+                    title="Machine code per namespace or class, read from this binary's own symbol table.">per&nbsp;module</button>
+          </div>
+        </div>
+        <span class="memtotal" id="memTotal"></span>
+      </div>
+      <div class="membody" id="memBody">
+        <canvas id="treemap"></canvas>
+        <canvas id="memChart"></canvas>
+      </div>
+    </section>
+  </div>
+
+  <div class="status">
+    <span id="conn">connecting…</span>
+    <span><b id="count">0</b> records</span>
+    <span><b id="shown">0</b> shown</span>
+    <span class="sep"></span>
+    <span id="rate">0/s</span>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

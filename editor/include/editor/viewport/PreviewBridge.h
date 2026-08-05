@@ -64,9 +64,17 @@ public:
 
     // Transient brush mesh under the cursor. It never enters the document or
     // ECS preview, so it cannot be picked, cooked or recorded by undo.
-    void showPlacementGhost(const game::content::KitPiece& piece,
-                            const game::content::XformAuthor& transform,
-                            float importScale);
+    //
+    // A kit piece is shown WHOLE: its own mesh plus every attachment it
+    // declares, at the offsets the cooker will use. A compound piece used to
+    // ghost as its root alone -- a boss with no sword -- and a mesh-less group
+    // (the root of an imported multi-part model) ghosted as nothing at all.
+    //
+    // The catalogue comes in because the piece's parts are named, not owned,
+    // and because a piece's own `import_scale` beats the kit's.
+    void showPlacementGhost(const game::content::KitCatalog& catalog,
+                            const game::content::KitPiece& piece,
+                            const game::content::XformAuthor& transform);
     // The same, for the two brushes that are not kit pieces. A mesh file and a
     // generated primitive are as placeable as a wall is, and the ghost is what
     // makes placing anything judgeable before the click rather than after it.
@@ -80,6 +88,15 @@ public:
     // the viewport draws around it. Asked of the renderer rather than derived
     // from a kit piece, because two of the three brushes have no kit piece.
     bool ghostBounds(glm::vec3& min, glm::vec3& max) const;
+
+    // How far to lift this mesh so its base sits on a surface, in metres.
+    //
+    // -min.y of the mesh's own bounds, scaled. Zero for a mesh authored with
+    // its base at the origin, which is why applying it unconditionally cannot
+    // move anything that was already placed correctly; it only rescues the
+    // centre-authored meshes that used to sink halfway into the floor.
+    float meshBaseOffset(const std::string& meshPath, float importScale) const;
+    float primitiveBaseOffset(const eng::ecs::PrimitiveMesh& primitive) const;
     // A real live effect at the brush position. A wire box cannot communicate
     // spread, direction, lifetime, or scale, which are the values an author is
     // choosing when placing particles.
@@ -106,12 +123,13 @@ public:
     const std::string& lastError() const { return mError; }
 
 private:
+    struct Impl;
+
     void syncViewmodel(const game::content::SceneDocument& document);
     void showGhostMesh(const std::string& key, eng::MeshHandle mesh,
                        const game::content::XformAuthor& transform,
                        float importScale);
 
-    struct Impl;
     std::unique_ptr<Impl> mImpl;
     std::string mError;
 };

@@ -40,7 +40,9 @@ eng::ui::UiTone rarityAccent(std::string_view rarity) {
 eng::ui::TooltipContent buildTooltip(const InteractionFocus& focus,
                                      const PropInfo* prop,
                                      const ActorLook& actor,
-                                     std::string_view interactKey) {
+                                     std::string_view interactKey,
+                                     const PickupLook& pickup,
+                                     const NpcLook& npc) {
     eng::ui::TooltipContent content;
     if (!focus.available)
         return content;
@@ -123,6 +125,47 @@ eng::ui::TooltipContent buildTooltip(const InteractionFocus& focus,
                                : eng::ui::UiTone::Positive,
                  readout});
         }
+        break;
+
+    case TargetKind::Item:
+        if (!pickup.valid)
+            return {};
+        content.id = "item/" + std::to_string(focus.id);
+        content.title = pickup.count > 1
+                            ? pickup.name + " x" + std::to_string(pickup.count)
+                            : pickup.name;
+        content.subtitle = pickup.category;
+        content.accent = rarityAccent(pickup.rarity);
+        if (!pickup.description.empty())
+            content.lines.push_back({pickup.description});
+        if (pickup.takeable) {
+            content.action = "TAKE";
+            content.actionKey = std::string(interactKey);
+        } else {
+            // No verb, because pressing it would do nothing. Saying why is the
+            // difference between a full pack and a broken game.
+            content.lines.push_back({"Too heavy to carry any more of."});
+            content.accent = eng::ui::UiTone::Warning;
+        }
+        break;
+
+    case TargetKind::Npc:
+        if (!npc.valid)
+            return {};
+        content.id = "npc/" + std::to_string(focus.id);
+        content.title = npc.name;
+        content.subtitle = npc.role;
+        // Someone with something to hand in reads as positive; someone with a
+        // request reads as mystic; idle small talk stays neutral. §20 wants
+        // minimal quest markers, and a tooltip the player has to aim at is
+        // about as minimal as a marker gets.
+        content.accent = npc.questReady  ? eng::ui::UiTone::Positive
+                         : npc.hasQuest ? eng::ui::UiTone::Mystic
+                                                       : eng::ui::UiTone::Text;
+        if (!npc.line.empty())
+            content.lines.push_back({npc.line});
+        content.action = "SPEAK";
+        content.actionKey = std::string(interactKey);
         break;
     }
 
