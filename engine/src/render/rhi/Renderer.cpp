@@ -173,6 +173,15 @@ struct alignas(16) SceneUniforms {
     glm::vec4 shadowParams{0.0f};  // enabled, bias, strength, texel
     std::array<glm::vec4, 16> lightPositionRange{};
     std::array<glm::vec4, 16> lightColourType{};
+    // The era knobs, appended last on purpose: every shader that declares this
+    // block must agree on the offsets of what it *does* declare, and adding at
+    // the end leaves the ones that never look at these (shadow, particle,
+    // debug line) correct without touching them.
+    //   x precisionMultiplier  vertex snap grid
+    //   y lightSteps           0 = smooth, >0 = posterized bands
+    //   z lightStepSoftness    band-edge half width
+    //   w affineAmount         0 = perspective UVs, 1 = full affine
+    glm::vec4 psxParams{1.0f, 0.0f, 0.30f, 0.0f};
 };
 
 struct DrawConstants {
@@ -1298,6 +1307,10 @@ struct Renderer::Impl {
         uniforms.clipParams = {std::max(nearClip, 0.001f),
                                std::max(farClip, nearClip + 0.01f),
                                env.perPixelLighting ? 0.0f : 1.0f, 0.0f};
+        uniforms.psxParams = {std::max(env.precisionMultiplier, 0.001f),
+                              std::max(env.lightSteps, 0.0f),
+                              std::clamp(env.lightStepSoftness, 0.0f, 0.5f),
+                              std::clamp(env.affineAmount, 0.0f, 1.0f)};
         // w carries fogDesatBoost: the scene shader needs it alongside fog.
         uniforms.ambient = glm::vec4(env.ambient, std::max(env.fogDesatBoost, 0.0f));
         uniforms.fogColourDensity = glm::vec4(env.fogColour, env.fogDensity);
@@ -3345,6 +3358,16 @@ void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
 }
 void Renderer::setGlobalMaterialParam(const std::string& parameter, float value)
 {
+    // Two of these are scene-wide GTE artefacts rather than per-material
+    // settings, and the scene shaders read them out of the uniform block. They
+    // still reach the material library as well: the parameter is what the
+    // render presets and the debug panel already speak, and intercepting it
+    // here is what makes the existing "Affine warp" slider drive this backend
+    // without either of them learning a new call.
+    if (parameter == "precisionMultiplier")
+        mImpl->env.precisionMultiplier = value;
+    else if (parameter == "affineAmount")
+        mImpl->env.affineAmount = value;
     for (const std::string& material : mImpl->materials.names())
         mImpl->materials.set(material, parameter, value);
 }
@@ -3382,11 +3405,7 @@ void Renderer::setOmniAttenuation(float exponent)
 {
     mImpl->env.omniAttenuation = exponent;
 }
-void Renderer::setLightSteps(float steps)
-{
-    mImpl->env.lightSteps = steps;
-    if (steps > 0) mImpl->warnOnce("light-steps", "posterized light steps");
-}
+void Renderer::setLightSteps(float steps) { mImpl->env.lightSteps = steps; }
 void Renderer::setLightStepSoftness(float softness)
 {
     mImpl->env.lightStepSoftness = softness;

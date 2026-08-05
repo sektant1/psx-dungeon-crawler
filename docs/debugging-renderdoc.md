@@ -129,3 +129,49 @@ the console never had, and Gouraud-interpolating them looks like a bug.
 
 The game runs the `dungeon` profile, which is per-pixel, so this changes nothing
 about the shipped image; the editor runs `ps1` and does take the vertex-lit path.
+
+## The three GTE artefacts
+
+The PS1 look is not one effect. Three separate things produced it, all authored
+per profile in `RenderPresets.cpp`, all pushed at the renderer already, and all
+ignored by the Vulkan backend until they were implemented. They share one
+uniform lane, `SceneUniforms.psxParams`, appended at the end of the block so
+shaders that never look at it (shadow, particle, debug line) stay correct
+without being touched.
+
+| Lane | Knob | What it is |
+|---|---|---|
+| `psxParams.x` | `precisionMultiplier` | vertex snap |
+| `psxParams.y` | `lightSteps` | posterized diffuse |
+| `psxParams.z` | `lightStepSoftness` | band seam width |
+| `psxParams.w` | `affineAmount` | affine texture mapping |
+
+**Affine texture mapping** is the recognisable one. The console interpolated UVs
+linearly in screen space with no perspective divide, so textures swim and buckle
+across large polygons and a quad's two triangles crease along their shared
+diagonal. The vertex stage emits the UVs twice -- once `smooth`, once
+`noperspective` -- and the fragment blends between them, so it is a dial rather
+than a compile-time variant. `psx.frag` does the same thing; this matches it.
+
+**Vertex snap** quantises clip position onto a fixed screen grid, which is why
+PS1 edges crawl. NDC spans [-1,1], so the grid is `2 * floor(512 * p)` steps
+across the screen -- p = 0.156 (the PS1 profile) gives ~158 steps over a ~533px
+target and wobbles hard, p = 1.0 is finer than any target here and reads as off.
+Vertices behind the eye are left to the clipper: the NDC divide sends them to
+infinity and `floor()` folds them back across the screen as a stray triangle.
+
+**Posterized lighting** quantises the *diffuse* term only, so ambient never
+bands the whole scene toward black, and stays unclamped so overbright torch
+cores survive for the bloom bright pass to threshold on.
+
+All three are tweakable live from the debug panel's Render tab, which already
+had the sliders -- `setGlobalMaterialParam` intercepts the two material-shaped
+ones so the existing UI drives this backend without learning a new call.
+
+### Still not implemented in this backend
+
+`Renderer` warns once for each and carries on: **world sprites**
+(`attachSprite`, `attachTextSprite`), **decal batches**, and the **enchantment
+rune overlay** (its rim tint is applied; the scrolling runes are not). These are
+subsystems rather than shader knobs -- each needs its own pipeline and pass, not
+a uniform lane.

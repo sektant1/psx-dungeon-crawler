@@ -46,6 +46,12 @@ struct EnvState {
     bool dither = false;
     int pixelSize = 3;       // PSX/Stylized RT = window / pixelSize
     bool perPixelLighting = true; // fragment vs vertex light evaluation
+    // The two GTE artefacts. 512x448 is the grid the snap is expressed
+    // against (psx.vert's base_snap_res), so 1.0 is finer than any render
+    // target here and reads as "off"; the PS1 profile runs 0.156.
+    float precisionMultiplier = 1.0f;
+    // 0 = perspective-correct UVs, 1 = the full screen-space swim.
+    float affineAmount = 0.0f;
     float omniAttenuation = 1.0f; // Godot omni falloff exponent (1 = linear)
     float lightSteps = 0.0f; // diffuse posterization bands, 0 = smooth
     float lightStepSoftness = 0.35f; // band seam half-width, 0 = hard edges
