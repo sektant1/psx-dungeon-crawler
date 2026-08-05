@@ -153,6 +153,9 @@ button.on {
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
+/* A watch-only channel's count is dimmer and tilde-prefixed: it points at the
+   panel above, not at lines waiting in the log. */
+.channel .count.values { color: #4a4a51; font-style: italic; }
 .side .empty { padding: 10px 14px; color: var(--text-faint); font-size: 12px; }
 
 /* --- the log ------------------------------------------------------------- */

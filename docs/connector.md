@@ -64,6 +64,19 @@ adds `editor.scene/entities/selected/dirty/mode/camera`, an `edit` channel
 carrying every command that runs (the undo stack, readable and searchable), and
 `scene` events for loads and isolation.
 
+### Reading the channel rail
+
+A channel's count is its **log lines**. A channel that only ever emits watches
+shows `~N` instead, dimmed — that is the number of *values* it publishes, and
+they are in the panel above, not waiting in the log. `frame` and `player` are
+watch-only; `render` has both.
+
+The distinction matters because without it the rail lies: publishing
+`render.batches` sixty times a second made the count read 900+, next to a pane
+with five lines in it, and clicking the channel appeared to do nothing.
+Toggling a channel now hides its watches as well as its lines, so the switch
+means the same thing everywhere.
+
 ## In the browser
 
 - **Filter** — plain text, or `/regex/`. Matches message and channel; hits are

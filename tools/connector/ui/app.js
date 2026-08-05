@@ -221,7 +221,7 @@ function noteWatch(record) {
   const key = `${record.ch}.${record.name ?? record.msg}`;
   let entry = watches.get(key);
   if (!entry) {
-    entry = { history: [], value: "", numeric: false };
+    entry = { history: [], value: "", numeric: false, channel: record.ch };
     watches.set(key, entry);
   }
   if (record.v !== undefined) {
@@ -267,6 +267,11 @@ function flushWatches() {
       el.watches.insertBefore(node, before ?? null);
     }
     entry.valueNode.textContent = entry.value;
+    // A channel switched off in the rail hides its watches as well as its
+    // lines; otherwise the toggle does nothing visible for a watch-only
+    // channel, which is exactly the case that made the rail confusing.
+    const channel = state.channels.get(entry.channel);
+    node.hidden = channel ? !channel.on : false;
     if (entry.numeric) drawSpark(entry);
   }
 }
@@ -291,14 +296,31 @@ function drawSpark(entry) {
   ctx.stroke();
 }
 
-function noteChannel(name) {
+// Counted separately, because they are not the same thing to a reader. A
+// channel that only ever emits watches ("frame", "render") has no lines to
+// show, and a rail that advertised "540" next to an empty pane was the UI
+// lying about what a click would do.
+function noteChannel(name, record) {
   let entry = state.channels.get(name);
   if (!entry) {
-    entry = { on: true, count: 0 };
+    entry = { on: true, lines: 0, watches: 0 };
     state.channels.set(name, entry);
     renderChannels();
   }
-  entry.count++;
+  const isValue = record.kind === "watch" || record.kind === "sample";
+  if (isValue) {
+    // Distinct watches, not arrivals: "render has 2 values" is the useful
+    // number, where "render has sent 540 updates" is just uptime.
+    entry.watches = new Set([
+      ...(entry.names ?? []),
+      record.name ?? record.msg,
+    ]).size;
+    entry.names = [...(entry.names ?? []), record.name ?? record.msg];
+    if (entry.names.length > 64) entry.names = [...new Set(entry.names)];
+  } else {
+    entry.lines++;
+  }
+  entry.dirty = true;
 }
 
 let channelsDirty = false;
@@ -320,7 +342,17 @@ function flushChannels() {
     label.textContent = name;
     const count = document.createElement("span");
     count.className = "count";
-    count.textContent = entry.count > 9999 ? "9k+" : entry.count;
+    if (entry.lines > 0) {
+      count.textContent = entry.lines > 9999 ? "9k+" : entry.lines;
+    } else if (entry.watches > 0) {
+      // A tilde, and dimmer: these are values in the panel above, not lines
+      // waiting in the log. Toggling still works -- it hides the watches.
+      count.textContent = "~" + entry.watches;
+      count.classList.add("values");
+      row.title = `${entry.watches} watched value(s); no log lines`;
+    } else {
+      count.textContent = "0";
+    }
     row.append(label, count);
     row.onclick = (event) => {
       // Alt-click solos, because "just this one" is the common intent and
@@ -334,6 +366,8 @@ function flushChannels() {
       }
       renderChannels();
       flushChannels();
+      for (const w of watches.values()) w.dirty = true; // re-evaluate visibility
+      flushWatches();
       rebuild();
     };
     el.channels.append(row);
@@ -381,7 +415,7 @@ function connect() {
     }
     state.received++;
     state.rateWindow.push(performance.now());
-    noteChannel(record.ch);
+    noteChannel(record.ch, record);
     if (record.kind === "watch" || record.kind === "sample") {
       noteWatch(record);
       return; // never enters the ring: it would evict real log lines
@@ -460,7 +494,11 @@ el.clear.onclick = async () => {
   state.head = 0;
   state.full = false;
   state.received = 0;
-  for (const entry of state.channels.values()) entry.count = 0;
+  for (const entry of state.channels.values()) {
+    entry.lines = 0;
+    entry.watches = 0;
+    entry.names = [];
+  }
   watches.clear();
   el.watches.replaceChildren();
   el.log.replaceChildren();
@@ -510,7 +548,7 @@ const LIVE = params.get("nostream") !== "1";
       try {
         const record = JSON.parse(row);
         state.received++;
-        noteChannel(record.ch);
+        noteChannel(record.ch, record);
         if (record.kind === "watch" || record.kind === "sample") noteWatch(record);
         else push(record);
       } catch { /* a truncated row is not worth failing the boot over */ }
