@@ -32,9 +32,9 @@
 
 <!-- <p align="center"><img src="docs/media/footage/preview.gif" alt="Portal room running in the engine" width="900"></p> -->
 
-<p align="center"><img src="docs/media/footage/engine1.png" alt="Engine rendering demo" width="900"></p>
+<p align="center"><img src="docs/media/footage/editor1.png" alt="Engine rendering demo" width="900"></p>
 
-<p align="center"><img src="docs/media/footage/engine2.png" alt="Engine rendering demo" width="900"></p>
+<p align="center"><img src="docs/media/footage/editor2.png" alt="Engine rendering demo" width="900"></p>
 
 <p align="center"><img src="docs/media/footage/demo_gif.gif" alt="Engine rendering demo" width="900"></p>
 
