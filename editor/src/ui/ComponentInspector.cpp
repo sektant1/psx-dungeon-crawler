@@ -37,10 +37,19 @@ const ImVec4 kAxisColours[] = {
 // A vector property is three numeric fields, not one unlabeled slider. The
 // explicit axis labels remain readable without colour, while colour matches the
 // viewport gizmo. Narrow inspectors stack the axes instead of crushing them.
+// `agree`, when given, is three flags saying whether the selection holds the
+// same value on each axis (ed::multiedit::agreementOf). An axis they disagree
+// on is drawn as "--" rather than as the primary's number, which is the
+// chapter's rule: a grid that shows one object's value for a field the
+// selection does not share is a grid that lies about what is selected.
+//
+// The widget stays live -- dragging or typing into a "--" axis writes that
+// value to everything, which is exactly what §15.4.1.6 says should happen.
 void drawVec3Property(const char* id, const char* label, const char* units,
                       glm::vec3& value, const glm::vec3& reset, float speed,
                       InspectorContext& context, float min = 0.0f,
-                      float max = 0.0f, const char* format = "%.3f")
+                      float max = 0.0f, const char* format = "%.3f",
+                      const bool* agree = nullptr)
 {
     ImGui::PushID(id);
     if (ImGui::BeginTable("##header", 2,
@@ -80,8 +89,12 @@ void drawVec3Property(const char* id, const char* label, const char* units,
             ImGui::TextColored(kAxisColours[axis], "%s", kAxes[axis]);
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-1.0f);
-            ImGui::DragFloat("##value", &value[axis], speed, min, max, format,
-                             flags);
+            const bool mixed = agree != nullptr && !agree[axis];
+            ImGui::DragFloat("##value", &value[axis], speed, min, max,
+                             mixed ? "--" : format, flags);
+            if (mixed && ImGui::IsItemHovered())
+                ImGui::SetTooltip("the selection differs on this axis;\n"
+                                  "editing sets all of them");
             track(context);
             eng::imguihint::hover(
                 "editor.inspector.number",
@@ -498,6 +511,8 @@ void drawMarker(Entity& entity, InspectorContext& context)
     };
     static const Known kKnown[] = {
         {"enemy.", "spawns that enemy id (same as an Enemy Spawn component)"},
+        {"pickup.", "drops that item id (same as a Pickup component)"},
+        {"npc.", "stands that person there (same as an NPC component)"},
         {"feature.", "places a boss-arena feature by name"},
         {"shrine.", "anchors the treasure shrine"},
         {"group.", "a name gameplay code can look up"},
@@ -597,6 +612,30 @@ void drawEnemySpawn(Entity& entity, InspectorContext& context)
 void drawPickup(Entity& entity, InspectorContext& context)
 {
     vocabularyField("pickup", *entity.pickup, context.pickupIds, context);
+}
+
+void drawNpc(Entity& entity, InspectorContext& context)
+{
+    vocabularyField("npc", *entity.npc, context.npcIds, context);
+
+    // What the content already says about the person just placed. The author's
+    // next question after picking a name is always "and what do they do" --
+    // answering it here is the difference between authoring a village and
+    // authoring a list of names and then reading three TOMLs to find out what
+    // was built.
+    const std::string& id = *entity.npc;
+    if (id.empty()) {
+        ImGui::TextDisabled("unset: nobody stands here yet");
+        return;
+    }
+    const auto listed = [&](const std::vector<std::string>* list) {
+        return list && std::find(list->begin(), list->end(), id) != list->end();
+    };
+    const bool trades = listed(context.traderIds);
+    if (trades)
+        ImGui::TextDisabled("keeps a shop: buys, sells and barters");
+    else
+        ImGui::TextDisabled("talks only; no entry in traders.toml");
 }
 
 void drawTrigger(Entity& entity, InspectorContext& context)
@@ -1049,8 +1088,14 @@ bool drawScriptPathPicker(std::string& path, InspectorContext& context)
 // Scripts get a hand-written block for the same reason they hand-write their
 // serialiser: every other component is a fixed set of typed rows, and this is a
 // reorderable list whose rows each carry a variable table of values.
+//
+// Shared with the entity's own free-form properties (Gregory §15.4.1.6), which
+// are the same typed key-value bag with a different owner -- the format, the
+// cook and the Lua binding all treat them as one thing, so the panel does too.
+// `tableId` keeps the two tables' ImGui ids apart when an entity has both.
 void drawScriptProps(std::vector<game::content::ScriptPropAuthor>& props,
-                     InspectorContext& context)
+                     InspectorContext& context,
+                     const char* tableId = "##script_props")
 {
     using Prop = game::content::ScriptPropAuthor;
     static const char* kTypeNames[] = {"bool", "number", "string", "vec3",
@@ -1066,7 +1111,7 @@ void drawScriptProps(std::vector<game::content::ScriptPropAuthor>& props,
     constexpr ImGuiTableFlags kPropFlags = ImGuiTableFlags_SizingStretchProp |
                                            ImGuiTableFlags_NoSavedSettings |
                                            ImGuiTableFlags_PadOuterX;
-    if (ImGui::BeginTable("##script_props", 4, kPropFlags)) {
+    if (ImGui::BeginTable(tableId, 4, kPropFlags)) {
         ImGui::TableSetupColumn("key", ImGuiTableColumnFlags_WidthStretch, 0.34f);
         ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthStretch, 0.22f);
         ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 0.38f);
@@ -1147,6 +1192,20 @@ void drawScriptProps(std::vector<game::content::ScriptPropAuthor>& props,
         props.emplace_back();
         track(context);
     }
+}
+
+// The entity's own free-form properties. Gregory §15.4.1.6: keys an author
+// invented on one instance, with no programmer declaring anything.
+//
+// The same table the scripts block uses, because they are the same data. What
+// differs is the note underneath: these belong to the entity rather than to one
+// script, so every script on it sees them -- and an entity with no scripts can
+// still carry them for C++ gameplay to read.
+void drawProperties(Entity& entity, InspectorContext& context)
+{
+    drawScriptProps(entity.properties, context, "##entity_props");
+    ImGui::TextDisabled("read as self.props by every script on this entity;\n"
+                        "a script's own prop of the same name wins");
 }
 
 void drawScripts(Entity& entity, InspectorContext& context)
@@ -1801,6 +1860,7 @@ constexpr Drawer kDrawers[] = {
     {"actor", drawActor},
     {"sounds", drawSounds},
     {"scripts", drawScripts},
+    {"properties", drawProperties},
     {"spin", drawSpin},
     {"orbit", drawOrbit},
     {"shader", drawShader},
@@ -1811,6 +1871,7 @@ constexpr Drawer kDrawers[] = {
     {"marker", drawMarker},
     {"enemy_spawn", drawEnemySpawn},
     {"pickup", drawPickup},
+    {"npc", drawNpc},
     {"trigger", drawTrigger},
 };
 
@@ -1921,13 +1982,19 @@ void drawEntityIdentity(Entity& entity, InspectorContext& context)
     ImGui::SeparatorText(entity.parent.empty() ? "Transform"
                                                : "Transform (Local to Parent)");
     ImGui::TextDisabled("Drag to scrub; click to type; Tab moves between axes.");
+    // The transform is the one thing a heterogeneous selection always shares --
+    // the chapter's own worked example -- so it is where mixed values are shown
+    // and where a multi-object edit is most often meant.
+    const multiedit::TransformAgreement& agree = context.agreement;
     drawVec3Property("position", "Position", "m", entity.transform.position,
-                     glm::vec3(0.0f), 0.05f, context);
+                     glm::vec3(0.0f), 0.05f, context, 0.0f, 0.0f, "%.3f",
+                     agree.position);
     drawVec3Property("rotation", "Rotation", "deg",
                      entity.transform.rotationDegrees, glm::vec3(0.0f), 1.0f,
-                     context, 0.0f, 0.0f, "%.1f");
+                     context, 0.0f, 0.0f, "%.1f", agree.rotation);
     drawVec3Property("scale", "Scale", "factor", entity.transform.scale,
-                     glm::vec3(1.0f), 0.01f, context, 0.001f, 100.0f);
+                     glm::vec3(1.0f), 0.01f, context, 0.001f, 100.0f, "%.3f",
+                     agree.scale);
 }
 
 void drawComponentBody(const ComponentType& type, Entity& entity,

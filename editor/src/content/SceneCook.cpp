@@ -13,6 +13,40 @@
 namespace game::content {
 namespace {
 
+// One authored prop, as the runtime carries it. Shared by the two things that
+// author a prop bag -- a script's per-instance values and an entity's own
+// free-form properties -- because they are the same data (see the
+// PropertyAuthor alias in SceneDocument.h), and two copies of this switch would
+// disagree the first time a type was added.
+eng::ecs::ScriptProp cookProp(const ScriptPropAuthor& p)
+{
+    eng::ecs::ScriptProp out;
+    out.key = p.key;
+    switch (p.type) {
+    case ScriptPropAuthor::Type::Bool:
+        out.type = eng::ecs::ScriptProp::Type::Bool;
+        out.b = p.boolValue;
+        break;
+    case ScriptPropAuthor::Type::Number:
+        out.type = eng::ecs::ScriptProp::Type::Number;
+        out.n = p.numberValue;
+        break;
+    case ScriptPropAuthor::Type::String:
+        out.type = eng::ecs::ScriptProp::Type::String;
+        out.s = p.stringValue;
+        break;
+    case ScriptPropAuthor::Type::Vec3:
+        out.type = eng::ecs::ScriptProp::Type::Vec3;
+        out.v = p.vecValue;
+        break;
+    case ScriptPropAuthor::Type::Entity:
+        out.type = eng::ecs::ScriptProp::Type::Entity;
+        out.s = p.stringValue;
+        break;
+    }
+    return out;
+}
+
 // The collision a kit piece carries by virtue of what it IS, derived from its
 // socket and its authored size. Returns false for pieces that hold nothing up
 // and stop nothing: openings, and props, which collide only where the author
@@ -206,6 +240,8 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                                             game::EnemySpawn{*authored.enemySpawn});
         if (authored.pickup)
             built.emplace<game::Pickup>(entity, game::Pickup{*authored.pickup});
+        if (authored.npc)
+            built.emplace<game::Npc>(entity, game::Npc{*authored.npc});
         if (authored.trigger) {
             built.emplace<game::Trigger>(
                 entity, game::Trigger{eng::ShapeKind::Box, authored.trigger->size,
@@ -323,37 +359,26 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                 ref.path = src.path;
                 ref.enabled = src.enabled;
                 ref.props.reserve(src.props.size());
-                for (const ScriptPropAuthor& p : src.props) {
-                    eng::ecs::ScriptProp out;
-                    out.key = p.key;
-                    switch (p.type) {
-                    case ScriptPropAuthor::Type::Bool:
-                        out.type = eng::ecs::ScriptProp::Type::Bool;
-                        out.b = p.boolValue;
-                        break;
-                    case ScriptPropAuthor::Type::Number:
-                        out.type = eng::ecs::ScriptProp::Type::Number;
-                        out.n = p.numberValue;
-                        break;
-                    case ScriptPropAuthor::Type::String:
-                        out.type = eng::ecs::ScriptProp::Type::String;
-                        out.s = p.stringValue;
-                        break;
-                    case ScriptPropAuthor::Type::Vec3:
-                        out.type = eng::ecs::ScriptProp::Type::Vec3;
-                        out.v = p.vecValue;
-                        break;
-                    case ScriptPropAuthor::Type::Entity:
-                        out.type = eng::ecs::ScriptProp::Type::Entity;
-                        out.s = p.stringValue;
-                        break;
-                    }
-                    ref.props.push_back(std::move(out));
-                }
+                for (const ScriptPropAuthor& p : src.props)
+                    ref.props.push_back(cookProp(p));
                 scripts.items.push_back(std::move(ref));
             }
             built.emplace<eng::ecs::Scripts>(entity, std::move(scripts));
         }
+        if (!authored.properties.empty()) {
+            eng::ecs::Properties properties;
+            properties.items.reserve(authored.properties.size());
+            for (const PropertyAuthor& p : authored.properties) {
+                if (p.key.empty())
+                    continue; // validate() warns; the map carries no blanks
+                properties.items.push_back(cookProp(p));
+            }
+            if (!properties.items.empty())
+                built.emplace<eng::ecs::Properties>(entity,
+                                                    std::move(properties));
+        }
+        // Layers are authoring organisation and stop here: the runtime map is
+        // flat, and nothing downstream of the editor knows they exist.
 
         // Compound prefabs own their attached parts. Scenes author only the
         // root prefab; attachments stay local to it and therefore follow live

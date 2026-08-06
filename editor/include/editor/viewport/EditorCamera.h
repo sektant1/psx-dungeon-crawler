@@ -24,6 +24,43 @@ public:
     // racing through it.
     static constexpr float kWalkSpeed = 3.0f;
 
+    // --- projection ---------------------------------------------------------
+    // What the viewport is looking through. Gregory §15.4.1.2: a world editor
+    // offers a 3D perspective view and/or 2D orthographic elevations, and a
+    // blockout laid out against a true plan view is a different job from one
+    // judged in perspective -- parallel walls stay parallel, and "are these two
+    // pillars in line" stops being a guess.
+    //
+    // The three elevations lock yaw and pitch to an axis and switch the
+    // projection; the wheel becomes a zoom rather than a dolly, because moving
+    // an orthographic eye forward changes nothing on screen.
+    //
+    // One viewport that switches, not the four-pane layout the chapter also
+    // describes: RenderCore has exactly one offscreen editor target, and four
+    // would mean four scene passes a frame. See docs/world-editor.md.
+    enum class Projection { Perspective, Top, Front, Side };
+
+    void setProjection(Projection projection);
+    Projection projection() const { return mProjection; }
+    bool orthographic() const { return mProjection != Projection::Perspective; }
+    // World metres the viewport spans vertically. Meaningless in perspective.
+    float orthoHeight() const { return mOrthoHeight; }
+    // Wheel zoom for the elevations. Multiplicative, so a step is the same
+    // proportion whether the view spans four metres or four hundred.
+    void zoomOrtho(float factor);
+    // Pan in the elevation's own plane, in metres. The elevations have no
+    // orbit target to circle, so dragging moves the framed region instead.
+    void panOrtho(glm::vec2 screenDelta);
+    // Where the elevation's eye sits and which way it looks. Pulled well back
+    // along the view axis so geometry behind the framed region is not clipped
+    // away by the near plane -- an orthographic eye's distance changes nothing
+    // else, so it costs nothing to stand far away.
+    glm::vec3 orthoEye() const;
+    glm::quat orthoOrientation() const;
+    // The centre of the framed region, which is what panning moves.
+    glm::vec3 orthoFocus() const { return mOrthoFocus; }
+    void setOrthoFocus(glm::vec3 focus) { mOrthoFocus = focus; }
+
     void orbit(float dYawRad, float dPitchRad); // mouse drag
     void dolly(float delta);                    // scroll toward/away target
     void pan(glm::vec3 worldDelta);
@@ -72,12 +109,33 @@ public:
     // Pose currently presented by the viewport. Picking, gizmos and rendering
     // must all use these accessors or walk mode becomes visually disconnected
     // from the tools under the cursor.
-    glm::vec3 activeEye() const { return mWalking ? walkEye() : flyEye(); }
+    glm::vec3 activeEye() const
+    {
+        if (mWalking)
+            return walkEye();
+        return orthographic() ? orthoEye() : flyEye();
+    }
     glm::quat activeOrientation() const
     {
-        return mWalking ? walkOrientation() : flyOrientation();
+        if (mWalking)
+            return walkOrientation();
+        return orthographic() ? orthoOrientation() : flyOrientation();
     }
     float activeFovDeg() const { return mWalking ? kGameFovDeg : kEditorFovDeg; }
+    // Zero in perspective and in walk mode, which is what the renderer reads as
+    // "use the perspective path".
+    float activeOrthoHeight() const
+    {
+        return (!mWalking && orthographic()) ? mOrthoHeight : 0.0f;
+    }
+
+    // How far back an elevation's eye stands. Large enough that a whole level
+    // sits in front of the near plane; an orthographic projection does not care
+    // how far away the eye is, so this only has to be generous.
+    static constexpr float kOrthoEyeDistance = 500.0f;
+    static constexpr float kMinOrthoHeight = 0.5f;
+    static constexpr float kMaxOrthoHeight = 2000.0f;
+
 private:
     glm::vec3 mTarget{0.0f};
     float mDistance = 12.0f;
@@ -98,4 +156,11 @@ private:
     float mSavedYaw = 0.0f;
     float mSavedPitch = 0.0f;
     glm::vec3 mSavedFlyPos{0.0f};
+
+    // Elevation state, kept apart from the orbit/fly numbers for the same
+    // reason walk mode's is: switching to a plan view and back must return the
+    // author to the framing they left, not to an approximation of it.
+    Projection mProjection = Projection::Perspective;
+    float mOrthoHeight = 24.0f;
+    glm::vec3 mOrthoFocus{0.0f};
 };

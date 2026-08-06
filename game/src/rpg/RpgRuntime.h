@@ -4,6 +4,8 @@
 #include "Hideout.h"
 #include "Inventory.h"
 #include "Items.h"
+#include "NpcSystem.h"
+#include "Npcs.h"
 #include "PickupSystem.h"
 #include "Quests.h"
 #include "RaidState.h"
@@ -44,6 +46,7 @@ public:
         std::string loot = "config/loot.toml";
         std::string quests = "config/quests.toml";
         std::string dialogue = "config/dialogue.toml";
+        std::string npcs = "config/npcs.toml";
         std::string progression = "config/progression.toml";
         std::string traders = "config/traders.toml";
         std::string stations = "config/stations.toml";
@@ -66,6 +69,7 @@ public:
     const LootLibrary& lootTables() const { return mLoot; }
     const QuestLibrary& questLibrary() const { return mQuestLibrary; }
     const DialogueLibrary& dialogueLibrary() const { return mDialogue; }
+    const NpcLibrary& npcLibrary() const { return mNpcLibrary; }
 
     // --- the player --------------------------------------------------------
     CharacterSheet& sheet() { return mSheet; }
@@ -89,6 +93,8 @@ public:
     const WorldState& world() const { return mWorld; }
     PickupSystem& pickups() { return mPickups; }
     const PickupSystem& pickups() const { return mPickups; }
+    NpcSystem& npcs() { return mNpcs; }
+    const NpcSystem& npcs() const { return mNpcs; }
     DialogueRunner& conversation() { return mConversation; }
     const DialogueRunner& conversation() const { return mConversation; }
     GameChannels& channels() { return mChannels; }
@@ -206,6 +212,17 @@ public:
 
     // Set once, so a level transition can rebuild the pickups it authored.
     void setPickupsForLevel(GameContext&, const std::vector<ScenePlacement>&);
+    // The same for the people the level stands in it.
+    void setNpcsForLevel(GameContext&, const std::vector<ScenePlacement>&);
+
+    // Open a conversation with the person under the crosshair. Resolves the
+    // placement to a person, then to their conversation, so a shopkeeper who
+    // shares a script with three other guards still talks.
+    //
+    // Returns false when there is nothing to say, which is a real state: a
+    // trader with stock and no dialogue tree is somebody you shop with, not
+    // somebody you chat to, and the caller opens the shop instead.
+    bool talkToPlacement(int npcEntryId);
 
     // Human-readable one-liners for the last few things that happened, for the
     // HUD's message feed. Newest last.
@@ -233,6 +250,7 @@ private:
     LootLibrary mLoot;
     QuestLibrary mQuestLibrary;
     DialogueLibrary mDialogue;
+    NpcLibrary mNpcLibrary;
 
     CharacterSheet mSheet;
     Inventory mInventory;
@@ -241,6 +259,7 @@ private:
     GameChannels mChannels;
     DialogueRunner mConversation;
     PickupSystem mPickups;
+    NpcSystem mNpcs;
     std::string mPartner;
 
     // The loot stream. One per runtime, advanced by every roll, so an

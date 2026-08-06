@@ -66,10 +66,12 @@ int main()
     // cover them. That is precisely the rot this file exists to catch, so both
     // are exercised now.
     document.palette = "dungeon";
+    document.layers.push_back(Layer{"lighting", "Lighting", {1.0f, 0.8f, 0.3f}});
     Entity entity;
     entity.id = "everything";
     entity.name = "Every Field";
     entity.parent = "some_pivot";
+    entity.layer = "lighting";
     entity.prefab = "kit.wall";
     entity.material = "Game/Kit/Stone";
     entity.castShadows = false;
@@ -90,16 +92,37 @@ int main()
     entity.marker = "boss.spawn";
     entity.enemySpawn = "goblin";
     entity.pickup = "potion";
+    entity.npc = "ilsabet";
     entity.trigger = TriggerAuthor{{2.0f, 2.0f, 2.0f}, "arena.start"};
     entity.playerSpawn = true;
+    // One free-form property per type, so the props subschema covers all five
+    // shapes the writer can emit rather than only the two a real scene happens
+    // to use.
+    entity.properties = {
+        PropertyAuthor{"flammable", PropertyAuthor::Type::Bool, true},
+        PropertyAuthor{"charge", PropertyAuthor::Type::Number, false, 0.75f},
+        PropertyAuthor{"tag", PropertyAuthor::Type::String, false, 0.0f,
+                       {}, "ritual"},
+        PropertyAuthor{"anchor", PropertyAuthor::Type::Vec3, false, 0.0f,
+                       {1.0f, 0.0f, -2.0f}},
+        PropertyAuthor{"target", PropertyAuthor::Type::Entity, false, 0.0f,
+                       {}, "some_pivot"},
+    };
     document.add(entity);
 
     const Json written = Json::parse(serializeSceneSource(document));
     checkObject(written, schema, "the document root");
     require(written["entities"].size() == 1, "one entity was written");
 
+    require(written.contains("layers") && written["layers"].size() == 1,
+            "the root emits the layer list");
+    checkObject(written["layers"][0], defs["layer"], "a layer");
+
     const Json& emitted = written["entities"][0];
     checkObject(emitted, defs["entity"], "an entity");
+    require(emitted.contains("properties") &&
+                emitted["properties"].size() == 5,
+            "every free-form property type survives the write");
     checkObject(emitted["transform"], defs["transform"], "a transform");
     checkObject(emitted["cell"], defs["cell"], "a cell");
     checkObject(emitted["collider"], defs["collider"], "a collider");

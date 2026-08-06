@@ -10,6 +10,7 @@
 #include <eng/Primitive.h>
 #include <eng/Renderer.h>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
@@ -200,6 +201,30 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
     ctx.physics.setBodyKinematic(body, true);
 
     // --- visual ----------------------------------------------------------
+    // The shared humanoid rig, scaled to this definition's stated height. What
+    // you can hit is still what you can see: the capsule and the rig are built
+    // from the same `body.height`, so a scaled-down goblin's silhouette sits
+    // inside its own collider rather than the mesh's.
+    //
+    // A definition naming its own mesh opts out and keeps the old static path,
+    // as does a game whose rig failed to load -- neither should cost the level
+    // its enemies.
+    actor::ActorVisual actorVisual;
+    if (ctx.humanoid.valid() && def->visual.mesh.empty()) {
+        // Unparented: an enemy's transform comes from its physics body every
+        // frame, so it is placed by setTransform rather than by riding a node.
+        // The body reports its CENTRE, which is what the anchor says.
+        actor::ActorVisualDesc visual;
+        visual.material = def->visual.material;
+        visual.height = def->body.height;
+        visual.anchor = actor::ActorAnchor::Centre;
+        // The definition's art multiplier, which the primitive path applies to
+        // its node too -- a rigged enemy should not silently lose it.
+        visual.scale = def->visual.scale;
+        visual.castShadows = def->visual.castShadows;
+        actorVisual.create(ctx.renderer, ctx.humanoid, eng::kRootNode, visual);
+    }
+
     // Placeholder art is a tinted cylinder that is exactly the collision shape,
     // so what you can hit is what you can see. Cached per definition: a pack of
     // a dozen shares one mesh.
@@ -208,7 +233,9 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
         defId + ":" + def->visual.mesh + ":" +
         std::to_string(def->body.cappedRadius()) + ":" +
         std::to_string(def->body.straightHeight());
-    if (auto it = mMeshCache.find(meshKey); it != mMeshCache.end()) {
+    if (actorVisual.valid()) {
+        // The rig owns the geometry; no per-definition mesh to build or cache.
+    } else if (auto it = mMeshCache.find(meshKey); it != mMeshCache.end()) {
         mesh = it->second;
     } else if (!def->visual.mesh.empty()) {
         eng::ModelImportOptions legacyImport;
@@ -229,11 +256,17 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
         mMeshCache[meshKey] = mesh;
     }
 
-    const eng::NodeHandle node = ctx.renderer.createNode(eng::kRootNode, centre);
-    ctx.renderer.setScale(node, def->visual.scale);
-    ctx.renderer.setOrientation(node, orientation);
-    ctx.renderer.attachMesh(node, mesh, def->visual.material,
-                            "Game/Prototype/Floor", def->visual.castShadows);
+    eng::NodeHandle node;
+    if (actorVisual.valid()) {
+        node = actorVisual.node();
+        actorVisual.setTransform(ctx.renderer, feetPos, yaw);
+    } else {
+        node = ctx.renderer.createNode(eng::kRootNode, centre);
+        ctx.renderer.setScale(node, def->visual.scale);
+        ctx.renderer.setOrientation(node, orientation);
+        ctx.renderer.attachMesh(node, mesh, def->visual.material,
+                                "Game/Prototype/Floor", def->visual.castShadows);
+    }
 
     // --- components -------------------------------------------------------
     // The combat half first: the director creates the entity and owns the
@@ -280,6 +313,13 @@ entt::entity EnemySystem::spawn(GameContext& ctx, const std::string& defId,
     motion.yaw = yaw;
     motion.feet = feetPos;
     reg.emplace<EnemyRender>(e, EnemyRender{node, mesh, 0.0f, 0.0f, false});
+    if (actorVisual.valid()) {
+        EnemyActor& actorBody = reg.emplace<EnemyActor>(e);
+        actorBody.visual = std::move(actorVisual);
+        actorBody.visual.animator().setStance(
+            brain.state == EnemyState::Dormant ? actor::ActorStance::Dormant
+                                               : actor::ActorStance::Relaxed);
+    }
     reg.emplace<EnemyOrigin>(e, EnemyOrigin{spawnerIndex});
     reg.emplace<EnemyPatternExecution>(e);
 
@@ -594,6 +634,23 @@ void EnemySystem::fixedStep(GameContext& ctx, glm::vec3 targetFeet,
                 // The cooldown starts here, not where the brain chose the
                 // move: a swing the feel layer refused was never made.
                 enemyai::notifyAttackStarted(def, brain, intent.attack);
+                if (auto* body = reg.try_get<EnemyActor>(e)) {
+                    // The clip is retimed to the attack the feel layer actually
+                    // accepted, so a fast jab and a slow overhead read as what
+                    // their windups say they are rather than as one animation
+                    // played at one speed under two different timers.
+                    const float windup =
+                        atk.timing.windup + atk.timing.active + atk.timing.recovery;
+                    const actor::ActorAction swing =
+                        atk.ranged ? actor::ActorAction::Cast
+                                   : (atk.timing.windup > 0.45f
+                                          ? actor::ActorAction::AttackHeavy
+                                          : (brain.pendingAttack % 2 == 0
+                                                 ? actor::ActorAction::AttackLight
+                                                 : actor::ActorAction::AttackAlternate));
+                    body->visual.animator().play(
+                        swing, ctx.humanoid.clipSpeedFor(swing, windup));
+                }
                 if (mOnTelegraph)
                     mOnTelegraph(e, atk, motion.feet);
             } else {
@@ -718,35 +775,108 @@ void EnemySystem::fixedStep(GameContext& ctx, glm::vec3 targetFeet,
         despawn(ctx, e);
 }
 
-void EnemySystem::syncRender(GameContext& ctx)
+namespace {
+
+// The brain's state, as a posture. Anything that has noticed something stands
+// ready; anything that has not stands easy. Deliberately a small mapping in one
+// place rather than an ActorStance field on EnemyBrain: what an enemy is
+// thinking is the AI's business and how it stands is presentation's.
+actor::ActorStance stanceFor(EnemyState state)
+{
+    switch (state) {
+    case EnemyState::Dormant:
+        return actor::ActorStance::Dormant;
+    case EnemyState::Alert:
+    case EnemyState::Chase:
+    case EnemyState::Circle:
+    case EnemyState::Attack:
+    case EnemyState::Reposition:
+    case EnemyState::Search:
+    case EnemyState::Flee:
+        return actor::ActorStance::Combat;
+    case EnemyState::Idle:
+    case EnemyState::Stagger:
+    case EnemyState::Dead:
+        break;
+    }
+    return actor::ActorStance::Relaxed;
+}
+
+} // namespace
+
+void EnemySystem::syncRender(GameContext& ctx, float dt,
+                             const glm::vec3* playerEye)
 {
     if (!mDirector)
         return;
+    entt::registry& reg = registry();
     for (auto [e, tag, render, link] :
-         registry().view<const EnemyTag, const EnemyRender, const BodyLink>()
-             .each()) {
+         reg.view<const EnemyTag, const EnemyRender, const BodyLink>().each()) {
         if (!render.node.valid())
             continue;
         glm::vec3 pos;
         glm::quat rot;
         ctx.physics.getRenderTransform(link.body, pos, rot);
-        ctx.renderer.setPosition(render.node, pos);
-        ctx.renderer.setOrientation(render.node, rot);
 
-        // Hit reaction: a brief squash. Cheap, silhouette-only, and it reads at
-        // the resolution this renderer actually draws at -- a colour flash on a
-        // 320-wide framebuffer does not.
-        glm::vec3 scale = tag.def->visual.scale;
-        if (render.hitFlash > 0.0f && tag.def->visual.hitFlashTime > 0.0f) {
-            const float t = render.hitFlash / tag.def->visual.hitFlashTime;
-            const float a = tag.def->visual.hitFlash * t;
-            scale.x *= 1.0f + a;
-            scale.z *= 1.0f + a;
-            scale.y *= 1.0f - a;
+        EnemyActor* body = reg.try_get<EnemyActor>(e);
+        if (!body) {
+            ctx.renderer.setPosition(render.node, pos);
+            ctx.renderer.setOrientation(render.node, rot);
+
+            // Hit reaction: a brief squash. Cheap, silhouette-only, and it
+            // reads at the resolution this renderer actually draws at -- a
+            // colour flash on a 320-wide framebuffer does not. An animated
+            // actor gets the authored flinch instead, which says the same thing
+            // without deforming a humanoid into a pancake.
+            glm::vec3 scale = tag.def->visual.scale;
+            if (render.hitFlash > 0.0f && tag.def->visual.hitFlashTime > 0.0f) {
+                const float t = render.hitFlash / tag.def->visual.hitFlashTime;
+                const float a = tag.def->visual.hitFlash * t;
+                scale.x *= 1.0f + a;
+                scale.z *= 1.0f + a;
+                scale.y *= 1.0f - a;
+            }
+            ctx.renderer.setScale(render.node, scale);
+            continue;
         }
-        ctx.renderer.setScale(render.node, scale);
-    }
 
+        const auto* motion = reg.try_get<EnemyMotion>(e);
+        const auto* brain = reg.try_get<EnemyBrain>(e);
+
+        // This system's yaw is the opposite of the engine's node convention:
+        // `forwardOf` here is (sin, 0, cos), a node's forward is local -Z, and
+        // the two differ by half a turn. Nothing noticed while an enemy was a
+        // rotationally symmetric capsule; a humanoid walks backwards. Converted
+        // once, here, at the boundary -- rather than by re-authoring the AI's
+        // vector maths, which every state in the brain depends on.
+        const float nodeYaw =
+            (motion ? motion->yaw : 0.0f) + glm::pi<float>();
+
+        // The interpolated physics transform, straight through: the body knows
+        // that a capsule reports its centre. Yaw comes from the brain rather
+        // than from the body, which is a capsule whose orientation is whatever
+        // the solver last left it at.
+        body->visual.setTransform(ctx.renderer, pos, nodeYaw);
+        const glm::vec3 feet = body->visual.feetOf(pos);
+
+        actor::ActorAnimationInput input;
+        if (motion) {
+            input.velocity = motion->velocity;
+            input.yawRadians = nodeYaw;
+            input.grounded = motion->grounded;
+        }
+        input.eyePosition = feet + glm::vec3(0.0f, tag.def->body.eyeHeight, 0.0f);
+        // An enemy that has noticed you watches you: the head leads, the chest
+        // follows. Only while it is actually engaged -- a patrolling guard that
+        // tracks the player through a wall gives the game away.
+        if (playerEye && brain && brain->state != EnemyState::Dormant &&
+            brain->state != EnemyState::Dead && brain->state != EnemyState::Idle)
+            input.lookTarget = *playerEye;
+
+        if (brain)
+            body->visual.animator().setStance(stanceFor(brain->state));
+        body->visual.update(ctx.renderer, dt, input);
+    }
 }
 
 void EnemySystem::syncProjectileRender(GameContext& ctx)
@@ -768,6 +898,16 @@ void EnemySystem::notifyHit(entt::entity e)
     if (auto* render = reg.try_get<EnemyRender>(e))
         if (const auto* tag = reg.try_get<EnemyTag>(e))
             render->hitFlash = tag->def->visual.hitFlashTime;
+    if (auto* body = reg.try_get<EnemyActor>(e)) {
+        // Poise decides which reaction: a flinch is an upper-body twitch that
+        // does not stop a charge, a stagger takes the whole body. The feel
+        // layer has already made that call by the time this runs, so this reads
+        // it rather than re-deciding it.
+        const auto* action = reg.try_get<ActionState>(e);
+        const bool broken = action && action->phase == ActionPhase::Staggered;
+        body->visual.animator().play(broken ? actor::ActorAction::Stagger
+                                            : actor::ActorAction::Hit);
+    }
     if (auto* brain = reg.try_get<EnemyBrain>(e)) {
         // Being hit ends dormancy and buys a window of guaranteed aggression,
         // so shooting something in the back never reads as it not noticing.
@@ -798,20 +938,32 @@ void EnemySystem::onKilled(GameContext& ctx, entt::entity e,
     if (auto* brain = reg.try_get<EnemyBrain>(e))
         brain->state = EnemyState::Dead;
 
-    // The corpse becomes a real rigid body and takes the killing blow. This is
-    // the whole death animation: physics is the animator, which for a
-    // placeholder cylinder reads better than any authored pose would.
-    ctx.physics.setBodyKinematic(link.body, false);
-    glm::vec3 impulse = impulseDir;
-    const float len = glm::length(impulse);
-    impulse = len > 1e-4f ? impulse / len : glm::vec3(0.0f, 0.0f, 1.0f);
-    impulse *= tag.def->stats.deathImpulse * tag.def->body.mass * 0.05f;
-    impulse.y += tag.def->stats.deathImpulse * 0.5f;
     glm::vec3 pos;
     glm::quat rot;
     ctx.physics.getRenderTransform(link.body, pos, rot);
     ctx.renderer.spawnParticles("enemy_death_burst", pos);
-    ctx.physics.applyImpulse(link.body, impulse, pos);
+
+    if (auto* body = reg.try_get<EnemyActor>(e)) {
+        // An authored collapse, and the capsule stays kinematic underneath it.
+        //
+        // The placeholder path below throws the corpse as a rigid body, which
+        // reads well for a cylinder because a tumbling cylinder is what a
+        // falling cylinder looks like. A humanoid is not: the capsule would
+        // roll while the rig kept standing at attention inside it. Until there
+        // is a ragdoll to hand the pose over to (Gregory 12.7.3), the clip is
+        // the better of the two answers, and it is also the readable one -- the
+        // enemy falls the same way every time, so death is legible in a crowd.
+        body->visual.animator().play(actor::ActorAction::Death);
+    } else {
+        // The corpse becomes a real rigid body and takes the killing blow.
+        ctx.physics.setBodyKinematic(link.body, false);
+        glm::vec3 impulse = impulseDir;
+        const float len = glm::length(impulse);
+        impulse = len > 1e-4f ? impulse / len : glm::vec3(0.0f, 0.0f, 1.0f);
+        impulse *= tag.def->stats.deathImpulse * tag.def->body.mass * 0.05f;
+        impulse.y += tag.def->stats.deathImpulse * 0.5f;
+        ctx.physics.applyImpulse(link.body, impulse, pos);
+    }
 
     if (mOnDeath)
         mOnDeath(e, *tag.def);
@@ -824,7 +976,14 @@ void EnemySystem::despawn(GameContext& ctx, entt::entity e)
     entt::registry& reg = registry();
     if (!reg.valid(e) || !reg.all_of<EnemyTag>(e))
         return;
-    if (auto* render = reg.try_get<EnemyRender>(e); render && render->node.valid())
+    // The animated body owns the same node EnemyRender points at, so this is
+    // the one that has to go first -- destroyNode releases the skin instances
+    // under it, and the reverse order leaves ActorVisual releasing a handle the
+    // renderer has already forgotten.
+    if (auto* body = reg.try_get<EnemyActor>(e))
+        body->visual.destroy(ctx.renderer);
+    else if (auto* render = reg.try_get<EnemyRender>(e);
+             render && render->node.valid())
         ctx.renderer.destroyNode(render->node);
     if (auto* link = reg.try_get<BodyLink>(e)) {
         const eng::BodyHandle body = link->body;

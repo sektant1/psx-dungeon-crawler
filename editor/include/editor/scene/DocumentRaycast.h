@@ -48,4 +48,18 @@ DocumentHit raycastDocument(const game::content::SceneDocument& doc,
                             const game::content::KitCatalog& catalog,
                             const Ray& ray, const EntityFilter& accepts);
 
+// Everything the ray meets, nearest first, ties to the smaller box -- the same
+// order raycastDocument picks its single answer by, so element zero is always
+// what a plain click would have selected.
+//
+// This is what makes Gregory §15.4.1.4's cycling possible: "the editor might
+// allow the user to cycle through all of the objects that the ray is currently
+// intersecting rather than always selecting the nearest one". A dense level
+// otherwise leaves the author hiding whatever is in front and trying again,
+// which is a loop, not a tool. See ed::selection::PickCycle for the walking.
+std::vector<DocumentHit>
+raycastDocumentAll(const game::content::SceneDocument& doc,
+                   const game::content::KitCatalog& catalog, const Ray& ray,
+                   const EntityFilter& accepts);
+
 } // namespace ed

@@ -33,28 +33,43 @@ void InteractionSystem::update(GameContext& ctx, LiveLevel& level, int depth,
     mFocus.distance = glm::length(target->position - eye);
     mFocus.catalogIndex = target->catalogIndex;
 
-    if (target->kind == TargetKind::Prop || target->kind == TargetKind::Actor) {
-        // Look targets with no transition of their own: they exist so the HUD
-        // can describe them. Interaction verbs for props land here when the
-        // container systems arrive.
-        return;
-    }
-
-    if (target->kind == TargetKind::Torch) {
+    // A switch with no default, deliberately. This was an if/else chain whose
+    // final `else` meant "ascend", so every target kind added after it -- an
+    // item on the floor, a person to talk to -- inherited the up-portal's verb:
+    // aiming at a dropped potion and pressing interact took the player up a
+    // level and cleared the focus, which is why nothing could be picked up. A
+    // kind added now fails to compile here instead.
+    switch (target->kind) {
+    case TargetKind::Torch:
         mFocus.active = level.torchIsLit(target->id);
         if (in.wasPressed("interact"))
             level.toggleTorch(ctx.renderer, target->id);
         mFocus.active = level.torchIsLit(target->id);
-    } else if (target->kind == TargetKind::PortalDown) {
+        break;
+
+    case TargetKind::PortalDown:
         if (in.wasPressed("interact")) {
             mFocus = {};
             onDescend();
         }
-    } else {
+        break;
+
+    case TargetKind::PortalUp:
         if (in.wasPressed("interact")) {
             mFocus = {};
             onAscend();
         }
+        break;
+
+    case TargetKind::Prop:
+    case TargetKind::Actor:
+    case TargetKind::Item:
+    case TargetKind::Npc:
+        // Look targets with no transition of their own. The focus is published
+        // and that is all: taking an item and speaking to somebody are verbs
+        // the app owns, because this system owns neither an inventory nor a
+        // conversation.
+        break;
     }
 }
 

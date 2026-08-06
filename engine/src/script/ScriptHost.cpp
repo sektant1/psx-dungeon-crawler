@@ -213,34 +213,52 @@ struct ScriptHost::Impl {
 
     // --- authored props ---------------------------------------------------
     // Builds self.props for one script instance.
+    //
+    // Two layers, in this order: the entity's own free-form properties (the
+    // ones an author invented in the world editor without a programmer
+    // declaring anything), then the script instance's declared props on top.
+    // A script that names a key owns it; anything else the entity carries is
+    // still visible, which is what makes "tag the crate flammable and read it
+    // from whatever script it has" work without editing C++.
     sol::table buildProps(entt::entity owner, const ecs::ScriptRef& ref)
     {
         sol::table props = lua.create_table();
-        for (const ecs::ScriptProp& p : ref.props) {
-            switch (p.type) {
-            case ecs::ScriptProp::Type::Bool:   props[p.key] = p.b; break;
-            case ecs::ScriptProp::Type::Number: props[p.key] = p.n; break;
-            case ecs::ScriptProp::Type::String: props[p.key] = p.s; break;
-            case ecs::ScriptProp::Type::Vec3:   props[p.key] = p.v; break;
-            case ecs::ScriptProp::Type::Entity: {
-                const entt::entity target = findByName(world, p.s);
-                if (target == entt::null) {
-                    // A warning, not an error: a level may legitimately ship
-                    // without the collaborator, and the cooker already fails
-                    // the build on a name absent from the authored scene.
-                    log::warn("Script: %s on %s: prop '%s' names entity '%s', "
-                              "which does not exist",
-                              ref.path.c_str(), subject(owner).c_str(),
-                              p.key.c_str(), p.s.c_str());
-                    props[p.key] = sol::lua_nil;
-                } else {
-                    props[p.key] = LuaEntity{&world, target};
-                }
-                break;
-            }
-            }
-        }
+        if (const ecs::Properties* own =
+                world.registry().try_get<ecs::Properties>(owner))
+            for (const ecs::ScriptProp& p : own->items)
+                writeProp(props, p, "entity property", owner);
+        for (const ecs::ScriptProp& p : ref.props)
+            writeProp(props, p, ref.path.c_str(), owner);
         return props;
+    }
+
+    // One prop into a Lua table. `source` names what is being built, so the
+    // unresolved-entity warning can say which of the two layers it came from.
+    void writeProp(sol::table& props, const ecs::ScriptProp& p,
+                   const char* source, entt::entity owner)
+    {
+        switch (p.type) {
+        case ecs::ScriptProp::Type::Bool:   props[p.key] = p.b; break;
+        case ecs::ScriptProp::Type::Number: props[p.key] = p.n; break;
+        case ecs::ScriptProp::Type::String: props[p.key] = p.s; break;
+        case ecs::ScriptProp::Type::Vec3:   props[p.key] = p.v; break;
+        case ecs::ScriptProp::Type::Entity: {
+            const entt::entity target = findByName(world, p.s);
+            if (target == entt::null) {
+                // A warning, not an error: a level may legitimately ship
+                // without the collaborator, and the cooker already fails
+                // the build on a name absent from the authored scene.
+                log::warn("Script: %s on %s: prop '%s' names entity '%s', "
+                          "which does not exist",
+                          source, subject(owner).c_str(), p.key.c_str(),
+                          p.s.c_str());
+                props[p.key] = sol::lua_nil;
+            } else {
+                props[p.key] = LuaEntity{&world, target};
+            }
+            break;
+        }
+        }
     }
 
     // Builds instances for any entity carrying Scripts but no ScriptState.

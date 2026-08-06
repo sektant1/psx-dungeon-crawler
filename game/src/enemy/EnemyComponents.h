@@ -1,5 +1,6 @@
 #pragma once
 #include "EnemyDef.h"
+#include "actor/ActorVisual.h"
 
 #include <eng/Handles.h>
 
@@ -80,6 +81,16 @@ struct EnemyMotion {
     // timer: an enemy that walks fires them further apart than one that charges
     // without either being authored per-speed.
     float sinceFootstep = 0.0f;
+};
+
+// The animated body, for enemies wearing the shared humanoid rig.
+//
+// A separate component rather than a field on EnemyRender because it is
+// optional: an enemy whose definition names its own mesh, or a game whose rig
+// failed to load, still gets EnemyRender and a primitive capsule. Code asks
+// "does this one have a body" by asking for the component.
+struct EnemyActor {
+    actor::ActorVisual visual;
 };
 
 // Render-side handles and the presentation timers the AI never reads.

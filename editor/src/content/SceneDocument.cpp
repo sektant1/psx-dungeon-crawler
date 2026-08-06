@@ -204,6 +204,12 @@ std::optional<game::ActorKind> actorKindOf(const Entity& entity)
         return game::ActorKind::Player;
     if (entity.enemySpawn)
         return game::ActorKind::Enemy;
+    // An Npc component says what the explicit `actor` field used to be the only
+    // way to say. Now that the format can express the person directly, adding
+    // one classifies it, so the sound table appears on the villagers without
+    // anybody remembering to also tick "this is an actor".
+    if (entity.npc)
+        return game::ActorKind::Npc;
     // The marker spelling of an enemy spawn. MapRuntime feeds markers and
     // EnemySpawn components into one encounter path, so classifying only one of
     // them would offer the sound table on half the enemies in a level.
@@ -224,6 +230,42 @@ AuthorId SceneDocument::allocateId(std::string_view stem) const
         std::snprintf(buffer, sizeof(buffer), "_%04d", index);
         AuthorId candidate = prefix + buffer;
         if (!contains(candidate))
+            return candidate;
+    }
+    return prefix + "_overflow";
+}
+
+Layer* SceneDocument::findLayer(std::string_view layerId)
+{
+    const SceneDocument* self = this;
+    return const_cast<Layer*>(self->findLayer(layerId));
+}
+
+const Layer* SceneDocument::findLayer(std::string_view layerId) const
+{
+    // Linear: a chunk has a handful of layers, and an index that has to be
+    // invalidated is a second thing to get wrong for no measurable gain.
+    for (const Layer& layer : layers)
+        if (layer.id == layerId)
+            return &layer;
+    return nullptr;
+}
+
+bool SceneDocument::hasLayer(std::string_view layerId) const
+{
+    return layerId.empty() || findLayer(layerId) != nullptr;
+}
+
+std::string SceneDocument::allocateLayerId(std::string_view stem) const
+{
+    const std::string prefix(stem.empty() ? std::string_view("layer") : stem);
+    if (!findLayer(prefix))
+        return prefix;
+    for (int index = 2; index < 100000; ++index) {
+        char buffer[16];
+        std::snprintf(buffer, sizeof(buffer), "_%04d", index);
+        const std::string candidate = prefix + buffer;
+        if (!findLayer(candidate))
             return candidate;
     }
     return prefix + "_overflow";

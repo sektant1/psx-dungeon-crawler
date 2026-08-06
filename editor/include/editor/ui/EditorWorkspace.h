@@ -12,6 +12,10 @@ inline constexpr const char* kSceneView = "Scene View###Viewport";
 inline constexpr const char* kHudPreview = "HUD Preview###UI";
 inline constexpr const char* kAssetBrowser = "Asset Browser###Catalog";
 inline constexpr const char* kHierarchy = "Hierarchy###Outliner";
+// Tabbed with the Hierarchy rather than given a rail of its own: both answer
+// "what is in this level and can I see it", and a layer list is a handful of
+// rows that would waste a permanent panel.
+inline constexpr const char* kLayers = "Layers###Layers";
 inline constexpr const char* kInspector = "Inspector";
 inline constexpr const char* kProblems = "Problems###Issues";
 inline constexpr const char* kConsole = "Console";

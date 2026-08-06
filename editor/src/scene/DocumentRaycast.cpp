@@ -2,6 +2,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace ed {
@@ -28,6 +29,68 @@ void transformedBounds(const WorldTransform& transform,
         worldMin = glm::min(worldMin, world);
         worldMax = glm::max(worldMax, world);
     }
+}
+
+std::vector<DocumentHit> raycastDocumentAll(const SceneDocument& doc,
+                                            const KitCatalog& catalog,
+                                            const Ray& ray,
+                                            const EntityFilter& accepts)
+{
+    std::vector<DocumentHit> hits;
+    std::vector<float> volumes;
+
+    for (const Entity& entity : doc.entities) {
+        if (accepts && !accepts(entity.id))
+            continue;
+
+        glm::vec3 localMin(-0.5f), localMax(0.5f);
+        if (const KitPiece* piece = catalog.find(entity.prefab))
+            piece->localBoundsMeters(catalog.scale(), localMin, localMax);
+
+        glm::vec3 min, max;
+        transformedBounds(doc.worldTransform(entity.id), localMin, localMax,
+                          min, max);
+
+        float t = 0.0f;
+        glm::vec3 normal;
+        if (!rayAabb(ray, min, max, t, normal))
+            continue;
+
+        DocumentHit hit;
+        hit.valid = true;
+        hit.id = entity.id;
+        hit.t = t;
+        hit.point = ray.origin + ray.dir * t;
+        hit.normal = normal;
+        hit.boundsMin = min;
+        hit.boundsMax = max;
+        hits.push_back(hit);
+        const glm::vec3 size = max - min;
+        volumes.push_back(size.x * size.y * size.z);
+    }
+
+    // Nearest first, and on a tie the smaller box -- the same order
+    // raycastDocument's single answer uses, so the first element of this list
+    // is always what a plain click would have selected. Cycling then walks
+    // outward from it, which is the order an author expects: the barrel, then
+    // the room it stands in.
+    std::vector<std::size_t> order(hits.size());
+    for (std::size_t i = 0; i < order.size(); ++i)
+        order[i] = i;
+    std::sort(order.begin(), order.end(),
+              [&hits, &volumes](std::size_t a, std::size_t b) {
+                  if (std::fabs(hits[a].t - hits[b].t) > 1e-3f)
+                      return hits[a].t < hits[b].t;
+                  if (volumes[a] != volumes[b])
+                      return volumes[a] < volumes[b];
+                  return hits[a].id < hits[b].id; // stable across frames
+              });
+
+    std::vector<DocumentHit> sorted;
+    sorted.reserve(hits.size());
+    for (const std::size_t at : order)
+        sorted.push_back(hits[at]);
+    return sorted;
 }
 
 DocumentHit raycastDocument(const SceneDocument& doc, const KitCatalog& catalog,

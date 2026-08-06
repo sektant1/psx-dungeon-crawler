@@ -1,0 +1,22 @@
+# Resource database record. Authored metadata only -- the source
+# hash, the outputs and the build state are derived and live in
+# build/acp, not here.
+#
+# The humanoid every actor wears: the kit's own mannequin mesh, rigged and
+# animated by tools/author_humanoid_rig.py. Like arms_rig.glb this is the DCC
+# file behind three pipeline rows -- gltf2ozz reads it for the skeleton
+# (humanoid_rig.skeleton.ozz) and the clips (clip_*.ozz, config/
+# humanoid_rig.ozz.json), and the engine loads the .glb itself as skinned
+# geometry.
+#
+# The Mesh Exporter is not one of those rows: a skinned rig baked to a static
+# .rmesh is the bind pose, silently.
+schema = 1
+guid = "7c31a5b0d2e84196"
+type = "mesh"
+name = "Humanoid actor rig"
+tags = ["actor", "skinned"]
+
+[import]
+skip = true
+skip_reason = "skinned rig: gltf2ozz owns it (see config/humanoid_rig.ozz.json)"

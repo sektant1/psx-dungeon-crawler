@@ -462,15 +462,65 @@ bool parseFields(const Json& source, const eng::FieldSpan& fields, void* out,
     return true;
 }
 
+// A typed key-value bag: a script's props, or an entity's free-form
+// properties. One decoder for both -- they are the same data, and the writer
+// has one encoder for the same reason.
+//
+// Types are inferred from the JSON value -- boolean, number, string, three
+// numbers as a vec3 -- except Entity, which is the tagged object
+// { "entity": "name" } so the type survives a round trip and the inspector
+// knows to offer a picker.
+bool parseProps(const Json& source, std::vector<ScriptPropAuthor>& out,
+                const std::string& where, std::string& error)
+{
+    if (!source.is_object()) {
+        error = where + " must be an object";
+        return false;
+    }
+    for (auto it = source.begin(); it != source.end(); ++it) {
+        ScriptPropAuthor p;
+        p.key = it.key();
+        const Json& v = it.value();
+        if (v.is_boolean()) {
+            p.type = ScriptPropAuthor::Type::Bool;
+            p.boolValue = v.get<bool>();
+        } else if (v.is_number()) {
+            const double n = v.get<double>();
+            if (!std::isfinite(n)) {
+                error = where + "/" + it.key() + " must be finite";
+                return false;
+            }
+            p.type = ScriptPropAuthor::Type::Number;
+            p.numberValue = float(n);
+        } else if (v.is_string()) {
+            p.type = ScriptPropAuthor::Type::String;
+            p.stringValue = v.get<std::string>();
+        } else if (v.is_array()) {
+            if (!readVec3(v, p.vecValue)) {
+                error = where + "/" + it.key() +
+                        " must be three finite numbers";
+                return false;
+            }
+            p.type = ScriptPropAuthor::Type::Vec3;
+        } else if (v.is_object() && v.contains("entity") &&
+                   v["entity"].is_string()) {
+            p.type = ScriptPropAuthor::Type::Entity;
+            p.stringValue = v["entity"].get<std::string>();
+        } else {
+            error = where + "/" + it.key() +
+                    " must be a boolean, number, string, three numbers, "
+                    "or { \"entity\": \"name\" }";
+            return false;
+        }
+        out.push_back(std::move(p));
+    }
+    return true;
+}
+
 // Scripts cannot go through parseFields: that helper is driven by a FieldSpan,
 // which describes a fixed layout, and this is a variable-length list of
 // heterogeneous values. So it is parsed by hand, and the JSON schema is what
 // keeps the accepted shape documented.
-//
-// Prop types are inferred from the JSON value -- boolean, number, string, three
-// numbers as a vec3 -- except Entity, which is the tagged object
-// { "entity": "name" } so the type survives a round trip and the inspector
-// knows to offer a picker.
 bool parseScripts(const Json& entity, std::vector<ScriptAuthor>& out,
                   const std::string& location, std::string& error)
 {
@@ -495,50 +545,9 @@ bool parseScripts(const Json& entity, std::vector<ScriptAuthor>& out,
         script.path = node["path"].get<std::string>();
         script.enabled = node.value("enabled", true);
 
-        if (node.contains("props")) {
-            const Json& props = node["props"];
-            if (!props.is_object()) {
-                error = where + "/props must be an object";
-                return false;
-            }
-            for (auto it = props.begin(); it != props.end(); ++it) {
-                ScriptPropAuthor p;
-                p.key = it.key();
-                const Json& v = it.value();
-                if (v.is_boolean()) {
-                    p.type = ScriptPropAuthor::Type::Bool;
-                    p.boolValue = v.get<bool>();
-                } else if (v.is_number()) {
-                    const double n = v.get<double>();
-                    if (!std::isfinite(n)) {
-                        error = where + "/props/" + it.key() + " must be finite";
-                        return false;
-                    }
-                    p.type = ScriptPropAuthor::Type::Number;
-                    p.numberValue = float(n);
-                } else if (v.is_string()) {
-                    p.type = ScriptPropAuthor::Type::String;
-                    p.stringValue = v.get<std::string>();
-                } else if (v.is_array()) {
-                    if (!readVec3(v, p.vecValue)) {
-                        error = where + "/props/" + it.key() +
-                                " must be three finite numbers";
-                        return false;
-                    }
-                    p.type = ScriptPropAuthor::Type::Vec3;
-                } else if (v.is_object() && v.contains("entity") &&
-                           v["entity"].is_string()) {
-                    p.type = ScriptPropAuthor::Type::Entity;
-                    p.stringValue = v["entity"].get<std::string>();
-                } else {
-                    error = where + "/props/" + it.key() +
-                            " must be a boolean, number, string, three numbers, "
-                            "or { \"entity\": \"name\" }";
-                    return false;
-                }
-                script.props.push_back(std::move(p));
-            }
-        }
+        if (node.contains("props") &&
+            !parseProps(node["props"], script.props, where + "/props", error))
+            return false;
         out.push_back(std::move(script));
     }
     return true;
@@ -801,6 +810,17 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         out.parent = source["parent"].get<std::string>();
     }
 
+    if (source.contains("layer")) {
+        if (!source["layer"].is_string()) {
+            error = location + "/layer must be the id of a declared layer";
+            return false;
+        }
+        // Existence is validate()'s to report, for the same reason `parent` is:
+        // a document that names a layer somebody deleted has to open, or there
+        // is nothing to fix it with.
+        out.layer = source["layer"].get<std::string>();
+    }
+
     if (source.contains("prefab")) {
         if (!source["prefab"].is_string()) {
             error = location + "/prefab must be a logical asset id";
@@ -867,6 +887,10 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         out.camera = camera;
     }
     if (!parseScripts(source, out.scripts, location, error))
+        return false;
+    if (source.contains("properties") &&
+        !parseProps(source["properties"], out.properties,
+                    location + "/properties", error))
         return false;
     if (source.contains("spin")) {
         SpinAuthor spin;
@@ -1037,6 +1061,13 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         }
         out.pickup = source["pickup"].get<std::string>();
     }
+    if (source.contains("npc")) {
+        if (!source["npc"].is_string()) {
+            error = location + "/npc must be a string";
+            return false;
+        }
+        out.npc = source["npc"].get<std::string>();
+    }
     if (source.contains("trigger")) {
         TriggerAuthor trigger;
         if (!parseTrigger(source["trigger"], trigger, location + "/trigger",
@@ -1085,6 +1116,38 @@ bool parseSceneSource(const std::string& json, const std::string& location,
             // a scene naming a palette that has been renamed must still open,
             // because opening it is how the name gets fixed.
             document.palette = root["palette"].get<std::string>();
+        }
+        if (root.contains("layers")) {
+            const Json& list = root["layers"];
+            if (!list.is_array()) {
+                error = location + "/layers must be an array";
+                return false;
+            }
+            std::unordered_set<std::string> seenLayers;
+            for (std::size_t i = 0; i < list.size(); ++i) {
+                const Json& node = list[i];
+                const std::string where =
+                    location + "/layers/" + std::to_string(i);
+                if (!node.is_object() || !node.contains("id") ||
+                    !node["id"].is_string() ||
+                    node["id"].get<std::string>().empty()) {
+                    error = where + " needs a non-empty string 'id'";
+                    return false;
+                }
+                Layer layer;
+                layer.id = node["id"].get<std::string>();
+                if (!seenLayers.insert(layer.id).second) {
+                    error = where + "/id '" + layer.id + "' is not unique";
+                    return false;
+                }
+                layer.name = node.value("name", layer.id);
+                if (node.contains("colour") &&
+                    !readVec3(node["colour"], layer.colour)) {
+                    error = where + "/colour must be three finite numbers";
+                    return false;
+                }
+                document.layers.push_back(std::move(layer));
+            }
         }
         std::unordered_set<std::string> seen;
         const Json& entities = root["entities"];

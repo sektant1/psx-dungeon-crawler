@@ -4,6 +4,7 @@
 #include <editor/ui/ComponentInspector.h>
 #include <editor/ui/EditorWorkspace.h>
 #include <editor/ui/OutlinerPanel.h>
+#include <editor/scene/MultiEdit.h>
 #include <editor/scene/PaintSlot.h>
 #include <editor/scene/Picker.h>
 #include <editor/scene/PickTarget.h>
@@ -357,10 +358,18 @@ bool EditorApp::onStart(eng::Engine& engine)
             eng::assets::resolve("config/quests.toml");
         !quests.empty())
         mQuestIds = tomlSectionIds(quests.string(), "quest");
-    if (const std::filesystem::path dialogue =
-            eng::assets::resolve("config/dialogue.toml");
-        !dialogue.empty())
-        mNpcIds = tomlSectionIds(dialogue.string(), "dialogue");
+    // The roster, which is the vocabulary the NPC component is authored
+    // against. Deliberately npcs.toml and not dialogue.toml: a shopkeeper with
+    // stock and no conversation written yet is somebody you can still stand in
+    // the village, and a picker sourced from the conversations would have been
+    // the one list that refused to offer them.
+    if (const std::filesystem::path npcs =
+            eng::assets::resolve("config/npcs.toml");
+        !npcs.empty())
+        mNpcIds = tomlSectionIds(npcs.string(), "npc");
+    eng::log::info("Editor: %zu npc ids, %zu traders, %zu quests, %zu stations",
+                   mNpcIds.size(), mTraderIds.size(), mQuestIds.size(),
+                   mStationIds.size());
     // The player loadout, for the viewmodel preview's weapon picker. Same
     // argument as enemies and pickups: an id you can only get right by having
     // read a TOML is not authorable.
@@ -413,6 +422,17 @@ bool EditorApp::onStart(eng::Engine& engine)
     // click on its own.
     if (std::getenv("RAVEN_EDITOR_CYCLE_MATERIALS"))
         mCycleMaterials = true;
+    // The viewport's projection. Same argument as the panel hook below: the
+    // elevations are a toolbar click, and a screenshot run has no mouse.
+    if (const char* view = std::getenv("RAVEN_EDITOR_VIEW")) {
+        const std::string which = view;
+        if (which == "top")
+            mPendingView = EditorCamera::Projection::Top;
+        else if (which == "front")
+            mPendingView = EditorCamera::Projection::Front;
+        else if (which == "side")
+            mPendingView = EditorCamera::Projection::Side;
+    }
     // Verification hook: the surfaces that only exist while a key is held or a
     // menu is open, and that a screenshot run therefore cannot reach.
     if (const char* panel = std::getenv("RAVEN_EDITOR_PANEL")) {
@@ -839,6 +859,20 @@ AuthorId EditorApp::parentForNewEntity() const
     return mState.isolating() ? mState.isolation.root : AuthorId{};
 }
 
+// The layer a newly created entity lands in: whichever row the Layers panel has
+// active. The same idea as the active layer in an image editor, and the reason
+// the panel makes a row active on a plain click.
+//
+// Only stamped when the entity does not already name one -- a duplicate, a
+// paste or a merged import brought its own layer with it, and having "new
+// things go in the active layer" quietly re-file a paste would be a surprise
+// nobody could undo selectively.
+void EditorApp::stampLayer(Entity& entity) const
+{
+    if (entity.layer.empty())
+        entity.layer = mState.layerSession.active;
+}
+
 // Turns a compound kit piece's baked attachments into real child entities.
 //
 // kit.prop_boss_placeholder ships with its sword declared in kit.toml, and the
@@ -1018,39 +1052,40 @@ void EditorApp::finishInspectorEdit()
     if (!mInspectorEdit.active())
         return;
     const AuthorId id = mInspectorEdit.id();
-    // Captured before commit(), which clears the transaction: comparing the
-    // pre-edit material against the post-edit one is how the fan-out below
-    // knows a material change is what just happened.
-    const std::string materialBefore = mInspectorEdit.beforeMaterial();
+    // Captured before commit(), which clears the transaction: the fan-out below
+    // is a diff against the entity as it was when the interaction opened.
+    const std::optional<Entity> before = mInspectorEdit.before();
     std::optional<Command> command =
         mInspectorEdit.commit(mState.document, "edit " + id);
     if (!command)
         return;
 
-    // A material picked in the Inspector applies to everything selected, not
-    // just the one entity whose fields the panel happens to be showing. The
-    // panel is explicit that it edits one entity, which is right for a position
-    // or a name -- but "give these twelve walls that material" is the whole
-    // reason to multi-select, and doing it one entity at a time is not a
-    // workflow. Only the material fans out; every other field stays per-entity.
+    // Multi-object editing, Gregory §15.4.1.6. The Inspector draws the primary,
+    // but an edit made with several entities selected reaches all of them --
+    // "give these twelve walls that material", "drop these forty pillars by a
+    // metre", "make these torches dimmer" is the whole reason to multi-select,
+    // and doing it one entity at a time is not a workflow.
+    //
+    // Field-level: only what the author actually moved fans out, so a mixed
+    // selection absorbs the transform edit and quietly ignores the light one.
+    // ed::multiedit owns which fields those are and why.
     std::vector<Command> parts;
     parts.push_back(std::move(*command));
-    if (const Entity* edited = mState.document.find(id)) {
-        const std::string& material = edited->material;
-        if (material != materialBefore) {
+    std::vector<std::string> changed;
+    if (before && mState.selection.size() > 1) {
+        if (const Entity* edited = mState.document.find(id)) {
+            changed = multiedit::changedFields(*before, *edited);
             for (const AuthorId& other : mState.selection) {
                 if (other == id)
                     continue;
                 const Entity* entity = mState.document.find(other);
-                // Same rule as applyMaterialToSelection: an entity with no
-                // prefab has no surface to override.
-                if (!entity || entity->prefab.empty() ||
-                    entity->material == material)
+                if (!entity)
                     continue;
                 Entity updated = *entity;
-                updated.material = material;
+                if (!multiedit::applyDelta(*before, *edited, updated))
+                    continue;
                 parts.push_back(
-                    makeEditEntity("set material", other, *entity, updated));
+                    makeEditEntity("edit " + other, other, *entity, updated));
             }
         }
     }
@@ -1062,12 +1097,19 @@ void EditorApp::finishInspectorEdit()
     }
     else {
         const std::size_t count = parts.size();
+        const std::string what =
+            changed.empty() ? std::string("edit")
+                            : (changed.size() == 1
+                                   ? changed.front()
+                                   : changed.front() + " and " +
+                                         std::to_string(changed.size() - 1) +
+                                         " more");
         mCommands.run(mState.document,
-                      makeComposite("set material on " + std::to_string(count),
+                      makeComposite(what + " on " + std::to_string(count),
                                     std::move(parts)));
         mPreview->invalidate();
-        mStatus =
-            "applied the material to " + std::to_string(count) + " selected";
+        mStatus = "applied " + what + " to " + std::to_string(count) +
+                  " selected";
     }
     mState.dirty = !mCommands.savedStateReached();
     mCookStatus = "stale";
@@ -1760,9 +1802,41 @@ void EditorApp::onFrameBegin(const eng::FrameContext& f)
         input.setMouseGrab(mFlying);
     }
 
+    // The wheel zooms an elevation. In perspective it is already the placement
+    // tools' (brush scale and rotation), so this is deliberately scoped to the
+    // orthographic views, where a dolly would do nothing visible at all.
+    if (mViewportHovered && mState.camera.orthographic() &&
+        !mState.camera.walking()) {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+            mState.camera.zoomOrtho(wheel > 0.0f ? 0.9f : 1.0f / 0.9f);
+    }
+
     if (mFlying) {
         const glm::vec2 delta = input.mouseDelta();
         constexpr float kLookSpeed = 0.0032f;
+        // An elevation cannot be looked around -- its whole value is that the
+        // axis is fixed -- so the right-drag gesture pans the framed region
+        // instead, which is what the same drag does in every 2D view.
+        if (mState.camera.orthographic() && !mState.camera.walking()) {
+            if (mViewportH > 1.0f)
+                mState.camera.panOrtho({delta.x / mViewportH,
+                                        delta.y / mViewportH});
+            glm::vec3 move{0.0f};
+            if (input.isDown("fly_forward")) move.y += 1.0f;
+            if (input.isDown("fly_back")) move.y -= 1.0f;
+            if (input.isDown("fly_left")) move.x -= 1.0f;
+            if (input.isDown("fly_right")) move.x += 1.0f;
+            if (move != glm::vec3(0.0f)) {
+                // Scaled by the zoom, so a keypress crosses the same fraction
+                // of the screen whether the view spans four metres or four
+                // hundred.
+                const float pace = (input.isDown("fly_fast") ? 1.2f : 0.4f) *
+                                   f.dt;
+                mState.camera.panOrtho({-move.x * pace, move.y * pace});
+            }
+            return;
+        }
         // Walk mode borrows the same right-drag-to-look gesture, but drives the
         // walk camera: it has its own yaw/pitch so that peeking at eye level
         // cannot disturb the framing the author will come back to.
@@ -1830,6 +1904,26 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
         requestPanelFocus("ui");
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_6))
         requestPanelFocus("issues");
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_7))
+        requestPanelFocus("layers");
+
+    // Navigation, Gregory §15.4.1.3. Alt rather than Ctrl for the bookmarks
+    // because Ctrl+digit is already panel focus above, and Alt+arrow is the
+    // browser gesture the history is modelled on.
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_LeftArrow))
+        navigateHistory(false);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_RightArrow))
+        navigateHistory(true);
+    for (int slot = 0; slot < int(nav::kBookmarkSlots); ++slot) {
+        // Slot 0 is on the 1 key and slot 9 on the 0 key, which is where every
+        // application that numbers ten of something puts them.
+        const ImGuiKey digit =
+            slot < 9 ? ImGuiKey(int(ImGuiKey_1) + slot) : ImGuiKey_0;
+        if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiMod_Ctrl | digit))
+            setBookmark(std::size_t(slot));
+        else if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | digit))
+            jumpToBookmark(std::size_t(slot));
+    }
 
     // WantCaptureKeyboard also means "an ImGui window has navigation focus";
     // in a docked editor that is almost always true, even when no field is
@@ -2113,6 +2207,10 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
     renderer.setEditorCameraPose(mState.camera.activeEye(),
                                  mState.camera.activeOrientation(),
                                  mState.camera.activeFovDeg());
+    // Zero in perspective and in walk mode, which is the renderer's own
+    // "use the perspective path". Pushed every frame beside the pose so
+    // leaving an elevation cannot leave the viewport orthographic.
+    renderer.setEditorCameraOrtho(mState.camera.activeOrthoHeight());
     if (mAudio) {
         eng::AudioListener listener;
         listener.position = mState.camera.activeEye();
@@ -2420,6 +2518,7 @@ std::vector<PaletteAction> EditorApp::paletteActions()
     gameplay("marker", Gameplay::Marker);
     gameplay("enemy spawn", Gameplay::EnemySpawn);
     gameplay("pickup", Gameplay::Pickup);
+    gameplay("npc", Gameplay::Npc);
     gameplay("trigger volume", Gameplay::Trigger);
     gameplay("point light", Gameplay::PointLight);
     gameplay("directional light", Gameplay::DirectionalLight);
@@ -2478,7 +2577,10 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // v4: the toolbar is tall enough for its own tab bar plus two wrapped rows
     // (it was being clipped by the panel below), and Hierarchy became a tab
     // beside Asset Browser rather than a stack under it.
-    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v4");
+    // v5: the Layers panel joined the left rail. The version is part of the id
+    // so a saved v4 layout -- which has no node for the new window and would
+    // leave it floating over the viewport -- cannot override the new topology.
+    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v5");
     if (!mLayoutBuilt || mResetLayoutRequested) {
         const bool missing = ImGui::DockBuilderGetNode(dock) == nullptr ||
                              ImGui::DockBuilderGetNode(dock)->IsEmpty();
@@ -2501,8 +2603,16 @@ void EditorApp::onGui(const eng::FrameContext& f)
 
     drawToolbar();
     drawViewport(f);
+    // Deferred from the environment hook: framing an elevation needs the open
+    // document and a measured viewport, and neither exists when onLoad reads
+    // the variable. Applied after the first viewport pass, once.
+    if (mPendingView && mViewportW > 8.0f) {
+        setViewProjection(*mPendingView);
+        mPendingView.reset();
+    }
     drawUiStage();
     drawOutliner();
+    drawLayers();
     drawInspector();
     // Browser owns shared preview RTT when visible; draw it after Inspector so
     // Materials/Effects mode cannot show one subject under another label.
@@ -2513,6 +2623,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
     drawSettings();
     captureSettings();
     drawSaveAsPopup();
+    drawLayerIoPopup();
     drawImportModelPopup();
     drawOpenScenePopup();
     drawDiscardPopup();
@@ -2663,9 +2774,118 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             commitSettings();
         ImGui::EndMenu();
     }
+    // Selection and placement aids, Gregory §15.4.1.4 and §15.4.1.7. Their own
+    // menu rather than more of Edit: everything here acts on the selection as a
+    // set, which is a different question from the single-entity verbs above.
+    if (ImGui::BeginMenu("Arrange")) {
+        const bool many = mState.selection.size() > 1;
+        const bool any = !mState.selection.empty();
+        if (ImGui::BeginMenu("Align", many)) {
+            struct Row { const char* label; align::Mode mode; };
+            static const Row kRows[] = {{"min", align::Mode::Min},
+                                        {"centre", align::Mode::Centre},
+                                        {"max", align::Mode::Max}};
+            for (const align::Axis axis :
+                 {align::Axis::X, align::Axis::Y, align::Axis::Z}) {
+                if (!ImGui::BeginMenu(align::axisName(axis)))
+                    continue;
+                for (const Row& row : kRows)
+                    if (ImGui::MenuItem(row.label))
+                        alignSelection(axis, row.mode);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Distribute evenly",
+                             mState.selection.size() > 2)) {
+            for (const align::Axis axis :
+                 {align::Axis::X, align::Axis::Y, align::Axis::Z})
+                if (ImGui::MenuItem(align::axisName(axis)))
+                    distributeSelection(axis);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Drop to surface", nullptr, false, any))
+            dropSelectionToSurface();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("rests each entity's underside on whatever is "
+                              "below it");
+
+        ImGui::Separator();
+        // Named selections: the chapter's "selections to be named and saved
+        // for later retrieval".
+        if (ImGui::BeginMenu("Saved selections")) {
+            ImGui::SetNextItemWidth(180.0f);
+            ImGui::InputTextWithHint("##setname", "name",
+                                     mSelectionSetName,
+                                     sizeof(mSelectionSetName));
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Save") && any) {
+                selection::save(mSelectionSets, mSelectionSetName,
+                                mState.selection);
+                mStatus = "saved selection '" +
+                          std::string(mSelectionSetName) + "'";
+                mSelectionSetName[0] = '\0';
+            }
+            if (mSelectionSets.empty()) {
+                ImGui::TextDisabled("none yet");
+            }
+            for (const selection::SelectionSet& set : mSelectionSets) {
+                ImGui::PushID(set.name.c_str());
+                if (ImGui::MenuItem(set.name.c_str())) {
+                    mState.selection =
+                        selection::restore(mSelectionSets, set.name,
+                                           mState.document);
+                    mPickCycle.reset();
+                    mSelectionAnchor.clear();
+                    if (!mState.selection.empty())
+                        mOutlinerReveal = mState.selection.front();
+                    mStatus = std::to_string(mState.selection.size()) +
+                              " restored from '" + set.name + "'";
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("x")) {
+                    const std::string name = set.name;
+                    ImGui::PopID();
+                    selection::remove(mSelectionSets, name);
+                    break;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenu();
+    }
     if (ImGui::BeginMenu("Window")) {
         if (ImGui::MenuItem("Command palette", "Ctrl+P"))
             openPalette(mPalette);
+        ImGui::Separator();
+        // Navigation history and bookmarks, Gregory §15.4.1.3.
+        if (ImGui::MenuItem("Back", "Alt+Left", false,
+                            mCameraHistory.canGoBack()))
+            navigateHistory(false);
+        if (ImGui::MenuItem("Forward", "Alt+Right", false,
+                            mCameraHistory.canGoForward()))
+            navigateHistory(true);
+        if (ImGui::BeginMenu("Saved views")) {
+            for (std::size_t slot = 0; slot < mBookmarks.size(); ++slot) {
+                ImGui::PushID(int(slot));
+                const std::string key =
+                    "Alt+" + std::to_string((slot + 1) % 10);
+                if (mBookmarks.has(slot)) {
+                    if (ImGui::MenuItem(mBookmarks.at(slot).name.c_str(),
+                                        key.c_str()))
+                        jumpToBookmark(slot);
+                } else {
+                    const std::string label =
+                        "set view " + std::to_string(slot + 1);
+                    if (ImGui::MenuItem(label.c_str(), key.c_str()))
+                        setBookmark(slot);
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem("Reset workspace"))
             mResetLayoutRequested = true;
         ImGui::Separator();
@@ -2681,6 +2901,8 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             requestPanelFocus("ui");
         if (ImGui::MenuItem("Problems", "Ctrl+6"))
             requestPanelFocus("issues");
+        if (ImGui::MenuItem("Layers", "Ctrl+7"))
+            requestPanelFocus("layers");
         bool console = mConsole.visible();
         if (ImGui::MenuItem("Console", "`", &console))
             mConsole.setVisible(console);
@@ -2956,6 +3178,53 @@ void EditorApp::drawToolbar()
 void EditorApp::drawViewportToolbar()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
+
+    // Projection first, because it is the biggest change to what the view IS.
+    // Gregory §15.4.1.2: the perspective view answers "does this room read",
+    // an elevation answers "are these two things in line", and no amount of
+    // orbiting answers the second reliably.
+    //
+    // Text rather than icons: "Top" and "Front" are already the shortest
+    // possible names for themselves, and a drawn glyph for an axis is a
+    // guessing game.
+    {
+        struct Choice {
+            EditorCamera::Projection projection;
+            const char* label;
+            const char* tip;
+        };
+        static const Choice kChoices[] = {
+            {EditorCamera::Projection::Perspective, "3D",
+             "perspective -- fly with the right mouse button"},
+            {EditorCamera::Projection::Top, "Top",
+             "plan view, looking down -- drag to pan, wheel to zoom"},
+            {EditorCamera::Projection::Front, "Front",
+             "front elevation, looking along -Z"},
+            {EditorCamera::Projection::Side, "Side",
+             "side elevation, looking along -X"},
+        };
+        const bool walking = mState.camera.walking();
+        ImGui::BeginDisabled(walking);
+        for (const Choice& choice : kChoices) {
+            const bool active = mState.camera.projection() == choice.projection;
+            if (active)
+                ImGui::PushStyleColor(ImGuiCol_Button,
+                                      ImGui::GetStyleColorVec4(
+                                          ImGuiCol_ButtonActive));
+            if (ImGui::SmallButton(choice.label))
+                setViewProjection(choice.projection);
+            if (active)
+                ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", choice.tip);
+            ImGui::SameLine();
+        }
+        ImGui::EndDisabled();
+        if (walking && ImGui::IsItemHovered())
+            ImGui::SetTooltip("walk mode is always a perspective view");
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+    }
 
     // The view switches are icons: they are states, they are flipped
     // constantly, and four labelled checkboxes were most of the strip.
@@ -3248,7 +3517,13 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             // Gizmo before picking: a click that lands on a handle is a drag,
             // not a selection change.
             drawGizmo(f);
-            handleViewportPicking(f);
+            // The band before the pick, for the same reason: it only starts on
+            // empty space, and once one is running it owns the drag -- so a
+            // sweep across the level cannot also register as a click on
+            // whatever it happened to finish over.
+            handleMarquee(f);
+            if (!mMarqueeDragging)
+                handleViewportPicking(f);
         }
         if (validViewport)
             viewportDraw->PopClipRect();
@@ -3271,8 +3546,20 @@ static void cameraMatrices(const EditorCamera& camera, float aspect,
     const glm::vec3 forward = orientation * glm::vec3(0.0f, 0.0f, -1.0f);
     const glm::vec3 up = orientation * glm::vec3(0.0f, 1.0f, 0.0f);
     view = glm::lookAt(eye, eye + forward, up);
-    projection = glm::perspective(glm::radians(viewportFovDeg(camera)), aspect,
-                                  0.05f, 4000.0f);
+    // An elevation builds the same orthographic matrix the renderer does, so a
+    // gizmo mark is drawn exactly where a click on it would land -- which is
+    // the contract the whole file depends on, and the one that breaks silently
+    // if these two ever disagree.
+    const float orthoHeight = camera.activeOrthoHeight();
+    if (orthoHeight > 0.0f) {
+        const float halfHeight = orthoHeight * 0.5f;
+        const float halfWidth = halfHeight * aspect;
+        projection = glm::ortho(-halfWidth, halfWidth, -halfHeight, halfHeight,
+                                0.05f, 4000.0f);
+    } else {
+        projection = glm::perspective(glm::radians(viewportFovDeg(camera)),
+                                      aspect, 0.05f, 4000.0f);
+    }
 }
 
 const std::vector<GizmoMark>& EditorApp::entityGizmoMarks()
@@ -3377,15 +3664,365 @@ void EditorApp::handleViewportPicking(const eng::FrameContext& f)
         return;
     }
 
-    // The same traversal the placement ghost uses to find its surface, so a
-    // click and the thing a ghost would rest on can never disagree.
-    const DocumentHit hit = hoveredEntity();
-    if (!hit.valid) {
+    // Everything under the cursor, nearest first. A repeated click at the same
+    // spot walks down the list instead of selecting the nearest thing forever
+    // -- Gregory §15.4.1.4, and the answer to a dense level that otherwise
+    // leaves the author hiding whatever is in front and trying again.
+    const std::vector<DocumentHit> hits = raycastDocumentAll(
+        mState.document, mState.catalog, mouseRay(),
+        [this](const AuthorId& id) {
+            return !mState.isHidden(id) && !mState.isLocked(id) &&
+                   (!mState.isolating() || mState.isolation.contains(id));
+        });
+    if (hits.empty()) {
+        mPickCycle.reset();
         if (!ImGui::GetIO().KeyShift)
             mState.selection.clear();
         return;
     }
-    selectAndReveal(resolvePick(hit.id), ImGui::GetIO().KeyShift);
+
+    // Resolved to the entity each hit MEANS -- the composed object it belongs
+    // to -- before cycling, so the cycle walks distinct selectable things
+    // rather than repeatedly offering the same parent from four of its parts.
+    std::vector<AuthorId> targets;
+    for (const DocumentHit& hit : hits) {
+        const AuthorId target = resolvePick(hit.id);
+        bool seen = false;
+        for (const AuthorId& already : targets)
+            seen = seen || already == target;
+        if (!seen)
+            targets.push_back(target);
+    }
+
+    const AuthorId picked =
+        mPickCycle.next(targets, glm::vec2(mouse.x, mouse.y));
+    if (picked.empty())
+        return;
+    selectAndReveal(picked, ImGui::GetIO().KeyShift);
+    if (mPickCycle.count() > 1) {
+        mStatus = std::to_string(mPickCycle.depth() + 1) + " of " +
+                  std::to_string(mPickCycle.count()) +
+                  " under the cursor -- click again for the next";
+    }
+}
+
+// Rubber-band selection. Gregory §15.4.1.4: "Objects might be selected via a
+// rubber-band box in the orthographic view or by ray cast style picking in the
+// 3D view." Both here -- the band works in either projection, because it tests
+// projected bounds against a screen rectangle and does not care how the
+// projection was built.
+//
+// Only starts on empty space. A drag that begins on an entity is a gizmo drag
+// or a click, and a band that stole those would make the viewport unusable.
+void EditorApp::handleMarquee(const eng::FrameContext& f)
+{
+    (void)f;
+    if (materialMode() || mViewportW < 8.0f)
+        return;
+
+    const ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 mouse = io.MousePos;
+
+    if (!mMarqueeDragging) {
+        const bool canStart = mViewportHovered && !mFlying &&
+                              mState.tool == Tool::Select &&
+                              !ImGuizmo::IsUsingAny() && !mGizmoHovered &&
+                              ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        if (!canStart)
+            return;
+        // Nothing under the cursor: this is a band, not a pick. Checked with
+        // the same traversal the click uses, so the two can never disagree
+        // about whether the author hit something.
+        if (hoveredEntity().valid)
+            return;
+        mMarqueeDragging = true;
+        mMarqueeStart = {mouse.x, mouse.y};
+        return;
+    }
+
+    const selection::ScreenRect rect =
+        selection::ScreenRect::fromCorners(mMarqueeStart, {mouse.x, mouse.y});
+
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        // Drawn over the viewport image, like the entity marks: a band that
+        // only appeared once released would be a gesture with no feedback.
+        if (!rect.degenerate()) {
+            ImDrawList* list = ImGui::GetWindowDrawList();
+            const ImU32 line = ImGui::GetColorU32(ImGuiCol_CheckMark);
+            list->AddRectFilled(ImVec2(rect.min.x, rect.min.y),
+                                ImVec2(rect.max.x, rect.max.y),
+                                (line & 0x00FFFFFF) | 0x22000000);
+            list->AddRect(ImVec2(rect.min.x, rect.min.y),
+                          ImVec2(rect.max.x, rect.max.y), line);
+        }
+        return;
+    }
+
+    mMarqueeDragging = false;
+    if (rect.degenerate())
+        return; // a click with a shaky hand, already handled as a pick
+
+    std::vector<selection::Candidate> candidates;
+    candidates.reserve(mState.document.entities.size());
+    for (const Entity& entity : mState.document.entities) {
+        if (mState.isHidden(entity.id) || mState.isLocked(entity.id))
+            continue;
+        if (mState.isolating() && !mState.isolation.contains(entity.id))
+            continue;
+        glm::vec3 localMin(-0.5f), localMax(0.5f);
+        if (const KitPiece* piece = mState.catalog.find(entity.prefab))
+            piece->localBoundsMeters(mState.catalog.scale(), localMin, localMax);
+        selection::Candidate candidate;
+        candidate.id = entity.id;
+        transformedBounds(mState.document.worldTransform(entity.id), localMin,
+                          localMax, candidate.boundsMin, candidate.boundsMax);
+        candidates.push_back(std::move(candidate));
+    }
+
+    glm::mat4 view, projection;
+    cameraMatrices(mState.camera, mViewportW / mViewportH, view, projection);
+    // Alt demands the whole footprint inside the box. The default takes
+    // anything the band crosses, which is what a quick sweep along a row of
+    // props means; Alt is for boxing one room without catching the corridor.
+    const selection::Fit fit = io.KeyAlt ? selection::Fit::Enclose
+                                         : selection::Fit::Touch;
+    std::vector<AuthorId> caught = selection::marquee(
+        candidates, projection * view, glm::vec2(mViewportX, mViewportY),
+        glm::vec2(mViewportW, mViewportH), rect, fit);
+
+    // Resolved the same way a click is, so a band over a composed object
+    // selects the object rather than forty of its parts.
+    std::vector<AuthorId> resolved;
+    for (const AuthorId& id : caught) {
+        const AuthorId target = resolvePick(id);
+        bool seen = false;
+        for (const AuthorId& already : resolved)
+            seen = seen || already == target;
+        if (!seen)
+            resolved.push_back(target);
+    }
+
+    if (!io.KeyShift)
+        mState.selection.clear();
+    for (const AuthorId& id : resolved)
+        if (!mState.isSelected(id))
+            mState.selection.push_back(id);
+
+    mPickCycle.reset();
+    mSelectionAnchor.clear();
+    if (!mState.selection.empty())
+        mOutlinerReveal = mState.selection.front();
+    mStatus = std::to_string(resolved.size()) + " selected by band" +
+              (fit == selection::Fit::Enclose ? " (fully enclosed)" : "");
+}
+
+// --- alignment aids ---------------------------------------------------------
+//
+// Gregory §15.4.1.7. The arithmetic is in ed::align and is checked headlessly;
+// what lives here is resolving each entity's world bounds and turning the
+// world-space moves that come back into the authored local transforms the file
+// stores -- which is what keeps a parented entity where it is put.
+
+void EditorApp::applyMoves(const std::vector<align::Move>& moves,
+                           const std::string& label)
+{
+    std::vector<Command> parts;
+    for (const align::Move& move : moves) {
+        const Entity* entity = mState.document.find(move.id);
+        if (!entity)
+            continue;
+        game::content::WorldTransform world =
+            mState.document.worldTransform(move.id);
+        if (glm::distance(world.position, move.position) < 1e-4f)
+            continue; // already there; not worth an undo entry
+        world.position = move.position;
+
+        const XformAuthor before = entity->transform;
+        XformAuthor after = before;
+        if (entity->parent.empty()) {
+            after.position = move.position;
+        } else {
+            after = game::content::localFromWorld(
+                mState.document.worldTransform(entity->parent), world);
+        }
+        parts.push_back(makeSetTransform(move.id, before, after));
+    }
+    if (parts.empty()) {
+        mStatus = label + ": already in place";
+        return;
+    }
+    const std::size_t count = parts.size();
+    runCommand(makeComposite(label, std::move(parts)));
+    mStatus = label + ": " + std::to_string(count) + " moved";
+}
+
+// The selection's world bounds, in the form the align maths takes. Catalogue
+// bounds rather than loaded meshes, for the reason raycastDocument uses them:
+// an entity has to be alignable before its mesh is on disk.
+static std::vector<align::Placement>
+placementsOf(const game::content::SceneDocument& document,
+             const game::content::KitCatalog& catalog,
+             const std::vector<AuthorId>& ids)
+{
+    std::vector<align::Placement> placements;
+    for (const AuthorId& id : ids) {
+        const Entity* entity = document.find(id);
+        if (!entity)
+            continue;
+        glm::vec3 localMin(-0.5f), localMax(0.5f);
+        if (const KitPiece* piece = catalog.find(entity->prefab))
+            piece->localBoundsMeters(catalog.scale(), localMin, localMax);
+        align::Placement placement;
+        placement.id = id;
+        const game::content::WorldTransform world = document.worldTransform(id);
+        placement.position = world.position;
+        transformedBounds(world, localMin, localMax, placement.boundsMin,
+                          placement.boundsMax);
+        placements.push_back(std::move(placement));
+    }
+    return placements;
+}
+
+void EditorApp::alignSelection(align::Axis axis, align::Mode mode)
+{
+    const std::vector<align::Placement> placements =
+        placementsOf(mState.document, mState.catalog, mState.selection);
+    applyMoves(align::alignTo(placements, axis, mode), align::label(axis, mode));
+}
+
+void EditorApp::distributeSelection(align::Axis axis)
+{
+    const std::vector<align::Placement> placements =
+        placementsOf(mState.document, mState.catalog, mState.selection);
+    applyMoves(align::distribute(placements, axis),
+               std::string("distribute ") + align::axisName(axis));
+}
+
+// "Snap to terrain" in the chapter's list. This engine has no terrain, so the
+// same gesture runs against the geometry that does exist: cast down from each
+// entity and rest its underside on whatever is below.
+void EditorApp::dropSelectionToSurface()
+{
+    const std::vector<align::Placement> placements =
+        placementsOf(mState.document, mState.catalog, mState.selection);
+
+    std::vector<align::Drop> floors;
+    for (const align::Placement& placement : placements) {
+        Ray down;
+        // Started just above the underside so the entity cannot hit itself,
+        // which is what a ray from its centre would do.
+        down.origin = {(placement.boundsMin.x + placement.boundsMax.x) * 0.5f,
+                       placement.boundsMin.y + 0.01f,
+                       (placement.boundsMin.z + placement.boundsMax.z) * 0.5f};
+        down.dir = {0.0f, -1.0f, 0.0f};
+        const DocumentHit hit = raycastDocument(
+            mState.document, mState.catalog, down,
+            [this, &placement](const AuthorId& id) {
+                // Never itself, never anything else being dropped in the same
+                // gesture -- otherwise a stack lands on its own falling parts.
+                if (id == placement.id || mState.isSelected(id))
+                    return false;
+                return !mState.isHidden(id);
+            });
+        if (hit.valid)
+            floors.push_back(align::Drop{placement.id, hit.boundsMax.y});
+    }
+
+    if (floors.empty()) {
+        mStatus = "drop to surface: nothing underneath";
+        return;
+    }
+    applyMoves(align::dropTo(placements, floors), "drop to surface");
+}
+
+// --- camera bookmarks and history -------------------------------------------
+
+void EditorApp::setViewProjection(EditorCamera::Projection projection)
+{
+    if (mState.camera.projection() == projection)
+        return;
+    const bool entering =
+        mState.camera.projection() == EditorCamera::Projection::Perspective &&
+        projection != EditorCamera::Projection::Perspective;
+    mState.camera.setProjection(projection);
+    if (!entering)
+        return;
+
+    // Frame the selection if there is one, the level otherwise. The camera
+    // cannot do this itself -- it has no document -- and an elevation that
+    // opens on a corner of the scene is one the author has to hunt around in
+    // before it is any use.
+    glm::vec3 min, max;
+    if (!boundsOf(mState.selection, min, max))
+        return;
+    mState.camera.setOrthoFocus((min + max) * 0.5f);
+
+    // The span is taken across the two axes this elevation actually shows, and
+    // padded: a plan view whose contents touch all four edges reads as cropped.
+    const glm::vec3 size = max - min;
+    float across = 0.0f;
+    float up = 0.0f;
+    switch (projection) {
+    case EditorCamera::Projection::Top:
+        across = size.x;
+        up = size.z;
+        break;
+    case EditorCamera::Projection::Front:
+        across = size.x;
+        up = size.y;
+        break;
+    case EditorCamera::Projection::Side:
+        across = size.z;
+        up = size.y;
+        break;
+    case EditorCamera::Projection::Perspective:
+        return;
+    }
+    const float aspect = mViewportH > 1.0f ? mViewportW / mViewportH : 1.6f;
+    // Whichever axis is the binding constraint decides the span.
+    const float wanted = std::max(up, across / std::max(aspect, 0.01f));
+    // zoomOrtho is multiplicative and clamps, so the span is set by asking for
+    // the ratio rather than by writing the field -- one place enforces the
+    // limits.
+    if (wanted > 0.0f)
+        mState.camera.zoomOrtho(wanted * 1.15f / mState.camera.orthoHeight());
+}
+
+void EditorApp::pushCameraHistory()
+{
+    mCameraHistory.push(nav::poseOf(mState.camera));
+}
+
+void EditorApp::setBookmark(std::size_t slot)
+{
+    mBookmarks.set(slot, nav::poseOf(mState.camera));
+    mStatus = "saved view " + std::to_string(slot + 1);
+}
+
+void EditorApp::jumpToBookmark(std::size_t slot)
+{
+    if (!mBookmarks.has(slot)) {
+        mStatus = "view " + std::to_string(slot + 1) + " is empty -- " +
+                  "Ctrl+Shift+" + std::to_string((slot + 1) % 10) + " saves it";
+        return;
+    }
+    pushCameraHistory();
+    nav::applyPose(mState.camera, mBookmarks.at(slot).pose);
+    mStatus = "jumped to " + mBookmarks.at(slot).name;
+}
+
+void EditorApp::navigateHistory(bool forward)
+{
+    const nav::Pose current = nav::poseOf(mState.camera);
+    nav::Pose target;
+    const bool moved = forward ? mCameraHistory.forward(current, target)
+                               : mCameraHistory.back(current, target);
+    if (!moved) {
+        mStatus = forward ? "nothing forward" : "nothing back";
+        return;
+    }
+    nav::applyPose(mState.camera, target);
+    mStatus = forward ? "forward" : "back";
 }
 
 // A viewport hit is a mesh; this is the entity that click means. The rule lives
@@ -3466,7 +4103,10 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
     if (!primary)
         return;
 
-    ImGuizmo::SetOrthographic(false);
+    // Follows the viewport: ImGuizmo builds its own handle geometry from the
+    // projection, and a perspective gizmo drawn over an orthographic view has
+    // handles that do not line up with the axis they drag.
+    ImGuizmo::SetOrthographic(mState.camera.orthographic());
     ImGuizmo::SetDrawlist();
     // The panel's rect, not the window's: docked anywhere else and the handles
     // would sit offset from the geometry they manipulate.
@@ -3679,6 +4319,16 @@ void EditorApp::drawGizmo(const eng::FrameContext& f)
 Ray EditorApp::mouseRay() const
 {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
+    // An elevation's rays are parallel, not a pinhole fan. Picking that used
+    // the perspective builder in an orthographic view would miss by more the
+    // further the cursor was from the centre of the viewport.
+    const float orthoHeight = mState.camera.activeOrthoHeight();
+    if (orthoHeight > 0.0f) {
+        return orthoViewportRay({mouse.x, mouse.y}, {mViewportX, mViewportY},
+                                {mViewportW, mViewportH},
+                                mState.camera.activeEye(),
+                                mState.camera.activeOrientation(), orthoHeight);
+    }
     return viewportRay({mouse.x, mouse.y}, {mViewportX, mViewportY},
                        {mViewportW, mViewportH}, mState.camera.activeEye(),
                        mState.camera.activeOrientation(),
@@ -3817,6 +4467,7 @@ void EditorApp::placeAt(const Placement& placement)
             entity.unpackedAttachments = true;
     }
 
+    stampLayer(entity);
     // Applied immediately so the next hover sees it; the command is recorded
     // and pushed as one composite when the drag ends.
     mState.document.add(entity);
@@ -4115,7 +4766,10 @@ void EditorApp::drawStageGizmo(const eng::FrameContext& f)
         mViewportW < 8.0f)
         return;
 
-    ImGuizmo::SetOrthographic(false);
+    // Follows the viewport: ImGuizmo builds its own handle geometry from the
+    // projection, and a perspective gizmo drawn over an orthographic view has
+    // handles that do not line up with the axis they drag.
+    ImGuizmo::SetOrthographic(mState.camera.orthographic());
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(mViewportX, mViewportY, mViewportW, mViewportH);
 
@@ -4998,6 +5652,363 @@ void EditorApp::drawOutliner()
     ImGui::End();
 }
 
+// --- layers -----------------------------------------------------------------
+//
+// Gregory §15.4.1.5. Two kinds of state meet in this panel and the split is the
+// whole design: a layer's identity and who is in it are document edits and go
+// through the command stack, while its visibility, lock and solo are this
+// author's session and are never written to the file two people share.
+
+void EditorApp::drawLayers()
+{
+    focusPanelIfRequested("layers");
+    if (!ImGui::Begin(workspace_window::kLayers, nullptr, kPanelFlags)) {
+        ImGui::End();
+        return;
+    }
+
+    if (mLayerRowsRevision != mState.document.revision) {
+        mLayerRows = layers::stats(mState.document);
+        mLayerRowsRevision = mState.document.revision;
+    }
+
+    LayerActions actions;
+    actions.selectionCount = mState.selection.size();
+    actions.isHidden = [this](const std::string& id) {
+        return layers::isHidden(mState.layerSession, id);
+    };
+    actions.setHidden = [this](const std::string& id, bool on) {
+        layers::setHidden(mState.layerSession, id, on);
+    };
+    actions.isLocked = [this](const std::string& id) {
+        return layers::isLocked(mState.layerSession, id);
+    };
+    actions.setLocked = [this](const std::string& id, bool on) {
+        layers::setLocked(mState.layerSession, id, on);
+    };
+    actions.isSolo = [this](const std::string& id) {
+        return mState.layerSession.solo == id && mState.layerSession.soloing();
+    };
+    actions.toggleSolo = [this](const std::string& id) {
+        layers::toggleSolo(mState.layerSession, id);
+    };
+    actions.isActive = [this](const std::string& id) {
+        return mState.layerSession.active == id;
+    };
+    actions.setActive = [this](const std::string& id) {
+        mState.layerSession.active = id;
+    };
+    actions.selectMembers = [this](const std::string& id) {
+        selectLayerMembers(id);
+    };
+    actions.assignSelection = [this](const std::string& id) {
+        assignSelectionToLayer(id);
+    };
+    actions.rename = [this](const std::string& id, const std::string& name) {
+        renameLayer(id, name);
+    };
+    actions.recolour = [this](const std::string& id, const glm::vec3& colour) {
+        recolourLayer(id, colour);
+    };
+    actions.removeLayer = [this](const std::string& id) { removeLayer(id); };
+    actions.addLayer = [this]() { addLayer(); };
+    actions.exportLayer = [this](const std::string& id) { exportLayer(id); };
+    actions.importLayer = [this](const std::string& id) {
+        importIntoLayer(id);
+    };
+
+    drawLayerRows(mLayerRows, actions);
+    ImGui::End();
+}
+
+// A layer's list is document data, so adding one is an undoable command like
+// any other edit. The id is allocated deterministically for the same reason
+// entity ids are: two authors adding a layer in parallel must not be guaranteed
+// a merge conflict.
+void EditorApp::addLayer()
+{
+    const std::string id = mState.document.allocateLayerId("layer");
+    game::content::Layer layer;
+    layer.id = id;
+    layer.name = id;
+    Command command;
+    command.label = "Add layer";
+    command.apply = [layer](Doc& document) {
+        document.layers.push_back(layer);
+        document.touch();
+    };
+    command.revert = [id](Doc& document) {
+        for (std::size_t i = 0; i < document.layers.size(); ++i) {
+            if (document.layers[i].id != id)
+                continue;
+            document.layers.erase(document.layers.begin() +
+                                  std::ptrdiff_t(i));
+            break;
+        }
+        document.touch();
+    };
+    runCommand(std::move(command));
+    mState.layerSession.active = id;
+    mStatus = "added layer '" + id + "'";
+}
+
+// Deleting a layer never deletes its entities: a layer is an organisation of a
+// level, and losing the organisation must not lose the level. Its members fall
+// back to the default layer, and undo puts both the declaration and the
+// membership back.
+void EditorApp::removeLayer(const std::string& layerId)
+{
+    if (layerId.empty())
+        return; // the default layer is implicit and cannot be removed
+    const game::content::Layer* found = mState.document.findLayer(layerId);
+    if (!found)
+        return;
+
+    const game::content::Layer layer = *found;
+    std::size_t index = 0;
+    for (std::size_t i = 0; i < mState.document.layers.size(); ++i)
+        if (mState.document.layers[i].id == layerId)
+            index = i;
+    const std::vector<AuthorId> members =
+        layers::membersOf(mState.document, layerId);
+
+    Command command;
+    command.label = "Delete layer";
+    command.apply = [layerId, members](Doc& document) {
+        for (std::size_t i = 0; i < document.layers.size(); ++i) {
+            if (document.layers[i].id != layerId)
+                continue;
+            document.layers.erase(document.layers.begin() + std::ptrdiff_t(i));
+            break;
+        }
+        for (const AuthorId& id : members)
+            if (Entity* entity = document.find(id))
+                entity->layer.clear();
+        document.touch();
+    };
+    command.revert = [layer, index, members](Doc& document) {
+        const std::size_t at = std::min(index, document.layers.size());
+        document.layers.insert(document.layers.begin() + std::ptrdiff_t(at),
+                               layer);
+        for (const AuthorId& id : members)
+            if (Entity* entity = document.find(id))
+                entity->layer = layer.id;
+        document.touch();
+    };
+    runCommand(std::move(command));
+    if (mState.layerSession.active == layerId)
+        mState.layerSession.active.clear();
+    if (mState.layerSession.solo == layerId)
+        mState.layerSession.solo.clear();
+    mStatus = "deleted layer '" + layerId + "'; its entities kept";
+}
+
+void EditorApp::renameLayer(const std::string& layerId, const std::string& name)
+{
+    const game::content::Layer* found = mState.document.findLayer(layerId);
+    if (!found || name.empty() || found->name == name)
+        return;
+    const std::string before = found->name;
+    Command command;
+    command.label = "Rename layer";
+    command.apply = [layerId, name](Doc& document) {
+        if (game::content::Layer* layer = document.findLayer(layerId))
+            layer->name = name;
+        document.touch();
+    };
+    command.revert = [layerId, before](Doc& document) {
+        if (game::content::Layer* layer = document.findLayer(layerId))
+            layer->name = before;
+        document.touch();
+    };
+    runCommand(std::move(command));
+}
+
+void EditorApp::recolourLayer(const std::string& layerId,
+                              const glm::vec3& colour)
+{
+    const game::content::Layer* found = mState.document.findLayer(layerId);
+    if (!found)
+        return;
+    const glm::vec3 before = found->colour;
+    Command command;
+    command.label = "Recolour layer";
+    command.apply = [layerId, colour](Doc& document) {
+        if (game::content::Layer* layer = document.findLayer(layerId))
+            layer->colour = colour;
+        document.touch();
+    };
+    command.revert = [layerId, before](Doc& document) {
+        if (game::content::Layer* layer = document.findLayer(layerId))
+            layer->colour = before;
+        document.touch();
+    };
+    runCommand(std::move(command));
+}
+
+// "Move these forty pillars into the background layer" is the gesture layers
+// exist for, so it is one undo entry rather than forty.
+void EditorApp::assignSelectionToLayer(const std::string& layerId)
+{
+    if (mState.selection.empty())
+        return;
+    std::vector<std::pair<AuthorId, std::string>> before;
+    before.reserve(mState.selection.size());
+    for (const AuthorId& id : mState.selection)
+        if (const Entity* entity = mState.document.find(id))
+            before.emplace_back(id, entity->layer);
+    if (before.empty())
+        return;
+
+    Command command;
+    command.label = "Move to layer";
+    command.apply = [before, layerId](Doc& document) {
+        for (const auto& entry : before)
+            if (Entity* entity = document.find(entry.first))
+                entity->layer = layerId;
+        document.touch();
+    };
+    command.revert = [before](Doc& document) {
+        for (const auto& entry : before)
+            if (Entity* entity = document.find(entry.first))
+                entity->layer = entry.second;
+        document.touch();
+    };
+    runCommand(std::move(command));
+    mStatus = std::to_string(before.size()) + " moved to layer '" +
+              (layerId.empty() ? std::string(layers::kDefaultLayerName)
+                               : layerId) +
+              "'";
+}
+
+void EditorApp::selectLayerMembers(const std::string& layerId)
+{
+    mState.selection = layers::membersOf(mState.document, layerId);
+    mSelectionAnchor.clear();
+    if (!mState.selection.empty())
+        mOutlinerReveal = mState.selection.front();
+    mStatus = std::to_string(mState.selection.size()) + " selected in layer '" +
+              (layerId.empty() ? std::string(layers::kDefaultLayerName)
+                               : layerId) +
+              "'";
+}
+
+void EditorApp::exportLayer(const std::string& layerId)
+{
+    mLayerIoOpen = true;
+    mLayerIoExport = true;
+    mLayerIoLayer = layerId;
+    mLayerIoError.clear();
+    // Defaulted beside the open scene, named for the layer: the whole point is
+    // handing this file to somebody, and a path they have to invent is a path
+    // that lands somewhere nobody looks.
+    const std::string stem =
+        layerId.empty() ? std::string("default") : layerId;
+    std::filesystem::path base =
+        mState.scenePath.empty()
+            ? std::filesystem::path(mState.assetRoot) / "scenes"
+            : std::filesystem::path(mState.scenePath).parent_path();
+    const std::string suggested = (base / (stem + ".layer.scn")).string();
+    std::snprintf(mLayerIoPath, sizeof(mLayerIoPath), "%s", suggested.c_str());
+}
+
+void EditorApp::importIntoLayer(const std::string& layerId)
+{
+    mLayerIoOpen = true;
+    mLayerIoExport = false;
+    mLayerIoLayer = layerId;
+    mLayerIoError.clear();
+    mLayerIoPath[0] = '\0';
+}
+
+void EditorApp::drawLayerIoPopup()
+{
+    static constexpr const char* kTitle = "Layer file###LayerIo";
+    if (mLayerIoOpen && !ImGui::IsPopupOpen(kTitle))
+        ImGui::OpenPopup(kTitle);
+    if (!ImGui::BeginPopupModal(kTitle, nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    const std::string name = layers::displayName(mState.document, mLayerIoLayer);
+    if (mLayerIoExport)
+        ImGui::Text("Write layer '%s' to:", name.c_str());
+    else
+        ImGui::Text("Merge a layer file into '%s':", name.c_str());
+    ImGui::SetNextItemWidth(520.0f);
+    ImGui::InputText("##path", mLayerIoPath, sizeof(mLayerIoPath));
+    if (mLayerIoExport)
+        ImGui::TextDisabled("Only this layer's entities, plus the ancestors "
+                            "they hang from as bare transforms.");
+    else
+        ImGui::TextDisabled("Colliding ids are renamed, never overwritten.");
+    if (!mLayerIoError.empty())
+        ImGui::TextColored(ImVec4(0.89f, 0.42f, 0.33f, 1.0f), "%s",
+                           mLayerIoError.c_str());
+
+    if (ImGui::Button(mLayerIoExport ? "Export" : "Import")) {
+        std::string error;
+        if (mLayerIoExport) {
+            const Doc slice =
+                layers::extractLayer(mState.document, mLayerIoLayer);
+            if (game::content::writeSceneSource(mLayerIoPath, slice, error)) {
+                mStatus = "exported " + std::to_string(slice.entities.size()) +
+                          " entities to " + mLayerIoPath;
+                mLayerIoOpen = false;
+                ImGui::CloseCurrentPopup();
+            } else {
+                mLayerIoError = error;
+            }
+        } else {
+            Doc incoming;
+            if (!game::content::loadSceneSource(mLayerIoPath, incoming, error)) {
+                mLayerIoError = error;
+            } else {
+                // Merged once, here, so the report can be shown; the command
+                // then swaps whole documents. Both halves are captured by
+                // value because a merge touches ids, parents and the layer
+                // list at once, and reversing that edit-by-edit is where the
+                // bugs would be. A document is a vector of PODs -- two copies
+                // of a level cost less than the bookkeeping would.
+                const Doc before = mState.document;
+                Doc after = before;
+                const layers::MergeReport report =
+                    layers::mergeLayer(after, incoming, mLayerIoLayer);
+
+                const auto swap = [](Doc& document, const Doc& to) {
+                    const uint64_t revision = document.revision;
+                    document = to;
+                    document.revision = revision;
+                    document.touch();
+                };
+                Command command;
+                command.label = "Import layer";
+                command.apply = [after, swap](Doc& document) {
+                    swap(document, after);
+                };
+                command.revert = [before, swap](Doc& document) {
+                    swap(document, before);
+                };
+                runCommand(std::move(command));
+                mStatus = "merged " + std::to_string(report.added) +
+                          " entities" +
+                          (report.renamed.empty()
+                               ? std::string()
+                               : ", " + std::to_string(report.renamed.size()) +
+                                     " renamed");
+                mLayerIoOpen = false;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) {
+        mLayerIoOpen = false;
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+}
+
 // Shared by both outliner rows: whatever is selected, act on all of it. Adding
 // a component here is the same call the inspector makes, so there is one path
 // from "author wants a collider" to the document.
@@ -5202,6 +6213,10 @@ Entity EditorApp::makeGameplayEntity(Gameplay kind,
         stem = "pickup";
         component = "pickup";
         break;
+    case Gameplay::Npc:
+        stem = "npc";
+        component = "npc";
+        break;
     case Gameplay::Trigger:
         stem = "trigger";
         component = "trigger";
@@ -5258,6 +6273,7 @@ void EditorApp::addGameplayEntity(Gameplay kind)
 
     Entity entity = makeGameplayEntity(kind, transform);
     adoptIntoIsolation(entity);
+    stampLayer(entity);
     runCommand(makeCreateEntity(entity));
     selectAndReveal(entity.id, false);
     mPreview->invalidate();
@@ -5770,6 +6786,17 @@ void EditorApp::drawInspector()
     InspectorContext context;
     context.catalog = &mState.catalog;
     context.grid = &mState.grid;
+    // What the whole selection agrees about, so the transform rows can show
+    // "--" where it does not (Gregory §15.4.1.6). Computed here rather than in
+    // the panel because only the app knows what is selected.
+    if (mState.selection.size() > 1) {
+        std::vector<const Entity*> selected;
+        selected.reserve(mState.selection.size());
+        for (const AuthorId& id : mState.selection)
+            if (const Entity* e = mState.document.find(id))
+                selected.push_back(e);
+        context.agreement = multiedit::agreementOf(selected);
+    }
     context.materialNames = &mMaterialNames;
     context.enemyIds = &mEnemyIds;
     context.scriptPaths = &mScriptPaths;
@@ -5781,6 +6808,10 @@ void EditorApp::drawInspector()
         mSceneEntityIds.push_back(e.id);
     context.sceneEntityIds = &mSceneEntityIds;
     context.pickupIds = &mPickupIds;
+    context.npcIds = &mNpcIds;
+    context.traderIds = &mTraderIds;
+    context.questIds = &mQuestIds;
+    context.stationIds = &mStationIds;
     context.weaponIds = &mWeaponIds;
     context.materials = &materialCatalog();
     context.meshKind = selectionMeshKind();

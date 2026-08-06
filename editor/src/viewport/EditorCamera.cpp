@@ -134,3 +134,72 @@ glm::quat EditorCamera::walkOrientation() const
     return glm::angleAxis(mWalkYaw, glm::vec3(0, 1, 0)) *
            glm::angleAxis(mWalkPitch, glm::vec3(1, 0, 0));
 }
+
+// --- orthographic elevations ------------------------------------------------
+//
+// Gregory §15.4.1.2. A plan view is not a camera angle, it is a different
+// question: perspective answers "does this room read", an elevation answers
+// "are these two things in line", and no amount of orbiting answers the second
+// reliably because the vanishing point moves everything.
+
+void EditorCamera::setProjection(Projection projection)
+{
+    if (mProjection == projection)
+        return;
+    // Entering an elevation frames whatever the author was looking at, rather
+    // than the world origin: switching to a plan view and finding yourself
+    // somewhere else in the level is how a mode stops being used.
+    if (mProjection == Projection::Perspective)
+        mOrthoFocus = mWalking ? walkFloorPosition() : mFlyPos;
+    mProjection = projection;
+}
+
+void EditorCamera::zoomOrtho(float factor)
+{
+    if (!(factor > 0.0f))
+        return;
+    // Multiplicative and clamped, the same rule Brush::resize follows: a step
+    // is the same proportion at any zoom, and the limits are where the view is
+    // either one texel of a wall or the whole county.
+    mOrthoHeight = glm::clamp(mOrthoHeight * factor, kMinOrthoHeight,
+                              kMaxOrthoHeight);
+}
+
+void EditorCamera::panOrtho(glm::vec2 screenDelta)
+{
+    // The drag is in screen fractions of the viewport height, so a pan follows
+    // the cursor at any zoom: the region on screen IS mOrthoHeight metres tall.
+    const glm::vec3 right = orthoOrientation() * glm::vec3(1, 0, 0);
+    const glm::vec3 up = orthoOrientation() * glm::vec3(0, 1, 0);
+    mOrthoFocus -= right * (screenDelta.x * mOrthoHeight);
+    mOrthoFocus += up * (screenDelta.y * mOrthoHeight);
+}
+
+glm::quat EditorCamera::orthoOrientation() const
+{
+    switch (mProjection) {
+    case Projection::Top:
+        // Looking straight down, with +Z of the world running up the screen.
+        // Built as a single -90 degree pitch rather than a look-at, because a
+        // look-at straight down has no defined up vector and glm picks one.
+        return glm::angleAxis(glm::radians(-90.0f), glm::vec3(1, 0, 0));
+    case Projection::Front:
+        // Down -Z, which is the default camera facing: no rotation at all.
+        return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    case Projection::Side:
+        // Down -X, looking from the +X side of the level.
+        return glm::angleAxis(glm::radians(90.0f), glm::vec3(0, 1, 0));
+    case Projection::Perspective:
+        break;
+    }
+    return flyOrientation();
+}
+
+glm::vec3 EditorCamera::orthoEye() const
+{
+    // Standing well back along the view axis. In an orthographic projection
+    // the eye's distance changes nothing on screen, so this only has to be far
+    // enough that the near plane is behind everything in the level.
+    const glm::vec3 forward = orthoOrientation() * glm::vec3(0, 0, -1);
+    return mOrthoFocus - forward * kOrthoEyeDistance;
+}

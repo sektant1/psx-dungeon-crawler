@@ -35,6 +35,9 @@ struct OutlinerNode {
     // Kept for composed-object search. A child nested under a root no longer
     // has a prefab group row whose key can satisfy the query for it.
     std::string prefab;
+    // Which authoring layer the entity is in, for the `layer:` filter term.
+    // Empty is the default layer, matched by typing `layer:default`.
+    std::string layer;
 };
 
 // The entities that share a kind: one prefab id, or one gameplay kind for the
@@ -65,6 +68,7 @@ struct OutlinerOptions {
     //
     //   has:collider     entities carrying that component
     //   kind:enemy       entities of that kind, exactly
+    //   layer:lighting   entities in that layer ("default" for the implicit one)
     //
     // Free text is a substring and matches four different things, which is
     // right for "where did I put stone_arch" and useless for "which of these

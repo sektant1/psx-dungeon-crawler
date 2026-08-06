@@ -1291,6 +1291,13 @@ void RenderCore::setEditorCameraPose(float px, float py, float pz, float qw,
     mImpl->editorView.fovDeg = std::clamp(fovDeg, 1.0f, 179.0f);
 }
 
+void RenderCore::setEditorCameraOrtho(float worldHeight)
+{
+    // Negatives would invert the projection rather than mean anything; clamped
+    // to zero, which is the perspective path.
+    mImpl->editorView.orthoHeight = std::max(worldHeight, 0.0f);
+}
+
 void RenderCore::enableThumbnailViewport(int size)
 {
     const uint32_t wanted = uint32_t(std::max(size, 32));

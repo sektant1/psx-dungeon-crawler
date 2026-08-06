@@ -51,6 +51,11 @@ enum class Gameplay {
     Marker,
     EnemySpawn,
     Pickup,
+    // A person. Placeable for the same reason an enemy spawn is: a village is
+    // authored by standing people in it, and an NPC that could only be created
+    // by adding a component to a group meant the safehouse was authored in a
+    // different gesture from everything around it.
+    Npc,
     Trigger,
     AudioEmitter,
     PointLight,

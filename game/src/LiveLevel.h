@@ -64,6 +64,11 @@ public:
     // the RPG layer cannot tell them apart.
     std::vector<game::ScenePlacement> pickupPlacements() const;
 
+    // People, the same way again: a "npc.ilsabet" marker and the editor's Npc
+    // component both arrive here prefixed, so the village's inhabitants can be
+    // authored by either route.
+    std::vector<game::ScenePlacement> npcPlacements() const;
+
     // The player tuning this level authored, if any. Empty for a procedural
     // dungeon, which has no .scn to carry components: the caller then applies
     // the game's own config, so a transition from an authored level back into

@@ -1,0 +1,52 @@
+# Who lives here.
+#
+# One row per person. This is the roster the editor's NPC component picks from
+# and the world stands bodies from; it does not restate what anybody says or
+# sells. `dialogue` names a tree in dialogue.toml (defaulting to this id) and
+# `trader` names a shop in traders.toml (empty: they talk, they do not deal).
+#
+# Splitting it this way is what lets two guards share one script, and what lets
+# a shopkeeper with stock and no conversation still be somebody you can stand
+# in the village.
+#
+# PRESENTATION
+# `mesh` is optional. Empty gets a capsule stand-in of `height` metres in
+# `material`, which is where the whole cast is until there are character
+# models -- a shape that reads as a person beats a missing-asset box. Only the
+# materials in assets/materials/prototype.mat exist; naming one that does not
+# fails assetlint, which is the check that keeps this file honest.
+#
+# `height` is also where the look target sits: you aim at somebody's chest, and
+# only whoever authored the row knows where that is.
+
+[npc.ilsabet]
+name = "Mother Ilsabet"
+role = "Lamps and small kindnesses"
+greeting = "She is trimming a wick that does not need trimming."
+trader = "ilsabet"
+material = "Game/Prototype/ProjectileEidolon"
+height = 1.62
+
+[npc.alder]
+name = "Alder"
+role = "Physician"
+greeting = "Bandages, drying. He does not look up until you are close."
+trader = "alder"
+material = "Game/Prototype/Floor"
+height = 1.78
+
+[npc.corvin]
+name = "Corvin"
+role = "Buys what came out of the dark"
+greeting = "He is already looking at your pack, not at you."
+trader = "corvin"
+material = "Game/Prototype/ProjectileVesper"
+height = 1.85
+
+[npc.magus]
+name = "The Magus"
+role = "The lodge does not trade. It exchanges."
+greeting = "Still. Too still, for the length of time you have been watching."
+trader = "magus"
+material = "Game/Prototype/ProjectileTalon"
+height = 1.9

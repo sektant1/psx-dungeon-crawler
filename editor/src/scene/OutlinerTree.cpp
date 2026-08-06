@@ -37,9 +37,9 @@ std::string entityLabel(const Entity& entity)
     return eng::assets::friendlyAssetLabel(entity.id);
 }
 
-// One search term: free text, or one of the two prefixes.
+// One search term: free text, or one of the three prefixes.
 struct Term {
-    enum class Kind { Text, HasComponent, IsKind } kind = Kind::Text;
+    enum class Kind { Text, HasComponent, IsKind, InLayer } kind = Kind::Text;
     std::string value; // already lowered
 };
 
@@ -62,6 +62,13 @@ std::vector<Term> parseFilter(const std::string& filterLower)
         else if (word.rfind("kind:", 0) == 0) {
             term.kind = Term::Kind::IsKind;
             term.value = word.substr(5);
+        }
+        // `layer:lighting`. The third narrowing prefix, and the one that makes
+        // the hierarchy agree with the Layers panel: hiding a layer takes it
+        // out of the viewport, and this takes it out of the list.
+        else if (word.rfind("layer:", 0) == 0) {
+            term.kind = Term::Kind::InLayer;
+            term.value = word.substr(6);
         }
         else {
             term.value = std::move(word);
@@ -90,12 +97,21 @@ std::vector<std::string> componentIds(const Entity& entity)
 // flat one.
 bool matchesTerms(const std::vector<Term>& terms, const std::string& text,
                   const std::string& kind,
-                  const std::vector<std::string>& components)
+                  const std::vector<std::string>& components,
+                  const std::string& layer)
 {
     for (const Term& term : terms) {
         switch (term.kind) {
         case Term::Kind::Text:
             if (!contains(text, term.value))
+                return false;
+            break;
+        case Term::Kind::InLayer:
+            // Exact, like kind: above and for the same reason. "default" names
+            // the implicit layer, whose id is empty and which therefore cannot
+            // be typed any other way.
+            if (lower(layer).empty() ? term.value != "default"
+                                     : lower(layer) != term.value)
                 return false;
             break;
         case Term::Kind::IsKind:
@@ -139,7 +155,7 @@ bool subtreeMatches(const OutlinerNode& node, const std::vector<Term>& terms)
     if (matchesTerms(terms,
                      lower(node.label) + " " + lower(node.id) + " " +
                          lower(node.kind) + " " + lower(node.prefab),
-                     node.kind, node.components))
+                     node.kind, node.components, node.layer))
         return true;
     for (const OutlinerNode& child : node.children)
         if (subtreeMatches(child, terms))
@@ -165,6 +181,7 @@ OutlinerNode buildNode(const SceneDocument& document, const KitCatalog& catalog,
     node.kind = entityKind(entity, catalog);
     node.components = componentIds(entity);
     node.prefab = entity.prefab;
+    node.layer = entity.layer;
     visited.insert(entity.id);
 
     std::vector<const Entity*> children = document.childrenOf(entity.id);
@@ -299,7 +316,7 @@ OutlinerTree buildOutliner(const SceneDocument& document,
             !matchesTerms(terms,
                           lower(label) + " " + lower(entity.id) + " " +
                               lower(kind) + " " + lower(key),
-                          kind, components)) {
+                          kind, components, entity.layer)) {
             ++tree.hidden;
             continue;
         }

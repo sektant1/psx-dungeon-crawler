@@ -56,6 +56,21 @@ struct Pickup {
     std::string type;
 };
 
+// A person worth talking to. `id` keys into dialogue.toml, traders.toml and
+// the quest book at once, because those three name the same person: the
+// blacksmith you buy from is the blacksmith you talk to is the blacksmith who
+// wanted six iron ingots.
+//
+// Deliberately just the id. Their name, their trade, what they say and whether
+// they have anything for you are all facts about the person, which live in the
+// content that describes them -- an authored entity that restated any of it
+// would be a second place for those to be wrong. What the *scene* decides is
+// only where they stand and which way they face, and the transform already
+// says that.
+struct Npc {
+    std::string id;
+};
+
 // Event volume (WC3-style region). event keys into the trigger dispatch.
 // Deciding that a trigger is a sensor body on the trigger layer is game
 // policy, so MapRuntime gives each one a sensor Collider; the engine only

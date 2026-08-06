@@ -136,6 +136,19 @@ void dePickup(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
     r.emplace_or_replace<game::Pickup>(e, game::Pickup{type});
 }
 
+void serNpc(const entt::registry& r, entt::entity e, ByteWriter& w)
+{ w.str(r.get<game::Npc>(e).id); }
+void deNpc(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    if (bytes < 4) { b.invalidate(); return; }
+    const std::string id = b.str();
+    // An NPC with no id is nobody: there is no conversation to open, no shop to
+    // stock and no name to draw. Refusing it here fails the load with a bad
+    // entity to point at, which beats a silent mute statue in the village.
+    if (id.empty()) { b.invalidate(); return; }
+    r.emplace_or_replace<game::Npc>(e, game::Npc{id});
+}
+
 void serTrigger(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
     const auto& t = r.get<game::Trigger>(e);
@@ -263,7 +276,7 @@ ComponentRegistry buildCore()
     // one id, which is a cook that fails with no bad entity to point at.
     //
     // 32 is the engine's again (PrimitiveMesh), taken after 29-31 were already
-    // spent here. The next game type takes 33.
+    // spent here. The next game type takes 34.
     reg.add({"Actor", 29, addDefault<game::Actor>, has<game::Actor>,
              remove<game::Actor>, serActor, deActor});
     reg.add({"ActorSounds", 30, addDefault<game::ActorSounds>,
@@ -274,6 +287,16 @@ ComponentRegistry buildCore()
     // payload format, the inspector rows and the add-menu entry at once.
     reg.add(eng::ecs::reflectedComponent<game::ViewmodelRig>("ViewmodelRig",
                                                              31));
+    // kFirstApplicationTypeId, not 33: the engine took 33 for Scripts, and a
+    // stable id is a file format that cannot be shared -- MapSerializer refuses
+    // to write a map when two types claim one, so this collision made every
+    // cook fail rather than corrupting anything. Moving it is free because no
+    // .map on disk can contain an Npc: none could ever be written.
+    //
+    // 64 and up is the block the engine reserves for application types exactly
+    // so this cannot happen again; the game's 10-17 and 29-31 predate it.
+    reg.add({"Npc", eng::ecs::kFirstApplicationTypeId, addDefault<game::Npc>,
+             has<game::Npc>, remove<game::Npc>, serNpc, deNpc});
     return reg;
 }
 

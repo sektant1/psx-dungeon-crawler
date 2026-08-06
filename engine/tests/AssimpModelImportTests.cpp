@@ -369,6 +369,22 @@ void test_spatial_scale_precedes_cleanup_and_opposite_faces_survive()
             "scaled fixture did not meet canonical spatial standard");
 }
 
+// True when a mesh's .meta opts it out of static import -- the skinned rigs,
+// which gltf2ozz owns. A substring match rather than a TOML parse because this
+// test links the model importer and nothing else, and pulling a parser in to
+// read one boolean would be the larger change.
+bool skinnedRigOptOut(const std::filesystem::path& model)
+{
+    std::filesystem::path meta = model;
+    meta += ".meta";
+    std::ifstream file(meta);
+    if (!file)
+        return false;
+    const std::string text((std::istreambuf_iterator<char>(file)),
+                           std::istreambuf_iterator<char>());
+    return text.find("skip = true") != std::string::npos;
+}
+
 void test_shipped_models_pass_import_gate()
 {
 #ifdef PROJECT_SOURCE_DIR
@@ -384,7 +400,13 @@ void test_shipped_models_pass_import_gate()
         // Deforming assets have their own skeleton/bind-pose production gate
         // in SkeletalAnimationTests; static importer must continue rejecting
         // them rather than silently discarding skin and clips.
-        if (entry.path().filename() == "arms_rig.glb")
+        //
+        // Recognised by the sidecar that already states it -- `skip = true`,
+        // which is also what keeps them out of the conditioning pipeline --
+        // rather than by filename. There are two such rigs now (the arms and
+        // the actor humanoid) and adding a third should not require editing a
+        // test to keep the suite green.
+        if (skinnedRigOptOut(entry.path()))
             continue;
         eng::ModelImportOptions options;
         eng::detail::ImportedModelData model;

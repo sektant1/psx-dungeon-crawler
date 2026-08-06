@@ -1,0 +1,102 @@
+# What a body is, for everything in the world that has one.
+#
+# The player's third-person avatar, every enemy and every NPC used to draw as a
+# tinted capsule -- three separate pieces of code each building the same
+# primitive. They now share this: one rigged mesh, one clip library, one set of
+# blend numbers. An enemy that wants to look different overrides `material` (or
+# `mesh`) in enemies.toml; it does not get its own animation code.
+#
+# The rig itself is authored by tools/author_humanoid_rig.py and cooked by
+# gltf2ozz (see config/humanoid_rig.ozz.json). Changing a pose means editing
+# that script and re-running `make cook-humanoid`, not editing this file.
+#
+# See docs/actor-animation.md.
+
+[actor]
+skeleton = "animations/actors/humanoid/humanoid_rig.skeleton.ozz"
+# The directory the clips are cooked into. Named `clip_directory` and not
+# `clips` because `[actor.clips]` below is a table, and TOML will not let one
+# key be both.
+clip_directory = "animations/actors/humanoid"
+model = "meshes/actors/humanoid_rig.glb"
+# The default skin. Vertex colour is baked into the mesh, so a material that
+# only modulates white shows the mannequin's own grey; enemies.toml points its
+# rows at the tinted Game/Enemy/* materials over the same geometry.
+material = "Game/Actor/Default"
+# Metres, and the number every other length here is measured against: the mesh
+# is modelled 1.8 m tall, and an enemy whose capsule is 1.6 m is scaled to fit.
+height = 1.8
+
+# Which joints the action layer is allowed to move on its own. Everything under
+# these roots is "upper body"; an attack drives them at full strength while the
+# legs keep running, and the complement is what fades the legs in when the actor
+# is standing still.
+upper_body = ["spine"]
+
+# The joints a look-at turns, and how much of the total each takes. Splitting
+# the turn across the chain is what stops the head from snapping round on a neck
+# that did not move -- the classic owl.
+[actor.look]
+joints = ["chest", "neck", "head"]
+share = [0.25, 0.35, 0.40]
+max_yaw_degrees = 70.0
+max_pitch_degrees = 35.0
+# How fast the look chases its target, in units of "fraction closed per second".
+responsiveness = 9.0
+
+# --- locomotion -------------------------------------------------------------
+#
+# Cycles are played by PHASE, not by a per-clip clock: one phase drives walk_f,
+# walk_l and run_f together, so a diagonal blend keeps both feet on the same
+# beat. `stride` is how far one full two-step cycle carries the actor, and it is
+# what converts speed into cadence -- get it wrong and the feet skate.
+[actor.locomotion]
+walk_stride = 1.50
+run_stride = 3.40
+# Below this the actor is standing; above `run_speed` it is running, and between
+# them the two cycles crossfade.
+idle_speed = 0.15
+walk_speed = 1.60
+run_speed = 4.20
+# Cadence bounds, cycles per second. The floor stops a creeping enemy from
+# playing a slideshow; the ceiling stops a lunge from vibrating.
+min_cadence = 0.45
+max_cadence = 2.40
+# Seconds to fade between postures (ground <-> air, relaxed <-> combat).
+posture_blend = 0.18
+
+# --- action layer -----------------------------------------------------------
+[actor.action]
+# Seconds to fade an action in and out over. In beats a stagger has to arrive
+# faster than an attack winds up, so hits use the shorter pair.
+blend_in = 0.07
+blend_out = 0.16
+hit_blend_in = 0.03
+hit_blend_out = 0.12
+
+# --- the clip vocabulary ----------------------------------------------------
+#
+# Gameplay names a STATE; this table says which clip plays it. A creature with
+# its own clip set overrides the rows it has and inherits the rest, which is the
+# whole extension story for a second rig.
+[actor.clips]
+idle = "idle"
+idle_combat = "idle_combat"
+dormant = "dormant"
+talk = "talk"
+walk_forward = "walk_f"
+walk_back = "walk_b"
+walk_left = "walk_l"
+walk_right = "walk_r"
+run_forward = "run_f"
+run_back = "run_b"
+jump = "jump"
+fall = "fall"
+land = "land"
+attack_light = "attack_1"
+attack_alternate = "attack_2"
+attack_heavy = "attack_heavy"
+cast = "cast"
+hit = "hit"
+stagger = "stagger"
+death = "death"

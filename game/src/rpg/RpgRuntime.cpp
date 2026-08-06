@@ -93,6 +93,9 @@ bool RpgRuntime::load(const Paths& paths, const CombatVocabulary& vocabulary)
     if (!mStations.load(assetPath(paths.stations)))
         eng::log::error("rpg: stations.toml failed to load; the safehouse "
                         "cannot be upgraded");
+    if (!mNpcLibrary.load(assetPath(paths.npcs)))
+        eng::log::error("rpg: npcs.toml failed to load; the village will be "
+                        "empty");
 
     // Cross-validation. A dangling reference here is content that will fail
     // silently at the worst possible moment -- a drop table that drops nothing,
@@ -116,6 +119,23 @@ bool RpgRuntime::load(const Paths& paths, const CombatVocabulary& vocabulary)
         if (q && !q->giver.empty() && !mDialogue.find(q->giver))
             eng::log::error("rpg: quest '%s' is given by '%s', who has no "
                             "dialogue tree", id.c_str(), q->giver.c_str());
+    }
+    // The roster's own two links. A person naming a conversation or a shop
+    // that is not there is somebody who stands in the village and does
+    // nothing when spoken to -- exactly the silent hole every check above
+    // exists to prevent.
+    for (const std::string& id : mNpcLibrary.ids()) {
+        const NpcLibrary::Ref npc = mNpcLibrary.find(id);
+        if (!npc)
+            continue;
+        if (!mDialogue.find(npc->dialogueId()) && !npc->trades())
+            eng::log::error("rpg: npc '%s' has neither a dialogue tree ('%s') "
+                            "nor a shop; they cannot be interacted with",
+                            id.c_str(), npc->dialogueId().c_str());
+        if (npc->trades() && !mTraders.find(npc->trader))
+            eng::log::error("rpg: npc '%s' keeps shop '%s', which traders.toml "
+                            "does not define",
+                            id.c_str(), npc->trader.c_str());
     }
 
     // Progression: the curve and the starting kit.
@@ -182,9 +202,10 @@ bool RpgRuntime::load(const Paths& paths, const CombatVocabulary& vocabulary)
     wireRewards();
     mLoaded = true;
     eng::log::info("rpg: %d items, %d drop tables, %d quests, %d conversations, "
-                   "%d traders, %d skills",
+                   "%d traders, %d people, %d skills",
                    mItems.size(), mLoot.size(), mQuestLibrary.size(),
-                   mDialogue.size(), mTraders.size(), mSkillTable.size());
+                   mDialogue.size(), mTraders.size(), mNpcLibrary.size(),
+                   mSkillTable.size());
     return true;
 }
 
@@ -202,6 +223,12 @@ bool RpgRuntime::reload(const CombatVocabulary& vocabulary)
     mTraders.load(assetPath(mPaths.traders));
     mMarket.sync(mTraders);
     mStations.load(assetPath(mPaths.stations));
+    // The people already standing in the level keep the Ref they were spawned
+    // with, so a reload that renames somebody leaves the body where it is with
+    // the old name until the level is re-entered. That is the same bargain
+    // every other Ref in here makes, and it beats the alternative of a dangling
+    // pointer under the crosshair.
+    mNpcLibrary.load(assetPath(mPaths.npcs));
     const std::vector<std::string> dropped = mQuests.rebind(mQuestLibrary);
     for (const std::string& id : dropped)
         eng::log::error("rpg: quest '%s' was in the log and is no longer in "
@@ -842,6 +869,10 @@ bool RpgRuntime::takePickup(GameContext& ctx, int pickupId)
         return false;
     const std::string item = entry->item;
     const int count = entry->count;
+    // Copied before anything can erase the entry: `take` below removes it from
+    // the vector, and the partial branch used to read `entry->position` after
+    // that -- a dangling read that decided where the remainder was dropped.
+    const glm::vec3 where = entry->position;
 
     // Ask first, take second: a pickup that vanishes on a failed add is the
     // bug that loses items, and it is unrecoverable for the player.
@@ -854,10 +885,10 @@ bool RpgRuntime::takePickup(GameContext& ctx, int pickupId)
     }
     const ItemLibrary::Ref def = mItems.find(item);
     const std::string name = def ? def->name : item;
-    if (added < count) {
+    if (added < count && def) {
         // Partial: take what fitted and leave the rest where it was.
         mPickups.take(ctx, pickupId);
-        mPickups.spawn(ctx, *def, entry->position, count - added, true);
+        mPickups.spawn(ctx, *def, where, count - added, true);
         note("Took " + std::to_string(added) + " " + name +
              "; left the rest.");
         return true;
@@ -875,6 +906,19 @@ void RpgRuntime::setPickupsForLevel(GameContext& ctx,
     const int spawned = mPickups.spawnAuthored(ctx, mItems, placements);
     if (spawned > 0)
         eng::log::info("rpg: %d authored pickups in this level", spawned);
+}
+
+void RpgRuntime::setNpcsForLevel(GameContext& ctx,
+                                 const std::vector<ScenePlacement>& placements)
+{
+    // Whoever the player was mid-sentence with is not in the level they just
+    // walked into. Ending it here rather than leaving a runner pointing at a
+    // destroyed body is what keeps "who am I talking to" answerable.
+    endConversation();
+    mNpcs.clear(ctx);
+    const int spawned = mNpcs.spawnAuthored(ctx, mNpcLibrary, placements);
+    if (spawned > 0)
+        eng::log::info("rpg: %d people standing in this level", spawned);
 }
 
 // ---------------------------------------------------------------------------
@@ -972,6 +1016,30 @@ bool RpgRuntime::talkTo(const std::string& npc)
     return true;
 }
 
+bool RpgRuntime::talkToPlacement(int npcEntryId)
+{
+    const NpcSystem::Entry* entry = mNpcs.find(npcEntryId);
+    if (!entry || !entry->def)
+        return false;
+    // The person is the identity the rest of the RPG layer knows -- standing,
+    // quests, trade all key off it -- and the tree is only what they read from.
+    // Opening the conversation under the *tree's* id would give two guards
+    // sharing a script one shared reputation.
+    const NpcDef& def = *entry->def;
+    const auto condition = [this](const Condition& c) { return evaluate(c); };
+    const auto effect = [this](const Effect& e) { apply(e); };
+    if (!mConversation.begin(mDialogue, def.dialogueId(), condition, effect))
+        return false;
+    // Whoever is speaking gestures while they do. The placement id, not the
+    // person's: two guards sharing a script are two bodies, and only the one
+    // being addressed should be talking.
+    mNpcs.setSpeaking(npcEntryId);
+    mPartner = def.id;
+    mQuests.setConversationPartner(def.id);
+    mChannels.npcs.raise(eng::intern(def.id));
+    return true;
+}
+
 bool RpgRuntime::chooseReply(int offeredIndex)
 {
     const auto condition = [this](const Condition& c) { return evaluate(c); };
@@ -986,6 +1054,7 @@ void RpgRuntime::endConversation()
 {
     mConversation.end();
     mPartner.clear();
+    mNpcs.setSpeaking(-1); // back to the standing idle
     mQuests.setConversationPartner({});
 }
 

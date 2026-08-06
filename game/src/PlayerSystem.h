@@ -7,6 +7,7 @@
 #include "LockOn.h"
 #include "PlayerWeapons.h"
 #include "FirstPersonHands.h"
+#include "actor/ActorVisual.h"
 
 #include <glm/glm.hpp>
 
@@ -89,8 +90,11 @@ public:
     void fixedStep(GameContext& ctx, float fixedDt);
     // Push the interpolated pose to the renderer. `alpha` is the fraction
     // between the last two fixed steps (Physics::interpolationAlpha), `frameDt`
-    // the real frame delta the camera rig eases its own layers on.
-    void present(GameContext& ctx, float alpha, float frameDt = 0.0f);
+    // the real frame delta the camera rig eases its own layers on, and
+    // `animationDt` the stepped creature channel the third-person body's
+    // skeleton advances on (0 in first person, where there is no body).
+    void present(GameContext& ctx, float alpha, float frameDt = 0.0f,
+                 float animationDt = 0.0f);
     // Render input is sampled once, then consumed by fixed simulation so catch-up
     // steps cannot duplicate click/swap edges.
     void sampleWeaponInput(GameContext& ctx, bool enabled);
@@ -135,6 +139,11 @@ private:
     // whether the hands or the avatar is the thing on screen.
     void applyCameraMode(GameContext& ctx);
     void rebuildAvatar(GameContext& ctx);
+    // Steps the third-person body's animation. Called from present(), on the
+    // render delta: the avatar is presentation, and stepping it at the
+    // simulation rate is visible as stutter on a body that is otherwise
+    // interpolated.
+    void presentAvatar(GameContext& ctx, float frameDt);
 
     eng::FpsController mPlayer;
     eng::ThirdPersonCameraRig mThirdPerson;
@@ -144,7 +153,15 @@ private:
     // The placeholder body you see in third person. A primitive rather than a
     // model because there is no player mesh in this project yet, and a camera
     // that frames nothing cannot be judged at all.
+    // The third-person body. Empty in first person, where the hands are what
+    // you see; the primitive below is the fallback for a game whose rig failed
+    // to load, and only one of the two ever exists.
+    actor::ActorVisual mBody;
     eng::PrimitiveInstance mAvatar{};
+    // The character controller's capsule, as a height: the rig is scaled to it
+    // so the drawn body matches the shape the world collides with. Matches the
+    // capsule rebuildAvatar's fallback builds (0.30 radius, 1.70 straight).
+    static constexpr float kPlayerHeight = 1.80f;
     PlayerWeaponLibrary mWeaponLibrary;
     WeaponController mWeapons;
     FirstPersonHands mHands;

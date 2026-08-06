@@ -129,12 +129,7 @@
           0.0
         ]
       },
-      "camera": {
-        "fov_degrees": 32.0,
-        "far_clip": 40.0,
-        "priority": 10,
-        "active": false
-      }
+      "third_person": {}
     },
     {
       "id": "camera_main",
@@ -151,12 +146,7 @@
           0.0
         ]
       },
-      "camera": {
-        "fov_degrees": 45.0,
-        "near_clip": 0.07999999821186066,
-        "far_clip": 60.0,
-        "priority": 20
-      }
+      "third_person": {}
     },
     {
       "id": "camera_orbit",
@@ -173,13 +163,7 @@
           0.0
         ]
       },
-      "camera": {
-        "fov_degrees": 45.0,
-        "near_clip": 0.07999999821186066,
-        "far_clip": 60.0,
-        "priority": 10,
-        "active": false
-      },
+      "third_person": {},
       "orbit": {
         "centre": [
           0.0,

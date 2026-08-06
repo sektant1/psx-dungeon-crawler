@@ -12,10 +12,10 @@ scene authoring, properties, and diagnostics visible as separate jobs.
 |                      |                                               |                  |
 | ASSET BROWSER        |                                               |                  |
 | Placeables / Meshes  |                SCENE VIEW                     |    INSPECTOR     |
-| Materials / Effects  |              HUD Preview tab                  |                  |
+| Materials / Effects  |        3D / Top / Front / Side · HUD tab      |                  |
 |----------------------|                                               |                  |
 |                      |                                               |                  |
-| HIERARCHY            |-----------------------------------------------|                  |
+| HIERARCHY / LAYERS   |-----------------------------------------------|                  |
 |                      |          Problems / Console                   |                  |
 +----------------------+-----------------------------------------------+------------------+
 | RAVEN // EDIT | scene + dirty | last activity | selection / camera                     |
@@ -27,14 +27,19 @@ Panel responsibilities:
 | Surface | Owns | Does not own |
 |---|---|---|
 | Command Bar | Authoring mode, transform, grid step, snap, work plane | View options |
-| Scene View strip | Lighting, marks, volumes, frame stats, framing, walk view | Document edits |
+| Scene View strip | Projection, lighting, marks, volumes, frame stats, framing, walk view | Document edits |
 | Asset Browser | Placeable kit, gameplay entities, the mesh tree, material and particle libraries | Scene hierarchy |
 | Hierarchy | Selection, grouping, visibility, locking | Component properties |
+| Layers | Layer identity, membership, per-layer visibility and lock | Which entities exist |
 | Inspector | Selected entity components or scene properties | Asset browsing |
 | Problems | Validation and quick fixes | General log output |
 | Console | Logs and commands | Persistent workspace status |
 | Status strip | Scene/dirty state, last action, selection context | Long-form diagnostics |
 | Settings | Autosave and interface scale | Duplicate live viewport/play controls |
+
+What each panel is *for*, measured against Gregory §15.4's feature list for a
+game world editor, is [The Game World Editor](world-editor.md). This document is
+the layout and the styling; that one is the capability map.
 
 Asset labels and stable identities follow
 [Asset And Entity Naming](asset-naming.md). Browser labels may be friendly;

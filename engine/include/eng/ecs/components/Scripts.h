@@ -50,4 +50,22 @@ struct Scripts {
     std::vector<ScriptRef> items;
 };
 
+// Free-form properties authored on one entity instance, rather than on one
+// script. Gregory §15.4.1.6: the world editor lets an author invent a key,
+// choose its type and set its value on a single object, without a programmer
+// declaring anything -- "incredibly useful for prototyping new gameplay
+// features or implementing one-off scenarios".
+//
+// Same ScriptProp payload as above, because it is the same kind of data and a
+// second near-identical type would be a second thing to serialise, inspect and
+// bind. What differs is the owner: these belong to the entity, so every script
+// on it sees them as the base layer of `self.props` and a script's own props
+// override on a key clash. That precedence is what makes the feature useful --
+// tag a crate `flammable` in the editor and whatever script it carries can read
+// it -- and it is why an entity with no scripts can still carry properties: the
+// gameplay code that grows to consume them does not have to be Lua.
+struct Properties {
+    std::vector<ScriptProp> items;
+};
+
 } // namespace eng::ecs

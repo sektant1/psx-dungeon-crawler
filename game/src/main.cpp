@@ -204,6 +204,10 @@ private:
     bool mHitStopDrivingClock = false;
 
     game::CombatVocabulary mVocabulary;
+    // The one humanoid rig every actor wears. Owned here because it outlives
+    // every level and is shared by three systems that have no other place to
+    // meet; handed to them as a reference on GameContext.
+    game::actor::ActorRig mHumanoid;
     std::optional<game::GameContext> mCtx;
     game::CombatSystem mCombat;
     game::GameAudioSystem mGameAudio;
@@ -347,7 +351,17 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
 
     colliderView().enabled = std::getenv("RAVEN_SHOW_COLLIDERS") != nullptr;
 
-    mCtx.emplace(r, physics(), engine.input(), mVocabulary);
+    // The body, before anything that spawns one. A failure here is logged and
+    // survivable: every consumer checks valid() and falls back to the primitive
+    // it used to draw, so a broken rig costs the game its animation and not its
+    // ability to start.
+    {
+        game::actor::ActorRigDef rig;
+        game::actor::loadActorRigDef(game::assetPath("config/actors.toml"), rig);
+        mHumanoid.load(r, rig);
+    }
+
+    mCtx.emplace(r, physics(), engine.input(), mVocabulary, mHumanoid);
 
     // Player controller + three data-authored magical ranged weapons.
     //
@@ -589,8 +603,10 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // to have its nodes wiped, and the panel should not carry the handles into
     // the next one.
     mPanels.releaseParticleSpawns();
-    if (mCtx)
+    if (mCtx) {
         mRpg.pickups().clear(*mCtx);
+        mRpg.npcs().clear(*mCtx);
+    }
     if (mCtx)
         mEnemies.clear(*mCtx);
     if (mCtx)
@@ -621,6 +637,19 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
         return;
     }
     mParticles.reregisterAll(r);
+    // The shared humanoid, again, and before anything spawns wearing it.
+    //
+    // Building a level calls clearScene, which destroys every mesh the renderer
+    // holds -- skinned ones included. A rig uploaded once at start-up is
+    // therefore a dead handle by the first frame of the first level, and every
+    // actor silently falls back to a capsule. The player's hands already live
+    // under this contract (attachLoadout re-inits them after every transition);
+    // the difference was that the hands are rebuilt by a call the transition
+    // already made, and the body had none.
+    // By value: load() assigns its argument over the rig's own stored
+    // definition, so passing def() directly is a self-assignment waiting to
+    // become a dangling read the first time load() reorders.
+    mHumanoid.load(r, game::actor::ActorRigDef(mHumanoid.def()));
     if (mCombatReady)
         mCombat.reloadPresentation(*mCtx);
     // What this level says about the player, falling back to the config for
@@ -677,8 +706,12 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // the editor could place an item, SceneCook wrote it into the .map and
     // MapRuntime reported it -- and nothing read that call, so the item simply
     // did not exist. This is the consumer that closes that path.
-    if (mRpgReady && mCtx)
+    if (mRpgReady && mCtx) {
         mRpg.setPickupsForLevel(*mCtx, mLevel.pickupPlacements());
+        // The same closed path for people: an authored `npc.<id>` was an entity
+        // in the file that nobody could ever meet.
+        mRpg.setNpcsForLevel(*mCtx, mLevel.npcPlacements());
+    }
 
     // Depth 0 is the threshold, which is the safehouse side of the loop;
     // anything deeper is a live raid, where the profile may not be written.
@@ -1247,8 +1280,18 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // applies to creatures applies to them. Unlike the dummy they are synced as
     // a group: per-enemy phase jitter lives in their own animation, not in
     // whether their transform is copied this frame.
-    if (steps.stepped(eng::StepChannel::Characters))
-        mEnemies.syncRender(*mCtx);
+    if (steps.stepped(eng::StepChannel::Characters)) {
+        // The player's eyes, so an engaged enemy tracks the head it is about to
+        // swing at. Passed rather than looked up because the enemy system has
+        // no business knowing what a player is.
+        const glm::vec3 eye = mPlayerSys.aimOrigin();
+        const float creatureDt = steps.delta(eng::StepChannel::Characters);
+        mEnemies.syncRender(*mCtx, creatureDt, &eye);
+        // Townsfolk on the same channel, so a villager and a goblin standing in
+        // the same room move in the same beats.
+        if (mRpgReady)
+            mRpg.npcs().update(*mCtx, creatureDt, &eye);
+    }
     // Bleeding is a state, not an event, so it is refreshed every frame from
     // the health the sim just wrote -- not on the stop-motion channel: the
     // emitter has to follow the body smoothly or it strings drops behind it.
@@ -1295,8 +1338,8 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // camera/FOV tweaks so the debug sliders take effect live.
     {
         const auto timed = stats().time(PhasePlayer);
-        mPlayerSys.present(*mCtx, playerDriven() ? f.alpha : 1.0f,
-                           f.realDt);
+        mPlayerSys.present(*mCtx, playerDriven() ? f.alpha : 1.0f, f.realDt,
+                           steps.delta(eng::StepChannel::Characters));
         if (eng::telemetry::enabled("player", eng::telemetry::Level::Trace)) {
             const glm::vec3 eye = mPlayerSys.controller().eyePosition();
             eng::telemetry::watchf("player", "pos", "%.2f %.2f %.2f", eye.x,
@@ -1346,6 +1389,9 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         mRpg.pickups().update(*mCtx, f.dt);
         std::vector<GameplayTarget> items;
         mRpg.pickups().appendTargets(items);
+        // People go through the same seam. They are static -- a villager has no
+        // per-frame update to run -- so only the targets are published.
+        mRpg.npcs().appendTargets(items);
         for (const GameplayTarget& t : items)
             mInteraction.pushTarget(t);
         // The extraction countdown runs on the real delta: a hit-stop must not
@@ -1374,6 +1420,24 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         mInteraction.focus().kind == TargetKind::Item &&
         in.wasPressed("interact")) {
         mRpg.takePickup(*mCtx, mInteraction.focus().id);
+    }
+
+    // Speaking to whoever is under the crosshair. Same argument as taking an
+    // item: the interaction system resolves the target and stops, because it
+    // owns no conversation.
+    //
+    // A person with a shop and no tree is not a failure -- they are somebody
+    // you trade with -- so the fallback opens the shop rather than reporting
+    // nothing happened.
+    if (mRpgReady && in.mouseGrabbed() && mInteraction.focus().available &&
+        mInteraction.focus().kind == TargetKind::Npc &&
+        in.wasPressed("interact")) {
+        const int id = mInteraction.focus().id;
+        if (!mRpg.talkToPlacement(id)) {
+            if (const game::rpg::NpcSystem::Entry* e = mRpg.npcs().find(id);
+                e && e->def && e->def->trades())
+                mRpg.note(e->def->name + " has goods to trade.");
+        }
     }
 
     // Defensive actions remain independent from selected ranged weapon.
@@ -1478,6 +1542,41 @@ eng::ui::TooltipContent DungeonApp::lookTooltip()
         }
     }
 
+    // Somebody under the crosshair, flattened the same way. What they say here
+    // is the greeting, or -- when they are waiting on something the player is
+    // carrying -- what they are waiting for, because a person with a request
+    // outstanding is the one thing a glance should surface.
+    game::NpcLook npc;
+    if (mRpgReady && focus.kind == TargetKind::Npc) {
+        if (const game::rpg::NpcSystem::Entry* entry =
+                mRpg.npcs().find(focus.id);
+            entry && entry->def) {
+            const game::rpg::NpcDef& def = *entry->def;
+            npc.valid = true;
+            npc.name = def.name;
+            npc.role = def.trades() && !def.role.empty()
+                           ? def.role
+                           : (def.role.empty() ? "Villager" : def.role);
+            npc.line = def.greeting;
+            for (const auto& q : mRpg.quests().quests()) {
+                if (!q || q->def().giver != def.id)
+                    continue;
+                const game::rpg::QuestState state = q->state();
+                if (state != game::rpg::QuestState::Active &&
+                    state != game::rpg::QuestState::Complete)
+                    continue;
+                npc.hasQuest = true;
+                npc.line = q->progressText();
+                // A quest ready to hand in wins over one still running: it is
+                // the one the player can act on right now.
+                if (state == game::rpg::QuestState::Complete) {
+                    npc.questReady = true;
+                    break;
+                }
+            }
+        }
+    }
+
     game::ActorLook actor;
     // Enemy targets carry their entity id in catalogIndex (see onPresent); a
     // zero index is the training dummy, which predates enemies and has none.
@@ -1498,7 +1597,7 @@ eng::ui::TooltipContent DungeonApp::lookTooltip()
             }
         }
         return game::buildTooltip(focus, prop, actor, mHud.interactKey(),
-                                  pickup);
+                                  pickup, npc);
     }
     if (focus.kind == TargetKind::Actor && mDummyAlive && mDummy.alive()) {
         actor.valid = true;
@@ -1513,7 +1612,8 @@ eng::ui::TooltipContent DungeonApp::lookTooltip()
         }
     }
 
-    return game::buildTooltip(focus, prop, actor, mHud.interactKey(), pickup);
+    return game::buildTooltip(focus, prop, actor, mHud.interactKey(), pickup,
+                              npc);
 }
 
 void DungeonApp::onGameGui(const eng::FrameContext& f)
@@ -1554,8 +1654,10 @@ void DungeonApp::onStopGame(eng::Engine&)
     mGameAudio.stopAll(eng::StopMode::Immediate);
     // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
     mProps.teardown(physics());
-    if (mCtx)
+    if (mCtx) {
         mRpg.pickups().clear(*mCtx);
+        mRpg.npcs().clear(*mCtx);
+    }
     if (mCtx)
         mEnemies.clear(*mCtx);
     teardownDummy();

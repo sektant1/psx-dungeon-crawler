@@ -26,6 +26,7 @@ const char* gameplayName(Gameplay kind)
     case Gameplay::Marker:           return "marker";
     case Gameplay::EnemySpawn:       return "enemy spawn";
     case Gameplay::Pickup:           return "pickup";
+    case Gameplay::Npc:              return "npc";
     case Gameplay::Trigger:          return "trigger volume";
     case Gameplay::AudioEmitter:     return "audio emitter";
     case Gameplay::PointLight:       return "point light";
@@ -44,8 +45,8 @@ const std::vector<Gameplay>& paintableGameplay()
     static const std::vector<Gameplay> kKinds = {
         Gameplay::Group,     Gameplay::PlayerSpawn, Gameplay::Portal,
         Gameplay::Exit,      Gameplay::Marker,      Gameplay::EnemySpawn,
-        Gameplay::Pickup,    Gameplay::Trigger,     Gameplay::AudioEmitter,
-        Gameplay::PointLight,
+        Gameplay::Pickup,    Gameplay::Npc,         Gameplay::Trigger,
+        Gameplay::AudioEmitter, Gameplay::PointLight,
     };
     return kKinds;
 }
@@ -286,6 +287,22 @@ const std::vector<ComponentType>& table()
          [](Entity& e) { e.scripts.clear(); }, always,
          ComponentGroup::Gameplay},
 
+        // Free-form properties: keys nobody declared in C++, invented on one
+        // instance. Gregory §15.4.1.6. Listed under Gameplay because that is
+        // what they are for -- prototyping a behaviour before it has a
+        // component -- and they are read by whatever script the entity carries.
+        {"properties", "Properties",
+         "free-form keys on this instance; scripts read them as self.props",
+         [](const Entity& e) { return !e.properties.empty(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // One empty row, so adding the component shows a key field rather
+             // than an empty section with an Add button -- the same reason
+             // Scripts above seeds a row.
+             e.properties.emplace_back();
+         },
+         [](Entity& e) { e.properties.clear(); }, always,
+         ComponentGroup::Gameplay},
+
         {"spin", "Spin", "turns forever -- and turns whatever hangs under it",
          [](const Entity& e) { return e.spin.has_value(); },
          [](Entity& e, const ComponentDefaults&) {
@@ -322,6 +339,16 @@ const std::vector<ComponentType>& table()
          [](const Entity& e) { return e.pickup.has_value(); },
          [](Entity& e, const ComponentDefaults&) { e.pickup = "potion"; },
          [](Entity& e) { e.pickup.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        // Deliberately no default id. "potion" above is a placeholder an author
+        // corrects; an NPC id that is wrong is a person who stands in the
+        // village and cannot be spoken to, so the empty string is what the
+        // picker and the validator both read as "unfinished".
+        {"npc", "NPC", "a person: dialogue, trade and quests",
+         [](const Entity& e) { return e.npc.has_value(); },
+         [](Entity& e, const ComponentDefaults&) { e.npc = ""; },
+         [](Entity& e) { e.npc.reset(); }, always,
          ComponentGroup::Gameplay},
 
         {"trigger", "Trigger", "box volume that raises an event",

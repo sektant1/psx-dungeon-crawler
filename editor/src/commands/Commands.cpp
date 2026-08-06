@@ -66,12 +66,6 @@ void EntityEditTransaction::begin(const Entity& before)
     mBefore = before;
 }
 
-const std::string& EntityEditTransaction::beforeMaterial() const
-{
-    static const std::string kNone;
-    return mBefore ? mBefore->material : kNone;
-}
-
 std::optional<Command>
 EntityEditTransaction::commit(const Doc& document, std::string label)
 {

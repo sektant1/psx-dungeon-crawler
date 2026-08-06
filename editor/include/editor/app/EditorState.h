@@ -1,6 +1,7 @@
 #pragma once
 #include <editor/viewport/EditorCamera.h>
 #include <editor/scene/EntityComponents.h>
+#include <editor/scene/Layers.h>
 #include <editor/content/GridMath.h>
 #include <editor/content/RoomBuilder.h>
 #include <editor/content/KitCatalog.h>
@@ -178,11 +179,43 @@ struct EditorState {
         if (on) list.push_back(id);
     }
 
+    // Which layers are switched off, locked or soloed, and where new entities
+    // land. Session state for the same reason `hidden` above is: what a layer
+    // IS and who is in it is shared and lives in the document, but whether it
+    // is on screen right now is one person's ten minutes.
+    layers::LayerSession layerSession;
+
+    // --- effective visibility ------------------------------------------------
+    // An entity is out of the way if it was hidden on its own account OR its
+    // layer is off. Every consumer -- the viewport filter, the picker, the
+    // marquee, the outliner -- must ask these two rather than the raw lists, or
+    // a click lands on something that is not on screen.
+    //
+    // The layer half needs the entity, not just the id, so the two overloads
+    // exist: callers holding a document look the entity up, callers already
+    // holding one pass it straight in.
     bool isHidden(const game::content::AuthorId& id) const
+    {
+        if (listed(hidden, id))
+            return true;
+        const game::content::Entity* entity = document.find(id);
+        return entity != nullptr && layers::hidesEntity(layerSession, *entity);
+    }
+    bool isLocked(const game::content::AuthorId& id) const
+    {
+        if (listed(locked, id))
+            return true;
+        const game::content::Entity* entity = document.find(id);
+        return entity != nullptr && layers::locksEntity(layerSession, *entity);
+    }
+    // Whether the entity itself was hidden/locked, ignoring its layer. What the
+    // outliner's own eye and padlock toggles read and write, so clicking the
+    // eye on a row inside a hidden layer does not silently do nothing.
+    bool isHiddenAlone(const game::content::AuthorId& id) const
     {
         return listed(hidden, id);
     }
-    bool isLocked(const game::content::AuthorId& id) const
+    bool isLockedAlone(const game::content::AuthorId& id) const
     {
         return listed(locked, id);
     }

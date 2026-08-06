@@ -87,12 +87,28 @@ void PlayerSystem::rebuildAvatar(GameContext& ctx)
     if (mAvatar.valid())
         eng::destroyPrimitive(ctx.renderer, ctx.physics, mAvatar);
     mAvatar = {};
+    mBody.destroy(ctx.renderer);
     if (mMode != CameraMode::ThirdPerson)
         return;
-    // A capsule the size of the character controller, parented to the node that
-    // carries the body's facing -- so what you see turn is what the simulation
-    // turned. Placeholder until there is a player model; the socket it hangs
-    // on does not change when there is.
+
+    // The shared humanoid, on the node that carries the body's facing -- so
+    // what you see turn is what the simulation turned. Parented rather than
+    // positioned each frame, which is what keeps the avatar exactly as smooth
+    // as the interpolated character it hangs on.
+    //
+    // The character node is at the FEET. Saying so is the whole placement: the
+    // capsule below needs +0.85 only because a primitive's origin is its
+    // centre, and that number is not transferable.
+    actor::ActorVisualDesc body;
+    body.material = "Game/Actor/Player";
+    body.height = kPlayerHeight;
+    body.anchor = actor::ActorAnchor::Feet;
+    if (ctx.humanoid.valid() &&
+        mBody.create(ctx.renderer, ctx.humanoid, mPlayer.bodyNode(), body))
+        return;
+
+    // No rig: the capsule the avatar used to be. A player who can see
+    // themselves badly is better off than one who cannot see themselves at all.
     eng::PrimitiveDesc desc;
     desc.mesh.kind = eng::PrimitiveKind::Capsule;
     desc.mesh.radius = 0.30f;
@@ -101,6 +117,25 @@ void PlayerSystem::rebuildAvatar(GameContext& ctx)
     desc.position = glm::vec3(0.0f, 0.85f, 0.0f);
     desc.castShadows = true;
     mAvatar = eng::spawnPrimitive(ctx.renderer, ctx.physics, desc);
+}
+
+void PlayerSystem::presentAvatar(GameContext& ctx, float dt)
+{
+    if (!mBody.valid())
+        return;
+    // The avatar rides its parent node, so this only has to say what the body
+    // is DOING -- the where is already solved.
+    actor::ActorAnimationInput input;
+    input.velocity = mPlayer.horizontalVelocity();
+    input.yawRadians = mPlayer.facingYaw();
+    input.grounded = mPlayer.grounded();
+    input.eyePosition = mPlayer.eyePosition();
+    // In third person the character looks where the camera is aimed, which is
+    // also what it will shoot at. Lock-on overrides it, via aimDirection().
+    input.lookTarget = mPlayer.eyePosition() + aimDirection() * 8.0f;
+    mBody.animator().setStance(mLockOn.camera().active ? actor::ActorStance::Combat
+                                                       : actor::ActorStance::Relaxed);
+    mBody.update(ctx.renderer, dt, input);
 }
 
 void PlayerSystem::applyLockOn(GameContext& ctx)
@@ -190,9 +225,15 @@ void PlayerSystem::look(GameContext& ctx)
     mPlayer.applyLook(eng::FpsController::readCommand(ctx.input));
 }
 
-void PlayerSystem::present(GameContext& ctx, float alpha, float frameDt)
+void PlayerSystem::present(GameContext& ctx, float alpha, float frameDt,
+                           float animationDt)
 {
     mPlayer.present(ctx.renderer, alpha, frameDt);
+    // Two clocks, the same split the first-person hands already use: the body
+    // is placed smoothly (it is the player's own movement, and quantising that
+    // reads as input lag) while its pose steps on the creature channel, so the
+    // avatar animates in the same beats every other creature does.
+    presentAvatar(ctx, animationDt);
 }
 
 void PlayerSystem::fixedStep(GameContext& ctx, float dt)

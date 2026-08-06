@@ -22,6 +22,19 @@ Ray viewportRay(glm::vec2 screenPoint, glm::vec2 viewportOrigin,
                 glm::vec2 viewportSize, glm::vec3 camPos, glm::quat camOrient,
                 float vFovRad);
 
+// The same, for an orthographic elevation. Rays are PARALLEL here -- every one
+// points along the view axis and they differ only in where they start -- which
+// is why this is a separate entry point rather than a flag on the one above:
+// a caller that forgot to set the flag would get a pinhole fan in a projection
+// that has no pinhole, and clicks would miss by more the further they were
+// from the centre of the viewport.
+//
+// `worldHeight` is the world height the viewport spans (EditorCamera::
+// orthoHeight); the width follows from the viewport's aspect.
+Ray orthoViewportRay(glm::vec2 screenPoint, glm::vec2 viewportOrigin,
+                     glm::vec2 viewportSize, glm::vec3 camPos,
+                     glm::quat camOrient, float worldHeight);
+
 // World point -> screen pixel in the same viewport rect. False for points
 // behind the camera.
 bool projectToViewport(glm::vec3 world, const glm::mat4& viewProjection,

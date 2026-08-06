@@ -626,6 +626,8 @@ add_library(
   game/src/rpg/RaidState.cpp
   game/src/rpg/RpgSave.cpp
   game/src/rpg/PickupSystem.cpp
+  game/src/rpg/Npcs.cpp
+  game/src/rpg/NpcSystem.cpp
   game/src/rpg/RpgRuntime.cpp)
 target_include_directories(game_rpg PUBLIC game/src engine/include
                            PRIVATE third_party)
@@ -664,6 +666,12 @@ add_executable(
   editor/src/viewport/ViewportOverlay.cpp
   editor/src/ui/ComponentInspector.cpp
   editor/src/scene/EntityComponents.cpp
+  editor/src/scene/AlignTools.cpp
+  editor/src/scene/Layers.cpp
+  editor/src/scene/MultiEdit.cpp
+  editor/src/scene/SelectionTools.cpp
+  editor/src/viewport/CameraNavigation.cpp
+  editor/src/ui/LayersPanel.cpp
   editor/src/ui/OutlinerPanel.cpp
   editor/src/scene/OutlinerTree.cpp
   editor/src/scene/PaintSlot.cpp
@@ -778,6 +786,11 @@ add_executable(
   game/src/enemy/EnemySpawnerRuntime.cpp
   game/src/enemy/EnemySave.cpp
   game/src/enemy/EnemySaveRuntime.cpp
+  # The body every actor wears: the shared humanoid rig, the animation state
+  # machine that drives it, and the node/skin pair each actor owns.
+  game/src/actor/ActorRig.cpp
+  game/src/actor/ActorAnimator.cpp
+  game/src/actor/ActorVisual.cpp
   game/src/PlayerWeapons.cpp
   game/src/PlayerSystem.cpp
   game/src/InteractionSystem.cpp
@@ -847,6 +860,52 @@ if(ENG_BUILD_ANIMATION_TOOLS AND TARGET gltf2ozz AND
             "${_hands_source_dir}/arms_01.png"
             assets/config/arms_rig.ozz.json
     COMMENT "Cooking checked-in first-person hands runtime assets"
+    VERBATIM)
+endif()
+
+# The actor humanoid, on the same terms and for the same reason.
+#
+# One extra step in front of the converter: unlike the hands, whose .glb was
+# downloaded already rigged, this rig does not exist until Blender builds it.
+# tools/author_humanoid_rig.py turns the kit's own mannequin mesh into a rigged,
+# animated .glb; gltf2ozz then cooks that into the runtime skeleton and clips.
+# Both halves are checked in, so a normal build and a fresh checkout consume the
+# result and never need Blender.
+set(_actor_source "${CMAKE_CURRENT_SOURCE_DIR}/assets/source/models/actors")
+set(_actor_animation_dir
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/animations/actors/humanoid")
+set(_actor_animation_stage
+    "${CMAKE_CURRENT_BINARY_DIR}/cooked-assets/actor-humanoid")
+set(_actor_mesh_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets/meshes/actors")
+if(ENG_BUILD_ANIMATION_TOOLS AND TARGET gltf2ozz)
+  add_custom_target(
+    cook_actor_humanoid
+    # Author: Humanoid.blend -> a rigged, animated .glb.
+    COMMAND ${CMAKE_COMMAND} -E env
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/author_humanoid_rig.py"
+            --out "${_actor_source}"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${_actor_animation_stage}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_actor_animation_stage}"
+    # Condition: .glb -> skeleton + clips.
+    COMMAND ${CMAKE_COMMAND} -E chdir "${_actor_animation_stage}"
+            $<TARGET_FILE:gltf2ozz>
+            --file=${_actor_source}/humanoid_rig.glb
+            --config_file=${CMAKE_CURRENT_SOURCE_DIR}/assets/config/humanoid_rig.ozz.json
+            --endian=little
+    # Converter succeeded: only now replace the destination, so a failed cook
+    # leaves the last good clips in place rather than an empty directory that
+    # makes every actor fall back to a capsule.
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${_actor_animation_dir}"
+    COMMAND ${CMAKE_COMMAND} -E rename "${_actor_animation_stage}"
+            "${_actor_animation_dir}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_actor_mesh_dir}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_actor_source}/humanoid_rig.glb"
+            "${_actor_mesh_dir}/humanoid_rig.glb"
+    DEPENDS gltf2ozz tools/author_humanoid_rig.py
+            assets/config/humanoid_rig.ozz.json
+            assets/source/models/base_player_mesh/Humanoid.blend
+    COMMENT "Authoring and cooking the shared actor humanoid rig"
     VERBATIM)
 endif()
 if(ENABLE_PCH)
@@ -1707,6 +1766,60 @@ if(BUILD_TESTING)
                                                             engine/include)
   target_link_libraries(editor_component_tests PRIVATE glm::glm)
   add_test(NAME editor_component COMMAND editor_component_tests)
+
+  # Layers are pure document logic -- membership, session visibility, and the
+  # per-layer extract/merge -- so all of it is assertable without a window.
+  add_executable(editor_layer_tests editor/tests/EditorLayerTests.cpp
+                                    editor/src/scene/Layers.cpp
+                                    editor/src/content/SceneDocument.cpp)
+  target_include_directories(editor_layer_tests PRIVATE editor/include game/src
+                                                        engine/include)
+  target_link_libraries(editor_layer_tests PRIVATE glm::glm)
+  add_test(NAME editor_layer COMMAND editor_layer_tests)
+
+  # Rubber-band selection and click cycling. Screen-space maths against a
+  # view-projection, so both projections are exercised without a window --
+  # and cycling in particular is state whose bugs only show up on the second
+  # and third click, which is not something anyone tests by hand.
+  add_executable(editor_selection_tests editor/tests/EditorSelectionTests.cpp
+                                        editor/src/scene/SelectionTools.cpp
+                                        editor/src/scene/Picker.cpp
+                                        editor/src/content/SceneDocument.cpp)
+  target_include_directories(editor_selection_tests PRIVATE editor/include
+                             game/src engine/include)
+  target_link_libraries(editor_selection_tests PRIVATE glm::glm)
+  add_test(NAME editor_selection COMMAND editor_selection_tests)
+
+  # Camera bookmarks, the back/forward history and the speed steps.
+  add_executable(editor_navigation_tests editor/tests/EditorNavigationTests.cpp
+                                         editor/src/viewport/CameraNavigation.cpp
+                                         editor/src/viewport/EditorCamera.cpp)
+  target_include_directories(editor_navigation_tests PRIVATE editor/include
+                             engine/include)
+  target_link_libraries(editor_navigation_tests PRIVATE eng)
+  add_test(NAME editor_navigation COMMAND editor_navigation_tests)
+
+  # Align, distribute and drop-to-surface. Pure arithmetic on world bounds, and
+  # the kind of operation whose failure mode is "everything is now in one
+  # place" -- which is too late to notice in a screenshot.
+  add_executable(editor_align_tests editor/tests/EditorAlignTests.cpp
+                                    editor/src/scene/AlignTools.cpp)
+  target_include_directories(editor_align_tests PRIVATE editor/include game/src
+                                                        engine/include)
+  target_link_libraries(editor_align_tests PRIVATE glm::glm)
+  add_test(NAME editor_align COMMAND editor_align_tests)
+
+  # Multi-object editing: which fields fan out across a selection, and which
+  # deliberately do not. Pure document logic, and the place a regression would
+  # be silent -- a field that stopped fanning out looks exactly like an author
+  # having selected one entity.
+  add_executable(editor_multiedit_tests editor/tests/EditorMultiEditTests.cpp
+                                        editor/src/scene/MultiEdit.cpp
+                                        editor/src/content/SceneDocument.cpp)
+  target_include_directories(editor_multiedit_tests PRIVATE editor/include
+                             game/src engine/include)
+  target_link_libraries(editor_multiedit_tests PRIVATE glm::glm)
+  add_test(NAME editor_multiedit COMMAND editor_multiedit_tests)
 
   add_executable(editor_outliner_tests editor/tests/EditorOutlinerTests.cpp
                                        editor/src/scene/OutlinerTree.cpp

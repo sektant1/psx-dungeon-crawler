@@ -58,10 +58,15 @@ class EntityEditTransaction
 public:
     bool active() const { return mBefore.has_value(); }
     const AuthorId& id() const { return mId; }
-    // The material as it was when the edit began. The inspector compares it
-    // against the committed value to tell a material change from any other
-    // field, so that one field can fan out across the whole selection.
-    const std::string& beforeMaterial() const;
+    // The entity as it was when the interaction opened, or nothing when no
+    // edit is in progress.
+    //
+    // This is what multi-object editing is diffed against (ed::multiedit): the
+    // inspector draws one entity, and comparing its pre-edit state against the
+    // committed one is how the editor knows which FIELD the author moved and
+    // therefore what to fan out across the rest of the selection. It used to be
+    // a single `beforeMaterial()`, which is why only the material could.
+    const std::optional<Entity>& before() const { return mBefore; }
     void begin(const Entity& before);
     std::optional<Command> commit(const Doc& document, std::string label);
     bool cancel(Doc& document);

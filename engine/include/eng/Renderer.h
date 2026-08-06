@@ -435,6 +435,14 @@ public:
     void setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly);
     void setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient,
                              float fovDeg);
+    // Switches the editor viewport to an orthographic projection spanning
+    // `worldHeight` metres vertically; zero returns it to perspective.
+    //
+    // The editor's top/front/side elevations, which a world editor is expected
+    // to offer beside the 3D view (Gregory §15.4.1.2). Editor-only by
+    // construction: nothing in the game calls this, and the flag it sets
+    // defaults to off, so the shipped image is untouched.
+    void setEditorCameraOrtho(float worldHeight);
 
     // --- debug line overlay -----------------------------------------------
     struct DebugLine { glm::vec3 a{0}; glm::vec3 b{0}; glm::vec3 colour{1,1,1}; };

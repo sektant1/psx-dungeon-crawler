@@ -80,6 +80,11 @@ public:
     // Authored Pickup components, likewise: type is "pickup.<id>".
     std::vector<ScenePlacement> pickupPlacements() const;
 
+    // Authored Npc components; type is "npc.<id>". Same prefixing rule as the
+    // two above, so a hand-written "npc.ilsabet" marker and the editor's Npc
+    // component are indistinguishable by the time anything acts on them.
+    std::vector<ScenePlacement> npcPlacements() const;
+
     // The palette the level asks to be lit and graded with, or empty for the
     // game's default.
     std::string palette() const;

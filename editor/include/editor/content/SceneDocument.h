@@ -248,6 +248,21 @@ struct ScriptPropAuthor {
     std::string stringValue;
 };
 
+// A free-form property, authored on one entity instance.
+//
+// The same shape as a script prop, and deliberately the same type: what an
+// author wants when they invent a property is for something to be able to READ
+// it, and the scripting layer's prop store is the one thing in this engine that
+// already can. So an entity's free-form properties cook into that store, and a
+// key typed in the inspector is visible to Lua on the next playtest rather than
+// being a line in a file nothing consumes.
+//
+// Gregory calls these out for exactly this use (§15.4.1.6): "incredibly useful
+// for prototyping new gameplay features or implementing one-off scenarios". The
+// distinction from a component is that nobody declared this key in C++ -- it is
+// per instance, and the editor never validates it beyond its type.
+using PropertyAuthor = ScriptPropAuthor;
+
 // One script attached to an entity. A list of these is the only component the
 // document carries as a vector rather than an optional: an entity may run
 // several scripts, and their order is the order they tick in.
@@ -302,6 +317,12 @@ struct Entity {
     // The runtime map stays flat: the cooker bakes the chain into a world
     // transform, so nothing downstream of the editor knows hierarchies exist.
     AuthorId parent;
+    // Which authoring layer this entity belongs to, by Layer::id. Empty means
+    // the default layer, which is every entity authored before layers existed.
+    //
+    // Membership is document data while a layer's visibility is not -- see the
+    // comment on SceneDocument::layers for why the line falls there.
+    std::string layer;
     std::string prefab; // "kit.wall", or empty for a marker/light/trigger
     // The two other ways to be a mesh. Exactly one of the three should be set:
     // a prefab is a kit piece, `mesh` is any file, `primitive` is generated.
@@ -342,6 +363,9 @@ struct Entity {
     std::optional<ViewmodelRigAuthor> viewmodelRig;
     std::optional<ViewmodelPreviewAuthor> viewmodelPreview;
     std::vector<ScriptAuthor> scripts;
+    // Per-instance properties nobody declared in C++. Keys are unique within
+    // the entity; the last one written wins if a hand-edited file repeats one.
+    std::vector<PropertyAuthor> properties;
     std::optional<SpinAuthor> spin;
     std::optional<OrbitAuthor> orbit;
     std::optional<ShaderAuthor> shader;
@@ -355,6 +379,7 @@ struct Entity {
     std::optional<std::string> marker;
     std::optional<std::string> enemySpawn; // enemy type id
     std::optional<std::string> pickup;     // pickup type id
+    std::optional<std::string> npc;        // npc id: dialogue, trade and quests
     std::optional<TriggerAuthor> trigger;
     bool playerSpawn = false;
 };
@@ -373,12 +398,45 @@ inline bool isActor(const Entity& entity)
     return actorKindOf(entity).has_value();
 }
 
+// A named group of entities, for organising a chunk and for dividing work on
+// it. Gregory §15.4.1.5.
+//
+// What is in a layer is a shared decision -- a torch that belongs to "lighting"
+// belongs to it for everybody -- so identity and membership are in the file.
+// Whether a layer is currently *shown* is not: that is one person getting a
+// ceiling out of their way for ten minutes, and it lives in the session beside
+// the per-entity hidden/locked lists (see ed::layers::LayerSession).
+struct Layer {
+    // Stable key, what Entity::layer stores. Never the display name: renaming
+    // a layer must not orphan four hundred entities.
+    std::string id;
+    std::string name;
+    // Identification only -- the chapter's "layers might be colour-coded". Used
+    // by the panel and the outliner, never by the renderer.
+    glm::vec3 colour{0.6f, 0.65f, 0.7f};
+};
+
 // The authored scene: what a .scn file says, in memory. Renderer-free and
 // EnTT-free on purpose, so it loads in a headless test in milliseconds.
 class SceneDocument
 {
 public:
     std::string id; // "scene.test.ritual_boss_showroom"
+
+    // The layers this chunk defines, in author order. The default layer -- the
+    // one an entity with an empty `layer` is in -- is implicit and is never in
+    // this list, so a scene authored before layers existed needs no migration
+    // and round-trips byte for byte.
+    std::vector<Layer> layers;
+
+    Layer* findLayer(std::string_view layerId);
+    const Layer* findLayer(std::string_view layerId) const;
+    // True for the implicit default layer and for anything in `layers`. What
+    // validate() uses to report an entity naming a layer nobody defined.
+    bool hasLayer(std::string_view layerId) const;
+    // "<stem>_0001", lowest free index, on the same deterministic rule
+    // allocateId() follows and for the same merge-conflict reason.
+    std::string allocateLayerId(std::string_view stem) const;
 
     // The look this level is lit and graded with: a table in palettes.toml
     // ("dungeon", "showroom"). Empty means the game's default.

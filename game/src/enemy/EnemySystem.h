@@ -99,7 +99,17 @@ public:
 
     // Copy interpolated physics transforms onto render nodes and advance the
     // presentation-only timers. Call from the render step.
-    void syncRender(GameContext& ctx);
+    //
+    // `dt` is the CHARACTERS channel's stepped delta, the same clock that
+    // decides whether the transform is copied this frame -- so the pose
+    // advances in the same quantised beats the body does. That is the shipped
+    // stop-motion look, not an accident: a smoothly-animated skeleton on a
+    // stepped transform reads as two different creatures fighting over one
+    // body. `playerEye` is what engaged enemies turn their heads toward; null
+    // means nobody is being watched, which is also what a level with no player
+    // looks like (the editor's preview).
+    void syncRender(GameContext& ctx, float dt,
+                    const glm::vec3* playerEye = nullptr);
     void syncProjectileRender(GameContext& ctx);
 
     // Tell an enemy it was hit, so it flashes and stops ignoring you. Damage

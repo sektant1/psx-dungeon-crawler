@@ -27,6 +27,15 @@ public:
         float fovDeg = 70.0f;
         float nearClip = 0.05f;
         float farClip = 4000.0f;
+        // Non-zero switches this view to an orthographic projection, and is the
+        // world height the viewport spans; width follows from the aspect.
+        //
+        // Zero -- the default, and what every shipped view uses -- keeps the
+        // perspective path byte for byte. Only the editor's offscreen target
+        // ever sets it, for the top/front/side elevations a world editor is
+        // expected to offer (Gregory §15.4.1.2). The game's rendered image
+        // cannot be affected by a field nothing in the game writes.
+        float orthoHeight = 0.0f;
     };
 
     struct TextureBinding {
@@ -132,6 +141,9 @@ public:
     void setOffscreenBackground(float r, float g, float b);
     void setEditorCameraPose(float px, float py, float pz, float qw, float qx,
                              float qy, float qz, float fovDeg);
+    // Non-zero puts the editor viewport in orthographic projection spanning
+    // this many world metres vertically. Zero is perspective. See View.
+    void setEditorCameraOrtho(float worldHeight);
 
     void enableThumbnailViewport(int size);
     uint64_t thumbnailTextureId() const;

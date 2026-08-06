@@ -215,4 +215,11 @@ std::vector<ScenePlacement> MapRuntime::pickupPlacements() const
         [](const Pickup& pickup) -> const std::string& { return pickup.type; });
 }
 
+std::vector<ScenePlacement> MapRuntime::npcPlacements() const
+{
+    return componentPlacements<Npc>(
+        mWorld.registry(), "npc.",
+        [](const Npc& npc) -> const std::string& { return npc.id; });
+}
+
 } // namespace game

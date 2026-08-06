@@ -108,6 +108,7 @@ void buildEditorWorkspace(std::uint32_t dockspaceId, float width, float height,
     // is what a tab is for.
     ImGui::DockBuilderDockWindow(workspace_window::kAssetBrowser, left);
     ImGui::DockBuilderDockWindow(workspace_window::kHierarchy, left);
+    ImGui::DockBuilderDockWindow(workspace_window::kLayers, left);
     ImGui::DockBuilderDockWindow(workspace_window::kInspector, right);
     ImGui::DockBuilderDockWindow(workspace_window::kCommandBar, commandBar);
     ImGui::DockBuilderDockWindow(workspace_window::kHudPreview, centre);

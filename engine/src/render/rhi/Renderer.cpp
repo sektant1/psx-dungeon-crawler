@@ -1367,9 +1367,23 @@ struct Renderer::Impl {
         // No clip-space Y flip here: that would reverse screen-space winding
         // and get solid geometry back-face culled. The scene target is righted
         // by the upscale blit instead (see RenderCore's flipV).
-        const glm::mat4 projection = glm::perspectiveRH_ZO(
-            glm::radians(std::clamp(fov, 1.0f, 179.0f)), aspect,
-            std::max(nearClip, 0.001f), std::max(farClip, nearClip + 0.01f));
+        //
+        // An orthographic view is the editor's top/front/side elevation and
+        // nothing else -- View::orthoHeight is zero everywhere in the game, so
+        // the shipped image goes down the same perspective path it always has.
+        glm::mat4 projection;
+        if (requested.orthoHeight > 0.0f) {
+            const float halfHeight = requested.orthoHeight * 0.5f;
+            const float halfWidth = halfHeight * aspect;
+            projection = glm::orthoRH_ZO(-halfWidth, halfWidth, -halfHeight,
+                                         halfHeight, std::max(nearClip, 0.001f),
+                                         std::max(farClip, nearClip + 0.01f));
+        } else {
+            projection = glm::perspectiveRH_ZO(
+                glm::radians(std::clamp(fov, 1.0f, 179.0f)), aspect,
+                std::max(nearClip, 0.001f),
+                std::max(farClip, nearClip + 0.01f));
+        }
         uniforms.viewProjection = projection * view;
         uniforms.view = view;
         // z is the vertex-lighting switch: the PS1 and N64 presets ask for it
@@ -3663,6 +3677,10 @@ void Renderer::setEditorCameraPose(const glm::vec3& position,
     mImpl->core.setEditorCameraPose(
         position.x, position.y, position.z, orientation.w, orientation.x,
         orientation.y, orientation.z, fovDeg);
+}
+void Renderer::setEditorCameraOrtho(float worldHeight)
+{
+    mImpl->core.setEditorCameraOrtho(worldHeight);
 }
 void Renderer::enableMaterialThumbnail(int size)
 {

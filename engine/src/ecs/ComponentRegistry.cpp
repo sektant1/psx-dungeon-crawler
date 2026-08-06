@@ -131,6 +131,68 @@ void deScripts(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
     r.emplace_or_replace<Scripts>(e, std::move(s));
 }
 
+// One prop, in the encoding serScripts already uses for the props inside a
+// script. Factored out so the entity-level bag below cannot drift from it: two
+// copies of a tagged-union writer disagree the first time a type is added.
+void writeProp(ByteWriter& w, const ScriptProp& p)
+{
+    w.str(p.key);
+    w.u8(uint8_t(p.type));
+    switch (p.type) {
+    case ScriptProp::Type::Bool:   w.u8(p.b ? 1u : 0u); break;
+    case ScriptProp::Type::Number: w.f32(p.n); break;
+    case ScriptProp::Type::Vec3:   w.vec3(p.v); break;
+    case ScriptProp::Type::String:
+    case ScriptProp::Type::Entity: w.str(p.s); break;
+    }
+}
+
+// False when the type id is one this build cannot parse -- everything after it
+// is unreadable, so the caller stops rather than guessing a width and
+// desynchronising the rest of the payload.
+bool readProp(ByteReader& b, ScriptProp& p)
+{
+    p.key = b.str();
+    p.type = ScriptProp::Type(b.u8());
+    switch (p.type) {
+    case ScriptProp::Type::Bool:   p.b = b.u8() != 0; break;
+    case ScriptProp::Type::Number: p.n = b.f32(); break;
+    case ScriptProp::Type::Vec3:   p.v = b.vec3(); break;
+    case ScriptProp::Type::String:
+    case ScriptProp::Type::Entity: p.s = b.str(); break;
+    default:
+        b.invalidate();
+        return false;
+    }
+    return b.ok();
+}
+
+// The entity's own free-form properties: u16 count, then the same per-prop
+// encoding. Hand-written for the same reason Scripts is.
+void serProperties(const entt::registry& r, entt::entity e, ByteWriter& w)
+{
+    const auto& p = r.get<Properties>(e);
+    w.u16(uint16_t(p.items.size()));
+    for (const ScriptProp& item : p.items)
+        writeProp(w, item);
+}
+
+void deProperties(entt::registry& r, entt::entity e, ByteReader& b,
+                  uint32_t bytes)
+{
+    Properties props;
+    if (bytes >= 2) {
+        const uint16_t count = b.u16();
+        for (uint16_t i = 0; i < count && b.ok(); ++i) {
+            ScriptProp item;
+            if (!readProp(b, item))
+                break;
+            props.items.push_back(std::move(item));
+        }
+    }
+    r.emplace_or_replace<Properties>(e, std::move(props));
+}
+
 void serTransform(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
     const auto& t = r.get<Transform>(e);
@@ -667,6 +729,13 @@ void registerEngineComponents(ComponentRegistry& reg)
     // is not a component anybody can author.
     reg.add(reflectedComponent<ThirdPersonCamera>("ThirdPersonCamera", 34));
     reg.add(reflectedComponent<ScreenCamera>("ScreenCamera", 35));
+    // Free-form per-instance properties. Hand-written for the same reason
+    // Scripts at 33 is: a variable-length list of heterogeneous values is not a
+    // field table. Its own id rather than a corner of Scripts, because an
+    // entity with no scripts can carry properties -- see the component's
+    // comment for why that matters.
+    reg.add({"Properties", 36, addDefault<Properties>, has<Properties>,
+             remove<Properties>, serProperties, deProperties});
 }
 
 } // namespace ecs

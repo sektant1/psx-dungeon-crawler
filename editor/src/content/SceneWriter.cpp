@@ -177,6 +177,42 @@ Json writePrimitive(const PrimitiveAuthor& p)
     return node;
 }
 
+// A typed key-value bag, as the object both script props and an entity's
+// free-form properties are written as. One encoder, because they are the same
+// data -- see the PropertyAuthor alias in SceneDocument.h -- and two would
+// disagree the first time a type was added.
+Json writeProps(const std::vector<ScriptPropAuthor>& props)
+{
+    Json out = Json::object();
+    for (const ScriptPropAuthor& p : props) {
+        if (p.key.empty())
+            continue; // an unnamed row is a half-typed one, not a property
+        switch (p.type) {
+        case ScriptPropAuthor::Type::Bool:
+            out[p.key] = p.boolValue;
+            break;
+        case ScriptPropAuthor::Type::Number:
+            out[p.key] = canonical(p.numberValue);
+            break;
+        case ScriptPropAuthor::Type::String:
+            out[p.key] = p.stringValue;
+            break;
+        case ScriptPropAuthor::Type::Vec3:
+            out[p.key] = vec3(p.vecValue);
+            break;
+        case ScriptPropAuthor::Type::Entity: {
+            // Tagged, so the type survives the round trip: a bare string would
+            // read back as a String prop.
+            Json target = Json::object();
+            target["entity"] = p.stringValue;
+            out[p.key] = std::move(target);
+            break;
+        }
+        }
+    }
+    return out;
+}
+
 Json writeEntity(const Entity& entity)
 {
     Json out = Json::object();
@@ -187,6 +223,10 @@ Json writeEntity(const Entity& entity)
     // existed still writes byte-identical to what it was read from.
     if (!entity.parent.empty())
         out["parent"] = entity.parent;
+    // Same rule: the default layer is the empty id, so a scene authored before
+    // layers existed writes back with no layer key anywhere in it.
+    if (!entity.layer.empty())
+        out["layer"] = entity.layer;
     if (!entity.prefab.empty())
         out["prefab"] = entity.prefab;
     if (entity.mesh) {
@@ -290,36 +330,18 @@ Json writeEntity(const Entity& entity)
             if (!script.enabled)
                 node["enabled"] = false; // true is the default
             if (!script.props.empty()) {
-                Json props = Json::object();
-                for (const ScriptPropAuthor& p : script.props) {
-                    switch (p.type) {
-                    case ScriptPropAuthor::Type::Bool:
-                        props[p.key] = p.boolValue;
-                        break;
-                    case ScriptPropAuthor::Type::Number:
-                        props[p.key] = canonical(p.numberValue);
-                        break;
-                    case ScriptPropAuthor::Type::String:
-                        props[p.key] = p.stringValue;
-                        break;
-                    case ScriptPropAuthor::Type::Vec3:
-                        props[p.key] = vec3(p.vecValue);
-                        break;
-                    case ScriptPropAuthor::Type::Entity: {
-                        // Tagged, so the type survives the round trip: a bare
-                        // string would read back as a String prop.
-                        Json target = Json::object();
-                        target["entity"] = p.stringValue;
-                        props[p.key] = std::move(target);
-                        break;
-                    }
-                    }
-                }
-                node["props"] = std::move(props);
+                Json props = writeProps(script.props);
+                if (!props.empty())
+                    node["props"] = std::move(props);
             }
             list.push_back(std::move(node));
         }
         out["scripts"] = std::move(list);
+    }
+    if (!entity.properties.empty()) {
+        Json props = writeProps(entity.properties);
+        if (!props.empty())
+            out["properties"] = std::move(props);
     }
     if (entity.spin) {
         const SpinAuthor& spin = *entity.spin;
@@ -471,6 +493,8 @@ Json writeEntity(const Entity& entity)
         out["enemy_spawn"] = *entity.enemySpawn;
     if (entity.pickup)
         out["pickup"] = *entity.pickup;
+    if (entity.npc)
+        out["npc"] = *entity.npc;
     if (entity.trigger) {
         Json node = Json::object();
         node["size"] = vec3(entity.trigger->size);
@@ -504,6 +528,22 @@ std::string serializeSceneSource(const SceneDocument& document)
     // palette still round-trips byte for byte.
     if (!document.palette.empty())
         root["palette"] = document.palette;
+    // Author order, NOT sorted like the entities below: a layer list is a
+    // handful of rows somebody arranged deliberately, and re-alphabetising it
+    // on every save would be a diff in every file that touched a layer.
+    if (!document.layers.empty()) {
+        Json list = Json::array();
+        for (const Layer& layer : document.layers) {
+            Json node = Json::object();
+            node["id"] = layer.id;
+            if (!layer.name.empty() && layer.name != layer.id)
+                node["name"] = layer.name;
+            if (!nearlyEqual(layer.colour, Layer{}.colour))
+                node["colour"] = vec3(layer.colour);
+            list.push_back(std::move(node));
+        }
+        root["layers"] = std::move(list);
+    }
     Json entities = Json::array();
     for (const Entity* entity : sorted)
         entities.push_back(writeEntity(*entity));

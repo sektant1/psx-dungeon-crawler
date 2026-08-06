@@ -33,6 +33,13 @@
       "type": "string",
       "minLength": 1
     },
+    "layers": {
+      "description": "The authoring layers this chunk defines, in author order. Optional: a scene with none puts every entity in the implicit default layer.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/layer"
+      }
+    },
     "entities": {
       "type": "array",
       "items": {
@@ -48,6 +55,67 @@
       },
       "minItems": 3,
       "maxItems": 3
+    },
+    "props": {
+      "type": "object",
+      "description": "A typed key-value bag. Used by a script's per-instance props and by an entity's free-form properties; the type of each value is inferred from its JSON shape, except an entity reference, which is tagged so it survives a round trip.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "a vec3"
+          },
+          {
+            "type": "object",
+            "required": [
+              "entity"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "type": "string"
+              }
+            },
+            "description": "a reference to another entity, by name"
+          }
+        ]
+      }
+    },
+    "layer": {
+      "type": "object",
+      "description": "A named group of entities, for organising a chunk and for dividing work on it. Which layer an entity is in is shared and lives here; whether a layer is currently shown is one author's session state and deliberately does not.",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "description": "Stable key, what an entity's 'layer' stores. The empty id is the implicit default layer and is never declared here.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "colour": {
+          "description": "Identification only -- the panel and the outliner colour rows with it. Never reaches the renderer.",
+          "$ref": "#/$defs/vec3"
+        }
+      }
     },
     "transform": {
       "type": "object",
@@ -665,6 +733,11 @@
           "type": "string",
           "minLength": 1
         },
+        "layer": {
+          "description": "The id of a layer declared at the root. Absent means the implicit default layer, which is where every entity authored before layers existed lives.",
+          "type": "string",
+          "minLength": 1
+        },
         "prefab": {
           "type": "string",
           "pattern": "^kit\\."
@@ -760,6 +833,10 @@
         "audio_listener": {
           "$ref": "#/$defs/audio_listener"
         },
+        "properties": {
+          "description": "Free-form per-instance properties: keys this entity carries that nobody declared in C++. Cooked into the entity's Properties component, where they become the base layer of every attached script's self.props -- a script's own props override on a key clash.",
+          "$ref": "#/$defs/props"
+        },
         "scripts": {
           "type": "array",
           "description": "Lua scripts attached to this entity, in the order their callbacks run.",
@@ -781,43 +858,8 @@
                 "description": "A disabled script is never instantiated."
               },
               "props": {
-                "type": "object",
                 "description": "Per-instance authored values, reachable as self.props.",
-                "additionalProperties": {
-                  "oneOf": [
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "type": "number"
-                      },
-                      "minItems": 3,
-                      "maxItems": 3,
-                      "description": "a vec3"
-                    },
-                    {
-                      "type": "object",
-                      "required": [
-                        "entity"
-                      ],
-                      "additionalProperties": false,
-                      "properties": {
-                        "entity": {
-                          "type": "string"
-                        }
-                      },
-                      "description": "a reference to another entity, by name"
-                    }
-                  ]
-                }
+                "$ref": "#/$defs/props"
               }
             }
           }
@@ -845,6 +887,11 @@
           "minLength": 1
         },
         "pickup": {
+          "type": "string",
+          "minLength": 1
+        },
+        "npc": {
+          "description": "A person from config/npcs.toml: dialogue, trade and quests.",
           "type": "string",
           "minLength": 1
         },

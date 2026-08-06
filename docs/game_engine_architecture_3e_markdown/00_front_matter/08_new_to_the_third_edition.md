@@ -1,0 +1,58 @@
+# New to the Third Edition
+
+> Source PDF pages: 16-17
+> Extraction mode: PyMuPDF text blocks; line breaks and printed hyphenation are preserved.
+
+<!-- source-pdf-page: 16 -->
+
+New to the Third Edition
+
+The computing hardware that lies at the heart of today’s game consoles, mo-
+bile devices and personal computers makes heavy use of parallelism. Deep
+within the CPUs and GPUs in these devices, multiple functional units operate
+simultaneously, employing a “divide and conquer” approach to high-speed
+computation. While parallel computing hardware can make traditional single-
+threaded programs run faster, programmers need to write concurrent software
+to truly take advantage of the hardware parallelism that has become ubiqui-
+tous in modern computing platforms.
+In prior editions of Game Engine Architecture, the topics of parallelism and
+concurrency were touched on in the context of game engine design. However,
+they weren’t given the in-depth treatment they deserved. In this, the third
+edition of the book, this problem has been remedied via the addition of a brand
+new chapter on concurrency and parallelism. Chapters 8 and 16 have also been
+augmented to include detailed discussions of how concurrent programming
+techniques are typically applied to game engine subsystem and game object
+model updates, and how a general-purpose job system can be used to unlock
+the power of concurrency within a game engine.
+I’ve already mentioned that every good game programmer must have a
+strong working knowledge of C++ (in addition to the wide variety of other
+useful languages used regularly in the game industry). In my view, a pro-
+grammer’s knowledge of high-level languages should rest upon a solid under-
+standing of the software and hardware systems that underlie them. As such,
+in this edition I’ve expanded Chapter 3 to include a treatment of the funda-
+mentals of computer hardware, assembly language, and the operating system
+kernel.
+This third edition of Game Engine Architecture also improves upon the treat-
+ment of various topics covered in prior editions. A discussion of local and
+global compiler optimizations has been added. Fuller coverage of the vari-
+ous C++ language standards is included. The section on memory caching and
+cache coherency has been expanded. The animation chapter has been stream-
+lined. And, as with the second edition, various errata have been repaired that
+were brought to my attention by you, my devoted readers. Thank you! I hope
+you’ll find that the mistakes you found have all been fixed. (Although no
+doubt they have been replaced by a slew of new mistakes, about which you
+can feel free to inform me, so that I may correct them in the fourth edition of
+the book!)
+
+
+<!-- source-pdf-page: 17 -->
+
+xvi
+Preface
+
+Of course, as I’ve said before, the field of game engine programming is al-
+most unimaginably broad and deep. There’s no way to cover every topic in
+one book. As such, the primary purpose of this book remains to serve as an
+awareness-building tool and a jumping-off point for further learning. I hope
+you find this edition helpful on your journey through the fascinating and mul-
+tifaceted landscape of game engine architecture.

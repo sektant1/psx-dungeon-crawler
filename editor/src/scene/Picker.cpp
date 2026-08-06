@@ -26,6 +26,30 @@ Ray viewportRay(glm::vec2 screenPoint, glm::vec2 viewportOrigin,
                      viewportSize.x / viewportSize.y);
 }
 
+Ray orthoViewportRay(glm::vec2 screenPoint, glm::vec2 viewportOrigin,
+                     glm::vec2 viewportSize, glm::vec3 camPos,
+                     glm::quat camOrient, float worldHeight)
+{
+    const glm::vec2 within = (screenPoint - viewportOrigin) / viewportSize;
+    const glm::vec2 ndc{within.x * 2.0f - 1.0f, 1.0f - within.y * 2.0f};
+
+    const float aspect = viewportSize.x / viewportSize.y;
+    const float halfHeight = worldHeight * 0.5f;
+    const float halfWidth = halfHeight * aspect;
+
+    // The origin slides across the view plane; the direction never changes.
+    // That is the whole difference from the perspective ray, and it is why the
+    // two are separate functions.
+    const glm::vec3 right = camOrient * glm::vec3(1, 0, 0);
+    const glm::vec3 up = camOrient * glm::vec3(0, 1, 0);
+    const glm::vec3 forward = camOrient * glm::vec3(0, 0, -1);
+
+    Ray ray;
+    ray.origin = camPos + right * (ndc.x * halfWidth) + up * (ndc.y * halfHeight);
+    ray.dir = glm::normalize(forward);
+    return ray;
+}
+
 bool projectToViewport(glm::vec3 world, const glm::mat4& viewProjection,
                        glm::vec2 viewportOrigin, glm::vec2 viewportSize,
                        glm::vec2& screenPoint)

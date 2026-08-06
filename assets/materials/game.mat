@@ -25,6 +25,37 @@ shader = "lit"
 texture = "white.png"
 filter = "nearest"
 
+# --- actors -----------------------------------------------------------------
+# The humanoid rig every actor wears. Vertex colour is baked into the mesh (see
+# tools/author_humanoid_rig.py), so white here draws the mannequin's own grey
+# and the tinted Game/Enemy/* materials multiply over the same geometry -- which
+# is why an enemy needs a colour, not a mesh, to look like itself.
+[material."Game/Actor/Default"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+
+# The player's own body, seen in third person and in a mirror-less world only
+# from behind: a touch warmer than the neutral grey so the player reads as the
+# one thing in the room that is not a threat.
+[material."Game/Actor/Player"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+
+[material."Game/Actor/Player".params]
+modulateColor = [0.86, 0.82, 0.74, 1.0]
+
+# Townsfolk. Cooler and lighter than the enemy palette, so a silhouette across
+# the threshold reads as safe before its name resolves.
+[material."Game/Actor/Npc"]
+shader = "lit"
+texture = "white.png"
+filter = "nearest"
+
+[material."Game/Actor/Npc".params]
+modulateColor = [0.72, 0.76, 0.88, 1.0]
+
 [material."Game/PropBauerhaus"]
 shader = "lit"
 texture = "bauerhaus.png"

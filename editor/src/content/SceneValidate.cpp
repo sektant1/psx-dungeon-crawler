@@ -60,6 +60,9 @@ std::set<std::string> tomlIds(const std::string& path, const std::string& sectio
 struct GameIds {
     std::set<std::string> items;
     std::set<std::string> enemies;
+    // The roster. npcs.toml rather than dialogue.toml, for the reason that file
+    // exists: being a person is not the same as having a conversation written.
+    std::set<std::string> people;
 
     static GameIds load()
     {
@@ -72,6 +75,10 @@ struct GameIds {
                 eng::assets::resolve("config/enemies.toml");
             !p.empty())
             ids.enemies = tomlIds(p.string(), "enemy");
+        if (const std::filesystem::path p =
+                eng::assets::resolve("config/npcs.toml");
+            !p.empty())
+            ids.people = tomlIds(p.string(), "npc");
         return ids;
     }
 };
@@ -285,6 +292,33 @@ std::vector<Issue> validate(const SceneDocument& document,
                         "parent chain loops through '" + entity.parent + "'",
                         entity.id, QuickFix::ClearParent);
                 }
+            }
+        }
+
+        // A layer nobody declares. Not an error: the entity is intact and the
+        // level plays -- layers are dropped at cook -- but it is invisible from
+        // the Layers panel's declared rows, so it has to be said out loud or a
+        // botched merge quietly parks a room in a layer nothing can reach.
+        if (!document.hasLayer(entity.layer)) {
+            add(issues, Severity::Warning, "layer.undeclared",
+                "layer '" + entity.layer + "' is not declared by this scene",
+                entity.id);
+        }
+
+        // A free-form property with no key cannot be looked up by anything, and
+        // is what a half-typed row in the inspector leaves behind.
+        for (const PropertyAuthor& prop : entity.properties) {
+            if (prop.key.empty()) {
+                add(issues, Severity::Warning, "property.no_key",
+                    "a free-form property has no name", entity.id);
+            } else if (prop.type == PropertyAuthor::Type::Entity &&
+                       !prop.stringValue.empty() &&
+                       entityNames.count(prop.stringValue) == 0) {
+                add(issues, Severity::Warning, "property.unresolved",
+                    "property '" + prop.key + "' names entity '" +
+                        prop.stringValue +
+                        "', which this scene does not contain",
+                    entity.id);
             }
         }
 
@@ -547,6 +581,25 @@ std::vector<Issue> validate(const SceneDocument& document,
                 "enemy '" + *entity.enemySpawn +
                     "' is not one enemies.toml defines; nothing will spawn",
                 entity.id);
+        }
+        if (entity.npc) {
+            // Empty is the state a freshly added component starts in, so it is
+            // the one an unfinished village is full of. Named separately from
+            // the unknown-id case because the fix is different: one is "pick
+            // somebody", the other is "you picked somebody who is not there".
+            if (entity.npc->empty()) {
+                add(issues, Severity::Error, "npc.no_id",
+                    "an NPC with no id is nobody: there is no conversation to "
+                    "open and no shop to stock",
+                    entity.id);
+            } else if (!gameIds.people.empty() &&
+                       !gameIds.people.count(*entity.npc)) {
+                add(issues, Severity::Error, "npc.unknown_id",
+                    "npc '" + *entity.npc +
+                        "' is not somebody npcs.toml describes; nobody will "
+                        "be here",
+                    entity.id);
+            }
         }
         if (entity.trigger && entity.trigger->event.empty()) {
             add(issues, Severity::Error, "trigger.no_event",

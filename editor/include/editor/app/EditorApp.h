@@ -21,11 +21,15 @@
 #include <editor/project/EditorSettings.h>
 #include <editor/app/EditorState.h>
 #include <editor/scene/EntityComponents.h>
+#include <editor/ui/LayersPanel.h>
 #include <editor/ui/OutlinerPanel.h>
 #include <editor/ui/UiStage.h>
 #include <editor/ui/MaterialStage.h>
+#include <editor/scene/AlignTools.h>
 #include <editor/scene/OutlinerTree.h>
 #include <editor/scene/Picker.h>
+#include <editor/scene/SelectionTools.h>
+#include <editor/viewport/CameraNavigation.h>
 #include <editor/viewport/PreviewBridge.h>
 #include <editor/content/SceneTemplates.h>
 #include <editor/project/RunGame.h>
@@ -78,6 +82,24 @@ private:
     // The 2D viewport: the game's real HUD drawn against a dialled-in state.
     void drawUiStage();
     void drawOutliner();
+    // The Layers panel and the edits it drives. Layers are the chapter's
+    // division-of-labour feature (Gregory §15.4.1.5): identity and membership
+    // are document edits and go through the command stack, while visibility,
+    // lock and solo are session state and deliberately do not.
+    void drawLayers();
+    void addLayer();
+    void removeLayer(const std::string& layerId);
+    void renameLayer(const std::string& layerId, const std::string& name);
+    void recolourLayer(const std::string& layerId, const glm::vec3& colour);
+    // Moves the selection into a layer, as one undo entry.
+    void assignSelectionToLayer(const std::string& layerId);
+    void selectLayerMembers(const std::string& layerId);
+    // Per-layer save and load. Export writes a .scn holding only that layer
+    // (plus the ancestors its entities hang from); import merges one back,
+    // renaming on collision rather than overwriting.
+    void exportLayer(const std::string& layerId);
+    void importIntoLayer(const std::string& layerId);
+    void drawLayerIoPopup();
     // Select from outside the outliner (viewport pick, placement, a jump from
     // the validation list) and ask the panel to scroll to the row.
     void selectAndReveal(const game::content::AuthorId& id, bool toggle);
@@ -189,6 +211,9 @@ private:
     // the part appear beside it in the level is the mode being read-only in
     // practice.
     game::content::AuthorId parentForNewEntity() const;
+    // Puts a newly created entity in the Layers panel's active layer. See the
+    // definition for why a paste is deliberately exempt.
+    void stampLayer(game::content::Entity& entity) const;
     void frameIsolated(const glm::vec3& min, const glm::vec3& max);
     void adoptIntoIsolation(game::content::Entity& entity) const;
     // Writes a compound kit piece's baked attachments out as child entities, so
@@ -199,6 +224,28 @@ private:
     // Selection and manipulation, both driven from inside the viewport panel so
     // they share its rect with ImGuizmo.
     void handleViewportPicking(const eng::FrameContext& f);
+    // Rubber-band selection: drag on empty space, take everything the box
+    // crosses. Gregory §15.4.1.4. Drawn and resolved inside the viewport panel
+    // so it shares the rect with ImGuizmo and the picker.
+    void handleMarquee(const eng::FrameContext& f);
+    // Align, distribute and drop-to-surface, applied to the selection as one
+    // undo entry each. The arithmetic is in ed::align; this resolves bounds and
+    // turns the resulting world moves back into authored local transforms.
+    void alignSelection(align::Axis axis, align::Mode mode);
+    void distributeSelection(align::Axis axis);
+    void dropSelectionToSurface();
+    void applyMoves(const std::vector<align::Move>& moves,
+                    const std::string& label);
+    // Camera bookmarks and the browser-style history. Gregory §15.4.1.3.
+    // Switches the viewport's projection, framing the level the first time an
+    // elevation is entered. A plan view that opens showing a corner of the
+    // scene is one the author has to hunt around in before it is useful.
+    void setViewProjection(EditorCamera::Projection projection);
+    void jumpToBookmark(std::size_t slot);
+    void setBookmark(std::size_t slot);
+    void navigateHistory(bool forward);
+    // Records where the camera is before a jump, so Back can return to it.
+    void pushCameraHistory();
     void drawGizmo(const eng::FrameContext& f);
     void finishGizmoDrag();
     void drawStageGizmo(const eng::FrameContext& f);
@@ -618,6 +665,46 @@ private:
     // resolves a range against (see OutlinerRowOrder).
     OutlinerRowOrder mOutlinerRows;
     int mOutlinerOpenRequest = -1;
+    // Layer rows, rebuilt when the document moves: the panel is open while the
+    // gizmo is dragged, and counting every entity per frame to fill a list of
+    // six rows is the same waste the outliner cache exists to avoid.
+    std::vector<layers::LayerStat> mLayerRows;
+    uint64_t mLayerRowsRevision = ~uint64_t(0);
+
+    // Selection, past "click the nearest thing" (Gregory §15.4.1.4).
+    //
+    // The cycle remembers where the last viewport click landed and how deep
+    // into the stack under it the author has walked. Reset whenever the
+    // selection changes from anywhere else, so the next click starts at the top
+    // rather than continuing a count nobody is still making.
+    selection::PickCycle mPickCycle;
+    // Rubber band: where the drag began, and whether one is in progress. Only
+    // starts on empty space, so it can never steal a gizmo drag or a click on
+    // an entity.
+    bool mMarqueeDragging = false;
+    glm::vec2 mMarqueeStart{0.0f};
+    // Selections somebody named and kept. Session state: the members are
+    // document ids, but "the six lights I keep coming back to" is one author's
+    // working set.
+    std::vector<selection::SelectionSet> mSelectionSets;
+    char mSelectionSetName[64] = {};
+
+    // Navigation aids (Gregory §15.4.1.3): saved viewpoints, a browser-style
+    // back/forward stack over camera jumps, and a coarse/fine movement speed.
+    // RAVEN_EDITOR_VIEW, applied once the document is open and the viewport has
+    // been measured -- framing an elevation needs both, and the environment is
+    // read before either exists.
+    std::optional<EditorCamera::Projection> mPendingView;
+    nav::Bookmarks mBookmarks;
+    nav::History mCameraHistory;
+    nav::Speed mCameraSpeed = nav::Speed::Normal;
+    // The per-layer export/import dialog: which layer it is about, whether it
+    // is saving or loading, and the path being typed.
+    bool mLayerIoOpen = false;
+    bool mLayerIoExport = true;
+    std::string mLayerIoLayer;
+    char mLayerIoPath[512] = {};
+    std::string mLayerIoError;
     // The 2D viewport's state and the HUD it drives. The HUD is the game's own
     // class, constructed once here, so what the panel shows is what ships.
     UiStageState mUiStage;

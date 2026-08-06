@@ -405,6 +405,17 @@ std::vector<game::ScenePlacement> LiveLevel::pickupPlacements() const
     return all;
 }
 
+std::vector<game::ScenePlacement> LiveLevel::npcPlacements() const
+{
+    if (!authoredMap)
+        return {};
+    std::vector<game::ScenePlacement> all = authoredMap->placements("npc.");
+    const std::vector<game::ScenePlacement> components =
+        authoredMap->npcPlacements();
+    all.insert(all.end(), components.begin(), components.end());
+    return all;
+}
+
 std::vector<game::ScenePlacement> LiveLevel::enemyPlacements() const
 {
     if (!authoredMap)

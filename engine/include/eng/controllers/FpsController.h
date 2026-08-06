@@ -164,6 +164,14 @@ public:
     bool grounded() const { return mPhysics ? mCharGrounded : (mPos.y <= 0.001f); }
     glm::vec3 groundNormal() const { return mGroundNormal; }
     float horizontalSpeed() const { return glm::length(mVelocity); }
+    // The same, as a world-space vector, and where the body is pointing. An
+    // avatar's locomotion blend needs the direction of travel *relative to the
+    // facing* -- strafing is walking sideways -- and speed alone cannot say
+    // which of those two the character is doing.
+    glm::vec3 horizontalVelocity() const
+    {
+        return glm::vec3(mVelocity.x, 0.0f, mVelocity.y);
+    }
     // Metres per second up the world axis. Positive is rising, which is how a
     // caller distinguishes a jump from walking off a ledge -- both leave the
     // ground, and only one of them is something the player did.
