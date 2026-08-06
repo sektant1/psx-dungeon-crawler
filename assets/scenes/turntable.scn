@@ -442,6 +442,17 @@
       }
     },
     {
+      "id": "pillar_broken_0001",
+      "prefab": "kit.pillar_broken",
+      "transform": {
+        "position": [
+          -1.1549999713897705,
+          0.0,
+          1.8774000406265259
+        ]
+      }
+    },
+    {
       "id": "player_start",
       "name": "Player Start",
       "transform": {
@@ -495,7 +506,7 @@
     {
       "id": "portal_0001",
       "prefab": "kit.portal_membrane",
-      "material": "Game/Vfx/PortalDown",
+      "material": "Engine/PrototypeVfx/Slime",
       "cast_shadows": false,
       "transform": {
         "position": [

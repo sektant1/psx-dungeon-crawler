@@ -34,7 +34,7 @@
 
 <p align="center"><img src="docs/media/footage/editor1.png" alt="Engine rendering demo" width="900"></p>
 
-<p align="center"><img src="docs/media/footage/editor2.png" alt="Engine rendering demo" width="900"></p>
+<p align="center"><img src="docs/media/footage/ux.gif" alt="Engine rendering demo" width="900"></p>
 
 <p align="center"><img src="docs/media/footage/demo_gif.gif" alt="Engine rendering demo" width="900"></p>
 
