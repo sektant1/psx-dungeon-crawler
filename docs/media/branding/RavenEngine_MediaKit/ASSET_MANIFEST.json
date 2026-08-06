@@ -1,0 +1,548 @@
+{
+  "kit": "Raven Engine Media Kit",
+  "version": "1.0",
+  "palette": {
+    "void_black": "#08080A",
+    "carbon": "#15171B",
+    "gunmetal": "#2E333A",
+    "steel": "#666E79",
+    "silver": "#B7BDC5",
+    "signal_red": "#C1121F",
+    "deep_red": "#5A0E0E",
+    "terminal_green": "#5DFF85"
+  },
+  "files": [
+    {
+      "path": "ATTRIBUTION_AND_USAGE.md",
+      "bytes": 475
+    },
+    {
+      "path": "BRAND_GUIDE.md",
+      "bytes": 1814
+    },
+    {
+      "path": "README.md",
+      "bytes": 1343
+    },
+    {
+      "path": "cover/disc-label.png",
+      "bytes": 705162,
+      "width": 1800,
+      "height": 1800,
+      "mode": "RGBA"
+    },
+    {
+      "path": "cover/psx-inspired-cover-back.png",
+      "bytes": 1767164,
+      "width": 2048,
+      "height": 2048,
+      "mode": "RGBA"
+    },
+    {
+      "path": "cover/psx-inspired-cover-front.png",
+      "bytes": 1382800,
+      "width": 2048,
+      "height": 2048,
+      "mode": "RGBA"
+    },
+    {
+      "path": "cover/psx-inspired-cover-wrap.png",
+      "bytes": 3605169,
+      "width": 4356,
+      "height": 2048,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-1024.png",
+      "bytes": 214310,
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-128.png",
+      "bytes": 495,
+      "width": 128,
+      "height": 128,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-16.png",
+      "bytes": 113,
+      "width": 16,
+      "height": 16,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-180.png",
+      "bytes": 20525,
+      "width": 180,
+      "height": 180,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-24.png",
+      "bytes": 894,
+      "width": 24,
+      "height": 24,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-256.png",
+      "bytes": 60676,
+      "width": 256,
+      "height": 256,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-32.png",
+      "bytes": 154,
+      "width": 32,
+      "height": 32,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-48.png",
+      "bytes": 2572,
+      "width": 48,
+      "height": 48,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-512.png",
+      "bytes": 182575,
+      "width": 512,
+      "height": 512,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-64.png",
+      "bytes": 258,
+      "width": 64,
+      "height": 64,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/png/raven-engine-96.png",
+      "bytes": 8064,
+      "width": 96,
+      "height": 96,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/raven-engine-app-icon.png",
+      "bytes": 214310,
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "icons/raven-engine.ico",
+      "bytes": 97597,
+      "width": 256,
+      "height": 256,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/badge-black.png",
+      "bytes": 28874,
+      "width": 650,
+      "height": 666,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/badge-red.png",
+      "bytes": 28754,
+      "width": 650,
+      "height": 666,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/badge-silver.png",
+      "bytes": 28733,
+      "width": 650,
+      "height": 666,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/badge-white.png",
+      "bytes": 28769,
+      "width": 650,
+      "height": 666,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/mech_logo-black.png",
+      "bytes": 25596,
+      "width": 566,
+      "height": 369,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/mech_logo-red.png",
+      "bytes": 25285,
+      "width": 566,
+      "height": 369,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/mech_logo-silver.png",
+      "bytes": 25244,
+      "width": 566,
+      "height": 369,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/mech_logo-white.png",
+      "bytes": 25282,
+      "width": 566,
+      "height": 369,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/stacked-black.png",
+      "bytes": 21289,
+      "width": 784,
+      "height": 598,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/stacked-red.png",
+      "bytes": 21313,
+      "width": 784,
+      "height": 598,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/stacked-silver.png",
+      "bytes": 21325,
+      "width": 784,
+      "height": 598,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/stacked-white.png",
+      "bytes": 21313,
+      "width": 784,
+      "height": 598,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/wordmark-black.png",
+      "bytes": 9486,
+      "width": 691,
+      "height": 115,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/wordmark-red.png",
+      "bytes": 9381,
+      "width": 691,
+      "height": 115,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/wordmark-silver.png",
+      "bytes": 9385,
+      "width": 691,
+      "height": 115,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/monochrome/wordmark-white.png",
+      "bytes": 9373,
+      "width": 691,
+      "height": 115,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/original/badge-logo.png",
+      "bytes": 202094,
+      "width": 712,
+      "height": 726,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/original/mech-logo.png",
+      "bytes": 319948,
+      "width": 594,
+      "height": 397,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/original/only-name.png",
+      "bytes": 118143,
+      "width": 719,
+      "height": 143,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/original/stacked-logo.png",
+      "bytes": 227923,
+      "width": 844,
+      "height": 658,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/badge-transparent-2x.png",
+      "bytes": 258506,
+      "width": 1300,
+      "height": 1332,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/badge-transparent.png",
+      "bytes": 216518,
+      "width": 650,
+      "height": 666,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/mech_logo-transparent-2x.png",
+      "bytes": 411450,
+      "width": 1132,
+      "height": 738,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/mech_logo-transparent.png",
+      "bytes": 326648,
+      "width": 566,
+      "height": 369,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/stacked-transparent-2x.png",
+      "bytes": 277221,
+      "width": 1568,
+      "height": 1196,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/stacked-transparent.png",
+      "bytes": 234669,
+      "width": 784,
+      "height": 598,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/wordmark-transparent-2x.png",
+      "bytes": 147256,
+      "width": 1382,
+      "height": 230,
+      "mode": "RGBA"
+    },
+    {
+      "path": "logos/transparent/wordmark-transparent.png",
+      "bytes": 118752,
+      "width": 691,
+      "height": 115,
+      "mode": "RGBA"
+    },
+    {
+      "path": "manual/manual-back.png",
+      "bytes": 2859093,
+      "width": 1600,
+      "height": 2100,
+      "mode": "RGBA"
+    },
+    {
+      "path": "manual/manual-front.png",
+      "bytes": 1647878,
+      "width": 1600,
+      "height": 2100,
+      "mode": "RGBA"
+    },
+    {
+      "path": "palette/raven-engine-palette.css",
+      "bytes": 245
+    },
+    {
+      "path": "palette/raven-engine-palette.gpl",
+      "bytes": 216
+    },
+    {
+      "path": "palette/raven-engine-palette.json",
+      "bytes": 205
+    },
+    {
+      "path": "palette/raven-engine-palette.png",
+      "bytes": 33983,
+      "width": 1280,
+      "height": 400,
+      "mode": "RGB"
+    },
+    {
+      "path": "press/PRESS_COPY.md",
+      "bytes": 1327
+    },
+    {
+      "path": "preview/generated-media-kit-concept-board.png",
+      "bytes": 1915277,
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "preview/media-kit-contact-sheet.png",
+      "bytes": 1566539,
+      "width": 1560,
+      "height": 1320,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/banner-1500x500.png",
+      "bytes": 382965,
+      "width": 1500,
+      "height": 500,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/banner-1920x480.png",
+      "bytes": 523225,
+      "width": 1920,
+      "height": 480,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/github-social-1280x640.png",
+      "bytes": 514730,
+      "width": 1280,
+      "height": 640,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/itch-cover-630x500.png",
+      "bytes": 133054,
+      "width": 630,
+      "height": 500,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/physical-media-mockup.png",
+      "bytes": 1961767,
+      "width": 1800,
+      "height": 1200,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/poster-1080x1350.png",
+      "bytes": 728844,
+      "width": 1080,
+      "height": 1350,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/poster-1080x1920.png",
+      "bytes": 898204,
+      "width": 1080,
+      "height": 1920,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/social-1200x628.png",
+      "bytes": 538847,
+      "width": 1200,
+      "height": 628,
+      "mode": "RGBA"
+    },
+    {
+      "path": "promotional/steam-capsule-616x353.png",
+      "bytes": 140360,
+      "width": 616,
+      "height": 353,
+      "mode": "RGBA"
+    },
+    {
+      "path": "source/a_high_detail_promotional_media_kit_layout_image_f.png",
+      "bytes": 1915277,
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "source/badge-logo.png",
+      "bytes": 202094,
+      "width": 712,
+      "height": 726,
+      "mode": "RGBA"
+    },
+    {
+      "path": "source/logo-alt.jpg",
+      "bytes": 278745,
+      "width": 1248,
+      "height": 832,
+      "mode": "RGB"
+    },
+    {
+      "path": "source/logo-avatar.jpg",
+      "bytes": 177002,
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "source/logo-vert.jpg",
+      "bytes": 203313,
+      "width": 720,
+      "height": 1280,
+      "mode": "RGB"
+    },
+    {
+      "path": "source/logo.jpg",
+      "bytes": 214429,
+      "width": 1280,
+      "height": 720,
+      "mode": "RGB"
+    },
+    {
+      "path": "source/mech-logo.png",
+      "bytes": 319948,
+      "width": 594,
+      "height": 397,
+      "mode": "RGBA"
+    },
+    {
+      "path": "source/only-name.png",
+      "bytes": 118143,
+      "width": 719,
+      "height": 143,
+      "mode": "RGBA"
+    },
+    {
+      "path": "source/stacked-logo.png",
+      "bytes": 227923,
+      "width": 844,
+      "height": 658,
+      "mode": "RGBA"
+    },
+    {
+      "path": "source/wkrmn.jpg",
+      "bytes": 187091,
+      "width": 784,
+      "height": 1168,
+      "mode": "RGB"
+    },
+    {
+      "path": "wallpapers/raven-engine-1920x1080.jpg",
+      "bytes": 355254,
+      "width": 1920,
+      "height": 1080,
+      "mode": "RGB"
+    },
+    {
+      "path": "wallpapers/raven-engine-2560x1440.jpg",
+      "bytes": 693062,
+      "width": 2560,
+      "height": 1440,
+      "mode": "RGB"
+    },
+    {
+      "path": "wallpapers/raven-engine-ultrawide-3440x1440.jpg",
+      "bytes": 822626,
+      "width": 3440,
+      "height": 1440,
+      "mode": "RGB"
+    }
+  ]
+}

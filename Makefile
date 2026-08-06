@@ -17,6 +17,13 @@
 # Every app target (game, editor, demo) shares the same run/debug options, so
 # `make gdb APP=scene_editor` and `make renderdoc APP=scene_editor` work exactly
 # like they do for the game.
+#
+# Output is coloured and carries a progress bar when a terminal is attached, and
+# is plain text when it is not -- so a pipe, a log file and CI all get the same
+# text they always did. Force plain with PLAIN=1 (or NO_COLOR=1).
+#
+#   make doctor      diagnose the build tree, the toolchain and ccache
+#   make doctor FIX=1  and repair what is safely repairable
 
 # ---- configuration ---------------------------------------------------------
 BUILD_DIR   ?= build
@@ -86,6 +93,28 @@ PYTHON      ?= $(shell command -v python3 2>/dev/null || echo python)
 # command line if needed.
 SDL_VIDEODRIVER ?= x11
 
+# ---- build UI --------------------------------------------------------------
+# Colour, log lines and the progress bar live in one script rather than in the
+# recipes, for two reasons: the recipes stay readable, and there is exactly one
+# place that decides whether this invocation has a terminal. Without one -- a
+# pipe, a log, CI -- the script emits the same plain text the recipes used to,
+# so nothing downstream has to learn about escape codes.
+#
+#   make PLAIN=1 ...     plain output on a terminal too (also NO_COLOR=1)
+#
+# The script is decoration only: it runs the command it is given and passes the
+# exit status through, so deleting it costs the colour and nothing else.
+UI          := $(CURDIR)/tools/build-ui.sh
+DOCTOR      := $(CURDIR)/tools/build-doctor.sh
+export RAVEN_BUILD_PLAIN := $(if $(PLAIN),1,)
+# Where `run` keeps the raw, uncoloured transcript of the last build, so a
+# compiler error that scrolled past the progress bar is still readable.
+export RAVEN_BUILD_LOG_DIR := $(abspath $(BUILD_DIR))
+
+# Every build rule goes through this: one lock, one progress bar, one summary.
+#   $(call forge,<target>,<what to say while it builds>)
+forge = @$(UI) run "$(2)" -- $(BUILD_LOCK) cmake --build $(BUILD_DIR) --target $(1) -j$(JOBS)
+
 # ---- run-option -> RAVEN_* env mapping -------------------------------------
 # Each variable is only exported when the user sets it, so unset options keep
 # the game's own defaults. Add a mapping here to expose a new env var.
@@ -142,7 +171,8 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
               $(if $(filter psx_demo,$(APP)),psx_demo,game))
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
-        build-editor build-cook build-acp build-reset acp acp-check acp-clean assetdb \
+        build-editor build-cook build-acp build-reset doctor ui-deps \
+        acp acp-check acp-clean assetdb \
         editor cook scene material prefab-viewer \
         run game demo psx-demo mapgen sim test asan bench screenshot visual-test \
         editor-selftest clip clip-mp4 look new-clip assetformats \
@@ -157,26 +187,45 @@ all: build
 # still performs its own dependency check, so edits to CMake inputs regenerate
 # normally when cmake --build runs.
 configure:
+	@$(UI) banner "$(BUILD_TYPE) $(GENERATOR) $(JOBS) jobs -> $(BUILD_DIR)/"
 	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ] && [ "$(GENERATOR)" = "Ninja" ] && ! command -v ninja >/dev/null 2>&1; then \
-		echo "ninja not found -- run 'make deps' or install Ninja"; \
+		$(UI) err "ninja not found -- run 'make deps' or install Ninja"; \
 		exit 2; \
 	fi
 	@if [ -f "$(BUILD_DIR)/CMakeCache.txt" ]; then \
 		actual=$$(grep '^CMAKE_GENERATOR:INTERNAL=' "$(BUILD_DIR)/CMakeCache.txt" | cut -d= -f2-); \
 		if [ -n "$$actual" ] && [ "$$actual" != "$(GENERATOR)" ] && [ "$(GENERATOR_ORIGIN)" != "file" ]; then \
-			echo "$(BUILD_DIR) uses '$$actual', requested '$(GENERATOR)'"; \
-			echo "choose another BUILD_DIR or remove that build tree before switching generators"; \
+			$(UI) err "$(BUILD_DIR) uses '$$actual', requested '$(GENERATOR)'"; \
+			$(UI) note "choose another BUILD_DIR or remove that build tree before switching generators"; \
 			exit 2; \
 		fi; \
 	fi
 	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ]; then \
-		cmake -B "$(BUILD_DIR)" -G "$(GENERATOR)" \
+		$(UI) run "configuring $(BUILD_DIR)" -- cmake -B "$(BUILD_DIR)" -G "$(GENERATOR)" \
 		      -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	elif [ -n "$(strip $(CMAKE_ARGS))" ] || ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
-		cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
+		$(UI) run "reconfiguring $(BUILD_DIR)" -- cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	fi
+	@$(MAKE) --no-print-directory deps-guard
+
+# A truncated .ninja_deps is invisible: the tree simply rebuilds itself in full,
+# every time, forever, and never recovers on its own (see build-reset). The
+# check costs ~60ms -- ninja prints its warning on stderr and we read only that
+# -- which is cheap enough to run in front of every build and so turn a
+# permanent, silent full rebuild into one automatic recovery.
+#
+#   make NO_DEPS_CHECK=1 ...     skip it
+deps-guard:
+ifndef NO_DEPS_CHECK
+	@if [ -f "$(BUILD_DIR)/.ninja_deps" ] && \
+	    ninja -C "$(BUILD_DIR)" -t deps 2>&1 >/dev/null | grep -q "premature end of file"; then \
+		$(UI) warn "ninja dependency log is truncated -- resetting it"; \
+		$(UI) note "this build is a full one; the next is incremental again"; \
+		rm -f "$(BUILD_DIR)/.ninja_deps" "$(BUILD_DIR)/.ninja_log"; \
+	fi
+endif
 
 # Recover a tree whose dependency log has been truncated. Symptom: every build
 # recompiles everything even with no edits, and
@@ -189,41 +238,57 @@ configure:
 # and nothing else. It is deliberately not part of `clean`, and it does NOT
 # touch object files, so ccache makes the recovery build cheap.
 build-reset:
-	rm -f $(BUILD_DIR)/.ninja_deps $(BUILD_DIR)/.ninja_log
-	@echo "cleared $(BUILD_DIR) dependency log; the next build is a full one"
+	@rm -f $(BUILD_DIR)/.ninja_deps $(BUILD_DIR)/.ninja_log
+	@$(UI) ok "cleared $(BUILD_DIR) dependency log; the next build is a full one"
+
+# What is wrong with this tree, and (FIX=1) the repairs that are safe to make.
+# Covers the failures that look like a slow build rather than like a fault:
+# a truncated deps log, ccache disabled by a dependency, no memory headroom.
+doctor:
+	@$(DOCTOR)
+
+# The optional half of the build UI. rich goes into a repo-local venv so the
+# system python is untouched and 'make clean' territory stays out of it; the
+# bash renderer keeps working if this is never run.
+ui-deps:
+	@$(UI) step "installing the rich build UI into .cache/py"
+	@$(PYTHON) -m venv .cache/py 2>/dev/null || $(PYTHON) -m venv --without-pip .cache/py
+	@.cache/py/bin/python -m pip install --quiet --upgrade rich \
+	    && $(UI) ok "rich installed; builds now use the python renderer" \
+	    || $(UI) warn "could not install rich; the bash renderer stays in use"
 
 build-all: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) -j$(JOBS)
+	$(call forge,all,forging everything)
 
 # Run-oriented commands build only their required target. In particular this
 # keeps the demo, map generator, simulation harness, and test executables out
 # of the edit/build/run loop for the game.
 build-game: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target game -j$(JOBS)
+	$(call forge,game,forging the game)
 
 build: build-game
 
 build-demo: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target psx_demo -j$(JOBS)
+	$(call forge,psx_demo,forging the psx demo)
 
 build-mapgen: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target mapgen -j$(JOBS)
+	$(call forge,mapgen,forging the map generator)
 
 build-sim: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target game_sim -j$(JOBS)
+	$(call forge,game_sim,forging the simulation harness)
 
 build-editor: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target scene_editor -j$(JOBS)
+	$(call forge,scene_editor,raising the editor)
 
 build-cook: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target scene_cook -j$(JOBS)
+	$(call forge,scene_cook,forging the scene cooker)
 
 build-acp: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target raven_acp -j$(JOBS)
+	$(call forge,raven_acp,forging the asset pipeline)
 
 # The generic app build, for the APP=-driven targets below.
 build-app: configure
-	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target $(APP_TARGET) -j$(JOBS)
+	$(call forge,$(APP_TARGET),forging $(APP_TARGET))
 
 # Detects pacman/apt/dnf/zypper/apk/brew; installs toolchain + SDL2 + glm,
 # plus the Vulkan loader and the SPIR-V toolchain the RHI compiles through.
@@ -233,6 +298,7 @@ deps:
 # ---- run -------------------------------------------------------------------
 # `run` is the primary entry point; `game` is a back-compat alias.
 run game: build-game
+	@$(UI) step "descending$(if $(RUN_ARGS), into $(RUN_ARGS))$(if $(SEED), seed $(SEED))$(if $(PRESET), preset $(PRESET))"
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game $(RUN_ARGS)
 
 # ---- the model showroom ----------------------------------------------------

@@ -447,9 +447,17 @@
       "transform": {
         "position": [
           0.0,
+          1.9055999517440796,
+          4.223299980163574
+        ],
+        "rotation_degrees": [
+          -2.0,
           0.0,
-          7.5
+          0.0
         ]
+      },
+      "camera": {
+        "fov_degrees": 51.20000076293945
       },
       "player_spawn": true
     },
@@ -485,22 +493,26 @@
       }
     },
     {
-      "id": "portal_membrane_0001",
+      "id": "portal_0001",
       "prefab": "kit.portal_membrane",
-      "material": "Game/Vfx/ToxicSlime",
+      "material": "Game/Vfx/PortalDown",
+      "cast_shadows": false,
       "transform": {
         "position": [
-          -0.0052999998442828655,
-          0.0,
-          -7.844299793243408
+          -0.07490000128746033,
+          -0.045099999755620956,
+          -8.211899757385254
         ],
         "scale": [
-          1.1299999952316284,
-          1.7699999809265137,
+          1.0,
+          1.5700000524520874,
           1.0
         ]
       },
-      "portal": {}
+      "portal": {},
+      "exit": {
+        "yaw_degrees": 0.0
+      }
     },
     {
       "id": "prop_barrel",

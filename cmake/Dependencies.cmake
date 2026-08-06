@@ -89,7 +89,12 @@ set(_eng_sdl_options
     # SDL 2.30.11's pipewire backend does not compile against newer system
     # PipeWire headers (pw_node_enum_params signature drift). We only need
     # SDL for windowing/input; audio still negotiates ALSA/PulseAudio.
-    "SDL_PIPEWIRE OFF")
+    "SDL_PIPEWIRE OFF"
+    # ccache is configured once, in BuildOptions.cmake. SDL's own switch
+    # overwrites CMAKE_C_COMPILER_LAUNCHER in its directory with a bare
+    # `ccache`, dropping the sloppiness settings this tree's precompiled
+    # headers need. See the ccache note below Assimp.
+    "SDL_CCACHE OFF")
     # RHI uses SDL only for events, a native Vulkan surface and drawable-size
     # queries. These optional modules otherwise pull GL/EGL implementation
     # sources into the platform library; KMSDRM and offscreen depend on EGL.
@@ -209,6 +214,10 @@ CPMAddPackage(
         "ASSIMP_BUILD_USD_IMPORTER OFF"
         "ASSIMP_BUILD_VRML_IMPORTER OFF"
         "ASSIMP_BUILD_DRACO OFF"
+        # See the RULE_LAUNCH_COMPILE note at the end of this file: Assimp's
+        # ccache switch is not scoped to Assimp, and it silently disabled
+        # caching for the entire build.
+        "ASSIMP_BUILD_USE_CCACHE OFF"
 )
 if(_eng_had_build_shared_libs)
     set(BUILD_SHARED_LIBS "${_eng_saved_build_shared_libs}")
@@ -339,3 +348,39 @@ endif()
 # Worth it while scripts are being written; off in Release.
 target_compile_definitions(eng_sol2 INTERFACE
     $<$<CONFIG:Debug>:SOL_ALL_SAFETIES_ON=1>)
+
+# --- keep dependencies out of this tree's compiler launcher ------------------
+# A dependency that switches ccache on for itself does not necessarily scope it
+# to itself. Assimp sets it as a GLOBAL property:
+#
+#   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${CCACHE_PATH})
+#
+# which the generator prepends to every compile rule in the *whole project*,
+# ahead of the launcher BuildOptions.cmake configured. Each compile then ran:
+#
+#   ccache  cmake -E env CCACHE_SLOPPINESS=... ccache  c++ -c foo.cpp
+#   ^ theirs                                   ^ ours
+#
+# The outer ccache takes `cmake` for the compiler, sees several arguments that
+# look like input files, gives up with "multiple source files", and execs the
+# line uncached. The inner one then finds itself running under another ccache
+# and reports "disabled". So ccache appeared twice on every command line and
+# cached nothing: `ccache -s` read 96% uncacheable, and every rebuild of an
+# untouched tree recompiled from scratch at full cost. RULE_LAUNCH_LINK got the
+# same treatment, which also put a ccache in front of every `ar` and `ranlib`.
+#
+# The options above ask both projects not to do this. This is the backstop, for
+# the next dependency that does it anyway: the property is read at generate
+# time, so clearing it here covers every target in the build, and this tree's
+# own launcher -- which does carry the PCH sloppiness settings -- is untouched.
+foreach(_eng_rule_launch RULE_LAUNCH_COMPILE RULE_LAUNCH_LINK)
+    get_property(_eng_launcher GLOBAL PROPERTY ${_eng_rule_launch})
+    if(_eng_launcher)
+        message(STATUS
+            "clearing ${_eng_rule_launch}='${_eng_launcher}' set by a "
+            "dependency; ccache is configured in BuildOptions.cmake")
+        set_property(GLOBAL PROPERTY ${_eng_rule_launch} "")
+    endif()
+endforeach()
+unset(_eng_launcher)
+unset(_eng_rule_launch)

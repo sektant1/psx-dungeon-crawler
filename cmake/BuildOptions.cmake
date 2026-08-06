@@ -22,7 +22,13 @@ endif()
 # and a no-op rebuild of `game` still cost 326s. No source here uses __DATE__
 # or __TIME__ (checked), so time_macros costs nothing.
 #
-# Verify with `ccache -s -v`: "Could not use precompiled header" should be 0.
+# This is also the *only* place ccache is configured. A dependency that turns
+# ccache on for itself can prepend a second one to every rule in the project and
+# disable caching wholesale -- see the RULE_LAUNCH_COMPILE backstop at the end of
+# Dependencies.cmake.
+#
+# Verify with `make doctor`, or by hand with `ccache -s -v`: "Could not use
+# precompiled header" and "Multiple source files" should both be 0.
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
   set(_eng_ccache "${CMAKE_COMMAND}" -E env

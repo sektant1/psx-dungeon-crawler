@@ -30,17 +30,22 @@
 
 ## Footage
 
-<p align="center"><img src="docs/media/footage/preview.gif" alt="Portal room running in the engine" width="900"></p>
+<!-- <p align="center"><img src="docs/media/footage/preview.gif" alt="Portal room running in the engine" width="900"></p> -->
 
-<p align="center"><img src="docs/media/footage/engine-demo.gif" alt="Engine rendering demo" width="900"></p>
+<p align="center"><img src="docs/media/footage/engine1.png" alt="Engine rendering demo" width="900"></p>
 
-<p align="center"><img src="docs/media/footage/engine-demo-debug-ui.gif" alt="Engine debug UI" width="900"></p>
+<p align="center"><img src="docs/media/footage/engine2.png" alt="Engine rendering demo" width="900"></p>
 
-<p align="center"><img src="docs/media/footage/scene-editor.gif" alt="Scene editor" width="900"></p>
+<p align="center"><img src="docs/media/footage/demo_gif.gif" alt="Engine rendering demo" width="900"></p>
+
+<!-- <p align="center"><img src="docs/media/footage/engine-demo-debug-ui.gif" alt="Engine debug UI" width="900"></p> -->
+
+<!-- <p align="center"><img src="docs/media/footage/scene-editor.gif" alt="Scene editor" width="900"></p> -->
+
 
 <p align="center"><img src="docs/media/footage/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
 
-<p align="center"><img src="docs/media/footage/ac_vexian.gif" alt="Model viewer turntable" width="600"></p>
+<!-- <p align="center"><img src="docs/media/footage/ac_vexian.gif" alt="Model viewer turntable" width="600"></p> -->
 
 
 ## Build
@@ -70,20 +75,6 @@ make run PRESET=ps1
 make run PRESET=n64
 make run PRESET=pixel-3d
 make run PRESET=modern-ps1
-```
-
-## Content Pipeline
-
-```text
-  .scn    source
-    |
-    x     scene cooker
-    |
-    v
-  .map    runtime data
-    |
-    v
-  game
 ```
 
 ## License
