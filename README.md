@@ -42,10 +42,10 @@
 
 <!-- <p align="center"><img src="docs/media/footage/scene-editor.gif" alt="Scene editor" width="900"></p> -->
 
+<p align="center"><img src="docs/media/footage/ac_vexian.gif" alt="Model viewer turntable" width="900"></p>
 
-<p align="center"><img src="docs/media/footage/model-viewer-turntable.gif" alt="Model viewer turntable" width="600"></p>
+<p align="center"><img src="docs/media/footage/model-viewer-turntable.gif" alt="Model viewer turntable" width="900"></p>
 
-<!-- <p align="center"><img src="docs/media/footage/ac_vexian.gif" alt="Model viewer turntable" width="600"></p> -->
 
 
 ## Build
