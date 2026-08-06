@@ -193,6 +193,69 @@ void deProperties(entt::registry& r, entt::entity e, ByteReader& b,
     r.emplace_or_replace<Properties>(e, std::move(props));
 }
 
+// Clips. Hand-written for the same reason Scripts and Properties are: a list of
+// tracks each holding a list of keys is not a field table.
+//
+// Only the authored half is written. `time`, `playing`, `started`, `finished`
+// and `direction` are where the clip currently *is* -- the same rule that keeps
+// Orbit::travelled and LightAnimation::time out of their field lists -- and a
+// saved playhead would reload mid-swing. The resolved indices are omitted for a
+// stronger reason: they are offsets into a registry that the loading build may
+// have numbered differently, so persisting them would silently animate the
+// wrong field.
+void serClip(const entt::registry& r, entt::entity e, ByteWriter& w)
+{
+    const auto& c = r.get<Clip>(e);
+    w.f32(c.duration);
+    w.u8(uint8_t(c.mode));
+    w.f32(c.speed);
+    w.u8(c.autoplay ? 1u : 0u);
+    w.u16(uint16_t(c.tracks.size()));
+    for (const ClipTrack& t : c.tracks) {
+        w.str(t.target);
+        w.str(t.component);
+        w.str(t.field);
+        w.u8(uint8_t(t.ease));
+        w.u16(uint16_t(t.keys.size()));
+        for (const ClipKey& k : t.keys) {
+            w.f32(k.t);
+            w.vec3(k.value);
+        }
+    }
+}
+
+void deClip(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
+{
+    Clip c;
+    // The reader is bounded to this component and yields zeros past its end, so
+    // a truncated payload produces fewer tracks rather than reading into the
+    // next component's bytes.
+    if (bytes >= 10) {
+        c.duration = b.f32();
+        c.mode = ClipMode(b.u8());
+        c.speed = b.f32();
+        c.autoplay = b.u8() != 0;
+        const uint16_t trackCount = b.u16();
+        for (uint16_t i = 0; i < trackCount && b.ok(); ++i) {
+            ClipTrack t;
+            t.target = b.str();
+            t.component = b.str();
+            t.field = b.str();
+            t.ease = ClipEase(b.u8());
+            const uint16_t keyCount = b.u16();
+            for (uint16_t k = 0; k < keyCount && b.ok(); ++k) {
+                ClipKey key;
+                key.t = b.f32();
+                key.value = b.vec3();
+                t.keys.push_back(key);
+            }
+            if (b.ok())
+                c.tracks.push_back(std::move(t));
+        }
+    }
+    r.emplace_or_replace<Clip>(e, std::move(c));
+}
+
 void serTransform(const entt::registry& r, entt::entity e, ByteWriter& w)
 {
     const auto& t = r.get<Transform>(e);
@@ -442,6 +505,31 @@ template <> FieldSpan fieldsOf<ecs::Lifetime>()
     return {f, int(std::size(f))};
 }
 
+// Transform is reflected for its *readers* only -- the clip player, the
+// inspector, anything generic -- and keeps the hand-written serTransform /
+// deTransform pair below.
+//
+// The split is deliberate and is the one case where a component has both. Its
+// .map payload is the oldest in the engine and is in every file on disk, so the
+// codec cannot move to the generic one; but leaving the field table off made
+// the single most animatable component in the engine the one thing a clip could
+// not name, which is exactly the "same standard" failure this table exists to
+// prevent. A reflected field list costs nothing to a component that does not
+// serialise through it.
+//
+// `rotation` is declared even though a clip refuses to interpolate a Quat: the
+// inspector wants it, and a track naming it gets a warning that says what to do
+// instead rather than silence about a field that is visibly there.
+template <> FieldSpan fieldsOf<ecs::Transform>()
+{
+    static const Field f[] = {
+        ENG_FIELD(ecs::Transform, position, FieldType::Vec3),
+        ENG_FIELD(ecs::Transform, rotation, FieldType::Quat),
+        ENG_FIELD(ecs::Transform, scale, FieldType::Vec3),
+    };
+    return {f, int(std::size(f))};
+}
+
 template <> FieldSpan fieldsOf<ecs::Spin>()
 {
     static const Field f[] = {
@@ -669,8 +757,20 @@ std::size_t copyEntities(entt::registry& dst, const entt::registry& src,
 void registerEngineComponents(ComponentRegistry& reg)
 {
     reg.add({"Name", 1, addDefault<Name>, has<Name>, remove<Name>, serName, deName});
-    reg.add({"Transform", 2, addDefault<Transform>, has<Transform>,
-             remove<Transform>, serTransform, deTransform});
+    // Hand-written codec (the payload is shipped) with a reflected field table
+    // bolted on, so generic readers -- clipSystem, a generic inspector -- can
+    // address `position` and `scale` by name. See fieldsOf<Transform> above.
+    {
+        ComponentType t{"Transform", 2, addDefault<Transform>, has<Transform>,
+                        remove<Transform>, serTransform, deTransform};
+        const FieldSpan fields = fieldsOf<Transform>();
+        t.fields = fields.data;
+        t.fieldCount = fields.count;
+        t.instance = [](entt::registry& r, entt::entity e) -> void* {
+            return r.try_get<Transform>(e);
+        };
+        reg.add(t);
+    }
     reg.add({"MeshRenderer", 3, addDefault<MeshRenderer>, has<MeshRenderer>,
              remove<MeshRenderer>, serMesh, deMesh});
     reg.add({"LightRef", 4, addDefault<LightRef>, has<LightRef>,
@@ -736,6 +836,19 @@ void registerEngineComponents(ComponentRegistry& reg)
     // comment for why that matters.
     reg.add({"Properties", 36, addDefault<Properties>, has<Properties>,
              remove<Properties>, serProperties, deProperties});
+    // Short authored animations. Hand-written codec, and no field table -- a
+    // clip's shape is a list of tracks of keys, so there is nothing for the
+    // generic inspector to draw and `authorable` stays true only because the
+    // add-component menu should still be able to put an empty one on an entity
+    // for a track editor to fill.
+    //
+    // The component this animates is named by *string* inside a track, which is
+    // why the registry it is registered in is also the registry clipSystem
+    // resolves against: one table, so a component is animatable on the same day
+    // it is serialisable, and the two cannot disagree about what a field is
+    // called.
+    reg.add({"Clip", 37, addDefault<Clip>, has<Clip>, remove<Clip>, serClip,
+             deClip});
 }
 
 } // namespace ecs

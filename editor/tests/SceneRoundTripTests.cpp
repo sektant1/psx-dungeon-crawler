@@ -233,6 +233,117 @@ int main()
                 "serialize is still idempotent with scripts present");
     }
 
+    // --- clips -------------------------------------------------------------
+    // A clip's JSON is hand-written on both sides (a list of tracks of keys is
+    // not a field table), so it is exactly the shape that rots without a test.
+    {
+        const std::string json = R"({
+          "format": "raven-scene", "version": 2, "id": "scene.clip",
+          "entities": [
+            { "id": "door",
+              "clip": {
+                "duration": 0.8, "mode": "pingpong", "speed": 1.5,
+                "autoplay": false,
+                "tracks": [
+                  { "target": "lid", "component": "Transform",
+                    "field": "position", "ease": "easeout",
+                    "keys": [ {"t": 0.0, "v": [0,0,0]},
+                              {"t": 0.8, "v": [0,3.2,0]} ] },
+                  { "component": "ShaderParams", "field": "tint",
+                    "keys": [ {"t": 0.0, "v": 0.25} ] }
+                ]
+              } } ] })";
+
+        SceneDocument doc = parse(json, "<clip>");
+        const Entity* door = doc.find("door");
+        require(door && door->clip, "the clip parses");
+        require(door->clip->duration == 0.8f, "duration");
+        require(door->clip->mode == eng::ecs::ClipMode::PingPong, "mode");
+        require(door->clip->speed == 1.5f, "speed");
+        require(!door->clip->autoplay, "autoplay=false survives -- it is the "
+                                       "non-default, and a writer that dropped "
+                                       "it would silently start every clip");
+        require(door->clip->tracks.size() == 2, "both tracks");
+        require(door->clip->tracks[0].target == "lid", "the descendant target");
+        require(door->clip->tracks[0].ease == eng::ecs::ClipEase::EaseOut, "ease");
+        require(door->clip->tracks[0].keys.size() == 2, "two keys");
+        require(door->clip->tracks[0].keys[1].value.y == 3.2f, "the key value");
+        // A scalar `v` is the shorthand a Float track wants; it lands in x.
+        require(door->clip->tracks[1].keys[0].value.x == 0.25f,
+                "a bare number is accepted for a scalar field");
+
+        // Runtime state is never read back, even from a hand-edited file: a
+        // saved playhead would reload mid-swing.
+        require(door->clip->time == 0.0f && !door->clip->playing,
+                "the playhead starts at zero regardless of the file");
+
+        const std::string first = serializeSceneSource(doc);
+        require(first == serializeSceneSource(parse(first, "<clip again>")),
+                "serialize is idempotent with a clip present");
+    }
+
+    // A default clip writes only what it must, so adding the component to an
+    // entity is a small diff rather than a page of restated defaults.
+    {
+        SceneDocument doc;
+        doc.id = "scene.default_clip";
+        Entity entity;
+        entity.id = "thing";
+        entity.clip = ClipAuthor{};
+        doc.add(std::move(entity));
+
+        const std::string text = serializeSceneSource(doc);
+        require(text.find("\"speed\"") == std::string::npos,
+                "a default speed is omitted");
+        require(text.find("\"autoplay\"") == std::string::npos,
+                "so is a default autoplay");
+        require(text.find("\"mode\"") == std::string::npos,
+                "and the default mode");
+        require(text.find("\"tracks\"") == std::string::npos,
+                "and an empty track list, which every freshly added clip has");
+        require(text.find("\"duration\"") != std::string::npos,
+                "but the duration is always written -- it is what a clip IS, "
+                "and a file that omitted it would read as zero-length");
+    }
+
+    // Every mode and every ease survives a write and a read.
+    //
+    // The failure this catches is the one the shared id tables were introduced
+    // for: the reader's accepted set and the writer's emitted set used to be
+    // two hand-written lists, and a value in one but not the other is a scene
+    // that saves and then refuses to load. Looping over the enums rather than
+    // naming three cases means a mode added later is covered without anyone
+    // remembering to extend this.
+    {
+        for (int m = 0; m < eng::ecs::kClipModeCount; ++m) {
+            for (int e = 0; e < eng::ecs::kClipEaseCount; ++e) {
+                SceneDocument doc;
+                doc.id = "scene.enum_sweep";
+                Entity entity;
+                entity.id = "thing";
+                ClipAuthor clip;
+                clip.mode = eng::ecs::ClipMode(m);
+                eng::ecs::ClipTrack track;
+                track.component = "Transform";
+                track.field = "position";
+                track.ease = eng::ecs::ClipEase(e);
+                track.keys = {{0.0f, {0.0f, 0.0f, 0.0f}}};
+                clip.tracks.push_back(std::move(track));
+                entity.clip = std::move(clip);
+                doc.add(std::move(entity));
+
+                const std::string text = serializeSceneSource(doc);
+                const SceneDocument back = parse(text, "<enum sweep>");
+                const Entity* thing = back.find("thing");
+                require(thing && thing->clip, "the clip survives");
+                require(int(thing->clip->mode) == m, "the mode survives");
+                require(thing->clip->tracks.size() == 1, "the track survives");
+                require(int(thing->clip->tracks[0].ease) == e,
+                        "and so does the ease");
+            }
+        }
+    }
+
     std::cout << "SceneRoundTripTests: ok\n";
     return 0;
 }

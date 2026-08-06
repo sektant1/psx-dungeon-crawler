@@ -2,6 +2,8 @@
 
 #include <editor/content/SceneCook.h>
 
+#include <scene/ComponentRegistry.h> // mapio::coreRegistry(), for clip tracks
+
 #include <FirstPersonHands.h>
 #include <HandsDefinition.h>
 #include <PlayerWeapons.h>
@@ -10,6 +12,7 @@
 #include <eng/Renderer.h>
 #include <eng/assets/AssetRoot.h>
 #include <eng/ecs/Components.h>
+#include <eng/ecs/Systems.h>
 #include <eng/ecs/components/MeshSource.h>
 #include <eng/particles/ParticleEffectDesc.h>
 #include <ecs/RendererSceneBackend.h>
@@ -38,6 +41,11 @@ struct PreviewBridge::Impl
         // authored one would throw the author out of their own view on every
         // rebuild, which is once per keystroke.
         world.attachRenderer(backend, /*drivesCamera=*/false);
+        // The same table the cooker and the inspector use. A clip addresses a
+        // component by name, so without this the Timeline could scrub a clip
+        // in the editor and see nothing move (see docs/clips.md). It is a
+        // function-local static and so outlives this world.
+        world.setComponentTypes(&mapio::coreRegistry());
     }
 
     eng::ecs::RendererSceneBackend backend;
@@ -387,6 +395,23 @@ void PreviewBridge::tickViewmodel(float dt)
     // viewport reads as a dropped-frame editor rather than as the shipped look.
     mImpl->hands.update(mImpl->renderer, dt, dt, {});
 }
+
+void PreviewBridge::tickClips(float dt)
+{
+    // Nothing to do in a scene with no clips, which is nearly every scene. The
+    // early-out is what keeps this off the editor's frame budget: sync()
+    // reconciles the whole world, and paying for that every frame so that a
+    // component almost nothing carries can animate is the wrong trade.
+    if (mImpl->world.registry().view<eng::ecs::Clip>().empty())
+        return;
+    // The clip player writes component fields and tags moved transforms Dirty;
+    // sync() is what turns that into node poses. Both, in that order, or a
+    // scrub would change the components and nothing on screen.
+    eng::ecs::clipSystem(mImpl->world, dt);
+    mImpl->world.sync();
+}
+
+eng::ecs::World& PreviewBridge::world() { return mImpl->world; }
 
 void PreviewBridge::setVisible(eng::Renderer& renderer, bool visible)
 {

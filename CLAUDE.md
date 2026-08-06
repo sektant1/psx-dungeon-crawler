@@ -76,6 +76,25 @@ or a half-linked `libOgreMain.so` that segfaults in `call_init` before `main`).
 - If the tree does break, `cmake -S . -B build` regenerates the makefiles
   without discarding object files. Never `rm -rf build`.
 
+## "It rebuilds everything and I changed nothing"
+
+Killing a build, or running two in one build directory, can truncate ninja's
+dependency log. Ninja then meets a partial record on load, prints `premature
+end of file; recovering`, and **discards every record after it**. The next
+build recompiles all of it, writes its records past the same corruption, and
+loses them again on the next load. It never recovers on its own — an untouched
+tree rebuilds from scratch, forever.
+
+Diagnose it, don't guess: `ninja -C build -d explain -n game` blames `stored
+deps info out of date` / `deps are missing` instead of naming a changed file,
+and `ninja -C build -t deps` opens with the `premature end of file` warning and
+marks entries `STALE`. Fix with `make build-reset` (drops the log, costs one
+rebuild, touches no object files). `make` now takes an flock per build tree so
+concurrent invocations cannot re-corrupt it.
+
+Note this failure is invisible to the compiler and looks exactly like a slow
+build, so measure before optimising anything.
+
 ## Targets
 
 ```sh

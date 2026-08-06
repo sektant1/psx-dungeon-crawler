@@ -83,12 +83,17 @@ move.
 
 ### What hangs there
 
-`game::WeaponViewmodel` builds one of two presentations, chosen by data:
+The weapon's presentation is chosen by data, in three branches:
 
 | `[player_weapon.<id>.viewmodel]` | What is built |
 |---|---|
+| `presentation = "sprite"` | a stack of camera-space sprite layers (below) |
 | `model = "meshes/viewmodels/weapons/x.glb"` | that mesh, wearing `material` |
 | `model` empty, `[[...part]]` rows authored | the primitives, generated |
+
+The first is `game::SpriteViewmodel`; the other two are `game::WeaponViewmodel`.
+`WeaponController`, `ViewmodelMotion` and the projectile/melee/hitscan
+deliveries never learn which branch was taken.
 
 Both render with `renderOnTop`, like the hands: a first-person weapon is a
 presentation element, not a world object, and must not vanish into a wall the
@@ -99,6 +104,85 @@ than an empty hand.
 This is the whole model/sprite/primitive seam. `WeaponController` and
 `ViewmodelMotion` never learn which branch was taken, so giving weapon #4 a real
 model is a path in a TOML.
+
+## Sprite viewmodels
+
+The classic FPS presentation: a stack of flat images in front of the eye, drawn
+in order. `presentation = "sprite"` on a weapon selects it, and the weapon's
+`model` and `[[...part]]` rows are then ignored.
+
+```toml
+[player_weapon.<id>.viewmodel]
+presentation = "sprite"
+
+[[player_weapon.<id>.viewmodel.sprite_layer]]
+id = "weapon"
+material = "Game/Viewmodel/Sprite/Talon"
+offset = [0.0, -0.30]     # camera space, metres, on the sprite plane
+size = [0.72, 0.72]       # quad width/height in metres
+distance = 0.55           # metres in front of the eye -- also the layer order
+grid = [2, 2]             # atlas columns, rows
+idle_frame = 0
+fire_frame = 1            # first cell of the firing run
+fire_frame_count = 3
+fire_fps = 18.0
+```
+
+Layers are **sorted farthest-first and drawn with depth testing off**. That is
+not laziness: the viewmodel pass runs after the world and reuses its depth
+buffer, so a depth-testing sprite would be occluded by the wall the player is
+standing against — the one failure a first-person presentation element must not
+have. With depth off, submission order is the only thing that orders the stack,
+which is why `distance` is sorted on rather than merely positioning.
+
+Frame selection writes `uvScale` / `uvOffset` on the layer's **material**, which
+the shared vertex shader already reads every draw. Two consequences worth
+knowing: an animated layer needs its **own material entry**, or two layers will
+fight over the cell; and a frame index outside the atlas is rejected at load
+rather than clamped, because sampling a neighbouring cell reads as a sprite
+flickering into someone else's art rather than as a number that is wrong.
+
+### Hands are layers too
+
+The player's hand layers are authored **once**, in `viewmodel_hands.toml`:
+
+```toml
+[[hands.sprite_layer]]
+id = "hands"
+material = "Game/Viewmodel/Sprite/Hands"
+offset = [0.0, -0.46]
+size = [1.10, 0.55]
+distance = 0.50
+```
+
+A sprite weapon composites its own layers over these, so replacing the player's
+hands is one file and every sprite weapon follows. A weapon that wants its own
+hands can still author a hand layer of its own — it is the same type — but the
+shared set is what a weapon gets for free. This is the sprite-mode answer to the
+same question sockets answer in model mode.
+
+### Placeholder art
+
+`tools/gen_viewmodel_sprites.py` generates the shipped placeholder sheets into
+`assets/textures/viewmodels/` — gloved hands, a clawed weapon with a three-cell
+firing bloom, and an arcane muzzle flash. Regenerate rather than hand-editing;
+it is deterministic, chunky by construction (authored at half resolution and
+nearest-upscaled) and uses one small palette so the set looks related.
+
+### Sprite or model?
+
+Both are first-class and neither is a migration target for the other. A sprite
+viewmodel rides the same `ViewmodelMotion` output as the skinned rig, so bob,
+sway, recoil and the landing dip apply identically. What differs:
+
+|  | sprite | model |
+|---|---|---|
+| Where the weapon hangs | a camera-space layer | a socket on the hand skeleton |
+| Muzzle | authored camera-space point | a joint, via `muzzle_socket` |
+| Animation | atlas cells on a fire edge | authored skeletal clips |
+| Hands | shared sprite layers | the shared skinned rig |
+
+`aim != muzzle` holds in both — aim is the camera ray in either case.
 
 ## aim ≠ muzzle
 
@@ -145,6 +229,13 @@ sensitivity and hand placement are one tuning session.
 
 - **Camera** — base FOV, sprint FOV kick, sensitivity, head bob. Restrained on
   purpose: move the viewmodel loudly, the camera subtly.
+- **Movement** — the locomotion tuning: acceleration, friction, air
+  acceleration, jump velocity, the state multipliers and the jump forgiveness
+  windows. Edited in place, so a drag is felt on the next simulation step with
+  no respawn. It also derives the two numbers a designer actually reasons about
+  — *milliseconds to full speed* and *jump apex against the world's gravity* —
+  and **Copy [player.movement]** hands you the block for `game.toml`.
+  See [fps-gameplay.md](fps-gameplay.md#movement).
 - **Rig socket** — offset (right/up/forward), rotation, scale, framing presets,
   motion freeze, reload from `game.toml`.
 - **Motion layers** — the global multipliers and each layer's own numbers.
@@ -156,7 +247,11 @@ sensitivity and hand placement are one tuning session.
   block, formatted to paste straight back.
 
 - **Attachment** — the socket the weapon hangs on, and its offset, rotation and
-  scale inside it. This is where a weapon is seated in the hand.
+  scale inside it. This is where a weapon is seated in the hand. A **sprite**
+  weapon shows **Sprite layers** instead — a readout of its layers plus the one
+  number it still owns, the camera-space muzzle. It has no skeleton, so a
+  socket and a joint muzzle would be sliders that move nothing, and the
+  **Weapon attach** and **Muzzle** gizmo targets are inert for it too.
 
 ### The gizmo
 
@@ -188,7 +283,10 @@ way to see that `aim != muzzle` is actually true for the weapon in your hands.
 - **Viewmodel Rig** — socket, rotation, scale, the layer multipliers and each
   layer's numbers.
 - **Viewmodel Preview** — show the hands here, holding a weapon picked from
-  `weapons.toml`.
+  `weapons.toml`. **Both presentations preview**: the bridge builds the real
+  `FirstPersonHands`, which picks model or sprite from the weapon itself, so a
+  sprite weapon needed no editor change at all. That is the payoff of putting
+  the branch inside the rig rather than at its call sites.
 
 The preview builds the **real** `FirstPersonHands`, the real socket set and the
 real `WeaponViewmodel` at the camera entity's place in the world — the same
@@ -297,8 +395,9 @@ What is **not** implemented, and what it would take:
 - **One authored GLTF containing hands + weapon.** Point `[hands] model` at it
   and give the weapon an empty `model` with no parts. Untested; the socket layer
   does not care, but nothing exercises it.
-- **Sprite viewmodels.** `WeaponViewmodel` has two branches and would take a
-  third; the socket, motion and muzzle layers are unaffected.
+- **Weapon-owned sprite frames driven by anything but the fire edge.** A sprite
+  layer animates on `triggerFire` and returns to its idle cell. There is no
+  walk cycle or reload run, because there is no reload.
 
 The three seams to keep honest are the ones this document names: **placement is
 not animation**, **aim is not muzzle**, and **a socket is a point on the
@@ -313,6 +412,8 @@ skeleton, not a place in the hand**.
 | Socket maths + live socket nodes | `game/src/ViewmodelSocket.{h,cpp}` |
 | Hands rig definition + loader | `game/src/HandsDefinition.{h,cpp}`, `assets/config/viewmodel_hands.toml` |
 | Held weapon: mesh or primitives | `game/src/WeaponViewmodel.{h,cpp}` |
+| Sprite layer stack | `game/src/SpriteViewmodel.{h,cpp}` |
+| Placeholder sprite art | `tools/gen_viewmodel_sprites.py`, `assets/textures/viewmodels/vm_*.png` |
 | Editor preview component | `game/src/ViewmodelPreview.h`, `editor/src/viewport/PreviewBridge.cpp` |
 | Hand rig, clips, muzzle | `game/src/FirstPersonHands.{h,cpp}` |
 | Panel + gizmo | `game/src/DebugOverlay.cpp` |

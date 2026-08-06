@@ -115,6 +115,7 @@ void buildEditorWorkspace(std::uint32_t dockspaceId, float width, float height,
     ImGui::DockBuilderDockWindow(workspace_window::kSceneView, centre);
     ImGui::DockBuilderDockWindow(workspace_window::kConsole, diagnostics);
     ImGui::DockBuilderDockWindow(workspace_window::kProblems, diagnostics);
+    ImGui::DockBuilderDockWindow(workspace_window::kTimeline, diagnostics);
     ImGui::DockBuilderFinish(dock);
 }
 

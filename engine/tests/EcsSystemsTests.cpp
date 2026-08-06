@@ -1,3 +1,4 @@
+#include <eng/ecs/ComponentRegistry.h>
 #include <eng/ecs/Systems.h>
 #include <eng/ecs/World.h>
 
@@ -225,6 +226,196 @@ int main()
         tickComponentSystems(world, 0.016f);
         require(world.registry().storage<entt::entity>().size() == 1u,
                 "a world with no behavioural components is untouched");
+    }
+
+    // --- Clip: a short animation over a reflected field --------------------
+    //
+    // The claim under test is the one the whole design rests on: a clip names a
+    // component and a field as *strings* and drives them through the registry,
+    // so a field is animatable the day it is reflected and this file needs no
+    // per-component code.
+    ComponentRegistry types;
+    registerEngineComponents(types);
+
+    // A door that slides up over 0.8 s and holds.
+    {
+        World world;
+        world.setComponentTypes(&types);
+        const entt::entity door = world.create("door");
+        world.registry().emplace<Transform>(door, Transform{});
+
+        Clip clip;
+        clip.duration = 0.8f;
+        clip.mode = ClipMode::Once;
+        ClipTrack track;
+        track.component = "Transform";
+        track.field = "position";
+        track.ease = ClipEase::Linear;
+        track.keys = {{0.0f, {0.0f, 0.0f, 0.0f}}, {0.8f, {0.0f, 3.2f, 0.0f}}};
+        clip.tracks.push_back(track);
+        world.registry().emplace<Clip>(door, clip);
+
+        clipSystem(world, 0.4f);
+        require(std::abs(world.registry().get<Transform>(door).position.y - 1.6f) < 1e-3f,
+                "halfway through a linear track is halfway up");
+        require(world.registry().all_of<Dirty>(door),
+                "a clip that moved a Transform must tag it -- the hierarchy "
+                "resolve is driven by Dirty, not by comparing poses");
+
+        clipSystem(world, 0.4f);
+        require(std::abs(world.registry().get<Transform>(door).position.y - 3.2f) < 1e-3f,
+                "Once reaches the last key exactly");
+        require(!world.registry().get<Clip>(door).playing, "and stops there");
+
+        clipSystem(world, 10.0f);
+        require(std::abs(world.registry().get<Transform>(door).position.y - 3.2f) < 1e-3f,
+                "a stopped Once clip holds its last pose rather than drifting");
+        require(world.registry().get<Clip>(door).finished,
+                "and `finished` stays latched -- a door that has finished "
+                "opening is a thing gameplay asks about, so the flag has to "
+                "survive the frame that set it");
+
+        // A finished clip costs nothing per frame. The bug this pins: the pose
+        // was re-applied every tick, which re-tagged the Transform Dirty and
+        // kept the hierarchy resolving that branch forever for something that
+        // had not moved since it stopped.
+        world.registry().remove<Dirty>(door);
+        clipSystem(world, 0.016f);
+        require(!world.registry().all_of<Dirty>(door),
+                "a stopped clip whose playhead has not moved re-poses nothing");
+
+        // ...but a SCRUB does re-pose. Nothing tells the system the playhead
+        // moved on a paused clip, so it compares against the time it last
+        // applied rather than testing `playing`.
+        world.registry().get<Clip>(door).time = 0.4f;
+        clipSystem(world, 0.0f);
+        require(std::abs(world.registry().get<Transform>(door).position.y - 1.6f) < 1e-3f,
+                "seeking a paused clip re-poses it -- what the Timeline's "
+                "scrubbing needs, and what testing `playing` could not do");
+    }
+
+    // Loop wraps with fmod rather than by subtracting, so a frame far longer
+    // than the clip (a level load, a breakpoint) leaves the playhead in range
+    // instead of stuck past the end.
+    {
+        World world;
+        world.setComponentTypes(&types);
+        const entt::entity e = world.create("pulse");
+        world.registry().emplace<Transform>(e, Transform{});
+
+        Clip clip;
+        clip.duration = 1.0f;
+        clip.mode = ClipMode::Loop;
+        ClipTrack track;
+        track.component = "Transform";
+        track.field = "position";
+        track.ease = ClipEase::Linear;
+        track.keys = {{0.0f, {0.0f, 0.0f, 0.0f}}, {1.0f, {0.0f, 10.0f, 0.0f}}};
+        clip.tracks.push_back(track);
+        world.registry().emplace<Clip>(e, clip);
+
+        clipSystem(world, 7.25f);
+        const float t = world.registry().get<Clip>(e).time;
+        require(t >= 0.0f && t < 1.0f, "a seven-second frame wraps into range");
+        require(std::abs(t - 0.25f) < 1e-3f, "and lands where fmod says");
+    }
+
+    // A track naming a component the entity does not carry, or a field that
+    // does not exist, is inert -- not a crash. Both are one typo away in a
+    // hand-edited scene, and the failure has to be survivable.
+    {
+        World world;
+        world.setComponentTypes(&types);
+        const entt::entity e = world.create("typo");
+        world.registry().emplace<Transform>(e, Transform{});
+
+        Clip clip;
+        ClipTrack absent;    // the component exists, the entity lacks it
+        absent.component = "ShaderParams";
+        absent.field = "tint";
+        absent.keys = {{0.0f, {1.0f, 0.0f, 0.0f}}};
+        ClipTrack misspelled;
+        misspelled.component = "Transform";
+        misspelled.field = "postion";
+        misspelled.keys = {{0.0f, {0.0f, 5.0f, 0.0f}}};
+        clip.tracks = {absent, misspelled};
+        world.registry().emplace<Clip>(e, clip);
+
+        clipSystem(world, 0.5f);
+        require(world.registry().get<Transform>(e).position.y == 0.0f,
+                "a misspelled field animates nothing rather than something else");
+        require(world.registry().valid(e), "and the entity survives");
+    }
+
+    // The generality claim, stated as a test: a component this file never
+    // mentions by type animates because it is reflected. ShaderParams::tint is
+    // a Colour, and nothing in ClipSystem.cpp knows ShaderParams exists.
+    {
+        World world;
+        world.setComponentTypes(&types);
+        const entt::entity e = world.create("glow");
+        world.registry().emplace<ShaderParams>(e, ShaderParams{});
+
+        Clip clip;
+        clip.duration = 1.0f;
+        ClipTrack track;
+        track.component = "ShaderParams";
+        track.field = "tint";
+        track.ease = ClipEase::Linear;
+        track.keys = {{0.0f, {0.0f, 0.0f, 0.0f}}, {1.0f, {1.0f, 0.5f, 0.0f}}};
+        clip.tracks.push_back(track);
+        world.registry().emplace<Clip>(e, clip);
+
+        clipSystem(world, 1.0f);
+        const glm::vec3 tint = world.registry().get<ShaderParams>(e).tint;
+        require(std::abs(tint.r - 1.0f) < 1e-3f && std::abs(tint.g - 0.5f) < 1e-3f,
+                "a reflected Colour on a component ClipSystem never heard of");
+    }
+
+    // autoplay=false stays put until something sets playing, so a clip a lever
+    // is supposed to start does not play itself on load.
+    {
+        World world;
+        world.setComponentTypes(&types);
+        const entt::entity e = world.create("waiting");
+        world.registry().emplace<Transform>(e, Transform{});
+
+        Clip clip;
+        clip.autoplay = false;
+        ClipTrack track;
+        track.component = "Transform";
+        track.field = "position";
+        track.keys = {{0.0f, {0.0f, 0.0f, 0.0f}}, {1.0f, {0.0f, 4.0f, 0.0f}}};
+        clip.tracks.push_back(track);
+        world.registry().emplace<Clip>(e, clip);
+
+        clipSystem(world, 0.5f);
+        require(world.registry().get<Transform>(e).position.y == 0.0f,
+                "autoplay=false does not play");
+        world.registry().get<Clip>(e).playing = true;
+        clipSystem(world, 0.5f);
+        require(world.registry().get<Transform>(e).position.y > 0.0f,
+                "and plays once something starts it");
+    }
+
+    // A World with no component table runs the tick without a clip doing
+    // anything -- what keeps the headless combat sim and the map tests free of
+    // the registry.
+    {
+        World world;
+        const entt::entity e = world.create("orphan");
+        world.registry().emplace<Transform>(e, Transform{});
+        Clip clip;
+        ClipTrack track;
+        track.component = "Transform";
+        track.field = "position";
+        track.keys = {{0.0f, {0.0f, 0.0f, 0.0f}}, {1.0f, {0.0f, 9.0f, 0.0f}}};
+        clip.tracks.push_back(track);
+        world.registry().emplace<Clip>(e, clip);
+
+        tickComponentSystems(world, 0.5f);
+        require(world.registry().get<Transform>(e).position.y == 0.0f,
+                "no table, no name resolution, no animation, no crash");
     }
 
     std::cout << "EcsSystemsTests OK\n";

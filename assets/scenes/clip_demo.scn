@@ -1,0 +1,123 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.clip_demo",
+  "entities": [
+    {
+      "id": "camera",
+      "name": "Camera",
+      "transform": {
+        "position": [0.0, 3.2, 9.0],
+        "rotation_degrees": [-12.0, 0.0, 0.0]
+      },
+      "camera": {
+        "fov_degrees": 55.0
+      }
+    },
+    {
+      "id": "key_light",
+      "name": "Key Light",
+      "transform": {
+        "rotation_degrees": [-45.0, -35.0, 0.0]
+      },
+      "light": {
+        "type": "directional",
+        "colour": [1.0, 0.96, 0.88]
+      }
+    },
+    {
+      "id": "floor",
+      "name": "Floor",
+      "transform": {
+        "position": [0.0, -0.1, 0.0]
+      },
+      "primitive": {
+        "kind": "box",
+        "size": [16.0, 0.2, 16.0]
+      }
+    },
+
+    {
+      "id": "riser",
+      "name": "Riser -- Transform.position, once",
+      "transform": {
+        "position": [-3.4, 0.5, 0.0]
+      },
+      "primitive": {
+        "kind": "box",
+        "size": [1.4, 1.0, 1.4]
+      },
+      "clip": {
+        "duration": 1.2,
+        "tracks": [
+          {
+            "component": "Transform",
+            "field": "position",
+            "ease": "smooth",
+            "keys": [
+              { "t": 0.0, "v": [-3.4, 0.5, 0.0] },
+              { "t": 1.2, "v": [-3.4, 3.4, 0.0] }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "pacer",
+      "name": "Pacer -- Transform.position, pingpong",
+      "transform": {
+        "position": [0.0, 0.6, 0.0]
+      },
+      "primitive": {
+        "kind": "sphere",
+        "radius": 0.6
+      },
+      "clip": {
+        "duration": 1.6,
+        "mode": "pingpong",
+        "tracks": [
+          {
+            "component": "Transform",
+            "field": "position",
+            "ease": "smooth",
+            "keys": [
+              { "t": 0.0, "v": [0.0, 0.6, -2.4] },
+              { "t": 1.6, "v": [0.0, 0.6, 2.4] }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "pulser",
+      "name": "Pulser -- ShaderParams.tint, loop",
+      "transform": {
+        "position": [3.4, 0.9, 0.0]
+      },
+      "primitive": {
+        "kind": "sphere",
+        "radius": 0.9
+      },
+      "shader": {
+        "tint": [1.0, 1.0, 1.0]
+      },
+      "clip": {
+        "duration": 2.0,
+        "mode": "loop",
+        "tracks": [
+          {
+            "component": "ShaderParams",
+            "field": "tint",
+            "ease": "smooth",
+            "keys": [
+              { "t": 0.0, "v": [1.0, 0.35, 0.2] },
+              { "t": 1.0, "v": [0.25, 0.6, 1.0] },
+              { "t": 2.0, "v": [1.0, 0.35, 0.2] }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

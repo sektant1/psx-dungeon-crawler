@@ -75,10 +75,57 @@ character_push_impulse = 2.0
 multithreaded = false
 
 [player]
-speed = 3.0
+# Boomer-shooter pace. Heretic and Doom run their marine at roughly this in
+# metres per second, and it is the single number that decides whether the game
+# reads as a dungeon crawl or as a shooter -- everything below is tuned against
+# it, and the viewmodel bob is normalised to bob_reference_speed so retuning it
+# does not also retune the hands.
+speed = 8.5
 mouse_sensitivity = 0.002
 # Profile in blood.toml the player bleeds when something lands a hit.
 blood = "human"
+
+# How the character accelerates, stops, jumps and falls.
+#
+# The brief for this movement is "no tactical-shooter inertia": you reach full
+# speed in about a tenth of a second and stop in about the same, so a strafe
+# reads as a step rather than as a slide. These were compiled-in constants in
+# FpsController.cpp until the FPS slice; they are data now precisely because
+# they are the numbers that need twenty iterations, not one.
+#
+# The air model is Doom/Heretic-like, not Quake-like: air input steers toward a
+# clamped target, so airborne speed can never exceed ground speed and there is
+# no strafe-jump acceleration. Predictability was worth more here than a speed
+# technique. See docs/fps-gameplay.md.
+#
+# move_speed is NOT here on purpose -- it is `speed` above, which is also what a
+# level's First-Person Controller component overrides.
+[player.movement]
+# m/s^2 toward the input while grounded. 90 covers 0 -> 8.5 m/s in ~0.09 s,
+# which is below the threshold where a ramp is perceptible at all.
+ground_acceleration = 90.0
+# m/s^2 back to rest with no input. Slightly less than acceleration so a hard
+# stop still costs a moment, but nowhere near ice.
+ground_friction = 70.0
+# m/s^2 while airborne: enough to commit to a different direction mid-jump,
+# not enough to make jumping a faster way to travel.
+air_acceleration = 22.0
+# Upward m/s on jump. Against the world's -18 gravity that is a ~1.55 m apex
+# and ~0.83 s of hang -- clears a crate, does not float.
+jump_velocity = 7.5
+# Fallback only: used when there is no physics world (tests, tools). The live
+# game falls at `[physics] gravity`, because the player and the props it walks
+# into have to agree about which way is down.
+gravity = 18.0
+# Sprint is a lean on top of an already fast run, not the real speed with the
+# walk as a penalty. 1.35 * 8.5 = ~11.5 m/s.
+sprint_multiplier = 1.35
+walk_multiplier = 0.55
+crouch_multiplier = 0.50
+# Jump forgiveness, seconds: how long after walking off a ledge a jump still
+# fires, and how long before landing one is remembered.
+coyote_time = 0.10
+jump_buffer_time = 0.12
 
 # The shared first-person rig: where the hands sit in front of the eye, and how
 # hard each procedural layer is allowed to move them. Every weapon inherits this

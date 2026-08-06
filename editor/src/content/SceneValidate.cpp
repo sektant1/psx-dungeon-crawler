@@ -1,5 +1,6 @@
 #include <editor/content/SceneValidate.h>
 
+#include <editor/content/SceneContract.h>
 #include <eng/assets/AssetRoot.h>
 
 extern "C" {
@@ -235,6 +236,51 @@ std::vector<Issue> validate(const SceneDocument& document,
     std::vector<Issue> issues;
     const GameIds gameIds = GameIds::load();
     const GridConfig grid = GridConfig::fromCatalog(catalog);
+
+    // The scene's own contract, first: a scene nobody can look through is
+    // wrong in a way no per-entity check can see, and it was the one failure
+    // this validator had no code for. See SceneContract.h.
+    //
+    // Reported from the shared table rather than restated here, so the panel,
+    // the validator and the cooker cannot disagree about what a scene needs.
+    // Two of the six roles reach this list, and the line between them matters.
+    //
+    // An UNFILLED role is an issue only when it is an Error -- a scene nobody
+    // can look through, a world with nowhere to start. The Warning-severity
+    // holes (no authored audio listener, no directional key light) are normal:
+    // the player's camera hears when a scene authors no listener, and a torch-
+    // lit dungeon has no directional light by design. Reporting those would put
+    // two warnings on every correct level in the repo, which is exactly how a
+    // panel gets ignored. They are still shown in the Scene section, where they
+    // read as information rather than as faults.
+    //
+    // An OVER-FILLED role is always an issue when the role cannot have two --
+    // two audio listeners leaves positional audio undefined, and nothing else
+    // in the editor would ever say so.
+    {
+        const ContractReport contract = sceneContract(document);
+        for (const RoleStatus& status : contract.roles) {
+            if (!status.applicable || status.severity == Severity::Info)
+                continue;
+            if (status.count == 1)
+                continue;
+            const bool unfilledError =
+                status.count == 0 && status.severity == Severity::Error;
+            const bool ambiguous =
+                status.count > 1 && status.fix != QuickFix::None;
+            if (!unfilledError && !ambiguous)
+                continue;
+            Issue issue;
+            issue.severity = status.severity;
+            issue.code = unfilledError ? "scene.role_unfilled"
+                                       : "scene.role_ambiguous";
+            issue.message = std::string(sceneRoleName(status.role)) + ": " +
+                            status.detail;
+            issue.entity = status.filledBy;
+            issue.fix = unfilledError ? status.fix : QuickFix::None;
+            issues.push_back(std::move(issue));
+        }
+    }
 
     int playerSpawns = 0;
     int exits = 0;
@@ -900,6 +946,40 @@ bool applyQuickFix(SceneDocument& document, const KitCatalog& catalog,
         spawn.name = "Player Spawn";
         spawn.playerSpawn = true;
         document.add(spawn);
+        return true;
+    }
+    // The three view fixes go through setSceneView(), which *swaps* the shape
+    // on the camera the scene already has rather than adding a second view. See
+    // SceneContract.h for why the entity is reused.
+    case QuickFix::AddFirstPersonView:
+        return !setSceneView(document, SceneKind::FirstPerson).empty();
+    case QuickFix::AddThirdPersonView:
+        return !setSceneView(document, SceneKind::ThirdPerson).empty();
+    case QuickFix::AddShotCamera:
+        return !setSceneView(document, SceneKind::Shot).empty();
+    case QuickFix::AddAudioListener: {
+        // On its own entity rather than on the camera: a listener that rode the
+        // camera could not be moved off it, and "the player hears from their
+        // head but the scene is framed from a crane" is a real shot.
+        Entity listener;
+        listener.id = document.allocateId("audio_listener");
+        listener.name = "Audio Listener";
+        listener.audioListener = AudioListenerAuthor{};
+        document.add(listener);
+        return true;
+    }
+    case QuickFix::AddKeyLight: {
+        Entity light;
+        light.id = document.allocateId("key_light");
+        light.name = "Key Light";
+        LightAuthor authored;
+        authored.type = LightAuthor::Type::Directional;
+        // Aimed down and across rather than straight down: a top-down key
+        // flattens every wall in a dungeon into the same value.
+        authored.colour = {1.0f, 0.96f, 0.88f};
+        light.light = authored;
+        light.transform.rotationDegrees = {-45.0f, -35.0f, 0.0f};
+        document.add(light);
         return true;
     }
     default:

@@ -69,6 +69,10 @@ void DebugPanels::install(eng::DebugTools& console)
     // bloom and grade settings that sit in the same dock group.
     mParticlePanel.install(console, eng::PanelGroup::Content);
 
+    // World group: a clip drives an entity in the scene, so it is read beside
+    // the player and camera tabs rather than beside the shader ones.
+    mClipPanel.install(console, eng::PanelGroup::World);
+
     // The ascent profile differs from the descent one only in palette and in
     // running the flow the other way; everything else is the shared default.
     eng::PortalTuning up;
@@ -148,6 +152,35 @@ void DebugPanels::drawCombatTab()
 // TOML block out of here and pasting it back, exactly like the engine's
 // Animation tab.
 namespace {
+
+// `[player.movement]`, formatted to paste straight back into game.toml.
+//
+// The same edit-live-then-paste loop the viewmodel rig uses (viewmodelRigToml),
+// and deliberately the same shape: the panel does not write config files, it
+// hands you the block. `move_speed` is not emitted because it is not in that
+// section -- it is `[player] speed`, and printing it here would invite pasting
+// a duplicate key that TOML rejects.
+std::string movementTuningToml(const eng::MovementTuning& m)
+{
+    char buffer[768];
+    std::snprintf(buffer, sizeof(buffer),
+                  "[player.movement]\n"
+                  "ground_acceleration = %.1f\n"
+                  "ground_friction = %.1f\n"
+                  "air_acceleration = %.1f\n"
+                  "jump_velocity = %.2f\n"
+                  "gravity = %.1f\n"
+                  "sprint_multiplier = %.2f\n"
+                  "walk_multiplier = %.2f\n"
+                  "crouch_multiplier = %.2f\n"
+                  "coyote_time = %.3f\n"
+                  "jump_buffer_time = %.3f\n",
+                  m.groundAcceleration, m.groundFriction, m.airAcceleration,
+                  m.jumpVelocity, m.gravity, m.sprintMultiplier,
+                  m.walkMultiplier, m.crouchMultiplier, m.coyoteTime,
+                  m.jumpBufferTime);
+    return buffer;
+}
 
 // A drag row labelled in the axes a first-person artist thinks in, rather than
 // x/y/z, which nobody can map to "further right" without guessing.
@@ -325,6 +358,58 @@ void DebugPanels::drawViewmodelTab()
         ImGui::PopID();
     }
 
+    if (section("Movement")) {
+        ImGui::PushID("move");
+        // Edited in place: FpsController reads its tuning every simulate(), so
+        // a drag is felt on the next step with no respawn. The struct is
+        // validated on the way IN from data (setMovementTuning); a slider
+        // cannot produce a non-finite value, and clamping the ranges here is
+        // what keeps it that way.
+        eng::MovementTuning& move = camera.movementTuning();
+        ImGui::SliderFloat("Move speed", &move.moveSpeed, 1.0f, 20.0f,
+                           "%.2f m/s");
+        ImGui::SliderFloat("Ground accel", &move.groundAcceleration, 5.0f,
+                           200.0f, "%.0f m/s2");
+        ImGui::SliderFloat("Ground friction", &move.groundFriction, 5.0f,
+                           200.0f, "%.0f m/s2");
+        ImGui::SliderFloat("Air accel", &move.airAcceleration, 0.0f, 80.0f,
+                           "%.0f m/s2");
+        ImGui::SliderFloat("Jump velocity", &move.jumpVelocity, 1.0f, 15.0f,
+                           "%.2f m/s");
+        ImGui::SliderFloat("Sprint x", &move.sprintMultiplier, 1.0f, 3.0f,
+                           "%.2f");
+        ImGui::SliderFloat("Crouch x", &move.crouchMultiplier, 0.1f, 1.0f,
+                           "%.2f");
+        ImGui::SliderFloat("Coyote time", &move.coyoteTime, 0.0f, 0.4f,
+                           "%.3f s");
+        ImGui::SliderFloat("Jump buffer", &move.jumpBufferTime, 0.0f, 0.4f,
+                           "%.3f s");
+        // The two numbers a designer actually reasons about, derived rather
+        // than typed: how long to reach full speed, and how high the jump goes
+        // against the world's gravity. Both change as the sliders move.
+        const float toSpeed = move.groundAcceleration > 0.0f
+                                  ? move.moveSpeed / move.groundAcceleration
+                                  : 0.0f;
+        // The world's gravity, not the tuning's: `gravity` in MovementTuning is
+        // only the no-physics fallback, and quoting it here would print an
+        // apex the live game does not have.
+        const float gravity = mCur.context ? -mCur.context->physics.gravityY()
+                                           : move.gravity;
+        const float apex = gravity > 0.0f
+                               ? (move.jumpVelocity * move.jumpVelocity) /
+                                     (2.0f * gravity)
+                               : 0.0f;
+        ImGui::TextDisabled("%.0f ms to full speed   |   jump apex %.2f m",
+                            toSpeed * 1000.0f, apex);
+        ImGui::TextDisabled("Air is clamped, not Quake-like: no strafe-jump "
+                            "acceleration.");
+        if (ImGui::SmallButton("Copy [player.movement]"))
+            ImGui::SetClipboardText(movementTuningToml(move).c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("(paste into assets/config/game.toml)");
+        ImGui::PopID();
+    }
+
     if (section("Rig socket")) {
         ImGui::PushID("socket");
         ImGui::TextDisabled("Camera space: right / up / forward (-z is ahead).");
@@ -455,41 +540,64 @@ void DebugPanels::drawViewmodelTab()
         feelChanged |= ImGui::SliderFloat("Scale##w", &v.handsScale, 0.25f,
                                           3.0f, "x%.3f");
 
-        // Where the weapon sits *in the hand*, as opposed to where the hands
-        // sit in front of the eye. These are the numbers that were unreachable
-        // before sockets existed: the weapon had nowhere to hang, so seating it
-        // was not a thing anyone could do.
-        ImGui::SeparatorText("Attachment (socket on the hand rig)");
-        const std::vector<std::string> socketNames =
-            player->hands().sockets().names();
-        if (socketNames.empty()) {
-            ImGui::TextDisabled("no cooked rig, so no sockets to hang from");
-        } else if (ImGui::BeginCombo("Socket", v.socket.c_str())) {
-            for (const std::string& name : socketNames)
-                if (ImGui::Selectable(name.c_str(), name == v.socket)) {
-                    v.socket = name;
-                    // A different socket is a different parent, so this one
-                    // rebuilds rather than re-seats.
-                    if (mCur.context)
-                        player->rebuildWeaponViewmodel(*mCur.context);
-                }
-            ImGui::EndCombo();
+        // A sprite weapon hangs off no socket -- it has no skeleton -- so the
+        // whole attachment block below would be sliders that move nothing.
+        // Showing what it *does* have instead is the honest readout, and the
+        // muzzle is the one number here a sprite weapon still owns.
+        if (v.presentation == ViewmodelPresentation::Sprite) {
+            ImGui::SeparatorText("Sprite layers");
+            ImGui::TextDisabled(
+                "%zu weapon layer(s) over the hands', %zu drawn",
+                v.spriteLayers.size(), player->hands().sprite().layerCount());
+            for (const ViewmodelSpriteLayer& layer : v.spriteLayers)
+                ImGui::BulletText("%s  %.2fx%.2f m @ %.2f m  grid %dx%d",
+                                  layer.id.c_str(), layer.size.x, layer.size.y,
+                                  layer.distance, layer.grid.x, layer.grid.y);
+            ImGui::TextDisabled("Layers are authored in weapons.toml; they are "
+                                "sorted farthest-first and drawn depth-off.");
+            if (axisDrag("Muzzle (m)##sm", v.spriteMuzzle, 0.002f, -2.0f, 2.0f,
+                         "R##smx", "U##smy", "F##smz") &&
+                mCur.context)
+                player->refreshViewmodel(*mCur.context);
+            ImGui::TextDisabled("Camera space. Aim is still the camera ray -- "
+                                "this only moves where the shot comes from.");
+        } else {
+            // Where the weapon sits *in the hand*, as opposed to where the
+            // hands sit in front of the eye. These are the numbers that were
+            // unreachable before sockets existed: the weapon had nowhere to
+            // hang, so seating it was not a thing anyone could do.
+            ImGui::SeparatorText("Attachment (socket on the hand rig)");
+            const std::vector<std::string> socketNames =
+                player->hands().sockets().names();
+            if (socketNames.empty()) {
+                ImGui::TextDisabled("no cooked rig, so no sockets to hang from");
+            } else if (ImGui::BeginCombo("Socket", v.socket.c_str())) {
+                for (const std::string& name : socketNames)
+                    if (ImGui::Selectable(name.c_str(), name == v.socket)) {
+                        v.socket = name;
+                        // A different socket is a different parent, so this one
+                        // rebuilds rather than re-seats.
+                        if (mCur.context)
+                            player->rebuildWeaponViewmodel(*mCur.context);
+                    }
+                ImGui::EndCombo();
+            }
+            bool attachChanged =
+                axisDrag("Offset (m)##a", v.attachOffset, 0.002f, -1.0f, 1.0f,
+                         "X##aox", "Y##aoy", "Z##aoz");
+            attachChanged |=
+                axisDrag("Rotation (deg)##a", v.attachRotationDegrees, 0.25f,
+                         -180.0f, 180.0f, "P##arx", "Y##ary", "R##arz");
+            attachChanged |= ImGui::SliderFloat("Scale##a", &v.attachScale,
+                                                0.05f, 3.0f, "x%.3f");
+            if (attachChanged && mCur.context)
+                player->refreshViewmodel(*mCur.context);
+            ImGui::TextDisabled("presenting: %s%s%s",
+                                weaponPresentationName(
+                                    player->hands().weapon().presentation()),
+                                v.model.empty() ? "" : "  model ",
+                                v.model.c_str());
         }
-        bool attachChanged =
-            axisDrag("Offset (m)##a", v.attachOffset, 0.002f, -1.0f, 1.0f,
-                     "X##aox", "Y##aoy", "Z##aoz");
-        attachChanged |=
-            axisDrag("Rotation (deg)##a", v.attachRotationDegrees, 0.25f,
-                     -180.0f, 180.0f, "P##arx", "Y##ary", "R##arz");
-        attachChanged |= ImGui::SliderFloat("Scale##a", &v.attachScale, 0.05f,
-                                            3.0f, "x%.3f");
-        if (attachChanged && mCur.context)
-            player->refreshViewmodel(*mCur.context);
-        ImGui::TextDisabled("presenting: %s%s%s",
-                            weaponPresentationName(
-                                player->hands().weapon().presentation()),
-                            v.model.empty() ? "" : "  model ",
-                            v.model.c_str());
 
         ImGui::SeparatorText("Recoil");
         feelChanged |= ImGui::SliderFloat("Distance", &v.recoilDistance, 0.0f,
@@ -652,6 +760,15 @@ void DebugPanels::drawViewmodelGizmo()
     const glm::mat4 lean = compose(weapon.handsOffset,
                                    weapon.handsRotationDegrees,
                                    weapon.handsScale);
+    // Both joint-anchored targets are meaningless for a sprite weapon: it has
+    // no skeleton, so there is no socket to seat it in and no joint to hang a
+    // muzzle on. Its muzzle is a camera-space point, dragged in the Sprite
+    // layers section above; anchoring a gizmo to a joint it does not use would
+    // move handles that change nothing on screen.
+    if (weapon.presentation == ViewmodelPresentation::Sprite &&
+        (mGizmoTarget == ViewmodelGizmoTarget::WeaponAttach ||
+         mGizmoTarget == ViewmodelGizmoTarget::Muzzle))
+        return;
     const std::optional<glm::mat4> jointWorld =
         mGizmoTarget == ViewmodelGizmoTarget::Muzzle
             ? player->hands().muzzleJointWorld(renderer)

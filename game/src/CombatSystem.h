@@ -2,6 +2,7 @@
 #include "BloodSystem.h"
 #include "PlayerWeapons.h"
 #include "Projectiles.h"
+#include "WeaponDelivery.h"
 #include "combat/CombatDirector.h"
 #include "combat/CombatVocabulary.h"
 
@@ -16,8 +17,14 @@ namespace game {
 
 struct GameContext;
 
-// Owns generic player projectile delivery and shared damage model. Archived
-// melee/spell prototypes remain in source but no longer participate here.
+// Owns generic player weapon delivery and the shared damage model.
+//
+// Three deliveries, selected per weapon by data (WeaponFireMode): projectiles
+// spawn bodies and are reconciled every frame, melee sweeps a shape over a
+// timed window, hitscan resolves a ray at once. They are two objects rather
+// than one because their lifetimes are opposites, and one damage path because
+// they report through the same impact callback -- everything downstream of a
+// hit sees an event, never a delivery.
 class CombatSystem {
 public:
     void init(GameContext& ctx);
@@ -36,6 +43,10 @@ public:
                     glm::vec3 eye, glm::vec3 forward,
                     std::optional<glm::vec3> muzzle = std::nullopt);
     ProjectileSystem& projectiles() { return mProjectiles; }
+    // Melee swings and hitscan rays. Exposed for the same reason projectiles
+    // are: main.cpp installs the impact callback that turns a hit into damage,
+    // audio and hit feel, and both deliveries must reach the same one.
+    WeaponDeliverySystem& delivery() { return mDelivery; }
 
     BloodSystem& blood() { return mBlood; }
     const BloodSystem& blood() const { return mBlood; }
@@ -49,6 +60,7 @@ public:
 
 private:
     ProjectileSystem mProjectiles;
+    WeaponDeliverySystem mDelivery;
     CombatDirector mDirector;
     BloodSystem mBlood;
 };

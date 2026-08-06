@@ -482,6 +482,56 @@ Json writeEntity(const Entity& entity)
         }
         out["orbit"] = std::move(node);
     }
+    if (entity.clip) {
+        // Authored state only. `time`, `playing`, `started`, `finished`,
+        // `direction` and the resolved track indices are deliberately absent:
+        // see the component header for why a saved playhead is wrong, and the
+        // .map codec for the stronger reason the indices are.
+        const ClipAuthor& clip = *entity.clip;
+        const ClipAuthor defaults;
+        Json node = Json::object();
+        node["duration"] = canonical(clip.duration);
+        // Ids from the component's own table, not a switch here: reader and
+        // writer sharing one list is what stops a mode being writable and not
+        // loadable. Defaults stay omitted, like everywhere else in this file.
+        if (clip.mode != defaults.mode)
+            node["mode"] = eng::ecs::clipModeId(clip.mode);
+        if (canonical(clip.speed) != canonical(defaults.speed))
+            node["speed"] = canonical(clip.speed);
+        if (clip.autoplay != defaults.autoplay)
+            node["autoplay"] = clip.autoplay;
+
+        Json tracks = Json::array();
+        const eng::ecs::ClipTrack trackDefaults;
+        for (const eng::ecs::ClipTrack& track : clip.tracks) {
+            Json entry = Json::object();
+            if (!track.target.empty())
+                entry["target"] = track.target;
+            entry["component"] = track.component;
+            entry["field"] = track.field;
+            if (track.ease != trackDefaults.ease)
+                entry["ease"] = eng::ecs::clipEaseId(track.ease);
+            Json keys = Json::array();
+            for (const eng::ecs::ClipKey& key : track.keys) {
+                Json out2 = Json::object();
+                out2["t"] = canonical(key.t);
+                // Three numbers always. The reader accepts one for a scalar
+                // field, but the writer cannot know the field's type without
+                // the registry -- and a round trip that silently narrowed a
+                // Vec3 track to its x would be the worst possible bug here.
+                out2["v"] = vec3(key.value);
+                keys.push_back(std::move(out2));
+            }
+            entry["keys"] = std::move(keys);
+            tracks.push_back(std::move(entry));
+        }
+        // Omitted when empty, like every other default in this writer. A clip
+        // freshly added from the inspector has no tracks yet, and "tracks": []
+        // on every one of them is a line of noise in a reviewed file.
+        if (!tracks.empty())
+            node["tracks"] = std::move(tracks);
+        out["clip"] = std::move(node);
+    }
     if (entity.playerSpawn)
         out["player_spawn"] = true;
     if (entity.exitYawDegrees) {

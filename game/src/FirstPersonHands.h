@@ -2,6 +2,7 @@
 
 #include "HandsDefinition.h"
 #include "PlayerWeapons.h"
+#include "SpriteViewmodel.h"
 #include "ViewmodelMotion.h"
 #include "ViewmodelSocket.h"
 #include "WeaponViewmodel.h"
@@ -91,6 +92,10 @@ public:
     const ViewmodelSocketSet& sockets() const { return mSockets; }
     const HandsDefinition& definition() const { return mHands; }
     const WeaponViewmodel& weapon() const { return mWeapon; }
+    // The sprite stack, live only while a `presentation = "sprite"` weapon is
+    // equipped. Empty otherwise, which is how a caller asks which presentation
+    // is on screen without the rig growing a mode enum of its own.
+    const SpriteViewmodel& sprite() const { return mSprite; }
     eng::NodeHandle node() const { return mNode; }
 
 private:
@@ -108,9 +113,19 @@ private:
     eng::SkinnedMeshHandle mMesh{};
     eng::SkinInstanceHandle mSkin{};
     eng::NodeHandle mNode{};
+    // The arms, on their own child of mNode at identity, so a sprite weapon can
+    // hide them without hiding the sprite stack that stands in for them.
+    eng::NodeHandle mSkinNode{};
     ViewmodelMotion mMotion;
     ViewmodelSocketSet mSockets;
     WeaponViewmodel mWeapon;
+    // The two presentations are mutually exclusive and both hang off mNode, so
+    // they inherit the same procedural motion. Exactly one is non-empty at a
+    // time; setWeapon is the only place that decides which.
+    SpriteViewmodel mSprite;
+    // Camera-space muzzle for the sprite presentation, which has no skeleton to
+    // hang one on. Only meaningful while mSprite is live.
+    glm::vec3 mSpriteMuzzle{0.0f};
     std::string mWeaponSocket;
     std::string mIdleClip = "relax";
     std::string mFireClip = "grab.R";

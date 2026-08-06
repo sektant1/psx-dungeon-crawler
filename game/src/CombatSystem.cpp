@@ -28,6 +28,10 @@ void CombatSystem::fixedStep(GameContext& ctx, glm::vec3 eye, glm::vec3 forward,
                              float dt)
 {
     mProjectiles.fixedUpdate(ctx.physics, ctx.renderer, dt);
+    // The eye and view direction are handed on rather than captured at fire
+    // time so a live melee swing tracks the player: turning mid-swing turns the
+    // sweep, which is what circling an enemy while holding the button means.
+    mDelivery.fixedUpdate(ctx.physics, ctx.renderer, eye, forward, dt);
     mDirector.tick(dt); // i-frames + status effects (Burn DoT) at fixed cadence
 
     // Feel layer: advance every combatant's action-state machine, then regen
@@ -52,13 +56,26 @@ void CombatSystem::onContact(GameContext& ctx, const eng::HitEvent& e)
 void CombatSystem::clear(GameContext& ctx)
 {
     mProjectiles.clear(ctx.physics, ctx.renderer);
+    mDelivery.clear(ctx.physics, ctx.renderer);
 }
 
 void CombatSystem::fireWeapon(GameContext& ctx, const PlayerWeaponDef& weapon,
                               glm::vec3 eye, glm::vec3 forward,
                               std::optional<glm::vec3> muzzle)
 {
-    mProjectiles.fire(ctx.physics, ctx.renderer, weapon, eye, forward, muzzle);
+    // The whole of "which kind of weapon is this". Everything above -- input,
+    // cooldowns, ARC, the switch lock, the viewmodel kick -- ran identically to
+    // get here, and everything below reports the same impact event.
+    switch (weapon.fireMode) {
+    case WeaponFireMode::Projectile:
+        mProjectiles.fire(ctx.physics, ctx.renderer, weapon, eye, forward,
+                          muzzle);
+        break;
+    case WeaponFireMode::Melee:
+    case WeaponFireMode::Hitscan:
+        mDelivery.fire(ctx.physics, ctx.renderer, weapon, eye, forward, muzzle);
+        break;
+    }
 }
 
 } // namespace game

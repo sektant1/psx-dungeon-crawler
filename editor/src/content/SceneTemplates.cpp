@@ -47,6 +47,7 @@ const char* sceneTemplateName(SceneTemplate which)
     case SceneTemplate::Empty: return "Empty";
     case SceneTemplate::Room: return "Single room";
     case SceneTemplate::TechDemo: return "Tech demo";
+    case SceneTemplate::Screen: return "2D screen (menu / HUD)";
     }
     return "Empty";
 }
@@ -66,6 +67,52 @@ bool buildTemplate(SceneTemplate which, const GridConfig& grid,
     const auto cellPoint = [&](int col, int row) {
         return cellCentre(grid, col, row, 0.0f);
     };
+
+    // --- 2D screen ---------------------------------------------------------
+    // A page, not a world: no spawn, no exit, no floor. Everything is authored
+    // in virtual pixels against the page's own extent, so the three quads below
+    // are at pixel coordinates and stay that size at every window resolution.
+    //
+    // Built before the grid helpers are used, because none of them apply -- a
+    // cell is a metre of dungeon and this scene's unit is a pixel.
+    if (which == SceneTemplate::Screen) {
+        Entity camera;
+        camera.id = out.allocateId("screen_camera");
+        camera.name = "Screen Camera";
+        camera.camera = CameraAuthor{};
+        ScreenAuthor screen;
+        // Contain rather than Height: a menu is the case where nothing authored
+        // may ever be cropped, and a first screen is far more often a menu than
+        // a HUD. A HUD flips this one field.
+        screen.fit = eng::ecs::ScreenCamera::Contain;
+        screen.origin = eng::ecs::ScreenCamera::TopLeft;
+        camera.screen = screen;
+        out.add(std::move(camera));
+
+        // A backing plate and two rows, at pixel coordinates from the top-left
+        // origin. Primitives rather than meshes so the template needs no art
+        // and cannot dangle a reference.
+        const auto plate = [&](const char* stem, const char* name, float x,
+                               float y, float w, float h, float layer) {
+            Entity panel;
+            panel.id = out.allocateId(stem);
+            panel.name = name;
+            eng::ecs::PrimitiveMesh mesh;
+            mesh.kind = eng::ecs::PrimitiveMesh::Kind::Plane;
+            mesh.size = {w, h, 1.0f};
+            panel.primitive = mesh;
+            // +x right, -y down from the top-left corner, z back by whole
+            // layers -- ScreenCamera::layerSpacing is what a layer index means.
+            panel.transform.position = {x + w * 0.5f, -(y + h * 0.5f),
+                                        -layer * 0.5f};
+            panel.castShadows = false;
+            out.add(std::move(panel));
+        };
+        plate("panel", "Panel", 24.0f, 24.0f, 380.0f, 192.0f, 0.0f);
+        plate("row", "Row 1", 40.0f, 56.0f, 348.0f, 28.0f, 1.0f);
+        plate("row", "Row 2", 40.0f, 96.0f, 348.0f, 28.0f, 1.0f);
+        return true;
+    }
 
     if (which == SceneTemplate::Empty) {
         Entity& spawn = emit(out, "player_spawn", cellPoint(0, 0), "Player Spawn");

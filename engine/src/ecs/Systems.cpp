@@ -191,6 +191,10 @@ void tickComponentSystems(World& world, float dt)
     // it and turned by whichever of the two owns its facing.
     orbitSystem(world, dt);
     lightAnimationSystem(world, dt);
+    // After the three procedural modulators: a clip is the more specific
+    // statement about a field, so it gets the last word on any they share. Free
+    // on a World that never attached a component table.
+    clipSystem(world, dt);
     // Last: an entity in its final frame animates like any other, and anything
     // the systems above would have touched is gone before the frame's sync.
     lifetimeSystem(world, dt);

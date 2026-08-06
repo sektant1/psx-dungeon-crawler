@@ -277,6 +277,16 @@ const std::vector<ComponentType>& table()
          },
          [](Entity& e) { e.orbit.reset(); }, always},
 
+        {"clip", "Clip", "a short animation: keyframes over component fields",
+         [](const Entity& e) { return e.clip.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // Empty of tracks on purpose: which field this clip drives is the
+             // decision the Timeline is for, and a guessed default track would
+             // be an animation the author has to notice and delete.
+             e.clip = game::content::ClipAuthor{};
+         },
+         [](Entity& e) { e.clip.reset(); }, always},
+
         {"scripts", "Scripts", "Lua behaviour: start, update, collisions",
          [](const Entity& e) { return !e.scripts.empty(); },
          [](Entity& e, const ComponentDefaults&) {

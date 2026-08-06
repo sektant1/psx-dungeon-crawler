@@ -3,9 +3,13 @@
 #include <string>
 
 // Data-oriented tunables for every attack, loaded from game.toml's [combat.*]
-// tables and live-editable in the debug UI. Systems (SpellSystem,
-// ProjectileSystem, MeleeSystem) hold a pointer to one instance and read it
-// each time they fire, so UI edits take effect on the next cast/swing.
+// tables and live-editable in the debug UI.
+//
+// Historical note worth keeping: this used to be where a fireball, a beam and a
+// melee swing got their numbers, one global block each, read by three singleton
+// systems. That is why the game could only ever have one of each. Player
+// weapons now carry their own delivery block per weapon (see PlayerWeapons.h),
+// and the systems that read these globals are gone.
 //
 // Hotkeys are stored as the input ACTION name plus the current key name; the
 // action->key mapping itself lives in [bindings]. The debug UI rebinds live

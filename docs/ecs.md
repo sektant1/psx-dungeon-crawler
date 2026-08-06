@@ -106,6 +106,7 @@ one, so a file needing `Transform` does not pull Jolt's layer enum in through
 | `Collider` | a shape that occupies space |
 | `RigidBody` | …and the simulation moves it |
 | `KinematicControl` | …but gameplay steers it |
+| `Clip` | a short authored animation over reflected fields — see [clips.md](clips.md) |
 | `Scripts` | Lua behaviours attached here: paths plus per-instance props |
 | `NodeRef` / `BodyRef` / `ParticlesRef` / `MaterialApplied` / `ScriptState` | runtime handles, written by reconcilers and the script host, never by callers |
 
@@ -155,11 +156,19 @@ Four components do something over time. Each has one system in
 | `Spin` | `spinSystem` | rotates the local `Transform`, so the subtree turns with it |
 | `Orbit` | `orbitSystem` | writes the position on a ring, and the facing when it is aiming |
 | `LightAnimation` | `lightAnimationSystem` | writes `LightColour` from the `LightRef`'s authored colour |
+| `Clip` | `clipSystem` | plays a short authored animation over reflected fields |
 | `Lifetime` | `lifetimeSystem` | counts down, then `destroyHierarchy` |
 | `Visibility` | *(SceneSync)* | pushed to the node when it changes |
 
-`tickComponentSystems(world, dt)` runs the three that need a clock, in the order
-a frame wants them. Call it **before** `World::sync()`; `sync()` deliberately
+`clipSystem` is the one that addresses its target by **name** rather than by C++
+type: a track says `"Transform"`/`"position"` and resolves it through the
+`ComponentRegistry`. That is why `World::setComponentTypes()` exists, and why
+every reflected field is animatable the day it is declared. See
+[clips.md](clips.md).
+
+`tickComponentSystems(world, dt)` runs the ones that need a clock, in the order
+a frame wants them — the three procedural modulators, then clips (the more
+specific statement about a field, so it gets the last word), then lifetimes. Call it **before** `World::sync()`; `sync()` deliberately
 does not, because the editor syncs its preview world every frame and would
 otherwise watch authored entities spin and expire while placing them.
 

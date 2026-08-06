@@ -88,6 +88,25 @@ int main()
     entity.orbit = OrbitAuthor{{1.0f, 2.0f, 3.0f}, {0.0f, 1.0f, 0.0f}, 5.5f,
                                24.0f, 90.0f, 1.5f,
                                OrbitAuthor::Facing::Centre};
+    // Every non-default clip field, and a track with a non-default ease and two
+    // keys -- otherwise the clip subschema is only checked against the shape a
+    // default-constructed component happens to write, which is the exact rot
+    // this file exists to catch.
+    {
+        ClipAuthor clip;
+        clip.duration = 0.8f;
+        clip.mode = eng::ecs::ClipMode::PingPong;
+        clip.speed = 1.5f;
+        clip.autoplay = false;
+        eng::ecs::ClipTrack track;
+        track.target = "lid";
+        track.component = "Transform";
+        track.field = "position";
+        track.ease = eng::ecs::ClipEase::EaseOut;
+        track.keys = {{0.0f, {0.0f, 0.0f, 0.0f}}, {0.8f, {0.0f, 3.2f, 0.0f}}};
+        clip.tracks.push_back(std::move(track));
+        entity.clip = std::move(clip);
+    }
     entity.exitYawDegrees = 90.0f;
     entity.marker = "boss.spawn";
     entity.enemySpawn = "goblin";
@@ -132,6 +151,10 @@ int main()
     checkObject(emitted["camera"], defs["camera"], "a camera");
     checkObject(emitted["spin"], defs["spin"], "a spin");
     checkObject(emitted["orbit"], defs["orbit"], "an orbit");
+    checkObject(emitted["clip"], defs["clip"], "a clip");
+    checkObject(emitted["clip"]["tracks"][0], defs["clip_track"], "a clip track");
+    checkObject(emitted["clip"]["tracks"][0]["keys"][0], defs["clip_key"],
+                "a clip key");
     checkObject(emitted["trigger"], defs["trigger"], "a trigger");
     checkObject(emitted["exit"], defs["entity"]["properties"]["exit"], "an exit");
 

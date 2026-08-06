@@ -84,5 +84,73 @@ int main()
             0.2f)
         return EXIT_FAILURE;
 
+    // --- movement tuning ----------------------------------------------------
+    // A tuning is applied whole or not at all: a controller running the new
+    // acceleration against the old friction is a feel nobody authored.
+    {
+        eng::MovementTuning tuning;
+        tuning.moveSpeed = 8.5f;
+        tuning.groundAcceleration = 90.0f;
+        if (!eng::validMovementTuning(tuning))
+            return EXIT_FAILURE;
+
+        eng::FpsController tuned;
+        tuned.reset(glm::vec3(0.0f), 3.0f, 0.002f, glm::vec3(-1000.0f),
+                    glm::vec3(1000.0f));
+        if (!tuned.setMovementTuning(tuning))
+            return EXIT_FAILURE;
+        // speed() is an alias for the tuning's move speed, not a second copy.
+        if (std::abs(tuned.speed() - 8.5f) > 0.001f)
+            return EXIT_FAILURE;
+
+        // 90 m/s^2 covers 0 -> 8.5 m/s in ~0.09 s, so a tenth of a second of
+        // input must already be at full speed. This is the "no ramp you can
+        // feel" property the whole tuning exists to deliver.
+        eng::FpsController::Command run;
+        run.move.y = 1.0f;
+        for (int i = 0; i < 6; ++i)
+            tuned.simulate(run, 1.0f / 60.0f);
+        if (tuned.horizontalSpeed() < 8.0f)
+            return EXIT_FAILURE;
+
+        // And releasing input stops it about as fast.
+        for (int i = 0; i < 12; ++i)
+            tuned.simulate({}, 1.0f / 60.0f);
+        if (tuned.horizontalSpeed() > 0.5f)
+            return EXIT_FAILURE;
+
+        // A rejected tuning must leave the live one untouched rather than
+        // half-applied. Non-finite is the case a bad TOML edit produces.
+        eng::MovementTuning broken = tuning;
+        broken.groundFriction = std::nanf("");
+        if (eng::validMovementTuning(broken) ||
+            tuned.setMovementTuning(broken))
+            return EXIT_FAILURE;
+        if (std::abs(tuned.movementTuning().groundAcceleration - 90.0f) > 0.001f)
+            return EXIT_FAILURE;
+
+        // Zero or negative rates are rejected for the same reason: a zero
+        // acceleration is a player who cannot move, and it reads as a hang.
+        broken = tuning;
+        broken.jumpVelocity = 0.0f;
+        if (eng::validMovementTuning(broken))
+            return EXIT_FAILURE;
+
+        // Jump velocity is the arc: a taller jump must actually leave the
+        // ground faster, which is what makes it tunable rather than decorative.
+        eng::MovementTuning high = tuning;
+        high.jumpVelocity = 7.5f;
+        eng::FpsController jumper;
+        jumper.reset(glm::vec3(0.0f), 8.5f, 0.002f, glm::vec3(-1000.0f),
+                     glm::vec3(1000.0f));
+        if (!jumper.setMovementTuning(high))
+            return EXIT_FAILURE;
+        eng::FpsController::Command jump;
+        jump.jumpPressed = true;
+        jumper.simulate(jump, 1.0f / 60.0f);
+        if (jumper.verticalSpeed() < 7.0f)
+            return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }

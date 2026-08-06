@@ -19,6 +19,10 @@ inline constexpr const char* kLayers = "Layers###Layers";
 inline constexpr const char* kInspector = "Inspector";
 inline constexpr const char* kProblems = "Problems###Issues";
 inline constexpr const char* kConsole = "Console";
+// Tabbed with Problems and Console along the bottom, where every DCC puts a
+// timeline and for the same reason: it is read against the viewport above it,
+// full width, while something plays.
+inline constexpr const char* kTimeline = "Timeline###Timeline";
 } // namespace workspace_window
 
 // Pixel targets are converted to split ratios only when the default workspace

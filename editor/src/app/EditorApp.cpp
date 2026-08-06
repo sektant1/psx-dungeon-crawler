@@ -16,7 +16,10 @@
 #include <algorithm>
 #include <editor/content/SceneSource.h>
 #include <editor/content/SceneTemplates.h>
+#include <editor/content/SceneContract.h>
 #include <editor/content/SceneValidate.h>
+
+#include <scene/ComponentRegistry.h> // mapio::coreRegistry(), for the Timeline
 #include <editor/content/SceneWriter.h>
 
 #include <eng/Input.h>
@@ -2185,6 +2188,11 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
         // The previewed hands animate on the frame clock; the document has not
         // changed, so this cannot ride the revision-guarded sync above.
         mPreview->tickViewmodel(f.dt);
+        // Authored clips, for the same reason and with the same caveat: the
+        // document has not changed, the clip is simply playing. Clips only --
+        // NOT tickComponentSystems -- so authored entities do not spin and
+        // expire under the author's cursor (see PreviewBridge::tickClips).
+        mPreview->tickClips(f.dt);
         // The whole scene, every storey, unless the author asks for the cut.
         // The cut is still here because a ceiling becomes a lid over a
         // top-down view, but it is opt-in now: the work plane is a placement
@@ -2580,7 +2588,9 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // v5: the Layers panel joined the left rail. The version is part of the id
     // so a saved v4 layout -- which has no node for the new window and would
     // leave it floating over the viewport -- cannot override the new topology.
-    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v5");
+    // v6: the Timeline joined the bottom rail beside Problems and Console, for
+    // exactly the same reason -- a saved v5 layout has no node for it.
+    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v6");
     if (!mLayoutBuilt || mResetLayoutRequested) {
         const bool missing = ImGui::DockBuilderGetNode(dock) == nullptr ||
                              ImGui::DockBuilderGetNode(dock)->IsEmpty();
@@ -2618,6 +2628,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // Materials/Effects mode cannot show one subject under another label.
     drawAssetBrowser();
     drawIssues();
+    drawTimeline();
     mConsole.draw();
     drawHelp();
     drawSettings();
@@ -6994,6 +7005,116 @@ void EditorApp::drawInspector()
     ImGui::End();
 }
 
+void EditorApp::drawTimeline()
+{
+    focusPanelIfRequested("timeline");
+    if (ImGui::Begin(workspace_window::kTimeline, nullptr, kPanelFlags)) {
+        // The panel edits the PREVIEW world's clips, not the document's.
+        //
+        // That is the honest state of this feature and worth saying plainly:
+        // the preview is rebuilt from the document on every edit, so a clip
+        // scrubbed here is a clip the author is *watching*, and retiming a key
+        // is lost on the next rebuild. Authoring a clip into the .scn needs the
+        // Clip component in the inspector, which is the next step and is not
+        // built. Previewing is still the half that cannot be done any other
+        // way -- a timeline you cannot play is not a timeline.
+        mClipPanel.setSources(mPreview ? &mPreview->world() : nullptr,
+                              &mapio::coreRegistry());
+        ImGui::TextDisabled(
+            "Previews clips in the viewport. Edits are not saved to the scene "
+            "yet.");
+        ImGui::Separator();
+        mClipPanel.drawBody();
+    }
+    ImGui::End();
+}
+
+void EditorApp::drawSceneContract()
+{
+    const ContractReport contract = sceneContract(mState.document);
+
+    // The kind, and what it means. A scene nobody can look through is the one
+    // state worth shouting about, so it is the only one drawn in the danger
+    // colour.
+    const bool empty = contract.kind == SceneKind::Empty;
+    if (empty)
+        ImGui::TextColored(kUiDanger, "%s", sceneKindName(contract.kind));
+    else
+        ImGui::Text("%s", sceneKindName(contract.kind));
+    ImGui::SameLine();
+    ImGui::TextDisabled("scene");
+    ImGui::TextWrapped("%s", sceneKindSummary(contract.kind));
+
+    // Changing the shape is one click, and it keeps the camera where the
+    // author put it (setSceneView). This was four manual component edits.
+    //
+    // Expressed as an edit or a create rather than a whole-document swap: the
+    // operation touches exactly one entity, and the undo stack should say so.
+    const auto setView = [this](SceneKind kind, const char* label) {
+        if (!ImGui::Button(label))
+            return;
+        Doc after = mState.document;
+        const AuthorId id = setSceneView(after, kind);
+        if (id.empty())
+            return;
+        const Entity* fixed = after.find(id);
+        if (!fixed)
+            return;
+        const std::string label2 =
+            std::string("make ") + sceneKindName(kind) + " scene";
+        if (const Entity* before = mState.document.find(id))
+            runCommand(makeEditEntity(label2, id, *before, *fixed));
+        else
+            runCommand(makeCreateEntity(*fixed));
+    };
+    setView(SceneKind::FirstPerson, "First person");
+    ImGui::SameLine();
+    setView(SceneKind::ThirdPerson, "Third person");
+    ImGui::SameLine();
+    setView(SceneKind::Shot, "Shot");
+    ImGui::SameLine();
+    setView(SceneKind::Screen, "2D screen");
+
+    if (ImGui::BeginTable("##roles", 3,
+                          ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("Role", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Filled by", ImGuiTableColumnFlags_WidthFixed,
+                                150.0f);
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
+        for (const RoleStatus& status : contract.roles) {
+            // A role this kind of scene does not have is not a hole. Reporting
+            // "no player spawn" on a menu is how a checklist gets ignored.
+            if (!status.applicable)
+                continue;
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            const bool hole = status.count == 0 &&
+                              status.severity != Severity::Info;
+            ImGui::TextColored(hole ? (status.severity == Severity::Error
+                                           ? kUiDanger
+                                           : kUiWarning)
+                                    : ImGui::GetStyleColorVec4(ImGuiCol_Text),
+                               "%s", sceneRoleName(status.role));
+            ImGui::TableNextColumn();
+            // Clicking the filler selects it: the fastest possible answer to
+            // "which entity is the camera in this scene".
+            if (!status.filledBy.empty()) {
+                ImGui::PushID(int(status.role));
+                if (ImGui::Selectable(status.filledBy.c_str(),
+                                      mState.isSelected(status.filledBy)))
+                    selectAndReveal(status.filledBy, false);
+                ImGui::PopID();
+            } else {
+                ImGui::TextDisabled("--");
+            }
+            ImGui::TableNextColumn();
+            ImGui::TextWrapped("%s", status.detail.c_str());
+        }
+        ImGui::EndTable();
+    }
+}
+
 void EditorApp::drawIssues()
 {
     focusPanelIfRequested("issues");
@@ -7012,6 +7133,13 @@ void EditorApp::drawIssues()
         ImGui::Text("%d issues (%d blocking)", int(mIssues.size()), errors);
         ImGui::SameLine();
         ImGui::TextDisabled("| cook: %s", mCookStatus.c_str());
+        ImGui::Separator();
+
+        // What this scene IS, before what is wrong with it. The roles below are
+        // the whole answer to "I opened a scene and I do not know what it does"
+        // -- one table, shared with the validator and the cooker, so a person
+        // reading this and a build failing cannot disagree (see docs/scenes.md).
+        drawSceneContract();
         ImGui::Separator();
 
         if (ImGui::BeginChild("##issues")) {
@@ -7076,6 +7204,16 @@ void EditorApp::drawIssues()
                                 return "Detach";
                             case QuickFix::AddPortalComponent:
                                 return "Add portal";
+                            case QuickFix::AddFirstPersonView:
+                                return "First person";
+                            case QuickFix::AddThirdPersonView:
+                                return "Third person";
+                            case QuickFix::AddShotCamera:
+                                return "Add camera";
+                            case QuickFix::AddAudioListener:
+                                return "Add listener";
+                            case QuickFix::AddKeyLight:
+                                return "Add key light";
                             case QuickFix::None:
                                 break;
                             }

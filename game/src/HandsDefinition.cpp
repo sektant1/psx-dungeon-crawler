@@ -1,5 +1,7 @@
 #include "HandsDefinition.h"
 
+#include "ViewmodelSpriteToml.h"
+
 #include <eng/Log.h>
 
 #define TOML_EXCEPTIONS 0
@@ -59,6 +61,17 @@ bool parseTable(const toml::table& root, HandsDefinition& out)
         }
     }
 
+    // Same replace-don't-merge rule the sockets follow, for the same reason.
+    if (const toml::array* layers = (*hands)["sprite_layer"].as_array()) {
+        parsed.spriteLayers.clear();
+        for (const toml::node& node : *layers) {
+            const toml::table* table = node.as_table();
+            if (!table)
+                return false;
+            parsed.spriteLayers.push_back(parseViewmodelSpriteLayer(*table));
+        }
+    }
+
     if (!validHandsDefinition(parsed))
         return false;
     out = std::move(parsed);
@@ -99,6 +112,12 @@ bool validHandsDefinition(const HandsDefinition& hands)
             if (hands.sockets[i].name == hands.sockets[j].name)
                 return false;
     }
+    // Hand sprite layers are held to the same bar as a weapon's. A bad row here
+    // would otherwise be dropped silently at build time and read as hands that
+    // simply did not appear.
+    for (const ViewmodelSpriteLayer& layer : hands.spriteLayers)
+        if (!validViewmodelSpriteLayer(layer))
+            return false;
     return true;
 }
 

@@ -582,6 +582,124 @@ bool parseSpin(const Json& source, SpinAuthor& out, const std::string& location,
     return true;
 }
 
+// A clip: a duration and a list of tracks, each a list of keys.
+//
+// Hand-written rather than driven by a FieldSpan, for the same reason `scripts`
+// is: a list of lists is not a field table. Runtime state (`time`, `playing`,
+// the resolved indices) is never read even when a hand-edited file carries it --
+// a saved playhead reloads mid-swing, and a saved index points into a registry
+// this build may have numbered differently.
+bool parseClip(const Json& source, ClipAuthor& out, const std::string& location,
+               std::string& error)
+{
+    if (!source.is_object()) {
+        error = location + " must be an object";
+        return false;
+    }
+    const auto number = [&](const Json& node, const char* key, float& value,
+                            const std::string& where) {
+        if (!node.contains(key))
+            return true;
+        if (!node[key].is_number()) {
+            error = where + "/" + key + " must be a number";
+            return false;
+        }
+        value = node[key].get<float>();
+        return std::isfinite(value)
+                   ? true
+                   : (error = where + "/" + key + " must be finite", false);
+    };
+    if (!number(source, "duration", out.duration, location) ||
+        !number(source, "speed", out.speed, location))
+        return false;
+    if (!(out.duration > 0.0f)) {
+        error = location + "/duration must be greater than zero";
+        return false;
+    }
+    if (source.contains("autoplay")) {
+        if (!source["autoplay"].is_boolean()) {
+            error = location + "/autoplay must be a boolean";
+            return false;
+        }
+        out.autoplay = source["autoplay"].get<bool>();
+    }
+
+    const std::string mode = source.value("mode", std::string("once"));
+    if (!eng::ecs::clipModeFromId(mode, out.mode)) {
+        error = location + "/mode must be " +
+                eng::ecs::clipIdList(eng::ecs::kClipModeIds,
+                                     eng::ecs::kClipModeCount);
+        return false;
+    }
+
+    if (!source.contains("tracks"))
+        return true;
+    if (!source["tracks"].is_array()) {
+        error = location + "/tracks must be an array";
+        return false;
+    }
+    for (std::size_t i = 0; i < source["tracks"].size(); ++i) {
+        const Json& node = source["tracks"][i];
+        const std::string where = location + "/tracks/" + std::to_string(i);
+        if (!node.is_object()) {
+            error = where + " must be an object";
+            return false;
+        }
+        eng::ecs::ClipTrack track;
+        // component and field are required: a track that names neither drives
+        // nothing, and accepting it would put a silent no-op in a scene file.
+        track.component = node.value("component", std::string());
+        track.field = node.value("field", std::string());
+        if (track.component.empty() || track.field.empty()) {
+            error = where + " must name a component and a field";
+            return false;
+        }
+        track.target = node.value("target", std::string());
+
+        const std::string ease = node.value("ease", std::string("smooth"));
+        if (!eng::ecs::clipEaseFromId(ease, track.ease)) {
+            error = where + "/ease must be " +
+                    eng::ecs::clipIdList(eng::ecs::kClipEaseIds,
+                                         eng::ecs::kClipEaseCount);
+            return false;
+        }
+
+        if (node.contains("keys")) {
+            if (!node["keys"].is_array()) {
+                error = where + "/keys must be an array";
+                return false;
+            }
+            for (std::size_t k = 0; k < node["keys"].size(); ++k) {
+                const Json& key = node["keys"][k];
+                const std::string keyWhere = where + "/keys/" + std::to_string(k);
+                if (!key.is_object()) {
+                    error = keyWhere + " must be an object";
+                    return false;
+                }
+                eng::ecs::ClipKey out2;
+                if (!number(key, "t", out2.t, keyWhere))
+                    return false;
+                // `v` takes a number for a scalar field or three for a vector,
+                // so a Float track does not have to write two zeroes it means
+                // nothing by. Which form is right is decided by the field's own
+                // type at resolve time, not here.
+                if (key.contains("v")) {
+                    if (key["v"].is_number()) {
+                        out2.value.x = key["v"].get<float>();
+                    } else if (!readVec3(key["v"], out2.value)) {
+                        error = keyWhere +
+                                "/v must be a number or three finite numbers";
+                        return false;
+                    }
+                }
+                track.keys.push_back(out2);
+            }
+        }
+        out.tracks.push_back(std::move(track));
+    }
+    return true;
+}
+
 bool parseOrbit(const Json& source, OrbitAuthor& out,
                 const std::string& location, std::string& error)
 {
@@ -903,6 +1021,12 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         if (!parseOrbit(source["orbit"], orbit, location + "/orbit", error))
             return false;
         out.orbit = orbit;
+    }
+    if (source.contains("clip")) {
+        ClipAuthor clip;
+        if (!parseClip(source["clip"], clip, location + "/clip", error))
+            return false;
+        out.clip = clip;
     }
     if (source.contains("particles")) {
         ParticleAuthor particles;

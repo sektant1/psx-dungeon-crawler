@@ -35,7 +35,41 @@ BUILD_DIR   ?= build
 #
 # Switching type rebuilds the whole tree, third party included.
 BUILD_TYPE  ?= RelWithDebInfo
-JOBS        ?= $(shell nproc)
+# Parallelism, capped by MEMORY rather than by core count.
+#
+# This tree's limit is not the CPU. Every heavy translation unit is compiled
+# against a precompiled header -- they total ~620 MB across the targets, with
+# eng_script's sol2 PCH alone at ~200 MB -- and a cc1plus optimising one of the
+# renderer or binding TUs on top of that peaks around 1.5-2 GB resident. `nproc`
+# jobs of that on a machine with less than 2 GB of headroom per core does not
+# swap gracefully: it dies, as `internal compiler error: Bus error` or
+# `cc1plus: out of memory`, on whichever file happened to be unlucky. That reads
+# as a corrupt tree and is not one, which is the trap -- see the note in
+# CLAUDE.md.
+#
+# So: one job per ~1.8 GB currently available, never more than there are cores,
+# never fewer than one. MemAvailable rather than MemTotal because the browser
+# and the language server on a development machine are real memory that the
+# compiler cannot have. Override explicitly when you know better:
+#
+#   make JOBS=8            # a machine with headroom
+#   make JOBS=1            # already swapping, or bisecting an ICE
+_mem_avail_mb := $(shell awk '/MemAvailable/{printf "%d", $$2/1024}' /proc/meminfo 2>/dev/null)
+_mem_jobs     := $(shell echo $$(( $(or $(_mem_avail_mb),4096) / 1800 )))
+JOBS        ?= $(shell n=$$(nproc); m=$(_mem_jobs); [ $$m -lt 1 ] && m=1; \
+                       [ $$m -lt $$n ] && echo $$m || echo $$n)
+# One build at a time per tree. Two ninja runs in the same build directory
+# interleave their appends to .ninja_deps; ninja then meets a partial record on
+# the next load, prints "premature end of file; recovering", and TRUNCATES the
+# log at that point -- silently discarding the dependency info for everything
+# recorded after it. The tree then rebuilds from scratch on every invocation and
+# never recovers on its own, because each new build's records land after the
+# corruption and are dropped again on the next load. That is a full rebuild for
+# an untouched tree, forever. Serialising invocations is what prevents it.
+#
+# If a tree is already in that state, `make build-reset` clears the log.
+FLOCK       := $(shell command -v flock 2>/dev/null)
+BUILD_LOCK   = $(if $(FLOCK),$(FLOCK) $(BUILD_DIR)/.build.lock,)
 # Ninja owns fresh project build trees by default. Existing trees keep their
 # cached generator because CMake cannot switch one in place; an explicit
 # GENERATOR override still reports a mismatch instead of deleting user data.
@@ -108,12 +142,13 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
               $(if $(filter psx_demo,$(APP)),psx_demo,game))
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
-        build-editor build-cook build-acp acp acp-check acp-clean assetdb \
+        build-editor build-cook build-acp build-reset acp acp-check acp-clean assetdb \
         editor cook scene material prefab-viewer \
         run game demo psx-demo mapgen sim test asan bench screenshot visual-test \
         editor-selftest clip clip-mp4 look new-clip assetformats \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
-        vulkan-kit asset debug debug-run clean help
+        vulkan-kit asset debug debug-run clean help \
+        connector run-connected
 
 all: build
 
@@ -143,38 +178,52 @@ configure:
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	fi
 
+# Recover a tree whose dependency log has been truncated. Symptom: every build
+# recompiles everything even with no edits, and
+#   ninja -C build -d explain -n game
+# blames "stored deps info out of date" / "deps are missing" rather than naming
+# a changed file. Confirm with `ninja -C build -t deps` -- a corrupt log opens
+# with "premature end of file; recovering" and marks entries STALE.
+#
+# .ninja_deps is a cache, not build output: deleting it costs one full rebuild
+# and nothing else. It is deliberately not part of `clean`, and it does NOT
+# touch object files, so ccache makes the recovery build cheap.
+build-reset:
+	rm -f $(BUILD_DIR)/.ninja_deps $(BUILD_DIR)/.ninja_log
+	@echo "cleared $(BUILD_DIR) dependency log; the next build is a full one"
+
 build-all: configure
-	cmake --build $(BUILD_DIR) -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) -j$(JOBS)
 
 # Run-oriented commands build only their required target. In particular this
 # keeps the demo, map generator, simulation harness, and test executables out
 # of the edit/build/run loop for the game.
 build-game: configure
-	cmake --build $(BUILD_DIR) --target game -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target game -j$(JOBS)
 
 build: build-game
 
 build-demo: configure
-	cmake --build $(BUILD_DIR) --target psx_demo -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target psx_demo -j$(JOBS)
 
 build-mapgen: configure
-	cmake --build $(BUILD_DIR) --target mapgen -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target mapgen -j$(JOBS)
 
 build-sim: configure
-	cmake --build $(BUILD_DIR) --target game_sim -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target game_sim -j$(JOBS)
 
 build-editor: configure
-	cmake --build $(BUILD_DIR) --target scene_editor -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target scene_editor -j$(JOBS)
 
 build-cook: configure
-	cmake --build $(BUILD_DIR) --target scene_cook -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target scene_cook -j$(JOBS)
 
 build-acp: configure
-	cmake --build $(BUILD_DIR) --target raven_acp -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target raven_acp -j$(JOBS)
 
 # The generic app build, for the APP=-driven targets below.
 build-app: configure
-	cmake --build $(BUILD_DIR) --target $(APP_TARGET) -j$(JOBS)
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target $(APP_TARGET) -j$(JOBS)
 
 # Detects pacman/apt/dnf/zypper/apk/brew; installs toolchain + SDL2 + glm,
 # plus the Vulkan loader and the SPIR-V toolchain the RHI compiles through.
@@ -435,9 +484,15 @@ test: build-all
 
 # Address/UB/Leak sanitizer build of game + game_sim (test targets aren't
 # ASan-hardened). Run e.g. `make asan && make run BUILD_DIR=build-asan`.
+#
+# Takes a lock on its own tree, like every other build rule here: build-asan is
+# a second build directory and gets its own .ninja_deps, which two concurrent
+# `make asan` runs would corrupt exactly the way they would corrupt build/'s.
+# This was the one build path that skipped it.
 asan:
 	$(MAKE) configure BUILD_DIR=build-asan BUILD_TYPE=Debug CMAKE_ARGS=-DENABLE_ASAN=ON
-	cmake --build build-asan --target game game_sim -j$(JOBS)
+	$(if $(FLOCK),$(FLOCK) build-asan/.build.lock,) \
+	    cmake --build build-asan --target game game_sim -j$(JOBS)
 
 # Frame-time percentiles over N frames (default 300), vsync off for real cost.
 bench: build-game
@@ -546,7 +601,7 @@ perf: build-app
 
 # ---- docs / debug / clean --------------------------------------------------
 docs: configure
-	cmake --build $(BUILD_DIR) --target docs
+	$(BUILD_LOCK) cmake --build $(BUILD_DIR) --target docs
 	@if command -v xdg-open >/dev/null 2>&1; then \
 		xdg-open "$(BUILD_DIR)/docs/html/index.html"; \
 	elif command -v open >/dev/null 2>&1; then \
@@ -586,6 +641,8 @@ help:
 	@echo "  run-connected      the game, reporting into a running connector"
 	@echo "  make [build]        configure + build the game"
 	@echo "  make build-all      build every executable and test target"
+	@echo "  make build-reset    clear a truncated ninja deps log (fixes"
+	@echo "                      'rebuilds everything with no edits')"
 	@echo "  make run            build + run the game (alias: game)"
 	@echo "  make demo           the model showroom (MODEL=, FIT=, SPIN=, YAW=, LIST=1, SHOT=)"
 	@echo "  make psx-demo       build + run the PSX shader sample"

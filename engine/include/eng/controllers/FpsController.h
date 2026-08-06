@@ -21,6 +21,53 @@ class Renderer;
 // installing one). That split is the point: the controller never learns which
 // camera shape is in play, and a rig never touches the capsule. Everything a
 // rig needs arrives once a frame as an eng::CameraPose.
+// How the character accelerates, stops, jumps and falls.
+//
+// These were nine `constexpr` floats at the top of FpsController.cpp, which
+// made the one thing a shooter is judged on -- how it feels to move -- a
+// recompile away from every experiment. They are a struct so the numbers can
+// arrive from `[player.movement]` in game.toml and be dialled live in the F1
+// panel, and so a test can assert against a tuning instead of against the
+// constants the implementation happens to hold.
+//
+// The defaults here are the *engine's* neutral ones and deliberately match the
+// old constants; the game's boomer-shooter pace is data (assets/config/game.toml).
+struct MovementTuning {
+    // Metres per second at a full run, before the multipliers below.
+    float moveSpeed = 3.0f;
+    // m/s^2 toward the input direction while grounded. High is the point: a
+    // ramp long enough to notice reads as input lag, not as weight.
+    float groundAcceleration = 42.0f;
+    // m/s^2 back toward rest when there is no input. This is the "friction"
+    // knob -- expressed as a deceleration rather than a damping coefficient so
+    // the stopping distance is a number a designer can reason about.
+    float groundFriction = 34.0f;
+    // m/s^2 while airborne. Lower than ground on purpose: it is steering, not
+    // a second way to run. See the air-control note in the .cpp.
+    float airAcceleration = 16.0f;
+    // Upward m/s imparted by a jump. Together with world gravity this is the
+    // whole jump arc; there is no second curve on top of it.
+    float jumpVelocity = 5.0f;
+    // Fallback gravity, m/s^2 downward, used ONLY when no Physics is attached
+    // (tests and tools). With physics live the world's own gravity wins --
+    // `[physics] gravity` -- because props and the player must fall together.
+    float gravity = 18.0f;
+    // Multipliers on moveSpeed for the locomotion states.
+    float sprintMultiplier = 2.05f;
+    float walkMultiplier = 0.55f;
+    float crouchMultiplier = 0.45f;
+    // Jump forgiveness: how long after leaving a ledge a jump still counts, and
+    // how long before landing one is remembered. Both are what makes a jump
+    // feel like it obeyed you rather than like it was dropped.
+    float coyoteTime = 0.10f;
+    float jumpBufferTime = 0.12f;
+};
+
+// Every field finite, speeds and rates positive, multipliers non-negative. A
+// rejected tuning leaves the controller's own untouched rather than
+// half-applied -- the same rule the viewmodel rig and the hands follow.
+bool validMovementTuning(const MovementTuning& tuning);
+
 class FpsController
 {
 public:
@@ -134,6 +181,15 @@ public:
     void setDashTuning(const DashTuning& t);
     const DashTuning& dashTuning() const { return mDash; }
 
+    // Locomotion tuning. Applied on the next simulate(); nothing needs a
+    // respawn, which is what makes dialling it live in the F1 panel useful.
+    // A tuning that fails validMovementTuning is rejected whole.
+    bool setMovementTuning(const MovementTuning& tuning);
+    const MovementTuning& movementTuning() const { return mMove; }
+    // Mutable access for the tuning panel, which edits in place. Callers that
+    // can produce an invalid number should go through setMovementTuning.
+    MovementTuning& movementTuning() { return mMove; }
+
     // Start a dash. `direction` is world-space XZ; a zero direction dashes
     // backwards, which is the souls-style backstep you get from a neutral
     // input. Returns false while another dash is running or cooling down, so
@@ -155,7 +211,9 @@ public:
     void setCollisionMask(CollisionMask m) { mCollisionMask = m; }
     CollisionMask collisionMask() const { return mCollisionMask; }
 
-    float& speed() { return mSpeed; }
+    // The same number as movementTuning().moveSpeed, kept as an accessor
+    // because half the game and every test already spells it this way.
+    float& speed() { return mMove.moveSpeed; }
     float& sensitivity() { return mSens; }
     float sprintStamina() const { return mSprintStamina; } // normalized 0..1
     bool crouched() const { return mCrouched; }
@@ -239,7 +297,7 @@ private:
     // simulate, consumed (and cleared) by present: it is a one-frame event, and
     // a rig that ignores it must not be able to accumulate one.
     float mLandingImpact = 0.0f;
-    float mSpeed = 3.0f;
+    MovementTuning mMove;
     float mSens = 0.002f;
     glm::vec2 mVelocity{0.0f};
     glm::vec2 mSlideDirection{0.0f};

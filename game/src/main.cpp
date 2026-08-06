@@ -194,6 +194,12 @@ private:
     game::CameraMode mConfigCameraMode = game::CameraMode::FirstPerson;
     game::ViewmodelRig mConfigRig{};
     std::string mPlayerBlood = "human";
+    // How the character accelerates, stops and jumps -- `[player.movement]`.
+    // Separate from mConfigController because it is engine locomotion rather
+    // than authored-per-level tuning: a level overrides the speed and the lens,
+    // not the shape of the acceleration curve. Applied once and it survives
+    // respawns (FpsController::reset only rewrites the move speed).
+    eng::MovementTuning mMovement;
     eng::FpsController::DashTuning mDashTuning;
     float mDodgeIframes = 0.22f;
     float mDodgeStamina = 25.0f;
@@ -347,6 +353,42 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mDodgeStamina = float(cfg.getNumber("dodge.stamina", 25.0));
     mSens = float(cfg.getNumber("player.mouse_sensitivity", 0.002));
     mPlayerBlood = cfg.getString("player.blood", "human");
+
+    // Locomotion feel. `move_speed` is deliberately NOT read here: it is
+    // `[player] speed` above, which is also what a level's FirstPersonController
+    // overrides, and two places to set one number is how they drift apart.
+    {
+        const eng::MovementTuning d;
+        eng::MovementTuning m;
+        m.moveSpeed = mSpeed;
+        m.groundAcceleration = float(cfg.getNumber(
+            "player.movement.ground_acceleration", d.groundAcceleration));
+        m.groundFriction = float(
+            cfg.getNumber("player.movement.ground_friction", d.groundFriction));
+        m.airAcceleration = float(cfg.getNumber(
+            "player.movement.air_acceleration", d.airAcceleration));
+        m.jumpVelocity =
+            float(cfg.getNumber("player.movement.jump_velocity", d.jumpVelocity));
+        m.gravity = float(cfg.getNumber("player.movement.gravity", d.gravity));
+        m.sprintMultiplier = float(cfg.getNumber(
+            "player.movement.sprint_multiplier", d.sprintMultiplier));
+        m.walkMultiplier = float(
+            cfg.getNumber("player.movement.walk_multiplier", d.walkMultiplier));
+        m.crouchMultiplier = float(cfg.getNumber(
+            "player.movement.crouch_multiplier", d.crouchMultiplier));
+        m.coyoteTime =
+            float(cfg.getNumber("player.movement.coyote_time", d.coyoteTime));
+        m.jumpBufferTime = float(
+            cfg.getNumber("player.movement.jump_buffer_time", d.jumpBufferTime));
+        // A rejected table leaves the engine defaults in place rather than
+        // shipping a player who cannot move; say so, because silently ignoring
+        // a config edit is the worst of the three outcomes.
+        if (!eng::validMovementTuning(m))
+            eng::log::error(
+                "game: [player.movement] is out of range; keeping defaults");
+        else
+            mMovement = m;
+    }
     mGameAudio.applyUserMix(cfg);
 
     colliderView().enabled = std::getenv("RAVEN_SHOW_COLLIDERS") != nullptr;
@@ -432,6 +474,7 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mPlayerSys.lockOn().setTuning(lock);
     mPlayerSys.setCameraTuning(mConfigCamera);
     mPlayerSys.setControllerTuning(mConfigController);
+    mPlayerSys.controller().setMovementTuning(mMovement);
     mPlayerSys.controller().setDashTuning(mDashTuning);
     mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
     // The hands rig and the socket names weapons hang off. Before the weapons,
@@ -483,6 +526,11 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // GameAudio owns the player's listener; authored emitters still reconcile
     // through the World without competing for it.
     mWorld.attachAudio(audio(), /*drivesListener=*/false);
+    // The same table the serialiser, the inspector and the script host share.
+    // Clips address a component by *name*, so this is what makes an authored
+    // animation resolve at all (see docs/clips.md); it is a function-local
+    // static and therefore outlives the World, as the attachment requires.
+    mWorld.setComponentTypes(&mapio::coreRegistry());
 
     // Scripting over the same World. mapio::coreRegistry() is the table the
     // serialiser and the editor inspector already share, so every component
@@ -523,26 +571,32 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     // physics world does.
     physics().addContactCallback(
         [this](const eng::HitEvent& e) { mCombat.onContact(*mCtx, e); });
-    mCombat.projectiles().setImpactCallback(
-        [this](eng::BodyHandle victim, const std::string& payload,
-               glm::vec3 direction, glm::vec3 point) {
-            // The weapon's own impact cue over the player's Impact row: what a
-            // bolt sounds like hitting a wall is a property of the bolt, and
-            // the actor's row is what an author reaches for to change every
-            // weapon at once.
-            std::string_view impact;
-            for (const game::PlayerWeaponDef& weapon :
-                 mPlayerSys.weaponDefinitions()) {
-                if (weapon.payloadId == payload) {
-                    impact = weapon.projectile.impactSound;
-                    break;
-                }
+    // One impact handler for all three deliveries. A bolt landing, a swing
+    // connecting and a beam terminating are the same event here -- they differ
+    // in how they got there, which is exactly what this layer must not know.
+    auto onImpact = [this](eng::BodyHandle victim, const std::string& payload,
+                           glm::vec3 direction, glm::vec3 point) {
+        // The weapon's own impact cue over the player's Impact row: what a
+        // bolt sounds like hitting a wall is a property of the bolt, and
+        // the actor's row is what an author reaches for to change every
+        // weapon at once. weaponImpactSound picks the cue belonging to the
+        // delivery that fired, so a melee weapon is not silently read for a
+        // projectile sound it does not have.
+        std::string_view impact;
+        for (const game::PlayerWeaponDef& weapon :
+             mPlayerSys.weaponDefinitions()) {
+            if (weapon.payloadId == payload) {
+                impact = game::weaponImpactSound(weapon);
+                break;
             }
-            if (mActorAudio)
-                mActorAudio->play(mPlayerEntity, game::ActorAction::Impact,
-                                  point, impact);
-            playerHit(victim, payload.c_str(), direction, point);
-        });
+        }
+        if (mActorAudio)
+            mActorAudio->play(mPlayerEntity, game::ActorAction::Impact, point,
+                              impact);
+        playerHit(victim, payload.c_str(), direction, point);
+    };
+    mCombat.projectiles().setImpactCallback(onImpact);
+    mCombat.delivery().setImpactCallback(onImpact);
 
     mProps.spawnShowroom(*mCtx, mLevel.markerPlacements("physics."));
 
@@ -1632,6 +1686,7 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
     deps.context = mCtx ? &*mCtx : nullptr;
     deps.level = &mLevel;
     deps.particles = &mParticles;
+    deps.world = &mWorld;
     deps.audio = &mGameAudio;
     deps.playerFeet = playerFeet();
     deps.playerForward = mPlayerSys.controller().forward();

@@ -2,8 +2,11 @@
 #include <entt/entt.hpp>
 
 #include <eng/DebugTools.h> // eng::DebugTools, the console these panels join
+#include <eng/debug/ClipPanel.h>     // Timeline: engine component, engine panel
 #include <eng/debug/ParticlePanel.h> // Particles: engine library, engine panel
 #include <eng/debug/SurfacePanels.h> // Portal/VFX: engine shaders, engine panels
+
+#include "scene/ComponentRegistry.h" // mapio::coreRegistry(), for the Timeline
 
 #include <glm/glm.hpp>
 
@@ -12,6 +15,9 @@
 namespace eng {
 class Renderer;
 class ParticleLibrary;
+namespace ecs {
+class World;
+}
 } // namespace eng
 
 class LiveLevel;
@@ -72,6 +78,9 @@ public:
         // which is why they arrive per-frame like everything else here.
         LiveLevel* level = nullptr;
         eng::ParticleLibrary* particles = nullptr;
+        // The scene's World, for the Timeline. Null in a frame with no level
+        // loaded, which is why it arrives per-frame like everything else here.
+        eng::ecs::World* world = nullptr;
         GameAudioSystem* audio = nullptr;
         glm::vec3 playerFeet{0.0f};
         glm::vec3 playerForward{0.0f, 0.0f, 1.0f};
@@ -89,6 +98,9 @@ public:
         mSurfaces.setRenderer(deps.renderer);
         mParticlePanel.setSources(deps.renderer, deps.particles);
         mParticlePanel.update(deps.dt);
+        // The same table the World was given; the panel reads it directly
+        // because it must list component types even before a level is loaded.
+        mClipPanel.setSources(deps.world, &mapio::coreRegistry());
     }
 
     // Level transitions destroy the scene the panel's spawns live in. The
@@ -122,6 +134,9 @@ private:
     // Likewise engine tooling: it edits eng::ParticleLibrary and spawns through
     // the Renderer, neither of which is a game concept.
     eng::ParticlePanel mParticlePanel;
+    // Likewise: it edits eng::ecs::Clip through the component registry, and
+    // neither is a game concept.
+    eng::ClipPanel mClipPanel;
     // Descent/ascent prop dressing, in the order install() registers the
     // materials.
     PortalDressing mDressing[2];

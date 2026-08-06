@@ -1,5 +1,52 @@
-# Player loadout definitions own firing, projectile, and viewmodel presentation.
+# Player loadout definitions own firing, delivery, and viewmodel presentation.
 # Damage remains in [weapon.*] so enemies and player shots share one pipeline.
+#
+# --- fire_mode: how a weapon reaches what it is pointed at -------------------
+#
+# One key selects the delivery, and everything else a weapon carries -- interval,
+# payload, arc_cost, recoil, viewmodel, switch_time -- means the same thing
+# whichever it picked. Adding a weapon is a table here; adding a fourth delivery
+# is the only thing that is C++.
+#
+#   fire_mode = "projectile"   a body is spawned and travels. Needs [.projectile]
+#   fire_mode = "melee"        a sphere is swept ahead of the eye over a timed
+#                              window. Needs [.melee]
+#   fire_mode = "hitscan"      a ray resolves instantly, optionally drawing a
+#                              beam. Needs [.hitscan]
+#
+# Omitting fire_mode means "projectile", so every weapon authored before the
+# key existed keeps its delivery.
+#
+# There is no "spell" mode, deliberately. A spell is not a fourth way to reach a
+# target -- it is a projectile or a hitscan that costs ARC and wears a school's
+# glow, and both of those are already keys every weapon has (`arc_cost`, and
+# `glow_school` under [.viewmodel]). Both weapons below are spells by that
+# definition. See docs/fps-gameplay.md.
+#
+# Only the selected delivery's block is validated. A weapon keeps the blocks it
+# is not using, so retuning one from a bolt into a swing and back is two edits,
+# not a rewrite:
+#
+#   [player_weapon.example]
+#   fire_mode = "melee"
+#   [player_weapon.example.melee]
+#   reach = 2.4          # metres ahead of the eye the sweep ends
+#   radius = 0.55        # radius of the swept sphere
+#   windup = 0.06        # seconds before the hit window opens
+#   active = 0.10        # seconds it stays open; each body is hit once
+#   impulse = 7.0        # knockback along the swing
+#   max_targets = 4
+#   impact_effect = "talon_impact"
+#   impact_sound = "weapon.talon.impact"
+#
+#   [player_weapon.example.hitscan]
+#   range = 60.0
+#   impulse = 2.0
+#   beam_material = "Game/Spells/BeamCore"  # empty draws no trace
+#   beam_width = 0.05
+#   beam_seconds = 0.06
+#   impact_effect = "eidolon_impact"
+#   impact_sound = "weapon.eidolon.impact"
 #
 # damage_type: physical | fire | frost | lightning | poison | arcane | true
 # cc_on_hit[].kind: stun | root | silence | slow | chill | burn
@@ -12,6 +59,9 @@ slot = 1
 name = "EIDOLON ARBALEST"
 discipline = "TRIUNE / HEAVY"
 payload = "eidolon_bolt"
+# Spelled out rather than left to default: the delivery is the first thing
+# somebody reading a weapon wants to know.
+fire_mode = "projectile"
 trigger = "press"
 fire_interval = 0.72
 arc_cost = 12.0
@@ -82,6 +132,7 @@ slot = 0
 name = "RIVEN TALON"
 discipline = "SURGE / AGGRESSION"
 payload = "riven_spark"
+fire_mode = "projectile"
 trigger = "automatic"
 fire_interval = 0.09
 arc_cost = 3.0
@@ -105,6 +156,19 @@ mass = 0.08
 gravity_factor = 0.0
 aim_range = 70.0
 [player_weapon.riven_talon.viewmodel]
+# Sprite presentation: flat layers in front of the eye, composited over the
+# hand layers in viewmodel_hands.toml. The arbalest on slot 1 stays a model
+# weapon, so switching between 1 and 2 in game shows both presentations riding
+# the same rig, the same bob/sway/recoil, and the same aim.
+#
+# `model`, `socket`, `attach_*` and the [[...part]] rows below are ignored while
+# this is "sprite" -- they are kept so flipping this one key back is the whole
+# of reverting to the primitive placeholder.
+presentation = "sprite"
+# Where its shots leave from, camera space. A sprite has no skeleton to hang a
+# muzzle joint on, so this replaces muzzle_socket for this presentation. Aim is
+# still the camera ray: this only decides where the shot appears to come from.
+sprite_muzzle = [0.10, -0.06, -0.42]
 position = [0.27, -0.25, -0.52]
 rotation = [-11.0, 10.0, 6.0]
 glow_school = "fire"
@@ -133,6 +197,34 @@ movement_bob = 0.013
 movement_bob_speed = 9.5
 idle_sway = 0.005
 look_sway = 0.0014
+# The claw itself: cell 0 is the idle silhouette, cells 1-3 are the firing
+# bloom collapsing. Square, because the atlas cells are.
+[[player_weapon.riven_talon.viewmodel.sprite_layer]]
+id = "weapon"
+material = "Game/Viewmodel/Sprite/Talon"
+offset = [0.10, -0.26]
+size = [0.64, 0.64]
+distance = 0.46
+grid = [2, 2]
+idle_frame = 0
+fire_frame = 1
+fire_frame_count = 3
+fire_fps = 22.0
+
+# The flash, additive and nearest the eye so it reads over the claw. Cell 0 is
+# deliberately empty: that is this layer's idle state.
+[[player_weapon.riven_talon.viewmodel.sprite_layer]]
+id = "muzzle_flash"
+material = "Game/Viewmodel/Sprite/MuzzleArcane"
+offset = [0.10, -0.06]
+size = [0.46, 0.46]
+distance = 0.40
+grid = [2, 2]
+idle_frame = 0
+fire_frame = 1
+fire_frame_count = 3
+fire_fps = 26.0
+
 [[player_weapon.riven_talon.viewmodel.part]]
 shape = "sphere"
 position = [0.0, 0.0, 0.0]

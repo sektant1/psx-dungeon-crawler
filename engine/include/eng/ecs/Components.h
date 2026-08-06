@@ -26,6 +26,7 @@
 
 // --- identity and hierarchy ---
 #include <eng/ecs/components/Children.h>
+#include <eng/ecs/components/Clip.h>
 #include <eng/ecs/components/Dirty.h>
 #include <eng/ecs/components/EntityGroup.h>
 #include <eng/ecs/components/Lifetime.h>

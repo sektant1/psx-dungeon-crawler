@@ -69,3 +69,31 @@ joint = "forearm.L"
 offset = [0.0, 0.0, 0.0]
 rotation = [0.0, 0.0, 0.0]
 scale = 1.0
+
+# --- sprite layers ----------------------------------------------------------
+# The sprite-mode equivalent of the sockets above: the player's hands as flat
+# layers, drawn under whatever a `presentation = "sprite"` weapon composites
+# over them. Replacing the player's hands in sprite mode is this one block,
+# exactly as replacing the skinned rig is `model` above.
+#
+# Unused by model weapons, so both presentations are authored here at once and
+# a weapon picks which it wants.
+#
+#   offset    camera space, metres, on the sprite plane (+x right, +y up)
+#   size      quad width/height in metres
+#   distance  metres in front of the eye -- AND the layer order, since layers
+#             are sorted farthest-first and drawn with depth off
+#   grid      atlas columns, rows
+#
+# The sheet is 2:1, so the size is too. Low and wide: the hands frame the bottom
+# corners and leave the centre of the screen to the weapon, which is what the
+# reference art does and what keeps a crosshair readable.
+
+[[hands.sprite_layer]]
+id = "hands"
+material = "Game/Viewmodel/Sprite/Hands"
+offset = [0.0, -0.40]
+size = [1.10, 0.55]
+distance = 0.52
+grid = [1, 1]
+idle_frame = 0

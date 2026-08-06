@@ -908,6 +908,9 @@
         "orbit": {
           "$ref": "#/$defs/orbit"
         },
+        "clip": {
+          "$ref": "#/$defs/clip"
+        },
         "particles": {
           "$ref": "#/$defs/particles"
         },
@@ -993,6 +996,108 @@
             "free",
             "centre",
             "travel"
+          ]
+        }
+      }
+    },
+    "clip": {
+      "description": "A short authored animation: a duration, and tracks that drive reflected component fields over it. A track names its target component and field as strings and the runtime resolves them through the component registry, so every reflected field is animatable without per-component code. Runtime state (the playhead, the resolved indices) is deliberately not in the file: a saved playhead reloads mid-swing, and a saved index points into a registry another build may have numbered differently.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration"
+      ],
+      "properties": {
+        "duration": {
+          "description": "Seconds. Key times are in the same units, so retiming is one number.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "mode": {
+          "description": "'once' holds the last pose, 'loop' wraps, 'pingpong' reverses.",
+          "enum": [
+            "once",
+            "loop",
+            "pingpong"
+          ]
+        },
+        "speed": {
+          "description": "Playback multiplier. Negative plays backwards.",
+          "type": "number"
+        },
+        "autoplay": {
+          "description": "Whether it starts on load. False for anything a trigger, lever or script is meant to start.",
+          "type": "boolean"
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/clip_track"
+          }
+        }
+      }
+    },
+    "clip_track": {
+      "description": "One driven field. Interpolatable field types only -- float, vec3, colour, and bool/int as steps. A quaternion is not interpolated: rotation is authored as an euler vec3 on the transform.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "field"
+      ],
+      "properties": {
+        "target": {
+          "description": "Which entity this drives: empty or absent means the entity carrying the clip, otherwise a DESCENDANT by name. Descendants only -- a clip reaching across the scene is a dependency the file does not record.",
+          "type": "string"
+        },
+        "component": {
+          "description": "A component registry type name, e.g. \"Transform\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "field": {
+          "description": "A reflected field on that component, e.g. \"position\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "ease": {
+          "enum": [
+            "linear",
+            "smooth",
+            "easein",
+            "easeout",
+            "step"
+          ]
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/clip_key"
+          }
+        }
+      }
+    },
+    "clip_key": {
+      "description": "One keyframe. Before the first key a track holds the first value and after the last it holds the last.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "t"
+      ],
+      "properties": {
+        "t": {
+          "description": "Seconds from the start of the clip.",
+          "type": "number"
+        },
+        "v": {
+          "description": "A single number for a scalar field, or three for a vector/colour. Which is right is decided by the field type at resolve time.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/vec3"
+            }
           ]
         }
       }

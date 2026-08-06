@@ -1,5 +1,9 @@
 #pragma once
 
+#include <entt/entt.hpp>
+
+#include <string>
+
 namespace eng::ecs {
 
 class World;
@@ -27,6 +31,27 @@ void spinSystem(World&, float dt);
 // and Orbit(Centre) is a camera whose facing Spin cannot fight over.
 void orbitSystem(World&, float dt);
 void lightAnimationSystem(World&, float dt);
+
+// Plays authored `Clip`s: short animations that drive reflected component
+// fields by name. Needs World::setComponentTypes() to have been called -- name
+// resolution is what the table is for -- and no-ops without it, so a headless
+// World that never assembled one is unaffected.
+//
+// Runs LAST of the modulators, and that order is the contract: Spin, Orbit and
+// LightAnimation write their own derived values, and a clip is the more
+// specific statement, so it gets the final word on any field they share.
+void clipSystem(World&, float dt);
+
+// The entity a clip track drives: `self` when `target` is empty, otherwise the
+// descendant of `self` with that Name, or entt::null when there is none.
+//
+// Exposed because the Timeline's "Key at playhead" has to read the value from
+// the same entity the player will write it to. When the panel resolved that
+// itself it read `self` unconditionally, so keying a track aimed at a child
+// sampled the wrong entity's field -- and the resulting key looked correct
+// until the clip played.
+entt::entity clipTrackTarget(const entt::registry&, entt::entity self,
+                             const std::string& target);
 
 // All of them, in the order a frame wants them: animate, then expire. Call once
 // per frame before World::sync().

@@ -130,6 +130,46 @@ the app aborts during script parsing.
 Source art (`.zip`, `.rar`, `.blend`) sits under `assets/` beside the packs and
 is gitignored by extension — it is a pipeline input, not a build input.
 
+## The build files
+
+`CMakeLists.txt` is the running order and nothing else — 60 lines of `include()`
+in dependency order. Each module owns one part of the build:
+
+| Module | Owns |
+|---|---|
+| `cmake/BuildOptions.cmake` | how the tree is compiled: ccache, linker, LTO, PCH, unity, sanitizers, feature switches |
+| `cmake/Dependencies.cmake` | every third-party fetch, through CPM |
+| `cmake/Engine.cmake` | one static library per engine layer, and the PCHs |
+| `cmake/Samples.cmake` | the sample apps — they link `eng` only, which is what makes them a test of the public API |
+| `cmake/Content.cmake` | `eng_ecs_headless` and `game_content`, shared by the game, the editor and the headless tools |
+| `cmake/Editor.cmake` | the placement editor, the ACP, and the headless CLIs |
+| `cmake/Game.cmake` | the game, its cooked-asset targets, `mapgen`, `game_sim` |
+| `cmake/Tests.cmake` | every ctest |
+| `cmake/AddTest.cmake` | `eng_add_test()` |
+
+`include()` rather than `add_subdirectory()`, deliberately: it splices a module
+into the root scope, so every source path stays relative to the repository root
+and every target stays visible without export plumbing. A subdirectory per
+component would mean rewriting ~1500 source paths to express a structure
+`check_layering.py` already enforces where it counts — in the includes.
+
+The one rule: **a module may use targets defined above it, never below** — the
+same downward-only dependency the engine layers themselves follow.
+
+### Adding a test
+
+```cmake
+eng_add_test(ripple
+  SOURCES engine/tests/RippleTests.cpp
+  INCLUDES engine/include third_party
+  LIBS glm::glm EnTT::EnTT)
+```
+
+The executable is `ripple_tests` and the ctest is `ripple`. That was four
+separate calls per test, 153 times over — and being separate, a target could be
+built and never registered, or registered under a name that did not match its
+executable. One call emits all four, so neither is possible.
+
 ## Running the checks
 
 ```sh

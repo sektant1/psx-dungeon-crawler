@@ -351,6 +351,11 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                 entity, eng::ecs::Spin{authored.spin->axis,
                                        authored.spin->degreesPerSecond});
         }
+        // The authored type IS the runtime one, so this is a copy rather than a
+        // translation. The runtime half of the struct (playhead, resolved
+        // indices) is already at its defaults: the reader never fills it.
+        if (authored.clip)
+            built.emplace<eng::ecs::Clip>(entity, *authored.clip);
         if (!authored.scripts.empty()) {
             eng::ecs::Scripts scripts;
             scripts.items.reserve(authored.scripts.size());

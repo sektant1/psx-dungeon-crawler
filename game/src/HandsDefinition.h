@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SpriteViewmodel.h"
 #include "ViewmodelSocket.h"
 
 #include <string>
@@ -25,6 +26,18 @@ struct HandsDefinition {
     // returns to after a draw or a shot.
     std::string idleAnimation = "relax";
     std::vector<ViewmodelSocketDef> sockets;
+
+    // The sprite-mode equivalent of `sockets`: the player's hand layers, drawn
+    // under whatever a sprite weapon composites over them.
+    //
+    // Authored here rather than per weapon for exactly the reason the socket
+    // list is: replacing the player's hands must be one file, not an edit to
+    // every weapon. A sprite weapon may still author a hand layer of its own --
+    // it is the same type -- but this is what it gets for free.
+    //
+    // Empty by default. The shipped rig is skinned, so nothing uses these until
+    // a weapon asks for `presentation = "sprite"`.
+    std::vector<ViewmodelSpriteLayer> spriteLayers;
 };
 
 // The shipped rig: hand.R/hand.L plus the fingertip the finger-gun weapons

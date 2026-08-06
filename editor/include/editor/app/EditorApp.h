@@ -12,6 +12,8 @@
 #include <editor/assets/MaterialCatalog.h>
 #include <editor/assets/MeshCatalog.h>
 #include <editor/assets/ResourceDbPanel.h>
+
+#include <eng/debug/ClipPanel.h> // Timeline: engine component, engine panel
 #include <editor/assets/ModelImportPipeline.h>
 #include <editor/ui/EditorUi.h>
 #include "RenderPalette.h"
@@ -148,6 +150,14 @@ private:
     void drawAssetBrowser();
     void drawCatalog();
     void drawIssues();
+    // What this scene IS -- its kind, the roles it fills, and the buttons that
+    // fill the empty ones. Drawn above the issue list because "what does this
+    // scene do" comes before "what is wrong with it". See docs/scenes.md.
+    void drawSceneContract();
+    // The clip timeline, docked along the bottom with Problems and Console.
+    // The panel itself is the engine's (eng::ClipPanel): it edits eng::ecs::Clip
+    // through the component registry, and neither is an editor concept.
+    void drawTimeline();
     void drawMaterialPanel();
     // Triangle extent and submesh count for a mesh the swatch has loaded,
     // drawn into the Placeables metadata block.
@@ -554,6 +564,9 @@ private:
     MeshCatalog mMeshCatalog;
     // The Resource Database Management Tool, as a tab of the asset browser.
     ResourceDbPanel mResourceDb;
+    // The clip timeline. Engine tooling, like ParticlePanel in the game: it
+    // edits eng::ecs::Clip through the component registry.
+    eng::ClipPanel mClipPanel;
     // Meshes loaded for the swatch, kept across frames: re-parsing an OBJ per
     // hovered row would make scrubbing the list unusable.
     std::unordered_map<std::string, eng::MeshHandle> mMeshPreviewCache;

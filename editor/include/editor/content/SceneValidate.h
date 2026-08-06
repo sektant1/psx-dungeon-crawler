@@ -31,6 +31,19 @@ enum class QuickFix {
     // already has the right mesh in the right place; only the component that
     // drives it is missing, so replacing the entity would be the wrong fix.
     AddPortalComponent,
+    // The scene contract's fixes (SceneContract.h). Each gives a scene a role
+    // it needs and has nobody to fill: something to look through, something to
+    // hear from, something to see by.
+    //
+    // The three view fixes go through setSceneView(), so applying one to a
+    // scene that already has a different view *swaps* it rather than adding a
+    // second -- which is what "make this a third-person level" means and what
+    // used to be four manual component edits.
+    AddFirstPersonView,
+    AddThirdPersonView,
+    AddShotCamera,
+    AddAudioListener,
+    AddKeyLight,
 };
 
 struct Issue {

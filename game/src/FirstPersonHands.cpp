@@ -59,7 +59,17 @@ bool FirstPersonHands::init(eng::Renderer& renderer, eng::NodeHandle headNode,
     }
     mMotion.reset();
     applyPose(renderer);
-    mSkin = renderer.attachSkinnedMesh(mNode, mMesh, mHands.material, false,
+    // The arms get their own child at identity rather than hanging off mNode
+    // directly, so a sprite weapon can hide them without hiding the sprite
+    // stack that replaces them -- both live under mNode, and node visibility is
+    // the only granularity the renderer offers. Identity transform, so the skin
+    // pose, the sockets and the muzzle maths are all unchanged by it.
+    mSkinNode = renderer.createNode(mNode, glm::vec3(0.0f), "hands-skin");
+    if (!mSkinNode.valid()) {
+        cleanup();
+        return false;
+    }
+    mSkin = renderer.attachSkinnedMesh(mSkinNode, mMesh, mHands.material, false,
                                        true);
     if (!mSkin.valid()) {
         cleanup();
@@ -90,10 +100,13 @@ bool FirstPersonHands::init(eng::Renderer& renderer, eng::NodeHandle headNode,
 void FirstPersonHands::shutdown(eng::Renderer& renderer)
 {
     mWeapon.clear(renderer);
+    mSprite.clear(renderer);
     mSockets.clear(renderer);
     if (mNode.valid())
         renderer.destroyNode(mNode);
     mNode = {};
+    // Destroyed with mNode above, which owns it; only the handle is dropped.
+    mSkinNode = {};
     mSkin = {};
     if (mMesh.valid())
         renderer.releaseSkinnedMesh(mMesh);
@@ -148,13 +161,42 @@ void FirstPersonHands::setWeapon(eng::Renderer& renderer,
     // the cooked rig is missing and the skinned hands never came up.
     mMotion.setFeel(viewmodelFeel(definition));
     mWeaponSocket = definition.socket;
-    // Rebuild the held visual even when the skeleton did not come up: the
-    // socket set is empty then, build() sees an invalid node and leaves the
-    // weapon empty, which is the honest outcome rather than a crash.
-    mWeapon.build(renderer, mSockets.node(definition.socket), definition, glow);
-    if (!definition.socket.empty() && !mWeapon.valid() && !mSockets.empty())
-        eng::log::warn("First-person hands: no socket '%s' on this rig",
-                       definition.socket.c_str());
+    mSpriteMuzzle = definition.spriteMuzzle;
+
+    // Exactly one presentation is live. Both hang off mNode and therefore ride
+    // the same procedural motion; what differs is whether the thing in frame is
+    // a skinned rig holding geometry, or a stack of flat layers.
+    if (definition.presentation == ViewmodelPresentation::Sprite) {
+        mWeapon.clear(renderer);
+        // The shared hand layers first, then the weapon's over them. Order does
+        // not decide draw order -- SpriteViewmodel sorts by distance -- but it
+        // does decide which of two identically-placed layers wins the sort's
+        // stability, and a weapon leaning on the hands is the intent.
+        std::vector<ViewmodelSpriteLayer> layers = mHands.spriteLayers;
+        layers.insert(layers.end(), definition.spriteLayers.begin(),
+                      definition.spriteLayers.end());
+        mSprite.build(renderer, mNode, layers);
+        // Hide the skinned arms rather than tearing them down: switching back
+        // to a model weapon must not reload a skeleton, which is the one thing
+        // in this rig that costs real time.
+        if (mSkinNode.valid())
+            renderer.setNodeVisible(mSkinNode, false);
+        if (!mSprite.valid())
+            eng::log::warn("First-person hands: sprite weapon has no drawable "
+                           "layers");
+    } else {
+        mSprite.clear(renderer);
+        if (mSkinNode.valid())
+            renderer.setNodeVisible(mSkinNode, true);
+        // Rebuild the held visual even when the skeleton did not come up: the
+        // socket set is empty then, build() sees an invalid node and leaves the
+        // weapon empty, which is the honest outcome rather than a crash.
+        mWeapon.build(renderer, mSockets.node(definition.socket), definition,
+                      glow);
+        if (!definition.socket.empty() && !mWeapon.valid() && !mSockets.empty())
+            eng::log::warn("First-person hands: no socket '%s' on this rig",
+                           definition.socket.c_str());
+    }
     if (!mAnimator.valid())
         return;
     mIdleClip = mRig->hasClip(definition.handsIdleAnimation)
@@ -188,6 +230,14 @@ void FirstPersonHands::refreshAttachment(eng::Renderer& renderer,
 bool FirstPersonHands::triggerFire(eng::Renderer& renderer)
 {
     mMotion.kick();
+    // Before the valid() gate: a sprite weapon must animate whether or not the
+    // cooked skeleton came up. Its frames are the whole of its fire animation,
+    // and they do not depend on the rig at all.
+    if (mSprite.valid()) {
+        mSprite.triggerFire();
+        mSprite.update(renderer, 0.0f); // seat frame 0 of the run this instant
+        return true;
+    }
     if (!valid())
         return false;
     eng::animation::AnimationPlayOptions fire;
@@ -219,6 +269,10 @@ void FirstPersonHands::update(eng::Renderer& renderer, float animationDt,
     // sprite or model presentation would ride on, and a missing skeleton must
     // not take the whole viewmodel offline.
     applyMotion(renderer, motion);
+    // Sprite frames step on the same stopped-motion channel the authored clips
+    // use, for the same reason: the presentation snaps, the placement does not.
+    if (mSprite.valid())
+        mSprite.update(renderer, animationDt);
     if (!valid())
         return;
     if (mAnimator.update(animationDt)) {
@@ -293,6 +347,18 @@ FirstPersonHands::muzzleJointWorld(const eng::Renderer& renderer) const
 std::optional<glm::vec3>
 FirstPersonHands::muzzleWorldPosition(const eng::Renderer& renderer) const
 {
+    // A sprite weapon has no skeleton, so its muzzle is an authored point in
+    // camera space rather than a joint. It still rides the rig node, so bob,
+    // sway and recoil move the muzzle exactly as they do for a model weapon --
+    // and aim is still the camera ray, so `aim != muzzle` holds unchanged.
+    if (mSprite.valid()) {
+        eng::NodeTransform spriteWorld;
+        if (!renderer.nodeWorldTransform(mNode, spriteWorld))
+            return std::nullopt;
+        return spriteWorld.position +
+               spriteWorld.orientation * (spriteWorld.scale * mSpriteMuzzle);
+    }
+
     const std::optional<glm::mat4> local = muzzleLocal();
     if (!local)
         return std::nullopt;

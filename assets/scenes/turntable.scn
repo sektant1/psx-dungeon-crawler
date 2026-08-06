@@ -115,68 +115,6 @@
       }
     },
     {
-      "id": "camera_detail",
-      "name": "Detail Camera (parked)",
-      "transform": {
-        "position": [
-          0.8999999761581421,
-          1.4004000425338745,
-          2.536799907684326
-        ],
-        "rotation_degrees": [
-          -2.0,
-          16.0,
-          0.0
-        ]
-      },
-      "third_person": {}
-    },
-    {
-      "id": "camera_main",
-      "name": "Hero Camera",
-      "transform": {
-        "position": [
-          0.0,
-          1.555999994277954,
-          5.073599815368652
-        ],
-        "rotation_degrees": [
-          4.292300224304199,
-          0.0,
-          0.0
-        ]
-      },
-      "third_person": {}
-    },
-    {
-      "id": "camera_orbit",
-      "name": "Orbit Camera (parked)",
-      "transform": {
-        "position": [
-          0.0,
-          1.555999994277954,
-          4.312600135803223
-        ],
-        "rotation_degrees": [
-          4.292300224304199,
-          0.0,
-          0.0
-        ]
-      },
-      "third_person": {},
-      "orbit": {
-        "centre": [
-          0.0,
-          1.9368000030517578,
-          0.0
-        ],
-        "radius": 4.312600135803223,
-        "degrees_per_second": 9.0,
-        "height": -0.3808000087738037,
-        "facing": "centre"
-      }
-    },
-    {
       "id": "column_1",
       "name": "Column 1",
       "prefab": "kit.pillar",
@@ -244,20 +182,6 @@
         "row": -2,
         "edge": "west",
         "yaw_quarters": 1
-      }
-    },
-    {
-      "id": "dust",
-      "name": "Dust Motes",
-      "transform": {
-        "position": [
-          0.0,
-          1.399999976158142,
-          0.5
-        ]
-      },
-      "particles": {
-        "effect": "hall_dust"
       }
     },
     {

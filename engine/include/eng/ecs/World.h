@@ -14,6 +14,7 @@ class Physics;
 namespace eng::ecs {
 
 class SceneBackend;
+class ComponentRegistry;
 
 // One view driven from the registry: renderer, physics, or audio. World knows
 // only this contract and the order to call it in, so
@@ -98,6 +99,19 @@ public:
     // before the renderer or physics world dies; the registry survives.
     void detachAll();
 
+    // The table describing this World's component types, for the systems that
+    // address a component by *name* rather than by C++ type -- clipSystem is
+    // the first, and any generic tool built on the registry is the next.
+    //
+    // An attachment rather than a constructor argument, like the three above
+    // and for the same reason: the registry is assembled by the application
+    // (engine types, then its own from kFirstApplicationTypeId up) and a World
+    // is built before it. Must outlive this World. A World without one still
+    // works -- every name-addressed system no-ops, which is what keeps the
+    // headless combat sim and the map tests free of it.
+    void setComponentTypes(const ComponentRegistry* types) { mTypes = types; }
+    const ComponentRegistry* componentTypes() const { return mTypes; }
+
     // --- entities --------------------------------------------------------
     // Entities created while a group is active are stamped with it, so a level
     // transition can destroy exactly what the level added. 0 (the default)
@@ -159,6 +173,7 @@ private:
     std::unique_ptr<WorldReconciler> mRender;
     std::unique_ptr<WorldReconciler> mPhysics;
     std::unique_ptr<WorldReconciler> mAudio;
+    const ComponentRegistry* mTypes = nullptr;
     uint32_t mActiveGroup = 0;
 };
 

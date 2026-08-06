@@ -1303,6 +1303,111 @@ void drawSpin(Entity& entity, InspectorContext& context)
                         "for an orbit");
 }
 
+void drawClip(Entity& entity, InspectorContext& context)
+{
+    game::content::ClipAuthor& clip = *entity.clip;
+
+    // The labels come from the component's own tables, so this panel and the
+    // Timeline cannot disagree about what a mode is called, and neither can
+    // fall behind a mode added to the enum.
+    using eng::ecs::kClipEaseCount;
+    using eng::ecs::kClipEaseNames;
+    using eng::ecs::kClipModeCount;
+    using eng::ecs::kClipModeNames;
+    {
+        ui::PropertyGrid grid("##clip");
+        grid.row("duration", "s");
+        ImGui::DragFloat("##duration", &clip.duration, 0.01f, 0.05f, 120.0f,
+                         "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        track(context);
+
+        grid.row("mode", "");
+        int mode = int(clip.mode);
+        if (ImGui::Combo("##mode", &mode, kClipModeNames, kClipModeCount))
+            clip.mode = eng::ecs::ClipMode(mode);
+        track(context);
+
+        grid.row("speed", "x");
+        ImGui::DragFloat("##speed", &clip.speed, 0.01f, -4.0f, 4.0f, "%.2f");
+        track(context);
+
+        grid.row("autoplay", "");
+        ImGui::Checkbox("##autoplay", &clip.autoplay);
+        track(context);
+    }
+
+    // The tracks, as a list rather than a timeline: retiming a key is a drag
+    // gesture and belongs in the Timeline panel, while *which field* a track
+    // drives is a typed decision and belongs on a property row. Splitting them
+    // that way is why neither panel has to be the other one badly.
+    ImGui::Separator();
+    ImGui::Text("Tracks (%d)", int(clip.tracks.size()));
+    ImGui::SameLine();
+    if (ImGui::SmallButton("+ track")) {
+        eng::ecs::ClipTrack added;
+        added.component = "Transform";
+        added.field = "position";
+        // Two keys at zero: a track with one key is a constant and a track with
+        // none is invisible, so the useful empty state is "holds still, now
+        // move one end".
+        added.keys = {{0.0f, glm::vec3(0.0f)}, {clip.duration, glm::vec3(0.0f)}};
+        clip.tracks.push_back(std::move(added));
+        context.track(true, true);
+    }
+
+    int remove = -1;
+    for (std::size_t i = 0; i < clip.tracks.size(); ++i) {
+        eng::ecs::ClipTrack& t = clip.tracks[i];
+        ImGui::PushID(int(i));
+        const std::string header =
+            (t.target.empty() ? std::string() : t.target + "/") + t.component +
+            "." + t.field + "###track";
+        if (ImGui::TreeNodeEx(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            ui::PropertyGrid grid("##track");
+            grid.row("component", "");
+            char component[64] = {};
+            std::snprintf(component, sizeof(component), "%s", t.component.c_str());
+            if (ImGui::InputText("##component", component, sizeof(component)))
+                t.component = component;
+            track(context);
+
+            grid.row("field", "");
+            char field[64] = {};
+            std::snprintf(field, sizeof(field), "%s", t.field.c_str());
+            if (ImGui::InputText("##field", field, sizeof(field)))
+                t.field = field;
+            track(context);
+
+            grid.row("target", "child");
+            char target[64] = {};
+            std::snprintf(target, sizeof(target), "%s", t.target.c_str());
+            if (ImGui::InputTextWithHint("##target", "(this entity)", target,
+                                         sizeof(target)))
+                t.target = target;
+            track(context);
+
+            grid.row("ease", "");
+            int ease = int(t.ease);
+            if (ImGui::Combo("##ease", &ease, kClipEaseNames, kClipEaseCount))
+                t.ease = eng::ecs::ClipEase(ease);
+            track(context);
+
+            grid.row("keys", "");
+            ImGui::Text("%d", int(t.keys.size()));
+            ImGui::SameLine();
+            if (ImGui::SmallButton("remove track"))
+                remove = int(i);
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+    if (remove >= 0) {
+        clip.tracks.erase(clip.tracks.begin() + remove);
+        context.track(true, true);
+    }
+    ImGui::TextDisabled("drag keyframes in the Timeline panel");
+}
+
 void drawShader(Entity& entity, InspectorContext& context)
 {
     game::content::ShaderAuthor& sh = *entity.shader;
@@ -1681,7 +1786,10 @@ void drawViewmodelPreview(Entity& entity, InspectorContext& context)
                            preview.weapon.c_str());
     }
     grid.full("editor only -- the cook drops this, the map never carries it");
-    grid.full("seat the weapon in the hand with the game's F1 Viewmodel panel");
+    // Both presentations preview here: the bridge builds the real
+    // FirstPersonHands, which picks model or sprite from the weapon itself.
+    grid.full("tune it in the game's F1 Viewmodel panel -- seating in the hand "
+              "for a model weapon, layer placement for a sprite one");
 }
 
 void drawViewmodelRig(Entity& entity, InspectorContext& context)
@@ -1863,6 +1971,7 @@ constexpr Drawer kDrawers[] = {
     {"properties", drawProperties},
     {"spin", drawSpin},
     {"orbit", drawOrbit},
+    {"clip", drawClip},
     {"shader", drawShader},
     {"particles", drawParticles},
     {"portal", drawPortal},

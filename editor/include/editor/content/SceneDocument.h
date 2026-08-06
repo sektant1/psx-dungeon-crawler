@@ -1,6 +1,7 @@
 #pragma once
 #include <eng/ecs/components/AudioEmitter.h>
 #include <eng/ecs/components/AudioListener.h>
+#include <eng/ecs/components/Clip.h>
 #include <eng/ecs/components/FirstPersonController.h>
 #include <eng/ecs/components/ParticleEmitter.h>
 #include <eng/ecs/components/PortalParams.h>
@@ -220,6 +221,17 @@ using ActorSoundsAuthor = game::ActorSoundSet;
 // is how the body moves and what the lens does, the rig is where the hands sit
 // in front of it. A scene that carries neither runs on the game's config
 // defaults, which is every level authored before they existed.
+// A short authored animation. The authored type IS the runtime one, like the
+// camera components below -- but unlike them it cannot ride the reflected
+// helpers, because a list of tracks each holding a list of keys is not a field
+// table. Its JSON is hand-written in SceneSource/SceneWriter for the same
+// reason `scripts` is.
+//
+// Only the authored half round-trips: `time`, `playing` and the resolved track
+// indices are runtime state, and the writer omits them (see the component's
+// header for why a saved playhead is wrong).
+using ClipAuthor = eng::ecs::Clip;
+
 using FirstPersonAuthor = eng::ecs::FirstPersonController;
 // The other two camera shapes. Same mirror-not-translate rule: the authored
 // type IS the runtime one, so a field added to the component shows up in the
@@ -368,6 +380,7 @@ struct Entity {
     std::vector<PropertyAuthor> properties;
     std::optional<SpinAuthor> spin;
     std::optional<OrbitAuthor> orbit;
+    std::optional<ClipAuthor> clip;
     std::optional<ShaderAuthor> shader;
     std::optional<PortalAuthor> portal;
     std::optional<ParticleAuthor> particles;

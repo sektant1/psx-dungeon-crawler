@@ -113,6 +113,134 @@ int main()
     require(library.defs().size() == previousCount,
             "failed reload destroyed last valid loadout");
 
+    // The shipped loadout carries one weapon of each presentation on purpose,
+    // so switching slots in game shows both riding the same rig. If this ever
+    // fails, the sprite path has been silently reverted to a model.
+    require(talon->viewmodel.presentation == ViewmodelPresentation::Sprite,
+            "the talon is no longer a sprite viewmodel");
+    require(talon->viewmodel.spriteLayers.size() == 2,
+            "the talon's sprite layers did not parse");
+    require(arbalest->viewmodel.presentation == ViewmodelPresentation::Model,
+            "the arbalest is no longer a model viewmodel");
+
+    // --- fire modes ---------------------------------------------------------
+    // The shipped loadout is projectile, and an omitted fire_mode must stay
+    // projectile: the key was added after these weapons existed, and a default
+    // that changed their delivery would be a content migration in disguise.
+    require(arbalest->fireMode == WeaponFireMode::Projectile &&
+                talon->fireMode == WeaponFireMode::Projectile,
+            "shipped weapons are no longer projectile weapons");
+
+    // The viewmodel/hands/motion half of a definition is identical whichever
+    // delivery it selects, so these fixtures differ only in the delivery block.
+    // That is the property under test: a melee weapon is a weapon.
+    const char* kCommonTail = R"(
+[player_weapon.probe.viewmodel]
+socket = "right_hand"
+hands_idle_animation = "relax"
+hands_draw_animation = "relax"
+hands_fire_animation = "grab.R"
+hands_muzzle_joint = "f_index.03.R"
+[[player_weapon.probe.viewmodel.part]]
+shape = "box"
+scale = [0.1, 0.1, 0.1]
+material = "Game/ViewModelVesper"
+)";
+
+    const std::string meleeSource =
+        std::string(R"(
+[player_weapon.probe]
+slot = 0
+name = "PROBE"
+discipline = "TEST"
+payload = "riven_spark"
+fire_mode = "melee"
+[player_weapon.probe.melee]
+reach = 2.4
+radius = 0.6
+windup = 0.05
+active = 0.12
+impulse = 7.0
+max_targets = 3
+impact_sound = "weapon.talon.impact"
+)") + kCommonTail;
+
+    PlayerWeaponLibrary melee;
+    require(melee.loadFromString(meleeSource.c_str()),
+            "a melee weapon with no projectile block was rejected");
+    const PlayerWeaponDef* swing = melee.find("probe");
+    require(swing && swing->fireMode == WeaponFireMode::Melee,
+            "melee fire mode did not parse");
+    require(near(swing->melee.reach, 2.4f) && near(swing->melee.active, 0.12f) &&
+                swing->melee.maxTargets == 3,
+            "melee delivery numbers did not parse");
+    // The impact cue must come from the delivery that fired. Reading
+    // .projectile here is what silently played nothing for melee weapons.
+    require(weaponImpactSound(*swing) == "weapon.talon.impact",
+            "melee weapon reported the wrong impact sound");
+
+    const std::string hitscanSource =
+        std::string(R"(
+[player_weapon.probe]
+slot = 0
+name = "PROBE"
+discipline = "TEST"
+payload = "riven_spark"
+fire_mode = "hitscan"
+[player_weapon.probe.hitscan]
+range = 55.0
+impulse = 3.0
+beam_material = "Game/Spells/BeamCore"
+beam_width = 0.04
+beam_seconds = 0.08
+)") + kCommonTail;
+
+    PlayerWeaponLibrary hitscan;
+    require(hitscan.loadFromString(hitscanSource.c_str()),
+            "a hitscan weapon with no projectile block was rejected");
+    const PlayerWeaponDef* beam = hitscan.find("probe");
+    require(beam && beam->fireMode == WeaponFireMode::Hitscan &&
+                near(beam->hitscan.range, 55.0f) &&
+                beam->hitscan.beamMaterial == "Game/Spells/BeamCore",
+            "hitscan delivery did not parse");
+
+    // A weapon must bring the block its own delivery needs...
+    PlayerWeaponLibrary missing;
+    require(!missing.loadFromString(
+                (std::string(R"(
+[player_weapon.probe]
+slot = 0
+name = "PROBE"
+discipline = "TEST"
+payload = "riven_spark"
+fire_mode = "melee"
+)") + kCommonTail)
+                    .c_str()),
+            "a melee weapon with no melee block was accepted");
+    // ...and an unknown delivery is a typo, not a silent fallback to shooting.
+    require(!missing.loadFromString(
+                (std::string(R"(
+[player_weapon.probe]
+slot = 0
+name = "PROBE"
+discipline = "TEST"
+payload = "riven_spark"
+fire_mode = "conjuration"
+)") + kCommonTail)
+                    .c_str()),
+            "an unknown fire_mode was accepted");
+
+    // Only the selected delivery is validated: a melee weapon carrying a stale
+    // projectile block it does not read must still load, or retuning a weapon's
+    // kind becomes a rewrite of the parts that had nothing to do with it.
+    PlayerWeaponDef stale = *swing;
+    stale.projectile.speed = -1.0f;
+    require(validPlayerWeaponDefinition(stale),
+            "an unread projectile block invalidated a melee weapon");
+    stale.melee.active = 0.0f;
+    require(!validPlayerWeaponDefinition(stale),
+            "a melee weapon with no active window was accepted");
+
     std::cout << "PlayerWeaponTests OK\n";
     return EXIT_SUCCESS;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SpriteViewmodel.h"
 #include "combat/FeelComponents.h"
 
 #include <glm/glm.hpp>
@@ -22,6 +23,64 @@ enum class WeaponPrimitive {
     Cone,
     Disc,
 };
+
+// How a weapon reaches what it is pointed at.
+//
+// This is the weapon system's ONLY branch point, and it is deliberately three
+// cases rather than one per weapon: a weapon definition selects a delivery, and
+// every other field it carries -- interval, damage payload, ARC cost, recoil,
+// viewmodel, switch time -- means the same thing whichever one it picked.
+// Adding a weapon stays a TOML table; adding a fourth *delivery* is the only
+// thing that is C++, and it should stay that way.
+//
+//   projectile  a body is spawned and travels        (ProjectileSystem)
+//   melee       a shape is swept in front of the eye (WeaponDeliverySystem)
+//   hitscan     a ray resolves instantly             (WeaponDeliverySystem)
+//
+// There is deliberately no `spell` mode. A spell is not a fourth way to reach a
+// target -- it is a projectile or a hitscan that costs ARC and wears a school's
+// glow, and `arc_cost` plus `[...viewmodel] glow_school` already say that on
+// every weapon. A mode for it would have been two code paths differing only in
+// vocabulary, which is how a fireball and a bolt acquire separate bugs.
+// See docs/fps-gameplay.md.
+enum class WeaponFireMode { Projectile, Melee, Hitscan };
+
+const char* weaponFireModeName(WeaponFireMode mode);
+std::optional<WeaponFireMode> weaponFireModeFromName(const std::string& name);
+
+// `[player_weapon.<id>.melee]` -- the swept-shape delivery.
+//
+// A swing is a *window*, not an instant: windup, then an active period during
+// which the shape is swept every fixed step and each body is hit at most once.
+// That is what lets the viewmodel's fire animation and the hit land together
+// instead of the damage arriving on the frame the button went down.
+struct WeaponMeleeDef {
+    float reach = 2.2f;   // metres ahead of the eye the sweep ends
+    float radius = 0.55f; // radius of the swept sphere
+    float windup = 0.06f; // seconds before the window opens
+    float active = 0.10f; // seconds the window stays open
+    float impulse = 6.0f; // knockback along the swing
+    int maxTargets = 4;   // bodies one swing may connect with
+    std::string impactEffect;
+    std::string impactSound;
+};
+
+// `[player_weapon.<id>.hitscan]` -- the instant-ray delivery.
+struct WeaponHitscanDef {
+    float range = 60.0f;
+    float impulse = 2.0f;
+    // The beam drawn along the ray. An empty material draws nothing, which is a
+    // legitimate choice for an instant weapon whose feedback is the muzzle
+    // flash and the impact rather than a visible trace.
+    std::string beamMaterial;
+    float beamWidth = 0.05f;
+    float beamSeconds = 0.06f;
+    std::string impactEffect;
+    std::string impactSound;
+};
+
+bool validWeaponMeleeDef(const WeaponMeleeDef& melee);
+bool validWeaponHitscanDef(const WeaponHitscanDef& hitscan);
 
 struct PlayerProjectileDef {
     WeaponPrimitive primitive = WeaponPrimitive::Sphere;
@@ -47,7 +106,31 @@ struct WeaponViewmodelPart {
     bool enchanted = false;
 };
 
+// Which presentation a weapon wears in the player's hands.
+//
+// Model is the default and covers both mesh and primitive weapons -- they share
+// a socket on the skinned hand rig and differ only in what hangs there. Sprite
+// is the flat layered presentation, which has no skeleton and therefore no
+// socket, so it is the branch that genuinely differs.
+enum class ViewmodelPresentation { Model, Sprite };
+
+const char* viewmodelPresentationName(ViewmodelPresentation presentation);
+std::optional<ViewmodelPresentation>
+viewmodelPresentationFromName(const std::string& name);
+
 struct WeaponViewmodelDef {
+    // `presentation = "sprite"` in TOML. When it is Sprite, `model` and the
+    // `parts` below are ignored and `spriteLayers` is what gets built.
+    ViewmodelPresentation presentation = ViewmodelPresentation::Model;
+    // Composited over the hands' own layers (viewmodel_hands.toml), sorted by
+    // distance. Empty on a model weapon.
+    std::vector<ViewmodelSpriteLayer> spriteLayers;
+    // Where a sprite weapon's shots leave from, in camera space. A sprite has
+    // no skeleton, so this replaces muzzleSocket/handsMuzzleJoint for that
+    // presentation -- `aim != muzzle` is unaffected, aim is still the camera
+    // ray. Ignored by model weapons.
+    glm::vec3 spriteMuzzle{0.0f, -0.10f, -0.60f};
+
     glm::vec3 position{0.24f, -0.24f, -0.55f};
     glm::vec3 rotationDegrees{0.0f};
     std::vector<WeaponViewmodelPart> parts;
@@ -103,6 +186,9 @@ struct PlayerWeaponDef {
     std::string discipline;
     std::string payloadId;
     WeaponTrigger trigger = WeaponTrigger::Press;
+    // Which delivery fires. Projectile is the default because it is what every
+    // shipped weapon uses and what an omitted `fire_mode` key should mean.
+    WeaponFireMode fireMode = WeaponFireMode::Projectile;
     float fireInterval = 0.25f;
     float arcCost = 5.0f;
     int projectileCount = 1;
@@ -112,9 +198,21 @@ struct PlayerWeaponDef {
     glm::vec3 muzzleOffset{0.18f, -0.16f, 0.40f};
     std::string muzzleEffect;
     std::string fireSound;
+    // One block per delivery, and only the selected one is validated or read.
+    // They are plain members rather than a variant because a weapon being
+    // retuned from a bolt into a beam should not lose the numbers it had --
+    // an author flips `fire_mode` back and the old block is still there.
     PlayerProjectileDef projectile;
+    WeaponMeleeDef melee;
+    WeaponHitscanDef hitscan;
     WeaponViewmodelDef viewmodel;
 };
+
+// The impact cue for whichever delivery this weapon uses. Callers that want to
+// play "what this weapon sounds like landing" must not reach into `.projectile`
+// directly: a melee weapon has no projectile block worth reading, and the one
+// call site that did read it silently played nothing for two of three modes.
+const std::string& weaponImpactSound(const PlayerWeaponDef& weapon);
 
 bool validPlayerWeaponDefinition(const PlayerWeaponDef& definition);
 

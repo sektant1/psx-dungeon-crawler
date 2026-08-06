@@ -10,15 +10,18 @@
 namespace {
 constexpr float kEyeHeight = 1.7f;
 constexpr float kCrouchEyeHeight = 1.18f;
-// Snappy, high-agility locomotion: near-instant ground response and strong
-// air control so direction changes read as deliberate, weighty dashes rather
-// than sluggish drift.
-constexpr float kAcceleration = 42.0f;
-constexpr float kDeceleration = 34.0f;
-constexpr float kAirAcceleration = 16.0f;
-constexpr float kSprintMultiplier = 2.05f;
-constexpr float kWalkMultiplier = 0.55f;
-constexpr float kCrouchMultiplier = 0.45f;
+// Snappy, high-agility locomotion. The numbers that decide *how* snappy now
+// live in eng::MovementTuning and arrive from data; what stays here is the
+// shape of the model, which is the part a designer cannot retune anyway.
+//
+// The air model is Doom/Heretic-like, NOT Quake-like: airborne input steers the
+// velocity toward a clamped target at airAcceleration, so air speed can never
+// exceed ground speed and there is no strafe-jump acceleration to discover.
+// That is a deliberate choice for this game -- "predictable air movement" is
+// worth more here than a speed technique, and Quake's model is a different
+// velocity integrator rather than a different constant, so it could not be
+// reached by tuning these anyway. See docs/fps-gameplay.md.
+//
 // Generous, sustained sprint: ~10 s at full tilt, ~2 s to fully recover. The
 // hysteresis band (drop at empty, resume only past kSprintRecoverThreshold)
 // turns the old stamina flap into one long sprint / brief breather / sprint.
@@ -26,10 +29,6 @@ constexpr float kStaminaDrain = 0.10f;
 constexpr float kStaminaRecover = 0.50f;
 constexpr float kSprintStartThreshold = 0.10f;
 constexpr float kSprintRecoverThreshold = 0.45f; // auto-resume past this
-constexpr float kJumpVelocity = 5.0f;
-constexpr float kGravity = 18.0f;
-constexpr float kCoyoteDuration = 0.10f;
-constexpr float kJumpBufferDuration = 0.12f;
 constexpr float kCeilingClearance = 0.10f;
 constexpr float kSlideDuration = 0.55f;
 constexpr float kSlideMultiplier = 2.0f;
@@ -50,6 +49,34 @@ float smootherstep(float value)
 } // namespace
 
 namespace eng {
+
+bool validMovementTuning(const MovementTuning& t)
+{
+    const float positive[] = {t.moveSpeed,   t.groundAcceleration,
+                              t.groundFriction, t.airAcceleration,
+                              t.jumpVelocity, t.gravity};
+    for (const float value : positive)
+        if (!std::isfinite(value) || value <= 0.0f)
+            return false;
+    const float nonNegative[] = {t.sprintMultiplier, t.walkMultiplier,
+                                 t.crouchMultiplier, t.coyoteTime,
+                                 t.jumpBufferTime};
+    for (const float value : nonNegative)
+        if (!std::isfinite(value) || value < 0.0f)
+            return false;
+    return true;
+}
+
+bool FpsController::setMovementTuning(const MovementTuning& tuning)
+{
+    // All or nothing. A tuning arrives from a TOML file or a slider, and a
+    // half-applied one -- new acceleration against the old friction -- is a
+    // feel nobody authored and nobody can reproduce.
+    if (!validMovementTuning(tuning))
+        return false;
+    mMove = tuning;
+    return true;
+}
 
 glm::vec3 FpsController::eyePosition() const
 {
@@ -124,7 +151,7 @@ void FpsController::reset(glm::vec3 startPos, float speed, float sensitivity,
                           glm::vec3 roomMin, glm::vec3 roomMax, float baseFov)
 {
     mPos = startPos;
-    mSpeed = speed;
+    mMove.moveSpeed = speed;
     mSens = sensitivity;
     mMin = roomMin;
     mMax = roomMax;
@@ -150,7 +177,7 @@ void FpsController::reset(glm::vec3 startPos, float speed, float sensitivity,
     mSprinting = false;
     mSprintExhausted = false;
     mSliding = false;
-    mCoyoteTime = kCoyoteDuration;
+    mCoyoteTime = mMove.coyoteTime;
     mJumpBufferTime = 0.0f;
     mFacingYaw = mYaw;
     mPrevFacingYaw = mYaw;
@@ -321,23 +348,23 @@ void FpsController::simulate(const Command& command, float dt)
     mCrouched = command.crouch || mSliding;
 
     if (command.jumpPressed)
-        mJumpBufferTime = kJumpBufferDuration;
+        mJumpBufferTime = mMove.jumpBufferTime;
     else
         mJumpBufferTime = std::max(0.0f, mJumpBufferTime - dt);
     if (grounded())
-        mCoyoteTime = kCoyoteDuration;
+        mCoyoteTime = mMove.coyoteTime;
     else
         mCoyoteTime = std::max(0.0f, mCoyoteTime - dt);
     if (mJumpBufferTime > 0.0f && mCoyoteTime > 0.0f && !mCrouched) {
-        mVerticalVelocity = kJumpVelocity;
+        mVerticalVelocity = mMove.jumpVelocity;
         mCoyoteTime = 0.0f;
         mJumpBufferTime = 0.0f;
     }
     float speedFactor = 1.0f;
     if (mSliding) speedFactor = kSlideMultiplier;
-    else if (mCrouched) speedFactor = kCrouchMultiplier;
-    else if (mSprinting) speedFactor = kSprintMultiplier;
-    else if (command.walk) speedFactor = kWalkMultiplier;
+    else if (mCrouched) speedFactor = mMove.crouchMultiplier;
+    else if (mSprinting) speedFactor = mMove.sprintMultiplier;
+    else if (command.walk) speedFactor = mMove.walkMultiplier;
 
     const float slideProgress = mSlideTime / kSlideDuration;
     // A dash overrides steering entirely: fixed direction, fixed speed, for its
@@ -347,16 +374,16 @@ void FpsController::simulate(const Command& command, float dt)
     const glm::vec2 target =
         dashing() ? mDashDirection * mDash.speed
         : mSliding
-            ? mSlideDirection * (mSpeed * speedFactor * (0.35f + 0.65f * slideProgress))
-            : (hasMove ? moveDirection * (mSpeed * speedFactor) : glm::vec2(0.0f));
+            ? mSlideDirection * (mMove.moveSpeed * speedFactor * (0.35f + 0.65f * slideProgress))
+            : (hasMove ? moveDirection * (mMove.moveSpeed * speedFactor) : glm::vec2(0.0f));
     // Reaching dash speed has to be instant; ramping it turns the escape into a
     // lean.
     constexpr float kDashAcceleration = 1000.0f;
     const float rate = dashing() ? kDashAcceleration
                      : mSliding  ? kSlideDeceleration
-                                 : (!grounded() ? kAirAcceleration
-                                                : (hasMove ? kAcceleration
-                                                           : kDeceleration));
+                                 : (!grounded() ? mMove.airAcceleration
+                                                : (hasMove ? mMove.groundAcceleration
+                                                           : mMove.groundFriction));
     mVelocity.x = approach(mVelocity.x, target.x, rate * dt);
     mVelocity.y = approach(mVelocity.y, target.y, rate * dt);
 
@@ -407,7 +434,7 @@ void FpsController::simulate(const Command& command, float dt)
         // No physics (test fallback): manual gravity + AABB clamp.
         fallSpeed = mVerticalVelocity;
         if (!grounded() || mVerticalVelocity > 0.0f) {
-            mVerticalVelocity -= kGravity * dt;
+            mVerticalVelocity -= mMove.gravity * dt;
             mPos.y += mVerticalVelocity * dt;
             // Apply the optional game-supplied ceiling constraint.
             const float maxFeetY = mCeilingHeight - mEyeHeight - kCeilingClearance;
@@ -481,8 +508,8 @@ void FpsController::simulate(const Command& command, float dt)
 
     // The authored templates pair locomotion state with camera feedback.
     const float horizontalSpeed = glm::length(mVelocity);
-    const float speedRatio = glm::clamp(horizontalSpeed / std::max(mSpeed, 0.001f),
-                                        0.0f, kSprintMultiplier);
+    const float speedRatio = glm::clamp(horizontalSpeed / std::max(mMove.moveSpeed, 0.001f),
+                                        0.0f, mMove.sprintMultiplier);
     const bool actuallyMoving = horizontalSpeed > 0.01f;
     mBobPhase += dt * (actuallyMoving ? (mBobSpeed + speedRatio * 3.0f) : 0.0f);
     const float targetEye = mCrouched ? kCrouchEyeHeight : kEyeHeight;
@@ -525,14 +552,14 @@ void FpsController::present(eng::Renderer& r, float alpha, float dt)
     pose.rollRadians = glm::mix(mPrevDashRoll, mDashRoll, t);
     const float horizontalSpeed = glm::length(mVelocity);
     pose.speedRatio =
-        glm::clamp(horizontalSpeed / std::max(mSpeed, 0.001f), 0.0f, 1.0f);
+        glm::clamp(horizontalSpeed / std::max(mMove.moveSpeed, 0.001f), 0.0f, 1.0f);
     // Signed lateral fraction, in the *view's* frame: which way the body is
     // sliding across the screen is what a lean and a boom lag react to, not
     // which way it is travelling in the world.
     if (horizontalSpeed > 0.01f) {
         const glm::vec2 right(std::cos(mYaw), -std::sin(mYaw));
         pose.strafeRatio =
-            glm::clamp(glm::dot(mVelocity, right) / std::max(mSpeed, 0.001f),
+            glm::clamp(glm::dot(mVelocity, right) / std::max(mMove.moveSpeed, 0.001f),
                        -1.0f, 1.0f);
     }
     pose.grounded = grounded();

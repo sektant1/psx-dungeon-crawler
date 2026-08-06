@@ -46,6 +46,22 @@ public:
     // enabled. Separate from sync() because the document has not changed --
     // the rig is simply animating, once per frame.
     void tickViewmodel(float dt);
+    // Advances authored `Clip`s in the preview world, and nothing else.
+    //
+    // Deliberately NOT tickComponentSystems(): the editor would then watch
+    // authored entities spin and expire while it tried to place them, which is
+    // exactly why sync() does not call it (see docs/ecs.md). A clip is the one
+    // behaviour an author has to *see* to author -- a timeline that scrubbed a
+    // playhead over a still viewport would be useless -- so it is the one that
+    // runs here, and only while the Timeline is driving it.
+    //
+    // Pass 0 to re-apply the current pose without advancing: what a scrub does.
+    void tickClips(float dt);
+    // The preview world, for the Timeline panel to edit clips in. Handing out
+    // the World rather than copying its clips: the panel writes the same
+    // components tickClips reads, and a copy would be a second source of truth
+    // about a playhead.
+    eng::ecs::World& world();
     // Forces the next sync to rebuild, after an undo/redo or a fresh load.
     void invalidate();
     // Hides the whole level without tearing it down, for the modes that need
