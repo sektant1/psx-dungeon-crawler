@@ -195,6 +195,70 @@ OutlinerNode buildNode(const SceneDocument& document, const KitCatalog& catalog,
     return node;
 }
 
+// Anything still unvisited named a parent but had no valid root: an orphan, a
+// self-parent, or a cycle. Omitting these rows made the exact entities reported
+// by validation impossible to select and repair.
+//
+// Shared by both view modes -- a broken parent link must not become invisible
+// because the panel happens to be grouping repeats.
+void appendInvalidRoots(const SceneDocument& document,
+                        const KitCatalog& catalog,
+                        const std::vector<Term>& terms,
+                        std::unordered_set<std::string>& visited,
+                        OutlinerTree& tree)
+{
+    std::vector<const Entity*> invalidRoots;
+    for (const Entity& entity : document.entities)
+        if (visited.count(entity.id) == 0)
+            invalidRoots.push_back(&entity);
+    std::sort(invalidRoots.begin(), invalidRoots.end(),
+              [](const Entity* a, const Entity* b) { return a->id < b->id; });
+    for (const Entity* entity : invalidRoots) {
+        if (visited.count(entity->id) != 0)
+            continue;
+        OutlinerGroup group;
+        group.key = "__invalid__" + entity->id;
+        group.kind = "INVALID";
+        group.composed = true;
+        group.invalid = true;
+        group.nodes.push_back(buildNode(document, catalog, *entity, visited));
+        group.nodes.front().label =
+            "[invalid hierarchy] " + group.nodes.front().label;
+        group.nodes.front().kind = "INVALID";
+        group.label = group.nodes.front().label;
+
+        const std::size_t count = countNodes(group.nodes.front());
+        if (!terms.empty() && !subtreeMatches(group.nodes.front(), terms)) {
+            tree.hidden += count;
+            continue;
+        }
+        tree.shown += count;
+        tree.groups.push_back(std::move(group));
+    }
+}
+
+// Deterministic order, so two authors on the same scene see the same panel and
+// a placement never reshuffles the list under the cursor.
+void sortOutliner(OutlinerTree& tree)
+{
+    for (OutlinerGroup& group : tree.groups)
+        std::sort(group.nodes.begin(), group.nodes.end(),
+                  [](const OutlinerNode& a, const OutlinerNode& b) {
+                      return a.id < b.id;
+                  });
+    std::sort(tree.groups.begin(), tree.groups.end(),
+              [](const OutlinerGroup& a, const OutlinerGroup& b) {
+                  // Kit groups after the loose gameplay ones, whatever a member
+                  // happens to carry: the panel's order is a property of the
+                  // level's structure, not of the last edit.
+                  if (a.invalid != b.invalid)
+                      return a.invalid;
+                  if (a.geometry != b.geometry)
+                      return !a.geometry;
+                  return a.label < b.label;
+              });
+}
+
 } // namespace
 
 const char* entityKind(const Entity& entity, const KitCatalog& catalog)
@@ -255,6 +319,54 @@ OutlinerTree buildOutliner(const SceneDocument& document,
         }
         tree.shown = count;
         tree.groups.push_back(std::move(group));
+        return tree;
+    }
+
+    // Hierarchy mode: the document's own structure, one row per entity.
+    //
+    // Every root gets a group, its children nest inside it, and nothing is
+    // merged. This is the panel answering "what is parented to what" rather
+    // than "what is in this level" -- and until it existed, the first question
+    // had no surface at all for a scene whose entities are mostly flat.
+    if (!options.groupRepeats) {
+        for (const Entity& entity : document.entities) {
+            if (!entity.parent.empty())
+                continue; // drawn under its own root
+            // Built BEFORE the visibility test, because building is what marks
+            // the whole subtree visited -- and the shared appendInvalidRoots
+            // tail below reports anything unvisited as an orphan or a cycle.
+            // Skipping the build for hidden geometry therefore relabelled every
+            // hidden root and all its descendants "[invalid hierarchy]": the
+            // rows came back, wearing a broken-scene warning.
+            OutlinerNode node = buildNode(document, catalog, entity, visited);
+            const std::size_t count = countNodes(node);
+
+            const bool geometry = isGeometry(entity);
+            if (geometry && !options.showGeometry) {
+                // The whole subtree, not one row: hiding a composed object hides
+                // everything under it, and the panel's count says so.
+                tree.hidden += count;
+                continue;
+            }
+            OutlinerGroup group;
+            group.key = entity.id;
+            group.kind = entityKind(entity, catalog);
+            group.composed = true;
+            group.geometry = geometry;
+            group.nodes.push_back(std::move(node));
+            group.label = group.nodes.front().label;
+            if (!terms.empty() && !subtreeMatches(group.nodes.front(), terms)) {
+                tree.hidden += count;
+                continue;
+            }
+            tree.shown += count;
+            tree.groups.push_back(std::move(group));
+        }
+        // Orphans and cycles are still reported: the shared tail below does it
+        // for both modes, so a broken parent link cannot become invisible just
+        // because the panel is in the other view.
+        appendInvalidRoots(document, catalog, terms, visited, tree);
+        sortOutliner(tree);
         return tree;
     }
 
@@ -333,6 +445,10 @@ OutlinerTree buildOutliner(const SceneDocument& document,
             group.kind =
                 entity.prefab.empty() ? kind : prefabKind(entity, catalog);
             group.geometry = !entity.prefab.empty();
+            // A pile, not a parent. Set here rather than inferred from
+            // nodes.size() at draw time, because a bucket that happens to hold
+            // one entity is still a bucket and must not read as an object.
+            group.bucket = true;
             tree.groups.push_back(std::move(group));
         }
         OutlinerGroup& group = tree.groups[found->second];
@@ -341,54 +457,8 @@ OutlinerTree buildOutliner(const SceneDocument& document,
         ++tree.shown;
     }
 
-    // Anything still unvisited named a parent but had no valid root: an orphan,
-    // a self-parent, or a cycle. Omitting these rows made the exact entities
-    // reported by validation impossible to select and repair.
-    std::vector<const Entity*> invalidRoots;
-    for (const Entity& entity : document.entities)
-        if (visited.count(entity.id) == 0)
-            invalidRoots.push_back(&entity);
-    std::sort(invalidRoots.begin(), invalidRoots.end(),
-              [](const Entity* a, const Entity* b) { return a->id < b->id; });
-    for (const Entity* entity : invalidRoots) {
-        if (visited.count(entity->id) != 0)
-            continue;
-        OutlinerGroup group;
-        group.key = "__invalid__" + entity->id;
-        group.kind = "INVALID";
-        group.composed = true;
-        group.invalid = true;
-        group.nodes.push_back(buildNode(document, catalog, *entity, visited));
-        group.nodes.front().label =
-            "[invalid hierarchy] " + group.nodes.front().label;
-        group.nodes.front().kind = "INVALID";
-        group.label = group.nodes.front().label;
-
-        const std::size_t count = countNodes(group.nodes.front());
-        if (!terms.empty() && !subtreeMatches(group.nodes.front(), terms)) {
-            tree.hidden += count;
-            continue;
-        }
-        tree.shown += count;
-        tree.groups.push_back(std::move(group));
-    }
-
-    for (OutlinerGroup& group : tree.groups)
-        std::sort(group.nodes.begin(), group.nodes.end(),
-                  [](const OutlinerNode& a, const OutlinerNode& b) {
-                      return a.id < b.id;
-                  });
-    std::sort(tree.groups.begin(), tree.groups.end(),
-              [](const OutlinerGroup& a, const OutlinerGroup& b) {
-                  // Kit groups after the loose gameplay ones, whatever a
-                  // member happens to carry: the panel's order is a property of
-                  // the level's structure, not of the last edit.
-                  if (a.invalid != b.invalid)
-                      return a.invalid;
-                  if (a.geometry != b.geometry)
-                      return !a.geometry;
-                  return a.label < b.label;
-              });
+    appendInvalidRoots(document, catalog, terms, visited, tree);
+    sortOutliner(tree);
     return tree;
 }
 

@@ -20,7 +20,8 @@ my-game/
   scenes/main.scn      authored scenes
   scripts/cube.lua     behaviour
   materials/ textures/ meshes/
-  .raven/              per-user working state: cooked maps. Not for committing.
+  ui/icon.png          optional: the window icon, shadowing the engine's
+  .raven/              per-user working state: cooked maps, saves. Gitignored.
 ```
 
 `project.toml` is both the identity and the configuration, because the engine
@@ -56,7 +57,10 @@ project missing any of them starts and then dies on the first frame that asks.
 ## Running one
 
 ```sh
-raven_player <project-dir>     # play a project
+make play PROJECT=<dir>        # through the Makefile, like everything else
+make export PROJECT=<dir>      # a distributable, in <dir>-build (OUT= to choose)
+
+raven_player <project-dir>     # or directly
 raven_player <scene.map>       # play one cooked scene, no project
 ```
 
@@ -553,5 +557,3 @@ Named so nobody looks for them:
 - **Trimming unused assets.** The engine content set is a fixed list, not a
   trace of what a project actually references, so a small game still ships
   ~14 MB of engine content.
-- **A window icon.** An exported build logs a warning about the engine's own
-  icon path; a game should ship its own, and there is no field for one yet.

@@ -112,7 +112,7 @@ export RAVEN_BUILD_PLAIN := $(if $(PLAIN),1,)
 export RAVEN_BUILD_LOG_DIR := $(abspath $(BUILD_DIR))
 
 # Every build rule goes through this: one lock, one progress bar, one summary.
-#   $(call forge,<target>,<what to say while it builds>)
+#   $(call forge,<target>,<label shown while it builds>)
 forge = @$(UI) run "$(2)" -- $(BUILD_LOCK) cmake --build $(BUILD_DIR) --target $(1) -j$(JOBS)
 
 # ---- run-option -> RAVEN_* env mapping -------------------------------------
@@ -171,13 +171,14 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
               $(if $(filter psx_demo,$(APP)),psx_demo,game))
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
-        build-editor build-cook build-acp build-reset doctor ui-deps \
+        build-editor build-cook build-acp build-player build-export \
+        build-reset doctor ui-deps play export \
         acp acp-check acp-clean assetdb \
         editor cook scene material prefab-viewer \
         run game demo psx-demo mapgen sim test asan bench screenshot visual-test \
         editor-selftest clip clip-mp4 look new-clip assetformats \
         visual-bench renderdoc-capture renderdoc gdb valgrind perf deps docs \
-        vulkan-kit asset debug debug-run clean help \
+        vulkan-kit asset debug debug-run clean help help-text deps-guard \
         connector run-connected
 
 all: build
@@ -201,11 +202,11 @@ configure:
 		fi; \
 	fi
 	@if [ ! -f "$(BUILD_DIR)/CMakeCache.txt" ]; then \
-		$(UI) run "configuring $(BUILD_DIR)" -- cmake -B "$(BUILD_DIR)" -G "$(GENERATOR)" \
+		$(UI) run "configuring" -- cmake -B "$(BUILD_DIR)" -G "$(GENERATOR)" \
 		      -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	elif [ -n "$(strip $(CMAKE_ARGS))" ] || ! grep -Fqx "CMAKE_BUILD_TYPE:STRING=$(BUILD_TYPE)" "$(BUILD_DIR)/CMakeCache.txt"; then \
-		$(UI) run "reconfiguring $(BUILD_DIR)" -- cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
+		$(UI) run "reconfiguring" -- cmake -B "$(BUILD_DIR)" -DCMAKE_BUILD_TYPE="$(BUILD_TYPE)" \
 		      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(CMAKE_ARGS); \
 	fi
 	@$(MAKE) --no-print-directory deps-guard
@@ -258,37 +259,43 @@ ui-deps:
 	    || $(UI) warn "could not install rich; the bash renderer stays in use"
 
 build-all: configure
-	$(call forge,all,forging everything)
+	$(call forge,all,building all targets)
 
 # Run-oriented commands build only their required target. In particular this
 # keeps the demo, map generator, simulation harness, and test executables out
 # of the edit/build/run loop for the game.
 build-game: configure
-	$(call forge,game,forging the game)
+	$(call forge,game,building game)
 
 build: build-game
 
 build-demo: configure
-	$(call forge,psx_demo,forging the psx demo)
+	$(call forge,psx_demo,building psx_demo)
 
 build-mapgen: configure
-	$(call forge,mapgen,forging the map generator)
+	$(call forge,mapgen,building mapgen)
 
 build-sim: configure
-	$(call forge,game_sim,forging the simulation harness)
+	$(call forge,game_sim,building game_sim)
 
 build-editor: configure
-	$(call forge,scene_editor,raising the editor)
+	$(call forge,scene_editor,building scene_editor)
 
 build-cook: configure
-	$(call forge,scene_cook,forging the scene cooker)
+	$(call forge,scene_cook,building scene_cook)
 
 build-acp: configure
-	$(call forge,raven_acp,forging the asset pipeline)
+	$(call forge,raven_acp,building raven_acp)
+
+build-player: configure
+	$(call forge,raven_player,building raven_player)
+
+build-export: configure
+	$(call forge,raven_export,building raven_export)
 
 # The generic app build, for the APP=-driven targets below.
 build-app: configure
-	$(call forge,$(APP_TARGET),forging $(APP_TARGET))
+	$(call forge,$(APP_TARGET),building $(APP_TARGET))
 
 # Detects pacman/apt/dnf/zypper/apk/brew; installs toolchain + SDL2 + glm,
 # plus the Vulkan loader and the SPIR-V toolchain the RHI compiles through.
@@ -298,7 +305,7 @@ deps:
 # ---- run -------------------------------------------------------------------
 # `run` is the primary entry point; `game` is a back-compat alias.
 run game: build-game
-	@$(UI) step "descending$(if $(RUN_ARGS), into $(RUN_ARGS))$(if $(SEED), seed $(SEED))$(if $(PRESET), preset $(PRESET))"
+	@$(UI) step "running game$(if $(RUN_ARGS), $(RUN_ARGS))$(if $(SEED), seed $(SEED))$(if $(PRESET), preset $(PRESET))"
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./game $(RUN_ARGS)
 
 # ---- the model showroom ----------------------------------------------------
@@ -351,6 +358,24 @@ editor: build-editor
 material: build-editor
 	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_EDITOR_MATERIAL=1 \
 	    ./scene_editor $(if $(SCENE),$(abspath $(SCENE)),)
+
+# ---- projects --------------------------------------------------------------
+# A project is a directory with a project.toml: somebody else's game, made in
+# this editor and played by a runtime with none of this game's code in it. See
+# docs/projects.md.
+#
+#   make play PROJECT=~/games/my-game       play it
+#   make export PROJECT=~/games/my-game     build a distributable beside it
+#   make export PROJECT=... OUT=~/ship
+play: build-player
+	@test -n "$(PROJECT)" || { echo "usage: make play PROJECT=<dir>"; exit 2; }
+	cd $(BUILD_DIR) && env $(RUN_ENV) ./raven_player $(abspath $(PROJECT))
+
+export: build-player build-export
+	@test -n "$(PROJECT)" || { echo "usage: make export PROJECT=<dir> [OUT=<dir>]"; exit 2; }
+	cd $(BUILD_DIR) && env $(RUN_ENV) ./raven_export $(abspath $(PROJECT)) \
+	    --out $(if $(OUT),$(abspath $(OUT)),$(abspath $(PROJECT))-build) \
+	    --player ./raven_player --overwrite
 
 # ---- asset pipeline --------------------------------------------------------
 # The Asset Conditioning Pipeline: every DCC source in assets/ through its
@@ -477,7 +502,7 @@ endif
 	    --record-start $(CLIP_START) --record-width $(CLIP_WIDTH) \
 	    --record-keep-frames --record-frame-dir clip-frames
 	$(if $(MP4),$(MAKE) clip-mp4 OUT=$(CLIP_OUT),)
-	@echo "wrote $(CLIP_OUT).gif ($(CLIP_SECONDS)s at $(CLIP_FPS) fps)"
+	@$(UI) ok "wrote $(CLIP_OUT).gif ($(CLIP_SECONDS)s at $(CLIP_FPS) fps)"
 
 # Re-encodes the frames the last `make clip` kept, so a second format costs no
 # second run of the game. Nearest-neighbour scaling: bilinear turns a
@@ -486,7 +511,7 @@ clip-mp4:
 	ffmpeg -y -loglevel error -framerate $(CLIP_FPS) \
 	    -i $(CLIP_DIR)/frame_%05d.png -c:v libx264 -pix_fmt yuv420p -crf 20 \
 	    -vf "scale=720:-2:flags=neighbor" $(CLIP_OUT).mp4
-	@echo "wrote $(CLIP_OUT).mp4"
+	@$(UI) ok "wrote $(CLIP_OUT).mp4"
 
 # One frame of a scene, for a look rather than a clip. The fast loop while
 # framing a shot: edit the .scn, run this, read the PNG.
@@ -500,7 +525,7 @@ endif
 	cd $(BUILD_DIR) && env $(RUN_ENV) \
 	    RAVEN_SCREENSHOT=$(if $(SHOT),$(abspath $(SHOT)),$(abspath $(BUILD_DIR))/look.png) \
 	    RAVEN_SCREENSHOT_FRAME=$(if $(FRAME),$(FRAME),200) ./game clip.map
-	@echo "wrote $(if $(SHOT),$(SHOT),$(BUILD_DIR)/look.png)"
+	@$(UI) ok "wrote $(if $(SHOT),$(SHOT),$(BUILD_DIR)/look.png)"
 
 # Start a new shot from the one that works: copies the example scene under a new
 # name and opens it. Beats an empty document, because a shot is mostly lighting
@@ -511,12 +536,12 @@ ifndef NAME
 	$(error set NAME=<scene-name>)
 endif
 	@test ! -f assets/scenes/$(NAME).scn || \
-	    (echo "assets/scenes/$(NAME).scn already exists" && false)
+	    ($(UI) err "assets/scenes/$(NAME).scn already exists" && false)
 	@$(PYTHON) -c "import json,sys; \
 d=json.load(open('assets/scenes/spin_portal.scn')); \
 d['id']='scene.$(NAME)'; \
 json.dump(d, open('assets/scenes/$(NAME).scn','w'), indent=2)"
-	@echo "created assets/scenes/$(NAME).scn from spin_portal"
+	@$(UI) ok "created assets/scenes/$(NAME).scn from spin_portal"
 	$(MAKE) editor SCENE=assets/scenes/$(NAME).scn
 
 # Blender -> engine. The front of the asset pipeline, which had no target:
@@ -545,8 +570,12 @@ sim: build-sim
 	cd $(BUILD_DIR) && ./game_sim $(if $(SCRIPT),$(abspath $(SCRIPT)),)
 
 # ---- test / analysis -------------------------------------------------------
+# ctest's own "N/M Test #k" lines feed the same progress bar the compiler does,
+# so the 150-test suite reports like a build instead of scrolling like one.
+# --output-on-failure keeps a failing test's output, which prints in full.
 test: build-all
-	cd $(BUILD_DIR) && ctest --output-on-failure
+	@cd $(BUILD_DIR) && $(UI) run "running tests" -- \
+	    ctest --output-on-failure $(if $(TEST),-R $(TEST),)
 
 # Address/UB/Leak sanitizer build of game + game_sim (test targets aren't
 # ASan-hardened). Run e.g. `make asan && make run BUILD_DIR=build-asan`.
@@ -625,7 +654,7 @@ renderdoc-capture: build-app
 #   make renderdoc FRAME=200           auto-capture one frame, headless
 renderdoc: build-app
 	@command -v renderdoccmd >/dev/null 2>&1 || { \
-	    echo "renderdoccmd not found -- install RenderDoc, or use 'make renderdoc-capture'"; \
+	    $(UI) err "renderdoccmd not found -- install RenderDoc, or use 'make renderdoc-capture'"; \
 	    exit 1; }
 ifdef FRAME
 	cd $(BUILD_DIR) && env $(RUN_ENV) RAVEN_RENDERDOC_FRAME=$(FRAME) \
@@ -673,7 +702,7 @@ docs: configure
 	elif command -v open >/dev/null 2>&1; then \
 		open "$(BUILD_DIR)/docs/html/index.html"; \
 	else \
-		echo "Docs generated at $(BUILD_DIR)/docs/html/index.html"; \
+		$(UI) note "docs generated at $(BUILD_DIR)/docs/html/index.html"; \
 	fi
 
 # The Vulkan RHI implementation guide. Static HTML checked into the repo, so
@@ -686,7 +715,7 @@ vulkan-kit:
 	elif command -v open >/dev/null 2>&1; then \
 		open "$(VULKAN_KIT)"; \
 	else \
-		echo "Open $(VULKAN_KIT) in a browser"; \
+		$(UI) note "open $(VULKAN_KIT) in a browser"; \
 	fi
 
 # Unoptimised build with symbols, in its own tree so the Release one survives.
@@ -699,7 +728,13 @@ debug-run: debug
 clean:
 	rm -rf $(BUILD_DIR) build-debug build-asan
 
+# Piped through the formatter, which paints the target names and options and
+# swaps the title line for the wordmark. The text itself is unchanged, so
+# `make help | grep` and `make help PLAIN=1` behave as they always did.
 help:
+	@$(MAKE) --no-print-directory help-text | $(UI) helpfmt
+
+help-text:
 	@echo "Raven Engine build/run CLI"
 	@echo ""
 	@echo "Targets:"
@@ -707,6 +742,7 @@ help:
 	@echo "  run-connected      the game, reporting into a running connector"
 	@echo "  make [build]        configure + build the game"
 	@echo "  make build-all      build every executable and test target"
+	@echo "  make doctor         diagnose the tree/toolchain/ccache (FIX=1 repairs)"
 	@echo "  make build-reset    clear a truncated ninja deps log (fixes"
 	@echo "                      'rebuilds everything with no edits')"
 	@echo "  make run            build + run the game (alias: game)"
@@ -714,6 +750,8 @@ help:
 	@echo "  make psx-demo       build + run the PSX shader sample"
 	@echo "  make editor         build + run the placement editor (SCENE=)"
 	@echo "  make material       editor, opened in the material staging scene"
+	@echo "  make play PROJECT=  play a project (docs/projects.md)"
+	@echo "  make export PROJECT= build a distributable (OUT=)"
 	@echo "  make acp            condition all assets (TYPE=, FILTER=, FORCE=1)"
 	@echo "  make acp-check      fail if any asset is stale -- what CI runs"
 	@echo "  make assetdb        the resource database (STAMP=1, LIST=1, TYPE=)"
@@ -744,6 +782,7 @@ help:
 	@echo "  make docs           generate + open API docs"
 	@echo "  make vulkan-kit     open the Vulkan RHI implementation guide"
 	@echo "  make debug          Debug build in build-debug/"
+	@echo "  make ui-deps        install the rich build UI into .cache/py"
 	@echo "  make clean          remove build directories"
 	@echo ""
 	@echo "Run options (make run/demo/prefab-viewer/screenshot/bench):"
@@ -774,5 +813,10 @@ help:
 	@echo "  FRAME=<n>           auto-capture frame / exit frame"
 	@echo "  BATCH=1             gdb: run to completion, print backtrace, exit"
 	@echo "  OUT=<path>          renderdoc: capture file"
+	@echo ""
+	@echo "Output options (every target):"
+	@echo "  PLAIN=1             no colour, no progress bar (also NO_COLOR=1)"
+	@echo "  JOBS=<n>            parallel compile jobs; defaults from free memory"
+	@echo "  NO_DEPS_CHECK=1     skip the ninja deps-log integrity check"
 	@echo ""
 	@echo "Build config: BUILD_DIR=$(BUILD_DIR) BUILD_TYPE=$(BUILD_TYPE) GENERATOR=$(GENERATOR) JOBS=$(JOBS) APP=$(APP)"

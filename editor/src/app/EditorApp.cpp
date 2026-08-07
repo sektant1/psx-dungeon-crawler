@@ -3336,8 +3336,17 @@ void EditorApp::drawBottomPanel(const eng::FrameContext& f, float height)
     mBottomResizing = ImGui::IsItemActive();
     if (hovered || mBottomResizing)
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-    if (mBottomResizing)
-        mBottom.height -= ImGui::GetIO().MouseDelta.y;
+    if (mBottomResizing) {
+        // Clamped here, not only in bottomPanelHeight: that clamps the value it
+        // RETURNS, so dragging past the floor kept driving `height` down
+        // without bound and the panel then refused to grow until the mouse had
+        // travelled all of it back. The bounds are the panel's own, so this
+        // cannot disagree with what gets drawn.
+        const float viewport = ImGui::GetMainViewport()->WorkSize.y;
+        mBottom.height =
+            std::clamp(mBottom.height - ImGui::GetIO().MouseDelta.y, 64.0f,
+                       std::max(viewport * 0.5f, 64.0f));
+    }
     ImGui::GetWindowDrawList()->AddRectFilled(
         ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
         ImGui::GetColorU32(mBottomResizing ? ImGuiCol_SeparatorActive

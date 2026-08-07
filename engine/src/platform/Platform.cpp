@@ -3,6 +3,8 @@
 #include <eng/Log.h>
 #include <eng/assets/AssetRoot.h>
 
+#include <filesystem>
+
 #include <cstdlib>
 
 #include <stb_image.h>
@@ -17,15 +19,26 @@ namespace {
 
 void setWindowIcon(SDL_Window* window)
 {
-    const auto path = assets::project() / "docs/media/avatar.png";
+    // Content first, so a project ships its own icon by putting a file at
+    // ui/icon.png -- the project's pack is mounted over the engine's, so that
+    // shadows whatever the engine provides with no code and no setting.
+    //
+    // The repo's own avatar is the fallback, and only reachable in a source
+    // tree: an exported build has no docs/ and used to warn about it on every
+    // launch, which is a shipped game complaining that it is not this one.
+    std::filesystem::path path = assets::resolve("ui/icon.png");
+    if (path.empty())
+        path = assets::project() / "docs/media/avatar.png";
+
     int width = 0;
     int height = 0;
     int channels = 0;
     stbi_uc* pixels = stbi_load(path.string().c_str(), &width, &height,
                                 &channels, STBI_rgb_alpha);
     if (!pixels) {
-        log::warn("Platform: cannot load window icon '%s': %s",
-                  path.string().c_str(), stbi_failure_reason());
+        // Not a warning: a game with no icon is a game with no icon. The window
+        // still opens, and the platform default is a perfectly good icon.
+        log::info("Platform: no window icon (%s)", path.string().c_str());
         return;
     }
 
