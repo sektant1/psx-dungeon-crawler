@@ -483,10 +483,10 @@ Nothing in this plan is trusted because it compiles.
 | Property | Check | When |
 |---|---|---|
 | Behaviour preserved | the 131 ctests, moving with their modules | every phase |
-| Image unchanged | `make visual-test` golden images | every render-touching step |
+| Image unchanged | `make visual-test` golden images — **currently broken, see §2**; until repaired, `RAVEN_SCREENSHOT` against the real display | every render-touching step |
 | No upward dependency | layering lint, extended to modules | every phase |
 | Module is standalone | build + test the module with the rest of the engine absent | module exit |
-| No third-party leak | grep each module's public headers for `glm/entt/Jolt/SDL/imgui/toml/vulkan` (only `raven.math` may match glm) | module exit |
+| No third-party leak | `tools/check_modules.py` in the new tree (only `raven.math` may match glm) | module exit |
 | Engine has no game | grep engine modules for game vocabulary | Phase 8 |
 | Consumable externally | a scratch CMake project doing `find_package(raven.render)` | Phase 8 |
 
@@ -526,12 +526,43 @@ When the migration lands:
 
 ---
 
-## 9. Immediate next actions
+## 9. Progress
 
-1. Phase 0: strip the OGRE fiction from the four documents; commit the baseline.
-2. Phase 1: scaffold `../raven-engine/` — module template, CMake spine, CI, the
-   ported `make doctor` tooling.
-3. Phase 2: `raven.math`, then `raven.core`.
+### Done
 
-Phases 0–2 are mechanical and low-risk; they are the right work to do first and
-the right place to judge whether the plan's estimates hold.
+**Phase 0 (mostly)** — branch `chore/phase0-retire-ogre`.
+The OGRE residue is gone: 11 dead `#if !defined(ENG_RENDERER_RHI)` branches,
+the 4 files naming `Ogre::` types (including `attach(Ogre::SceneManager*)` in a
+public header), ~100 stale comments, and the `ENG_RENDERER_RHI` macro itself.
+Rules were *restated against what enforces them now* rather than deleted.
+Removing the dead branches exposed a native-window-handle chain that was dead
+end to end (`Platform → Engine → RenderCore → rhi::DeviceDesc`, read by no
+backend) and the X11 driver pin that existed only for OGRE — so the engine now
+runs on native Wayland. Two real defects surfaced and were fixed: the editor
+advertising an unloadable `.dds` import, and a `srand` comment claiming a
+determinism guarantee nothing depended on any more.
+Build 398/398; ctest 164/166 with the two pre-existing failures unchanged;
+frame captured and inspected.
+
+**Phase 1** — `../raven-engine/`, commit `fd1607b`.
+The module spine: `raven_module()` (own include root, own export set, own
+tests) and `tools/check_modules.py`, the `modules` ctest enforcing the two
+contract rules CMake cannot — no third-party type in a public header, no
+undeclared cross-module include. Both negative-tested.
+
+**Phase 2 (first half)** — `raven.math`.
+Transforms, AABBs, and a seedable RNG; the conventions the old tree carried as
+folklore (forward is -Z, the empty AABB is `+inf/-inf`) stated in code. glm is
+confined here, which is what turns a 60-header dependency into a one-module
+seam. 4/4 tests pass.
+
+### Next
+
+1. **Repair `make visual-test`** (§2). It is the migration's safety net for the
+   frozen image and it does not currently run — this is now the highest-value
+   item in the plan, ahead of any further module work.
+2. Finish Phase 0's baseline: commit `docs/baseline-2026-08-07.md` and tag.
+3. Phase 2's second half: `raven.core` — `Log`, `StringId`, `Clock`, `Config`,
+   `FileSystem`, `Handles`, `Profiler`, events; toml++ leaves the public API.
+4. Phase 3: `raven.platform` + `raven.input`, which is the module most likely to
+   be reused first somewhere else.
