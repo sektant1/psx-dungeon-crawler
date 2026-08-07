@@ -185,6 +185,81 @@ error anywhere. It looks exactly like a broken renderer.
 5. F5, or `scene_cook <scene.scn> --assets <project-dir> --out <map>` then
    `raven_player <project-dir>`.
 
+## Scene instancing
+
+The central idea, and Godot's: a torch, a pillar, an enemy is authored **once**
+as its own `.scn` and placed anywhere. Fixing it once fixes every placement.
+
+```json
+{
+  "id": "torch_a",
+  "name": "Torch A",
+  "transform": { "position": [2.0, 0.0, 0.0] },
+  "instance": { "scene": "scenes/torch.scn" }
+}
+```
+
+Not called a prefab, though that is the usual word: `prefab` already means a
+kit piece in this format, and one word for two things in one struct is how a
+file format acquires a bug nobody can describe.
+
+**What expansion does.** Before the cooker, the validator or the editor's
+preview sees the document, every `instance` is replaced by the contents of the
+scene it names:
+
+- The placement **survives**, stripped of its `instance`. It is the node the
+  contents hang from, so moving it moves the whole torch, and a script on it is
+  the torch's script. It keeps its name, layer and transform.
+- Ids are namespaced with the placement's — `torch_a/flame` — so two placements
+  of one scene cannot collide and a diagnostic names something findable.
+- An inner root is parented to the placement; an inner child keeps its own
+  parent, namespaced to match. No transform arithmetic happens: the cooker
+  already resolves transforms through the parent chain.
+- Contents inherit the placement's layer, so hiding the layer a torch is on
+  hides its flame.
+- Nesting works, to `kMaxInstanceDepth` (8).
+
+Refused, with the document left untouched: a scene that does not resolve, one
+that will not parse, and cycles — reported with the chain of files in them,
+because "cycle detected" alone is something you have to reproduce before you
+can act on it.
+
+Per-instance overrides ("this torch is blue") deliberately do **not** exist yet.
+An override system is a merge policy, and one invented alongside its first use
+gets redesigned the moment somebody nests two deep. Make a variant scene.
+
+### Component scenes
+
+A scene meant to be placed rather than played declares it:
+
+```json
+{ "format": "raven-scene", "version": 2, "id": "scene.torch",
+  "component": true,
+  "entities": [ ... ] }
+```
+
+The scene contract's rules are about *levels*: a level with nothing to look
+through and nowhere to start is broken and has to say so. A pillar has neither
+and never will. Without this flag every prop in a project would need a camera
+nobody looks through — or could not be cooked at all, and so could never be
+spawned at runtime. Everything else still applies: a prefab that does not
+resolve, or a script that will not compile, is wrong in a pillar exactly as it
+is in a level.
+
+### At runtime
+
+The same `.scn` an author places is what a script spawns:
+
+```lua
+local handle = game.spawn_scene("scenes/torch.scn", vec3(4, 0, -2))
+game.despawn(handle)
+```
+
+The handle is a lifetime group, so despawning is one call and cannot take
+anything else with it — spawned objects get groups distinct from the level's,
+so changing scene does not destroy a script's effects and vice versa. `0` means
+it did not load, which a script can test.
+
 ## The Lua surface
 
 On top of the object model in [scripting.md](scripting.md) — `world`, `entity`,
@@ -281,7 +356,10 @@ Named so nobody looks for them:
 - **Project-defined components.** The player registers the engine set only, and
   the editor's add-component menu still offers this game's markers. This is the
   largest remaining piece and is its own milestone.
-- **Prefabs / scene instancing.** A scene cannot yet be a node inside another.
+- **Per-instance overrides.** A placed scene cannot be tweaked in place; make
+  a variant scene instead.
+- **Instanced contents in the outliner.** A placement is one row in the editor;
+  its contents appear when cooked, not in the tree.
 - **UI from Lua.** No HUD or menu drawing; gameplay must not depend on ImGui,
   so this needs the engine's own UI canvas exposed rather than ImGui bound.
 - **In-editor script editing.** Scripts are files the editor references by path.

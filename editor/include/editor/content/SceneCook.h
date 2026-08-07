@@ -30,16 +30,22 @@ namespace game::content {
 // against a newer kit, still has to be able to see and fix their level. It used
 // to get an empty viewport, because a single bad prefab abandoned the registry
 // mid-build and every other entity in the scene went with it.
+// `assetRoot` is the directory scene-instance paths resolve against -- the open
+// project's, or the content pack's. Only read when the document actually
+// instances something; a scene that does not is built without touching it, and
+// without paying for a copy of itself.
 bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                    entt::registry& out, std::string& error,
                    std::unordered_map<AuthorId, entt::entity>* authorToEntity =
                        nullptr,
-                   std::vector<AuthorId>* unresolved = nullptr);
+                   std::vector<AuthorId>* unresolved = nullptr,
+                   const std::string& assetRoot = {});
 
 // The whole cook: IR -> registry -> binary .map, written atomically by
 // eng::ecs::writeMap. The one function both scene_cook and the editor call; there
 // is deliberately no second path from a scene to a map.
 bool cookToMap(const SceneDocument& document, const KitCatalog& catalog,
-               const std::string& mapPath, std::string& error);
+               const std::string& mapPath, std::string& error,
+               const std::string& assetRoot = {});
 
 } // namespace game::content

@@ -1573,7 +1573,8 @@ bool EditorApp::cookScene(std::string& mapPath)
     mapPath = mProject.cookTarget(mState.scenePath, mState.assetRoot);
 
     std::string error;
-    if (!cookToMap(mState.document, mState.catalog, mapPath, error)) {
+    if (!cookToMap(mState.document, mState.catalog, mapPath, error,
+                   mState.assetRoot)) {
         mStatus = error;
         mCookStatus = "failed";
         return false;

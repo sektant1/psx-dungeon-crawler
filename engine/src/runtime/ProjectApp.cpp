@@ -272,6 +272,19 @@ void ProjectApp::startScripts(Engine& engine)
         mPendingScene = scene;
     };
     hooks.quit = [&engine]() { engine.requestClose(); };
+    // Spawning names a scene the way an author does; cookedPathFor is what
+    // turns that into the build product, exactly as load_scene does -- so a
+    // script says "scenes/torch.scn" in both and never learns where .raven is.
+    hooks.spawnScene = [this](const std::string& scene,
+                              const glm::vec3& at) -> uint32_t {
+        if (!mScene)
+            return 0;
+        const std::string path = cookedPathFor(scene);
+        if (path.empty())
+            return 0;
+        return mScene->instantiate(path, at);
+    };
+    hooks.despawn = [this](uint32_t group) { mWorld.destroyGroup(group); };
     hooks.cameraPosition = [this]() { return mPlayer.eyePosition(); };
     hooks.cameraForward = [this]() { return mPlayer.forward(); };
     hooks.elapsed = [&engine]() { return engine.gameClock().elapsed(); };

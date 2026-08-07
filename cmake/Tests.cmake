@@ -957,6 +957,12 @@ if(BUILD_TESTING)
   # attachments fails the build rather than making the test pass vacuously.
   # The mechanical repairs: cell records never move an entity, and only an
   # exact copy is ever deleted.
+  # Scene instancing: one .scn placed inside another.
+  eng_add_test(scene_instancing
+    SOURCES editor/tests/SceneInstancingTests.cpp
+    INCLUDES editor/include game/src engine/include third_party
+    LIBS game_content eng_ecs_headless)
+
   eng_add_test(scene_repair
     SOURCES editor/tests/SceneRepairTests.cpp
     INCLUDES game/tests editor/include

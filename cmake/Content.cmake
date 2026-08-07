@@ -56,6 +56,7 @@ add_library(
   editor/src/content/SceneSource.cpp
   editor/src/content/SceneWriter.cpp
   editor/src/content/SceneCook.cpp
+  editor/src/content/SceneInstancing.cpp
   editor/src/content/GridMath.cpp
   editor/src/content/SceneValidate.cpp
   editor/src/content/SceneContract.cpp

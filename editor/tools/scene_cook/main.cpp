@@ -208,7 +208,7 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    if (!game::content::cookToMap(document, catalog, out, error)) {
+    if (!game::content::cookToMap(document, catalog, out, error, assets)) {
         std::fprintf(stderr, "scene_cook: %s\n", error.c_str());
         return 1;
     }

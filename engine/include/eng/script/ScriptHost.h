@@ -42,6 +42,12 @@ struct RuntimeHooks {
     // a frame boundary means.
     std::function<void(const std::string&)> loadScene;
     std::function<void()> quit;
+    // Merge a cooked scene into the world at a position; returns the group that
+    // despawns it, or 0 on failure. The runtime half of scene instancing: the
+    // same .scn an author places is what a script spawns.
+    std::function<uint32_t(const std::string&, const glm::vec3&)> spawnScene;
+    // Destroy everything in a group -- what spawnScene handed back.
+    std::function<void(uint32_t)> despawn;
     std::function<glm::vec3()> cameraPosition;
     std::function<glm::vec3()> cameraForward;
     // Game-time controls, over eng::Clock -- so slowing time from Lua slows

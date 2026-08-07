@@ -170,7 +170,11 @@ ContractReport sceneContract(const SceneDocument& document)
     report.kind = chosen          ? kindOf(*chosen)
                   : spawns > 0    ? SceneKind::GameDriven
                                   : SceneKind::Empty;
-    const bool world = isWorld(report.kind);
+    // A component scene is a building block -- a torch, a pillar, an enemy --
+    // and the roles below that presuppose a player do not apply to one. It is
+    // never "not playable": it is not a thing that gets played. See
+    // SceneDocument::component.
+    const bool world = isWorld(report.kind) && !document.component;
 
     // --- View ------------------------------------------------------------
     // Filled by an authored view OR by a player spawn -- the game supplies the
@@ -178,7 +182,8 @@ ContractReport sceneContract(const SceneDocument& document)
     // player controller rather than being broken. Only a scene with neither is
     // an Error, and that is the failure this file was written for.
     {
-        RoleStatus status = role(SceneRole::View, true, Severity::Error,
+        RoleStatus status = role(SceneRole::View, !document.component,
+                                 Severity::Error,
                                  QuickFix::AddFirstPersonView);
         status.count = activeViews;
         if (chosen)

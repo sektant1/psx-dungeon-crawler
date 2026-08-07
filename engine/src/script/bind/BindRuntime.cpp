@@ -44,6 +44,31 @@ void bindRuntime(sol::state& lua, const RuntimeHooks& hooks)
         g["quit"] = []() { unavailable("game.quit"); };
     }
 
+    // Scene instancing at runtime. Returns a handle -- really the lifetime
+    // group -- so despawning is one call and cannot take anything else with
+    // it. Zero means it did not load, which a script can test.
+    if (hooks.spawnScene) {
+        const auto spawn = hooks.spawnScene;
+        g["spawn_scene"] = [spawn](const std::string& scene,
+                                   sol::optional<glm::vec3> at) {
+            return spawn(scene, at.value_or(glm::vec3(0.0f)));
+        };
+    } else {
+        g["spawn_scene"] = [](const std::string&, sol::optional<glm::vec3>) {
+            unavailable("game.spawn_scene");
+            return uint32_t(0);
+        };
+    }
+
+    if (hooks.despawn) {
+        const auto despawn = hooks.despawn;
+        g["despawn"] = [despawn](uint32_t handle) {
+            if (handle != 0) despawn(handle);
+        };
+    } else {
+        g["despawn"] = [](uint32_t) { unavailable("game.despawn"); };
+    }
+
     // Game time, not wall time: it carries the clock's scale and pause, which
     // is what makes a timestamp taken here comparable with a timer's countdown.
     if (hooks.elapsed) {

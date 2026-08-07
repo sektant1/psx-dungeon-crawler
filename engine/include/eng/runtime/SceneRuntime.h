@@ -62,6 +62,25 @@ public:
     // holding geometry, so a level that spawns nothing pays one view walk.
     void resolveNewPrimitives(Renderer& renderer);
 
+    // Merges a cooked scene into the world at `origin`, as a group of its own,
+    // and returns that group -- or 0 if it could not be read.
+    //
+    // The runtime half of scene instancing. Cook-time instancing (an `instance`
+    // entity in a .scn) covers what a level is built out of; this covers what a
+    // level produces while it runs: an enemy, a projectile, a dropped item. The
+    // two are deliberately the same asset -- a torch.scn placed by an author and
+    // one spawned by a script are the same file -- because the alternative is
+    // authoring every spawnable thing twice.
+    //
+    // The returned group is what despawns it again (World::destroyGroup), and
+    // is distinct from the scene's own group, so destroying the level does not
+    // take the player's spawned effects with it and vice versa.
+    //
+    // Entities arrive with their meshes unresolved; the runtime's per-frame
+    // resolveNewPrimitives and mesh pass pick them up on the next frame, the
+    // same way anything a script spawns does.
+    uint32_t instantiate(const std::string& path, const glm::vec3& origin);
+
     // Last step of the build. `before` runs against the registry with
     // everything loaded and resolved but nothing synced yet -- the seam for
     // turning an application's own authored components into engine ones (this
@@ -104,6 +123,9 @@ private:
     ecs::World& mWorld;
     const ecs::ComponentRegistry& mComponents;
     uint32_t mGroup = 0;
+    // Groups handed out by instantiate(). Starts above the scene's own so a
+    // spawned object can never share a group with the level that spawned it.
+    uint32_t mLastSpawnGroup = 0;
     ecs::PrimitiveMeshCache mPrimitives;
 };
 

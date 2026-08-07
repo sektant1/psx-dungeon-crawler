@@ -1,5 +1,7 @@
 #include <editor/content/SceneValidate.h>
 
+#include <editor/content/SceneInstancing.h>
+
 #include <editor/content/SceneContract.h>
 #include <eng/assets/AssetRoot.h>
 
@@ -305,6 +307,46 @@ std::vector<Issue> validate(const SceneDocument& document,
     for (const Entity& entity : document.entities) {
         if (!entity.id.empty()) entityNames.insert(entity.id);
         if (!entity.name.empty()) entityNames.insert(entity.name);
+    }
+
+    // --- scene instancing --------------------------------------------------
+    // Checked before anything else looks at the document, because everything
+    // else is looking at a document that has NOT been expanded: validate() runs
+    // on what the author wrote, and the cooker expands its own copy. So an
+    // instance is one entity here however many it becomes later, and the only
+    // things worth saying about it are whether it will expand at all and
+    // whether it is a coherent thing to have authored.
+    {
+        std::vector<AuthorId> placements;
+        for (const Entity& entity : document.entities) {
+            if (!entity.instance)
+                continue;
+            placements.push_back(entity.id);
+            // An entity that both instances a scene and draws something of its
+            // own was never meaningful: the placement is a node the contents
+            // hang from, and a mesh on it would be a second object nobody
+            // placed. Caught here rather than silently dropped at cook.
+            if (!entity.prefab.empty() || entity.mesh || entity.primitive) {
+                add(issues, Severity::Error, "instance.also_draws",
+                    "'" + entity.id +
+                        "' instances a scene and also has geometry of its "
+                        "own; the placement should be an empty node",
+                    entity.id);
+            }
+        }
+
+        if (!placements.empty()) {
+            // The expansion is the authority on what is wrong -- cycles, depth,
+            // a missing or malformed file -- so ask it rather than
+            // reimplementing those rules and letting the two disagree. It works
+            // on a copy, so this costs one expansion and changes nothing.
+            SceneDocument probe = document;
+            std::string expandError;
+            if (!expandInstances(probe, assetRoot, expandError)) {
+                add(issues, Severity::Error, "instance.unresolved", expandError,
+                    placements.front());
+            }
+        }
     }
 
     for (const Entity& entity : document.entities) {
@@ -800,7 +842,8 @@ std::vector<Issue> validate(const SceneDocument& document,
         }
     }
 
-    if (playerSpawns == 0) {
+    // A component scene has no player to place; see SceneDocument::component.
+    if (playerSpawns == 0 && !document.component) {
         add(issues, Severity::Error, "spawn.missing",
             "the scene has no player spawn", {}, QuickFix::AddPlayerSpawn);
     } else if (playerSpawns > 1) {
@@ -809,7 +852,7 @@ std::vector<Issue> validate(const SceneDocument& document,
                 " player spawns; it must have exactly one",
             {});
     }
-    if (exits == 0) {
+    if (exits == 0 && !document.component) {
         add(issues, Severity::Warning, "exit.missing",
             "the scene has no exit, so it cannot be left", {});
     }
