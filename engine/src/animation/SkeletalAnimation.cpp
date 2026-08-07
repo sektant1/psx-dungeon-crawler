@@ -2,6 +2,17 @@
 
 #include <eng/Log.h>
 
+// ozz's SimdFloat4 is __m128, whose 16-byte alignment is an attribute rather
+// than part of the type, so every template that takes one -- ozz's own spans as
+// well as the containers below -- makes the compiler announce that it is
+// dropping that attribute. It is not being dropped in any way that matters:
+// ozz::vector's allocator is what honours the alignment. Silenced across the
+// whole ozz surface because the diagnostic fires at each instantiation, inside
+// headers this file does not own.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
 #include <ozz/animation/runtime/animation.h>
 #include <ozz/animation/runtime/blending_job.h>
 #include <ozz/animation/runtime/local_to_model_job.h>
@@ -12,6 +23,9 @@
 #include <ozz/base/containers/vector.h>
 #include <ozz/base/maths/simd_math.h>
 #include <ozz/base/maths/soa_transform.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -510,7 +524,19 @@ struct PoseBlender::Impl {
     // frame and turns a blend into a search.
     std::vector<std::unique_ptr<ozz::animation::SamplingJob::Context>> contexts;
     std::vector<ozz::vector<ozz::math::SoaTransform>> sampled;
+    // SimdFloat4 is __m128, whose 16-byte alignment is an attribute rather than
+    // part of the type, so naming it as a template argument makes the compiler
+    // say it is dropping that attribute. It is not: ozz::vector's allocator is
+    // the one that honours the alignment, which is why this member uses it and
+    // why the diagnostic is noise here specifically.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
     std::vector<ozz::vector<ozz::math::SimdFloat4>> maskBuffers;
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     ozz::vector<ozz::math::SoaTransform> poseLocals;
     ozz::vector<ozz::math::Float4x4> modelTransforms;
     std::vector<glm::mat4> modelMatrices;

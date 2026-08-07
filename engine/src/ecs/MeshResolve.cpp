@@ -78,12 +78,15 @@ void PrimitiveMeshCache::clear(Renderer& renderer)
 
 std::size_t resolvePrimitiveMeshes(entt::registry& registry,
                                    Renderer& renderer,
-                                   PrimitiveMeshCache& cache)
+                                   PrimitiveMeshCache& cache,
+                                   bool onlyUnresolved)
 {
     std::size_t resolved = 0;
     auto view = registry.view<PrimitiveMesh, MeshRenderer>();
     for (const entt::entity entity : view) {
         if (registry.all_of<MeshSource>(entity))
+            continue;
+        if (onlyUnresolved && view.get<MeshRenderer>(entity).mesh.valid())
             continue;
         const MeshHandle mesh =
             cache.get(renderer, view.get<PrimitiveMesh>(entity));

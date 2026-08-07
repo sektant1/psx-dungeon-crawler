@@ -70,6 +70,16 @@ struct InspectorContext {
     // Rescan the above. Offered next to the picker: a script written after the
     // editor started must be attachable without restarting it.
     std::function<void()> rescanScripts;
+    // Make a new .lua from the template and return its logical path, or empty
+    // if it could not be written. The editor owns this because only it knows
+    // where the project's scripts/ is and how to report a failure.
+    //
+    // A callback rather than the inspector doing it: writing files from a
+    // widget-drawing function is how a UI layer acquires a dependency on the
+    // filesystem, and this one already refuses to know where anything lives.
+    std::function<std::string(const std::string& entityName)> createScript;
+    // Open a logical script path in the author's own editor.
+    std::function<void(const std::string& logicalPath)> openScript;
     // Every author id in the open scene, for a script prop that names another
     // entity. Rebuilt per frame by the panel, because an entity added this
     // frame is a legitimate target and a cached list would not offer it. The

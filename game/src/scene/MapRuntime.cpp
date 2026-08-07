@@ -1,12 +1,11 @@
 #include "MapRuntime.h"
 
+#include "ComponentRegistry.h"
 #include "GameComponents.h"
-#include "MapSerializer.h"
 
 #include <eng/Log.h>
 #include <eng/ecs/ComponentRegistry.h>
 #include <eng/ecs/Components.h>
-#include <eng/ecs/components/MeshSource.h>
 
 namespace game {
 
@@ -15,7 +14,8 @@ namespace {
 // physically is this game's decision: a non-blocking sensor body on the
 // trigger layer, so props and projectiles cannot fire it (see GameCollision.h).
 // Expressing that here rather than inside the engine's PhysicsSync is what
-// lets the engine stay ignorant of the layer taxonomy.
+// lets the engine stay ignorant of the layer taxonomy, and it is why
+// SceneRuntime::buildAll takes a hook rather than doing this itself.
 void materialiseTriggers(entt::registry& reg)
 {
     for (auto e : reg.view<Trigger>(entt::exclude<Collider>)) {
@@ -37,55 +37,33 @@ ActorSoundSet authoredSounds(const entt::registry& reg, entt::entity entity)
 } // namespace
 
 MapRuntime::MapRuntime(eng::ecs::World& world, uint32_t group)
-    : mWorld(world), mGroup(group)
+    : mScene(world, group, mapio::coreRegistry())
 {
 }
 
 bool MapRuntime::load(const std::string& path)
 {
-    // Parse into a scratch registry first, then merge. Reading straight into
-    // the live world would leave a half-decoded map behind on a malformed file,
-    // and -- now that the world is shared -- the old `registry = std::move(...)`
-    // would have thrown away every entity the rest of the game had spawned.
-    entt::registry parsed;
-    if (!mapio::readMap(path, parsed, mapio::coreRegistry()))
-        return false;
-
-    entt::registry& reg = mWorld.registry();
-    // copyEntities tags each copy Dirty; this used to dirty every entity in the
-    // world instead, which also re-resolved the player and everything the last
-    // level left standing.
-    const std::size_t added =
-        eng::ecs::copyEntities(reg, parsed, mapio::coreRegistry(), mGroup);
-    eng::log::info("Map: '%s' merged %zu entities", path.c_str(), added);
-    return true;
+    return mScene.load(path);
 }
 
 void MapRuntime::resolveMeshes(const LoadMeshFn& loadFn)
 {
-    entt::registry& reg = mWorld.registry();
-    auto view = reg.view<eng::ecs::MeshRenderer>();
-    for (auto e : view) {
-        if (const auto* src = reg.try_get<eng::ecs::MeshSource>(e)) {
-            reg.get<eng::ecs::MeshRenderer>(e).mesh = loadFn(src->path);
-        }
-    }
+    mScene.resolveMeshes(loadFn);
 }
 
 void MapRuntime::resolvePrimitives(eng::Renderer& renderer)
 {
-    eng::ecs::resolvePrimitiveMeshes(mWorld.registry(), renderer, mPrimitives);
+    mScene.resolvePrimitives(renderer);
 }
 
 void MapRuntime::buildAll()
 {
-    materialiseTriggers(mWorld.registry());
-    mWorld.sync();
+    mScene.buildAll(&materialiseTriggers);
 }
 
 glm::vec3 MapRuntime::playerSpawn() const
 {
-    const entt::registry& reg = mWorld.registry();
+    const entt::registry& reg = mScene.registry();
     auto view = reg.view<const PlayerSpawn>();
     for (auto e : view) {
         if (const auto* world = reg.try_get<eng::ecs::WorldTransform>(e))
@@ -93,12 +71,14 @@ glm::vec3 MapRuntime::playerSpawn() const
         if (const auto* t = reg.try_get<eng::ecs::Transform>(e))
             return t->position;
     }
-    return glm::vec3(0.0f, 1.0f, 0.0f);
+    // No authored marker: fall through to what the engine reads, which is the
+    // authored first-person rig and then just above the origin.
+    return mScene.playerSpawn();
 }
 
 glm::vec3 MapRuntime::levelExit() const
 {
-    const entt::registry& reg = mWorld.registry();
+    const entt::registry& reg = mScene.registry();
     for (const auto entity : reg.view<const Exit>()) {
         if (const auto* transform = reg.try_get<eng::ecs::Transform>(entity))
             return transform->position;
@@ -108,7 +88,7 @@ glm::vec3 MapRuntime::levelExit() const
 
 float MapRuntime::exitYawDegrees() const
 {
-    const entt::registry& reg = mWorld.registry();
+    const entt::registry& reg = mScene.registry();
     for (const auto entity : reg.view<const Exit>())
         return reg.get<const Exit>(entity).yawDegrees;
     return 0.0f;
@@ -118,7 +98,7 @@ std::vector<ScenePlacement> MapRuntime::placements(
     const std::string& prefix) const
 {
     std::vector<ScenePlacement> result;
-    const entt::registry& reg = mWorld.registry();
+    const entt::registry& reg = mScene.registry();
     for (const auto entity : reg.view<const SceneMarker,
                                       const eng::ecs::Transform>()) {
         const auto& marker = reg.get<const SceneMarker>(entity);
@@ -133,7 +113,7 @@ std::vector<ScenePlacement> MapRuntime::placements(
 
 namespace {
 
-// Shared shape of the two component-to-placement queries below.
+// Shared shape of the component-to-placement queries below.
 template <typename Component, typename Name>
 std::vector<ScenePlacement> componentPlacements(const entt::registry& reg,
                                                 const char* prefix, Name name)
@@ -156,7 +136,7 @@ std::vector<ScenePlacement> componentPlacements(const entt::registry& reg,
 std::vector<ScenePlacement> MapRuntime::enemySpawnPlacements() const
 {
     return componentPlacements<EnemySpawn>(
-        mWorld.registry(), "enemy.",
+        mScene.registry(), "enemy.",
         [](const EnemySpawn& spawn) -> const std::string& { return spawn.type; });
 }
 
@@ -164,45 +144,23 @@ std::string MapRuntime::palette() const
 {
     // The first one found. The cooker writes at most one, and a map that
     // somehow carries two has a level design problem, not a runtime one.
-    for (const auto entity : mWorld.registry().view<const SceneEnvironment>())
-        return mWorld.registry().get<const SceneEnvironment>(entity).palette;
+    const entt::registry& reg = mScene.registry();
+    for (const auto entity : reg.view<const SceneEnvironment>())
+        return reg.get<const SceneEnvironment>(entity).palette;
     return {};
 }
 
 MapRuntime::AuthoredPlayerRig MapRuntime::playerRig() const
 {
+    // The three engine components come from the engine's own reading of them;
+    // duplicating that here would be a second answer to the same question.
+    const eng::runtime::SceneRuntime::AuthoredRig base = mScene.rig();
     AuthoredPlayerRig rig;
-    const entt::registry& reg = mWorld.registry();
-    // First of each, independently: the two components usually ride the same
-    // camera, but nothing forces that, and a level that puts the rig on its
-    // player spawn instead should still be read.
-    for (const auto entity :
-         reg.view<const eng::ecs::FirstPersonController>()) {
-        const auto& authored =
-            reg.get<const eng::ecs::FirstPersonController>(entity);
-        // `active` is how an author parks a tuning without deleting it.
-        if (!authored.active)
-            continue;
-        rig.controller = authored;
-        break;
-    }
-    for (const auto entity : reg.view<const ViewmodelRig>()) {
-        rig.viewmodel = reg.get<const ViewmodelRig>(entity);
-        break;
-    }
-    for (const auto entity :
-         reg.view<const eng::ecs::ThirdPersonCamera>()) {
-        const auto& authored = reg.get<const eng::ecs::ThirdPersonCamera>(entity);
-        if (!authored.active)
-            continue;
-        rig.thirdPerson = authored;
-        break;
-    }
-    for (const auto entity : reg.view<const eng::ecs::ScreenCamera>()) {
-        const auto& authored = reg.get<const eng::ecs::ScreenCamera>(entity);
-        if (!authored.active)
-            continue;
-        rig.screen = authored;
+    rig.controller = base.controller;
+    rig.thirdPerson = base.thirdPerson;
+    rig.screen = base.screen;
+    for (const auto entity : mScene.registry().view<const ViewmodelRig>()) {
+        rig.viewmodel = mScene.registry().get<const ViewmodelRig>(entity);
         break;
     }
     return rig;
@@ -211,14 +169,14 @@ MapRuntime::AuthoredPlayerRig MapRuntime::playerRig() const
 std::vector<ScenePlacement> MapRuntime::pickupPlacements() const
 {
     return componentPlacements<Pickup>(
-        mWorld.registry(), "pickup.",
+        mScene.registry(), "pickup.",
         [](const Pickup& pickup) -> const std::string& { return pickup.type; });
 }
 
 std::vector<ScenePlacement> MapRuntime::npcPlacements() const
 {
     return componentPlacements<Npc>(
-        mWorld.registry(), "npc.",
+        mScene.registry(), "npc.",
         [](const Npc& npc) -> const std::string& { return npc.id; });
 }
 

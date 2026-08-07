@@ -28,16 +28,6 @@ static std::string writeScript(const std::string& name, const std::string& body)
     return file.string();
 }
 
-static const ComponentRegistry& engineRegistry()
-{
-    static ComponentRegistry reg = [] {
-        ComponentRegistry r;
-        registerEngineComponents(r);
-        return r;
-    }();
-    return reg;
-}
-
 // Attaches one script with no props.
 static void attach(World& w, entt::entity e, const std::string& path,
                    bool enabled = true)

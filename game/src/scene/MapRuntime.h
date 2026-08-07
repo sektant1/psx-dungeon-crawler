@@ -1,16 +1,15 @@
 #pragma once
 
-#include <eng/ecs/MeshResolve.h>
 #include <eng/ecs/World.h>
 #include <eng/ecs/components/FirstPersonController.h>
 #include <eng/ecs/components/ScreenCamera.h>
 #include <eng/ecs/components/ThirdPersonCamera.h>
+#include <eng/runtime/SceneRuntime.h>
 
 #include "ViewmodelRig.h"
 #include "audio/ActorSounds.h"
 
 #include <entt/entt.hpp>
-#include <functional>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <optional>
@@ -31,14 +30,19 @@ struct ScenePlacement {
     ActorSoundSet sounds;
 };
 
-// Reads a cooked .map into the level's world and answers the authored queries
-// the game asks of it (where the player starts, where the exit is, what was
-// placed).
+// This game's half of reading a cooked .map: the authored queries that are
+// about *this game's* vocabulary -- where the player spawns, where the exit is,
+// what enemies and pickups were placed, what the viewmodel was tuned to.
 //
-// It does NOT own a world any more. A level has exactly one (see eng::ecs::
-// World), and this used to be a second: the authored entities lived in here,
-// the gameplay actors somewhere else, and the combatants in a third registry,
-// so no view could see a whole level. Load merges into the world it is given.
+// Everything generic underneath -- decoding the file, merging it into the
+// world, resolving meshes and primitives, reading the authored camera rig --
+// is eng::runtime::SceneRuntime, which this holds. The split is by vocabulary,
+// not by convenience: what is in here names game::Exit, game::EnemySpawn and
+// ViewmodelRig, and what is down there does not, which is exactly what lets
+// raven_player play a scene without linking any of this.
+//
+// It does not own a world. A level has exactly one (see eng::ecs::World);
+// load() merges into the world it is given.
 class MapRuntime {
 public:
     // `group` is stamped on every entity this map contributes, so a level
@@ -49,18 +53,16 @@ public:
     // Merges the cooked map's entities into the world. Returns false and adds
     // nothing if the file is missing or malformed.
     bool load(const std::string& path);
-    using LoadMeshFn = std::function<eng::MeshHandle(const std::string& path)>;
+    using LoadMeshFn = eng::runtime::SceneRuntime::LoadMeshFn;
     void resolveMeshes(const LoadMeshFn& loadFn);
     // The generated half of the same job: entities carrying a PrimitiveMesh get
     // geometry built for them rather than loaded.
-    //
-    // A renderer rather than a callback, because unlike a mesh path there is
-    // nothing for a caller to disagree about -- the description IS the geometry,
-    // and the engine's own resolver builds it. The cache lives here so a level
-    // transition releases exactly the meshes that level generated.
     void resolvePrimitives(eng::Renderer& renderer);
     // Turn authored Triggers into sensor colliders, then reconcile the world.
     void buildAll();
+
+    // The authored PlayerSpawn, which is this game's marker rather than an
+    // engine concept -- hence here and not in SceneRuntime.
     glm::vec3 playerSpawn() const;
     glm::vec3 levelExit() const;
     float exitYawDegrees() const;
@@ -97,6 +99,9 @@ public:
     // separately: a level that only wants a wider FOV should not have to
     // restate the whole viewmodel framing to get one. Absent means the game's
     // own config, which is every level authored before these existed.
+    //
+    // Three of the four come straight from the engine's rig; `viewmodel` is
+    // this game's and is read here.
     struct AuthoredPlayerRig {
         std::optional<eng::ecs::FirstPersonController> controller;
         std::optional<ViewmodelRig> viewmodel;
@@ -112,16 +117,15 @@ public:
     };
     AuthoredPlayerRig playerRig() const;
 
-    entt::registry& registry() { return mWorld.registry(); }
-    const entt::registry& registry() const { return mWorld.registry(); }
+    entt::registry& registry() { return mScene.registry(); }
+    const entt::registry& registry() const { return mScene.registry(); }
+
+    // The generic runtime underneath, for a caller that wants what it reports
+    // rather than this game's reading of it.
+    eng::runtime::SceneRuntime& scene() { return mScene; }
 
 private:
-    eng::ecs::World& mWorld;
-    uint32_t mGroup = 0;
-    // Generated meshes this map's entities share. Two hundred greybox blocks
-    // with four distinct sizes between them are four vertex buffers, not two
-    // hundred.
-    eng::ecs::PrimitiveMeshCache mPrimitives;
+    eng::runtime::SceneRuntime mScene;
 };
 
 } // namespace game

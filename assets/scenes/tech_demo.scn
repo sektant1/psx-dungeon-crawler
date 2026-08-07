@@ -81,7 +81,7 @@
           -22.0
         ]
       },
-      "enemy_spawn": "goblin"
+      "enemy_spawn": "hollow"
     },
     {
       "id": "exit_0001",
@@ -3391,7 +3391,7 @@
     },
     {
       "id": "pickup_0001",
-      "name": "Cached Potion",
+      "name": "Cached Bandage",
       "transform": {
         "position": [
           2.0,
@@ -3399,7 +3399,7 @@
           -30.0
         ]
       },
-      "pickup": "potion"
+      "pickup": "bandage_linen"
     },
     {
       "id": "pillar_0001",

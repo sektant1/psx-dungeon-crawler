@@ -3,7 +3,8 @@
 
 #include "GameComponents.h"
 #include <eng/ecs/components/MeshSource.h>
-#include "MapSerializer.h"
+#include "ComponentRegistry.h"
+#include <eng/ecs/MapSerializer.h>
 
 #include <eng/Physics.h>
 #include <eng/ecs/Components.h>
@@ -53,7 +54,7 @@ int main()
         eng::ecs::Transform st; st.position = glm::vec3(3, 1, -2);
         reg.emplace<eng::ecs::Transform>(spawn, st);
         reg.emplace<PlayerSpawn>(spawn);
-        require(mapio::writeMap(path, reg, mapio::coreRegistry()), "author map");
+        require(eng::ecs::writeMap(path, reg, mapio::coreRegistry()), "author map");
     }
 
     eng::Physics physics;

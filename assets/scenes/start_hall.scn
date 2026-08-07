@@ -3045,9 +3045,6 @@
           2.279599905014038,
           8.544400215148926
         ]
-      },
-      "camera": {
-        "fov_degrees": 60.0
       }
     },
     {
@@ -3358,7 +3355,7 @@
     },
     {
       "id": "pickup_0001",
-      "name": "Camp Potion",
+      "name": "Camp Bandage",
       "transform": {
         "position": [
           2.299999952316284,
@@ -3366,11 +3363,11 @@
           8.600000381469727
         ]
       },
-      "pickup": "potion"
+      "pickup": "bandage_linen"
     },
     {
       "id": "pickup_0002",
-      "name": "Rubble Scrap",
+      "name": "Rubble Fitting",
       "transform": {
         "position": [
           3.9000000953674316,
@@ -3378,7 +3375,7 @@
           6.699999809265137
         ]
       },
-      "pickup": "scrap"
+      "pickup": "rusted_fitting"
     },
     {
       "id": "pillar_0001",

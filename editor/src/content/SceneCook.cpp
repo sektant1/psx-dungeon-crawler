@@ -1,7 +1,9 @@
 #include <editor/content/SceneCook.h>
 
+#include <editor/content/SceneInstancing.h>
+
 #include "GameComponents.h"
-#include "MapSerializer.h"
+#include <eng/ecs/MapSerializer.h>
 #include "scene/ComponentRegistry.h"
 
 #include <eng/ecs/Components.h>
@@ -118,12 +120,33 @@ bool ancestorAnimated(const SceneDocument& document, const Entity& entity)
 
 } // namespace
 
-bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
-                   entt::registry& out, std::string& error,
+bool buildRegistry(const SceneDocument& sourceDocument,
+                   const KitCatalog& catalog, entt::registry& out,
+                   std::string& error,
                    std::unordered_map<AuthorId, entt::entity>* authorToEntity,
-                   std::vector<AuthorId>* unresolved)
+                   std::vector<AuthorId>* unresolved,
+                   const std::string& assetRoot)
 {
     error.clear();
+
+    // Scene instancing is resolved here, once, so that everything below --
+    // and every other consumer of a cooked scene -- works on a flat document
+    // and never learns that instancing exists. See SceneInstancing.h.
+    //
+    // Copied only when there is something to expand: this runs on every
+    // preview rebuild in the editor, and copying a large document for the
+    // overwhelmingly common case of no instances at all would be a real cost.
+    SceneDocument expanded;
+    const bool hasInstances =
+        std::any_of(sourceDocument.entities.begin(),
+                    sourceDocument.entities.end(),
+                    [](const Entity& e) { return e.instance.has_value(); });
+    if (hasInstances) {
+        expanded = sourceDocument;
+        if (!expandInstances(expanded, assetRoot, error))
+            return false;
+    }
+    const SceneDocument& document = hasInstances ? expanded : sourceDocument;
     if (authorToEntity)
         authorToEntity->clear();
     if (unresolved)
@@ -516,12 +539,14 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
 }
 
 bool cookToMap(const SceneDocument& document, const KitCatalog& catalog,
-               const std::string& mapPath, std::string& error)
+               const std::string& mapPath, std::string& error,
+               const std::string& assetRoot)
 {
     entt::registry registry;
-    if (!buildRegistry(document, catalog, registry, error))
+    if (!buildRegistry(document, catalog, registry, error, nullptr, nullptr,
+                       assetRoot))
         return false;
-    if (!mapio::writeMap(mapPath, registry, mapio::coreRegistry())) {
+    if (!eng::ecs::writeMap(mapPath, registry, mapio::coreRegistry())) {
         error = mapPath + ": failed to write cooked map";
         return false;
     }

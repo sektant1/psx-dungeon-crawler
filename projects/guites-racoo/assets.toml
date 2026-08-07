@@ -1,0 +1,14 @@
+# This project's content.
+#
+# Mounted OVER the engine's own pack, so anything here shadows the builtin of
+# the same logical path -- which is how a project overrides a default material
+# without editing anything else.
+schema = 1
+
+[[pack]]
+id = "project"
+dir = "."
+resources = ["materials", "textures"]
+
+[mounts]
+game = ["project"]

@@ -1,0 +1,206 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.clip_demo",
+  "entities": [
+    {
+      "id": "camera",
+      "name": "Camera",
+      "transform": {
+        "position": [
+          0.0,
+          3.200000047683716,
+          9.0
+        ],
+        "rotation_degrees": [
+          -12.0,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 55.0
+      }
+    },
+    {
+      "id": "floor",
+      "name": "Floor",
+      "primitive": {
+        "kind": "box",
+        "size": [
+          16.0,
+          0.20000000298023224,
+          16.0
+        ]
+      },
+      "transform": {
+        "position": [
+          0.0,
+          -0.10000000149011612,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "key_light",
+      "name": "Key Light",
+      "transform": {
+        "rotation_degrees": [
+          -45.0,
+          -35.0,
+          0.0
+        ]
+      },
+      "light": {
+        "type": "directional",
+        "colour": [
+          1.0,
+          0.9599999785423279,
+          0.8799999952316284
+        ]
+      }
+    },
+    {
+      "id": "pacer",
+      "name": "Pacer -- Transform.position, pingpong",
+      "primitive": {
+        "kind": "sphere",
+        "radius": 0.6000000238418579
+      },
+      "transform": {
+        "position": [
+          0.0,
+          0.6000000238418579,
+          0.0
+        ]
+      },
+      "clip": {
+        "duration": 1.600000023841858,
+        "mode": "pingpong",
+        "tracks": [
+          {
+            "component": "Transform",
+            "field": "position",
+            "keys": [
+              {
+                "t": 0.0,
+                "v": [
+                  0.0,
+                  0.6000000238418579,
+                  -2.4000000953674316
+                ]
+              },
+              {
+                "t": 1.600000023841858,
+                "v": [
+                  0.0,
+                  0.6000000238418579,
+                  2.4000000953674316
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "pulser",
+      "name": "Pulser -- ShaderParams.tint, loop",
+      "primitive": {
+        "kind": "sphere",
+        "radius": 0.8999999761581421
+      },
+      "transform": {
+        "position": [
+          3.4000000953674316,
+          0.8999999761581421,
+          0.0
+        ]
+      },
+      "shader": {},
+      "clip": {
+        "duration": 2.0,
+        "mode": "loop",
+        "tracks": [
+          {
+            "component": "ShaderParams",
+            "field": "tint",
+            "keys": [
+              {
+                "t": 0.0,
+                "v": [
+                  1.0,
+                  0.3499999940395355,
+                  0.20000000298023224
+                ]
+              },
+              {
+                "t": 1.0,
+                "v": [
+                  0.25,
+                  0.6000000238418579,
+                  1.0
+                ]
+              },
+              {
+                "t": 2.0,
+                "v": [
+                  1.0,
+                  0.3499999940395355,
+                  0.20000000298023224
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "riser",
+      "name": "Riser -- Transform.position, once",
+      "primitive": {
+        "kind": "box",
+        "size": [
+          1.399999976158142,
+          1.0,
+          1.399999976158142
+        ]
+      },
+      "transform": {
+        "position": [
+          -3.4000000953674316,
+          0.5,
+          0.0
+        ]
+      },
+      "clip": {
+        "duration": 1.2000000476837158,
+        "tracks": [
+          {
+            "component": "Transform",
+            "field": "position",
+            "keys": [
+              {
+                "t": 0.0,
+                "v": [
+                  -3.4000000953674316,
+                  0.5,
+                  0.0
+                ]
+              },
+              {
+                "t": 1.2000000476837158,
+                "v": [
+                  -3.4000000953674316,
+                  3.4000000953674316,
+                  0.0
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

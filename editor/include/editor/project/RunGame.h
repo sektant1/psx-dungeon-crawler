@@ -41,6 +41,11 @@ RunHandle launchGame(const std::string& gameExe, const std::string& mapPath,
 struct PlaytestEnvironment {
     std::string playFrom;    // empty for the scene's own spawn
     std::string renderPreset; // empty for the engine default
+    // The cooked map to open instead of the target's own main scene. Set when
+    // playing a project, where the argument is the project directory and F5
+    // still has to mean "play what is on screen" rather than "play whatever
+    // the project calls its main".
+    std::string playMap;
     bool console = false;
     bool colliders = false;
     bool fullscreen = false;

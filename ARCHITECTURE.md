@@ -12,7 +12,9 @@ dependency that points upward is a **link error**, not a review comment.
 
 | Target | Owns | May link |
 |---|---|---|
-| `game` (exe) | combat, dungeon generation, player, bosses, items, UI | `eng` |
+| `game` (exe) | combat, dungeon generation, player, bosses, items, UI | `eng`, `eng_runtime` |
+| `raven_player` (exe) | nothing: an argument parse over `eng_runtime` | `eng_runtime` |
+| `eng_runtime` | playing a *project*: `project.toml`, scene boot, the frame arrangement | `eng` |
 | `eng` | application lifetime (`Engine`), the facade consumers link | `eng_script` |
 | `eng_script` | Lua scripting: the VM, the bindings, the script host | `eng_framework` |
 | `eng_framework` | the ECS world, its components and reconcilers, controllers | `eng_systems` |
@@ -28,7 +30,21 @@ preview world, and keeping the VM out of that makes "who depends on Lua" a link
 fact instead of a habit. See [docs/scripting.md](docs/scripting.md).
 
 `eng` is the only target an application names. Everything else arrives
-transitively.
+transitively -- except `eng_runtime`, which an application names when it wants
+the *project* runtime rather than only the engine.
+
+### The project runtime
+
+`eng_runtime` is what plays a game that is not this one: it reads a
+`project.toml`, boots its scenes, and runs Lua over them. `raven_player` is an
+argument parse on top of it and links **nothing** under `game/` -- enforced by
+the `player_purity` ctest, which reads the built binary's symbol table.
+
+The dungeon crawler boots through the same `eng::runtime::ProjectApp`:
+`game::MapPlayApp` derives from it and adds what makes it that game -- its
+component table, its collision layers, its exit portals. One scene-boot path in
+the tree, so the game is the runtime's regression test. See
+[docs/projects.md](docs/projects.md).
 
 The layers link whole-archive: with LTO, a reference materialised during the
 link-time optimisation pass comes too late to pull a member out of a normal

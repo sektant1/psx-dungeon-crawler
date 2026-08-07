@@ -47,6 +47,17 @@ struct Pack {
 // Returns false and logs on a missing or malformed manifest. Never throws.
 bool init(const std::string& rootOverride = {});
 
+// The directory holding the running executable.
+//
+// Public because a shipped build has to be able to find what was shipped
+// beside it -- raven_player with no argument looks for a `project/` there, so
+// double-clicking an exported game plays it. Everything discovery does is
+// relative to this, which is what makes an installed build possible: no
+// absolute source path survives into the binary except the dev fallback.
+//
+// Empty when it cannot be determined, which no supported platform does.
+std::filesystem::path exeDirectory();
+
 // True once init() has succeeded. Everything below is safe to call either way;
 // this exists so a caller can tell "nothing mounted" from "never initialised".
 bool ready();
@@ -65,6 +76,29 @@ const std::filesystem::path& project();
 // names a pack the manifest does not declare.
 bool mount(const std::string& mountSet);
 const std::vector<Pack>& mounted();
+
+// Overlay a project's own content on top of what is already mounted.
+//
+// This is the one place the content model admits a second root. Everything
+// above assumes exactly one tree, discovered once, because for this game there
+// is exactly one -- but a project made in the editor lives wherever its author
+// put it, and it cannot render from there alone: it has no shaders, no
+// compositors, no fonts and no default materials, and shipping a copy of all
+// of them into every new project would be worse than the coupling.
+//
+// So a project is mounted OVER the engine's own content rather than instead of
+// it. `projectDir` must contain an assets.toml declaring [[pack]] entries;
+// [mounts] is not read, because a project's packs are all of them, in
+// declaration order. They go in at the highest priority, so first-hit-wins --
+// already the rule resolve() follows -- means a file a project ships shadows
+// the builtin of the same logical path, and overriding a default material is
+// therefore a matter of putting a file in the right place.
+//
+// Accumulates, unlike mount(): calling it does not disturb what is already
+// mounted. Fails and mounts nothing on a missing or malformed manifest, or on
+// a pack id that collides with one already declared -- a silent shadow there
+// would make "which pack did this come from" unanswerable.
+bool mountProject(const std::filesystem::path& projectDir);
 
 // Every pack the manifest declares, whether or not it is mounted.
 const std::vector<Pack>& packs();

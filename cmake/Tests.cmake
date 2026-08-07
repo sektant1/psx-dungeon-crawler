@@ -10,6 +10,13 @@ if(BUILD_TESTING)
     add_test(NAME assetlint
              COMMAND ${Python3_EXECUTABLE}
                      ${CMAKE_CURRENT_SOURCE_DIR}/tools/assetlint.py)
+    # raven_player must contain no game code. The claim the target exists to
+    # make, checked against the built binary rather than trusted -- see
+    # tools/check_player_purity.py.
+    add_test(NAME player_purity
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_player_purity.py
+                     $<TARGET_FILE:raven_player>)
   else()
     message(WARNING "Python3 not found: layering + assetlint tests disabled")
   endif()
@@ -164,6 +171,17 @@ if(BUILD_TESTING)
 
   eng_add_test(script_host
     SOURCES engine/tests/ScriptHostTests.cpp
+    INCLUDES engine/include engine/src
+    LIBS eng_script glm::glm EnTT::EnTT)
+
+  # Scheduling, and the runtime surface a game is written against.
+  eng_add_test(script_timer
+    SOURCES engine/tests/ScriptTimerTests.cpp
+    INCLUDES engine/include engine/src
+    LIBS eng_script glm::glm EnTT::EnTT)
+
+  eng_add_test(script_runtime_api
+    SOURCES engine/tests/ScriptRuntimeApiTests.cpp
     INCLUDES engine/include engine/src
     LIBS eng_script glm::glm EnTT::EnTT)
 
@@ -670,7 +688,7 @@ if(BUILD_TESTING)
   eng_add_test(map_runtime
     SOURCES game/tests/MapRuntimeTests.cpp game/src/scene/MapRuntime.cpp
     INCLUDES game/src game/src/scene engine/include engine/src third_party third_party/imgui
-    LIBS eng game_content EnTT::EnTT glm::glm)
+    LIBS eng eng_runtime game_content EnTT::EnTT glm::glm)
 
   # --- authoring pipeline (.scn -> IR -> .map) --------------------------------
   # These run against the REAL assets/game/kit.toml and the real shipped scene:
@@ -791,6 +809,24 @@ if(BUILD_TESTING)
     SOURCES editor/tests/EditorWorkspaceTests.cpp editor/src/ui/EditorWorkspace.cpp
     INCLUDES editor/include engine/include third_party
     LIBS eng_imgui)
+
+  # The shell's arithmetic: the top bar's three zones and the bottom panel's
+  # height. Pure, so it needs neither an imgui context nor a window.
+  eng_add_test(editor_shell
+    SOURCES editor/tests/EditorShellTests.cpp editor/src/ui/EditorShell.cpp
+            editor/src/content/SceneContract.cpp
+            editor/src/content/SceneDocument.cpp
+    INCLUDES editor/include game/src engine/include
+    LIBS glm::glm)
+
+  eng_add_test(editor_scene_tabs
+    SOURCES editor/tests/SceneTabsTests.cpp editor/src/app/SceneTabs.cpp
+            editor/src/commands/Commands.cpp
+            editor/src/content/SceneDocument.cpp
+            editor/src/viewport/EditorCamera.cpp
+            editor/src/scene/Layers.cpp
+    INCLUDES editor/include game/src engine/include
+    LIBS glm::glm)
 
   eng_add_test(editor_scene_browser
     SOURCES editor/tests/EditorSceneBrowserTests.cpp editor/src/project/SceneBrowser.cpp
@@ -921,6 +957,30 @@ if(BUILD_TESTING)
   # attachments fails the build rather than making the test pass vacuously.
   # The mechanical repairs: cell records never move an entity, and only an
   # exact copy is ever deleted.
+  # Exporting a project: the build's layout, and what the exporter refuses.
+  # eng_runtime (not eng_ecs_headless) because it reads a Project -- linking
+  # both would be a duplicate-symbol error, see Content.cmake.
+  eng_add_test(project_export
+    SOURCES editor/tests/ProjectExportTests.cpp
+            editor/src/project/ProjectExport.cpp
+    INCLUDES editor/include engine/include third_party
+    LIBS game_content eng_runtime)
+
+  # Making a script, and reading errors back out of a playtest log. The log
+  # format is the contract between the runtime and the editor -- two processes,
+  # no shared type -- so this test is what keeps them agreeing.
+  eng_add_test(script_workshop
+    SOURCES editor/tests/ScriptWorkshopTests.cpp
+            editor/src/project/ScriptWorkshop.cpp
+    INCLUDES editor/include engine/include
+    LIBS eng_core)
+
+  # Scene instancing: one .scn placed inside another.
+  eng_add_test(scene_instancing
+    SOURCES editor/tests/SceneInstancingTests.cpp
+    INCLUDES editor/include game/src engine/include third_party
+    LIBS game_content eng_ecs_headless)
+
   eng_add_test(scene_repair
     SOURCES editor/tests/SceneRepairTests.cpp
     INCLUDES game/tests editor/include
@@ -957,6 +1017,29 @@ if(BUILD_TESTING)
     SOURCES game/tests/LayoutToSceneTests.cpp game/src/DungeonGen.cpp
     INCLUDES game/src/scene game/src engine/include third_party
     LIBS game_content eng_ecs_headless)
+
+  # --- the project runtime ----------------------------------------------
+  # Project is pure data -- TOML in, a struct out -- so it tests against
+  # eng_core alone, with no renderer and no window to stand up.
+  eng_add_test(project
+    SOURCES engine/tests/ProjectTests.cpp engine/src/runtime/Project.cpp
+    INCLUDES engine/include third_party
+    LIBS eng_core eng_toml)
+
+  # Components a project declares in TOML. Headless: a declared component is
+  # registry work plus the .map codec, and neither needs a window.
+  eng_add_test(project_components
+    SOURCES engine/tests/ProjectComponentTests.cpp
+            engine/src/runtime/ProjectComponents.cpp
+    INCLUDES engine/include third_party
+    LIBS eng_framework eng_toml glm::glm EnTT::EnTT)
+
+  # SceneRuntime needs a World, so it links eng_framework -- still headless:
+  # every assertion here is registry work, and none of it opens a window.
+  eng_add_test(scene_runtime
+    SOURCES engine/tests/SceneRuntimeTests.cpp engine/src/runtime/SceneRuntime.cpp
+    INCLUDES engine/include third_party
+    LIBS eng_framework glm::glm EnTT::EnTT)
 
   # The tests that assert against shipped content share game/tests/TestAssets.h,
   # which mounts the game pack and resolves logical paths. It replaced a

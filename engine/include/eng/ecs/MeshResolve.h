@@ -67,8 +67,19 @@ bool samePrimitive(const PrimitiveMesh&, const PrimitiveMesh&);
 // converting. Skips entities with no MeshRenderer as well -- what material a
 // generated mesh wears is the MeshRenderer's business, and inventing one here
 // would put an untextured pink box in a level nobody asked for.
+// `onlyUnresolved` skips entities whose MeshRenderer already holds a valid
+// mesh. Off for the load pass, which must (re)build everything; on for the
+// per-frame pass a runtime uses to give geometry to entities a script spawned
+// after the level was built. The cost of the difference is a map lookup per
+// primitive entity per frame, which is why the per-frame caller does not pay it
+// for the entities it already did.
+//
+// The consequence, stated because it will surprise somebody: with it on, an
+// entity whose PrimitiveMesh *changes* keeps its old geometry. Clear
+// MeshRenderer::mesh to ask for it again.
 std::size_t resolvePrimitiveMeshes(entt::registry&, Renderer&,
-                                   PrimitiveMeshCache&);
+                                   PrimitiveMeshCache&,
+                                   bool onlyUnresolved = false);
 
 } // namespace ecs
 } // namespace eng

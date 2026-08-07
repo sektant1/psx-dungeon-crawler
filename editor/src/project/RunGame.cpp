@@ -30,6 +30,8 @@ std::vector<std::string> playtestEnvironment(const PlaytestEnvironment& options)
         env.push_back("RAVEN_PLAY_FROM=" + options.playFrom);
     if (!options.renderPreset.empty())
         env.push_back("RAVEN_RENDER_PRESET=" + options.renderPreset);
+    if (!options.playMap.empty())
+        env.push_back("RAVEN_PLAY_MAP=" + options.playMap);
     // Presence, not value: the game tests getenv() != nullptr for these, so
     // exporting them as "0" would turn them ON.
     if (options.console)

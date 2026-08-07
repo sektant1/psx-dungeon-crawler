@@ -42,8 +42,45 @@ static const OutlinerGroup* group(const OutlinerTree& tree,
     return nullptr;
 }
 
+
+// Hiding geometry in hierarchy mode must hide it, not relabel it.
+//
+// buildNode is what marks a subtree visited, and the shared invalid-roots tail
+// reports anything unvisited as an orphan or a cycle -- so skipping the build
+// for hidden geometry brought every hidden row back wearing an
+// "[invalid hierarchy]" warning.
+static void testHiddenGeometryIsNotReportedInvalid()
+{
+    SceneDocument document;
+    KitCatalog catalog;
+
+    Entity& parent = document.entities.emplace_back();
+    parent.id = "crate";
+    // A prefab, because that is what isGeometry() means by geometry: a kit
+    // piece carrying nothing else.
+    parent.prefab = "kit.wall";
+    Entity& child = document.entities.emplace_back();
+    child.id = "crate_lid";
+    child.parent = "crate";
+    child.prefab = "kit.wall";
+
+    OutlinerOptions options;
+    options.groupRepeats = false; // hierarchy mode
+    options.showGeometry = false;
+
+    const OutlinerTree tree = buildOutliner(document, catalog, options);
+    for (const OutlinerGroup& group : tree.groups) {
+        require(group.label.find("invalid") == std::string::npos,
+                "hidden geometry must not come back labelled invalid");
+    }
+    require(tree.groups.empty(), "it is hidden, so there is nothing to show");
+    require(tree.hidden == 2,
+            "and the count is the whole subtree, not one row");
+}
+
 int main()
 {
+    testHiddenGeometryIsNotReportedInvalid();
     // An empty catalogue: prefabs do not resolve, which is exactly the state a
     // scene is in when kit.toml lost a piece. Grouping must survive it.
     KitCatalog catalog;

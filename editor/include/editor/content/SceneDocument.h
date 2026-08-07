@@ -301,6 +301,22 @@ struct SpinAuthor {
 // The path is pack-relative ("meshes/props/Chair.obj"), which is exactly what
 // eng::assets::resolve takes and what MeshSource carries, so the cook is a copy
 // and the map stays portable.
+// A placement of another scene inside this one.
+//
+// One field, on purpose. Per-instance overrides -- "this torch is blue" -- are
+// the obvious next thing to want and are deliberately not here yet: an override
+// system is a merge policy, and a merge policy invented alongside its first use
+// is one that has to be redesigned the moment somebody nests two levels deep.
+// Until then the answer is the same as Godot's was for years: make a variant
+// scene, or edit the placed entity after unpacking it.
+struct InstanceAuthor {
+    // Logical path to the .scn, as the editor resolves it: "scenes/torch.scn".
+    // The source, not the cooked map -- an instance is an authoring-time
+    // relationship, and pointing it at a build product would mean a scene could
+    // not be opened without first cooking its dependencies.
+    std::string scene;
+};
+
 struct MeshAuthor {
     std::string path;
     // Multiplies the entity's transform scale, the way KitPiece::importScale
@@ -336,6 +352,19 @@ struct Entity {
     // comment on SceneDocument::layers for why the line falls there.
     std::string layer;
     std::string prefab; // "kit.wall", or empty for a marker/light/trigger
+    // This entity IS another scene. Godot's central idea: a torch, a door, an
+    // enemy is authored once as its own .scn and placed anywhere, and fixing it
+    // once fixes every placement.
+    //
+    // Deliberately not called a prefab, though that is what other engines name
+    // it: `prefab` above already means a kit piece in this format, and one word
+    // for two things in the same struct is how a file format acquires a bug
+    // nobody can describe.
+    //
+    // Expanded before anything downstream sees the document (expandInstances),
+    // so the cooker, the validator and the editor's preview all work on a flat
+    // scene and none of them has to know instancing exists.
+    std::optional<InstanceAuthor> instance;
     // The two other ways to be a mesh. Exactly one of the three should be set:
     // a prefab is a kit piece, `mesh` is any file, `primitive` is generated.
     // The cooker resolves them in that order, so an entity that somehow carries
@@ -464,6 +493,22 @@ public:
     // fields per look, and a copy of them in every .scn is forty fields that
     // drift.
     std::string palette;
+
+    // This scene is a building block, not a level: a torch, a pillar, an
+    // enemy. Something authored to be placed inside other scenes with
+    // `instance`, or spawned at runtime with game.spawn_scene.
+    //
+    // It exists because the scene contract's rules are about *levels*. A level
+    // with nothing to look through and nowhere to start is broken and has to
+    // say so -- that check is the reason SceneContract exists. A pillar has
+    // neither and never will, and demanding them would mean every prop in a
+    // project carried a camera nobody looks through, or that props could not be
+    // cooked at all and so could never be spawned at runtime.
+    //
+    // Only the roles that presuppose a player are relaxed. Everything else --
+    // a prefab that does not resolve, two pieces in one cell, a script that
+    // will not compile -- is wrong in a pillar exactly as it is in a level.
+    bool component = false;
 
     std::vector<Entity> entities;
 

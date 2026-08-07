@@ -14,7 +14,7 @@ namespace game::content {
 // must produce no diff at all. Both are tested.
 std::string serializeSceneSource(const SceneDocument& document);
 
-// Writes atomically (temp file + rename), like mapio::writeMap, so an
+// Writes atomically (temp file + rename), like eng::ecs::writeMap, so an
 // interrupted save cannot leave a half-written scene on disk. Rejects absolute
 // paths inside the document -- those are what made the old editor's maps
 // non-portable.

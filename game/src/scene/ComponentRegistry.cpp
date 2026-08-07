@@ -75,37 +75,6 @@ bool validShape(uint8_t shape)
 {
     return shape <= uint8_t(eng::ShapeKind::Cylinder);
 }
-void serCollider(const entt::registry& r, entt::entity e, ByteWriter& w)
-{
-    const auto& c = r.get<game::Collider>(e);
-    w.u8(uint8_t(c.shape)); w.vec3(c.size); w.u8(uint8_t(c.layer));
-    w.u8(c.sensor ? 1 : 0);
-}
-void deCollider(entt::registry& r, entt::entity e, ByteReader& b,
-                uint32_t payloadBytes)
-{
-    if (payloadBytes < 14) { b.invalidate(); return; }
-    game::Collider c;
-    const uint8_t shape = b.u8();
-    c.shape = eng::ShapeKind(shape); c.size = b.vec3();
-    c.layer = eng::CollisionLayer(b.u8());
-    // Version-1 collider payloads ended after layer (14 bytes). The sensor bit
-    // is an optional trailing field so those maps remain readable as solids.
-    if (payloadBytes >= 15)
-        c.sensor = b.u8() != 0;
-    const bool validSize = finite(c.size) && c.size.x > 0.0f &&
-        (c.shape == eng::ShapeKind::Sphere ||
-         (c.shape == eng::ShapeKind::Box
-              ? c.size.y > 0.0f && c.size.z > 0.0f
-              : c.size.y >= 0.0f));
-    if (!validShape(shape) || !validSize ||
-        c.layer >= eng::kMaxCollisionLayers) {
-        b.invalidate();
-        return;
-    }
-    r.emplace_or_replace<game::Collider>(e, c);
-}
-
 void serExit(const entt::registry& r, entt::entity e, ByteWriter& w)
 { w.f32(r.get<game::Exit>(e).yawDegrees); }
 void deExit(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
@@ -250,8 +219,10 @@ ComponentRegistry buildCore()
     ComponentRegistry reg;
     eng::ecs::registerEngineComponents(reg);
 
-    reg.add({"Collider", 10, addDefault<game::Collider>, has<game::Collider>,
-             remove<game::Collider>, serCollider, deCollider});
+    // Collider is NOT here: it is eng::ecs::Collider, registered by
+    // registerEngineComponents above at the same stable id 10. It moved there
+    // when a project scene showed that a runtime without this game's table
+    // could not deserialise a collider and therefore had no solid ground.
     reg.add({"PlayerSpawn", 11, addDefault<game::PlayerSpawn>,
              has<game::PlayerSpawn>, remove<game::PlayerSpawn>,
              serEmpty, dePlayerSpawn});

@@ -1,12 +1,15 @@
 #pragma once
+#include <eng/script/ScriptHost.h>
 #include <sol/sol.hpp>
 
 #include <entt/entt.hpp>
+#include <glm/glm.hpp>
 
 #include <functional>
 #include <string>
 
 namespace eng {
+class Audio;
 class Input;
 class Physics;
 struct BodyHandle;
@@ -67,11 +70,30 @@ entt::entity findByName(ecs::World& world, const std::string& name);
 void bindWorld(sol::state& lua, ecs::World& world, const WorldCallbacks& cb);
 
 // --- optional subsystems ---------------------------------------------------
-// A host given neither still runs every script that only touches the World,
-// which is what makes the headless tests real and lets a combat sim run
+// A host given none of these still runs every script that only touches the
+// World, which is what makes the headless tests real and lets a combat sim run
 // scripted behaviour with no window.
 void bindInput(sol::state& lua, Input& input);
 void bindPhysics(sol::state& lua, Physics& physics, ecs::World& world);
+void bindAudio(sol::state& lua, Audio& audio);
+
+// RuntimeHooks is declared in the public header, because it is a parameter of
+// ScriptHost::bindRuntime -- the runtime that fills it in lives above this
+// library and cannot see this file.
+void bindRuntime(sol::state& lua, const RuntimeHooks& hooks);
+
+// save.get/set/commit, persisted to `path`.
+//
+// Deliberately a flat key -> string|number|bool table rather than a document
+// store: what a game needs on day one is "which checkpoint, how much gold, is
+// this door open", and a format somebody can read in a text editor is worth
+// more here than one that can hold anything.
+void bindSave(sol::state& lua, const std::string& path);
+
+// timer.after/every/cancel over the host's TimerSet, which is ticked with the
+// game clock so pause and slow-motion reach every scheduled callback at once.
+class TimerSet;
+void bindTimers(sol::state& lua, TimerSet& timers);
 
 // Which entity owns a physics body, or null. Shared with the contact bridge.
 entt::entity entityForBody(ecs::World& world, BodyHandle body);

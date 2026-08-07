@@ -33,6 +33,12 @@ LAYERS = ["core", "platform", "systems", "framework", "app"]
 # directory that names their layer, so the path states the layer.
 SOURCE_RULES: list[tuple[str, str]] = [
     ("src/app/", "app"),
+    # The project runtime: reads project.toml, boots a scene into a World and
+    # runs the script host over it. At the app layer because that is exactly
+    # what it composes -- Engine, Renderer, Physics, World and ScriptHost -- and
+    # it is a separate target (eng_runtime) for the same reason eng_script is:
+    # only raven_player and the game link it, and that should be a link fact.
+    ("src/runtime/", "app"),
     ("src/platform/", "platform"),
     ("src/rhi/", "platform"),
     ("src/core/", "core"),
@@ -53,6 +59,7 @@ SOURCE_RULES: list[tuple[str, str]] = [
 HEADER_RULES: list[tuple[str, str]] = [
     ("Engine.h", "app"),
     ("app/", "app"),
+    ("runtime/", "app"),  # Project, SceneRuntime, ProjectApp -- see SOURCE_RULES
     ("Platform.h", "platform"),
     ("Input.h", "platform"),
     ("Config.h", "platform"),

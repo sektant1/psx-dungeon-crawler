@@ -205,4 +205,64 @@ void drawAssetPanel(const AssetPanelView& view)
         ImGui::TextDisabled("%s", view.footer.c_str());
 }
 
+// --- rows that do not fall off the edge -------------------------------------
+
+bool rowHasRoom(float cursorX, float nextWidth, float contentWidth,
+                float spacing)
+{
+    // A run that cannot fit on an empty row has nowhere better to go, so it
+    // stays where it is rather than being pushed onto a line it will overflow
+    // anyway -- wrapping it would cost a row and change nothing. The window's
+    // horizontal scrollbar is what makes it reachable.
+    if (nextWidth >= contentWidth)
+        return true;
+    // At the very start of a row there is nothing to wrap away from.
+    if (cursorX <= 0.0f)
+        return true;
+    return cursorX + spacing + nextWidth <= contentWidth;
+}
+
+bool sameLineIfItFits(float nextWidth)
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    // GetItemRectMax is where the last widget actually ended, which is what the
+    // next SameLine would continue from -- the cursor has already moved to the
+    // next line by the time this is asked.
+    const float cursorX =
+        ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x;
+    const float contentWidth = ImGui::GetWindowContentRegionMax().x;
+    if (!rowHasRoom(cursorX, nextWidth, contentWidth, style.ItemSpacing.x))
+        return false;
+    ImGui::SameLine();
+    return true;
+}
+
+float buttonWidth(const char* label)
+{
+    return ImGui::CalcTextSize(label, nullptr, true).x +
+           ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+float buttonRowWidth(const char* const* labels, std::size_t count)
+{
+    if (labels == nullptr || count == 0)
+        return 0.0f;
+    float width = 0.0f;
+    for (std::size_t i = 0; i < count; ++i) {
+        width += buttonWidth(labels[i]);
+        if (i > 0)
+            width += ImGui::GetStyle().ItemSpacing.x;
+    }
+    return width;
+}
+
+float iconRowWidth(float iconSize, int count)
+{
+    if (count <= 0)
+        return 0.0f;
+    const ImGuiStyle& style = ImGui::GetStyle();
+    return float(count) * (iconSize + style.FramePadding.x * 2.0f) +
+           float(count - 1) * style.ItemSpacing.x;
+}
+
 } // namespace ed::ui

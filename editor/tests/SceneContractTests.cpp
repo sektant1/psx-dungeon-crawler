@@ -119,11 +119,19 @@ int main()
     }
 
     // A world scene DOES need a spawn, and says so.
+    //
+    // The rig here is PARKED, which is what makes this a world with nobody in
+    // it: an *active* first-person rig fills the spawn role by itself (see the
+    // case below), because it states how the player moves and, by its
+    // transform, where they stand. A parked one is kept, not used -- the same
+    // rule a parked camera gets.
     {
         SceneDocument document;
         Entity& camera = add(document, "cam");
         camera.camera = CameraAuthor{};
-        camera.firstPerson = FirstPersonAuthor{};
+        FirstPersonAuthor parked;
+        parked.active = false;
+        camera.firstPerson = parked;
 
         ContractReport report = sceneContract(document);
         require(roleOf(report, SceneRole::Spawn).applicable, "a world has a player");
@@ -134,6 +142,42 @@ int main()
         spawn.playerSpawn = true;
         report = sceneContract(document);
         require(report.playable, "and playable once it has one");
+    }
+
+    // An active first-person rig IS a spawn.
+    //
+    // This is what lets a scene authored in a project -- which has none of this
+    // game's components, PlayerSpawn included -- say where the player starts.
+    // eng::runtime::SceneRuntime::playerSpawn reads the same rig at runtime, so
+    // the editor's answer and the player's are the same answer.
+    {
+        SceneDocument document;
+        Entity& player = add(document, "player");
+        player.firstPerson = FirstPersonAuthor{};
+
+        const ContractReport report = sceneContract(document);
+        require(roleOf(report, SceneRole::Spawn).count == 1,
+                "the rig is where the player starts");
+        require(report.playable,
+                "a scene with a first-person rig is playable on its own");
+    }
+
+    // A marked spawn AND a rig on a DIFFERENT entity is one spawn, not two.
+    //
+    // Levels do this routinely -- the rig carries the movement tuning, the
+    // marker says where the player stands -- and counting both reported two
+    // spawns, which is an Error, which made the level refuse to cook.
+    {
+        SceneDocument document;
+        Entity& spawn = add(document, "spawn");
+        spawn.playerSpawn = true;
+        Entity& rig = add(document, "rig");
+        rig.firstPerson = FirstPersonAuthor{};
+
+        const ContractReport report = sceneContract(document);
+        require(roleOf(report, SceneRole::Spawn).count == 1,
+                "a marker and a rig on separate entities are one spawn");
+        require(report.playable, "so the level is playable");
     }
 
     // --- over-filling: two views is legal, two listeners is not ------------

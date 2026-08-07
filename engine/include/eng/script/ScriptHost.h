@@ -2,13 +2,16 @@
 #include <eng/script/ScriptConfig.h>
 
 #include <entt/entity/fwd.hpp>
+#include <glm/glm.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace eng {
+class Audio;
 class Input;
 class Physics;
 class DebugConsole;
@@ -20,6 +23,40 @@ class ComponentRegistry;
 }
 
 namespace eng::script {
+
+// What the runtime does that the script layer cannot do for itself.
+//
+// Loading a scene, quitting, and where the camera is are all answered by the
+// application that owns the frame loop -- eng::runtime::ProjectApp, or a game
+// that arranges its own. They arrive as callbacks rather than as a pointer to
+// that application: the host must not be able to reach into the runtime, and
+// the runtime is above this library and cannot be named from inside it.
+//
+// Every field is optional. An unset one binds a call that logs "not available
+// in this runtime" and does nothing, which is friendlier than a nil global -- a
+// script calling game.load_scene under a headless test should say so, not die
+// on "attempt to call a nil value".
+struct RuntimeHooks {
+    // Logical scene path, as authored ("scenes/level2.scn"). The runtime is
+    // what knows where its cooked form lives, and what deferring the switch to
+    // a frame boundary means.
+    std::function<void(const std::string&)> loadScene;
+    std::function<void()> quit;
+    // Merge a cooked scene into the world at a position; returns the group that
+    // despawns it, or 0 on failure. The runtime half of scene instancing: the
+    // same .scn an author places is what a script spawns.
+    std::function<uint32_t(const std::string&, const glm::vec3&)> spawnScene;
+    // Destroy everything in a group -- what spawnScene handed back.
+    std::function<void(uint32_t)> despawn;
+    std::function<glm::vec3()> cameraPosition;
+    std::function<glm::vec3()> cameraForward;
+    // Game-time controls, over eng::Clock -- so slowing time from Lua slows
+    // every timer and every fixed step with it, rather than only what the
+    // calling script remembers to scale.
+    std::function<double()> elapsed;
+    std::function<void(float)> setTimeScale;
+    std::function<float()> timeScale;
+};
 
 // Owns the Lua state, the loaded-chunk cache and the live script instances for
 // one World.
@@ -52,6 +89,15 @@ public:
     // no window and no physics world.
     void bindInput(Input& input);
     void bindPhysics(Physics& physics);
+    // `sound.play/play_at/loop/bus_volume`.
+    void bindAudio(Audio& audio);
+    // `game.*` and `camera.*`. See RuntimeHooks above; an unset hook binds a
+    // call that logs and does nothing rather than leaving a nil global.
+    void bindRuntime(const RuntimeHooks& hooks);
+    // `save.*`, persisted to `path`. The runtime chooses where that is -- for a
+    // project it is inside the project's own working directory, so two games on
+    // one machine cannot overwrite each other's saves.
+    void bindSave(const std::string& path);
 
     // --- frame -----------------------------------------------------------
     // Creates instances for entities whose Scripts have none, runs start() on
@@ -119,6 +165,7 @@ public:
 
     // --- test and tooling seams ------------------------------------------
     std::size_t instanceCount() const;
+    std::size_t timerCount() const;
     bool luaGlobalBool(const char* name) const;
     double luaGlobalNumber(const char* name) const;
     std::string luaGlobalString(const char* name) const;

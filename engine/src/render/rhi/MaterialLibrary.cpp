@@ -297,6 +297,14 @@ void MaterialLibrary::uploadTexture(RenderCore& core, Material& material)
     }
 }
 
+const Material& MaterialLibrary::adopt(RenderCore& core, Material material)
+{
+    const std::string name = material.name;
+    Material& stored = mMaterials[name] = std::move(material);
+    uploadTexture(core, stored);
+    return stored;
+}
+
 void MaterialLibrary::refreshTextures(RenderCore& core)
 {
     mResourceDirs = assets::resourceDirs();

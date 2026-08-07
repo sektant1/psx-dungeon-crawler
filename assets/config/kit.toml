@@ -328,10 +328,30 @@ y_offset = -4.0
 id = "chest"
 role = "prop_chest" # base and lid are separate meshes so the lid can animate
 mesh = "Chest_Base.obj"
-lid_mesh = "Chest_Lid.obj"
 material = "Game/Kit/Containers"
 socket = "prop"
 size = [10.0, 4.5, 8.5]
+
+# The lid `chest` is missing. A piece rather than a field on `chest`, because
+# the lid has to be its own entity to turn on its own hinge -- and the thing
+# that assembles a base, a lid and the script that swings it is a component
+# scene (scenes/chest.scn), not the kit. The kit's job is the leaf piece and
+# what it measures; composing pieces into a working object is the scene's.
+#
+# This replaces a `lid_mesh = "Chest_Lid.obj"` line that sat on `chest` and was
+# read by nothing, so scenes/chest.scn had to name the mesh and its import
+# scale by hand -- two copies of a number kit.toml already owns, and the lid
+# would have parted company with its base the day [kit] scale changed.
+#
+# `role` is deliberately one no generator table names: a lid is placed as part
+# of a chest, never picked as scenery.
+[[piece]]
+id = "chest_lid"
+role = "prop_chest_lid"
+mesh = "Chest_Lid.obj"
+material = "Game/Kit/Containers"
+socket = "prop"
+size = [10.0, 4.0, 8.0]
 
 [[piece]]
 id = "candle"
@@ -545,7 +565,11 @@ role = "prop_container"
 mesh = "meshes/props/prop_chest.obj"
 material = "Game/PropChest"
 socket = "prop"
-import_scale = 1.0
+# The mesh is authored 0.202 m across -- a 20 cm chest, which reads as a lost
+# earring next to a 1.4 m barrel. Scaled to a chest somebody could put a sword
+# in. `size` and `y_offset` below are mesh units and scale with it, so they stay
+# correct without being re-measured.
+import_scale = 4.4
 # Authored around its own centre rather than standing on it, so half of it is
 # below y=0 until the offset lifts it.
 size = [0.202, 0.159, 0.16]

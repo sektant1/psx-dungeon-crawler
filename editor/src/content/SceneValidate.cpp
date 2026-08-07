@@ -1,5 +1,7 @@
 #include <editor/content/SceneValidate.h>
 
+#include <editor/content/SceneInstancing.h>
+
 #include <editor/content/SceneContract.h>
 #include <eng/assets/AssetRoot.h>
 
@@ -307,8 +309,64 @@ std::vector<Issue> validate(const SceneDocument& document,
         if (!entity.name.empty()) entityNames.insert(entity.name);
     }
 
+    // --- scene instancing --------------------------------------------------
+    // Checked before anything else looks at the document, because everything
+    // else is looking at a document that has NOT been expanded: validate() runs
+    // on what the author wrote, and the cooker expands its own copy. So an
+    // instance is one entity here however many it becomes later, and the only
+    // things worth saying about it are whether it will expand at all and
+    // whether it is a coherent thing to have authored.
+    {
+        std::vector<AuthorId> placements;
+        for (const Entity& entity : document.entities) {
+            if (!entity.instance)
+                continue;
+            placements.push_back(entity.id);
+            // An entity that both instances a scene and draws something of its
+            // own was never meaningful: the placement is a node the contents
+            // hang from, and a mesh on it would be a second object nobody
+            // placed. Caught here rather than silently dropped at cook.
+            if (!entity.prefab.empty() || entity.mesh || entity.primitive) {
+                add(issues, Severity::Error, "instance.also_draws",
+                    "'" + entity.id +
+                        "' instances a scene and also has geometry of its "
+                        "own; the placement should be an empty node",
+                    entity.id);
+            }
+        }
+
+        if (!placements.empty()) {
+            // The expansion is the authority on what is wrong -- cycles, depth,
+            // a missing or malformed file -- so ask it rather than
+            // reimplementing those rules and letting the two disagree. It works
+            // on a copy, so this costs one expansion and changes nothing.
+            SceneDocument probe = document;
+            std::string expandError;
+            if (!expandInstances(probe, assetRoot, expandError)) {
+                add(issues, Severity::Error, "instance.unresolved", expandError,
+                    placements.front());
+            }
+        }
+    }
+
+    // An active first-person rig is a spawn: it says how the player moves and,
+    // by its transform, where they stand, which is what
+    // eng::runtime::SceneRuntime::playerSpawn reads. It counts because
+    // PlayerSpawn is one of THIS game's markers, so a scene authored in a
+    // project -- with no game components in it at all -- has no other way to
+    // say where the player starts.
+    //
+    // A rig only counts when the document has no PlayerSpawn at all. The two
+    // are routinely on DIFFERENT entities (see MapRuntime::playerRig: "a level
+    // that puts the rig on its player spawn instead should still be read"), and
+    // counting both made such a level report two spawns and fail to cook.
+    const bool hasMarkedSpawn =
+        std::any_of(document.entities.begin(), document.entities.end(),
+                    [](const Entity& e) { return e.playerSpawn; });
     for (const Entity& entity : document.entities) {
-        if (entity.playerSpawn) {
+        const bool rigSpawn = !hasMarkedSpawn && entity.firstPerson &&
+                              entity.firstPerson->active;
+        if (entity.playerSpawn || rigSpawn) {
             ++playerSpawns;
             if (!spawnEntity) spawnEntity = &entity;
         }
@@ -400,7 +458,13 @@ std::vector<Issue> validate(const SceneDocument& document,
             std::filesystem::path file = script.path;
             if (!std::filesystem::exists(file, code))
                 file = std::filesystem::path(assetRoot) / script.path;
-            if (!std::filesystem::exists(file, code)) {
+            // Then the mounted packs, for the same reason the kit meshes above
+            // check them: a project mounts its content over the engine's, so a
+            // scene of its own may legitimately use a script that ships with
+            // the engine, and the runtime resolves it exactly this way.
+            if (!std::filesystem::exists(file, code))
+                file = eng::assets::resolve(script.path);
+            if (file.empty() || !std::filesystem::exists(file, code)) {
                 add(issues, Severity::Error, "script.missing",
                     "script '" + script.path + "' is not on disk", entity.id);
                 continue;
@@ -448,9 +512,17 @@ std::vector<Issue> validate(const SceneDocument& document,
                     entity.id);
             } else if (!assetRoot.empty() && !piece->isGroup()) {
                 std::error_code code;
-                const std::filesystem::path mesh =
+                std::filesystem::path mesh =
                     std::filesystem::path(assetRoot) / piece->meshPath;
-                if (!std::filesystem::exists(mesh, code)) {
+                // Then the mounted packs, which is where a PROJECT's kit meshes
+                // actually live: a project mounts its own content over the
+                // engine's, so a scene of its own using engine geometry is the
+                // documented arrangement, not a broken reference. Checking one
+                // root only reported every kit piece in a migrated scene as
+                // missing while the runtime resolved all of them.
+                if (!std::filesystem::exists(mesh, code))
+                    mesh = eng::assets::resolve(piece->meshPath);
+                if (mesh.empty() || !std::filesystem::exists(mesh, code)) {
                     add(issues, Severity::Error, "prefab.mesh_missing",
                         "mesh '" + piece->meshPath + "' is not on disk",
                         entity.id);
@@ -792,7 +864,24 @@ std::vector<Issue> validate(const SceneDocument& document,
         }
     }
 
-    if (playerSpawns == 0) {
+    // A component scene has no player to place, and neither does a shot (it
+    // plays itself through its own camera) or a screen (it is a flat page).
+    // sceneContract already decides which of those a scene is, so this asks it
+    // rather than re-deriving the rule and disagreeing with the panel -- which
+    // is exactly what happened: the Contract panel reported clip_demo.scn as
+    // playable while scene_cook refused to cook it at all.
+    // Only a shot and a screen genuinely have no player: a shot plays itself
+    // through its own camera, a screen is a flat page. Everything else needs a
+    // spawn -- INCLUDING an empty scene, which is the case this must not go
+    // quiet on. Asking the contract for the Spawn role's applicability instead
+    // did exactly that: an empty scene is SceneKind::Empty, isWorld() is false
+    // for it, and a scene with nothing in it stopped reporting the one thing
+    // most obviously wrong with it.
+    const ContractReport contract = sceneContract(document);
+    const bool playsItself = contract.kind == SceneKind::Shot ||
+                             contract.kind == SceneKind::Screen;
+    const bool needsSpawn = !document.component && !playsItself;
+    if (playerSpawns == 0 && needsSpawn) {
         add(issues, Severity::Error, "spawn.missing",
             "the scene has no player spawn", {}, QuickFix::AddPlayerSpawn);
     } else if (playerSpawns > 1) {
@@ -801,7 +890,7 @@ std::vector<Issue> validate(const SceneDocument& document,
                 " player spawns; it must have exactly one",
             {});
     }
-    if (exits == 0) {
+    if (exits == 0 && !document.component && needsSpawn) {
         add(issues, Severity::Warning, "exit.missing",
             "the scene has no exit, so it cannot be left", {});
     }

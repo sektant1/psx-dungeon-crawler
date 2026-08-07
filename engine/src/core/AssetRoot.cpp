@@ -50,11 +50,7 @@ const char* kManifest = "assets.toml";
 // and that one is only consulted last.
 fs::path exeDir()
 {
-    std::error_code ec;
-    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
-    if (ec)
-        return {};
-    return exe.parent_path();
+    return exeDirectory();
 }
 
 bool hasManifest(const fs::path& dir)
@@ -362,6 +358,15 @@ bool init(const std::string& rootOverride)
     return true;
 }
 
+fs::path exeDirectory()
+{
+    std::error_code ec;
+    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+    if (ec)
+        return {};
+    return exe.parent_path();
+}
+
 bool ready()
 {
     return state().ready;
@@ -405,6 +410,59 @@ bool mount(const std::string& mountSet)
     }
 
     s.mounted = std::move(resolved);
+    return true;
+}
+
+bool mountProject(const fs::path& projectDir)
+{
+    State& s = state();
+    if (!s.ready) {
+        log::error("assets: mountProject('%s') before init()",
+                   projectDir.c_str());
+        return false;
+    }
+
+    std::error_code ec;
+    fs::path canonical = fs::weakly_canonical(projectDir, ec);
+    if (ec)
+        canonical = projectDir.lexically_normal();
+
+    const fs::path manifestPath = canonical / kManifest;
+    if (!fs::is_regular_file(manifestPath, ec)) {
+        log::error("assets: project '%s' has no %s", canonical.c_str(),
+                   kManifest);
+        return false;
+    }
+
+    toml::parse_result parsed = toml::parse_file(manifestPath.string());
+    if (!parsed) {
+        log::error("assets: failed to parse %s: %s", manifestPath.c_str(),
+                   std::string(parsed.error().description()).c_str());
+        return false;
+    }
+
+    // Read into a scratch list first. readPacks() rejects a duplicate id only
+    // against what it has already read, so the collision check against the
+    // packs already declared is made here -- and made before anything is
+    // committed, which is what lets a bad manifest leave the mount untouched.
+    std::vector<Pack> projectPacks;
+    if (!readPacks(parsed.table(), canonical, projectPacks))
+        return false;
+
+    for (const Pack& pack : projectPacks) {
+        if (findPack(s.packs, pack.id)) {
+            log::error("assets: project pack '%s' collides with a declared one",
+                       pack.id.c_str());
+            return false;
+        }
+    }
+
+    s.packs.insert(s.packs.end(), projectPacks.begin(), projectPacks.end());
+    s.mounted.insert(s.mounted.begin(), projectPacks.begin(),
+                     projectPacks.end());
+
+    log::info("assets: project %s, %zu pack(s) over %zu", canonical.c_str(),
+              projectPacks.size(), s.mounted.size() - projectPacks.size());
     return true;
 }
 

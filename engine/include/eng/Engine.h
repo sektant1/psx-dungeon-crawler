@@ -34,8 +34,14 @@ public:
     // decide, then the engine default). The applied id is readable afterwards
     // so the debug console can open on the look that is actually live instead
     // of assuming the default.
+    //
+    // `projectDir`, when non-empty, is a project's directory: its own content
+    // is overlaid on the mounted set before anything is resolved, so the
+    // config path above can name a file the project ships and the renderer
+    // registers the project's resource locations. Empty is every app that is
+    // its own content -- the game, the editor, the samples.
     bool init(const std::string& configPath, const std::string& mountSet,
-              int renderPreset = 0);
+              int renderPreset = 0, const std::string& projectDir = {});
 
     // The render profile currently applied. Set by init and by
     // setRenderPreset; the console's own switcher reports through the latter.

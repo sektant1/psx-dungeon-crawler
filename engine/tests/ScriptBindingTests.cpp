@@ -34,16 +34,6 @@ static std::string writeScript(const std::string& name, const std::string& body)
     return file.string();
 }
 
-static const ComponentRegistry& engineRegistry()
-{
-    static ComponentRegistry reg = [] {
-        ComponentRegistry r;
-        registerEngineComponents(r);
-        return r;
-    }();
-    return reg;
-}
-
 static entt::entity scripted(World& w, const std::string& name,
                              const std::string& path)
 {

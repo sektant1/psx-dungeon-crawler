@@ -1,0 +1,49 @@
+# raco
+#
+# This file is both the project's identity and its configuration: the engine
+# reads [window] and [bindings] straight out of it, so there is one place to
+# change what the window is called and what W does.
+
+[project]
+name = "raco"
+# Relative to this file. The editor cooks it; the player plays the result.
+main_scene = "scenes/main.scn"
+
+[window]
+title = "raco"
+width = 1280
+height = 720
+vsync = false
+
+# Which look the renderer starts in. RAVEN_RENDER_PRESET overrides it.
+[render]
+preset = "pixel-3d"
+
+# Where scripts are resolved from and watched for hot reload.
+[scripts]
+root = "scripts"
+
+# Action -> key. Scripts and the player controller both name actions, never
+# keys, so this table is the only place a rebind happens.
+#
+# The locomotion block is not optional: eng::FpsController reads every one of
+# these by name and treats an unbound one as fatal, so a project missing any of
+# them would start and then die on the first frame that asked. Anything below
+# the blank line is this project's to change freely.
+[bindings]
+move_forward = "W"
+move_back = "S"
+move_left = "A"
+move_right = "D"
+jump = "Space"
+sprint = "Left Shift"
+walk = "Left Alt"
+crouch = "Left Ctrl"
+slide = "C"
+
+interact = "E"
+quit = "Escape"
+debug_ui = "F1"
+dev_console = "`"
+show_colliders = "F3"
+show_perf = "F4"

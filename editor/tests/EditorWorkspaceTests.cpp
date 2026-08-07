@@ -30,7 +30,7 @@ int main()
                 "720p keeps a usable inspector");
         require(1280.0f - plan.leftPixels - plan.rightPixels >= 720.0f,
                 "720p protects the scene workspace");
-        require(near(plan.diagnosticsPixels, 132.0f),
+        require(plan.bottomPanelPixels <= 672.0f * 0.5f,
                 "720p diagnostics do not consume the scene");
     }
     {
@@ -53,20 +53,32 @@ int main()
         const WorkspacePlan plan = makeWorkspacePlan(1280.0f, 672.0f, 2.0f);
         require(1280.0f - plan.leftPixels - plan.rightPixels >= 750.0f,
                 "large text cannot erase the 720p workspace");
-        // A sixth of a 672px window. The bound is a fraction rather than a
-        // pixel count because the bar's content scales with the text: pinning
-        // it at 96px was pinning it to the one-row-plus-scrollbar toolbar it
-        // used to have, and that bar was clipped by the panel below it.
-        require(plan.commandBarPixels <= 672.0f * 0.16f,
-                "large text keeps the command bar bounded");
     }
     {
-        // The toolbar is a docked panel, so its node pays for the dock's tab
-        // bar before the first button is drawn. Sizing it for the controls
-        // alone is what put their bottom half under the panel below.
+        // The bottom panel is not a dock split any more -- it lives outside the
+        // dockspace and starts closed -- so this is only the height it opens
+        // at. It still has to be a panel rather than a slot.
         const WorkspacePlan plan = makeWorkspacePlan(1600.0f, 950.0f, 1.0f);
-        require(plan.commandBarPixels >= 78.0f,
-                "the command bar fits its tab bar plus two wrapped rows");
+        require(plan.bottomPanelPixels >= 160.0f &&
+                    plan.bottomPanelPixels <= 320.0f,
+                "the bottom panel opens at a readable height");
+        require(plan.bottomPanelPixels < 950.0f * 0.5f,
+                "and never at half the window");
+    }
+    {
+        // The left column is split rather than tabbed, so the split has to
+        // leave both lists usable. The file browser has a preview swatch and a
+        // metadata block above its list that do not shrink, which is why the
+        // share tips away from the tree on a short window.
+        const WorkspacePlan tall = makeWorkspacePlan(1600.0f, 1400.0f, 1.0f);
+        const WorkspacePlan short_ = makeWorkspacePlan(1600.0f, 600.0f, 1.0f);
+        require(tall.sceneTreeFraction > short_.sceneTreeFraction,
+                "a taller window gives more of the column to the tree");
+        for (const WorkspacePlan& plan : {tall, short_}) {
+            require(plan.sceneTreeFraction >= 0.40f &&
+                        plan.sceneTreeFraction <= 0.65f,
+                    "neither half of the left column is ever squeezed out");
+        }
     }
 
     std::cout << "EditorWorkspaceTests: ok\n";

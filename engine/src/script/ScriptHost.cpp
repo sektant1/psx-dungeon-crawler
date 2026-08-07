@@ -4,6 +4,7 @@
 #include "script/ScriptContactBridge.h"
 #include "script/ScriptError.h"
 #include "script/ScriptInstance.h"
+#include "script/ScriptTimers.h"
 #include "script/bind/Bindings.h"
 
 #include <eng/DirectoryWatcher.h>
@@ -54,6 +55,9 @@ struct ScriptHost::Impl {
             broadcastEvent(n, std::move(d));
         };
         bindWorld(lua, world, cb);
+        // Bound unconditionally: a timer needs no subsystem, only a clock, and
+        // scheduling is the one thing every gameplay script reaches for.
+        bindTimers(lua, timers);
 
         // Registered here rather than in BindEntity because both reach into
         // the instance pool, which is the host's and not a binding's.
@@ -312,6 +316,14 @@ struct ScriptHost::Impl {
     ScriptConfig config;
     const ecs::ComponentRegistry& registry;
     sol::state lua;
+    // Scheduled Lua callbacks. Ticked from tick(), i.e. on game time, so pause
+    // and slow-motion reach every one of them without any script opting in.
+    //
+    // Declared AFTER `lua` and therefore destroyed BEFORE it: every timer holds
+    // a sol::protected_function, and releasing one after the state is gone
+    // dereferences a dead lua_State. Members destruct in reverse declaration
+    // order, so this line's position is load-bearing.
+    TimerSet timers;
     ScriptChunkCache chunks;
     ScriptInstancePool instances;
     // Held so binders that need the host's internals can add methods to the
@@ -358,6 +370,24 @@ void ScriptHost::tick(float dt)
         mImpl->call(*inst, "update", dt);
     }
 
+    // After update, so a timer scheduled this frame does not also fire this
+    // frame, and before flushDestroys, so a callback may destroy something and
+    // have it go with the rest of the batch.
+    //
+    // A failing timer callback is reported and dropped rather than quarantining
+    // anything: it is a closure, not an instance, so there is nothing to
+    // quarantine -- and the timer that owned it has already been rescheduled or
+    // retired by the time this runs.
+    mImpl->timers.tick(dt, [this](const sol::protected_function& fn) {
+        const sol::protected_function pf(fn, tracebackHandler(mImpl->lua));
+        const sol::protected_function_result r = pf();
+        if (!r.valid()) {
+            const sol::error err = r;
+            reportScriptError("timer", "callback", "a scheduled callback",
+                              err.what());
+        }
+    });
+
     mImpl->flushDestroys();
 }
 
@@ -371,6 +401,26 @@ void ScriptHost::bindPhysics(Physics& physics)
     eng::script::bindPhysics(mImpl->lua, physics, mImpl->world);
     mImpl->contacts =
         std::make_unique<ScriptContactBridge>(physics, mImpl->world);
+}
+
+void ScriptHost::bindAudio(Audio& audio)
+{
+    eng::script::bindAudio(mImpl->lua, audio);
+}
+
+void ScriptHost::bindRuntime(const RuntimeHooks& hooks)
+{
+    eng::script::bindRuntime(mImpl->lua, hooks);
+}
+
+void ScriptHost::bindSave(const std::string& path)
+{
+    eng::script::bindSave(mImpl->lua, path);
+}
+
+std::size_t ScriptHost::timerCount() const
+{
+    return mImpl->timers.size();
 }
 
 void ScriptHost::drainContacts()

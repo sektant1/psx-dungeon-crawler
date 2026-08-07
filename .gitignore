@@ -43,3 +43,7 @@ __pycache__/
 # Periodic backups the editor writes beside a scene. Recovery material for one
 # machine; the scene itself is the committed artefact.
 *.autosave.scn
+
+# Per-user project working state: cooked maps, saves. Written by the editor
+# and the player, never authored. See docs/projects.md.
+.raven/

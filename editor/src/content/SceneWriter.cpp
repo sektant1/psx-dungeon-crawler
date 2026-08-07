@@ -229,6 +229,11 @@ Json writeEntity(const Entity& entity)
         out["layer"] = entity.layer;
     if (!entity.prefab.empty())
         out["prefab"] = entity.prefab;
+    if (entity.instance) {
+        Json instance = Json::object();
+        instance["scene"] = entity.instance->scene;
+        out["instance"] = std::move(instance);
+    }
     if (entity.mesh) {
         Json mesh = Json::object();
         mesh["path"] = entity.mesh->path;
@@ -578,6 +583,10 @@ std::string serializeSceneSource(const SceneDocument& document)
     // palette still round-trips byte for byte.
     if (!document.palette.empty())
         root["palette"] = document.palette;
+    // Written only when true, so every scene authored before this existed round
+    // -trips byte for byte.
+    if (document.component)
+        root["component"] = true;
     // Author order, NOT sorted like the entities below: a layer list is a
     // handful of rows somebody arranged deliberately, and re-alphabetising it
     // on every save would be a diff in every file that touched a layer.

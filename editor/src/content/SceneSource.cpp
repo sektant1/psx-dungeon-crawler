@@ -946,6 +946,24 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         }
         out.prefab = source["prefab"].get<std::string>();
     }
+    if (source.contains("instance")) {
+        const Json& node = source["instance"];
+        // An object, not a bare string, because this is the field that will
+        // grow overrides. A string here would mean either breaking the format
+        // later or supporting both spellings forever.
+        if (!node.is_object() || !node.contains("scene") ||
+            !node["scene"].is_string()) {
+            error = location + "/instance needs a \"scene\" path";
+            return false;
+        }
+        InstanceAuthor instance;
+        instance.scene = node["scene"].get<std::string>();
+        if (instance.scene.empty()) {
+            error = location + "/instance/scene is empty";
+            return false;
+        }
+        out.instance = std::move(instance);
+    }
     if (source.contains("mesh")) {
         MeshAuthor mesh;
         if (!parseMesh(source["mesh"], mesh, location + "/mesh", error))
@@ -1230,6 +1248,13 @@ bool parseSceneSource(const std::string& json, const std::string& location,
 
         SceneDocument document;
         document.id = root["id"].get<std::string>();
+        if (root.contains("component")) {
+            if (!root["component"].is_boolean()) {
+                error = location + "/component must be a boolean";
+                return false;
+            }
+            document.component = root["component"].get<bool>();
+        }
         if (root.contains("palette")) {
             if (!root["palette"].is_string()) {
                 error = location + "/palette must be the name of a table in "

@@ -1,5 +1,7 @@
 #include <editor/content/SceneContract.h>
 
+#include <algorithm>
+
 
 namespace game::content {
 namespace {
@@ -135,8 +137,29 @@ ContractReport sceneContract(const SceneDocument& document)
     // there is a player spawn is what decides Empty from GameDriven.
     int spawns = 0, listeners = 0, keyLights = 0, exits = 0;
     AuthorId spawnId, listenerId, keyLightId, exitId;
+    // A first-person rig fills the Spawn role only when nothing is marked as
+    // one. The two live on different entities often enough that counting both
+    // reported two spawns for a perfectly ordinary level -- see the same rule,
+    // and the reason for it, in SceneValidate.
+    const bool hasMarkedSpawn =
+        std::any_of(document.entities.begin(), document.entities.end(),
+                    [](const Entity& e) { return e.playerSpawn; });
     for (const Entity& e : document.entities) {
-        if (e.playerSpawn) {
+        // A player spawn, or an active first-person rig -- which says the same
+        // thing and more. `first_person` states how the player moves AND, by
+        // its transform, where they are; eng::runtime::SceneRuntime::playerSpawn
+        // reads exactly that and stands the player there.
+        //
+        // This matters beyond tidiness: PlayerSpawn is one of THIS game's
+        // markers, so before this a scene made in a project -- which has no
+        // game components at all -- could not fill the role however it was
+        // authored, and every new project's first cook was a refusal.
+        //
+        // A parked rig (active = false) does not count, for the same reason a
+        // parked camera does not: it is kept, not used.
+        const bool firstPersonSpawn =
+            !hasMarkedSpawn && e.firstPerson && e.firstPerson->active;
+        if (e.playerSpawn || firstPersonSpawn) {
             ++spawns;
             spawnId = e.id;
         }
@@ -157,7 +180,11 @@ ContractReport sceneContract(const SceneDocument& document)
     report.kind = chosen          ? kindOf(*chosen)
                   : spawns > 0    ? SceneKind::GameDriven
                                   : SceneKind::Empty;
-    const bool world = isWorld(report.kind);
+    // A component scene is a building block -- a torch, a pillar, an enemy --
+    // and the roles below that presuppose a player do not apply to one. It is
+    // never "not playable": it is not a thing that gets played. See
+    // SceneDocument::component.
+    const bool world = isWorld(report.kind) && !document.component;
 
     // --- View ------------------------------------------------------------
     // Filled by an authored view OR by a player spawn -- the game supplies the
@@ -165,7 +192,8 @@ ContractReport sceneContract(const SceneDocument& document)
     // player controller rather than being broken. Only a scene with neither is
     // an Error, and that is the failure this file was written for.
     {
-        RoleStatus status = role(SceneRole::View, true, Severity::Error,
+        RoleStatus status = role(SceneRole::View, !document.component,
+                                 Severity::Error,
                                  QuickFix::AddFirstPersonView);
         status.count = activeViews;
         if (chosen)

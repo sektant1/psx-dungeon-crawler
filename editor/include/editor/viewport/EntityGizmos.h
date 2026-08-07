@@ -150,12 +150,74 @@ struct GizmoOverlay {
     // selected one, which is what makes the marks explorable: a level with
     // thirty of them cannot label them all at once and stay readable.
     const game::content::AuthorId* hovered = nullptr;
+    // The selection's primary -- the one the inspector is editing. It outranks
+    // the rest of a multi-selection for both budgets below, so the mark being
+    // worked on is never the one that gets dropped.
+    const game::content::AuthorId* primary = nullptr;
     bool labels = true;
     bool volumes = true;
+
+    // --- the two budgets -----------------------------------------------------
+    //
+    // Both exist because the original design assumed one attended mark at a
+    // time and multi-selection broke that assumption completely. Selecting a
+    // room's eleven lights drew eleven overlapping range spheres and
+    // twenty-two lines of text over the level: every individual rule was
+    // right ("only the selected light shows its reach", "only attended marks
+    // are labelled") and the result was unreadable, because "attended" turned
+    // out to be a set rather than a thing.
+    //
+    // Full volumes -- the range sphere, the box, the frustum -- for at most
+    // this many attended marks. Above it the rest of the selection keeps its
+    // body and its highlight and loses only the volume, which is the part that
+    // overlaps. Three, because tuning lights against each other is a real job
+    // and comparing two or three reaches is how it is done.
+    int volumeBudget = 3;
+    // Name labels drawn per frame, at most. The cap is the second half; the
+    // first is that a label is skipped when its rectangle would overlap one
+    // already drawn, which is what actually keeps them readable -- a budget
+    // alone still lets twenty labels stack on one point.
+    int labelBudget = 20;
+
     // Width/height a camera frustum is drawn at. Zero uses each mark's own.
     // The viewport's, in the editor: an author framing a shot has to be judging
     // the rectangle they are looking through, not a nominal 16:9.
     float aspect = 0.0f;
+};
+
+// --- label placement ---------------------------------------------------------
+//
+// Which labels get drawn when more of them want the same pixels than will fit.
+//
+// Separated out and pure so the rule can be tested: the failure it exists to
+// prevent is visual, appears only with a particular selection, and is exactly
+// the kind of thing that regresses silently. Callers claim rectangles in
+// priority order -- hovered first, then the primary selection, then the rest --
+// so the mark that matters most is the one that survives a collision.
+struct LabelRect {
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+};
+
+bool labelRectsOverlap(const LabelRect& a, const LabelRect& b);
+
+class LabelPacker
+{
+public:
+    explicit LabelPacker(int budget) : mBudget(budget) {}
+
+    // Takes the rectangle when it is free and the budget is not spent.
+    // `padding` is grown around the candidate before testing, so two labels
+    // never end up touching -- adjacent text reads as one string.
+    bool claim(const LabelRect& rect, float padding = 2.0f);
+
+    int drawn() const { return int(mTaken.size()); }
+
+private:
+    int mBudget = 0;
+    std::vector<LabelRect> mTaken;
 };
 
 // Draws the marks over the viewport image. `list` is an ImGui draw list --

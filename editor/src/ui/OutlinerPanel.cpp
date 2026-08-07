@@ -158,7 +158,9 @@ float toggleColumnLeft()
 // through it, so the row read as a name with a smudge on the end and the switch
 // it hid could not be aimed at.
 void drawKindLabel(const std::string& kind, const std::string& label,
-                   bool dimmed, float rightLimit = 0.0f)
+                   bool dimmed, float rightLimit = 0.0f,
+                   const Icon* iconOverride = nullptr,
+                   const char* iconTip = nullptr)
 {
     const float size = ImGui::GetFontSize();
     ImGui::SameLine(0.0f, 4.0f);
@@ -166,12 +168,13 @@ void drawKindLabel(const std::string& kind, const std::string& label,
     ImVec4 colour = kindColour(kind);
     if (dimmed)
         colour.w *= 0.45f;
-    drawIcon(ImGui::GetWindowDrawList(), iconForKind(kind.c_str()),
+    drawIcon(ImGui::GetWindowDrawList(),
+             iconOverride ? *iconOverride : iconForKind(kind.c_str()),
              ImVec2(origin.x, origin.y + 1.0f), size,
              ImGui::GetColorU32(colour));
     if (ImGui::IsMouseHoveringRect(origin,
                                    ImVec2(origin.x + size, origin.y + size)))
-        ImGui::SetTooltip("%s", kind.c_str());
+        ImGui::SetTooltip("%s", iconTip ? iconTip : kind.c_str());
     ImGui::Dummy(ImVec2(size, size));
     ImGui::SameLine(0.0f, 6.0f);
 
@@ -586,10 +589,17 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                              std::to_string(group.nodes.size()).c_str())
                              .x -
                          12.0f;
+        // A bucket wears the stack glyph, not the kind's. This is the tree's
+        // one genuinely ambiguous row: it looks like a parent and is a pile,
+        // and clicking it selects a hundred and forty-six things rather than
+        // one. A single-entity group IS its entity, so it keeps the kind icon.
+        const Icon stack = Icon::Stack;
+        const bool pile = group.bucket && !single;
         drawKindLabel(group.kind, header,
                       single && actions.isHidden &&
                           actions.isHidden(group.nodes.front().id),
-                      labelRight);
+                      labelRight, pile ? &stack : nullptr,
+                      pile ? "repeats -- not a parent" : nullptr);
         if (!single)
             drawGroupCount(group.nodes.size(), selectedCount);
         bool toggled = false;
@@ -612,6 +622,17 @@ void drawOutlinerRows(const OutlinerTree& tree, bool filterActive,
                 ImGui::TextUnformatted(group.label.c_str());
                 ImGui::TextDisabled("%zu entities | %zu selected",
                                     group.nodes.size(), selectedCount);
+                if (group.bucket) {
+                    // Said plainly, because the consequence of assuming
+                    // otherwise is selecting a hundred entities and editing
+                    // them all.
+                    ImGui::TextDisabled(
+                        "a pile of repeats, not a parent -- clicking selects "
+                        "all of them");
+                    ImGui::TextDisabled(
+                        "switch the panel to Hierarchy to see the document's "
+                        "own structure");
+                }
                 ImGui::EndTooltip();
             }
         }
