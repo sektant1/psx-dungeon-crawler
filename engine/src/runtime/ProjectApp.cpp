@@ -132,6 +132,69 @@ std::string ProjectApp::scenePath() const
     return {};
 }
 
+std::string ProjectApp::cookedPathFor(const std::string& scene) const
+{
+    // A script names a scene the way an author does -- "scenes/level2.scn" --
+    // and the runtime is what knows the cooked form lives under .raven/cooked.
+    // A path that is already a .map is taken as-is, which is what makes a bare
+    // .map runnable and lets a game hand its own cooked file straight in.
+    std::filesystem::path named(scene);
+    if (named.extension() == ".map") {
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(named, ec))
+            return named.string();
+        if (!mProject.dir.empty())
+            return (mProject.dir / named).string();
+        return named.string();
+    }
+    if (mProject.dir.empty()) {
+        log::error("ProjectApp: '%s' cannot be resolved without a project",
+                   scene.c_str());
+        return {};
+    }
+    return (mProject.workDir() / "cooked" / (named.stem().string() + ".map"))
+        .string();
+}
+
+void ProjectApp::applyPendingScene(Engine& engine)
+{
+    if (mPendingScene.empty())
+        return;
+    const std::string requested = mPendingScene;
+    mPendingScene.clear();
+
+    const std::string path = cookedPathFor(requested);
+    std::error_code ec;
+    if (path.empty() || !std::filesystem::is_regular_file(path, ec)) {
+        // Refuse rather than tear the level down: a script with a typo in a
+        // scene name should leave the player standing in the level they were
+        // in, with an error naming the file, not in an empty world.
+        log::error("ProjectApp: game.load_scene('%s') -- no cooked scene at %s",
+                   requested.c_str(), path.c_str());
+        return;
+    }
+
+    // Order matters. The host goes first: it holds instances whose entities are
+    // about to be destroyed, and on_destroy has to fire while the world is
+    // still whole. Then the group, which takes exactly the old scene's entities
+    // and leaves anything the game spawned outside it alone.
+    mScripts.reset();
+    mWorld.destroyGroup(mSceneGroup);
+    mScene.reset();
+    ++mSceneGroup;
+
+    if (!buildScene(engine, path)) {
+        log::error("ProjectApp: '%s' failed to build; the world is now empty",
+                   requested.c_str());
+        return;
+    }
+
+    mPlayer.init(engine.renderer(), physics(), playerStart(*mScene), 6.0f,
+                 0.0025f, glm::vec3(-500.0f), glm::vec3(500.0f));
+    startScripts(engine);
+    log::info("ProjectApp: loaded scene '%s'", requested.c_str());
+}
+
 void ProjectApp::onLoadGame(Engine& engine, LoadPlan& plan)
 {
     Renderer& renderer = engine.renderer();
@@ -152,28 +215,13 @@ void ProjectApp::onLoadGame(Engine& engine, LoadPlan& plan)
     });
 }
 
-bool ProjectApp::onStartGame(Engine& engine)
+bool ProjectApp::buildScene(Engine& engine, const std::string& path)
 {
-    const std::string path = scenePath();
-    if (path.empty()) {
-        exitCode = 1;
-        return false;
-    }
-
     Renderer& r = engine.renderer();
-    mBackend.emplace(r);
-    mWorld.attachRenderer(*mBackend);
-    mWorld.attachPhysics(physics());
-    mWorld.attachAudio(audio(), /*drivesListener=*/true);
-    onWorldAttached(engine);
-
-    // One scene, no transitions: everything it contributes lives as long as
-    // the app does, so no lifetime group is needed.
-    mScene.emplace(mWorld, 0u, components());
+    mScene.emplace(mWorld, mSceneGroup, components());
     SceneRuntime& scene = *mScene;
     if (!scene.load(path)) {
         log::error("ProjectApp: load failed: %s", path.c_str());
-        exitCode = 1;
         return false;
     }
 
@@ -198,6 +246,72 @@ bool ProjectApp::onStartGame(Engine& engine)
     scene.buildAll([this](entt::registry& reg) { onBeforeSync(reg); });
     lightIfDark(r, scene.registry());
     onSceneBuilt(engine, scene);
+    return true;
+}
+
+void ProjectApp::startScripts(Engine& engine)
+{
+    // Scripts last, so start() sees the fully built scene. The registry is the
+    // same table the scene was read with, so every component the application
+    // registers is reachable from Lua without a line of binding code.
+    script::ScriptConfig scriptConfig;
+    scriptConfig.root = mProject.scriptRoot;
+    scriptConfig.hotReload = true; // dev builds; see docs/scripting.md
+    mScripts.emplace(mWorld, scriptConfig, components());
+    mScripts->bindInput(engine.input());
+    mScripts->bindPhysics(physics());
+    mScripts->bindAudio(audio());
+
+    // Everything the script layer cannot answer for itself. The camera hooks
+    // read the controller rather than the renderer, because the controller is
+    // what actually decides where the eye is -- the renderer only receives it.
+    script::RuntimeHooks hooks;
+    hooks.loadScene = [this](const std::string& scene) {
+        // Recorded, not acted on: the caller is a script instance that the
+        // switch is about to destroy.
+        mPendingScene = scene;
+    };
+    hooks.quit = [&engine]() { engine.requestClose(); };
+    hooks.cameraPosition = [this]() { return mPlayer.eyePosition(); };
+    hooks.cameraForward = [this]() { return mPlayer.forward(); };
+    hooks.elapsed = [&engine]() { return engine.gameClock().elapsed(); };
+    hooks.setTimeScale = [&engine](float scale) {
+        engine.gameClock().setScale(scale);
+    };
+    hooks.timeScale = [&engine]() { return engine.gameClock().scale(); };
+    mScripts->bindRuntime(hooks);
+
+    // Inside the project's own working directory, so two games on one machine
+    // cannot overwrite each other's saves. A bare .map has no project, and
+    // saves beside the engine's other generated state.
+    const std::filesystem::path saveDir =
+        mProject.dir.empty() ? assets::project() / "artifacts"
+                             : mProject.workDir();
+    mScripts->bindSave((saveDir / "save.txt").string());
+
+    script::registerScriptCommands(devConsole(), *mScripts);
+}
+
+bool ProjectApp::onStartGame(Engine& engine)
+{
+    const std::string path = scenePath();
+    if (path.empty()) {
+        exitCode = 1;
+        return false;
+    }
+
+    Renderer& r = engine.renderer();
+    mBackend.emplace(r);
+    mWorld.attachRenderer(*mBackend);
+    mWorld.attachPhysics(physics());
+    mWorld.attachAudio(audio(), /*drivesListener=*/true);
+    onWorldAttached(engine);
+
+    if (!buildScene(engine, path)) {
+        exitCode = 1;
+        return false;
+    }
+    SceneRuntime& scene = *mScene;
 
     mPlayer.init(r, physics(), applyPlayFromOverride(playerStart(scene)), 6.0f,
                  0.0025f, glm::vec3(-500.0f), glm::vec3(500.0f));
@@ -225,16 +339,7 @@ bool ProjectApp::onStartGame(Engine& engine)
     }
     engine.input().setMouseGrab(!mCinematic);
 
-    // Scripts last, so start() sees the fully built scene. The registry is the
-    // same table the scene was read with, so every component the application
-    // registers is reachable from Lua without a line of binding code.
-    script::ScriptConfig scriptConfig;
-    scriptConfig.root = mProject.scriptRoot;
-    scriptConfig.hotReload = true; // dev builds; see docs/scripting.md
-    mScripts.emplace(mWorld, scriptConfig, components());
-    mScripts->bindInput(engine.input());
-    mScripts->bindPhysics(physics());
-    script::registerScriptCommands(devConsole(), *mScripts);
+    startScripts(engine);
 
     if (mRecording)
         engine.startRecording(*mRecording);
@@ -265,6 +370,11 @@ glm::vec3 ProjectApp::playerStart(const SceneRuntime& scene) const
 // clock".
 void ProjectApp::onPresent(const FrameContext& f)
 {
+    // A scene switch requested by a script last frame. First thing in the
+    // frame, so nothing else this frame touches the world that is about to be
+    // replaced.
+    applyPendingScene(f.engine);
+
     Renderer& r = f.engine.renderer();
     if (!mCinematic)
         mPlayer.update(f.engine.input(), r, f.dt);
@@ -277,6 +387,14 @@ void ProjectApp::onPresent(const FrameContext& f)
         mScripts->pollReload();
         mScripts->tick(f.dt);
     }
+
+    // Geometry for anything a script spawned this frame. Before the sync that
+    // materialises its node, so an entity built from Lua is visible on the
+    // frame it appears rather than the one after -- and so `world.spawn` plus
+    // an added PrimitiveMesh is a complete way to make a thing, which is what
+    // makes spawning useful at all from a script.
+    if (mScene)
+        mScene->resolveNewPrimitives(r);
 
     // Component-driven motion -- spin, light animation, lifetimes -- before the
     // sync that pushes it. This is what makes an authored scene move without a

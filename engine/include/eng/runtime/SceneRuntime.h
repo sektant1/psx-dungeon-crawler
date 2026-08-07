@@ -57,6 +57,11 @@ public:
     // change releases exactly the meshes that scene generated.
     void resolvePrimitives(Renderer& renderer);
 
+    // The same, for entities that have appeared since -- what a script spawns
+    // mid-level. Cheap enough to call every frame: it skips anything already
+    // holding geometry, so a level that spawns nothing pays one view walk.
+    void resolveNewPrimitives(Renderer& renderer);
+
     // Last step of the build. `before` runs against the registry with
     // everything loaded and resolved but nothing synced yet -- the seam for
     // turning an application's own authored components into engine ones (this

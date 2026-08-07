@@ -353,6 +353,11 @@ add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
                               engine/src/script/bind/BindComponents.cpp
                               engine/src/script/bind/BindWorld.cpp
                               engine/src/script/bind/BindInput.cpp
+                              engine/src/script/bind/BindAudio.cpp
+                              engine/src/script/bind/BindRuntime.cpp
+                              engine/src/script/bind/BindSave.cpp
+                              engine/src/script/bind/BindTimer.cpp
+                              engine/src/script/ScriptTimers.cpp
                               engine/src/script/bind/BindPhysics.cpp
                               engine/src/script/ScriptContactBridge.cpp
                               engine/src/script/ScriptConsole.cpp)

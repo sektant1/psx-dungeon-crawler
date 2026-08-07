@@ -185,15 +185,105 @@ error anywhere. It looks exactly like a broken renderer.
 5. F5, or `scene_cook <scene.scn> --assets <project-dir> --out <map>` then
    `raven_player <project-dir>`.
 
-## What M1 does not do yet
+## The Lua surface
+
+On top of the object model in [scripting.md](scripting.md) — `world`, `entity`,
+reflected components, `input`, `physics`, `event`, `log`, `vec3` — a project
+runtime binds these. Everything here is available in `raven_player`; a host
+that binds fewer subsystems (a headless test, a combat sim) still loads the
+same scripts, and an unavailable call logs and does nothing rather than being
+nil.
+
+### Scheduling
+
+```lua
+timer.after(1.5, function() game.load_scene("scenes/level2.scn") end)
+local id = timer.every(0.25, function() self.hp = self.hp + 1 end)
+timer.cancel(id)
+```
+
+Timers run on **game time**, so pausing or slowing the clock reaches every one
+of them at once — which is the reason they are not left to scripts to count
+themselves. A callback may cancel its own timer, or schedule more; one that
+errors is reported and dropped without stopping the others. A timer is not
+scoped to the entity that created it: the closure keeps its upvalues, and a
+handle re-checks validity, so one that outlives its entity is a safe no-op.
+
+### Audio
+
+```lua
+sound.play("audio/sfx/hit.wav", { gain_db = -3, pitch = 1.2, bus = "weapons" })
+sound.play_at("audio/sfx/step.wav", self.entity.position)
+local amb = sound.loop("audio/music/cave.ogg", { bus = "music" })
+amb.stop()
+sound.bus_volume("music", 0.4)
+```
+
+`play_at` implies spatialisation by having said where the sound is. Buses are
+named (`master`, `music`, `ambience`, `dialogue`, `weapons`, `sfx`, `ui`,
+`warnings`); an unknown name plays on `sfx` and warns, so a typo is audible
+rather than silent.
+
+### The runtime
+
+```lua
+game.load_scene("scenes/level2.scn")   -- deferred to the next frame
+game.quit()
+game.time()                            -- game seconds
+game.set_time_scale(0.25)              -- slows timers and physics with it
+camera.position(); camera.forward()
+```
+
+`load_scene` names the scene the way an author does; the runtime knows where
+the cooked form lives. It is applied at the top of the next frame, never
+inline: the script asking for it is running on an instance the switch is about
+to destroy. A scene that will not load leaves the player where they are, with
+an error naming the file.
+
+The switch destroys exactly the outgoing scene's entities — they carry a
+lifetime group — so anything spawned outside it survives. The camera is
+read-only: it belongs to whatever drives it, and a script that could move it
+would fight that thing every frame.
+
+### Saving
+
+```lua
+save.set("checkpoint", 3); save.set("name", "ilsabet"); save.set("open", true)
+local n = save.get("checkpoint", 0)   -- default for missing OR wrong-typed
+save.commit()                          -- explicit; writes to disk
+save.clear()                           -- new game
+```
+
+Numbers, booleans and strings, written as tab-separated plain text inside the
+project's `.raven/` — hand-editable, because the first thing anybody does with
+a save system is corrupt a save and need to look at it. `commit` writes through
+a temporary and renames, so a crash mid-write leaves the previous save intact.
+
+### Spawning things that are visible
+
+`world.spawn` gives a bare entity; add components to make it something:
+
+```lua
+local e = world.spawn("crate")
+e:add("Transform"); e.position = vec3(0, 1, -4)
+e:add("PrimitiveMesh"); e:add("MeshRenderer")
+```
+
+The runtime resolves geometry for primitives added after load, once per frame,
+so an entity built this way appears on the frame it is created. Changing a
+`PrimitiveMesh` afterwards keeps the old geometry — clear `MeshRenderer.mesh`
+to ask for it again.
+
+## What is still missing
 
 Named so nobody looks for them:
 
 - **Project-defined components.** The player registers the engine set only, and
-  the editor's add-component menu still offers this game's markers.
+  the editor's add-component menu still offers this game's markers. This is the
+  largest remaining piece and is its own milestone.
 - **Prefabs / scene instancing.** A scene cannot yet be a node inside another.
+- **UI from Lua.** No HUD or menu drawing; gameplay must not depend on ImGui,
+  so this needs the engine's own UI canvas exposed rather than ImGui bound.
 - **In-editor script editing.** Scripts are files the editor references by path.
 - **Export.** Running a project means running `raven_player` against a
   directory; there is no distributable yet.
-- **Lua breadth.** World, entity, reflected components, input, math and physics
-  are bound. Audio, UI, scene change, spawn/destroy, timers and camera are not.

@@ -95,6 +95,30 @@ private:
     // The cooked map this app opens: the project's, unless RAVEN_PLAY_MAP
     // names one. Reported as an absolute path, empty when it cannot be found.
     std::string scenePath() const;
+    // The cooked form of an authored path ("scenes/level2.scn"), as
+    // game.load_scene names it.
+    std::string cookedPathFor(const std::string& scene) const;
+
+    // Everything a scene needs after it is read: meshes, primitives, the build
+    // hook, the default light. Shared by the first load and every switch, so a
+    // scene reached through a door is built exactly like the one the project
+    // started on.
+    bool buildScene(Engine& engine, const std::string& path);
+    // Constructs the script host over the current world and binds everything
+    // it is allowed to reach. Called after every scene build, because a host
+    // binds to a World for its whole life and a scene switch replaces the
+    // contents of that world under it.
+    void startScripts(Engine& engine);
+    // Acts on a pending game.load_scene. Runs at the top of a frame, never from
+    // inside script dispatch: a script asking for a new level is running on an
+    // instance that the switch is about to destroy.
+    void applyPendingScene(Engine& engine);
+
+    // The lifetime group the current scene's entities carry, so a switch
+    // destroys exactly them. Starts at 1 because group 0 means "ungrouped" and
+    // World::destroyGroup rejects it -- it would take the player with it.
+    uint32_t mSceneGroup = 1;
+    std::string mPendingScene; // non-empty between the request and the switch
 
     Project mProject;
     ecs::World mWorld;

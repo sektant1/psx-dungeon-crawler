@@ -174,6 +174,17 @@ if(BUILD_TESTING)
     INCLUDES engine/include engine/src
     LIBS eng_script glm::glm EnTT::EnTT)
 
+  # Scheduling, and the runtime surface a game is written against.
+  eng_add_test(script_timer
+    SOURCES engine/tests/ScriptTimerTests.cpp
+    INCLUDES engine/include engine/src
+    LIBS eng_script glm::glm EnTT::EnTT)
+
+  eng_add_test(script_runtime_api
+    SOURCES engine/tests/ScriptRuntimeApiTests.cpp
+    INCLUDES engine/include engine/src
+    LIBS eng_script glm::glm EnTT::EnTT)
+
   eng_add_test(script_binding
     SOURCES engine/tests/ScriptBindingTests.cpp
     INCLUDES engine/include engine/src

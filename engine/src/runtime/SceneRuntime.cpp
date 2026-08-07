@@ -44,6 +44,12 @@ void SceneRuntime::resolvePrimitives(Renderer& renderer)
     ecs::resolvePrimitiveMeshes(mWorld.registry(), renderer, mPrimitives);
 }
 
+void SceneRuntime::resolveNewPrimitives(Renderer& renderer)
+{
+    ecs::resolvePrimitiveMeshes(mWorld.registry(), renderer, mPrimitives,
+                                /*onlyUnresolved=*/true);
+}
+
 void SceneRuntime::buildAll(const BuildHook& before)
 {
     if (before)
