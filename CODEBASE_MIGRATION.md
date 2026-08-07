@@ -210,26 +210,46 @@ Three properties are shipped results. The plan is built around preserving them.
    the rendered image; `make visual-test` is how that is proven." Every phase
    below that touches rendering ends with a golden-image comparison.
 
-   ⚠ **`make visual-test` does not currently work, and this blocks Phase 5.**
-   The harness runs the game under `xvfb-run` with `LIBGL_ALWAYS_SOFTWARE=1`
-   and a GLX-extended X server — a setup built for the OGRE/GL renderer. Xvfb
-   offers no DRI3, so the Vulkan backend finds "No queue capable of present
-   operations", fails device selection and segfaults (exit 139). Runs archived
-   under `artifacts/visual/` show the identical failure on 2026-08-04, so this
-   predates the migration. **Repairing it is a Phase 0 task**, not a Phase 5
-   discovery: the plan's single most important safety net is currently absent.
+   ⚠ **This safety net did not exist, in two separate ways.** Both were found
+   while verifying Phase 0.
 
-   What does work, and what was used to verify Phase 0, is capturing against
-   the real display, where there is a working present queue:
+   **(a) The harness could not run — fixed.** It launched the game under
+   `xvfb-run` with `LIBGL_ALWAYS_SOFTWARE=1` and a GLX-extended X server, a
+   setup built for the OGRE/GL renderer. Xvfb offers no DRI3, so Vulkan found
+   "No queue capable of present operations" and segfaulted. It reached that
+   path because `_display_usable()` required `xdpyinfo` or `glxinfo` to be
+   installed — neither is, here — so `auto` reported the working display as
+   unusable and fell through to Xvfb every time. Fixed: the probe now tests
+   for a display rather than for optional GL tooling, the x11 pin is gone
+   (Wayland is fine for a Vulkan surface), and the Xvfb path now demands a
+   software ICD and *says so* instead of crashing.
+
+   **(b) It never compared anything — now it can.** `visual_test.py` captured
+   a PNG, checked it had a PNG header, and reported `ok`. There was no golden,
+   no comparison, no pixel assertion anywhere in the tree. `CLAUDE.md` cites
+   it as the proof the PSX look is unchanged; it only ever proved the game did
+   not crash. `tools/image_diff.py` now provides that comparison (a minimal
+   PNG decoder over zlib + numpy, because Pillow is not installed and the
+   gate should not be the most fragile thing in the build).
+
+   **(c) The gate cannot arm yet: captures are not reproducible.** Two
+   consecutive runs at the same `--seed` and `--fixed-dt` differ in **65% of
+   pixels** — the camera has advanced further and exposure differs. Cause:
+   `Engine::renderFrame` returns early during the loading phase *without*
+   incrementing `frameCount`, while the simulation keeps advancing, so a
+   variable number of load frames (disk cache, shader warm-up) leaves a
+   variable world state at "frame 90". Until that is fixed, a golden would
+   fail on the very next run and train everyone to ignore the gate — so the
+   comparison stays unarmed unless a golden is placed deliberately with
+   `--adopt-golden`.
+
+   **This is now the top of the queue.** Determinism is a prerequisite for the
+   golden gate, which is a prerequisite for Phase 5. Meanwhile, verify by
+   capturing and *looking*:
 
    ```sh
    RAVEN_SCREENSHOT=/tmp/x.png RAVEN_SCREENSHOT_FRAME=120 ./build/game
    ```
-
-   The fix is likely to be either a headless Vulkan path (lavapipe /
-   `VK_ICD_FILENAMES` pointing at a software ICD) or dropping Xvfb in favour of
-   an offscreen swapchain. Until one exists, "the image is unchanged" is an
-   eyeball claim rather than a test.
 2. **`raven_player` links nothing under `game/`** — enforced by the
    `player_purity` ctest reading the built binary's symbol table. This is
    already the "engine is reusable" invariant in miniature; the migration

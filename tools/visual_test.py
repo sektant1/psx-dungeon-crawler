@@ -44,6 +44,9 @@ class VisualResult:
     environment: dict[str, str] = dataclasses.field(default_factory=dict)
     artifacts: list[dict[str, Any]] = dataclasses.field(default_factory=list)
     metrics: dict[str, Any] = dataclasses.field(default_factory=dict)
+    # Things the operator should read even on a pass -- notably "a new golden
+    # was adopted, so nothing was actually compared this run".
+    notes: list[str] = dataclasses.field(default_factory=list)
     capabilities: dict[str, Any] = dataclasses.field(default_factory=dict)
     errors: list[VisualError] = dataclasses.field(default_factory=list)
 
@@ -62,6 +65,7 @@ class VisualResult:
             "environment": self.environment,
             "artifacts": self.artifacts,
             "metrics": self.metrics,
+            "notes": self.notes,
             "capabilities": self.capabilities,
             "errors": [error.as_dict() for error in self.errors],
         }
@@ -77,9 +81,13 @@ def deterministic_environment(
 ) -> dict[str, str]:
     env = dict(base)
     env.pop("RAVEN_FULLSCREEN", None)
+    # SDL_VIDEODRIVER is deliberately NOT pinned to x11 here. That was needed
+    # when OGRE created its render window against an X11 handle; the Vulkan
+    # backend builds its surface from the SDL window and is happy on Wayland,
+    # and pinning x11 breaks a session with no XWayland. The Xvfb path sets it
+    # itself, where x11 is the only correct answer.
     env.update(
         {
-            "SDL_VIDEODRIVER": "x11",
             "RAVEN_FIXED_DT": fixed_dt,
             "RAVEN_GEN_SEED": str(seed),
             "RAVEN_SCREENSHOT_FRAME": str(max(1, frame)),
@@ -165,11 +173,23 @@ def _capability(command: str) -> dict[str, Any]:
 
 
 def _display_usable(env: dict[str, str]) -> bool:
-    if not env.get("DISPLAY"):
+    """Is there a compositor/X server this run can present to?
+
+    Deliberately does NOT require xdpyinfo or glxinfo. Those are optional
+    packages, and when neither is installed this returned False on a perfectly
+    good display -- so `auto` fell through to Xvfb, which cannot host a Vulkan
+    swapchain, and the run segfaulted with an error about DRI3 that named
+    nothing about the real cause. Neither tool is installed on this machine.
+
+    A set DISPLAY or WAYLAND_DISPLAY is the actual precondition; SDL picks the
+    backend from there. Where a probe happens to exist it is still used, but
+    only to *reject* a display that is set and broken.
+    """
+    if not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
         return False
-    probe = shutil.which("xdpyinfo") or shutil.which("glxinfo")
-    if not probe:
-        return False
+    probe = shutil.which("xdpyinfo")
+    if not probe or not env.get("DISPLAY"):
+        return True
     try:
         return (
             subprocess.run(
@@ -184,6 +204,20 @@ def _display_usable(env: dict[str, str]) -> bool:
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
+
+
+def _software_vulkan_icd() -> str | None:
+    """A software Vulkan ICD (lavapipe), if one is installed.
+
+    Xvfb has no DRI3, so a hardware ICD reports "No queue capable of present
+    operations" there and device selection fails. A headless run therefore
+    needs a software ICD; without one, Xvfb is not a usable fallback for this
+    renderer at all.
+    """
+    for path in Path("/usr/share/vulkan/icd.d").glob("*.json"):
+        if any(tag in path.name for tag in ("lvp", "lavapipe", "swrast")):
+            return str(path)
+    return None
 
 
 def probe_capabilities(build_dir: Path) -> dict[str, Any]:
@@ -219,6 +253,72 @@ def probe_capabilities(build_dir: Path) -> dict[str, Any]:
     }
 
 
+def _compare_to_golden(args, shot: Path, result) -> "VisualError | None":
+    """The regression gate: is this frame the frame we shipped?
+
+    Until this existed, `make visual-test` captured a screenshot, checked it
+    was a well-formed PNG, and reported ok -- so it proved the game did not
+    crash and nothing whatsoever about the image, while CLAUDE.md cited it as
+    the proof that the PSX look is unchanged.
+
+    A missing golden does NOT auto-adopt, and that is deliberate. The capture
+    is not yet reproducible: two consecutive runs at the same --seed and
+    --fixed-dt differ in ~65% of pixels, because the loading phase returns
+    early from renderFrame without incrementing frameCount while the
+    simulation keeps advancing -- so a variable number of load frames leaves a
+    variable world state at "frame 90". Auto-adopting under those conditions
+    mints a golden that fails on the very next run and trains everyone to
+    ignore the gate.
+
+    So: the gate arms itself only when a golden is deliberately placed
+    (--adopt-golden), and until the determinism bug is fixed it stays
+    unarmed. See CODEBASE_MIGRATION.md §2.
+    """
+    if getattr(args, "no_golden", False):
+        return None
+
+    golden_dir = Path(args.golden_dir)
+    golden = golden_dir / f"{args.golden_name}.png"
+
+    if getattr(args, "adopt_golden", False):
+        golden_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(shot, golden)
+        result.notes.append(
+            f"adopted a new golden: {golden}. Nothing was compared this run."
+        )
+        return None
+
+    if not golden.exists():
+        result.notes.append(
+            f"no golden at {golden}, so the image was NOT checked. Once "
+            f"captures are reproducible, arm the gate with --adopt-golden."
+        )
+        return None
+
+    try:
+        import image_diff
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import image_diff
+
+    try:
+        diff = image_diff.compare(golden, shot)
+    except Exception as exc:  # a decode failure must not read as a pass
+        return VisualError("golden_unreadable", f"could not compare: {exc}", str(golden))
+
+    result.metrics.update(diff.as_dict())
+    if diff.max_channel <= args.golden_tolerance and diff.same_shape:
+        return None
+
+    return VisualError(
+        "image_regression",
+        f"the rendered image changed against {golden}: {diff.describe()}. "
+        f"If the change is intended, delete the golden and re-run to adopt the "
+        f"new one, or pass --golden-tolerance.",
+        str(shot),
+    )
+
+
 def _run_dir(root: Path, operation: str) -> Path:
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     path = (root / f"{stamp}-{operation}").resolve()
@@ -235,13 +335,31 @@ def _display_prefix(env: dict[str, str], mode: str = "auto") -> list[str]:
         return []
     xvfb_run = shutil.which("xvfb-run")
     if not xvfb_run:
-        raise RuntimeError("No usable X11 display and xvfb-run is not installed")
-    env.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
+        raise RuntimeError("No usable display and xvfb-run is not installed")
+
+    # The renderer is Vulkan. Xvfb offers no DRI3, so a hardware ICD finds no
+    # present queue and the process dies during device selection -- which is
+    # what made this harness fail silently for weeks. Point it at a software
+    # ICD, or say plainly that this cannot work.
+    icd = _software_vulkan_icd()
+    if not icd:
+        raise RuntimeError(
+            "Headless capture needs a software Vulkan ICD: Xvfb has no DRI3, so "
+            "the hardware driver reports 'No queue capable of present "
+            "operations' and the renderer aborts. Install Mesa's lavapipe "
+            "(Arch: vulkan-swrast, Debian/Ubuntu: mesa-vulkan-drivers) or run "
+            "with --display-mode current on a machine that has a display.\n"
+            "Note this is NOT the old GL fallback: LIBGL_ALWAYS_SOFTWARE does "
+            "nothing for a Vulkan renderer."
+        )
+    env["VK_ICD_FILENAMES"] = icd
+    env["VK_DRIVER_FILES"] = icd  # newer loaders read this name instead
+    env["SDL_VIDEODRIVER"] = "x11"  # Xvfb is an X server; here this is correct
     return [
         xvfb_run,
         "-a",
         "-s",
-        "-screen 0 1280x720x24 +extension GLX +render -noreset",
+        "-screen 0 1280x720x24 -noreset",
     ]
 
 
@@ -341,7 +459,14 @@ def run_visual(args: argparse.Namespace, result: VisualResult) -> None:
         key: env[key]
         for key in sorted(env)
         if key.startswith("RAVEN_")
-        or key in {"DISPLAY", "SDL_VIDEODRIVER", "LIBGL_ALWAYS_SOFTWARE"}
+        or key
+        in {
+            "DISPLAY",
+            "WAYLAND_DISPLAY",
+            "SDL_VIDEODRIVER",
+            "VK_ICD_FILENAMES",
+            "VK_DRIVER_FILES",
+        }
     }
     try:
         completed = _run_process(command, cwd=build_dir, env=env, timeout=args.timeout)
@@ -364,6 +489,10 @@ def run_visual(args: argparse.Namespace, result: VisualResult) -> None:
             result.fail(error)
             return
         result.artifacts.append(_artifact("screenshot", output))
+        error = _compare_to_golden(args, output, result)
+        if error:
+            result.fail(error)
+            return
     elif args.operation == "benchmark":
         metrics = parse_frame_stats(completed.stdout + completed.stderr)
         if not metrics:
@@ -408,6 +537,32 @@ def build_parser() -> argparse.ArgumentParser:
             help="which built executable to drive (game, scene_editor, psx_demo)",
         )
         child.add_argument("--scene", help=".scn to open (scene_editor only)")
+        # The regression gate. A capture is compared against a committed
+        # golden; a missing golden is adopted (loudly) rather than failed.
+        child.add_argument(
+            "--golden-dir", default=os.environ.get("GOLDEN_DIR", "artifacts/visual/golden")
+        )
+        child.add_argument(
+            "--golden-name",
+            default=os.environ.get("GOLDEN_NAME", "game"),
+            help="which golden this run is compared against (one per scene/app)",
+        )
+        child.add_argument(
+            "--golden-tolerance",
+            type=int,
+            default=int(os.environ.get("GOLDEN_TOLERANCE", "0")),
+            help="largest per-channel delta treated as unchanged (default 0: exact)",
+        )
+        child.add_argument(
+            "--no-golden",
+            action="store_true",
+            help="capture only; do not compare (use when deliberately iterating)",
+        )
+        child.add_argument(
+            "--adopt-golden",
+            action="store_true",
+            help="overwrite the golden with this capture, arming the gate",
+        )
         child.add_argument("--frames", type=int, default=120)
         child.add_argument("--timeout", type=int, default=180)
         child.add_argument(
