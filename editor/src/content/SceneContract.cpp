@@ -1,5 +1,7 @@
 #include <editor/content/SceneContract.h>
 
+#include <algorithm>
+
 
 namespace game::content {
 namespace {
@@ -135,6 +137,13 @@ ContractReport sceneContract(const SceneDocument& document)
     // there is a player spawn is what decides Empty from GameDriven.
     int spawns = 0, listeners = 0, keyLights = 0, exits = 0;
     AuthorId spawnId, listenerId, keyLightId, exitId;
+    // A first-person rig fills the Spawn role only when nothing is marked as
+    // one. The two live on different entities often enough that counting both
+    // reported two spawns for a perfectly ordinary level -- see the same rule,
+    // and the reason for it, in SceneValidate.
+    const bool hasMarkedSpawn =
+        std::any_of(document.entities.begin(), document.entities.end(),
+                    [](const Entity& e) { return e.playerSpawn; });
     for (const Entity& e : document.entities) {
         // A player spawn, or an active first-person rig -- which says the same
         // thing and more. `first_person` states how the player moves AND, by
@@ -148,7 +157,8 @@ ContractReport sceneContract(const SceneDocument& document)
         //
         // A parked rig (active = false) does not count, for the same reason a
         // parked camera does not: it is kept, not used.
-        const bool firstPersonSpawn = e.firstPerson && e.firstPerson->active;
+        const bool firstPersonSpawn =
+            !hasMarkedSpawn && e.firstPerson && e.firstPerson->active;
         if (e.playerSpawn || firstPersonSpawn) {
             ++spawns;
             spawnId = e.id;

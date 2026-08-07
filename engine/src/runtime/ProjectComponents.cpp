@@ -232,6 +232,14 @@ bool ProjectComponents::load(const fs::path& file, std::string& error)
                 for (std::size_t axis = 0; axis < 3 && axis < v->size(); ++axis)
                     field.vec[int(axis)] =
                         float((*v)[axis].value_or(0.0));
+            } else if (const toml::value<bool>* b =
+                           (*spec)["default"].as_boolean()) {
+                // Asked for as a bool, not as a double. toml++ refuses to
+                // convert a boolean node to a floating-point one and hands back
+                // the fallback instead -- so reading every default as a double
+                // made `default = true` silently load as false, with no
+                // diagnostic anywhere.
+                field.number = b->get() ? 1.0 : 0.0;
             } else {
                 field.number = (*spec)["default"].value_or(0.0);
             }

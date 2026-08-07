@@ -30,10 +30,12 @@ bool SceneRuntime::load(const std::string& path)
     return true;
 }
 
-void SceneRuntime::resolveMeshes(const LoadMeshFn& loadFn)
+void SceneRuntime::resolveMeshes(const LoadMeshFn& loadFn, bool onlyUnresolved)
 {
     entt::registry& reg = mWorld.registry();
     for (const entt::entity e : reg.view<ecs::MeshRenderer>()) {
+        if (onlyUnresolved && reg.get<ecs::MeshRenderer>(e).mesh.valid())
+            continue;
         if (const auto* src = reg.try_get<ecs::MeshSource>(e))
             reg.get<ecs::MeshRenderer>(e).mesh = loadFn(src->path);
     }

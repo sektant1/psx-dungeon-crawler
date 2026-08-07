@@ -109,6 +109,57 @@ return T
     require(!host.luaGlobalBool("has_missing"), "has() is false for unset keys");
 }
 
+// Large numbers must survive a commit/load: the default ostream precision is
+// six significant figures, which turned 1234567 into 1234570.
+static void testSavePrecisionAndTypes()
+{
+    const fs::path file = dir() / "precision.txt";
+    std::error_code ec;
+    fs::remove(file, ec);
+
+    const std::string writer = writeScript("precise.lua", R"(
+local T = {}
+function T:start()
+  save.set("score", 1234567)
+  save.set("when", 1723058399)
+  save.set("label", "seven")
+  save.commit()
+end
+return T
+)");
+    {
+        ecs::World world;
+        ScriptHost host(world, ScriptConfig{}, ecs::engineRegistry());
+        host.bindSave(file.string());
+        attach(world, world.create("thing"), writer);
+        host.tick(0.0f);
+    }
+
+    const std::string reader = writeScript("imprecise.lua", R"(
+local T = {}
+function T:start()
+  score = save.get("score", 0)
+  when = save.get("when", 0)
+  -- A key stored as a string, asked for as a number: the documented answer is
+  -- the default, not the string.
+  mismatched = save.get("label", -1)
+end
+return T
+)");
+    ecs::World world;
+    ScriptHost host(world, ScriptConfig{}, ecs::engineRegistry());
+    host.bindSave(file.string());
+    attach(world, world.create("thing"), reader);
+    host.tick(0.0f);
+
+    require(host.luaGlobalNumber("score") == 1234567.0,
+            "a seven-digit number round-trips exactly");
+    require(host.luaGlobalNumber("when") == 1723058399.0,
+            "and a ten-digit one");
+    require(host.luaGlobalNumber("mismatched") == -1.0,
+            "a key of the wrong type reads as the default");
+}
+
 static void testSaveClear()
 {
     const fs::path file = dir() / "clear.txt";
@@ -210,6 +261,7 @@ return T
 int main()
 {
     testSaveRoundTrip();
+    testSavePrecisionAndTypes();
     testSaveClear();
     testRuntimeHooks();
     testUnboundHooksAreSafe();

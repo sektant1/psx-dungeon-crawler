@@ -221,6 +221,15 @@ void ProjectApp::applyPendingScene(Engine& engine)
         return;
     }
 
+    // The rig's nodes are the renderer's, not the world's: it creates them
+    // with createNode directly, so destroyGroup above did not touch them and
+    // init() below would overwrite the handles and orphan them under the root.
+    // Ten door transitions would leave twenty nodes nothing can ever reach.
+    //
+    // detach(), not forgetNodes(): the nodes are still alive here. forgetNodes
+    // is for the other case -- a scene clear that already destroyed them, which
+    // is what game/src/PlayerSystem.cpp is guarding against.
+    mPlayer.cameraRig().detach(engine.renderer());
     mPlayer.init(engine.renderer(), physics(), playerStart(*mScene), 6.0f,
                  0.0025f, glm::vec3(-500.0f), glm::vec3(500.0f));
     adoptSceneCamera(engine);
@@ -248,6 +257,24 @@ void ProjectApp::onLoadGame(Engine& engine, LoadPlan& plan)
     });
 }
 
+MeshHandle ProjectApp::loadSceneMesh(Renderer& r, const std::string& path) const
+{
+    // The editor stores absolute .obj paths in MeshSource. Prefer the stored
+    // path as-is; fall back to the resolver, which is what makes a portable
+    // scene portable -- and what lets a project mount its own meshes over the
+    // builtin ones.
+    ModelImportOptions legacyImport;
+    legacyImport.pivot = PivotMode::Source;
+    std::error_code ec;
+    if (std::filesystem::exists(path, ec))
+        return r.loadMesh(path, legacyImport);
+    const std::filesystem::path alt = assets::resolve(path);
+    if (!alt.empty())
+        return r.loadMesh(alt.string(), legacyImport);
+    log::error("ProjectApp: mesh not found: %s", path.c_str());
+    return r.prototypeMesh(path);
+}
+
 bool ProjectApp::buildScene(Engine& engine, const std::string& path)
 {
     Renderer& r = engine.renderer();
@@ -262,17 +289,8 @@ bool ProjectApp::buildScene(Engine& engine, const std::string& path)
     // path as-is; fall back to the resolver, which is what makes a portable
     // scene portable -- and what lets a project mount its own meshes over the
     // builtin ones.
-    ModelImportOptions legacyImport;
-    legacyImport.pivot = PivotMode::Source;
-    scene.resolveMeshes([&r, legacyImport](const std::string& mesh) -> MeshHandle {
-        std::error_code ec;
-        if (std::filesystem::exists(mesh, ec))
-            return r.loadMesh(mesh, legacyImport);
-        const std::filesystem::path alt = assets::resolve(mesh);
-        if (!alt.empty())
-            return r.loadMesh(alt.string(), legacyImport);
-        log::error("ProjectApp: mesh not found: %s", mesh.c_str());
-        return r.prototypeMesh(mesh);
+    scene.resolveMeshes([this, &r](const std::string& mesh) {
+        return loadSceneMesh(r, mesh);
     });
 
     scene.resolvePrimitives(r);
@@ -322,6 +340,14 @@ void ProjectApp::startScripts(Engine& engine)
         return group;
     };
     hooks.despawn = [this](uint32_t group) {
+        // Only what spawn_scene handed out. The scene's own group comes from
+        // the same allocator, so a script holding a stale handle -- or simply
+        // guessing -- could otherwise tear the level down with no error.
+        if (std::find(mSpawnedGroups.begin(), mSpawnedGroups.end(), group) ==
+            mSpawnedGroups.end()) {
+            log::warn("Script: game.despawn(%u) is not a live spawn", group);
+            return;
+        }
         mWorld.destroyGroup(group);
         mSpawnedGroups.erase(
             std::remove(mSpawnedGroups.begin(), mSpawnedGroups.end(), group),
@@ -473,8 +499,14 @@ void ProjectApp::onPresent(const FrameContext& f)
     // frame it appears rather than the one after -- and so `world.spawn` plus
     // an added PrimitiveMesh is a complete way to make a thing, which is what
     // makes spawning useful at all from a script.
-    if (mScene)
+    if (mScene) {
         mScene->resolveNewPrimitives(r);
+        mScene->resolveMeshes(
+            [this, &r](const std::string& mesh) {
+                return loadSceneMesh(r, mesh);
+            },
+            /*onlyUnresolved=*/true);
+    }
 
     // Component-driven motion -- spin, light animation, lifetimes -- before the
     // sync that pushes it. This is what makes an authored scene move without a

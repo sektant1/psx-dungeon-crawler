@@ -162,6 +162,24 @@ int main()
                 "a scene with a first-person rig is playable on its own");
     }
 
+    // A marked spawn AND a rig on a DIFFERENT entity is one spawn, not two.
+    //
+    // Levels do this routinely -- the rig carries the movement tuning, the
+    // marker says where the player stands -- and counting both reported two
+    // spawns, which is an Error, which made the level refuse to cook.
+    {
+        SceneDocument document;
+        Entity& spawn = add(document, "spawn");
+        spawn.playerSpawn = true;
+        Entity& rig = add(document, "rig");
+        rig.firstPerson = FirstPersonAuthor{};
+
+        const ContractReport report = sceneContract(document);
+        require(roleOf(report, SceneRole::Spawn).count == 1,
+                "a marker and a rig on separate entities are one spawn");
+        require(report.playable, "so the level is playable");
+    }
+
     // --- over-filling: two views is legal, two listeners is not ------------
     {
         SceneDocument document;

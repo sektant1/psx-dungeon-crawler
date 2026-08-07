@@ -62,7 +62,13 @@ bool directoryIsEmpty(const fs::path& dir)
     std::error_code ec;
     if (!fs::exists(dir, ec))
         return true;
-    return fs::directory_iterator(dir, ec) == fs::directory_iterator();
+    const fs::directory_iterator it(dir, ec);
+    // An iterator that failed to construct compares equal to the end iterator,
+    // so ignoring `ec` here reported "empty" for a directory that could not be
+    // read at all -- which is exactly when the guard this feeds matters most.
+    if (ec)
+        return false;
+    return it == fs::directory_iterator();
 }
 
 // Copies a directory tree, counting what it moved. Missing sources are not an
@@ -251,7 +257,25 @@ ExportReport exportProject(const ExportOptions& options)
             report.skippedScenes.push_back(logical + ": " + error);
             continue;
         }
-        const fs::path map = cookedOut / (scene.stem().string() + ".map");
+        // Named from the path under scenes/, not just the stem: `hub/main.scn`
+        // and `crypt/main.scn` both end in "main", and a stem-only name had the
+        // second silently overwrite the first while the report claimed both
+        // shipped. Separators become '_' so the result is one flat directory,
+        // which is what the runtime's cookedPathFor expects.
+        std::string cookedName =
+            fs::relative(scene, project.dir / "scenes", ec).generic_string();
+        if (ec || cookedName.empty())
+            cookedName = scene.stem().string();
+        else
+            cookedName = cookedName.substr(0, cookedName.rfind('.'));
+        std::replace(cookedName.begin(), cookedName.end(), '/', '_');
+        const fs::path map = cookedOut / (cookedName + ".map");
+        if (fs::exists(map, ec)) {
+            report.skippedScenes.push_back(
+                logical + ": would overwrite " + cookedName +
+                ".map, already cooked from another scene");
+            continue;
+        }
         if (!game::content::cookToMap(document, catalog, map.string(), error,
                                       project.dir.string())) {
             report.skippedScenes.push_back(logical + ": " + error);

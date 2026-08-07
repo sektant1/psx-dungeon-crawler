@@ -106,6 +106,10 @@ private:
     // scene reached through a door is built exactly like the one the project
     // started on.
     bool buildScene(Engine& engine, const std::string& path);
+    // How a MeshSource path becomes a mesh. One definition, used by the load
+    // pass and by the per-frame pass that catches what a script spawned --
+    // those must agree, or a spawned scene looks different from a placed one.
+    MeshHandle loadSceneMesh(Renderer& renderer, const std::string& path) const;
     // Constructs the script host over the current world and binds everything
     // it is allowed to reach. Called after every scene build, because a host
     // binds to a World for its whole life and a scene switch replaces the

@@ -50,7 +50,13 @@ public:
     bool load(const std::string& path);
 
     using LoadMeshFn = std::function<MeshHandle(const std::string& path)>;
-    void resolveMeshes(const LoadMeshFn& loadFn);
+    // `onlyUnresolved` skips entities that already hold a mesh. Off for the
+    // load pass; on for the per-frame pass, which is what gives geometry to a
+    // scene instantiate() merged in after the level was built. Without it a
+    // spawned scene's file-based meshes never resolved at all -- only its
+    // primitives did, so game.spawn_scene drew nothing for anything authored
+    // with `mesh = { path = ... }`.
+    void resolveMeshes(const LoadMeshFn& loadFn, bool onlyUnresolved = false);
 
     // The generated half of the same job: entities carrying a PrimitiveMesh
     // get geometry built rather than loaded. The cache lives here so a scene

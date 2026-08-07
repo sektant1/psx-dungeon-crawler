@@ -87,6 +87,7 @@ id = 64
 fields.max = { type = "float", default = 100.0, min = 0.0, max = 999.0 }
 fields.current = { type = "float", default = 100.0 }
 fields.invulnerable = { type = "bool", default = false }
+fields.alive = { type = "bool", default = true }
 
 [component.Team]
 id = 65
@@ -105,7 +106,7 @@ fields.colour = { type = "colour", default = [1.0, 0.5, 0.25] }
 
     const ecs::ComponentType& health = typeNamed(registry, "Health");
     require(health.stableTypeId == 64, "the declared id is used");
-    require(health.fieldCount == 3, "every field is reflected");
+    require(health.fieldCount == 4, "every field is reflected");
 
     // Adding one gives it the declared defaults, which is what makes the
     // inspector's "add component" produce something sensible.
@@ -117,6 +118,10 @@ fields.colour = { type = "colour", default = [1.0, 0.5, 0.25] }
             "a float default is honoured");
     require(fieldValue<uint8_t>(health, reg, e, "invulnerable") == 0,
             "and a bool one");
+    // `default = true` used to load as false: toml++ refuses to read a boolean
+    // node as a double, so asking for one handed back the fallback.
+    require(fieldValue<uint8_t>(health, reg, e, "alive") == 1,
+            "a bool default of true is honoured, not silently false");
 
     // Author a value the way the inspector would: straight into the bytes at
     // the reflected offset.

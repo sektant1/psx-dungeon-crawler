@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <cstdlib>
 #include <map>
 #include <memory>
@@ -100,7 +101,13 @@ bool commit(Store& store)
             switch (v.type) {
             case Value::Type::Bool:   out << (v.boolean ? '1' : '0'); break;
             case Value::Type::String: out << v.text; break;
-            case Value::Type::Number: out << v.number; break;
+            case Value::Type::Number:
+                // Enough digits to round-trip a double exactly. The default is
+                // six significant figures, which turned save.set("score",
+                // 1234567) into 1.23457e+06 and read it back as 1234570 --
+                // silently wrong for scores, ids, timestamps and positions.
+                out << std::setprecision(17) << v.number;
+                break;
             }
             out << '\n';
         }
@@ -139,6 +146,20 @@ void bindSave(sol::state& lua, const std::string& path)
         sol::state_view lv(ts);
         const auto it = store->values.find(key);
         if (it == store->values.end())
+            return fallback;
+        // A stored value of a different type than the caller expects reads as
+        // "not set". A save written by an older build that put a number where
+        // this one wants a string would otherwise hand Lua a number, and the
+        // concat one line later would be a runtime error in somebody's game.
+        // The fallback's type is the question being asked.
+        const bool wants =
+            (fallback.is<bool>() && it->second.type == Value::Type::Bool) ||
+            (fallback.is<std::string>() &&
+             it->second.type == Value::Type::String) ||
+            (!fallback.is<bool>() && !fallback.is<std::string>() &&
+             fallback.is<double>() && it->second.type == Value::Type::Number) ||
+            !fallback.valid() || fallback == sol::lua_nil;
+        if (!wants)
             return fallback;
         switch (it->second.type) {
         case Value::Type::Bool:

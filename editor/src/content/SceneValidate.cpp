@@ -349,16 +349,24 @@ std::vector<Issue> validate(const SceneDocument& document,
         }
     }
 
+    // An active first-person rig is a spawn: it says how the player moves and,
+    // by its transform, where they stand, which is what
+    // eng::runtime::SceneRuntime::playerSpawn reads. It counts because
+    // PlayerSpawn is one of THIS game's markers, so a scene authored in a
+    // project -- with no game components in it at all -- has no other way to
+    // say where the player starts.
+    //
+    // A rig only counts when the document has no PlayerSpawn at all. The two
+    // are routinely on DIFFERENT entities (see MapRuntime::playerRig: "a level
+    // that puts the rig on its player spawn instead should still be read"), and
+    // counting both made such a level report two spawns and fail to cook.
+    const bool hasMarkedSpawn =
+        std::any_of(document.entities.begin(), document.entities.end(),
+                    [](const Entity& e) { return e.playerSpawn; });
     for (const Entity& entity : document.entities) {
-        // An active first-person rig is a spawn: it says how the player moves
-        // and, by its transform, where they stand, which is what
-        // eng::runtime::SceneRuntime::playerSpawn reads. Counted alongside
-        // PlayerSpawn -- which is one of THIS game's markers -- so a scene
-        // authored in a project, with no game components in it at all, can
-        // still say where the player starts. See sceneContract(), which
-        // applies the same rule to the Spawn role.
-        if (entity.playerSpawn ||
-            (entity.firstPerson && entity.firstPerson->active)) {
+        const bool rigSpawn = !hasMarkedSpawn && entity.firstPerson &&
+                              entity.firstPerson->active;
+        if (entity.playerSpawn || rigSpawn) {
             ++playerSpawns;
             if (!spawnEntity) spawnEntity = &entity;
         }
