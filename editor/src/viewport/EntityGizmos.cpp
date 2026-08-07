@@ -490,33 +490,146 @@ void drawGlow(ImDrawList* list, ImVec2 centre, unsigned colour, float radius,
 
 } // namespace
 
+// --- label placement ---------------------------------------------------------
+
+bool labelRectsOverlap(const LabelRect& a, const LabelRect& b)
+{
+    // Touching is not overlapping: two labels that share an edge are still two
+    // readable labels, and treating them as a collision would throw away half
+    // of a tidy column.
+    return a.x < b.x + b.width && b.x < a.x + a.width &&
+           a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+bool LabelPacker::claim(const LabelRect& rect, float padding)
+{
+    if (int(mTaken.size()) >= mBudget)
+        return false;
+    // A label with no area cannot collide with anything and would let an
+    // unbounded number through. Refuse it rather than counting it.
+    if (rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    LabelRect padded = rect;
+    padded.x -= padding;
+    padded.y -= padding;
+    padded.width += padding * 2.0f;
+    padded.height += padding * 2.0f;
+    for (const LabelRect& taken : mTaken)
+        if (labelRectsOverlap(padded, taken))
+            return false;
+
+    mTaken.push_back(padded);
+    return true;
+}
+
+namespace {
+
+// How much attention a mark has earned, highest first. Ties are broken by the
+// order the marks arrive in, which is document order and therefore stable
+// across frames -- a priority that reshuffles makes labels flicker.
+enum class Attention {
+    Hovered = 0, // under the cursor: what the author is asking about
+    Primary = 1, // the entity the inspector is editing
+    Selected = 2,
+    Resting = 3,
+};
+
+struct Resolved {
+    const GizmoMark* mark = nullptr;
+    ImVec2 centre;
+    unsigned colour = 0;
+    Attention attention = Attention::Resting;
+    bool active = false;    // selected or hovered: drawn loud
+    bool volumes = false;   // ...and inside the volume budget
+    float bodyRadius = 5.0f;
+};
+
+} // namespace
+
 void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
                     const GizmoOverlay& overlay)
 {
     if (!list || !overlay.viewProjection)
         return;
 
+    // --- resolve -------------------------------------------------------------
+    //
+    // Two passes rather than one. Deciding how loud a mark should be needs to
+    // know how many others are competing with it, and that cannot be known
+    // while already drawing -- which is why the single-pass version drew
+    // eleven range spheres the moment eleven lights were selected.
+    std::vector<Resolved> resolved;
+    resolved.reserve(marks.size());
+
     for (const GizmoMark& mark : marks) {
         if (containsId(overlay.hidden, mark.id))
             continue;
+
+        ImVec2 centre;
+        if (!project(overlay, mark.world, centre))
+            continue;
+
         const bool isSelected =
             overlay.selected &&
             std::find(overlay.selected->begin(), overlay.selected->end(),
                       mark.id) != overlay.selected->end();
         const bool isHovered = overlay.hovered && *overlay.hovered == mark.id;
-        // "Attended to": selected, or under the cursor. Everything that makes a
-        // mark loud is spent here, and only here.
-        const bool active = isSelected || isHovered;
+        const bool isPrimary = overlay.primary && *overlay.primary == mark.id;
+
+        Resolved entry;
+        entry.mark = &mark;
+        entry.centre = centre;
+        entry.active = isSelected || isHovered;
+        entry.attention = isHovered    ? Attention::Hovered
+                          : isPrimary  ? Attention::Primary
+                          : isSelected ? Attention::Selected
+                                       : Attention::Resting;
+
         const GizmoLook look = gizmoLook(mark.kind);
         // A light wears its own colour; everything else wears its kind's, which
         // is what keeps the outliner's tags and the viewport's marks one
         // vocabulary.
         const unsigned base = mark.tinted ? packTint(mark.tint) : look.rgba;
-        const unsigned colour = active ? base : fade(base, 0.62f);
+        entry.colour = entry.active ? base : fade(base, 0.62f);
+        entry.bodyRadius = entry.active ? 7.0f : 5.0f;
+        resolved.push_back(entry);
+    }
 
-        ImVec2 centre;
-        if (!project(overlay, mark.world, centre))
+    // --- spend the volume budget ---------------------------------------------
+    //
+    // In attention order, so the light being tuned keeps its sphere and the ten
+    // others selected alongside it give theirs up. A mark whose volume is drawn
+    // "always" (a camera frustum, an orbit ring) does not compete for the
+    // budget: a scene has one or two cameras and each frustum IS the decision,
+    // where a room's lamps are eight spheres describing a room they bury.
+    std::vector<std::size_t> byAttention(resolved.size());
+    for (std::size_t i = 0; i < resolved.size(); ++i)
+        byAttention[i] = i;
+    std::stable_sort(byAttention.begin(), byAttention.end(),
+                     [&resolved](std::size_t a, std::size_t b) {
+                         return resolved[a].attention < resolved[b].attention;
+                     });
+
+    int volumesLeft = std::max(overlay.volumeBudget, 1);
+    for (const std::size_t index : byAttention) {
+        Resolved& entry = resolved[index];
+        if (!entry.active)
             continue;
+        if (volumesLeft <= 0)
+            continue;
+        entry.volumes = true;
+        --volumesLeft;
+    }
+
+    // --- draw ----------------------------------------------------------------
+    for (const std::size_t index : byAttention) {
+        const Resolved& entry = resolved[index];
+        const GizmoMark& mark = *entry.mark;
+        const unsigned colour = entry.colour;
+        const ImVec2 centre = entry.centre;
+        const bool active = entry.active;
+        const float r = entry.bodyRadius;
 
         if (mark.hasSource && active) {
             ImVec2 source;
@@ -527,32 +640,33 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
         }
 
         if (overlay.volumes && mark.halfExtents != glm::vec3(0.0f)) {
+            // A box is cheap ink compared to a sphere and is usually the thing
+            // being placed, so it survives the budget -- but only at full
+            // weight for the marks that won it.
             ImVec2 corners[8];
             if (projectBox(overlay, mark.world, mark.halfExtents,
-                           mark.orientation, corners))
-                drawBox(list, corners, active ? colour : fade(colour, 0.5f),
-                        active ? 2.0f : 1.0f);
+                           mark.orientation, corners)) {
+                drawBox(list, corners,
+                        entry.volumes ? colour : fade(colour, 0.45f),
+                        entry.volumes ? 2.0f : 1.0f);
+            }
         }
         // A light's reach is a big sphere, and a room with eight lamps in it is
         // eight overlapping spheres that bury the level they are describing.
-        // Drawn only for the light being worked on: at rest the author needs
-        // "there is a lamp here", and the reach when they are tuning it.
-        if (overlay.volumes && mark.radius > 0.0f && active)
+        // Drawn only for the lights being worked on, and only as many of them
+        // as the budget allows.
+        if (overlay.volumes && mark.radius > 0.0f && entry.volumes)
             drawWireSphere(list, overlay, mark.world, mark.radius,
                            fade(colour, 0.75f));
-        // A frustum is drawn at rest, unlike a light's reach: a scene has one
-        // or two cameras and each one IS a decision about what is on screen,
-        // where a room has eight lamps whose spheres would bury it.
         if (overlay.volumes && mark.orbitRadius > 0.0f &&
-            (active || mark.volumeAlways))
+            (entry.volumes || mark.volumeAlways))
             drawOrbitRing(list, overlay, mark,
                           active ? colour : fade(colour, 0.55f), active);
         if (overlay.volumes && mark.fovDegrees > 0.0f &&
-            (active || mark.volumeAlways))
+            (entry.volumes || mark.volumeAlways))
             drawFrustum(list, overlay, mark, active ? colour : fade(colour, 0.7f),
                         active);
 
-        const float r = active ? 7.0f : 5.0f;
         if (mark.kind == GizmoKind::Camera) {
             // Aimed at where the shot goes, so the body points the way the
             // frustum opens even when the frustum itself is off screen.
@@ -575,6 +689,14 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
                               active ? 2.0f : 1.5f);
         }
 
+        // A ring around what the inspector is editing. With a multi-selection
+        // lit up in one colour there was nothing on screen saying which of the
+        // eleven the panel on the right was about -- and every field in it
+        // applies to that one.
+        if (entry.attention == Attention::Primary && overlay.selected &&
+            overlay.selected->size() > 1)
+            list->AddCircle(centre, r + 4.5f, colour, 0, 1.5f);
+
         if (mark.directed) {
             // Yaw is measured the way the authored transform measures it, so
             // the arrow and the runtime always agree about "forward".
@@ -584,27 +706,61 @@ void drawGizmoMarks(ImDrawList* list, const std::vector<GizmoMark>& marks,
             if (project(overlay, mark.world + forward * 1.5f, tip))
                 list->AddLine(centre, tip, colour, active ? 2.0f : 1.5f);
         }
+    }
 
-        // Labels only for what is attended to. Thirty marks in a room is thirty
-        // words of text over the level, all of them overlapping, and the result
-        // is that none of them can be read -- including the one being looked
-        // for. The diamonds stay, so nothing is hidden; the words arrive when
-        // the cursor does.
-        if (overlay.labels && active) {
-            const ImVec2 at(centre.x + r + 4.0f, centre.y - 7.0f);
-            const auto shadowed = [list](ImVec2 pos, unsigned rgba,
-                                         const char* text) {
-                // Shadowed, because the label sits over whatever the level
-                // happens to be and half of this dungeon is the same value as
-                // the text.
-                list->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), 0xC0000000,
-                              text);
-                list->AddText(pos, rgba, text);
-            };
-            shadowed(at, colour, look.tag);
-            shadowed(ImVec2(at.x, at.y + ImGui::GetTextLineHeight()), colour,
-                     mark.label.c_str());
+    // --- labels --------------------------------------------------------------
+    //
+    // Last, and in a pass of their own, so text always lands over the shapes
+    // rather than under whichever mark happened to be drawn after it.
+    //
+    // Only what is attended to is labelled at all: thirty marks in a room is
+    // thirty words of text over the level, all of them overlapping, and the
+    // result is that none of them can be read -- including the one being
+    // looked for. The bodies stay, so nothing is hidden; the words arrive when
+    // the cursor does.
+    if (!overlay.labels)
+        return;
+
+    const float lineHeight = ImGui::GetTextLineHeight();
+    LabelPacker packer(std::max(overlay.labelBudget, 1));
+
+    for (const std::size_t index : byAttention) {
+        const Resolved& entry = resolved[index];
+        if (!entry.active)
+            continue;
+        const GizmoMark& mark = *entry.mark;
+
+        // The kind is spelled out only for the mark under the cursor. The
+        // body's own shape and colour already say "light" or "camera" for the
+        // rest, and a second line per mark was doubling the ink over a
+        // multi-selection for a word the author had just clicked on.
+        const bool withKind = entry.attention == Attention::Hovered;
+        const GizmoLook look = gizmoLook(mark.kind);
+        const ImVec2 nameSize = ImGui::CalcTextSize(mark.label.c_str());
+        const ImVec2 kindSize =
+            withKind ? ImGui::CalcTextSize(look.tag) : ImVec2(0.0f, 0.0f);
+
+        LabelRect rect;
+        rect.x = entry.centre.x + entry.bodyRadius + 4.0f;
+        rect.y = entry.centre.y - (withKind ? lineHeight : lineHeight * 0.5f);
+        rect.width = std::max(nameSize.x, kindSize.x);
+        rect.height = withKind ? lineHeight * 2.0f : lineHeight;
+        if (!packer.claim(rect))
+            continue;
+
+        const auto shadowed = [list](ImVec2 pos, unsigned rgba,
+                                     const char* text) {
+            // Shadowed, because the label sits over whatever the level happens
+            // to be and half of this dungeon is the same value as the text.
+            list->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), 0xC0000000, text);
+            list->AddText(pos, rgba, text);
+        };
+        ImVec2 at(rect.x, rect.y);
+        if (withKind) {
+            shadowed(at, entry.colour, look.tag);
+            at.y += lineHeight;
         }
+        shadowed(at, entry.colour, mark.label.c_str());
     }
 }
 

@@ -32,29 +32,21 @@ WorkspacePlan makeWorkspacePlan(float width, float height, float uiScale)
         plan.rightPixels *= squeeze;
     }
 
-    // Tall enough for the toolbar's two wrapped rows *plus the dock node's own
-    // tab bar*, which is the part the old 64px forgot: the tab took roughly a
-    // third of the node and the controls were drawn into what was left, so the
-    // bottom of every button sat under the panel below it.
+    // The bottom panel opens at roughly a quarter of the window and is dragged
+    // from there. It is not a dock split any more, so this is a starting height
+    // rather than a reservation -- when it is closed, and it starts closed, the
+    // workspace has all of the height.
+    plan.bottomPanelPixels =
+        std::clamp(height * 0.24f, 160.0f * density, 320.0f * density);
+
+    // The scene tree gets the larger share. A level's hierarchy is the thing an
+    // author is navigating continuously; the file system is dipped into, and
+    // has a search box for the times it is not.
     //
-    // Rows are sized from the ImGui defaults the editor runs with (a ~23px
-    // frame at 1.0 scale) rather than measured, because the workspace is built
-    // before the first frame draws anything.
-    constexpr float kToolbarRowPixels = 26.0f;
-    constexpr float kToolbarRows = 2.0f;
-    constexpr float kDockTabBarPixels = 26.0f;
-    constexpr float kToolbarPaddingPixels = 14.0f;
-    plan.commandBarPixels =
-        (kToolbarRowPixels * kToolbarRows + kDockTabBarPixels +
-         kToolbarPaddingPixels) *
-        std::clamp(uiScale, 0.80f, 1.50f);
-    // ...but never at the workspace's expense. On a short window at 2x text the
-    // requested height is a fifth of the screen; the split clamps it anyway, so
-    // clamping here as well is what keeps the plan honest about what it will
-    // get. The toolbar wraps to fewer visible rows rather than growing.
-    plan.commandBarPixels = std::min(plan.commandBarPixels, height * 0.16f);
-    plan.diagnosticsPixels =
-        std::clamp(height * 0.18f, 132.0f * density, 192.0f * density);
+    // The share tips toward the tree on tall windows and away on short ones,
+    // because the file list has a preview swatch and a metadata block above it
+    // that do not shrink -- at 600px a 60/40 split leaves it showing two rows.
+    plan.sceneTreeFraction = std::clamp(0.35f + height / 5000.0f, 0.42f, 0.62f);
     return plan;
 }
 
@@ -82,40 +74,37 @@ void buildEditorWorkspace(std::uint32_t dockspaceId, float width, float height,
         std::clamp(plan.rightPixels / widthAfterLeft, 0.14f, 0.42f), &right,
         &centre);
 
-    ImGuiID commandBar = 0;
-    ImGui::DockBuilderSplitNode(
-        centre, ImGuiDir_Up,
-        std::clamp(plan.commandBarPixels / std::max(height, 1.0f), 0.05f,
-                   0.16f),
-        &commandBar, &centre);
+    // The left column is two stacked nodes, not one node with tabs.
+    ImGuiID leftTop = 0;
+    ImGuiID leftBottom = 0;
+    ImGui::DockBuilderSplitNode(left, ImGuiDir_Up,
+                                std::clamp(plan.sceneTreeFraction, 0.30f, 0.75f),
+                                &leftTop, &leftBottom);
 
-    const float heightAfterCommand =
-        std::max(height - plan.commandBarPixels, 1.0f);
-    ImGuiID diagnostics = 0;
-    ImGui::DockBuilderSplitNode(
-        centre, ImGuiDir_Down,
-        std::clamp(plan.diagnosticsPixels / heightAfterCommand, 0.14f, 0.36f),
-        &diagnostics, &centre);
+    // Layers rides with the tree rather than taking a third node: both answer
+    // "what is in this level and can I see it", and a layer list is a handful
+    // of rows that would waste a permanent panel.
+    ImGui::DockBuilderDockWindow(workspace_window::kSceneTree, leftTop);
+    ImGui::DockBuilderDockWindow(workspace_window::kLayers, leftTop);
+    ImGui::DockBuilderDockWindow(workspace_window::kFileSystem, leftBottom);
 
-    // Reference flow: the left rail is one node the author tabs between, scene
-    // in centre, selected object on right, diagnostics below scene.
-    //
-    // Asset Browser and Hierarchy were stacked, which split the rail's height
-    // between two lists that are each read top-to-bottom -- so both were short,
-    // and a deep scene meant scrolling a third of a panel while the catalogue
-    // sat half empty above it. They answer different questions ("what can I
-    // place" versus "what is already here") and are never read at once, which
-    // is what a tab is for.
-    ImGui::DockBuilderDockWindow(workspace_window::kAssetBrowser, left);
-    ImGui::DockBuilderDockWindow(workspace_window::kHierarchy, left);
-    ImGui::DockBuilderDockWindow(workspace_window::kLayers, left);
+    // Inspector first: it is what a click on anything fills, so it is the tab
+    // that must be in front on a fresh workspace.
     ImGui::DockBuilderDockWindow(workspace_window::kInspector, right);
-    ImGui::DockBuilderDockWindow(workspace_window::kCommandBar, commandBar);
-    ImGui::DockBuilderDockWindow(workspace_window::kHudPreview, centre);
-    ImGui::DockBuilderDockWindow(workspace_window::kSceneView, centre);
-    ImGui::DockBuilderDockWindow(workspace_window::kConsole, diagnostics);
-    ImGui::DockBuilderDockWindow(workspace_window::kProblems, diagnostics);
-    ImGui::DockBuilderDockWindow(workspace_window::kTimeline, diagnostics);
+    ImGui::DockBuilderDockWindow(workspace_window::kContract, right);
+    ImGui::DockBuilderDockWindow(workspace_window::kHistory, right);
+
+    // 2D docked first so 3D ends up the selected tab: a level is what nearly
+    // every scene is, and the switcher raises the other one in one click.
+    ImGui::DockBuilderDockWindow(workspace_window::kViewport2D, centre);
+    ImGui::DockBuilderDockWindow(workspace_window::kViewport3D, centre);
+
+    // The centre node keeps no tab bar of its own. The main-screen switcher in
+    // the top bar is what changes it, and a second control for the same state
+    // is how the two end up disagreeing about which one is showing.
+    if (ImGuiDockNode* node = ImGui::DockBuilderGetNode(centre))
+        node->LocalFlags |= ImGuiDockNodeFlags_HiddenTabBar;
+
     ImGui::DockBuilderFinish(dock);
 }
 

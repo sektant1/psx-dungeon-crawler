@@ -65,6 +65,9 @@ EditorSettings sanitised(EditorSettings settings)
         settings.uiScale = EditorSettings{}.uiScale;
     settings.uiScale = std::clamp(settings.uiScale, EditorSettings::kMinUiScale,
                                   EditorSettings::kMaxUiScale);
+    // An empty theme is a truncated file, not a request for imgui's default.
+    if (settings.theme.empty())
+        settings.theme = EditorSettings{}.theme;
     return settings;
 }
 
@@ -99,6 +102,8 @@ EditorSettings loadEditorSettings(const std::string& file)
             settings.grid = asBool(value, settings.grid);
         else if (key == "ui.scale")
             settings.uiScale = asFloat(value, settings.uiScale);
+        else if (key == "ui.theme")
+            settings.theme = value;
         else if (key == "playtest.match_viewport")
             settings.playtestMatchesViewport =
                 asBool(value, settings.playtestMatchesViewport);
@@ -153,6 +158,7 @@ bool saveEditorSettings(const std::string& file, const EditorSettings& settings)
         << (settings.frameStats ? "true" : "false") << '\n';
     out << "viewport.grid = " << (settings.grid ? "true" : "false") << '\n';
     out << "ui.scale = " << settings.uiScale << '\n';
+    out << "ui.theme = " << settings.theme << '\n';
 
     out << "\n# what F5 launches the game with. Each one is an environment\n";
     out << "# variable the game already understands.\n";

@@ -195,6 +195,180 @@ void ravenEditor()
     // currently vendored ImGui. Assign them here after upgrading.
 }
 
+// Godot's editor chrome.
+//
+// The scene editor's shell is Godot's arrangement -- menus, a centred
+// main-screen switcher, play controls at the right, scene tabs, a collapsible
+// bottom panel -- and an arrangement somebody recognises wearing a palette they
+// do not is worse than either alone: it reads as a near-miss rather than as a
+// deliberate borrowing.
+//
+// The values are Godot 4's own construction, not an eyeballed approximation.
+// Its editor theme derives everything from two settings, `base_color` and
+// `contrast`, exactly as reproduced here:
+//
+//   base    = interface/theme/base_color   = #333B4F
+//   accent  = interface/theme/accent_color = #699CE8
+//   dark_N  = base lerped toward black by contrast * {1, 1.5, 2}
+//   font    = white lerped toward base by 0.25
+//
+// Two departures, both deliberate. Rounding is 3px, which is Godot's
+// `corner_radius` default and directly contradicts the zero-rounding rule the
+// Raven chrome was built on -- keeping the hard edges here would have been the
+// near-miss described above, and `raven_editor` is still registered for anyone
+// who wants them. And the status colours (warning, danger) stay this tree's,
+// because the panels that use them name them by meaning rather than by hex.
+void godotDark()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::StyleColorsDark(&style);
+
+    style.Alpha = 1.0f;
+    style.DisabledAlpha = 0.5f;
+
+    // Godot's default_margin_size is 4, doubled horizontally on anything that
+    // holds text. Its widgets read as noticeably roomier than imgui's defaults
+    // and that is most of why the two look different at a glance.
+    style.WindowPadding = ImVec2(8.0f, 8.0f);
+    style.FramePadding = ImVec2(8.0f, 4.0f);
+    style.CellPadding = ImVec2(6.0f, 4.0f);
+    style.ItemSpacing = ImVec2(6.0f, 5.0f);
+    style.ItemInnerSpacing = ImVec2(5.0f, 4.0f);
+    style.IndentSpacing = 16.0f;
+    style.ScrollbarSize = 12.0f;
+    style.GrabMinSize = 12.0f;
+
+    // Flat. Godot separates surfaces by value, not by hairlines -- the one
+    // border it does draw is the dark outline around an input field, which is
+    // FrameBorderSize below.
+    style.WindowBorderSize = 0.0f;
+    style.ChildBorderSize = 0.0f;
+    style.PopupBorderSize = 1.0f;
+    style.FrameBorderSize = 1.0f;
+    style.TabBorderSize = 0.0f;
+    style.TabBarBorderSize = 2.0f;
+    style.DockingSeparatorSize = 2.0f;
+
+    constexpr float kRadius = 3.0f;
+    style.WindowRounding = kRadius;
+    style.ChildRounding = kRadius;
+    style.FrameRounding = kRadius;
+    style.PopupRounding = kRadius;
+    style.ScrollbarRounding = kRadius;
+    style.GrabRounding = kRadius;
+    style.TabRounding = kRadius;
+
+    style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
+    style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
+    style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
+
+    const ImVec4 kBlack = rgba(0xFF000000);
+    const ImVec4 kWhite = rgba(0xFFFFFFFF);
+    const ImVec4 kBase = rgba(0xFF333B4F);
+    constexpr float kContrast = 0.30f;
+
+    // The three darks, exactly as Godot derives them.
+    const ImVec4 kDark1 = lerp(kBase, kBlack, kContrast);        // panels
+    const ImVec4 kDark2 = lerp(kBase, kBlack, kContrast * 1.5f); // recessed
+    const ImVec4 kDark3 = lerp(kBase, kBlack, kContrast * 2.0f); // void
+    // ...and the two contrasts, which is what a widget sitting *on* a panel
+    // gets so it separates from it without a border.
+    const ImVec4 kWidget = lerp(kBase, kWhite, 0.04f);
+    const ImVec4 kWidgetHover = lerp(kBase, kWhite, 0.13f);
+
+    const ImVec4 kAccent = rgba(0xFF699CE8);
+    const ImVec4 kAccentDim = lerp(kDark1, kAccent, 0.55f);
+    const ImVec4 kText = lerp(kWhite, kBase, 0.25f);
+    const ImVec4 kTextDim = lerp(kText, kDark1, 0.45f);
+    const ImVec4 kWarning = rgba(0xFFE0A85A);
+    const ImVec4 kDanger = rgba(0xFFE36A55);
+
+    const auto alpha = [](const ImVec4& color, float value) {
+        return ImVec4(color.x, color.y, color.z, value);
+    };
+
+    ImVec4* c = style.Colors;
+    c[ImGuiCol_Text] = kText;
+    c[ImGuiCol_TextDisabled] = kTextDim;
+
+    c[ImGuiCol_WindowBg] = kDark1;
+    c[ImGuiCol_ChildBg] = alpha(kDark2, 0.0f);
+    c[ImGuiCol_PopupBg] = kDark2;
+
+    c[ImGuiCol_Border] = kDark3;
+    c[ImGuiCol_BorderShadow] = alpha(kBlack, 0.0f);
+
+    // An input field is a *hole* in the panel in Godot, which is why it is
+    // darker than what surrounds it while a button is lighter.
+    c[ImGuiCol_FrameBg] = kDark2;
+    c[ImGuiCol_FrameBgHovered] = lerp(kDark2, kWhite, 0.06f);
+    c[ImGuiCol_FrameBgActive] = lerp(kDark2, kAccent, 0.22f);
+
+    c[ImGuiCol_TitleBg] = kDark2;
+    c[ImGuiCol_TitleBgActive] = kDark2;
+    c[ImGuiCol_TitleBgCollapsed] = alpha(kDark3, 0.90f);
+    c[ImGuiCol_MenuBarBg] = kDark2;
+
+    c[ImGuiCol_ScrollbarBg] = alpha(kDark3, 0.55f);
+    c[ImGuiCol_ScrollbarGrab] = kWidget;
+    c[ImGuiCol_ScrollbarGrabHovered] = kWidgetHover;
+    c[ImGuiCol_ScrollbarGrabActive] = kAccent;
+
+    c[ImGuiCol_CheckMark] = kAccent;
+    c[ImGuiCol_SliderGrab] = kAccentDim;
+    c[ImGuiCol_SliderGrabActive] = kAccent;
+
+    c[ImGuiCol_Button] = kWidget;
+    c[ImGuiCol_ButtonHovered] = kWidgetHover;
+    c[ImGuiCol_ButtonActive] = kAccentDim;
+
+    c[ImGuiCol_Header] = lerp(kDark1, kAccent, 0.30f);
+    c[ImGuiCol_HeaderHovered] = lerp(kDark1, kAccent, 0.45f);
+    c[ImGuiCol_HeaderActive] = lerp(kDark1, kAccent, 0.60f);
+
+    c[ImGuiCol_Separator] = kDark3;
+    c[ImGuiCol_SeparatorHovered] = kWidgetHover;
+    c[ImGuiCol_SeparatorActive] = kAccent;
+
+    c[ImGuiCol_ResizeGrip] = alpha(kWidget, 0.50f);
+    c[ImGuiCol_ResizeGripHovered] = kWidgetHover;
+    c[ImGuiCol_ResizeGripActive] = kAccent;
+
+    // A selected tab is the panel's own colour and carries the accent overline;
+    // the rest sit below it in the dark. That is Godot's read exactly, and the
+    // property the editor's docks depend on -- two tabs in one rail have to say
+    // which of them you are looking at.
+    c[ImGuiCol_TabSelected] = kDark1;
+    c[ImGuiCol_Tab] = kDark2;
+    c[ImGuiCol_TabHovered] = lerp(kDark1, kWhite, 0.08f);
+    c[ImGuiCol_TabSelectedOverline] = kAccent;
+    c[ImGuiCol_TabDimmedSelected] = lerp(kDark1, kDark3, 0.50f);
+    c[ImGuiCol_TabDimmed] = kDark3;
+    c[ImGuiCol_TabDimmedSelectedOverline] = alpha(kAccent, 0.30f);
+
+    c[ImGuiCol_DockingPreview] = alpha(kAccent, 0.40f);
+    c[ImGuiCol_DockingEmptyBg] = kDark3;
+
+    c[ImGuiCol_PlotLines] = kAccent;
+    c[ImGuiCol_PlotLinesHovered] = kWarning;
+    c[ImGuiCol_PlotHistogram] = kAccentDim;
+    c[ImGuiCol_PlotHistogramHovered] = kDanger;
+
+    c[ImGuiCol_TableHeaderBg] = kDark2;
+    c[ImGuiCol_TableBorderStrong] = kDark3;
+    c[ImGuiCol_TableBorderLight] = alpha(kDark3, 0.60f);
+    c[ImGuiCol_TableRowBg] = alpha(kBlack, 0.0f);
+    c[ImGuiCol_TableRowBgAlt] = alpha(kWhite, 0.03f);
+
+    c[ImGuiCol_TextLink] = kAccent;
+    c[ImGuiCol_TextSelectedBg] = alpha(kAccent, 0.35f);
+    c[ImGuiCol_DragDropTarget] = kAccent;
+    c[ImGuiCol_NavCursor] = kAccent;
+    c[ImGuiCol_NavWindowingHighlight] = kAccent;
+    c[ImGuiCol_NavWindowingDimBg] = alpha(kDark3, 0.72f);
+    c[ImGuiCol_ModalWindowDimBg] = alpha(kDark3, 0.70f);
+}
+
 // Pacome Danhiez's light palette with Doug Binks's dark-value conversion.
 // Ported from the legacy ImGui color names used by:
 // https://gist.github.com/dougbinks/8089b4bbaccaaf6fa204236978d165a9
@@ -381,6 +555,9 @@ void ensureBuiltins()
 {
     if (!registry().empty())
         return;
+    // First, and therefore the one the scene editor opens with: the shell it
+    // draws is Godot's, so its palette is too.
+    registerTheme("godot_dark", &godotDark);
     registerTheme("raven_editor", &ravenEditor);
     // Persisted ids from the previous editor theme keep working, but resolve to
     // current Raven chrome rather than preserving obsolete magenta branding.

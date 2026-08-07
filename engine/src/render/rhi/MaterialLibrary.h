@@ -88,10 +88,21 @@ public:
     bool set(const std::string& material, const std::string& parameter,
              MaterialValue value);
 
+    // Take ownership of a material built in code rather than parsed from a
+    // script, resolving its texture on the way in. The one caller is the sprite
+    // seam (Renderer::createSpriteMaterial), which turns a SpriteClip into the
+    // material an arbitrary mesh can wear -- there is no file to parse for
+    // something assembled from a struct at runtime.
+    const Material& adopt(RenderCore& core, Material material);
+
+    // Where a texture *name* -- logical id, relative path or absolute file --
+    // actually lives. Public because sprites resolve their own texture the same
+    // way materials do, and neither should reimplement the search order.
+    std::filesystem::path texturePath(const std::string& name) const;
+
 private:
     bool parse(RenderCore& core, const std::filesystem::path& path);
     void uploadTexture(RenderCore& core, Material& material);
-    std::filesystem::path texturePath(const std::string& name) const;
 
     std::unordered_map<std::string, Material> mMaterials;
     std::vector<std::filesystem::path> mResourceDirs;

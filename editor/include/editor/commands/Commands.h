@@ -38,6 +38,26 @@ public:
     std::string redoLabel() const;
     void clear();
 
+    // --- history, as a list --------------------------------------------------
+    //
+    // The History panel draws the stack: what has been done, oldest first, then
+    // what has been undone and could come back. Clicking a row walks to it.
+    //
+    // Exposed as labels rather than as the commands themselves. A caller that
+    // could reach a Command could run its apply() out of order, and the whole
+    // reason this class exists is that the order is the invariant.
+    std::vector<std::string> doneLabels() const;
+    // Newest first: the next redo is row 0, which is the order the panel draws
+    // them in above the "current" marker.
+    std::vector<std::string> undoneLabels() const;
+    std::size_t doneCount() const { return mDone.size(); }
+    std::size_t undoneCount() const { return mUndone.size(); }
+
+    // Undoes or redoes until exactly `depth` commands are on the done stack.
+    // What a click on a history row means. Returns how many steps it took, so
+    // the caller can skip the work that follows a no-op.
+    std::size_t walkTo(Doc& document, std::size_t depth);
+
     // "Saved" is a position in the history, not a flag: undoing back to it means
     // the file on disk matches again, and the title bar should stop saying so.
     void markSaved() { mSavedDepth = mDone.size(); }

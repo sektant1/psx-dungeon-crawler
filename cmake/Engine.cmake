@@ -296,6 +296,7 @@ set(_eng_systems_sources
        engine/src/render/rhi/BitmapFont.cpp
        engine/src/render/rhi/Warmup.cpp
        engine/src/render/rhi/Image.cpp
+       engine/src/render/rhi/LabelRaster.cpp
        engine/src/render/rhi/MaterialLibrary.cpp
        engine/src/particles/DecalSystemRhi.cpp)
 

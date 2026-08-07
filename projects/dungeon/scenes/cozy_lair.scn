@@ -1,0 +1,1025 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.test.cozy_lair",
+  "palette": "cozy_lair",
+  "entities": [
+    {
+      "id": "camera_main",
+      "name": "Static Inspection Camera",
+      "transform": {
+        "position": [
+          0.5,
+          6.219600200653076,
+          1.3016999959945679
+        ],
+        "rotation_degrees": [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 54.70000076293945,
+        "near_clip": 0.10000000149011612,
+        "far_clip": 24.0,
+        "priority": 10
+      }
+    },
+    {
+      "id": "corner_pillar_0001",
+      "name": "Corner Pillar",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          6.0,
+          4.0,
+          -11.0
+        ]
+      }
+    },
+    {
+      "id": "corner_pillar_0002",
+      "name": "Corner Pillar",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          -11.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0001",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -1.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0002",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -1.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0003",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -1.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0004",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0005",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0006",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0007",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -9.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0008",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -9.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0009",
+      "name": "floor_0018",
+      "prefab": "kit.floor",
+      "material": "Game/PropTerracotta",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -9.0
+        ]
+      }
+    },
+    {
+      "id": "import_ac_vixen_0001",
+      "name": "AC_Vixen",
+      "prefab": "kit.import_ac_vixen",
+      "transform": {
+        "position": [
+          2.615600109100342,
+          3.8638999462127686,
+          -8.246500015258789
+        ],
+        "scale": [
+          0.699999988079071,
+          0.699999988079071,
+          0.699999988079071
+        ]
+      },
+      "scripts": [
+        {
+          "path": "scripts/trigger_volume.lua"
+        }
+      ]
+    },
+    {
+      "id": "import_corsair_0001",
+      "name": "Corsair",
+      "prefab": "kit.import_corsair",
+      "transform": {
+        "position": [
+          -1.608199954032898,
+          4.337100028991699,
+          -7.314000129699707
+        ],
+        "scale": [
+          4.0,
+          4.0,
+          4.0
+        ]
+      },
+      "spin": {
+        "degrees_per_second": 60.0
+      }
+    },
+    {
+      "id": "import_howl_0001",
+      "name": "Howl",
+      "prefab": "kit.import_howl",
+      "transform": {
+        "position": [
+          0.6136000156402588,
+          3.5,
+          -5.129000186920166
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.75,
+          0.44999998807907104
+        ],
+        "range": 8.0
+      },
+      "spin": {
+        "degrees_per_second": 183.0
+      },
+      "particles": {
+        "effect": "portal_draw"
+      },
+      "orbit": {
+        "centre": [
+          0.6136000156402588,
+          3.5,
+          -5.129000186920166
+        ],
+        "radius": 1.9500000476837158,
+        "degrees_per_second": 30.0,
+        "phase_degrees": 67.0,
+        "facing": "centre"
+      }
+    },
+    {
+      "id": "lair_exit",
+      "name": "Lair Exit",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -9.0
+        ]
+      },
+      "exit": {
+        "yaw_degrees": 0.0
+      }
+    },
+    {
+      "id": "player_start",
+      "name": "Player Start",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -0.800000011920929
+        ]
+      },
+      "first_person": {},
+      "player_spawn": true
+    },
+    {
+      "id": "sphere_0001",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -3.259500026702881,
+          0.0,
+          -6.794899940490723
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "sphere_0002",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -8.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "sphere_0003",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "sphere_0004",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "sphere_0005",
+      "primitive": {
+        "kind": "sphere",
+        "rings": 16,
+        "segments": 24
+      },
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -4.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "stage_fill",
+      "name": "Cold Fill",
+      "transform": {
+        "position": [
+          1.7000000476837158,
+          9.5,
+          -3.7091000080108643
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          0.3402000069618225,
+          0.225600004196167,
+          1.0800000429153442
+        ],
+        "range": 31.25,
+        "cast_shadows": true
+      }
+    },
+    {
+      "id": "stage_key",
+      "name": "Warm Key",
+      "transform": {
+        "position": [
+          -1.5,
+          10.5,
+          -3.40910005569458
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.75,
+          0.44999998807907104
+        ],
+        "range": 8.0
+      }
+    },
+    {
+      "id": "stage_rim",
+      "name": "Scarlet Rim",
+      "transform": {
+        "position": [
+          0.0,
+          10.199999809265137,
+          -6.709099769592285
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.75,
+          0.44999998807907104
+        ],
+        "range": 8.0
+      }
+    },
+    {
+      "id": "wall_0001",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          4.0,
+          -1.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0002",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          4.0,
+          -5.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0003",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          4.0,
+          -9.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0004",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          8.0,
+          -1.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0005",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          8.0,
+          -5.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0006",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          8.0,
+          -9.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0007",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          12.0,
+          -1.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0008",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          12.0,
+          -5.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -4.0,
+          0.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0010",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          12.0,
+          -9.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0012",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          4.0,
+          4.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          4.0,
+          0.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0014",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          0.0,
+          4.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0015",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -4.0,
+          4.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0016",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          4.0,
+          8.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0017",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          0.0,
+          8.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0018",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          0.0,
+          -1.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0019",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          0.0,
+          -5.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0020",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          6.5,
+          0.0,
+          -9.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0021",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -4.0,
+          8.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0022",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          4.0,
+          12.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0023",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          0.0,
+          12.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0024",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -4.0,
+          12.0,
+          -11.5
+        ]
+      }
+    },
+    {
+      "id": "wall_0025",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.502200126647949,
+          4.0,
+          -8.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0026",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.500199794769287,
+          4.0,
+          -4.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0027",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.498300075531006,
+          4.0,
+          -0.9970999956130981
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0028",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.502200126647949,
+          8.0,
+          -8.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0029",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.500199794769287,
+          8.0,
+          -4.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0030",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.498300075531006,
+          8.0,
+          -0.9970999956130981
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0031",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.502200126647949,
+          12.0,
+          -8.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0032",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.500199794769287,
+          12.0,
+          -4.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0034",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.498300075531006,
+          12.0,
+          -0.9970999956130981
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0042",
+      "name": "wall_0009",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.502200126647949,
+          0.0,
+          -8.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0043",
+      "name": "wall_0011",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.500199794769287,
+          0.0,
+          -4.997099876403809
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_0044",
+      "name": "wall_0013",
+      "prefab": "kit.wall",
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          -6.498300075531006,
+          0.0,
+          -0.9970999956130981
+        ],
+        "rotation_degrees": [
+          0.0,
+          -89.97200012207031,
+          0.0
+        ]
+      }
+    }
+  ]
+}

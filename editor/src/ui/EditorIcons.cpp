@@ -251,6 +251,18 @@ void drawIcon(ImDrawList* list, Icon icon, ImVec2 origin, float size,
                       at(origin, size, 0.78f, 0.67f), dim(rgba, 0.6f), line);
         break;
     }
+    case Icon::Stack: {
+        // Three offset slabs seen edge-on: copies of one thing, piled up.
+        // Deliberately unlike Group's parent-and-children, because a bucket row
+        // is not a parent and the tree used to draw them identically.
+        for (int i = 0; i < 3; ++i) {
+            const float y = 0.28f + float(i) * 0.22f;
+            list->AddRectFilled(at(origin, size, 0.16f, y - 0.07f),
+                                at(origin, size, 0.84f, y + 0.07f),
+                                dim(rgba, i == 0 ? 1.0f : 0.62f));
+        }
+        break;
+    }
     case Icon::Collider: {
         // A wire box: bounds, not geometry.
         list->AddRect(at(origin, size, 0.14f, 0.18f),

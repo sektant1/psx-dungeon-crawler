@@ -111,9 +111,6 @@
           0.0
         ]
       },
-      "camera": {
-        "fov_degrees": 49.29999923706055
-      },
       "player_spawn": true
     },
     {

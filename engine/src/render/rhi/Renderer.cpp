@@ -1,5 +1,6 @@
 #include <eng/Renderer.h>
 
+#include "LabelRaster.h"
 #include "MaterialLibrary.h"
 #include "RenderCore.h"
 #include "render/AssimpLoader.h"
@@ -31,6 +32,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -121,6 +123,11 @@ constexpr uint32_t particleSliceCapacity(ParticleSlice slice)
                                              : kMaxDrawnParticles;
 }
 
+// World sprites are attached one per node rather than spawned in bursts, so a
+// level has tens of them where it has thousands of particles. Sized well under
+// kMaxDrawnParticles because the two share the quad index buffer.
+constexpr uint32_t kMaxDrawnSprites = 1024;
+
 // Keep in sync with the mode switch in assets/shaders/vulkan/particle.frag.
 // Ogre compiles one fragment_program per look; a runtime mode keeps the RHI
 // pipeline cache keyed on blend state alone.
@@ -160,6 +167,43 @@ SurfaceMode surfaceModeFor(rhi_renderer::MaterialShader shader)
     if (shader == S::SurfacePortal) return SurfaceMode::Portal;
     return SurfaceMode::None;
 }
+// Every uniform a per-node shader block (eng/ShaderBlock.h) can actually reach.
+// The first four are the generic shading constants that ride in DrawConstants;
+// the rest are the stylised-surface knobs, which drawMesh reads out of the
+// node's block in preference to the material's authored value -- that override
+// is what makes one PortalParams component per entity mean two portals on one
+// material can differ. A field outside this list is stored but never sampled by
+// any stage, so setNodeShaderBlock says so once rather than failing silently.
+constexpr std::string_view kRenderedBlockFields[] = {
+    "modulateColor", "rimColour", "rimPower", "alphaScissor",
+    // surface: palette and presentation, shared by all three profiles
+    "surfaceDark", "surfaceMid", "surfaceBright", "surfaceCore",
+    "surfaceGlowColour", "surfaceStepFps", "surfacePixelGrid",
+    "surfaceTexelSize", "surfaceDither", "surfaceBrightness",
+    "surfaceGlowStrength", "surfaceGlowThreshold", "surfaceEdgeGlow",
+    "surfaceEdgeFlow", "surfaceEdgeMode",
+    // portal profile
+    "portalFlowSpeed", "portalSwirlSpeed", "portalTwist", "portalArms",
+    "portalArmWidth", "portalDepthScale", "portalParallax",
+    "portalFieldWeight", "portalCoreRadius", "portalCoreBoost",
+    "portalRimRadius", "portalRimWidth", "portalRimIntensity",
+    "portalEdgeFade",
+    // liquid profile
+    "liquidDark", "liquidMid", "liquidBright", "liquidFlowA", "liquidFlowB",
+    "liquidStepFps", "liquidPixelGrid", "liquidEmission",
+    // lava profile
+    "lavaDark", "lavaCrust", "lavaHot", "lavaCore", "lavaStepFps",
+    "lavaPixelGrid", "lavaFlowSpeed",
+};
+
+bool blockFieldIsRendered(std::string_view name)
+{
+    for (std::string_view rendered : kRenderedBlockFields)
+        if (rendered == name)
+            return true;
+    return false;
+}
+
 // The half of a surface profile's parameters that does not fit the push range
 // once the model matrix is in it. Per material rather than per draw, uploaded
 // once per frame for the one surface being drawn.
@@ -365,6 +409,13 @@ struct Renderer::Impl {
         bool hasShader = false;
         std::optional<EnchantmentDesc> enchantment;
         std::unordered_map<std::string, rhi_renderer::MaterialValue> blocks;
+        // Only populated for a node whose block overrides a surface uniform:
+        // the shared per-material buffer cannot carry two different sets of
+        // values through one frame (it is dynamic -- both draws would read the
+        // later write), so such a node owns its own, per material it draws.
+        // Kept here rather than in a renderer-wide map so destroyNode releases
+        // them with the node instead of having to search for them.
+        std::unordered_map<std::string, rhi::BufferHandle> surfaceUniforms;
     };
     struct Light {
         bool alive = false;
@@ -376,6 +427,11 @@ struct Renderer::Impl {
         NodeHandle node{};
         SpriteClip clip;
         bool visible = true;
+        // Resolved on the first frame the sprite is drawn, for the same reason
+        // particle effects are: a level attaches its sprites while the texture
+        // index may still be filling in.
+        RenderCore::TextureBinding texture;
+        bool resolved = false;
     };
     struct StaticBatch {
         struct Record {
@@ -490,6 +546,12 @@ struct Renderer::Impl {
     std::unordered_map<uint32_t, rhi::PipelineHandle> debugLinePipelines;
     std::vector<DebugLineVertex> debugLineStaging;
     std::vector<ParticleVertex> particleStaging;
+    // World sprites share the particle vertex format, pipelines and index
+    // buffer -- a billboard is a billboard -- but not the vertex buffer: both
+    // are written once per view per frame, so one buffer would have the second
+    // pass overwrite what the first is still referencing.
+    std::array<rhi::BufferHandle, size_t(ParticleSlice::Count)> spriteVertices;
+    std::vector<ParticleVertex> spriteStaging;
     std::vector<uint32_t> particleOrder;
     std::vector<ParticleEffect> particleEffects;
     std::unordered_map<std::string, uint32_t> particleByName;
@@ -889,6 +951,25 @@ struct Renderer::Impl {
         return buffer;
     }
 
+    // The same arrangement for sprites, and created on first use for the same
+    // reason: a game that attaches no sprite never pays for the buffer.
+    rhi::BufferHandle spriteVertexBuffer(ParticleSlice slice)
+    {
+        rhi::BufferHandle& buffer = spriteVertices[size_t(slice)];
+        if (buffer.valid())
+            return buffer;
+        static const char* const kNames[] = {
+            "renderer.sprite-vertices.main",
+            "renderer.sprite-vertices.editor",
+            "renderer.sprite-vertices.thumbnail"};
+        rhi::BufferDesc desc;
+        desc.size = uint64_t(kMaxDrawnSprites) * 4u * sizeof(ParticleVertex);
+        desc.usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::Dynamic;
+        desc.debugName = kNames[size_t(slice)];
+        buffer = core.device()->createBuffer(desc);
+        return buffer;
+    }
+
     // Same vertex layout and state as a scene draw -- only the fragment stage
     // differs -- so this mirrors pipelineFor() rather than inventing new state.
     rhi::PipelineHandle surfacePipelineFor(const rhi_renderer::Material& material,
@@ -1166,6 +1247,9 @@ struct Renderer::Impl {
         for (auto& [name, buffer] : surfaceUniformBuffers)
             core.device()->destroyBuffer(buffer);
         surfaceUniformBuffers.clear();
+        for (Node& node : nodes)
+            for (auto& [name, buffer] : node.surfaceUniforms)
+                core.device()->destroyBuffer(buffer);
         if (surfaceFragment.valid()) core.device()->destroyShader(surfaceFragment);
         for (auto& [key, pipeline] : shadowPipelines)
             core.device()->destroyPipeline(pipeline);
@@ -1183,6 +1267,10 @@ struct Renderer::Impl {
         if (surfaceVertex.valid()) core.device()->destroyShader(surfaceVertex);
         surfaceFragment = {};
         surfaceVertex = {};
+        for (rhi::BufferHandle& buffer : spriteVertices) {
+            if (buffer.valid()) core.device()->destroyBuffer(buffer);
+            buffer = {};
+        }
         for (auto& [key, pipeline] : particlePipelines)
             core.device()->destroyPipeline(pipeline);
         particlePipelines.clear();
@@ -1578,7 +1666,10 @@ struct Renderer::Impl {
         return constants;
     }
 
-    void drawMesh(rhi::CommandList& commands, const Node& nodeRecord,
+    // Takes the node by mutable reference for one reason: a node that overrides
+    // a surface uniform owns the buffer those uniforms are uploaded through,
+    // and it is created on the first draw that needs it.
+    void drawMesh(rhi::CommandList& commands, Node& nodeRecord,
                    const MeshAttachment& attachment, const glm::mat4& model,
                   size_t& batches, size_t& triangles, bool withNormalDepth,
                   bool viewmodelPass = false)
@@ -1631,28 +1722,50 @@ struct Renderer::Impl {
                 continue;
             if (isSurface) {
                 SurfaceUniforms uniforms;
-                const auto number = [&](const char* name, float fallback) {
+                // The node's shader block wins over the material's authored
+                // value, and the material over the shader's own default. That
+                // ordering is the point of the block: the material is shared by
+                // every portal in the level, so tuning one of them can only
+                // happen per node. A block that names no surface field leaves
+                // every lookup exactly where it was.
+                const auto source = [&](const char* name)
+                    -> const rhi_renderer::MaterialValue* {
+                    if (!nodeRecord.blocks.empty()) {
+                        const auto block = nodeRecord.blocks.find(name);
+                        if (block != nodeRecord.blocks.end())
+                            return &block->second;
+                    }
                     const auto found = material.params.find(name);
-                    if (found == material.params.end())
+                    return found == material.params.end() ? nullptr
+                                                          : &found->second;
+                };
+                const auto number = [&](const char* name, float fallback) {
+                    const rhi_renderer::MaterialValue* found = source(name);
+                    if (!found)
                         return fallback;
-                    const float* value = std::get_if<float>(&found->second);
+                    const float* value = std::get_if<float>(found);
                     return value ? *value : fallback;
                 };
                 const auto vec2Of = [&](const char* name, glm::vec2 fallback) {
-                    const auto found = material.params.find(name);
-                    if (found == material.params.end())
+                    const rhi_renderer::MaterialValue* found = source(name);
+                    if (!found)
                         return fallback;
-                    const glm::vec2* value =
-                        std::get_if<glm::vec2>(&found->second);
+                    const glm::vec2* value = std::get_if<glm::vec2>(found);
                     return value ? *value : fallback;
                 };
+                // Materials state a palette stop as float4 and components as a
+                // Colour/Vec3 field, so both spellings have to arrive here as
+                // the same vec4 -- an opaque alpha is the only sane reading of
+                // a colour with no fourth component.
                 const auto palette = [&](const char* name, glm::vec4 fallback) {
-                    const auto found = material.params.find(name);
-                    if (found == material.params.end())
+                    const rhi_renderer::MaterialValue* found = source(name);
+                    if (!found)
                         return fallback;
-                    const glm::vec4* value =
-                        std::get_if<glm::vec4>(&found->second);
-                    return value ? *value : fallback;
+                    if (const glm::vec4* value = std::get_if<glm::vec4>(found))
+                        return *value;
+                    if (const glm::vec3* value = std::get_if<glm::vec3>(found))
+                        return glm::vec4(*value, 1.0f);
+                    return fallback;
                 };
                 if (surfaceMode == SurfaceMode::Lava) {
                     uniforms.paletteA =
@@ -1721,8 +1834,14 @@ struct Renderer::Impl {
                 }
                 uniforms.modeTime = {float(surfaceMode), surfaceTime, 0.0f,
                                      0.0f};
+                // One buffer per material is only safe while every node draws
+                // the material with the same values: this is a dynamic buffer,
+                // so two writes in a frame leave *both* draws reading the
+                // second. A node that overrides anything therefore gets its own.
                 rhi::BufferHandle& buffer =
-                    surfaceUniformBuffers[material.name];
+                    nodeRecord.blocks.empty()
+                        ? surfaceUniformBuffers[material.name]
+                        : nodeRecord.surfaceUniforms[material.name];
                 if (!buffer.valid()) {
                     rhi::BufferDesc desc;
                     desc.size = sizeof(SurfaceUniforms);
@@ -2187,6 +2306,223 @@ struct Renderer::Impl {
         }
     }
 
+    // A sprite names its texture the way a material does, so it resolves the
+    // same way. Deferred to the first draw because a level attaches its sprites
+    // while the asset index may still be filling in, and an unresolvable name
+    // should report once rather than on every frame that redraws it.
+    void resolveSprite(Sprite& sprite)
+    {
+        if (sprite.resolved)
+            return;
+        sprite.resolved = true;
+        const std::string& name = sprite.clip.texture;
+        if (name.empty())
+            return;
+        const std::filesystem::path path = materials.texturePath(name);
+        if (path.empty()) {
+            warnOnce("sprite-texture:" + name,
+                     "a sprite names a texture that does not exist");
+            sprite.texture = core.fallbackTexture();
+            return;
+        }
+        // Nearest and clamped: a world sprite is a pixel-art billboard, and a
+        // repeating address mode would bleed the opposite edge in under the
+        // scroll offset below.
+        sprite.texture = core.loadTexture(path, rhi::FilterMode::Nearest,
+                                          rhi::AddressMode::ClampToEdge);
+        if (!sprite.texture.valid())
+            sprite.texture = core.fallbackTexture();
+    }
+
+    // Additive is the only blend the particle pipeline distinguishes; the other
+    // three are alpha-blended and differ in how much of the texture survives the
+    // cutoff. Opaque has no depth write to make it truly opaque here (the shared
+    // pipeline never writes depth, so that sprites do not occlude each other),
+    // so it is expressed as a hard alpha cut instead -- which is what an opaque
+    // pixel-art billboard wants anyway.
+    static float spriteAlphaScissor(const SpriteClip& clip)
+    {
+        if (clip.blend == SpriteBlend::Opaque)
+            return std::max(clip.alphaCutoff, 0.5f);
+        return std::max(clip.alphaCutoff, 0.0f);
+    }
+    static ParticleBlend spriteBlendFor(SpriteBlend blend)
+    {
+        return blend == SpriteBlend::Additive || blend == SpriteBlend::Overlay
+                   ? ParticleBlend::Additive
+                   : ParticleBlend::Alpha;
+    }
+
+    // Camera-facing quads, one per attached sprite, built and drawn exactly the
+    // way particles are: same vertex format, same pipelines, same back-to-front
+    // sort for the alpha-blended ones. Kept a separate pass rather than folded
+    // into drawParticles because a sprite's frame comes from its own clip and
+    // its size from its node, neither of which the particle pool has.
+    void drawSprites(rhi::CommandList& commands, const RenderCore::View& view,
+                     size_t& batches, size_t& triangles, bool withNormalDepth)
+    {
+        const ParticleSlice slice = particleSliceFor(view.target);
+        if (slice == ParticleSlice::Count || sprites.empty())
+            return;
+        const bool thumbnailView =
+            view.target == RenderCore::SceneTarget::Thumbnail;
+
+        glm::quat cameraOrientation = view.orientation;
+        glm::vec3 cameraPosition = view.position;
+        if (view.target == RenderCore::SceneTarget::Main) {
+            const NodeTransform camera = worldTransform(cameraNode);
+            cameraPosition = camera.position;
+            cameraOrientation = camera.orientation;
+        }
+        const glm::vec3 right = cameraOrientation * glm::vec3(1.0f, 0.0f, 0.0f);
+        const glm::vec3 up = cameraOrientation * glm::vec3(0.0f, 1.0f, 0.0f);
+
+        struct Quad {
+            RenderCore::TextureBinding texture;
+            ParticleBlend blend = ParticleBlend::Alpha;
+            float alphaScissor = 0.0f;
+            glm::vec3 centre{0.0f};
+            glm::vec2 half{0.5f};
+            glm::vec2 uvOrigin{0.0f};
+            glm::vec2 uvSize{1.0f};
+            glm::vec4 tint{1.0f};
+            float distance = 0.0f;
+        };
+        std::vector<Quad> quads;
+
+        for (Sprite& sprite : sprites) {
+            if (!sprite.alive || !sprite.visible || !worldVisible(sprite.node))
+                continue;
+            const Node* owner = node(sprite.node);
+            if (!owner || owner->thumbnailOnly != thumbnailView)
+                continue;
+            resolveSprite(sprite);
+            if (!sprite.texture.valid())
+                continue;
+
+            const SpriteClip& clip = sprite.clip;
+            const NodeTransform where = worldTransform(sprite.node);
+            Quad quad;
+            quad.texture = sprite.texture;
+            quad.blend = spriteBlendFor(clip.blend);
+            quad.alphaScissor = spriteAlphaScissor(clip);
+            quad.centre = where.position;
+            // The node's scale sizes the billboard, so a sprite placed in the
+            // editor resizes with the handle that resizes everything else.
+            quad.half = clip.worldSize * glm::vec2(where.scale) * 0.5f;
+            quad.tint = clip.tint;
+            quad.distance = glm::length(where.position - cameraPosition);
+
+            // Grid, frame and scroll, in that order: the cell picks a window
+            // into the sheet, uvScale shrinks the window, and the scroll slides
+            // it. A single-cell clip (the default grid) leaves all three inert.
+            const glm::vec2 grid = glm::max(glm::vec2(clip.grid), glm::vec2(1.0f));
+            const glm::vec2 cell = 1.0f / grid;
+            const float frames =
+                std::max(float(std::min(clip.frameCount,
+                                        clip.grid.x * clip.grid.y)), 1.0f);
+            float index = 0.0f;
+            if (clip.framesPerSecond > 0.0f && frames > 1.0f)
+                index = std::floor(std::fmod(
+                    (particleTime + clip.phaseSeconds) * clip.framesPerSecond,
+                    frames));
+            const glm::vec2 window(std::fmod(index, grid.x),
+                                   std::floor(index / grid.x));
+            quad.uvOrigin = window * cell + clip.scrollVelocity * particleTime;
+            quad.uvSize = cell * clip.uvScale;
+            quads.push_back(quad);
+        }
+        if (quads.empty())
+            return;
+
+        // Back-to-front, and over the whole set rather than per texture: two
+        // alpha sprites of different textures still have to resolve against each
+        // other, and unlike particles there are few enough of them that one sort
+        // and a batch break per depth order is cheaper than the artefact.
+        std::sort(quads.begin(), quads.end(),
+                  [](const Quad& a, const Quad& b) {
+                      return a.distance > b.distance;
+                  });
+
+        static const glm::vec2 kCorners[4] = {
+            {-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}};
+        // v flipped against the corner sign: image row 0 is the top of the
+        // sprite, which is +y in world space.
+        static const glm::vec2 kUvs[4] = {
+            {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f}};
+
+        struct Group {
+            RenderCore::TextureBinding texture;
+            ParticleBlend blend = ParticleBlend::Alpha;
+            float alphaScissor = 0.0f;
+            uint32_t firstQuad = 0;
+            uint32_t quads = 0;
+        };
+        std::vector<Group> groups;
+        spriteStaging.clear();
+        uint32_t quadCount = 0;
+        for (const Quad& quad : quads) {
+            if (quadCount >= kMaxDrawnSprites) {
+                warnOnce("sprite-capacity",
+                         "more world sprites are visible than the buffer holds");
+                break;
+            }
+            // A run rather than a bucket: the sort above fixed the draw order,
+            // so a group can only extend while texture and state are unchanged.
+            if (groups.empty() ||
+                groups.back().texture.token != quad.texture.token ||
+                groups.back().blend != quad.blend ||
+                groups.back().alphaScissor != quad.alphaScissor) {
+                Group group;
+                group.texture = quad.texture;
+                group.blend = quad.blend;
+                group.alphaScissor = quad.alphaScissor;
+                group.firstQuad = quadCount;
+                groups.push_back(group);
+            }
+            for (int corner = 0; corner < 4; ++corner) {
+                ParticleVertex vertex;
+                vertex.position = quad.centre +
+                                  right * (kCorners[corner].x * quad.half.x) +
+                                  up * (kCorners[corner].y * quad.half.y);
+                vertex.uv = quad.uvOrigin + kUvs[corner] * quad.uvSize;
+                vertex.colour = quad.tint;
+                spriteStaging.push_back(vertex);
+            }
+            ++quadCount;
+            ++groups.back().quads;
+        }
+        if (spriteStaging.empty())
+            return;
+
+        const rhi::BufferHandle vertices = spriteVertexBuffer(slice);
+        if (!vertices.valid())
+            return;
+        core.device()->updateBuffer(vertices, spriteStaging.data(),
+                                    spriteStaging.size() *
+                                        sizeof(ParticleVertex));
+        for (const Group& group : groups) {
+            const rhi::PipelineHandle pipeline =
+                particlePipelineFor(group.blend, withNormalDepth);
+            if (!pipeline.valid())
+                continue;
+            commands.bindPipeline(pipeline);
+            commands.bindVertexBuffer(0, vertices);
+            commands.bindIndexBuffer(particleIndices, 0, rhi::IndexType::UInt32);
+            commands.bindTexture(0, group.texture.texture,
+                                 group.texture.sampler);
+            ParticleConstants constants;
+            // Textured: a sprite is its own image, with none of the procedural
+            // looks the particle modes generate.
+            constants.modeScissor = {float(ParticleMode::Textured),
+                                     group.alphaScissor, 0.0f, 0.0f};
+            commands.pushConstants(&constants, sizeof(constants));
+            commands.drawIndexed(group.quads * 6u, 1, group.firstQuad * 6u);
+            ++batches;
+            triangles += group.quads * 2u;
+        }
+    }
+
     void drawShadowCasters(rhi::CommandList& commands, uint32_t width,
                            uint32_t height)
     {
@@ -2313,7 +2649,7 @@ struct Renderer::Impl {
         size_t batches = 0;
         size_t triangles = 0;
         for (size_t index = 0; index < nodes.size(); ++index) {
-            const Node& nodeRecord = nodes[index];
+            Node& nodeRecord = nodes[index];
             if (!nodeRecord.alive || !worldVisible(NodeHandle{uint32_t(index + 1)}))
                 continue;
             if (view.target == RenderCore::SceneTarget::Thumbnail) {
@@ -2379,8 +2715,14 @@ struct Renderer::Impl {
         // Between world geometry and the renderOnTop set, which is where the
         // legacy queues put them: particles are RENDER_QUEUE_MAIN (50), the
         // viewmodel is RENDER_QUEUE_8 (80).
-        if (!viewmodelPass)
+        if (!viewmodelPass) {
+            // Sprites before particles: both are alpha-blended billboards that
+            // write no depth, and a particle effect is far more often the thing
+            // in front (smoke over a sign, a flame over its own marker) than
+            // behind.
+            drawSprites(commands, view, batches, triangles, withNormalDepth);
             drawParticles(commands, view, batches, triangles, withNormalDepth);
+        }
         // After the world and the particles, before the viewmodel pass: a
         // diagnostic overlay belongs over the level it describes and under the
         // hands, which is where the legacy queue put it.
@@ -2946,6 +3288,10 @@ void Renderer::destroyNode(NodeHandle handle)
         current->alive = false;
         current->meshes.clear();
         current->children.clear();
+        current->blocks.clear();
+        for (auto& [name, buffer] : current->surfaceUniforms)
+            mImpl->core.device()->destroyBuffer(buffer);
+        current->surfaceUniforms.clear();
     }
     mImpl->sceneRegistry.removeNode(handle);
     if (mImpl->cameraNode.id == handle.id)
@@ -3048,27 +3394,86 @@ void Renderer::attachMesh(NodeHandle node, MeshHandle mesh,
     mImpl->sceneRegistry.addAttachment(node, {NodeAttachKind::Mesh, 0, label});
 }
 
-std::string Renderer::createSpriteMaterial(const SpriteClip&)
+std::string Renderer::createSpriteMaterial(const SpriteClip& clip)
 {
-    mImpl->warnOnce("sprites", "world sprites");
-    return mImpl->nextName("rhi_sprite_material");
+    // The other half of the sprite seam: the same clip worn by a mesh instead
+    // of by a billboard. Unlit, because a sprite carries its own shading, and
+    // the clip's frame window becomes the material's uv transform -- which is
+    // as much of a flipbook as a static material can express. An animated clip
+    // on a mesh is what attachSprite is for.
+    rhi_renderer::Material material;
+    material.name = mImpl->nextName("rhi_sprite_material");
+    material.shader = rhi_renderer::MaterialShader::Unlit;
+    material.textureName = clip.texture;
+    material.filter = rhi::FilterMode::Nearest;
+    material.address = rhi::AddressMode::ClampToEdge;
+    material.cull = rhi::CullMode::None;
+    material.blend = clip.blend == SpriteBlend::Opaque
+                         ? rhi::BlendMode::Opaque
+                         : (clip.blend == SpriteBlend::Additive ||
+                            clip.blend == SpriteBlend::Overlay
+                                ? rhi::BlendMode::Additive
+                                : rhi::BlendMode::AlphaBlend);
+    material.depthTest = true;
+    material.depthWrite = clip.blend == SpriteBlend::Opaque;
+    const glm::vec2 grid =
+        glm::max(glm::vec2(clip.grid), glm::vec2(1.0f));
+    material.params["uvScale"] = clip.uvScale / grid;
+    material.params["modulateColor"] = clip.tint;
+    material.params["alphaScissor"] = std::max(clip.alphaCutoff, 0.0f);
+    mImpl->materials.adopt(mImpl->core, material);
+    return material.name;
 }
 SpriteHandle Renderer::attachSprite(NodeHandle node, const SpriteClip& clip)
 {
     if (!mImpl->node(node, "attachSprite"))
         return {};
-    mImpl->sprites.push_back({true, node, clip, true});
+    Impl::Sprite sprite;
+    sprite.alive = true;
+    sprite.node = node;
+    sprite.clip = clip;
+    mImpl->sprites.push_back(std::move(sprite));
     const SpriteHandle handle{uint32_t(mImpl->sprites.size())};
     mImpl->sceneRegistry.addAttachment(
         node, {NodeAttachKind::Sprite, handle.id, clip.texture});
-    mImpl->warnOnce("sprites", "world sprites");
     return handle;
 }
-SpriteHandle Renderer::attachTextSprite(NodeHandle node, const std::string&,
-                                        const TextSpriteStyle&)
+SpriteHandle Renderer::attachTextSprite(NodeHandle node,
+                                        const std::string& text,
+                                        const TextSpriteStyle& style)
 {
+    // A label is a sprite whose texture is drawn rather than loaded: rasterise
+    // it once here and hand the binding to the same billboard path everything
+    // else uses. The plate's pixel size sets the aspect, so the caller only has
+    // to say how tall the label should be in the world.
+    rhi_renderer::Image plate;
+    if (!rhi_renderer::rasterizeLabel(text, style, plate)) {
+        mImpl->warnOnce("text-sprite", "a text sprite could not be rasterised");
+        return {};
+    }
+    const RenderCore::TextureBinding texture = mImpl->core.createTexture(
+        mImpl->nextName("rhi_label"), uint32_t(plate.width),
+        uint32_t(plate.height), plate.rgba.data(), rhi::FilterMode::Nearest,
+        rhi::AddressMode::ClampToEdge);
+    if (!texture.valid()) {
+        mImpl->warnOnce("text-sprite", "a text sprite could not be uploaded");
+        return {};
+    }
+
     SpriteClip clip;
-    return attachSprite(node, clip);
+    const float height = std::max(style.worldHeight, 0.001f);
+    clip.worldSize = {height * float(plate.width) / float(plate.height),
+                      height};
+    clip.blend = SpriteBlend::Alpha;
+    const SpriteHandle handle = attachSprite(node, clip);
+    if (!handle.valid())
+        return handle;
+    // Pre-resolved: there is no file for resolveSprite to find, and the texture
+    // it would otherwise look for is the one just built.
+    Impl::Sprite& sprite = mImpl->sprites[handle.id - 1];
+    sprite.texture = texture;
+    sprite.resolved = true;
+    return handle;
 }
 void Renderer::setSpriteVisible(SpriteHandle handle, bool visible)
 {
@@ -3130,6 +3535,9 @@ void Renderer::clearScene()
     for (Impl::SkinnedMesh& mesh : mImpl->skinnedMeshes)
         if (mesh.alive)
             mImpl->destroySkinnedMeshGpu(mesh);
+    for (Impl::Node& node : mImpl->nodes)
+        for (auto& [name, buffer] : node.surfaceUniforms)
+            mImpl->core.device()->destroyBuffer(buffer);
     mImpl->meshes.clear();
     mImpl->skinInstances.clear();
     mImpl->skinnedMeshes.clear();
@@ -3172,7 +3580,13 @@ ParticleEffectId Renderer::registerParticleEffect(const ParticleEffectDesc& raw)
         return ParticleEffectId{found->second};
     }
     const uint16_t simId = mImpl->particleSim.registerEffect(desc);
-    mImpl->particleEffects.push_back({std::move(desc), simId});
+    // Field-by-field rather than braced: every other member wants the default
+    // its declaration gives it, and naming only two of them in an aggregate
+    // initialiser is what -Wmissing-field-initializers exists to flag.
+    Impl::ParticleEffect effect;
+    effect.desc = std::move(desc);
+    effect.simId = simId;
+    mImpl->particleEffects.push_back(std::move(effect));
     const uint32_t id = uint32_t(mImpl->particleEffects.size());
     mImpl->particleByName[mImpl->particleEffects.back().desc.name] = id;
     return ParticleEffectId{id};
@@ -3493,6 +3907,11 @@ void Renderer::clearNodeShaderParams(NodeHandle node)
         record->shader = {};
         record->hasShader = false;
         record->blocks.clear();
+        // With no block left the node draws through the shared per-material
+        // buffer again, so its own are dead weight.
+        for (auto& [name, buffer] : record->surfaceUniforms)
+            mImpl->core.device()->destroyBuffer(buffer);
+        record->surfaceUniforms.clear();
     }
 }
 void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
@@ -3505,7 +3924,6 @@ void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
         if (!field.name)
             continue;
         const void* value = fieldPtr(block.instance, field);
-        bool supported = false;
         switch (field.type) {
         case FieldType::Bool:
             record->blocks[field.name] =
@@ -3517,8 +3935,6 @@ void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
             break;
         case FieldType::Float:
             record->blocks[field.name] = *static_cast<const float*>(value);
-            supported = std::strcmp(field.name, "rimPower") == 0 ||
-                        std::strcmp(field.name, "alphaScissor") == 0;
             break;
         case FieldType::Vec3:
         case FieldType::Colour:
@@ -3535,12 +3951,14 @@ void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
         case FieldType::String:
             break;
         }
-        const std::string name = field.name ? field.name : "<unnamed>";
-        supported = supported || name == "modulateColor" ||
-                    name == "rimColour";
-        if (!supported && mImpl->warned.insert("shader-block:" + name).second)
+        // Strings are metadata on the component, never a uniform, so they are
+        // not worth reporting; anything else the draw path does not sample is.
+        if (field.type != FieldType::String &&
+            !blockFieldIsRendered(field.name) &&
+            mImpl->warned.insert(std::string("shader-block:") + field.name)
+                .second)
             log::warn("RHI renderer: shader block field '%s' preserved but not rendered yet",
-                      name.c_str());
+                      field.name);
     }
 }
 void Renderer::setGlobalMaterialParam(const std::string& parameter, float value)

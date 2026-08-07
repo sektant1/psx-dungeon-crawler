@@ -54,6 +54,16 @@ struct EditorSettings {
     // this is the author's readability preference, especially useful on TVs
     // and high-resolution monitors viewed at a distance.
     float uiScale = 1.0f;
+    // The imgui theme id, from eng::imguitheme::ids().
+    //
+    // Defaults to Godot's rather than to the engine's own raven_editor, because
+    // the shell this editor draws IS Godot's arrangement and an arrangement
+    // somebody recognises wearing a palette they do not reads as a near-miss.
+    // The engine default is untouched, so the game's debug UI is unaffected.
+    //
+    // Stored by name for the same reason the render preset is: an id is an
+    // index into a table that grows.
+    std::string theme = "godot_dark";
 
     // --- playtest --------------------------------------------------------
     // What F5 launches the game with. The editor spawns the game as a separate

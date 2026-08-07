@@ -146,6 +146,41 @@ void centreNextModal(float widthInTextHeights, float heightInTextHeights,
                      float minWidthInTextHeights,
                      float minHeightInTextHeights);
 
+// --- rows that do not fall off the edge -------------------------------------
+//
+// Dear ImGui clips whatever runs past a window's right edge and, unless the
+// window asked for a horizontal scrollbar, gives no way to reach it. A row of
+// buttons built with SameLine is therefore a row that silently loses its last
+// button when the panel is docked narrow -- and the button you cannot see is
+// the one you do not have.
+//
+// Two answers, and the order matters. Content that *can* wrap should wrap,
+// because a scrollbar is a second gesture before you can even see the control.
+// Content that cannot -- a wide table, a long path -- gets the scrollbar, so
+// nothing is ever unreachable. Every dockable panel in the editor now carries
+// ImGuiWindowFlags_HorizontalScrollbar as the backstop; these helpers are what
+// keeps it from being needed.
+
+// Whether a run `nextWidth` wide still fits on a row whose cursor is at
+// `cursorX`, inside a content region `contentWidth` wide.
+//
+// Pure, so the rule can be exercised without a context: the interesting cases
+// are the boundaries, and a docked panel is dragged across all of them. `spacing`
+// is the gap that would be inserted before the run.
+bool rowHasRoom(float cursorX, float nextWidth, float contentWidth,
+                float spacing);
+
+// Continue the current row when the next run fits, otherwise start a new one.
+// Not calling SameLine is what starts a new row, so "does not fit" is silence.
+// Returns true when the row was continued.
+bool sameLineIfItFits(float nextWidth);
+
+// Widths a run will occupy, measured from the live style rather than guessed --
+// the editor has a UI scale setting that hardcoded pixel counts opt out of.
+float buttonWidth(const char* label);
+float buttonRowWidth(const char* const* labels, std::size_t count);
+float iconRowWidth(float iconSize, int count);
+
 // --- shared bits -----------------------------------------------------------
 
 // Case-insensitive substring match, the rule every search box in the editor

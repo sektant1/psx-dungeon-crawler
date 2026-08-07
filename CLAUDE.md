@@ -62,7 +62,30 @@ The reference should guide presentation and feel, not be copied literally.
 
 # BUILD, RUN & DEBUG
 
-Everything goes through the Makefile; `make help` is the full reference.
+Everything goes through the Makefile; `make help` is the full reference, and
+`docs/build-system.md` explains the parts of it that are not self-evident.
+
+## When the build misbehaves, ask it
+
+```sh
+make doctor          # toolchain, tree, ccache, memory headroom, clangd
+make doctor FIX=1    # and repair what is safely repairable
+```
+
+Every check in it exists because the failure it looks for cost real time here
+and none of them announce themselves — they all look like the build merely
+being slow. Run this before theorising.
+
+## Reading build output
+
+Builds print a progress bar and one summary line, and **digest** their
+diagnostics rather than dumping them: errors in full, this repo's warnings
+collapsed to one line each, dependency warnings counted but not printed, and a
+tally by warning flag at the end. The untouched transcript is always at
+`build/last-build.log` — read that when a collapsed line is not enough.
+
+Colour and the bar disable themselves when stdout is not a terminal, so piped
+output is the same plain text it always was; `PLAIN=1` forces that anywhere.
 
 ## Never clean-build
 
@@ -88,12 +111,26 @@ tree rebuilds from scratch, forever.
 Diagnose it, don't guess: `ninja -C build -d explain -n game` blames `stored
 deps info out of date` / `deps are missing` instead of naming a changed file,
 and `ninja -C build -t deps` opens with the `premature end of file` warning and
-marks entries `STALE`. Fix with `make build-reset` (drops the log, costs one
-rebuild, touches no object files). `make` now takes an flock per build tree so
-concurrent invocations cannot re-corrupt it.
+marks entries `STALE`.
+
+`make` now runs that check itself before every build (~60ms) and resets the log
+when it finds the damage, so this should no longer be something you have to
+notice; `make build-reset` does it by hand, `NO_DEPS_CHECK=1` skips the check.
+It costs one rebuild and touches no object files. `make` also takes an flock per
+build tree, so concurrent invocations cannot create the damage in the first
+place.
 
 Note this failure is invisible to the compiler and looks exactly like a slow
 build, so measure before optimising anything.
+
+## ccache
+
+Configured in exactly one place, `cmake/BuildOptions.cmake`. A dependency that
+enables ccache for itself can prepend a second one to every rule in the project
+and silently disable caching everywhere — this tree read 96% uncacheable until
+`cmake/Dependencies.cmake` started clearing `RULE_LAUNCH_COMPILE`/`_LINK` after
+the dependency block. Do not add another launcher; `make doctor` checks for one.
+The full account is in `docs/build-system.md`.
 
 ## Targets
 
@@ -104,6 +141,7 @@ make material            # editor, in the material staging scene
 make cook SCENE=x.scn    # .scn -> .map, the same cooker CI uses (VALIDATE=1 to check only)
 make scene SCENE=x.scn   # cook and immediately play
 make test                # ctest
+make doctor              # diagnose the build tree (FIX=1 repairs)
 ```
 
 ## Verify on screen, not just in the compiler

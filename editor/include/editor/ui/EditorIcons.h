@@ -35,6 +35,11 @@ enum class Icon {
     Trigger,     // event volume
     Marker,
     Group,       // an empty node other things hang from
+    // A bucket of repeats: N entities that share a prefab, collapsed onto one
+    // row. Deliberately NOT the Group glyph -- see the comment on
+    // OutlinerGroup::bucket. A group row is a parent; a bucket row is a pile,
+    // and drawing them alike is what made the tree ambiguous.
+    Stack,
     Collider,
     Eye,         // visible
     EyeClosed,   // hidden

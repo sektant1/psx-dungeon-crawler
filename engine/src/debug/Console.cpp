@@ -663,6 +663,25 @@ void DebugConsole::draw(const char* title)
         ImGui::End();
         return;
     }
+    drawContents();
+    ImGui::End();
+}
+
+// The same panel with no window around it, for a host that owns its own
+// docking -- the scene editor draws it inside a Godot-style bottom panel, which
+// is a region rather than a window and cannot receive one.
+//
+// Log draining happens here as well as in draw(): a host that only ever calls
+// this one must not silently accumulate an unbounded pending queue.
+void DebugConsole::drawBody()
+{
+    mImpl->drainPending();
+    drawContents();
+}
+
+void DebugConsole::drawContents()
+{
+    Impl& s = *mImpl;
 
     // --- toolbar --------------------------------------------------------
     // The filter takes whatever the chips do not: measured, not guessed, so a
@@ -879,8 +898,6 @@ void DebugConsole::draw(const char* title)
         ImGui::SetKeyboardFocusHere(-1);
         s.focusInput = false;
     }
-
-    ImGui::End();
 }
 
 } // namespace eng

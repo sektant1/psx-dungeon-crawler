@@ -19,25 +19,6 @@ float num(const toml::table& t, const char* k, float d)
     return float(t[k].value_or(double(d)));
 }
 
-glm::vec4 vec4(const toml::table& t, const char* k, glm::vec4 d)
-{
-    const toml::array* a = t[k].as_array();
-    if (!a || a->size() != 4) return d;
-    return {float((*a)[0].value_or(double(d.x))),
-            float((*a)[1].value_or(double(d.y))),
-            float((*a)[2].value_or(double(d.z))),
-            float((*a)[3].value_or(double(d.w)))};
-}
-
-glm::vec3 vec3(const toml::table& t, const char* k, glm::vec3 d)
-{
-    const toml::array* a = t[k].as_array();
-    if (!a || a->size() != 3) return d;
-    return {float((*a)[0].value_or(double(d.x))),
-            float((*a)[1].value_or(double(d.y))),
-            float((*a)[2].value_or(double(d.z)))};
-}
-
 } // namespace
 
 // Severity is the one knob a call site is expected to pass, so it has to map to

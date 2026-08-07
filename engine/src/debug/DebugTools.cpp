@@ -234,8 +234,13 @@ void DebugTools::buildDefaultLayout(ImGuiID dockspace)
     // (or resetLayout() asked for the shipped one back), so a headless capture
     // with persistence off is still reproducible.
     ImGui::DockBuilderRemoveNode(dockspace);
-    ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_DockSpace |
-                                             ImGuiDockNodeFlags_PassthruCentralNode);
+    // The two flags come from different enums -- DockSpace is one of imgui's
+    // internal ones -- and C++20 makes a bitwise operation between distinct
+    // enumeration types deprecated. Widening to the flags typedef (an int) up
+    // front is the same value with nothing to deprecate.
+    ImGui::DockBuilderAddNode(dockspace,
+                              ImGuiDockNodeFlags(ImGuiDockNodeFlags_DockSpace) |
+                                  ImGuiDockNodeFlags_PassthruCentralNode);
     ImGui::DockBuilderSetNodeSize(dockspace,
                                   ImGui::GetMainViewport()->WorkSize);
 

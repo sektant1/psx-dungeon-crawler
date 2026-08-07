@@ -59,6 +59,21 @@ struct OutlinerGroup {
     // reveal and repair them. These groups sort first and carry an explicit
     // INVALID label rather than relying on colour.
     bool invalid = false;
+    // A pile of repeats rather than a parent.
+    //
+    // This distinction is the tree's canonical meaning, and it was previously
+    // only implicit. Two rows in this panel look alike and mean opposite
+    // things: a *composed* row is an object and the rows under it are its
+    // parts, so clicking it selects one thing; a *bucket* row is a hundred and
+    // forty-six unrelated walls that happen to share a prefab, so clicking it
+    // selects a hundred and forty-six things. Nothing on screen said which was
+    // which, and the second one is destructive to get wrong.
+    //
+    // So a bucket is now named, drawn with its own glyph (Icon::Stack, not
+    // Icon::Group) and says what it is on hover. It is a *view* device -- the
+    // document has no such node -- which is also why the hierarchy mode below
+    // can switch it off entirely.
+    bool bucket = false;
     std::vector<OutlinerNode> nodes;
 };
 
@@ -77,6 +92,23 @@ struct OutlinerOptions {
     // AND together, so `has:collider kind:enemy` is the intersection.
     std::string filter;
     bool showGeometry = true;
+    // Collapse repeats onto one row.
+    //
+    // On, which is the default, a blockout's hundred and forty-six identical
+    // walls are one bucket row instead of a hundred and forty-six lines that
+    // scroll the one enemy spawn off the panel. That is what makes a dense
+    // level readable and it is why the grouping exists.
+    //
+    // Off, the panel is the document's *actual* structure: every entity with no
+    // parent at the top level, its children indented under it, nothing invented
+    // and nothing merged. One row, one entity, always -- which is the meaning
+    // Godot's scene tree has, and the one an author needs when the question is
+    // "what is parented to what" rather than "what is in this level".
+    //
+    // Both are honest views of the same document. Having only the first one
+    // meant the parent/child structure of a flat scene was, strictly speaking,
+    // not visible anywhere in the editor.
+    bool groupRepeats = true;
     // Scope the panel to one entity and its descendants. Set while the viewport
     // is isolated on that entity (see EditorState::IsolationState), so the
     // hierarchy is the object's own tree rather than a level with one object

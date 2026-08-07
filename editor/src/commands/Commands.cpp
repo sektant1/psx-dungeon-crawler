@@ -1,5 +1,7 @@
 #include <editor/commands/Commands.h>
 
+#include <algorithm>
+
 namespace ed {
 
 void CommandStack::run(Doc& document, Command command)
@@ -56,6 +58,44 @@ void CommandStack::clear()
     mDone.clear();
     mUndone.clear();
     mSavedDepth = 0;
+}
+
+std::vector<std::string> CommandStack::doneLabels() const
+{
+    std::vector<std::string> out;
+    out.reserve(mDone.size());
+    for (const Command& command : mDone)
+        out.push_back(command.label);
+    return out;
+}
+
+std::vector<std::string> CommandStack::undoneLabels() const
+{
+    // mUndone is a stack, so its back() is the next redo. Reversed here so row
+    // 0 is that next redo and the panel can draw the list straight down from
+    // the current position without counting backwards.
+    std::vector<std::string> out;
+    out.reserve(mUndone.size());
+    for (auto it = mUndone.rbegin(); it != mUndone.rend(); ++it)
+        out.push_back(it->label);
+    return out;
+}
+
+std::size_t CommandStack::walkTo(Doc& document, std::size_t depth)
+{
+    // Clamped rather than rejected: the panel's row indices are computed from a
+    // list captured before whatever the author did in between, and the right
+    // answer to "go further than the history reaches" is to go as far as it
+    // does.
+    const std::size_t total = mDone.size() + mUndone.size();
+    depth = std::min(depth, total);
+
+    std::size_t steps = 0;
+    while (mDone.size() > depth && undo(document))
+        ++steps;
+    while (mDone.size() < depth && redo(document))
+        ++steps;
+    return steps;
 }
 
 void EntityEditTransaction::begin(const Entity& before)

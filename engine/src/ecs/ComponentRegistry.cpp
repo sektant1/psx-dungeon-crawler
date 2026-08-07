@@ -29,6 +29,28 @@ bool has(const entt::registry& r, entt::entity e) { return r.all_of<T>(e); }
 template <typename T>
 void remove(entt::registry& r, entt::entity e) { r.remove<T>(e); }
 
+// reflectedComponent's counterpart for the types whose payload is hand-written:
+// same storage hooks, an explicit codec, and no field table. Written out rather
+// than braced at each call site because ComponentType has members past
+// `deserialize` that every one of these wants defaulted -- naming a prefix of
+// an aggregate is exactly what -Wmissing-field-initializers reports.
+template <typename T>
+ComponentType codecComponent(
+    const char* name, uint16_t id,
+    void (*serialize)(const entt::registry&, entt::entity, ByteWriter&),
+    void (*deserialize)(entt::registry&, entt::entity, ByteReader&, uint32_t))
+{
+    ComponentType t;
+    t.name = name;
+    t.stableTypeId = id;
+    t.addDefault = &addDefault<T>;
+    t.has = &has<T>;
+    t.remove = &remove<T>;
+    t.serialize = serialize;
+    t.deserialize = deserialize;
+    return t;
+}
+
 bool finite(const glm::vec3& v)
 {
     return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
@@ -810,13 +832,13 @@ std::size_t copyEntities(entt::registry& dst, const entt::registry& src,
 
 void registerEngineComponents(ComponentRegistry& reg)
 {
-    reg.add({"Name", 1, addDefault<Name>, has<Name>, remove<Name>, serName, deName});
+    reg.add(codecComponent<Name>("Name", 1, serName, deName));
     // Hand-written codec (the payload is shipped) with a reflected field table
     // bolted on, so generic readers -- clipSystem, a generic inspector -- can
     // address `position` and `scale` by name. See fieldsOf<Transform> above.
     {
-        ComponentType t{"Transform", 2, addDefault<Transform>, has<Transform>,
-                        remove<Transform>, serTransform, deTransform};
+        ComponentType t = codecComponent<Transform>("Transform", 2, serTransform,
+                                                    deTransform);
         const FieldSpan fields = fieldsOf<Transform>();
         t.fields = fields.data;
         t.fieldCount = fields.count;
@@ -825,10 +847,8 @@ void registerEngineComponents(ComponentRegistry& reg)
         };
         reg.add(t);
     }
-    reg.add({"MeshRenderer", 3, addDefault<MeshRenderer>, has<MeshRenderer>,
-             remove<MeshRenderer>, serMesh, deMesh});
-    reg.add({"LightRef", 4, addDefault<LightRef>, has<LightRef>,
-             remove<LightRef>, serLight, deLight});
+    reg.add(codecComponent<MeshRenderer>("MeshRenderer", 3, serMesh, deMesh));
+    reg.add(codecComponent<LightRef>("LightRef", 4, serLight, deLight));
 
     // Ids 5-9 are the rest of the engine's reservation (kFirstApplicationTypeId
     // is 10). These carry field tables, so each is one line: the payload
@@ -839,11 +859,10 @@ void registerEngineComponents(ComponentRegistry& reg)
     reg.add(reflectedComponent<RigidBody>("RigidBody", 7));
     // No fields: a tag is its own value. Still registered, because it has to
     // save, load and appear in the add menu like anything else.
-    reg.add({"RenderNode", 8, addDefault<RenderNode>, has<RenderNode>,
-             remove<RenderNode>, serTag, deTag<RenderNode>});
-    reg.add({"KinematicControl", 9, addDefault<KinematicControl>,
-             has<KinematicControl>, remove<KinematicControl>, serTag,
-             deTag<KinematicControl>});
+    reg.add(codecComponent<RenderNode>("RenderNode", 8, serTag,
+                                       deTag<RenderNode>));
+    reg.add(codecComponent<KinematicControl>("KinematicControl", 9, serTag,
+                                             deTag<KinematicControl>));
 
     // Ids 10-17 are NOT free: they were handed to the game before the engine
     // ever needed a tenth component, and a stable id is a file format -- every
@@ -873,8 +892,7 @@ void registerEngineComponents(ComponentRegistry& reg)
     reg.add(reflectedComponent<PrimitiveMesh>("PrimitiveMesh", 32));
     // Hand-written for the same reason as the five at the top of this file: a
     // variable-length list of heterogeneous values is not a field table.
-    reg.add({"Scripts", 33, addDefault<Scripts>, has<Scripts>, remove<Scripts>,
-             serScripts, deScripts});
+    reg.add(codecComponent<Scripts>("Scripts", 33, serScripts, deScripts));
     // The other two camera shapes, beside FirstPersonController at 24 in
     // meaning if not in number: which of the three a scene carries is what
     // decides whether it plays in first person, over the shoulder, or as a flat
@@ -888,8 +906,8 @@ void registerEngineComponents(ComponentRegistry& reg)
     // field table. Its own id rather than a corner of Scripts, because an
     // entity with no scripts can carry properties -- see the component's
     // comment for why that matters.
-    reg.add({"Properties", 36, addDefault<Properties>, has<Properties>,
-             remove<Properties>, serProperties, deProperties});
+    reg.add(codecComponent<Properties>("Properties", 36, serProperties,
+                                       deProperties));
     // Short authored animations. Hand-written codec, and no field table -- a
     // clip's shape is a list of tracks of keys, so there is nothing for the
     // generic inspector to draw and `authorable` stays true only because the
@@ -901,14 +919,12 @@ void registerEngineComponents(ComponentRegistry& reg)
     // resolves against: one table, so a component is animatable on the same day
     // it is serialisable, and the two cannot disagree about what a field is
     // called.
-    reg.add({"Clip", 37, addDefault<Clip>, has<Clip>, remove<Clip>, serClip,
-             deClip});
+    reg.add(codecComponent<Clip>("Clip", 37, serClip, deClip));
     // Id 10, in the application block, because that is where this one has been
     // since before the engine outgrew its first reservation and the id is a
     // file format (see kFirstApplicationTypeId). Out of numeric order on
     // purpose: moving it would reinterpret every .map on disk.
-    reg.add({"Collider", 10, addDefault<Collider>, has<Collider>,
-             remove<Collider>, serCollider, deCollider});
+    reg.add(codecComponent<Collider>("Collider", 10, serCollider, deCollider));
 }
 
 const ComponentRegistry& engineRegistry()

@@ -85,8 +85,16 @@ public:
     // Draws the window when visible. Call inside the imgui frame. `title` is
     // also the imgui window id, so two consoles need two titles.
     void draw(const char* title = "Console");
+    // The panel's contents, without a window or a tab around them, and drawn
+    // regardless of visible(). For a host that owns its own layout -- the scene
+    // editor puts this in a bottom panel that is a *region* rather than a
+    // window, so there is nothing for Begin() to attach to. Mirrors
+    // eng::ClipPanel::drawBody(), which exists for the same host.
+    void drawBody();
 
 private:
+    void drawContents();
+
     struct Impl;
     std::unique_ptr<Impl> mImpl;
 };

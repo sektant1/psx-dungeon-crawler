@@ -1,0 +1,119 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.main",
+  "entities": [
+    {
+      "id": "cube",
+      "name": "Scripted Cube",
+      "primitive": {
+        "kind": "box",
+        "size": [
+          1.2000000476837158,
+          1.2000000476837158,
+          1.2000000476837158
+        ]
+      },
+      "material": "Game/import_modulardungeonfree/part11",
+      "transform": {
+        "position": [
+          0.0,
+          0.6000000238418579,
+          -2.2778000831604004
+        ]
+      },
+      "scripts": [
+        {
+          "path": "scripts/spin.lua",
+          "props": {
+            "speed": 5.0
+          }
+        },
+        {
+          "path": "scripts/scripted_cube.lua"
+        }
+      ]
+    },
+    {
+      "id": "floor",
+      "name": "Floor",
+      "primitive": {
+        "kind": "box",
+        "size": [
+          24.0,
+          0.20000000298023224,
+          24.0
+        ]
+      },
+      "material": "Game/DungeonFloor",
+      "transform": {
+        "position": [
+          0.0,
+          -0.10000000149011612,
+          0.0
+        ]
+      },
+      "collider": {
+        "shape": "box",
+        "half_extents": [
+          12.0,
+          0.10000000149011612,
+          12.0
+        ]
+      }
+    },
+    {
+      "id": "key_light",
+      "name": "Key Light",
+      "transform": {
+        "rotation_degrees": [
+          -55.0,
+          -30.0,
+          0.0
+        ]
+      },
+      "light": {
+        "type": "directional",
+        "colour": [
+          1.0,
+          0.9599999785423279,
+          0.8799999952316284
+        ]
+      }
+    },
+    {
+      "id": "player",
+      "name": "Player",
+      "transform": {
+        "position": [
+          0.0,
+          1.7000000476837158,
+          4.0
+        ]
+      },
+      "first_person": {
+        "moveSpeed": 6.0
+      }
+    },
+    {
+      "id": "prop_chest_0001",
+      "prefab": "kit.prop_chest",
+      "transform": {
+        "position": [
+          -0.13899999856948853,
+          1.8559999465942383,
+          -4.96999979019165
+        ],
+        "scale": [
+          14.420999526977539,
+          14.420999526977539,
+          14.420999526977539
+        ]
+      },
+      "spin": {
+        "degrees_per_second": 45.0
+      }
+    }
+  ]
+}
