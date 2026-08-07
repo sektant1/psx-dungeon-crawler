@@ -172,7 +172,7 @@ APP_TARGET := $(if $(filter scene_editor,$(APP)),scene_editor,\
 
 .PHONY: all configure build build-all build-app build-game build-demo build-mapgen build-sim \
         build-editor build-cook build-acp build-player build-export \
-        build-reset doctor ui-deps play export \
+        build-reset doctor ui-deps play export migrate build-migrate \
         acp acp-check acp-clean assetdb \
         editor cook scene material prefab-viewer \
         run game demo psx-demo mapgen sim test asan bench screenshot visual-test \
@@ -293,6 +293,9 @@ build-player: configure
 build-export: configure
 	$(call forge,raven_export,building raven_export)
 
+build-migrate: configure
+	$(call forge,raven_migrate,building raven_migrate)
+
 # The generic app build, for the APP=-driven targets below.
 build-app: configure
 	$(call forge,$(APP_TARGET),building $(APP_TARGET))
@@ -370,6 +373,12 @@ material: build-editor
 play: build-player
 	@test -n "$(PROJECT)" || { echo "usage: make play PROJECT=<dir>"; exit 2; }
 	cd $(BUILD_DIR) && env $(RUN_ENV) ./raven_player $(abspath $(PROJECT))
+
+#   make migrate PROJECT=~/games/ported     this game's scenes -> a project
+migrate: build-migrate
+	@test -n "$(PROJECT)" || { echo "usage: make migrate PROJECT=<dir> [SCENES=<dir>]"; exit 2; }
+	cd $(BUILD_DIR) && env $(RUN_ENV) ./raven_migrate --out $(abspath $(PROJECT)) \
+	    $(if $(SCENES),--scenes $(abspath $(SCENES)),)
 
 export: build-player build-export
 	@test -n "$(PROJECT)" || { echo "usage: make export PROJECT=<dir> [OUT=<dir>]"; exit 2; }
@@ -752,6 +761,7 @@ help-text:
 	@echo "  make material       editor, opened in the material staging scene"
 	@echo "  make play PROJECT=  play a project (docs/projects.md)"
 	@echo "  make export PROJECT= build a distributable (OUT=)"
+	@echo "  make migrate PROJECT= bring this game's scenes into a project"
 	@echo "  make acp            condition all assets (TYPE=, FILTER=, FORCE=1)"
 	@echo "  make acp-check      fail if any asset is stale -- what CI runs"
 	@echo "  make assetdb        the resource database (STAMP=1, LIST=1, TYPE=)"

@@ -264,6 +264,46 @@ anything else with it — spawned objects get groups distinct from the level's,
 so changing scene does not destroy a script's effects and vice versa. `0` means
 it did not load, which a script can test.
 
+## Bringing existing scenes into a project
+
+```sh
+make migrate PROJECT=<dir> [SCENES=<dir>]      # raven_migrate --out <dir>
+```
+
+A scene made for this game and a scene made in a project are **the same file
+format**, so this is not a conversion. What differs is the vocabulary a runtime
+reads it with, and one difference matters more than the rest: `player_spawn` is
+one of this game's own components, so a migrated scene would load with its
+geometry intact and nowhere for the player to stand.
+
+So the migration does exactly one transformation: every scene that marks a
+spawn gains an equivalent active `first_person` rig on the same entity. The
+marker is **left in place**, so a migrated scene plays in the game exactly as
+before *and* in `raven_player` for the first time.
+
+Everything else — exits, enemy spawns, pickups, triggers, markers — is reported
+per scene rather than translated. Those are not lost detail; they are gameplay
+this runtime has no systems for, and inventing stand-ins would produce a scene
+claiming to do something it cannot:
+
+```
+scenes/start_hall.scn   278 entities  +first_person rig
+    [not read by the player: exit x2 enemy_spawn x3 pickup x2 trigger x1]
+```
+
+Two things had to change for migrated scenes to cook at all, and both were
+bugs rather than migration concessions:
+
+- The validator resolved kit meshes and scripts against **one** root, so every
+  kit piece in a project's scene reported as missing while the runtime resolved
+  all of them through the mount. It now falls back to the mounted packs, which
+  is the documented arrangement — a project mounts its content over the
+  engine's.
+- A scene that is a *shot* (it authors a camera and plays itself) was required
+  to have a player spawn, so `clip_demo.scn` could not be cooked by
+  `scene_cook` at all while the Contract panel called it playable. Only shots
+  and screens are exempt; an empty scene still reports the missing spawn.
+
 ## Declaring your own components
 
 A project adds components in TOML, with no C++, in `<project>/components.toml`:

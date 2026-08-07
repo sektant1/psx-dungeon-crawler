@@ -1,0 +1,24 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.chest",
+  "component": true,
+  "entities": [
+    {
+      "id": "base",
+      "name": "Chest",
+      "prefab": "kit.chest"
+    },
+    {
+      "id": "lid",
+      "name": "Chest Lid",
+      "parent": "base",
+      "transform": { "position": [0.0, 0.893, -0.8] },
+      "mesh": { "path": "meshes/kit/Chest_Lid.obj", "import_scale": 0.2 },
+      "material": "Game/Kit/Containers",
+      "scripts": [
+        { "path": "scripts/chest_lid.lua", "props": { "auto": true, "closed_degrees": 0, "open_degrees": -100 } }
+      ]
+    }
+  ]
+}

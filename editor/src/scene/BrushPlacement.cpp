@@ -94,8 +94,24 @@ Placement resolvePlacement(const GridConfig& grid, const KitCatalog& catalog,
     out.transform.position = hit;
     // Both branches answer the same question -- how far above the surface does
     // this thing's origin belong -- and differ only in who knows the answer.
+    //
+    // SUBTRACTED, not added. `y_offset` is the mesh's own local ymin (measured:
+    // Arch.obj starts at 4.809 and declares 4.81, Chandelier at -13.0 and
+    // declares -13.0, every piece agrees). Geometry therefore spans
+    // origin+ymin .. origin+ymax, so resting it on a surface means putting the
+    // origin at surface-ymin.
+    //
+    // Adding it did the opposite, and a prop authored around its centre or
+    // hanging below its origin -- a chest, a table, a lamp, every item -- sank
+    // by twice its own offset the moment it was placed. A table (ymin -0.876)
+    // landed entirely beneath the floor.
+    //
+    // The GRID path (placementToTransform) still adds it and is deliberately
+    // left alone: a wall or an arch is modelled in the place it belongs
+    // relative to its opening, every shipped scene was authored through it, and
+    // the arches in start_hall store exactly the 0.962 it produces.
     if (piece)
-        out.transform.position.y +=
+        out.transform.position.y -=
             piece->yOffsetMeters(catalog.scale()) * brushScale;
     else
         out.transform.position.y += query.baseOffset * brushScale;

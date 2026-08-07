@@ -75,7 +75,8 @@ add_executable(
   editor/src/project/RunGame.cpp
   editor/src/project/ProjectSession.cpp
   editor/src/project/ScriptWorkshop.cpp
-  editor/src/project/ProjectExport.cpp)
+  editor/src/project/ProjectExport.cpp
+  editor/src/project/ProjectMigrate.cpp)
 target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/src third_party
                                                 engine/include)
@@ -143,13 +144,22 @@ eng_target_hardening(raven_player)
 # tool and not part of the player: the binary it SHIPS still has no game or
 # editor code in it, and player_purity checks that independently.
 add_executable(raven_export editor/tools/project_export/main.cpp
-                            editor/src/project/ProjectExport.cpp)
+                            editor/src/project/ProjectExport.cpp
+  editor/src/project/ProjectMigrate.cpp)
 target_include_directories(raven_export PRIVATE editor/include)
 # eng_runtime brings `eng`, which already contains the component registry and
 # the .map codec whole-archive -- so eng_ecs_headless must NOT be here as well.
 # Linking both is a duplicate-symbol error; see the note in Content.cmake.
 target_link_libraries(raven_export PRIVATE game_content eng_runtime)
 eng_target_hardening(raven_export)
+
+# raven_migrate: this game's scenes -> a project. Same library split as the
+# exporter: it links the authoring half because it reads and writes .scn.
+add_executable(raven_migrate editor/tools/project_migrate/main.cpp
+                             editor/src/project/ProjectMigrate.cpp)
+target_include_directories(raven_migrate PRIVATE editor/include)
+target_link_libraries(raven_migrate PRIVATE game_content eng_runtime)
+eng_target_hardening(raven_migrate)
 
 # Static-model production gate. Emits Markdown suitable for build artifacts and
 # production briefs; no renderer/window required.

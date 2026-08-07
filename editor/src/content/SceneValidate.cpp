@@ -458,7 +458,13 @@ std::vector<Issue> validate(const SceneDocument& document,
             std::filesystem::path file = script.path;
             if (!std::filesystem::exists(file, code))
                 file = std::filesystem::path(assetRoot) / script.path;
-            if (!std::filesystem::exists(file, code)) {
+            // Then the mounted packs, for the same reason the kit meshes above
+            // check them: a project mounts its content over the engine's, so a
+            // scene of its own may legitimately use a script that ships with
+            // the engine, and the runtime resolves it exactly this way.
+            if (!std::filesystem::exists(file, code))
+                file = eng::assets::resolve(script.path);
+            if (file.empty() || !std::filesystem::exists(file, code)) {
                 add(issues, Severity::Error, "script.missing",
                     "script '" + script.path + "' is not on disk", entity.id);
                 continue;
@@ -506,9 +512,17 @@ std::vector<Issue> validate(const SceneDocument& document,
                     entity.id);
             } else if (!assetRoot.empty() && !piece->isGroup()) {
                 std::error_code code;
-                const std::filesystem::path mesh =
+                std::filesystem::path mesh =
                     std::filesystem::path(assetRoot) / piece->meshPath;
-                if (!std::filesystem::exists(mesh, code)) {
+                // Then the mounted packs, which is where a PROJECT's kit meshes
+                // actually live: a project mounts its own content over the
+                // engine's, so a scene of its own using engine geometry is the
+                // documented arrangement, not a broken reference. Checking one
+                // root only reported every kit piece in a migrated scene as
+                // missing while the runtime resolved all of them.
+                if (!std::filesystem::exists(mesh, code))
+                    mesh = eng::assets::resolve(piece->meshPath);
+                if (mesh.empty() || !std::filesystem::exists(mesh, code)) {
                     add(issues, Severity::Error, "prefab.mesh_missing",
                         "mesh '" + piece->meshPath + "' is not on disk",
                         entity.id);
@@ -850,8 +864,24 @@ std::vector<Issue> validate(const SceneDocument& document,
         }
     }
 
-    // A component scene has no player to place; see SceneDocument::component.
-    if (playerSpawns == 0 && !document.component) {
+    // A component scene has no player to place, and neither does a shot (it
+    // plays itself through its own camera) or a screen (it is a flat page).
+    // sceneContract already decides which of those a scene is, so this asks it
+    // rather than re-deriving the rule and disagreeing with the panel -- which
+    // is exactly what happened: the Contract panel reported clip_demo.scn as
+    // playable while scene_cook refused to cook it at all.
+    // Only a shot and a screen genuinely have no player: a shot plays itself
+    // through its own camera, a screen is a flat page. Everything else needs a
+    // spawn -- INCLUDING an empty scene, which is the case this must not go
+    // quiet on. Asking the contract for the Spawn role's applicability instead
+    // did exactly that: an empty scene is SceneKind::Empty, isWorld() is false
+    // for it, and a scene with nothing in it stopped reporting the one thing
+    // most obviously wrong with it.
+    const ContractReport contract = sceneContract(document);
+    const bool playsItself = contract.kind == SceneKind::Shot ||
+                             contract.kind == SceneKind::Screen;
+    const bool needsSpawn = !document.component && !playsItself;
+    if (playerSpawns == 0 && needsSpawn) {
         add(issues, Severity::Error, "spawn.missing",
             "the scene has no player spawn", {}, QuickFix::AddPlayerSpawn);
     } else if (playerSpawns > 1) {
@@ -860,7 +890,7 @@ std::vector<Issue> validate(const SceneDocument& document,
                 " player spawns; it must have exactly one",
             {});
     }
-    if (exits == 0 && !document.component) {
+    if (exits == 0 && !document.component && needsSpawn) {
         add(issues, Severity::Warning, "exit.missing",
             "the scene has no exit, so it cannot be left", {});
     }

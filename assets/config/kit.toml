@@ -545,7 +545,11 @@ role = "prop_container"
 mesh = "meshes/props/prop_chest.obj"
 material = "Game/PropChest"
 socket = "prop"
-import_scale = 1.0
+# The mesh is authored 0.202 m across -- a 20 cm chest, which reads as a lost
+# earring next to a 1.4 m barrel. Scaled to a chest somebody could put a sword
+# in. `size` and `y_offset` below are mesh units and scale with it, so they stay
+# correct without being re-measured.
+import_scale = 4.4
 # Authored around its own centre rather than standing on it, so half of it is
 # below y=0 until the offset lifts it.
 size = [0.202, 0.159, 0.16]
