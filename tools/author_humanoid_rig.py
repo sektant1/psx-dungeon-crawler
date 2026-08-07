@@ -278,8 +278,14 @@ def sample_keys(keys, phase: float, loop: bool) -> Pose:
 # clip therefore starts from a base that carries the arms down to the sides;
 # authoring "arms down" once here is what keeps it out of twenty clip tables.
 BASE = Pose({
-    "upperarm.L": roll(-38) @ pitch(-4),
-    "upperarm.R": roll(38) @ pitch(-4),
+    # The mannequin is modelled in an A-pose: the upperarm runs from (0.20,
+    # 1.45) to (0.52, 1.22), which is 54 degrees off vertical. This roll is
+    # what brings the arms down to the sides, so it has to undo most of that
+    # -- at 38 it left them 18 degrees out and every clip inherited the splay,
+    # because every clip is layered on BASE. Measured at the hand: 0.39 m from
+    # the centreline where a 1.8 m figure's hand should hang around 0.25 m.
+    "upperarm.L": roll(-48) @ pitch(-4),
+    "upperarm.R": roll(48) @ pitch(-4),
     "forearm.L": pitch(12) @ yaw(-6),
     "forearm.R": pitch(12) @ yaw(6),
     "hand.L": pitch(6),
@@ -551,8 +557,8 @@ RUN_F = half_cycle([
                "thigh.R": pitch(-36), "shin.R": pitch(-42), "foot.R": pitch(22),
                "toe.R": pitch(24),
                "shoulder.L": roll(-4), "shoulder.R": roll(4),
-               "upperarm.L": pitch(-44) @ roll(6), "forearm.L": pitch(88),
-               "upperarm.R": pitch(46) @ roll(-6), "forearm.R": pitch(96),
+               "upperarm.L": pitch(-44) @ roll(-6), "forearm.L": pitch(88),
+               "upperarm.R": pitch(46) @ roll(6), "forearm.R": pitch(96),
                "hand.L": pitch(-14), "hand.R": pitch(-14)},
               offset=(0.0, 0.0, -0.012))),
     # Deepest absorb: this is the frame the whole run reads its weight from.
@@ -562,8 +568,8 @@ RUN_F = half_cycle([
                "thigh.L": pitch(16), "shin.L": pitch(-44), "foot.L": pitch(2),
                "thigh.R": pitch(-22), "shin.R": pitch(-72), "foot.R": pitch(24),
                "toe.R": pitch(30),
-               "upperarm.L": pitch(-30) @ roll(4), "forearm.L": pitch(80),
-               "upperarm.R": pitch(32) @ roll(-4), "forearm.R": pitch(86)},
+               "upperarm.L": pitch(-30) @ roll(-4), "forearm.L": pitch(80),
+               "upperarm.R": pitch(32) @ roll(4), "forearm.R": pitch(86)},
               offset=(0.0, 0.0, -0.072))),
     # Push-off: support leg extends, swing knee drives through high.
     (0.250, P({"hips": pitch(3) @ roll(-3), "spine": pitch(11),

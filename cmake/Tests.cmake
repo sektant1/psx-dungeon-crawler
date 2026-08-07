@@ -124,6 +124,16 @@ if(BUILD_TESTING)
     LIBS eng_systems
     DEFINES PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
+  # The SHIPPED humanoid clips, not a synthetic rig: does the asset the actors
+  # actually wear carry motion, and does a full-weight layer leave the rest
+  # pose? Nothing asserted either, so a cook that emitted held poses -- or a
+  # blender leaning on rest -- rendered as a mannequin with no test failing.
+  eng_add_test(humanoid_clip
+    SOURCES engine/tests/HumanoidClipTests.cpp
+    INCLUDES engine/src
+    LIBS eng_systems
+    DEFINES PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
   # The camera rigs' framing model: follow smoothing, the pitch clamp, the
   # lock-on blend, the spring arm and the screen fit. No renderer, no window --
   # solve()/boomLength()/fitDistance() are split out of present() precisely so
