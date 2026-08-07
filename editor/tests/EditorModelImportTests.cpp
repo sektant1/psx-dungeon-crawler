@@ -245,8 +245,9 @@ int main()
             return std::find(extensions.begin(), extensions.end(), ext) !=
                    extensions.end();
         };
-        require(lists(".png") && lists(".tga") && lists(".dds"),
-                "the STBI and DDS formats are searched");
+        require(lists(".png") && lists(".tga") && !lists(".dds"),
+                "the stb_image formats are searched, and DDS is not: the "
+                "renderer lost its DDS decoder along with OGRE");
         // FreeImage is off, so these genuinely cannot be loaded. Copying one
         // would give a material naming a file the renderer chokes on.
         require(!lists(".tif") && !lists(".exr") && !lists(".webp"),

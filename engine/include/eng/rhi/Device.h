@@ -112,10 +112,7 @@ public:
 };
 
 struct DeviceDesc {
-    // Native window handle, as produced by eng::Platform. What it means is the
-    // backend's business (X11 Window, HWND, ...).
-    uintptr_t nativeWindowHandle = 0;
-    void* platformWindow = nullptr; // SDL_Window*, for backends that want it
+    void* platformWindow = nullptr; // SDL_Window*, the surface is built from it
     uint32_t width = 0;
     uint32_t height = 0;
     bool vsync = true;

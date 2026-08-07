@@ -33,7 +33,7 @@ BUILD_DIR   ?= build
 # gdb backtraces, the heap profiler's call-stack names, Connector attached by
 # default -- while compiling -O2. Plain Debug is -O0, which on this engine costs
 # roughly half the frame rate for no debugging benefit that RelWithDebInfo does
-# not already give: Jolt, Ogre and the RHI all spend their time in small
+# not already give: Jolt, the renderer and the RHI all spend their time in small
 # functions that only inlining makes cheap.
 #
 #   make BUILD_TYPE=Debug ...            -O0, for stepping through optimised-out

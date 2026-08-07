@@ -75,7 +75,7 @@ struct ResolvedPrimitiveCollider {
 namespace detail {
 
 // Unit-testable dispatch seam used directly by Renderer. Keeping this separate
-// from the Ogre-backed generators makes it impossible for a newly added kind
+// from the mesh-building generators makes it impossible for a newly added kind
 // to silently fall through to an unrelated mesh.
 enum class PrimitiveMeshGenerator {
     Box,

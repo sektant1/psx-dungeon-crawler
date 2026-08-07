@@ -7,7 +7,7 @@
 #include <vector>
 
 // Editor-owned, renderer-independent dungeon document. Keeping commands and
-// validation here makes the authoring workflow testable without booting Ogre.
+// validation here makes the authoring workflow testable without booting the renderer.
 class LevelDocument
 {
 public:

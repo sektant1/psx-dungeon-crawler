@@ -21,7 +21,7 @@
 
 namespace eng {
 
-class RenderCore; // internal; forward-declared only, no Ogre leak
+class RenderCore; // internal; forward-declared only, no backend leak
 class Renderer;
 class SceneView; // read-only scene-graph facade, defined in Renderer.cpp
 struct PrimitiveMeshDesc;
@@ -77,7 +77,7 @@ struct NodeTransform {
     glm::vec3 scale{1.0f};
 };
 
-// Public renderer facade. All Ogre types stay inside engine/src.
+// Public renderer facade. All backend types stay inside engine/src.
 // Colour convention: shading runs in linear space; callers linearise
 // sRGB-picked colours themselves (pow 2.2), as the PSX shaders expect.
 class Renderer
@@ -120,7 +120,8 @@ public:
     size_t meshSubmeshCount(MeshHandle mesh) const;
     bool meshImportReport(MeshHandle mesh, ModelImportReport& out) const;
     // Triangle geometry captured during render-mesh load, never reparsed or
-    // read back from Ogre. Returns false for meshes without cached triangles.
+    // read back from the GPU. Returns false for meshes without cached
+    // triangles.
     bool meshCollisionGeometry(MeshHandle mesh,
                                std::vector<glm::vec3>& vertices,
                                std::vector<uint32_t>& indices) const;
@@ -152,8 +153,8 @@ public:
     void setPosition(NodeHandle node, glm::vec3 position);
     void setOrientation(NodeHandle node, glm::quat orientation);
     void setScale(NodeHandle node, glm::vec3 scale);
-    // Derived world transform using the same parent orientation/scale
-    // inheritance as Ogre. Returns false for invalid or destroyed handles.
+    // Derived world transform, composing parent orientation and scale down
+    // the hierarchy. Returns false for invalid or destroyed handles.
     bool nodeWorldTransform(NodeHandle node, NodeTransform& out) const;
     // Live-swap the material on every mesh attached to a node (editor tweaks).
     void setNodeMaterial(NodeHandle node, const std::string& materialName);
@@ -163,9 +164,9 @@ public:
     void setNodeEnchantment(NodeHandle node, const EnchantmentPalette& palette,
                             float strength = 1.0f);
     void clearNodeEnchantment(NodeHandle node);
-    // All user-facing material names currently loaded (Ogre parsed every
-    // .material at init), sorted, with engine/Ogre internals filtered out. For
-    // editor material pickers -- discovered, never hard-coded.
+    // All user-facing material names currently loaded, sorted, with engine
+    // internals and debug materials filtered out. For editor material pickers
+    // -- discovered, never hard-coded.
     std::vector<std::string> materialNames() const;
     bool materialAvailable(const std::string& materialName) const;
     // World-space bounds of everything attached under a node (recursive), for
@@ -175,7 +176,7 @@ public:
     // particles, lights).
     void setNodeVisible(NodeHandle node, bool show);
     // Permanently destroy a node and the lights/entities attached to it, so
-    // transient spawns (projectiles, one-shot VFX) don't leak Ogre objects.
+    // transient spawns (projectiles, one-shot VFX) don't leak GPU resources.
     // Pool-owned particle systems are only detached (they recycle themselves).
     void destroyNode(NodeHandle node);
 
@@ -278,9 +279,9 @@ public:
     // never links physics, so the application owns the adapter and its
     // lifetime: it must outlive the renderer or be cleared with nullptr.
     // Without one, effects that ask to collide simply pass through everything.
-    // Drop every particle batch and decal while Ogre is still alive. Engine
-    // calls this immediately before tearing the render core down; the
-    // destructor cannot do it, because by then the SceneManager is gone.
+    // Drop every particle batch and decal while the device is still alive.
+    // Engine calls this immediately before tearing the render core down; the
+    // destructor cannot do it, because by then the device is gone.
     void shutdownParticles();
     void setParticleCollider(IParticleCollider* collider);
     void setParticleRayBudget(uint32_t raysPerFrame);
@@ -318,22 +319,22 @@ public:
     glm::mat4 cameraProjection() const;
 
     // --- materials --------------------------------------------------------
-    // Parse one generated Ogre material script at runtime. Editor imports use
+    // Parse one generated material script at runtime. Editor imports use
     // this after writing a GLB's base-colour texture material so new geometry
     // does not require an editor restart before it renders correctly.
     bool loadMaterialScript(const std::string& path);
     // Re-index the mounted resource directories.
     //
-    // Ogre builds a FileSystem archive's file list once, at
-    // initialiseAllResourceGroups(), so a file written *after* start-up does
-    // not exist as far as a texture unit is concerned. Nothing reports this:
-    // the material parses, the texture silently resolves to nothing, and the
-    // model renders untextured.
+    // A material's texture is uploaded when the material is parsed, resolved
+    // against the resource directories as they stood at that moment. A file
+    // written *after* that resolves to nothing, and nothing reports it: the
+    // material parses, the texture silently misses, and the model renders
+    // untextured.
     //
     // That is exactly what an in-editor model import does -- copy a PNG in,
     // then load a material naming it -- so it must re-index between the two.
-    // Already-loaded resources are untouched; this only refreshes what the
-    // archives know is on disk.
+    // This re-reads the resource directories and re-uploads every material's
+    // texture; the materials themselves are not reparsed.
     void refreshAssetIndex();
     void setMaterialParam(const std::string& materialName,
                           const std::string& paramName, float value);

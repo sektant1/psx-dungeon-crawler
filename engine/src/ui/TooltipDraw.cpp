@@ -2,7 +2,7 @@
 //
 // The pacing itself lives in UiFade, which links and tests on its own:
 // everything below reaches into UiCanvas and the bitmap font, which drag in
-// Ogre and ImGui, and none of that is needed to decide *when* a panel should
+// the renderer and ImGui, and none of that is needed to decide *when* a panel should
 // appear.
 #include <eng/ui/Tooltip.h>
 

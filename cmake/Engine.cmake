@@ -4,7 +4,7 @@
 #
 #   eng            facade + app lifetime (Engine)
 #   eng_framework  ECS scene, scene sync, controllers
-#   eng_systems    renderer, physics, audio, particles  (owns Ogre/Jolt/SDL)
+#   eng_systems    renderer, physics, audio, particles  (owns Vulkan/Jolt/SDL)
 #   eng_platform   window, input, config
 #   eng_core       log, io, math/geometry, events, clocks, string ids, profiling
 #
@@ -119,9 +119,9 @@ target_compile_definitions(
 
 # Render Hardware Interface: the graphics-backend contract and its
 # implementations. Sits beside eng_platform rather than inside eng_systems
-# because it must not see the renderer -- the dependency runs the other way,
-# once anything above starts driving it. Today nothing does: the engine still
-# renders through OGRE. See engine/src/rhi/README.md.
+# because it must not see the renderer -- the dependency runs the other way:
+# RenderCore drives an rhi::Device, and this layer knows nothing about it.
+# See engine/src/rhi/README.md.
 set(_eng_rhi_sources
     engine/src/rhi/Registry.cpp
     engine/src/rhi/null/NullDevice.cpp
@@ -129,7 +129,6 @@ set(_eng_rhi_sources
 add_library(eng_rhi STATIC ${_eng_rhi_sources})
 target_include_directories(eng_rhi PRIVATE engine/src/rhi)
 target_link_libraries(eng_rhi PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_core>")
-  target_compile_definitions(eng_rhi PRIVATE ENG_RENDERER_RHI=1)
 
 if(ENG_RHI_VULKAN)
   target_sources(
@@ -310,8 +309,7 @@ target_link_libraries(eng_systems
           ${CMAKE_DL_LIBS})
   add_dependencies(eng_systems rhi_renderer_shaders)
   target_link_libraries(eng_systems PRIVATE eng_stb)
-  target_compile_definitions(eng_systems PRIVATE ENG_RENDERER_RHI=1
-                                                ${_eng_renderer_shader_definitions})
+  target_compile_definitions(eng_systems PRIVATE ${_eng_renderer_shader_definitions})
 
 add_library(
   eng_framework STATIC engine/src/ecs/World.cpp engine/src/ecs/SceneSync.cpp
@@ -381,8 +379,6 @@ add_library(eng STATIC engine/src/app/Engine.cpp engine/src/app/Application.cpp
 target_include_directories(eng PRIVATE third_party engine/src)
 target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_script>"
                       PUBLIC eng_telemetry)
-  target_compile_definitions(eng_platform PRIVATE ENG_RENDERER_RHI=1)
-  target_compile_definitions(eng PRIVATE ENG_RENDERER_RHI=1)
 
 # The project runtime: reads a project.toml, boots its scene into a World and
 # runs the script host over it.

@@ -1,5 +1,5 @@
 // Headless tests for the particle simulation. ParticleSim and ParticleEmitters
-// include neither Ogre nor Jolt, so everything here runs on a plain pool and a
+// include neither the renderer nor Jolt, so everything here runs on a plain pool and a
 // stub IParticleCollider; nothing reads the wall clock and every random draw is
 // seeded, so a failure here is a real behaviour change and never a flake.
 #include <particles/ParticleSim.h>

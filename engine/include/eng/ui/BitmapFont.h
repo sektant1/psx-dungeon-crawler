@@ -24,8 +24,8 @@ public:
     ~BitmapFont();
 
     // `definition` is the TOML filename inside assets/engine/fonts, e.g.
-    // "ui_regular.toml". Both it and the PNG resolve through Ogre's resource
-    // group, so no path handling is needed at the call site.
+    // "ui_regular.toml". Both it and the PNG resolve through the mounted
+    // resource directories, so no path handling is needed at the call site.
     bool load(const std::string& definition);
     bool valid() const { return mTextureId != 0; }
 

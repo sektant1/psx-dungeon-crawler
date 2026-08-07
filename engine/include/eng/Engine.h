@@ -15,8 +15,8 @@
 
 namespace eng {
 
-// Owns lifetime and ordering: SDL window -> Ogre Root -> (frames) ->
-// Ogre Root down -> SDL window down. Also owns the frame clock and the
+// Owns lifetime and ordering: SDL window -> render core -> (frames) ->
+// render core down -> SDL window down. Also owns the frame clock and the
 // RAVEN_SCREENSHOT verification hook (render 90 frames by default, save PNG,
 // close). RAVEN_SCREENSHOT_FRAME overrides the capture frame for animation tests.
 class Engine
@@ -52,12 +52,12 @@ public:
     bool shouldClose() const { return mClose; }
     void requestClose() { mClose = true; }
     // dt = wall time (drives the benchmark/screenshot hooks); animDt = the time
-    // Ogre advances particles + time-based animation by.
+    // particles and time-based animation are advanced by.
     //
     // Pass animDt < 0 (the default) to take it from the step clock's Particles
     // channel, so particle VFX are stepped in step with everything else without
     // each game having to remember to do it. Pass an explicit value to override,
-    // or 0 to freeze Ogre-side animation for a frame.
+    // or 0 to freeze that animation for a frame.
     void renderFrame(float dt, float animDt = -1.0f);
     void shutdown();
 

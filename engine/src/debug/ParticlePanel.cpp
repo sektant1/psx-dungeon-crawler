@@ -280,7 +280,7 @@ void ParticlePanel::drawTexturePicker(ParticleEffectDesc& desc, bool& dirty)
     ImGui::SetNextItemWidth(-FLT_MIN);
     char material[128];
     std::snprintf(material, sizeof(material), "%s", desc.material.c_str());
-    if (ImGui::InputTextWithHint("##material", "Ogre material", material,
+    if (ImGui::InputTextWithHint("##material", "material name", material,
                                  sizeof(material))) {
         desc.material = material;
         dirty = true;

@@ -144,8 +144,9 @@ void SceneSync::sync()
     }
 
     // 3c) Material overrides. Pushed when the named material changes rather
-    //     than every frame: the backend call rebuilds an Ogre entity's
-    //     technique, so doing it per frame would cost more than the draw.
+    //     than every frame: the backend call re-resolves the material and
+    //     re-attaches every mesh under the node, so doing it per frame would
+    //     cost more than the draw.
     for (auto e : reg.view<MaterialOverride, NodeRef>()) {
         const MaterialOverride& mo = reg.get<MaterialOverride>(e);
         MaterialApplied& applied = reg.get_or_emplace<MaterialApplied>(e);

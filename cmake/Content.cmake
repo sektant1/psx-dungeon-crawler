@@ -5,8 +5,8 @@
 #
 #   eng_ecs_headless  the engine sources a headless tool needs (the component
 #                     registry, plus eng_core underneath it), for CLI/test
-#                     targets that must NOT drag in Ogre/SDL/Jolt to read a
-#                     .map.
+#                     targets that must NOT drag in the renderer/SDL/Jolt to
+#                     read a .map.
 #   game_content      the temporarily named authoring/runtime scene bridge:
 #                     stable component ids, serializers and scene cooking.
 #                     Renderer-free by construction.
@@ -16,7 +16,7 @@
 # targets link eng; headless ones link eng_ecs_headless.
 #
 # It links eng_core rather than recompiling ByteStream.cpp of its own. eng_core
-# is Ogre/SDL/Jolt-free -- log, io, diagnostics, and eng::assets -- so the "no
+# is renderer/SDL/Jolt-free -- log, io, diagnostics, and eng::assets -- so the "no
 # heavy dependencies" property is unchanged, and a headless tool now gets the
 # content resolver for free. Listing ByteStream.cpp here *as well* would put two
 # definitions in one link.

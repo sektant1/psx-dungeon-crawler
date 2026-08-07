@@ -24,9 +24,9 @@
 namespace eng::assets {
 
 // One mounted content pack. `dir` is absolute; `resources` are the subdirs of
-// it that are registered with Ogre's flat resource group -- anything not
-// listed is data read by path, which is what keeps authoring debris out of the
-// group.
+// it registered as resource directories, which the renderer resolves texture
+// and material names against -- anything not listed is data read by path,
+// which is what keeps authoring debris out of that flat namespace.
 struct Pack {
     std::string id;
     std::filesystem::path dir;

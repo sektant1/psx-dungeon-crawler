@@ -96,8 +96,6 @@ struct DecalSystem::Impl {
 DecalSystem::DecalSystem() : mImpl(std::make_unique<Impl>()) {}
 DecalSystem::~DecalSystem() = default;
 
-void DecalSystem::attach(Ogre::SceneManager*) {}
-
 void DecalSystem::shutdown() { clear(); }
 
 void DecalSystem::registerProfile(const std::string& id,

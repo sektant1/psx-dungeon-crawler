@@ -13,7 +13,7 @@
 
 namespace game {
 
-// What an enemy *is*, as data. Nothing here knows about Ogre, Jolt or EnTT: an
+// What an enemy *is*, as data. Nothing here knows about the renderer, Jolt or EnTT: an
 // EnemyDef is the authored row that EnemyLibrary parses out of enemies.toml and
 // that EnemySystem turns into a body, a node and a set of components.
 //

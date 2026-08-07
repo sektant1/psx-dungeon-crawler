@@ -19,8 +19,8 @@ namespace eng {
 // This layer knows nothing about the renderer on purpose: it is plain data plus
 // callbacks, so it is unit-testable without a window (see LoadingTests).
 //
-// Steps run on the main thread. Deliberate: the renderer and Ogre's resource
-// manager are not thread-safe here, and a step that uploads a mesh from a
+// Steps run on the main thread. Deliberate: the renderer and its resource
+// upload path are not thread-safe here, and a step that uploads a mesh from a
 // worker would be a crash, not a speedup. A step that wants to be interruptible
 // splits itself with tick() instead.
 struct LoadStep {

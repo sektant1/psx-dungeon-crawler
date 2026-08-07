@@ -262,13 +262,14 @@ std::string modelSlug(const std::string& sourcePath)
 
 const std::vector<std::string>& textureExtensions()
 {
-    // OGRE's STBI codec, plus the DDS one built into OgreMain. FreeImage is
-    // off in cmake/Dependencies.cmake, so the long tail it would add (tif, exr,
-    // webp) genuinely cannot be loaded and must not be listed.
+    // Exactly what stb_image decodes -- the renderer loads every texture
+    // through stbi_load (engine/src/render/rhi/Image.cpp) and has no other
+    // decoder. .dds used to be here because OgreMain carried its own DDS
+    // codec; that went with OGRE, so listing it now would promise a format
+    // the renderer silently fails to load.
     static const std::vector<std::string> kExtensions = {
         ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd",
         ".gif", ".hdr", ".pic",  ".pnm", ".ppm", ".pgm",
-        ".dds",
     };
     return kExtensions;
 }

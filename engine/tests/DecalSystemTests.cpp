@@ -1,14 +1,12 @@
 // Headless tests for the decal budget, the merge grid and the profile
-// registry. DecalSystem's public header only forward-declares
-// Ogre::SceneManager, and attach() is documented as safe to skip: with no
-// scene manager the system still ages, merges, evicts and counts, and only the
-// instance-buffer rebuild is skipped. Everything asserted below therefore runs
-// with no Ogre context at all.
+// registry. DecalSystem needs no renderer to age, merge, evict and count --
+// only the instance-buffer rebuild wants one -- so everything asserted below
+// runs with no graphics context at all.
 //
-// Not covered, because it is unreachable without a live Ogre root: material
-// resolution/cloning per texture stem, batch capacity and visibility, and
-// back-to-front sorting. Those live inside DecalBatch and Impl::rebuild, which
-// return early or are never constructed when the scene manager is null.
+// Not covered, because it is unreachable without a live device: material
+// resolution per texture stem, batch capacity and visibility, and
+// back-to-front sorting. Those live inside the batch rebuild, which is never
+// reached headlessly.
 #include <eng/particles/DecalSystem.h>
 
 #include <eng/particles/ParticleCollider.h>   // DecalRequest
@@ -352,7 +350,6 @@ void testHeadlessLifecycle()
     using namespace eng;
     DecalSystem decals;
     decals.registerProfile("splat", splatProfile());
-    decals.attach(nullptr);   // documented as safe: simulate, draw nothing
     decals.spawn(hit("splat", glm::vec3(0.0f)));
     decals.update(0.016f);
     decals.update(0.016f, glm::vec3(0.0f, 1.6f, -3.0f));

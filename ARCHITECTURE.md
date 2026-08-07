@@ -113,7 +113,8 @@ box or a checkered surface instead. That is right at runtime and wrong at build
 time — it turns a typo into a scene that quietly looks wrong. `tools/assetlint.py`
 (the `assetlint` ctest) resolves every texture, mesh and material reference in
 each application's asset tree and fails on a dangling one, a duplicate material
-name, or two textures sharing a basename (Ogre's lookup is flat).
+name, or two textures sharing a basename — `MaterialLibrary` is one flat
+`name -> Material` map, so both collisions resolve arbitrarily at runtime.
 
 ## Content root
 
@@ -139,9 +140,11 @@ pack on top) only decides who wins if two packs answer to the same logical path.
 
 That makes material names globally unique by necessity, which is why they are
 `Pack/<defining .material file stem>/Name` — a rule `assetlint` checks, so it
-cannot drift. Ogre resolves both material names and file basenames flatly, and
-a duplicate material name is not a warning: `ResourceManager::add` throws and
-the app aborts during script parsing.
+cannot drift. `MaterialLibrary` keys materials by name in a single flat map and
+resolves texture basenames the same way, so a duplicate name is not even a
+warning — `insert_or_assign` silently keeps whichever file was parsed last.
+That silence is exactly why the lint is a build-time gate: the failure it
+catches has no runtime symptom beyond a surface drawing wrong.
 
 Source art (`.zip`, `.rar`, `.blend`) sits under `assets/` beside the packs and
 is gitignored by extension — it is a pipeline input, not a build input.

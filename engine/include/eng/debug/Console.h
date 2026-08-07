@@ -102,7 +102,7 @@ private:
 // Splits an engine log line into (subsystem, message).
 //
 // Everything in this engine logs as "Subsystem: what happened" -- "Warmup: 96
-// materials, 0 unsupported", "RenderCore: walking '...'", "Ogre: Error: ...".
+// materials, 0 unsupported", "RenderCore: walking '...'", "Physics: ...".
 // That convention was invisible to the console, which filed every captured line
 // under one category called "engine": the column showed the same word on every
 // row, the category filter could not narrow anything, and the eye had no left

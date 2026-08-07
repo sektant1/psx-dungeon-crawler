@@ -299,7 +299,7 @@ void LiveLevel::updateVisibility(eng::Renderer& r, glm::vec3 cameraPos)
         const bool visible = showcaseVisibleAtDistance(
             exhibit.visibility, glm::length(exhibit.position - cameraPos),
             exhibit.visibilityRange, exhibitHysteresis);
-        // Authored roots start visible in Ogre. Uninitialized evaluation must
+        // Authored roots start visible in the renderer. Uninitialized evaluation must
         // nevertheless use the entry threshold; only issue a renderer call
         // when the evaluated state differs from the live starting state.
         const bool wasVisible =

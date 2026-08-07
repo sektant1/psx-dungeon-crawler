@@ -111,8 +111,8 @@ public:
     RenderCore();
     ~RenderCore();
 
-    bool init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
-              int height, const std::string& title, bool vsync);
+    bool init(void* sdlWindow, int width, int height, const std::string& title,
+              bool vsync);
     void shutdown();
     void renderFrame(float dt);
     void onResize(int width, int height);

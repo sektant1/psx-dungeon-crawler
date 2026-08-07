@@ -1,6 +1,6 @@
 // The flipbook window: the one piece of maths shared by the material builder
 // (which pushes it to the GPU) and particle_sprite.vert (which walks it). It is
-// Ogre-free on purpose, so this test needs no renderer.
+// Renderer-free on purpose, so this test needs no graphics context.
 //
 // It also asserts the *contract* between the three files that have to agree
 // about the uniform names, because the failure mode when they drift is a

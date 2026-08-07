@@ -9,7 +9,7 @@ namespace eng {
 
 // The renderer-neutral half of the particle texture import: scan a directory of
 // PNGs, merge the *.toml overrides over them, and answer stem -> description.
-// Nothing here knows what a material is, which is why both the Ogre backend
+// Nothing here knows what a material is, which is why both the old backend
 // (via ParticleMaterials, which adds material generation on top) and the RHI
 // backend (which binds the PNG directly) can share one catalogue instead of
 // parsing the same tables twice.
@@ -49,10 +49,10 @@ public:
     }
 
     // Absolute path for a description's PNG. Entries name a bare leaf
-    // ("bullet16.png") even when the file lives in a subdirectory, because Ogre
-    // resolves textures by leaf name across recursively registered resource
-    // locations; the scan indexes every PNG under textures/ the same way so a
-    // backend that opens files directly agrees with that authoring contract.
+    // ("bullet16.png") even when the file lives in a subdirectory: textures
+    // resolve by leaf name across the recursively registered resource
+    // directories, and the scan indexes every PNG under textures/ the same way
+    // so a backend that opens files directly agrees with that contract.
     // Empty when no such file was found.
     std::string pathFor(const ParticleTextureDesc& desc) const;
 

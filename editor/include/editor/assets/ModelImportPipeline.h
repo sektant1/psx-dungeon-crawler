@@ -71,8 +71,8 @@ ModelImportResult importModelToKit(const std::string& sourcePath,
 // underscores. Exposed for the tests, and because the caller shows it.
 std::string modelSlug(const std::string& sourcePath);
 
-// Image formats this build can actually load: OGRE's STBI codec plus its
-// built-in DDS one (FreeImage is off -- see cmake/Dependencies.cmake).
+// Image formats this build can actually load: whatever stb_image decodes,
+// which is the renderer's only texture decoder.
 //
 // Copying a texture the renderer cannot read is worse than not finding one: the
 // prop renders untextured either way, but the material claims a file that

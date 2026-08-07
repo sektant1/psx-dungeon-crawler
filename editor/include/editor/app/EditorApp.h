@@ -69,8 +69,8 @@ namespace ed {
 //
 // The window is ImGui end to end: the world appears inside it as an
 // ImGui::Image of the renderer's offscreen viewport. That inversion is what
-// makes this editor viable at all -- ImGui drawn *over* the Ogre overlay is
-// what made the previous one flicker badly enough to be deleted.
+// makes this editor viable at all -- ImGui drawn *over* the world as an
+// overlay is what made the previous one flicker badly enough to be deleted.
 class EditorApp : public eng::Application {
 public:
     EditorApp();

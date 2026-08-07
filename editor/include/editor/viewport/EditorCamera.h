@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 // Orbit/fly/walk editor camera. Pure math + state; the caller applies the
-// resulting transform to a Renderer camera node. No engine/Ogre dependency.
+// resulting transform to a Renderer camera node. No renderer dependency.
 class EditorCamera {
 public:
     // The player's eye sits this far above the floor. This is a second copy of

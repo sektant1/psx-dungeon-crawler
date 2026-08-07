@@ -751,8 +751,8 @@ RenderCore::~RenderCore()
     shutdown();
 }
 
-bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
-                      int height, const std::string&, bool vsync)
+bool RenderCore::init(void* sdlWindow, int width, int height,
+                      const std::string&, bool vsync)
 {
     mImpl->window = static_cast<SDL_Window*>(sdlWindow);
     if (!mImpl->window) {
@@ -766,7 +766,6 @@ bool RenderCore::init(uintptr_t nativeWindowHandle, void* sdlWindow, int width,
     mImpl->windowHeight = uint32_t(std::max(drawableHeight, 1));
 
     rhi::DeviceDesc desc;
-    desc.nativeWindowHandle = nativeWindowHandle;
     desc.platformWindow = sdlWindow;
     desc.width = mImpl->windowWidth;
     desc.height = mImpl->windowHeight;

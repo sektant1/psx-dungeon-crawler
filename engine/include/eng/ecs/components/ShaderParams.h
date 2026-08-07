@@ -6,7 +6,7 @@ namespace eng::ecs {
 // Per-entity shader uniforms: the knobs this engine's shader family already
 // exposes, driven by one entity rather than by the material every entity shares.
 //
-// The problem it solves. Ogre materials are shared by name -- `Game/Kit/Dungeon`
+// The problem it solves. Materials are shared by name -- `Game/Kit/Dungeon`
 // is one object a hundred and sixty walls point at -- so
 // `Renderer::setMaterialParam` tints *all* of them. Anything that wanted one
 // pillar to glow therefore had to author a second material: a file, a name, an

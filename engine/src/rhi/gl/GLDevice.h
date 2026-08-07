@@ -10,7 +10,7 @@ namespace eng::rhi::gl {
 // and return the device from createDevice in ../Registry.cpp. Nothing above
 // the RHI needs to change when you do.
 //
-// Notes that will save time, from what the current OGRE path relies on:
+// Notes that will save time, from what the shipping Vulkan path relies on:
 //  - The PSX chain renders at 1/3 of the window and upscales with nearest
 //    filtering. Whatever you do about filtering elsewhere, that has to stay
 //    exact or the look changes.

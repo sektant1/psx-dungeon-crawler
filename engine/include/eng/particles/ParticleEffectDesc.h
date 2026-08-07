@@ -73,11 +73,11 @@ struct ParticleEmitterDesc {
     glm::vec4 startColour{1.0f};     // used when colourRamp is empty
 };
 
-// Renderer-agnostic description of one particle effect. eng::Particles translates
-// this into a pooled Ogre ParticleSystem.
+// Renderer-agnostic description of one particle effect. eng::Particles
+// translates this into a pooled, batched particle system.
 struct ParticleEffectDesc {
     std::string name;                // stable id, e.g. "fireball_trail"
-    std::string material;            // explicit Ogre material, if hand-authored
+    std::string material;            // explicit material name, if hand-authored
     // Preferred over `material`: the file stem of a PNG under
     // assets/particles/textures/, whose material is generated at boot. Dropping
     // a texture in and naming it here is the whole import workflow.
@@ -136,7 +136,7 @@ inline float particleQualityScale(ParticleVisualRole role,
 }
 
 // One-shot retirement is governed by the independently resolved emission
-// window + maximum particle TTL. It must not depend on Ogre's live count:
+// window + maximum particle TTL. It must not depend on the live particle count:
 // non-visible systems can intentionally stop simulation before their particles
 // age to zero. Looping effects remain active until explicitly stopped.
 inline bool particleSystemLifetimeExpired(bool oneShot, float age,
@@ -146,7 +146,8 @@ inline bool particleSystemLifetimeExpired(bool oneShot, float age,
 }
 
 // Fully resolved, renderer-independent checkout data. Runtime systems consume a
-// fresh value for every pool checkout instead of inheriting mutable Ogre state.
+// fresh value for every pool checkout instead of inheriting mutable emitter
+// state from the previous user of the pooled system.
 struct ResolvedParticleEmitter {
     ParticleEmitterShape shape = ParticleEmitterShape::Point;
     glm::vec3 boxSize{0.0f};

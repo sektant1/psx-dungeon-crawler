@@ -7,12 +7,13 @@
 #include <vector>
 
 // Render Hardware Interface: the device-level contract every graphics backend
-// implements. Nothing in eng::rhi names a graphics API -- no GL, no Vulkan, no
-// OGRE type appears in any of these headers, which is the whole point: code
-// above the RHI compiles once and runs on whichever backend is plugged in.
+// implements. Nothing in eng::rhi names a graphics API -- no Vulkan type
+// appears in any of these headers, which is the whole point: code above the
+// RHI compiles once and runs on whichever backend is plugged in.
 //
-// The engine currently renders through OGRE and does not go through this
-// contract yet. See docs/design/2026-07-29-rhi-and-module-contracts.md.
+// This is the engine's only rendering path: RenderCore owns an rhi::Device and
+// every pass records into an rhi::CommandList. See
+// docs/design/2026-07-29-rhi-and-module-contracts.md for how it got here.
 namespace eng::rhi {
 
 // Resources are generational handles, never pointers: a backend is free to

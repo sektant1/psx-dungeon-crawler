@@ -469,12 +469,9 @@ if(BUILD_TESTING)
   target_link_libraries(level_resource_tests PRIVATE eng_toml glm::glm eng)
   add_test(NAME level_resource COMMAND level_resource_tests)
 
-  # ObjLoader comes from the linked engine, not a second compile of the same
-  # source: the engine layers link whole-archive, so recompiling it here would
-  # be a duplicate definition.
-  # Scoped to the OGRE renderer: ObjLoader is an Ogre-typed source that only the
-  # OGRE path compiles (the RHI renderer imports geometry through Assimp), so
-  # its subject does not exist to test in an RHI build.
+  # ObjLoader had a test here that was scoped to the OGRE renderer; it imported
+  # geometry through Ogre types, and the renderer now imports through Assimp, so
+  # the subject no longer exists.
 
   eng_add_test(loading
     SOURCES engine/tests/LoadingTests.cpp engine/src/core/Loading.cpp
@@ -578,8 +575,8 @@ if(BUILD_TESTING)
     INCLUDES engine/include
     DEFINES PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
-  # The simulation is deliberately Ogre-free, so it links only glm and its own
-  # two translation units -- no renderer, no physics, no window.
+  # The simulation is deliberately renderer-free, so it links only glm and its
+  # own two translation units -- no renderer, no physics, no window.
   eng_add_test(particle_sim
     SOURCES engine/tests/ParticleSimTests.cpp engine/src/particles/ParticleSim.cpp
             engine/src/particles/ParticleEmitters.cpp
@@ -609,9 +606,9 @@ if(BUILD_TESTING)
     INCLUDES game/src
     LIBS eng)
 
-  # DecalSystem runs headlessly: attach() is optional and the rebuild path
-  # returns early with no scene manager, so ageing, merging and eviction are all
-  # testable. The .cpp still includes Ogre headers, hence the link against eng.
+  # DecalSystem runs headlessly: the rebuild path returns early with no device,
+  # so ageing, merging and eviction are all testable. The .cpp still pulls in
+  # renderer headers, hence the link against eng.
   eng_add_test(decal_system
     SOURCES engine/tests/DecalSystemTests.cpp
     INCLUDES engine/src third_party

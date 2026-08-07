@@ -1,13 +1,5 @@
 #include <eng/render/MaterialPreview.h>
 
-#if !defined(ENG_RENDERER_RHI)
-#include <OgreMaterial.h>
-#include <OgreMaterialManager.h>
-#include <OgrePass.h>
-#include <OgreTechnique.h>
-#include <OgreTextureUnitState.h>
-#endif
-
 #include <eng/LightDesc.h>
 #include <eng/Log.h>
 #include <eng/Primitive.h>
@@ -47,88 +39,6 @@ constexpr float kThumbQuadSize = 1.0f;
 // its point lights would otherwise spill onto whatever level is loaded there.
 constexpr glm::vec3 kThumbOrigin{0.0f, -1000.0f, 0.0f};
 constexpr glm::vec3 kThumbCameraOffset{0.0f, 0.28f, 1.5f};
-
-// Materials whose vertex program reads a per-instance stream. These cannot be
-// drawn on a plain mesh at all: particle.vert takes the world position, size,
-// colour and flipbook frame as vertex attributes the batch binds per instance
-// (uv1/uv2/uv3), so on an ordinary quad uv1.w -- the world size -- arrives as
-// zero, every corner collapses to a point, and the "preview" is a one-pixel
-// line. That is what the quad rig used to show for every particle material,
-// which was two of the three patterns it existed to serve.
-bool needsInstanceStream(const std::string& material)
-{
-#if defined(ENG_RENDERER_RHI)
-    (void)material;
-    return false;
-#else
-    Ogre::MaterialPtr mat =
-        Ogre::MaterialManager::getSingleton().getByName(material);
-    if (!mat || !mat->getTechnique(0) || !mat->getTechnique(0)->getPass(0))
-        return false;
-    const Ogre::Pass* pass = mat->getTechnique(0)->getPass(0);
-    if (!pass->hasVertexProgram())
-        return false;
-    const std::string& vs = pass->getVertexProgramName();
-    return vs == "Particle_VS" || vs == "Particles/SpriteVS" ||
-           vs == "Particles/VoxelVS" || vs == "Decals/QuadVS";
-#endif
-}
-
-// A preview stand-in for one of those: the same texture and blend on the
-// engine's plain sprite program, which takes only what a mesh actually has.
-// The atlas parameters are carried across, so a flipbook still plays -- the
-// preview shows the art animating, which is the whole point of staging an
-// icon.
-std::string instancedPreviewMaterial(const std::string& material)
-{
-#if defined(ENG_RENDERER_RHI)
-    return material;
-#else
-    auto& mm = Ogre::MaterialManager::getSingleton();
-    const std::string name = "__Preview/Quad/" + material;
-    if (mm.getByName(name))
-        return name;
-
-    Ogre::MaterialPtr source = mm.getByName(material);
-    Ogre::MaterialPtr base = mm.getByName("Engine/Psx/PreviewSprite");
-    if (!source || !base)
-        return material;
-    Ogre::MaterialPtr clone = base->clone(name);
-    Ogre::Pass* from = source->getTechnique(0)->getPass(0);
-    Ogre::Pass* to = clone->getTechnique(0)->getPass(0);
-    if (!from || !to)
-        return material;
-
-    if (from->getNumTextureUnitStates() > 0 &&
-        to->getNumTextureUnitStates() > 0)
-        to->getTextureUnitState(0)->setTextureName(
-            from->getTextureUnitState(0)->getTextureName());
-    to->setSceneBlending(from->getSourceBlendFactor(),
-                         from->getDestBlendFactor());
-
-    // Carry the flipbook across when the source declares one, so an atlas
-    // material previews as the animation the game plays rather than as frame 0.
-    if (from->hasVertexProgram() && to->hasVertexProgram()) {
-        const auto& src = from->getVertexProgramParameters();
-        auto dst = to->getVertexProgramParameters();
-        const auto carry = [&](const char* fromName, const char* toName) {
-            if (!src->_findNamedConstantDefinition(fromName, false))
-                return;
-            const Ogre::GpuConstantDefinition& def =
-                src->getConstantDefinition(fromName);
-            const float* v = src->getFloatPointer(def.physicalIndex);
-            if (def.elementSize >= 2)
-                dst->setNamedConstant(toName, Ogre::Vector2(v[0], v[1]));
-            else
-                dst->setNamedConstant(toName, v[0]);
-        };
-        carry("atlasGrid", "spriteGrid");
-        carry("atlasFrames", "spriteFrameCount");
-        carry("atlasFps", "spriteFps");
-    }
-    return name;
-#endif
-}
 
 // A plane primitive lies in XZ with its front face pointing +Y, so a quad that
 // faces a camera is that plane rotated until its normal points at the eye.
@@ -258,28 +168,13 @@ StagePreview StagePreviewCatalog::modeFor(const std::string& material) const
             return StagePreview::Quad;
     }
 
-    // Names are not reliable metadata. Game/Spells/FireballImpact and
-    // Engine/Particles/SpriteAdditive use the same instanced shader but only
-    // one happens to match the hand-authored prefix list. Inspect the loaded
-    // program so newly added animated/instanced materials get a useful preview
-    // without another catalog edit.
-#if !defined(ENG_RENDERER_RHI)
-    Ogre::MaterialPtr mat =
-        Ogre::MaterialManager::getSingleton().getByName(material);
-    if (mat && mat->getTechnique(0) && mat->getTechnique(0)->getPass(0)) {
-        const Ogre::Pass* pass = mat->getTechnique(0)->getPass(0);
-        if (pass->hasVertexProgram()) {
-            const std::string& vs = pass->getVertexProgramName();
-            const auto starts = [&vs](const char* prefix) {
-                return vs.rfind(prefix, 0) == 0;
-            };
-            if (starts("Particle") || starts("Particles/") ||
-                starts("Sprite/") || starts("Decals/") ||
-                starts("PixelVfx/"))
-                return StagePreview::Quad;
-        }
-    }
-#endif
+    // The catalog is the only source. There used to be a fallback here that
+    // recovered the mode by matching the loaded vertex program's name, for
+    // materials nobody had added to the catalog yet; it read OGRE's material
+    // manager and went away with it. The RHI format names its shader family
+    // outright (MaterialShader), so the same fallback could be rebuilt on
+    // MaterialLibrary if unlisted materials start previewing wrongly -- but it
+    // needs a real lookup, not a resurrected name-prefix guess.
     return StagePreview::Sphere;
 }
 
@@ -350,14 +245,6 @@ void MaterialPreview::buildSphereRig(Renderer& renderer)
         setVisible(renderer, false);
 }
 
-// Which material the quad rig actually attaches: the real one, or a stand-in
-// when the real one cannot be drawn on a mesh.
-std::string MaterialPreview::quadMaterial(const std::string& material)
-{
-    return needsInstanceStream(material) ? instancedPreviewMaterial(material)
-                                         : material;
-}
-
 // The quad rig: subject only. No floor, because a checkerboard behind a
 // transparent icon reads as part of the icon; no lights, because an animated
 // shader is emissive and a key light would just recolour it; no shadow, because
@@ -367,7 +254,7 @@ void MaterialPreview::buildQuadRig(Renderer& renderer)
     mSubject =
         renderer.createNode(kRootNode, focusPoint(), "material_stage_quad");
     renderer.attachMesh(mSubject, quadMesh(renderer, kQuadSize),
-                        quadMaterial(mMaterial), false);
+                        mMaterial, false);
     renderer.setOrientation(mSubject, facing(focusPoint(), cameraPosition()));
     if (!mVisible)
         setVisible(renderer, false);
@@ -380,7 +267,7 @@ void MaterialPreview::buildThumbnailRig(Renderer& renderer)
         mThumbSubject = renderer.createNode(kRootNode, kThumbOrigin,
                                             "material_thumbnail_quad");
         renderer.attachMesh(mThumbSubject, quadMesh(renderer, kThumbQuadSize),
-                            quadMaterial(mThumbMaterial), false);
+                            mThumbMaterial, false);
         renderer.setOrientation(
             mThumbSubject,
             facing(kThumbOrigin, kThumbOrigin + kThumbCameraOffset));
@@ -522,9 +409,7 @@ void MaterialPreview::setThumbnailMaterial(Renderer& renderer,
         return;
     }
 
-    renderer.setNodeMaterial(mThumbSubject, mThumbMode == StagePreview::Quad
-                                                ? quadMaterial(material)
-                                                : material);
+    renderer.setNodeMaterial(mThumbSubject, material);
     // setNodeMaterial re-attaches, which resets the visibility flags the
     // thumbnail target filters on. Without this the swatch subject reappears in
     // the level the moment you preview a material.

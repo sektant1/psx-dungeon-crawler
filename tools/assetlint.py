@@ -12,11 +12,12 @@ Checks:
      texture directory;
   2. every `.obj` named in a .toml exists under the owning tree's meshes/;
   3. every material name referenced from a .toml is defined by some .mat;
-  4. no material name is defined twice (Ogre rejects the duplicate, and the
-     scene silently keeps the first definition);
+  4. no material name is defined twice (MaterialLibrary keys materials by name
+     in one flat map and inserts with insert_or_assign, so the duplicate
+     silently wins and the surface draws with whichever file parsed last);
   5. no two texture files share a basename, and no two .mat files do
-     either (Ogre's file index is as flat as its resource namespace: the
-     duplicate is skipped and openResource() resolves it arbitrarily).
+     either (the texture index is as flat as the material namespace: the
+     duplicate resolves arbitrarily).
 
 Usage: assetlint.py [asset-root ...]   (defaults to every mount set declared in
 assets/assets.toml). Run standalone or as the `assetlint` ctest.
@@ -38,11 +39,11 @@ MANIFEST = ROOT / "assets" / "assets.toml"
 def mount_sets() -> dict[str, list[Path]]:
     """The manifest's [mounts], resolved to directories.
 
-    Uniqueness is per *mount set*, not global: Ogre's namespaces are flat, but
-    only one set is ever registered at a time, so two packs that are never
-    mounted together may reuse a name. Two packs in the SAME set may not --
-    ResourceManager::add throws rather than warns -- which is what makes this
-    the check that lets `demo` sit on top of `game`.
+    Uniqueness is per *mount set*, not global: the runtime's namespaces are
+    flat, but only one set is ever registered at a time, so two packs that are
+    never mounted together may reuse a name. Two packs in the SAME set may not
+    -- the later definition silently replaces the earlier -- which is what
+    makes this the check that lets `demo` sit on top of `game`.
 
     Every root comes from the manifest now. assets/game used to be
     appended here by hand because DEMO_SCENE_TOML reached it outside the
@@ -71,8 +72,8 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tga", ".dds", ".bmp"}
 
 # Pipeline INPUTS, not content: archives, .blend files and the raw effect/model
 # packs they extract to. They sit under assets/ so the artist finds them next to
-# the thing they produce, but nothing loads them and they are not registered
-# with Ogre -- so their basenames cannot collide with anything, and linting them
+# the thing they produce, but nothing loads them and they are never registered
+# as resource directories -- so their basenames cannot collide, and linting them
 # only produces noise (the dungeon pack ships the same texture names the game
 # already committed, extracted, under textures/).
 SKIP_DIRS = {"source"}
@@ -127,7 +128,7 @@ def lint(roots: list[Path]) -> tuple[list[str], str]:
     textures, meshes, materials, scripts, lua = collect(roots)
     errors: list[str] = []
 
-    # 4/5: ambiguity in the flat namespaces Ogre actually resolves against.
+    # 4/5: ambiguity in the flat namespaces the runtime resolves against.
     for name, files in sorted(materials.items()):
         if len(files) > 1:
             where = ", ".join(str(f.relative_to(ROOT)) for f in files)

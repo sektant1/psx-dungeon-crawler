@@ -26,8 +26,8 @@ enum class StagePreview {
 };
 
 // Which materials get which rig. There is no material catalog in this project --
-// Renderer::materialNames() enumerates Ogre's material manager directly -- so the
-// metadata cannot hang off a catalog entry and lives in its own tiny file,
+// Renderer::materialNames() enumerates the loaded MaterialLibrary directly -- so
+// the metadata cannot hang off a catalog entry and lives in its own tiny file,
 // assets/engine/material_preview.toml. Anything unlisted is a sphere, which is
 // why adding this file cannot change how any of the ~95 existing materials look.
 class StagePreviewCatalog
@@ -168,7 +168,6 @@ public:
 private:
     // Substitutes a drawable stand-in for a material that needs a per-instance
     // vertex stream; returns the material itself otherwise.
-    static std::string quadMaterial(const std::string& material);
 
 
     void buildSphereRig(Renderer& renderer);

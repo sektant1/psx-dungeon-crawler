@@ -1892,13 +1892,13 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
 
 
     // renderFrame() (owned by the runner) paints all of the above; it is
-    // full-rate so particles + Ogre anim stay smooth.
+    // full-rate so particles + animation stay smooth.
 }
 
 void DungeonApp::onStopGame(eng::Engine&)
 {
     mGameAudio.stopAll(eng::StopMode::Immediate);
-    // Remove dynamic prop bodies before shutdown (nodes are owned by Ogre/scene).
+    // Remove dynamic prop bodies before shutdown (nodes are owned by the scene).
     mProps.teardown(physics());
     if (mCtx) {
         mRpg.pickups().clear(*mCtx);
@@ -1924,7 +1924,7 @@ void DungeonApp::onStopGame(eng::Engine&)
 int main(int argc, char** argv)
 {
     // Dev self-test: RAVEN_GEN_DUMP=<seed> prints a generated grid and exits,
-    // no window/Ogre. Eyeball connectivity + room shapes across seeds.
+    // no window, no renderer. Eyeball connectivity + room shapes across seeds.
     if (const char* dump = std::getenv("RAVEN_GEN_DUMP")) {
         const auto grid = gen::generate(uint32_t(std::strtoul(dump, nullptr, 10)));
         for (const std::string& row : grid.rows())

@@ -22,7 +22,7 @@ struct NodeRecord {
 };
 
 // Editor-facing mirror of the scene graph, kept in sync by Renderer. Holds no
-// Ogre types. Keyed by handle id.
+// backend types. Keyed by handle id.
 class SceneRegistry {
 public:
     void addNode(NodeHandle node, NodeHandle parent, std::string name);

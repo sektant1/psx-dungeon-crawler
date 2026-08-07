@@ -42,7 +42,7 @@ endif()
 
 # --- Build speed: linker ----------------------------------------------------
 # GNU ld is the slowest part of an incremental build here: every executable
-# links the whole-archive engine layers plus Ogre. mold and lld do the same work
+# links the whole-archive engine layers. mold and lld do the same work
 # several times faster, so use whichever is installed.
 option(ENG_LINKER "Linker to use: auto, mold, lld, bfd" "auto")
 if(NOT ENG_LINKER OR ENG_LINKER STREQUAL "auto")
@@ -74,7 +74,7 @@ if(ENABLE_LTO)
 endif()
 
 # --- Build speed: precompiled headers ---------------------------------------
-# Ogre, imgui, EnTT, toml++ and the standard library headers dominate the
+# imgui, EnTT, toml++ and the standard library headers dominate the
 # per-file cost of the engine layers: they are large, templated, and included by
 # nearly every translation unit. Precompiling them once per target removes that
 # from every file in it.
@@ -95,10 +95,12 @@ endif()
 # --- Sanitizers: -DENABLE_ASAN=ON for an ASan+UBSan+LeakSan build -----------
 option(ENABLE_ASAN "Build our targets with Address/UB/Leak sanitizers" OFF)
 
-# The renderer is the Vulkan RHI. There was an ENG_RENDERER switch here while
-# the OGRE/GL3Plus backend was still the qualified default; the RHI has since
-# reached parity and OGRE is gone, so the switch and its second code path went
-# with it. ENG_RENDERER_RHI is still defined for the sources that branch on it.
+# The renderer is the Vulkan RHI, and it is the only renderer. There was an
+# ENG_RENDERER switch here while the OGRE/GL3Plus backend was still the
+# qualified default; the RHI reached parity, OGRE was removed, and the last
+# dead branches behind ENG_RENDERER_RHI went with it. Nothing is conditional
+# on a renderer choice any more -- if a second backend is ever added, it goes
+# behind eng::rhi::Device, not behind a preprocessor macro.
 option(ENG_RHI_VULKAN "Build the Vulkan 1.3 RHI backend" ON)
 cmake_dependent_option(
   ENG_BUILD_VULKAN_SMOKE
@@ -110,7 +112,7 @@ if(BUILD_TESTING AND ENG_RHI_VULKAN AND NOT ENG_BUILD_VULKAN_SMOKE)
 endif()
 
 # Shared compile/link options applied to first-party targets ONLY (never Jolt or
-# OGRE): warnings, optional IPO, optional sanitizers. Call for each target.
+# third-party code): warnings, optional IPO, optional sanitizers. Call for each target.
 function(eng_target_hardening tgt)
   target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wno-unused-parameter)
   if(ENG_IPO_SUPPORTED)

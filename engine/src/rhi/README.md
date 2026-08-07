@@ -6,12 +6,13 @@
 |---|---|---|
 | `null/` | working | Validates and records, draws nothing. Used by headless tests, and as the reference for what a backend must accept. |
 | `gl/` | skeleton | To be written by hand. `createDevice(BackendKind::OpenGL, ...)` returns null and logs until it is. |
-| `vulkan/` | opt-in | Vulkan 1.3 backend behind `ENG_RHI_VULKAN=ON`; exercised only by `rhi_vulkan_smoke`, not wired to the live renderer. |
+| `vulkan/` | shipping | Vulkan 1.3, built by default (`ENG_RHI_VULKAN=ON`). **This is what draws the game.** |
 
-The engine does **not** render through the RHI yet: `RenderCore`/`Renderer`
-still drive OGRE directly, which is what draws the game today. The RHI exists
-so a backend can be written and plugged in without touching anything above it.
-See `docs/design/2026-07-29-rhi-and-module-contracts.md` for the staging.
+The engine renders **through** the RHI: `RenderCore` owns an `rhi::Device` and
+every pass above it records into an `rhi::CommandList`. There is no longer a
+second, non-RHI path — OGRE was removed, and `cmake/BuildOptions.cmake` keeps
+`ENG_RENDERER_RHI` defined only for the sources that still branch on it.
+See `docs/design/2026-07-29-rhi-and-module-contracts.md` for how it was staged.
 
 ## Writing a backend
 

@@ -7,8 +7,6 @@
 #include <memory>
 #include <string>
 
-namespace Ogre { class SceneManager; }
-
 namespace eng {
 
 // Emitted by the particle simulation when a colliding particle asks for a mark.
@@ -87,12 +85,8 @@ public:
     DecalSystem(const DecalSystem&) = delete;
     DecalSystem& operator=(const DecalSystem&) = delete;
 
-    // Batches attach to the scene manager's root node, so decal positions are
-    // world-space. Safe to call with null, which leaves the system simulating
-    // but drawing nothing (headless tests, tooling).
-    void attach(Ogre::SceneManager* sceneManager);
-    // Drops every decal and every batch. Must be called before the scene
-    // manager is destroyed; the destructor does it too.
+    // Drops every decal and every batch. The destructor does it too; call it
+    // explicitly when the renderer is going down first.
     void shutdown();
 
     // Profiles may be re-registered at any time; a hot-reload therefore only

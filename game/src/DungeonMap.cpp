@@ -853,7 +853,7 @@ void DungeonMap::toggleTorch(eng::Renderer& r, int index)
     torch.lit = !torch.lit;
     r.setNodeVisible(torch.tip, torch.lit);
     // A snuffed light keeps shining unless zeroed: hidden lights still
-    // register with Ogre's light queries in some paths, so kill the
+    // register with the renderer's light queries in some paths, so kill the
     // colour too (flicker skips unlit torches and won't fight this).
     if (!torch.lit)
         r.setLightColour(torch.light, glm::vec3(0.0f));

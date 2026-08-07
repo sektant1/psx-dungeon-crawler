@@ -89,9 +89,10 @@ output is the same plain text it always was; `PLAIN=1` forces that anywhere.
 
 ## Never clean-build
 
-OGRE is compiled from source. A full rebuild is many minutes, and **killing a
-build mid-link corrupts the tree** (missing `CMakeFiles/<target>.dir/build.make`,
-or a half-linked `libOgreMain.so` that segfaults in `call_init` before `main`).
+Every dependency is compiled from source (SDL2, Jolt, assimp, ozz, toml++). A
+full rebuild is many minutes, and **killing a build mid-link corrupts the tree**
+(missing `CMakeFiles/<target>.dir/build.make`, or a half-linked shared library
+that segfaults in `call_init` before `main`).
 
 - Build single targets: `cmake --build build --target <t> -j8`.
 - Long builds: run them in the background with a generous timeout and wait for
@@ -948,7 +949,11 @@ A viewmodel may need:
 - disabled world shadows
 - depth isolation
 
-Choose the solution that integrates best with OGRE/current rendering infrastructure.
+Choose the solution that integrates best with the current rendering
+infrastructure — the in-house Vulkan renderer in `engine/src/render/rhi/`.
+Note that `RenderCore::SceneTarget` already has a `Viewmodel` member: the
+renderer has a dedicated first-person target, so this is an integration
+question, not a from-scratch one.
 
 The weapon must not:
 
@@ -1138,7 +1143,7 @@ During repository analysis, explicitly determine and document:
 
 1. Whether movement should remain relatively Heretic/Doom-like or whether the current engine architecture already supports Quake-like air acceleration cleanly.
 2. Whether projectile collision should be represented as EnTT entities with Jolt bodies/shapes, ECS-driven sweeps/raycasts, or a hybrid approach.
-3. How first-person viewmodels should integrate with OGRE without inheriting normal world-object depth/clipping behavior.
+3. How first-person viewmodels should integrate with the Vulkan RHI renderer (`RenderCore`, which already exposes a `SceneTarget::Viewmodel`) without inheriting normal world-object depth/clipping behavior.
 4. Whether sprite hands should be:
    - global player hand layers with weapon layers composed over them, or
    - bundled into individual weapon viewmodel definitions where required.

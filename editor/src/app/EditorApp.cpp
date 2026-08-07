@@ -4181,7 +4181,7 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
             const uint64_t texture =
                 f.engine.renderer().editorViewportTextureId();
             if (texture != 0) {
-                // Default uv: OGRE's render-to-texture already hands back a
+                // Default uv: the offscreen viewport already hands back a
                 // top-down image, so flipping V here turned the whole world
                 // upside down.
                 ImGui::Image(static_cast<ImTextureID>(texture), size);
@@ -10145,8 +10145,8 @@ bool EditorApp::importModel(const std::string& source)
     }
 
     // Before the material script, always: the textures were written to disk a
-    // moment ago, and Ogre indexed its resource locations at start-up. Without
-    // this the material parses cleanly and every texture unit in it resolves to
+    // moment ago, after the resource directories were last scanned. Without
+    // this the material parses cleanly and every texture in it resolves to
     // nothing, so the model arrives in the prototype surface with no error
     // anywhere to explain it.
     mEngine->renderer().refreshAssetIndex();

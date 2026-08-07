@@ -30,9 +30,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(BuildOptions)
 
 # --- Third-party dependencies ------------------------------------------------
-# Every dependency (OGRE, SDL2, glm, Jolt, toml++) is fetched + built from
-# source by CPM; see cmake/Dependencies.cmake. No system packages, no vendored
-# SDKs. Cache downloads across build trees so a clean build tree is cheap.
+# Every dependency (SDL2, glm, Jolt, toml++, assimp, miniaudio, ozz) is fetched
+# + built from source by CPM; see cmake/Dependencies.cmake. No system packages,
+# no vendored SDKs. Cache downloads across build trees so a clean build tree is
+# cheap.
 set(CPM_SOURCE_CACHE
     "${CMAKE_CURRENT_SOURCE_DIR}/.cache/cpm"
     CACHE PATH "Directory CPM caches fetched dependency sources in")

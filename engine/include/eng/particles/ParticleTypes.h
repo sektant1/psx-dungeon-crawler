@@ -51,7 +51,7 @@ struct FlipbookDesc {
 
     // What the vertex program consumes. Kept here rather than in the material
     // builder so the UV math has one definition that a test can reach without
-    // a live Ogre.
+    // a live renderer.
     float cellU() const { return 1.0f / float(sheetCols > 0 ? sheetCols : 1); }
     float cellV() const { return 1.0f / float(sheetRows > 0 ? sheetRows : 1); }
     float originU() const { return float(originCol) * cellU(); }

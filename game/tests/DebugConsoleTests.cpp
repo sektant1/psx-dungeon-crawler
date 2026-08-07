@@ -77,10 +77,10 @@ int main()
     require(split("Warmup: 96 materials, 0 unsupported").message ==
                 "96 materials, 0 unsupported",
             "the prefix is removed from the message");
-    require(split("Ogre: Error: ScriptCompiler - bad ref").category == "Ogre",
+    require(split("Physics: Error: body has no shape").category == "Physics",
             "only the FIRST colon splits, so nested prefixes stay in the text");
-    require(split("Ogre: Error: ScriptCompiler - bad ref").message ==
-                "Error: ScriptCompiler - bad ref",
+    require(split("Physics: Error: body has no shape").message ==
+                "Error: body has no shape",
             "the rest of the line survives intact");
     require(split("ParticleMaterials: 6 textures").category ==
                 "ParticleMaterials",

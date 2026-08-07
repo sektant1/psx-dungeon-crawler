@@ -10,11 +10,7 @@
 
 #include "platform/InputImpl.h"
 #include "platform/Platform.h"
-#if defined(ENG_RENDERER_RHI)
 #include "render/rhi/RenderCore.h"
-#else
-#include "render/RenderCore.h"
-#endif
 #include "render/RenderPresets.h"
 
 #include <imgui.h>
@@ -121,8 +117,7 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
 
     if (!mImpl->platform.init(title, width, height))
         return false;
-    if (!detail::coreOf(mRenderer).init(mImpl->platform.nativeHandle(),
-                                        mImpl->platform.window(), width, height,
+    if (!detail::coreOf(mRenderer).init(mImpl->platform.window(), width, height,
                                         title, vsync)) {
         shutdown();
         return false;
@@ -254,10 +249,11 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
     if (mImpl->frameCapture.requested())
         log::info("RenderDoc: capture requested for frame %d",
                   mImpl->frameCapture.requestedFrame());
-    // Deterministic capture: Ogre's ParticleFX emitters draw from C rand(),
-    // which some init path reseeds from wall-clock time. Pin it to a constant
-    // so fire/ash/spark emission is identical every run (seed here, before any
-    // particle spawns in the game's level build).
+    // Deterministic capture: pin the C RNG to a constant so anything that
+    // still draws from it behaves identically every run. The engine's own
+    // particles no longer do -- ParticleSim carries a seeded ParticleRng and
+    // the decal system a fixed-seed mt19937 -- so this now only covers
+    // third-party code, and is kept because a capture is a pixel-diff oracle.
     if (mImpl->fixedTickDt > 0.0f)
         std::srand(1234u);
 
@@ -360,7 +356,7 @@ bool Engine::imguiWantsKeyboard() const
 
 void Engine::renderFrame(float dt, float animDt)
 {
-    // animDt drives Ogre's particle + animation advance; dt stays wall time for
+    // animDt drives the particle + animation advance; dt stays wall time for
     // the benchmark/screenshot hooks below. animDt < 0 means "take it from the
     // step clock", so particle VFX step with the rest of the scene by default --
     // smooth particles beside stepped characters are the most common way the
@@ -486,7 +482,7 @@ void Engine::shutdown()
     // Particle batches and decals are custom renderables holding scene nodes,
     // so they have to go before the scene manager underneath them does.
     mRenderer.shutdownParticles();
-    detail::coreOf(mRenderer).shutdown(); // Ogre first
+    detail::coreOf(mRenderer).shutdown(); // render core first
     mImpl->platform.shutdown();           // native window after
 }
 
