@@ -318,6 +318,29 @@ bool buildRegistry(const SceneDocument& sourceDocument,
         if (authored.sounds && !authored.sounds->empty() && isActor(authored))
             built.emplace<game::ActorSounds>(entity,
                                              game::ActorSounds{*authored.sounds});
+        if (authored.sceneCondition) {
+            game::SceneCondition gate;
+            gate.kind = authored.sceneCondition->kind;
+            gate.subject = authored.sceneCondition->subject;
+            gate.value = authored.sceneCondition->value;
+            gate.negate = authored.sceneCondition->negate;
+            built.emplace<game::SceneCondition>(entity, std::move(gate));
+        }
+        if (authored.ui) {
+            // Emitted as the six independent components they are: the grouped
+            // authoring struct is an editor convenience and stops here.
+            built.emplace<eng::ecs::UiRect>(entity, authored.ui->rect);
+            if (authored.ui->panel)
+                built.emplace<eng::ecs::UiPanel>(entity, *authored.ui->panel);
+            if (authored.ui->label)
+                built.emplace<eng::ecs::UiLabel>(entity, *authored.ui->label);
+            if (authored.ui->bar)
+                built.emplace<eng::ecs::UiBar>(entity, *authored.ui->bar);
+            if (authored.ui->icon)
+                built.emplace<eng::ecs::UiIcon>(entity, *authored.ui->icon);
+            if (authored.ui->list)
+                built.emplace<eng::ecs::UiList>(entity, *authored.ui->list);
+        }
         if (authored.portal)
             built.emplace<eng::ecs::PortalParams>(entity, *authored.portal);
         if (authored.shader) {
@@ -510,7 +533,19 @@ bool buildRegistry(const SceneDocument& sourceDocument,
             byAuthor.emplace(ordered[i]->id, ids[i]);
         for (std::size_t i = 0; i < ordered.size(); ++i) {
             const Entity& authored = *ordered[i];
-            if (authored.parent.empty() || !ancestorAnimated(document, authored))
+            if (authored.parent.empty())
+                continue;
+            // The link survives for two reasons, and only these two.
+            //
+            //  - Something above it moves, so the transform has to stay local
+            //    and be composed at runtime (ancestorAnimated).
+            //  - It is a UI entity. A UiRect resolves against its *parent's*
+            //    resolved box and there is no world transform to bake in its
+            //    place, so dropping the link does not flatten the hierarchy --
+            //    it deletes it, and every element lands against the screen
+            //    corner instead of inside the panel it was authored in.
+            const bool uiChild = authored.ui.has_value();
+            if (!uiChild && !ancestorAnimated(document, authored))
                 continue;
             const auto parent = byAuthor.find(authored.parent);
             if (parent == byAuthor.end())

@@ -326,6 +326,13 @@ add_library(
                        engine/src/ecs/RendererSceneBackend.cpp
                        engine/src/ecs/Systems.cpp
                        engine/src/ecs/ClipSystem.cpp
+                       # Screen-space UI as entities. In src/ecs rather than
+                       # beside the other ui/ sources because it reads the
+                       # registry: src/ui is the systems layer, which sits below
+                       # the ECS and may not include it (tools/check_layering.py).
+                       # The public header stays eng/ui/UiScene.h -- it is a UI
+                       # API; only the implementation is ECS work.
+                       engine/src/ecs/UiScene.cpp
                        engine/src/controllers/FpsController.cpp
                        engine/src/camera/FirstPersonCameraRig.cpp
                        engine/src/camera/ThirdPersonCameraRig.cpp
@@ -356,6 +363,7 @@ add_library(eng_script STATIC engine/src/script/ScriptHost.cpp
                               engine/src/script/bind/BindInput.cpp
                               engine/src/script/bind/BindAudio.cpp
                               engine/src/script/bind/BindRuntime.cpp
+                              engine/src/script/bind/BindModule.cpp
                               engine/src/script/bind/BindSave.cpp
                               engine/src/script/bind/BindTimer.cpp
                               engine/src/script/ScriptTimers.cpp

@@ -1,4 +1,4 @@
-# Actors: the shared body
+# Actors: the shared body {#doc-actor-animation}
 
 Every actor in the game — the player's third-person avatar, every enemy, every
 NPC — wears the same rigged humanoid and plays from the same clip library. This

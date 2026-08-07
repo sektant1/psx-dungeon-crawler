@@ -1,4 +1,4 @@
-# Portals
+# Portals {#doc-portals}
 
 The portal is two things that are easy to confuse: a **prop** (a membrane slab
 inside a kit surround, assembled by `createPortalProp` in

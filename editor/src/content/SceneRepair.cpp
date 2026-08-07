@@ -140,6 +140,16 @@ bool safeToApplyInBulk(QuickFix fix)
     case QuickFix::SnapToCell:
     case QuickFix::ResetTransform:
     case QuickFix::AddPlayerSpawn:
+    // The scene contract's fixes. Each one decides what kind of scene this is
+    // -- what you look through, what you hear from, what lights it -- and the
+    // view fixes *swap* an existing camera rather than adding to it. That is an
+    // authoring choice made one at a time from the contract panel, never
+    // something a bulk repair pass should make on someone's behalf.
+    case QuickFix::AddFirstPersonView:
+    case QuickFix::AddThirdPersonView:
+    case QuickFix::AddShotCamera:
+    case QuickFix::AddAudioListener:
+    case QuickFix::AddKeyLight:
     case QuickFix::None:
         return false;
     }

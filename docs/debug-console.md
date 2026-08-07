@@ -1,4 +1,4 @@
-# Developer console
+# Developer console {#doc-debug-console}
 
 `eng::DebugConsole` (`engine/include/eng/debug/Console.h`) — one dockable imgui
 window with a filtered log and a command line, shared by the game, the scene

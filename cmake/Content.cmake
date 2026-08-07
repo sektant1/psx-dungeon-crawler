@@ -88,6 +88,9 @@ add_library(
   game/src/rpg/Stats.cpp
   game/src/rpg/Items.cpp
   game/src/rpg/Inventory.cpp
+  game/src/rpg/LossPolicy.cpp
+  game/src/ui/GameUiData.cpp
+  game/src/ui/UiScreens.cpp
   game/src/rpg/WorldState.cpp
   game/src/rpg/Quests.cpp
   game/src/rpg/Dialogue.cpp

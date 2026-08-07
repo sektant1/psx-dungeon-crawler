@@ -1,4 +1,4 @@
-# D14 Naming Rename Map (report only, apply nothing)
+# D14 Naming Rename Map (report only, apply nothing) {#doc-design-2026-07-31-asset-naming-map}
 
 Companion to `2026-07-31-unified-asset-root.md` §2 D14. This is the mechanical
 rename map for `tools/assetlint.py`'s planned naming check. **No renames are

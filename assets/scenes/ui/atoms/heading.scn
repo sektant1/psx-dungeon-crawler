@@ -1,0 +1,39 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.heading",
+  "component": true,
+  "entities": [
+    {
+      "id": "text",
+      "name": "Heading",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        },
+        "label": {
+          "text": "HEADING",
+          "tone": 2,
+          "align": 0,
+          "textScale": 2
+        }
+      }
+    }
+  ]
+}

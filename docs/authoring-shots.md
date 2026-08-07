@@ -1,4 +1,4 @@
-# Authoring a shot
+# Authoring a shot {#doc-authoring-shots}
 
 How to make a small scene that plays itself, and how to turn it into a GIF or an
 MP4. For the components involved see [ecs.md](ecs.md); this is the workflow.

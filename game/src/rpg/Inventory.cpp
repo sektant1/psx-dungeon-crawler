@@ -226,26 +226,6 @@ void Container::markAllOwned()
     }
 }
 
-std::vector<ItemStack> Container::loseFindings(const ItemLibrary& library)
-{
-    std::vector<ItemStack> lost;
-    for (ItemStack& s : mStacks) {
-        if (!s.foundThisRun)
-            continue;
-        const ItemDef* def = lookup(library, s.item);
-        // Quest items and explicitly protected rows survive: losing the letter
-        // a widow asked for is not tension, it is a dead end.
-        if (def && (def->questItem || !def->dropOnDeath))
-            continue;
-        lost.push_back(s);
-        s.count = 0;
-    }
-    mStacks.erase(std::remove_if(mStacks.begin(), mStacks.end(),
-                                 [](const ItemStack& s) { return s.count <= 0; }),
-                  mStacks.end());
-    return lost;
-}
-
 // ---------------------------------------------------------------------------
 // Equipment
 // ---------------------------------------------------------------------------

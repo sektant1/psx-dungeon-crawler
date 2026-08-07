@@ -35,6 +35,11 @@ enum class FieldType : uint8_t {
     Quat,
     Colour, // a vec3 the inspector shows as a colour swatch, not three sliders
     String,
+    // Appended rather than placed beside Vec3, where it belongs by meaning:
+    // eng::runtime::ProjectComponents derives a declared component's byte
+    // layout from these values, so renumbering them reinterprets every
+    // components.toml already written against the old order.
+    Vec2,
 };
 
 struct Field {

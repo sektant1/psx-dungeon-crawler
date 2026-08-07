@@ -1,4 +1,4 @@
-# Projects
+# Projects {#doc-projects}
 
 How a game that is not *this* game gets made with this engine: a directory, a
 `project.toml`, scenes authored in the editor, behaviour written in Lua, and a

@@ -248,7 +248,8 @@ PreviewBridge::~PreviewBridge() = default;
 void PreviewBridge::invalidate() { mImpl->builtRevision = ~uint64_t(0); }
 
 void PreviewBridge::sync(const game::content::SceneDocument& document,
-                         const game::content::KitCatalog& catalog)
+                         const game::content::KitCatalog& catalog,
+                         const std::string& assetRoot)
 {
     if (mImpl->builtRevision == document.revision)
         return;
@@ -272,7 +273,8 @@ void PreviewBridge::sync(const game::content::SceneDocument& document,
     // note about one entity.
     std::vector<game::content::AuthorId> unresolved;
     if (!game::content::buildRegistry(document, catalog, registry, mError,
-                                      &mImpl->authorToEntity, &unresolved)) {
+                                      &mImpl->authorToEntity, &unresolved,
+                                      assetRoot)) {
         return;
     }
     if (!unresolved.empty()) {

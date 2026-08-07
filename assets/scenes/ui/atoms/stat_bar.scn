@@ -1,0 +1,123 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.stat_bar",
+  "component": true,
+  "entities": [
+    {
+      "id": "row",
+      "name": "Stat",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        }
+      }
+    },
+    {
+      "id": "name",
+      "parent": "row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            0,
+            0
+          ],
+          "offsetMin": [
+            0,
+            0
+          ],
+          "offsetMax": [
+            34,
+            18
+          ],
+          "order": 0
+        },
+        "label": {
+          "text": "VIT",
+          "tone": 1,
+          "align": 0
+        }
+      }
+    },
+    {
+      "id": "gauge",
+      "parent": "row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            36,
+            4
+          ],
+          "offsetMax": [
+            -34,
+            -4
+          ],
+          "order": 0
+        },
+        "bar": {
+          "ratio": 1.0,
+          "fillTone": 5,
+          "trackTone": 7
+        }
+      }
+    },
+    {
+      "id": "value",
+      "parent": "row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            1,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            -32,
+            0
+          ],
+          "offsetMax": [
+            0,
+            0
+          ],
+          "order": 0
+        },
+        "label": {
+          "text": "0/0",
+          "tone": 0,
+          "align": 2
+        }
+      }
+    }
+  ]
+}

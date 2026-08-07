@@ -28,6 +28,11 @@ Json vec3(const glm::vec3& v)
     return Json::array({canonical(v.x), canonical(v.y), canonical(v.z)});
 }
 
+bool nearlyEqual(const glm::vec2& a, const glm::vec2& b)
+{
+    return canonical(a.x) == canonical(b.x) && canonical(a.y) == canonical(b.y);
+}
+
 bool nearlyEqual(const glm::vec3& a, const glm::vec3& b)
 {
     return canonical(a.x) == canonical(b.x) && canonical(a.y) == canonical(b.y) &&
@@ -42,6 +47,19 @@ bool nearlyEqual(const glm::vec3& a, const glm::vec3& b)
 // Writing only the differences is what keeps a scene file readable -- a rig
 // that spells out fourteen numbers on an entity that changed one is a diff
 // nobody can review.
+//
+// The pragma is for the small components. Every branch of the switch below is
+// compiled for every T, so on a struct smaller than a std::string -- UiIcon is
+// two ints -- GCC sees the String branch reading 32 bytes out of an 8-byte
+// object and warns, even though a table that pairs FieldType::String with that
+// offset cannot exist: ENG_FIELD takes the offset from the member itself. The
+// alternative is a compile-time dispatch per field type, which is a large
+// amount of template machinery to silence a branch that is already unreachable.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 template <typename T> Json reflectedNode(const T& value)
 {
     const T defaults;
@@ -56,6 +74,12 @@ template <typename T> Json reflectedNode(const T& value)
             const float v = *static_cast<const float*>(now);
             if (canonical(v) != canonical(*static_cast<const float*>(was)))
                 node[f.name] = canonical(v);
+            break;
+        }
+        case eng::FieldType::Vec2: {
+            const glm::vec2& v = *static_cast<const glm::vec2*>(now);
+            if (!nearlyEqual(v, *static_cast<const glm::vec2*>(was)))
+                node[f.name] = Json::array({canonical(v.x), canonical(v.y)});
             break;
         }
         case eng::FieldType::Vec3:
@@ -89,6 +113,9 @@ template <typename T> Json reflectedNode(const T& value)
     }
     return node;
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 const char* edgeName(CellPlacement::Edge edge)
 {
@@ -430,6 +457,33 @@ Json writeEntity(const Entity& entity)
             node["active"] = listener.active;
         out["audio_listener"] = std::move(node);
     }
+    if (entity.sceneCondition) {
+        Json gate = Json::object();
+        gate["kind"] = entity.sceneCondition->kind;
+        if (!entity.sceneCondition->subject.empty())
+            gate["subject"] = entity.sceneCondition->subject;
+        if (entity.sceneCondition->value != 0)
+            gate["value"] = entity.sceneCondition->value;
+        if (entity.sceneCondition->negate)
+            gate["negate"] = true;
+        out["condition"] = gate;
+    }
+
+    if (entity.ui) {
+        Json ui = Json::object();
+        ui["rect"] = reflectedNode(entity.ui->rect);
+        const auto part = [&](const char* key, const auto& slot) {
+            if (slot)
+                ui[key] = reflectedNode(*slot);
+        };
+        part("panel", entity.ui->panel);
+        part("label", entity.ui->label);
+        part("bar", entity.ui->bar);
+        part("icon", entity.ui->icon);
+        part("list", entity.ui->list);
+        out["ui"] = ui;
+    }
+
     if (entity.portal)
         out["portal"] = reflectedNode(*entity.portal);
     if (entity.firstPerson)

@@ -1,4 +1,4 @@
-# Prototype Reset and Demo Content Pipeline
+# Prototype Reset and Demo Content Pipeline {#doc-design-2026-07-27-prototype-content-reset-and-pipeline}
 
 ## Outcome
 

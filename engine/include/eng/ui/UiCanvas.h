@@ -4,8 +4,10 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 struct ImDrawList;
 
@@ -142,6 +144,15 @@ public:
     glm::ivec2 size() const { return mVirtual; }
     int scale() const { return mScale; }
     const BitmapFont& font() const { return mFont; }
+
+    // A named face, loaded on first use and kept.
+    //
+    // One canvas, several fonts: a heading and a body line want different
+    // faces, and a canvas that could only hold the one it was initialised with
+    // forced every screen in the game to speak in a single voice. An empty
+    // name, or one that will not load, is the canvas's own font -- a missing
+    // atlas must degrade to readable text, never to no text.
+    const BitmapFont& fontFor(const std::string& definition) const;
     UiPalette& palette() { return mStyle.palette; }
     const UiPalette& palette() const { return mStyle.palette; }
     UiStyleSheet& style() { return mStyle; }
@@ -156,6 +167,19 @@ public:
                UiTone railTone, float opacity = 1.0f) const;
     void text(glm::ivec2 at, std::string_view value, unsigned int colour,
               Align align = Align::Left, bool shadow = true) const;
+    // The same, in a named face at an integer magnification.
+    //
+    // `textScale` multiplies the canvas's own, so a 2 is twice the size at
+    // every window size rather than twice the size at one of them. Integer for
+    // the reason the canvas scale is: a bitmap font at 1.5x has uneven letter
+    // spacing and soft edges, which is the whole thing this UI is avoiding.
+    void text(glm::ivec2 at, std::string_view value, unsigned int colour,
+              Align align, bool shadow, const std::string& fontDefinition,
+              int textScale) const;
+    // Measurement in a named face at a scale, for anything laying out around
+    // text it did not draw.
+    glm::ivec2 measureIn(std::string_view value, const std::string& fontDefinition,
+                         int textScale) const;
     // A keyboard/mouse binding, drawn as a pressed cap: filled plate, border,
     // label. `textAt` is the same top-left a text() call would take, so a cap
     // and the words beside it line up by construction. Returns the plate width.
@@ -179,6 +203,13 @@ public:
     void icon(glm::ivec2 at, glm::ivec2 size, unsigned int colour,
               int inset = 0) const;
 
+    // A window pixel as a virtual one -- the inverse of the mapping begin()
+    // and beginTarget() set up. Here rather than at the call site because the
+    // two forms differ (a full-window canvas has no origin, an embedded one
+    // does) and a caller that inverted it by hand would be right for one of
+    // them and quietly wrong for the other.
+    glm::ivec2 toVirtual(glm::vec2 windowPixels) const;
+
     glm::ivec2 measure(std::string_view value) const {
         return mFont.measure(value);
     }
@@ -191,6 +222,10 @@ private:
     void popClip(ImDrawList* draw) const;
 
     BitmapFont mFont;
+    // Mutable because fontFor() is a const accessor that loads on demand: the
+    // alternative is every caller pre-registering the faces its screen uses,
+    // which is a rule somebody forgets and the symptom is missing text.
+    mutable std::unordered_map<std::string, std::unique_ptr<BitmapFont>> mFonts;
     UiStyleSheet mStyle;
     glm::ivec2 mVirtual{320, 240};
     glm::vec2 mDisplay{0.0f};

@@ -1,4 +1,4 @@
-# Design docs
+# Design docs {#doc-design-readme}
 
 Living design documentation for the PSX dungeon crawler.
 

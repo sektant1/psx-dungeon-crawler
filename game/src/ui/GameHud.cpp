@@ -88,12 +88,12 @@ std::string statusText(const HudStatus& status, bool compact)
 
 } // namespace
 
-bool GameHud::initialise() {
+bool GameHud::initialise(const std::string& fontDefinition) {
     mStyle = makeGameHudStyleSheet(mOpacity, mHighContrast, mReducedMotion);
     mCanvas.style() = mStyle.ui;
     mTooltip.configure(mStyle.tooltip);
     mBanner.configure(mStyle.banner);
-    return mCanvas.initialise();
+    return mCanvas.initialise(fontDefinition);
 }
 
 void GameHud::configure(const eng::Config& config) {

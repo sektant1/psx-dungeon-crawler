@@ -19,6 +19,17 @@ bool finite(const glm::vec3& value)
            std::isfinite(value.z);
 }
 
+bool readVec2(const Json& value, glm::vec2& out)
+{
+    if (!value.is_array() || value.size() != 2)
+        return false;
+    for (std::size_t i = 0; i < 2; ++i)
+        if (!value[i].is_number())
+            return false;
+    out = {value[0].get<float>(), value[1].get<float>()};
+    return std::isfinite(out.x) && std::isfinite(out.y);
+}
+
 bool readVec3(const Json& value, glm::vec3& out)
 {
     if (!value.is_array() || value.size() != 3)
@@ -420,6 +431,16 @@ bool parseFields(const Json& source, const eng::FieldSpan& fields, void* out,
             *static_cast<float*>(at) =
                 field->max > field->min
                     ? std::clamp(v, field->min, field->max) : v;
+            break;
+        }
+        case eng::FieldType::Vec2: {
+            glm::vec2 v{0.0f};
+            if (!readVec2(it.value(), v)) {
+                error = location + "/" + it.key() +
+                        " must be two finite numbers";
+                return false;
+            }
+            *static_cast<glm::vec2*>(at) = v;
             break;
         }
         case eng::FieldType::Vec3:
@@ -1106,6 +1127,56 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
         }
         out.sounds = set;
     }
+    if (source.contains("condition")) {
+        const Json& node = source["condition"];
+        if (!node.is_object() || !node.contains("kind") ||
+            !node["kind"].is_string()) {
+            error = location + "/condition needs a `kind`";
+            return false;
+        }
+        ConditionAuthor gate;
+        gate.kind = node["kind"].get<std::string>();
+        if (node.contains("subject") && node["subject"].is_string())
+            gate.subject = node["subject"].get<std::string>();
+        if (node.contains("value") && node["value"].is_number_integer())
+            gate.value = node["value"].get<int>();
+        if (node.contains("negate") && node["negate"].is_boolean())
+            gate.negate = node["negate"].get<bool>();
+        out.sceneCondition = gate;
+    }
+
+    if (source.contains("ui")) {
+        const Json& node = source["ui"];
+        if (!node.is_object()) {
+            error = location + "/ui must be an object";
+            return false;
+        }
+        UiAuthor ui;
+        // The rect is required and unconditional; each visual is present only
+        // when the entity authored one, so an absent key means "not a label"
+        // rather than "a label with default text".
+        if (node.contains("rect") &&
+            !parseFields(node["rect"], eng::fieldsOf<eng::ecs::UiRect>(),
+                         &ui.rect, location + "/ui/rect", error))
+            return false;
+        const auto part = [&](const char* key, auto& slot) {
+            using T = typename std::decay_t<decltype(slot)>::value_type;
+            if (!node.contains(key))
+                return true;
+            T value{};
+            if (!parseFields(node[key], eng::fieldsOf<T>(), &value,
+                             location + "/ui/" + key, error))
+                return false;
+            slot = value;
+            return true;
+        };
+        if (!part("panel", ui.panel) || !part("label", ui.label) ||
+            !part("bar", ui.bar) || !part("icon", ui.icon) ||
+            !part("list", ui.list))
+            return false;
+        out.ui = ui;
+    }
+
     if (source.contains("portal")) {
         PortalAuthor portal;
         if (!parseFields(source["portal"], eng::fieldsOf<PortalAuthor>(),

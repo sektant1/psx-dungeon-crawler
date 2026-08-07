@@ -1,4 +1,4 @@
-# Scenes: what one is, and what it needs to work
+# Scenes: what one is, and what it needs to work {#doc-scenes}
 
 A scene is not "a list of entities". It is a list of entities that fills a set
 of **roles**, and which roles it fills decides what kind of scene it is.

@@ -1,0 +1,1963 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.village",
+  "entities": [
+    {
+      "id": "floor_0_0",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_0",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_0",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_0",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_0",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_0",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_0",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          2.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_4",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_4",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_4",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_4",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_4",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_4",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_4",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_5",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          22.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_5",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          22.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_5",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          22.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_5",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          22.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_5",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          22.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_5",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          22.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_5",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          22.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_6",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_6",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_6",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_6",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_6",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_6",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_6",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_7",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_7",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_7",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_7",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_7",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_7",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_7",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "floor_0_8",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "floor_1_8",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "floor_2_8",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "floor_3_8",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "floor_4_8",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "floor_5_8",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "floor_6_8",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_0",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_0",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          2.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          6.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          6.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_3",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          14.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_3",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          14.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_4",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          18.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_4",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          18.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_5",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          22.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_5",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          22.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_6",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          26.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_6",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          26.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_7",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          30.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_7",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          30.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_w_8",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          34.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_e_8",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          28.0,
+          0.0,
+          34.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_s_0",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_s_1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_s_2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_s_3",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_s_4",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_s_5",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "wall_s_6",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "player_spawn",
+      "name": "Arrival",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          6.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "player_spawn": true
+    },
+    {
+      "id": "descent",
+      "name": "The Descent",
+      "prefab": "kit.portal_membrane",
+      "material": "Game/Vfx/PortalDown",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          2.6
+        ],
+        "rotation_degrees": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "portal": {},
+      "exit": {
+        "yaw_degrees": 0.0
+      }
+    },
+    {
+      "id": "descent_pillar_2",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          2.6
+        ]
+      }
+    },
+    {
+      "id": "descent_pillar_4",
+      "prefab": "kit.pillar",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          2.6
+        ]
+      }
+    },
+    {
+      "id": "npc_alder",
+      "name": "Alder",
+      "npc": "alder",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          14.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "alder_table",
+      "prefab": "kit.prop_table",
+      "transform": {
+        "position": [
+          4.6,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "alder_vase",
+      "prefab": "kit.prop_vase",
+      "transform": {
+        "position": [
+          4.6,
+          0.9,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "npc_ilsabet",
+      "name": "Mother Ilsabet",
+      "npc": "ilsabet",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          18.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "ilsabet_lamp",
+      "prefab": "kit.prop_lamp",
+      "transform": {
+        "position": [
+          23.4,
+          0.0,
+          18.0
+        ]
+      }
+    },
+    {
+      "id": "ilsabet_crate",
+      "prefab": "kit.prop_crate",
+      "transform": {
+        "position": [
+          23.4,
+          0.0,
+          19.6
+        ]
+      }
+    },
+    {
+      "id": "npc_corvin",
+      "name": "Corvin",
+      "npc": "corvin",
+      "transform": {
+        "position": [
+          6.0,
+          0.0,
+          26.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "corvin_crate_a",
+      "prefab": "kit.prop_crate",
+      "transform": {
+        "position": [
+          4.5,
+          0.0,
+          24.8
+        ]
+      }
+    },
+    {
+      "id": "corvin_crate_b",
+      "prefab": "kit.prop_crate",
+      "transform": {
+        "position": [
+          4.5,
+          0.75,
+          24.8
+        ]
+      }
+    },
+    {
+      "id": "corvin_sack",
+      "prefab": "kit.prop_jutesack",
+      "transform": {
+        "position": [
+          4.5,
+          0.0,
+          27.2
+        ]
+      }
+    },
+    {
+      "id": "lodge_arch",
+      "prefab": "kit.arch",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          29.0
+        ]
+      }
+    },
+    {
+      "id": "npc_magus",
+      "name": "The Magus",
+      "npc": "magus",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          34.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "lodge_candle_2",
+      "prefab": "kit.candle_cluster",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "lodge_candle_4",
+      "prefab": "kit.candle_cluster",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          34.0
+        ]
+      }
+    },
+    {
+      "id": "house_door",
+      "prefab": "kit.door_frame_wide",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-3_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-2_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-1_1",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          6.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-3_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-2_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-1_2",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-3_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-2_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "house_floor_-1_3",
+      "prefab": "kit.floor",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_w_1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -12.0,
+          0.0,
+          6.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_w_2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -12.0,
+          0.0,
+          10.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_w_3",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -12.0,
+          0.0,
+          14.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          270.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_s_-3",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_n_-3",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          16.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_s_-2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_n_-2",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -6.0,
+          0.0,
+          16.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_s_-1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          4.0
+        ]
+      }
+    },
+    {
+      "id": "house_wall_n_-1",
+      "prefab": "kit.wall",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          16.0
+        ],
+        "rotation_degrees": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "station_strongbox",
+      "name": "Strongbox",
+      "prefab": "kit.chest",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          6.0
+        ]
+      },
+      "marker": "station.strongbox"
+    },
+    {
+      "id": "station_workbench",
+      "name": "Workbench",
+      "prefab": "kit.prop_table",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          10.0
+        ]
+      },
+      "marker": "station.workbench"
+    },
+    {
+      "id": "station_hearth",
+      "name": "Hearth",
+      "prefab": "kit.candle_cluster",
+      "transform": {
+        "position": [
+          -10.0,
+          0.0,
+          14.0
+        ]
+      },
+      "marker": "station.hearth"
+    },
+    {
+      "id": "station_still",
+      "name": "Still",
+      "prefab": "kit.prop_barrel_open",
+      "transform": {
+        "position": [
+          -2.0,
+          0.0,
+          14.0
+        ]
+      },
+      "marker": "station.still",
+      "condition": {
+        "kind": "flag_set",
+        "subject": "hideout.still"
+      }
+    },
+    {
+      "id": "road_rubble_0",
+      "name": "Rubble",
+      "prefab": "kit.debris",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          30.0
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.road_lit",
+        "negate": true
+      }
+    },
+    {
+      "id": "road_lamp_0",
+      "name": "Road lamp",
+      "prefab": "kit.prop_lamp",
+      "transform": {
+        "position": [
+          10.0,
+          0.0,
+          30.0
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.road_lit"
+      }
+    },
+    {
+      "id": "road_rubble_1",
+      "name": "Rubble",
+      "prefab": "kit.debris",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          30.0
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.road_lit",
+        "negate": true
+      }
+    },
+    {
+      "id": "road_lamp_1",
+      "name": "Road lamp",
+      "prefab": "kit.prop_lamp",
+      "transform": {
+        "position": [
+          14.0,
+          0.0,
+          30.0
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.road_lit"
+      }
+    },
+    {
+      "id": "road_rubble_2",
+      "name": "Rubble",
+      "prefab": "kit.debris",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          30.0
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.road_lit",
+        "negate": true
+      }
+    },
+    {
+      "id": "road_lamp_2",
+      "name": "Road lamp",
+      "prefab": "kit.prop_lamp",
+      "transform": {
+        "position": [
+          18.0,
+          0.0,
+          30.0
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.road_lit"
+      }
+    },
+    {
+      "id": "road_light",
+      "name": "Road light",
+      "transform": {
+        "position": [
+          14.0,
+          3.0,
+          30.0
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.78,
+          0.45
+        ],
+        "range": 9.0,
+        "animation": {
+          "mode": "flicker",
+          "speed": 6.0,
+          "amount": 0.22
+        }
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.road_lit"
+      }
+    },
+    {
+      "id": "forge_body",
+      "prefab": "kit.block",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          26.0
+        ]
+      }
+    },
+    {
+      "id": "forge_cold",
+      "name": "Cold forge",
+      "prefab": "kit.prop_barrel",
+      "transform": {
+        "position": [
+          22.0,
+          0.0,
+          27.4
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.forge_lit",
+        "negate": true
+      }
+    },
+    {
+      "id": "forge_fire",
+      "name": "Forge fire",
+      "prefab": "kit.candle_cluster",
+      "transform": {
+        "position": [
+          22.0,
+          1.0,
+          26.0
+        ]
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.forge_lit"
+      }
+    },
+    {
+      "id": "forge_light",
+      "name": "Forge light",
+      "transform": {
+        "position": [
+          22.0,
+          2.0,
+          26.0
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.6,
+          0.62,
+          0.22
+        ],
+        "range": 7.0,
+        "animation": {
+          "mode": "flicker",
+          "speed": 8.0,
+          "amount": 0.3
+        }
+      },
+      "condition": {
+        "kind": "flag_set",
+        "subject": "village.forge_lit"
+      }
+    },
+    {
+      "id": "light_fill",
+      "name": "Fill",
+      "light": {
+        "type": "directional",
+        "colour": [
+          0.62,
+          0.6,
+          0.68
+        ]
+      }
+    },
+    {
+      "id": "torch_0",
+      "prefab": "kit.prop_torch",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          10.0
+        ]
+      }
+    },
+    {
+      "id": "torch_light_0",
+      "transform": {
+        "position": [
+          2.0,
+          2.4,
+          10.0
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.72,
+          0.42
+        ],
+        "range": 11.0,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3,
+          "phase": 0.0
+        }
+      }
+    },
+    {
+      "id": "torch_1",
+      "prefab": "kit.prop_torch",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          14.0
+        ]
+      }
+    },
+    {
+      "id": "torch_light_1",
+      "transform": {
+        "position": [
+          26.0,
+          2.4,
+          14.0
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.72,
+          0.42
+        ],
+        "range": 11.0,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3,
+          "phase": 1.7
+        }
+      }
+    },
+    {
+      "id": "torch_2",
+      "prefab": "kit.prop_torch",
+      "transform": {
+        "position": [
+          2.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "torch_light_2",
+      "transform": {
+        "position": [
+          2.0,
+          2.4,
+          30.0
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.72,
+          0.42
+        ],
+        "range": 11.0,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3,
+          "phase": 3.4
+        }
+      }
+    },
+    {
+      "id": "torch_3",
+      "prefab": "kit.prop_torch",
+      "transform": {
+        "position": [
+          26.0,
+          0.0,
+          30.0
+        ]
+      }
+    },
+    {
+      "id": "torch_light_3",
+      "transform": {
+        "position": [
+          26.0,
+          2.4,
+          30.0
+        ]
+      },
+      "light": {
+        "type": "point",
+        "colour": [
+          1.0,
+          0.72,
+          0.42
+        ],
+        "range": 11.0,
+        "animation": {
+          "mode": "flicker",
+          "speed": 7.0,
+          "amount": 0.3,
+          "phase": 5.1
+        }
+      }
+    }
+  ],
+  "palette": "cozy_lair"
+}

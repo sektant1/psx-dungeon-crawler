@@ -28,6 +28,7 @@
 #include <editor/scene/EntityComponents.h>
 #include <editor/ui/LayersPanel.h>
 #include <editor/ui/OutlinerPanel.h>
+#include <editor/ui/UiSceneEditor.h>
 #include <editor/ui/UiStage.h>
 #include <editor/ui/MaterialStage.h>
 #include <editor/scene/AlignTools.h>
@@ -849,6 +850,24 @@ private:
     // class, constructed once here, so what the panel shows is what ships.
     UiStageState mUiStage;
     game::GameHud mUiHud;
+    // Authoring the screens the document holds, on the same solver the game
+    // paints with. Its own canvas rather than the HUD's: the two draw different
+    // things into the same panel and sharing one would mean whichever began
+    // last decided the surface for both.
+    UiSceneEditor mUiSceneEditor;
+    eng::ui::UiCanvas mUiSceneCanvas;
+    bool mUiSceneCanvasReady = false;
+    // The drag in progress: which handle, and the virtual pixel the pointer was
+    // last seen at. Held across frames because a drag is the one interaction
+    // that spans them, and applying the *total* delta each frame instead of the
+    // step would accelerate the box away from the cursor.
+    UiSceneEditor::Handle mUiDragHandle = UiSceneEditor::Handle::None;
+    glm::ivec2 mUiDragLast{0, 0};
+    bool mUiDragChanged = false;
+    // The entity being dragged and what it looked like before, so the
+    // whole gesture commits as one command instead of one per frame.
+    game::content::AuthorId mUiDragId;
+    game::content::Entity mUiDragBefore;
     bool mUiHudReady = false;
     // Where the next Shift-range starts: the last row clicked without Shift.
     // Cleared when the document changes under it, so a range can never reach

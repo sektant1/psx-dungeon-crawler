@@ -1,4 +1,4 @@
-# The build
+# The build {#doc-build-system}
 
 `make help` is the target reference. This document covers the parts that are
 not self-evident from it: what the output is telling you, how the build stays
@@ -170,3 +170,56 @@ screenshot is usually the window being unfocused or offscreen, not a
 regression -- confirm against a known-good binary before chasing it.
 
 See `docs/debugging-renderdoc.md` before opening a GPU capture.
+
+## The documentation site
+
+`make docs` runs Doxygen over `engine/include`, `editor/`, `game/src`,
+`samples/common` **and every page under `docs/`**, then opens the result. The
+handbook and the generated C++ reference are one site: `docs/scenes.md` is a
+page there exactly as `eng::Renderer` is.
+
+Adding a page is one file. Give its H1 an anchor:
+
+```markdown
+# Occlusion culling {#doc-occlusion-culling}
+```
+
+and list it under a part in `docs/mainpage.md`:
+
+```markdown
+- @subpage doc-occlusion-culling — what the portal graph rejects before drawing.
+```
+
+A page with no anchor and no `@subpage` still ships; it just lands at the top
+level of the tree instead of inside a part. Ordinary markdown links between
+pages (`[the ECS](ecs.md)`, `[a section](#the-object-model)`) resolve on the
+site and on GitHub both -- `MARKDOWN_ID_STYLE = GITHUB` is what keeps the
+heading anchors identical in the two places.
+
+`docs/` also holds imported material: a book conversion, vendored skill packs,
+the survival kit's own built site. Those directories are listed in `EXCLUDE` in
+`docs/Doxyfile.in`. Add a directory there if you drop another one in.
+
+### The skin
+
+Two stylesheets, in this order:
+
+| Sheet | Owns |
+|---|---|
+| `docs/vulkan-impl-survival-kit/kit.css` | the palette and type scale, shared with the survival kit |
+| `docs/doxygen-kit.css` | mapping Doxygen's markup onto them |
+
+Change a colour in the first one. The second restates Doxygen's ~160 CSS custom
+properties in terms of the kit's dozen tokens, which is why the whole generated
+site follows the palette rather than only the parts the skin names. That bridge
+only exists when `HTML_COLORSTYLE` is `TOGGLE` or an `AUTO_*` value -- under
+`LIGHT` or `DARK`, Doxygen bakes literal hex into `doxygen.css` and every
+unnamed corner goes back to being white. The light/dark control in the title
+bar is the same setting.
+
+Two traps live in that seam, both from generic rules in `kit.css` meeting
+Doxygen's markup, and both are commented where they are fixed: `.entry` means
+different things in the two sheets, and `* { box-sizing: border-box }` breaks
+the navigation tree's indentation. If a listing suddenly renders one word per
+line, look for a third one the same way -- compare `kit.css`'s class selectors
+against the `class="..."` values in `build/docs/html`.

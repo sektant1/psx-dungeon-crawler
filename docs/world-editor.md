@@ -1,4 +1,4 @@
-# The Game World Editor
+# The Game World Editor {#doc-world-editor}
 
 The scene editor measured against *Game Engine Architecture* 3e §15.4, "The Game
 World Editor". §15.4.1 lists the features a world editor is expected to have;

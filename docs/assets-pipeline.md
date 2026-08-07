@@ -1,4 +1,4 @@
-# The asset pipeline
+# The asset pipeline {#doc-assets-pipeline}
 
 How a file an artist made becomes something the game loads.
 

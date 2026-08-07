@@ -1,4 +1,4 @@
-# Enemies
+# Enemies {#doc-enemies}
 
 Enemies are data. Adding one is adding a table to `assets/config/enemies.toml`;
 there is no C++ to write, no factory to register with, and no `switch` on enemy

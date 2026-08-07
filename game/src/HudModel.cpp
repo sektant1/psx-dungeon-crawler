@@ -30,6 +30,8 @@ const char* hudInteractionAction(const InteractionFocus& focus)
             return "TAKE IT";
         case TargetKind::Npc:
             return "SPEAK";
+        case TargetKind::Station:
+            return "SET TO WORK";
         case TargetKind::Prop:
         case TargetKind::Actor:
             break; // described by the tooltip, not by a verb here

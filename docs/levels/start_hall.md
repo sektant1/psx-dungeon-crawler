@@ -1,4 +1,4 @@
-# Level: start_hall — "The Reliquary Antechamber"
+# Level: start_hall — "The Reliquary Antechamber" {#doc-level-start-hall}
 
 `assets/scenes/start_hall.scn` · 133 entities · re-authored by
 `tools/author_start_hall.py` · the scene the editor opens with no `SCENE=`.

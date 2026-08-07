@@ -1,4 +1,4 @@
-# Debugging this renderer with RenderDoc
+# Debugging this renderer with RenderDoc {#doc-debugging-renderdoc}
 
 How to take a GPU capture of this engine and read it. Written for someone — or
 some agent — who has never seen this frame graph before, because a capture of an

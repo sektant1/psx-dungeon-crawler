@@ -1,4 +1,4 @@
-# Game Design Document
+# Game Design Document {#doc-design-gdd}
 
 _Working title: **untitled PSX dungeon crawler**_
 _Living document. Player-facing intent only — engine implementation lives in [GEDD.md](GEDD.md)._

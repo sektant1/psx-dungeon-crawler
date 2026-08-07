@@ -1,4 +1,4 @@
-# Connector
+# Connector {#doc-connector}
 
 A browser window onto the engine's debug channels, after Naughty Dog's tool of
 the same name (*Game Engine Architecture*, 4th ed., 3.4.4): the engine writes

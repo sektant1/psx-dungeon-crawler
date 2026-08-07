@@ -74,6 +74,7 @@ LiveLevel buildLevel(eng::ecs::World& world, eng::Renderer& r,
         lv.authoredMap->resolvePrimitives(r);
         lv.authoredMap->buildAll();
         lv.spawn = lv.authoredMap->playerSpawn();
+        lv.spawnYaw = lv.authoredMap->playerSpawnYaw();
         lv.exit = lv.authoredMap->levelExit();
         lv.exitYaw = lv.authoredMap->exitYawDegrees();
     } else {

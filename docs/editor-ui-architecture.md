@@ -1,4 +1,4 @@
-# Editor UI Architecture
+# Editor UI Architecture {#doc-editor-ui-architecture}
 
 The scene editor's shell is **Godot's**, deliberately and in full: menus at the
 top left, a main-screen switcher centred, play controls at the top right, open

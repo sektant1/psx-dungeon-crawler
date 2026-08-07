@@ -1,0 +1,38 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.divider",
+  "component": true,
+  "entities": [
+    {
+      "id": "rule",
+      "name": "Divider",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            0
+          ],
+          "offsetMin": [
+            0,
+            0
+          ],
+          "offsetMax": [
+            0,
+            1
+          ],
+          "order": 0
+        },
+        "panel": {
+          "style": 1,
+          "rail": 0,
+          "opacity": 0.5
+        }
+      }
+    }
+  ]
+}

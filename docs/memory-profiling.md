@@ -1,4 +1,4 @@
-# Profiling memory, time and code size
+# Profiling memory, time and code size {#doc-memory-profiling}
 
 *Game Engine Architecture, 4th ed., §2.3 (profilers) and §2.4 (leaks and
 corruption), built into this engine and read through Connector.*

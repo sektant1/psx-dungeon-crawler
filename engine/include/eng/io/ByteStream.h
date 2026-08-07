@@ -21,6 +21,7 @@ public:
     void u32(uint32_t v);
     void u64(uint64_t v);
     void f32(float v);
+    void vec2(const glm::vec2& v);
     void vec3(const glm::vec3& v);
     void quat(const glm::quat& q);
     void str(const std::string& s); // interns, writes u32 index
@@ -56,6 +57,7 @@ public:
     uint32_t u32();
     uint64_t u64();
     float f32();
+    glm::vec2 vec2();
     glm::vec3 vec3();
     glm::quat quat();
     const std::string& str(); // reads u32 index into the pool

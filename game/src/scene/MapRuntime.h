@@ -64,6 +64,14 @@ public:
     // The authored PlayerSpawn, which is this game's marker rather than an
     // engine concept -- hence here and not in SceneRuntime.
     glm::vec3 playerSpawn() const;
+    // Which way the spawn faces, in radians, or 0 when it states none.
+    //
+    // Read from the marker's own rotation, because that is where an author puts
+    // it -- and until this existed the rotation was silently dropped, so a
+    // village whose street ran north spawned the player looking at the wall
+    // behind them. The engine convention is that forward is -Z, so a marker
+    // with no rotation faces -Z and the yaw is measured from there.
+    float playerSpawnYaw() const;
     glm::vec3 levelExit() const;
     float exitYawDegrees() const;
     std::vector<ScenePlacement> placements(const std::string& prefix = {}) const;

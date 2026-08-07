@@ -8,7 +8,12 @@
 // person worth talking to are look-targets exactly like a torch, and routing
 // them through the same aim test is what stops the crosshair having two
 // competing ideas of what it is on.
-enum class TargetKind { Torch, PortalDown, PortalUp, Prop, Actor, Item, Npc };
+// Station is a *place you improve*, not a thing you pick up: the hideout and
+// the village are the same mechanic (see rpg/Hideout.h), so one kind covers a
+// workbench in your house and a forge in the street.
+enum class TargetKind {
+    Torch, PortalDown, PortalUp, Prop, Actor, Item, Npc, Station
+};
 
 struct GameplayTarget {
     TargetKind kind;

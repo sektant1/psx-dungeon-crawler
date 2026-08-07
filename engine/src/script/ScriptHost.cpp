@@ -460,6 +460,23 @@ void ScriptHost::broadcast(const std::string& name)
     mImpl->flushDestroys();
 }
 
+void ScriptHost::broadcast(const std::string& name, const EventData& data)
+{
+    // Built fresh per broadcast rather than reused: the table is handed to
+    // script code, which may keep it, and a shared one would let one listener
+    // see a later event's payload through a reference it saved.
+    sol::table payload = mImpl->lua.create_table();
+    payload["subject"] = data.subject;
+    payload["value"] = data.value;
+    mImpl->broadcastEvent(name, payload);
+    mImpl->flushDestroys();
+}
+
+void ScriptHost::bindModule(const ScriptModule& module)
+{
+    script::bindModule(mImpl->lua, module);
+}
+
 void ScriptHost::fixedTick(float dt)
 {
     for (const uint32_t slot : mImpl->liveSlots()) {

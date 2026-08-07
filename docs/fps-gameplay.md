@@ -1,4 +1,4 @@
-# FPS gameplay: movement and weapons
+# FPS gameplay: movement and weapons {#doc-fps-gameplay}
 
 How the player moves, and how a weapon gets from a button press to a hit. For
 where the hands sit and how they bob, see

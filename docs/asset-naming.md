@@ -1,4 +1,4 @@
-# Asset And Entity Naming
+# Asset And Entity Naming {#doc-asset-naming}
 
 This standard separates machine identity from presentation:
 

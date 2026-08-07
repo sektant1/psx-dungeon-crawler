@@ -6,6 +6,7 @@
 // nothing else.
 #include "../src/rpg/Inventory.h"
 #include "../src/rpg/Items.h"
+#include "../src/rpg/LossPolicy.h"
 
 #include <cmath>
 #include <cstdio>
@@ -161,32 +162,142 @@ int main()
     }
 
     // --- what a death takes --------------------------------------------------
+    //
+    // The policy, not the container: these are the rules the whole risk loop
+    // rests on, and every one of them is a dial somebody will move.
     {
+        LossRules rules; // defaults: findings and carried are both at stake
+        Equipment worn;
         Container pack("pack", 0, 0.0f);
         pack.add(items, "stone", 4, /*foundThisRun=*/true);
         pack.add(items, "feather", 2, /*foundThisRun=*/false);
         pack.add(items, "relic", 1, /*foundThisRun=*/true);    // quest item
         pack.add(items, "heirloom", 1, /*foundThisRun=*/true); // drop_on_death
 
-        const std::vector<ItemStack> lost = pack.loseFindings(items);
-        check(lost.size() == 1, "only the stones were taken");
-        check(lost.size() == 1 && lost[0].item == "stone", "the stones");
-        check(pack.count("feather") == 2, "owned goods survive");
+        int purse = 0;
+        const LossReport report =
+            loss::applyDeath(pack, worn, items, rules, purse);
+        check(pack.count("stone") == 0, "findings are taken");
+        check(pack.count("feather") == 0,
+              "and so is what was carried in, by default");
         check(pack.count("relic") == 1, "a quest item survives");
         check(pack.count("heirloom") == 1, "so does a protected one");
-        check(pack.count("stone") == 0, "the findings are gone");
+        check(report.lostUnits() == 6, "six things were taken");
+        check(purse == 0, "no insurance without a rate");
     }
 
-    // Extracting settles everything, and merges the stacks provenance kept
-    // apart so a pack does not accumulate half-stacks per expedition.
+    // The forgiving setting: only what the dungeon gave you.
     {
+        LossRules rules;
+        rules.losesCarried = false;
+        Equipment worn;
         Container pack("pack", 0, 0.0f);
-        pack.add(items, "stone", 3, false);
-        pack.add(items, "stone", 3, true);
-        pack.markAllOwned();
-        check(pack.stacks().size() == 1, "settled stacks merge");
-        check(pack.count("stone") == 6, "and nothing was lost doing it");
-        check(pack.loseFindings(items).empty(), "a death now takes nothing");
+        pack.add(items, "stone", 4, true);
+        pack.add(items, "feather", 2, false);
+        int purse = 0;
+        loss::applyDeath(pack, worn, items, rules, purse);
+        check(pack.count("stone") == 0, "findings still go");
+        check(pack.count("feather") == 2, "what you brought comes home");
+    }
+
+    // A seal protects one stack, is refused past the slot count, and is spent
+    // by the death whether or not it was tested.
+    {
+        LossRules rules;
+        rules.securedSlots = 1;
+        Equipment worn;
+        Container pack("pack", 0, 0.0f);
+        pack.add(items, "stone", 4, true);
+        pack.add(items, "feather", 2, false);
+        check(loss::setSecured(pack, items, rules, "stone", true),
+              "the first seal is allowed");
+        check(!loss::setSecured(pack, items, rules, "feather", true),
+              "the second is refused: one slot");
+        check(!loss::setSecured(pack, items, rules, "relic", true),
+              "and a seal cannot be spent on something already safe");
+        int purse = 0;
+        loss::applyDeath(pack, worn, items, rules, purse);
+        check(pack.count("stone") == 4, "the sealed stack survived");
+        check(loss::securedCount(pack) == 0, "and the seal was spent doing it");
+    }
+
+    // Worn gear: spared by default, taken when the harsh dial is set, and never
+    // taken when the row itself is protected.
+    {
+        LossRules rules;
+        Equipment worn;
+        Container pack("pack", 0, 0.0f);
+        const ItemLibrary::Ref hat = items.find("helm");
+        check(bool(hat), "the fixture has an equippable");
+        if (hat)
+            worn.equip(*hat);
+        int purse = 0;
+        loss::applyDeath(pack, worn, items, rules, purse);
+        check(!worn.at(hat ? hat->slot : EquipSlot::Head).empty(),
+              "worn gear is spared by default");
+        rules.losesEquipped = true;
+        loss::applyDeath(pack, worn, items, rules, purse);
+        check(worn.at(hat ? hat->slot : EquipSlot::Head).empty(),
+              "and taken when the dial says so");
+    }
+
+    // Insurance pays a fraction of what was actually lost, priced the way a
+    // trader would price it.
+    {
+        LossRules rules;
+        rules.insuranceRate = 0.5f;
+        Equipment worn;
+        Container pack("pack", 0, 0.0f);
+        pack.add(items, "stone", 4, true); // value 5 each in the fixture
+        int purse = 0;
+        const LossReport report =
+            loss::applyDeath(pack, worn, items, rules, purse);
+        check(report.lostValue() == 20, "twenty coin of stone");
+        check(purse == 10, "half of it came back");
+    }
+
+    // Preview must not mutate: the inventory screen shows it every frame.
+    {
+        LossRules rules;
+        Equipment worn;
+        Container pack("pack", 0, 0.0f);
+        pack.add(items, "stone", 4, true);
+        const LossReport a = loss::preview(pack, worn, items, rules);
+        const LossReport b = loss::preview(pack, worn, items, rules);
+        check(pack.count("stone") == 4, "preview took nothing");
+        check(a.lostUnits() == b.lostUnits(), "and is stable");
+    }
+
+    // Extraction banks the haul and leaves the loadout on the player.
+    {
+        LossRules rules;
+        Container pack("pack", 0, 0.0f);
+        Container stash("stash", 0, 0.0f);
+        pack.add(items, "stone", 4, /*foundThisRun=*/true);
+        pack.add(items, "feather", 2, /*foundThisRun=*/false);
+        const ExtractReport report =
+            loss::applyExtraction(pack, stash, items, rules);
+        check(stash.count("stone") == 4, "the haul is in the vault");
+        check(pack.count("feather") == 2, "the kit stayed on the player");
+        check(pack.count("stone") == 0, "and left the pack");
+        check(report.bankedUnits == 4, "four banked");
+        for (const ItemStack& s : stash.stacks())
+            check(!s.foundThisRun, "banked goods are owned outright");
+    }
+
+    // With banking off, extraction still settles ownership -- which is what
+    // makes a second death stop taking the first run's haul.
+    {
+        LossRules rules;
+        rules.banksFindingsOnExtract = false;
+        Container pack("pack", 0, 0.0f);
+        Container stash("stash", 0, 0.0f);
+        pack.add(items, "stone", 4, true);
+        loss::applyExtraction(pack, stash, items, rules);
+        check(stash.empty(), "nothing was banked");
+        check(pack.count("stone") == 4, "it is all still carried");
+        for (const ItemStack& s : pack.stacks())
+            check(!s.foundThisRun, "but it is owned now");
     }
 
     // --- moving between containers -------------------------------------------

@@ -1,4 +1,4 @@
-# Lua scripting
+# Lua scripting {#doc-scripting}
 
 How a `.lua` file becomes behaviour on an entity, what it can reach, and what
 happens when it breaks. For the object model underneath it see
@@ -173,6 +173,57 @@ Two deliberate holes:
 
 A misspelled component name raises an error rather than doing nothing — silently
 doing nothing is how a typo becomes an afternoon.
+
+### Application modules
+
+`eng_script` knows no gameplay words. A host publishes its own vocabulary as a
+**module**: a table name plus named callbacks over a small value type
+(`ScriptHost::bindModule`). Nothing in this library is specific to the game that
+ships with it, and a different game on this engine publishes a different set.
+
+The dungeon crawler publishes two (see `game/src/ScriptGameplay.h`):
+
+```lua
+player.stat("health")     player.health_fraction()   player.alive()
+player.heal(25)           player.hurt(10)            -- scripted hazard, not a hit
+
+rpg.count("tincture")     rpg.stashed("ore")         rpg.give("torch", 2)
+rpg.take("coin", 5)       rpg.currency()
+rpg.flag("gate_open")     rpg.set_flag("gate_open", true)
+rpg.standing("alder")     rpg.quest_state("q_lamps")  rpg.start_quest("q_lamps")
+rpg.depth()               rpg.phase()                rpg.loss_at_risk()
+rpg.note("The lamp gutters.")
+```
+
+Arguments are read positionally and a wrong type reads as absent, because a
+dynamically bound function has no arity to check against. Returning nothing is
+Lua `nil`.
+
+Why these are functions rather than components: combat runs on its own registry,
+not the World the host binds, so an enemy's `Health` is not on an entity a
+script can name. The RPG layer has no entities at all.
+
+### Gameplay events
+
+The game's typed channels arrive as `on_event`, with a uniform payload:
+
+| Event | `subject` | `value` |
+|---|---|---|
+| `enemy_killed` | enemy definition id | how many |
+| `item_changed` | item id | how many now held |
+| `flag_set` | flag name | 1 |
+| `npc_talked` | npc id | 1 |
+| `depth_reached` / `extracted` | — | depth |
+| `raid_phase` | phase name | 0 |
+| `quest_assigned` / `quest_completed` / `quest_turned_in` / `quest_failed` | quest id | 0 |
+
+```lua
+function Shrine:on_event(name, data)
+  if name == "enemy_killed" and data.subject == "cinder_thrall" then
+    self.lit = self.lit + data.value
+  end
+end
+```
 
 ### `input`, `physics`, `event`, `log`, `vec3`
 

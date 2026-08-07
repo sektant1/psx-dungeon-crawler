@@ -452,8 +452,17 @@ OutlinerTree buildOutliner(const SceneDocument& document,
             tree.groups.push_back(std::move(group));
         }
         OutlinerGroup& group = tree.groups[found->second];
-        group.nodes.push_back(OutlinerNode{
-            entity.id, label, kind, components, {}, entity.prefab});
+        // Field by field, like buildNode: a bucket row carries the same data a
+        // nested row does, and positional init here quietly dropped `layer` --
+        // which the `layer:` term reads back off the node.
+        OutlinerNode node;
+        node.id = entity.id;
+        node.label = label;
+        node.kind = kind;
+        node.components = components;
+        node.prefab = entity.prefab;
+        node.layer = entity.layer;
+        group.nodes.push_back(std::move(node));
         ++tree.shown;
     }
 

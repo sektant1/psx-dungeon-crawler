@@ -1,0 +1,93 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.value_row",
+  "component": true,
+  "entities": [
+    {
+      "id": "row",
+      "name": "Value row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        }
+      }
+    },
+    {
+      "id": "name",
+      "parent": "row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            0.55,
+            1
+          ],
+          "offsetMin": [
+            0,
+            0
+          ],
+          "offsetMax": [
+            -2,
+            0
+          ],
+          "order": 0
+        },
+        "label": {
+          "text": "Name",
+          "tone": 1,
+          "align": 0
+        }
+      }
+    },
+    {
+      "id": "value",
+      "parent": "row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0.55,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            2,
+            0
+          ],
+          "offsetMax": [
+            0,
+            0
+          ],
+          "order": 0
+        },
+        "label": {
+          "text": "0",
+          "tone": 0,
+          "align": 2
+        }
+      }
+    }
+  ]
+}

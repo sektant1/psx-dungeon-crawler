@@ -7,6 +7,8 @@
 #include <eng/ecs/components/PortalParams.h>
 #include <eng/ecs/components/PrimitiveMesh.h>
 #include <eng/ecs/components/ScreenCamera.h>
+#include <eng/ecs/components/UiComponents.h>
+
 #include <eng/ecs/components/ThirdPersonCamera.h>
 
 #include "ViewmodelPreview.h"
@@ -184,6 +186,42 @@ struct ShaderAuthor {
 // struct rather than a translation of it, and the cook is a field-by-field copy
 // with nothing to get wrong in between.
 using PortalAuthor = eng::ecs::PortalParams;
+
+// A world-state gate, authored.
+//
+// Declared here rather than aliased to game::SceneCondition -- which it mirrors
+// field for field -- because that component lives in a header that pulls in
+// entt, and this one is included by every editor translation unit including the
+// header-only tests. A four-field POD is not worth an ECS dependency across the
+// whole editor; the cook copies it across, which is three lines in one place.
+struct ConditionAuthor {
+    std::string kind;
+    std::string subject;
+    int value = 0;
+    bool negate = false;
+};
+
+// A screen-space UI element, authored.
+//
+// GROUPED, unlike every other component slot here, and deliberately: the six UI
+// components are one feature and a UI entity always carries a rect plus exactly
+// one of the visuals. Six independent `std::optional` slots would mean six
+// parse branches, six writer branches, six menu rows and six cook lines to say
+// what "this entity is a label" says once -- and it would let an author create
+// a UiLabel with no UiRect, which has no position and can never be drawn.
+//
+// The runtime is unaffected: the cook emits them as the six separate components
+// they are, so the ECS, the inspector's field tables and Lua all see normal
+// independent components. This is an authoring convenience, not a data model.
+struct UiAuthor {
+    // Not optional: a UI element without a box is not addressable.
+    eng::ecs::UiRect rect;
+    std::optional<eng::ecs::UiPanel> panel;
+    std::optional<eng::ecs::UiLabel> label;
+    std::optional<eng::ecs::UiBar> bar;
+    std::optional<eng::ecs::UiIcon> icon;
+    std::optional<eng::ecs::UiList> list;
+};
 
 // A particle effect playing from this entity. The same mirror-not-translate
 // trick: the authored type IS the component, so the cook is a copy and the
@@ -412,6 +450,9 @@ struct Entity {
     std::optional<ClipAuthor> clip;
     std::optional<ShaderAuthor> shader;
     std::optional<PortalAuthor> portal;
+    // Screen-space UI. An entity carrying this is drawn on the canvas
+    // rather than in the world, and has no transform meaning.
+    std::optional<UiAuthor> ui;
     std::optional<ParticleAuthor> particles;
     std::optional<AudioEmitterAuthor> audio;
     std::optional<AudioListenerAuthor> audioListener;
@@ -423,6 +464,10 @@ struct Entity {
     std::optional<std::string> pickup;     // pickup type id
     std::optional<std::string> npc;        // npc id: dialogue, trade and quests
     std::optional<TriggerAuthor> trigger;
+    // Gates this entity on world state. The village's progression mechanism:
+    // an entity that fails its condition is never built (see
+    // game/src/scene/GameComponents.h, SceneCondition).
+    std::optional<ConditionAuthor> sceneCondition;
     bool playerSpawn = false;
 };
 

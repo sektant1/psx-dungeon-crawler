@@ -2,6 +2,7 @@
 
 #include <eng/ecs/Components.h>
 #include <eng/ecs/components/MeshSource.h>
+#include <eng/ecs/components/UiComponents.h>
 #include <eng/io/ByteStream.h>
 
 #include <cmath>
@@ -416,6 +417,7 @@ void writeField(io::ByteWriter& w, const void* c, const Field& f)
     case FieldType::Bool:   w.u8(*static_cast<const bool*>(p) ? 1 : 0); break;
     case FieldType::Int:    w.u32(uint32_t(*static_cast<const int*>(p))); break;
     case FieldType::Float:  w.f32(*static_cast<const float*>(p)); break;
+    case FieldType::Vec2:   w.vec2(*static_cast<const glm::vec2*>(p)); break;
     case FieldType::Vec3:
     case FieldType::Colour: w.vec3(*static_cast<const glm::vec3*>(p)); break;
     case FieldType::Quat:   w.quat(*static_cast<const glm::quat*>(p)); break;
@@ -436,6 +438,12 @@ void readField(io::ByteReader& b, void* c, const Field& f)
         const float v = b.f32();
         if (!std::isfinite(v)) { b.invalidate(); return; }
         *static_cast<float*>(p) = v;
+        break;
+    }
+    case FieldType::Vec2: {
+        const glm::vec2 v = b.vec2();
+        if (!std::isfinite(v.x) || !std::isfinite(v.y)) { b.invalidate(); return; }
+        *static_cast<glm::vec2*>(p) = v;
         break;
     }
     case FieldType::Vec3:
@@ -767,6 +775,100 @@ template <> FieldSpan fieldsOf<ecs::RigidBody>()
     return {f, int(std::size(f))};
 }
 
+
+// --- screen-space UI --------------------------------------------------------
+//
+// Ranges on every enum-shaped int, because the inspector is the only thing that
+// tells an author a tone is 0..7 -- the field is an int and a typo would
+// otherwise be an invisible colour rather than a rejected value.
+
+template <> FieldSpan fieldsOf<ecs::UiRect>()
+{
+    using U = ecs::UiRect;
+    static const Field f[] = {
+        ENG_FIELD(U, anchorMin, FieldType::Vec2),
+        ENG_FIELD(U, anchorMax, FieldType::Vec2),
+        ENG_FIELD(U, offsetMin, FieldType::Vec2),
+        ENG_FIELD(U, offsetMax, FieldType::Vec2),
+        ENG_FIELD_RANGE(U, order, FieldType::Int, -1000.0f, 1000.0f),
+        ENG_FIELD(U, visible, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+template <> FieldSpan fieldsOf<ecs::UiPanel>()
+{
+    using U = ecs::UiPanel;
+    static const Field f[] = {
+        ENG_FIELD_RANGE(U, style, FieldType::Int, 0.0f, 2.0f),
+        ENG_FIELD_RANGE(U, rail, FieldType::Int, 0.0f, 3.0f),
+        ENG_FIELD_RANGE(U, railTone, FieldType::Int, 0.0f, 7.0f),
+        ENG_FIELD_RANGE(U, opacity, FieldType::Float, 0.0f, 1.0f),
+    };
+    return {f, int(std::size(f))};
+}
+
+template <> FieldSpan fieldsOf<ecs::UiLabel>()
+{
+    using U = ecs::UiLabel;
+    static const Field f[] = {
+        ENG_FIELD(U, text, FieldType::String),
+        ENG_FIELD(U, binding, FieldType::String),
+        ENG_FIELD_RANGE(U, tone, FieldType::Int, 0.0f, 7.0f),
+        ENG_FIELD_RANGE(U, align, FieldType::Int, 0.0f, 2.0f),
+        ENG_FIELD(U, shadow, FieldType::Bool),
+        ENG_FIELD(U, font, FieldType::String),
+        ENG_FIELD_RANGE(U, textScale, FieldType::Int, 1.0f, 8.0f),
+        ENG_FIELD(U, colour, FieldType::Colour),
+        ENG_FIELD(U, useColour, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+template <> FieldSpan fieldsOf<ecs::UiBar>()
+{
+    using U = ecs::UiBar;
+    static const Field f[] = {
+        ENG_FIELD_RANGE(U, ratio, FieldType::Float, 0.0f, 1.0f),
+        ENG_FIELD(U, binding, FieldType::String),
+        ENG_FIELD_RANGE(U, fillTone, FieldType::Int, 0.0f, 7.0f),
+        ENG_FIELD_RANGE(U, trackTone, FieldType::Int, 0.0f, 7.0f),
+        ENG_FIELD(U, fillColour, FieldType::Colour),
+        ENG_FIELD(U, useFillColour, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+template <> FieldSpan fieldsOf<ecs::UiIcon>()
+{
+    using U = ecs::UiIcon;
+    static const Field f[] = {
+        ENG_FIELD_RANGE(U, tone, FieldType::Int, 0.0f, 7.0f),
+        ENG_FIELD_RANGE(U, inset, FieldType::Int, 0.0f, 8.0f),
+        ENG_FIELD(U, colour, FieldType::Colour),
+        ENG_FIELD(U, useColour, FieldType::Bool),
+    };
+    return {f, int(std::size(f))};
+}
+
+template <> FieldSpan fieldsOf<ecs::UiList>()
+{
+    using U = ecs::UiList;
+    static const Field f[] = {
+        ENG_FIELD(U, source, FieldType::String),
+        ENG_FIELD(U, action, FieldType::String),
+        ENG_FIELD_RANGE(U, maxRows, FieldType::Int, 1.0f, 64.0f),
+        ENG_FIELD_RANGE(U, rowHeight, FieldType::Float, 4.0f, 40.0f),
+        ENG_FIELD_RANGE(U, rowGap, FieldType::Float, 0.0f, 8.0f),
+        ENG_FIELD(U, showValues, FieldType::Bool),
+        ENG_FIELD_RANGE(U, tone, FieldType::Int, 0.0f, 7.0f),
+        ENG_FIELD_RANGE(U, selectedTone, FieldType::Int, 0.0f, 7.0f),
+        ENG_FIELD(U, font, FieldType::String),
+        ENG_FIELD_RANGE(U, textScale, FieldType::Int, 1.0f, 8.0f),
+    };
+    return {f, int(std::size(f))};
+}
+
 namespace ecs {
 
 
@@ -829,6 +931,7 @@ std::size_t copyEntities(entt::registry& dst, const entt::registry& src,
     }
     return remap.size();
 }
+
 
 void registerEngineComponents(ComponentRegistry& reg)
 {
@@ -901,6 +1004,15 @@ void registerEngineComponents(ComponentRegistry& reg)
     // is not a component anybody can author.
     reg.add(reflectedComponent<ThirdPersonCamera>("ThirdPersonCamera", 34));
     reg.add(reflectedComponent<ScreenCamera>("ScreenCamera", 35));
+    // Screen-space UI (see components/UiComponents.h). 38-43 rather than
+    // continuing at 38 with a gap: these six are one feature and a reader
+    // looking for "where is the UI" should find them together.
+    reg.add(reflectedComponent<UiRect>("UiRect", 38));
+    reg.add(reflectedComponent<UiPanel>("UiPanel", 39));
+    reg.add(reflectedComponent<UiLabel>("UiLabel", 40));
+    reg.add(reflectedComponent<UiBar>("UiBar", 41));
+    reg.add(reflectedComponent<UiIcon>("UiIcon", 42));
+    reg.add(reflectedComponent<UiList>("UiList", 43));
     // Free-form per-instance properties. Hand-written for the same reason
     // Scripts at 33 is: a variable-length list of heterogeneous values is not a
     // field table. Its own id rather than a corner of Scripts, because an

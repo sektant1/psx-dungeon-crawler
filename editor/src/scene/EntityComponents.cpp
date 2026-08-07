@@ -155,6 +155,33 @@ const std::vector<ComponentType>& table()
          [](Entity& e) { e.particles.reset(); }, always,
          ComponentGroup::Appearance},
 
+        {"condition", "Condition",
+         "only build this when world state says so",
+         [](const Entity& e) { return e.sceneCondition.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // `flag_set` with no subject: the commonest gate, and it does
+             // nothing until the author names a flag -- which is better than a
+             // default that silently hides the entity.
+             game::content::ConditionAuthor gate;
+             gate.kind = "flag_set";
+             e.sceneCondition = gate;
+         },
+         [](Entity& e) { e.sceneCondition.reset(); }, always,
+         ComponentGroup::Gameplay},
+
+        {"ui", "UI element", "a screen-space box: panel, label, bar or list",
+         [](const Entity& e) { return e.ui.has_value(); },
+         [](Entity& e, const ComponentDefaults&) {
+             // A rect and a panel: the box has to be visible the moment it is
+             // added or the author has selected something they cannot see, and
+             // a plate is the least presumptuous thing to show.
+             game::content::UiAuthor ui;
+             ui.panel = eng::ecs::UiPanel{};
+             e.ui = ui;
+         },
+         [](Entity& e) { e.ui.reset(); }, always,
+         ComponentGroup::Appearance},
+
         {"portal", "Portal", "animated portal surface parameters",
          [](const Entity& e) { return e.portal.has_value(); },
          [](Entity& e, const ComponentDefaults&) {

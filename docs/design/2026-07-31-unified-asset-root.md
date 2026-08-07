@@ -1,4 +1,4 @@
-# Unified Asset Root & Asset Contract — Refactor Plan
+# Unified Asset Root & Asset Contract — Refactor Plan {#doc-design-2026-07-31-unified-asset-root}
 
 Status: proposed, 2026-07-31, branch `major-refactor`.
 

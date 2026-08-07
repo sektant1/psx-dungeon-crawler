@@ -1,4 +1,4 @@
-# Phase 4 — rewrite the dungeon on the modular kit
+# Phase 4 — rewrite the dungeon on the modular kit {#doc-design-2026-07-29-modular-dungeon-rewrite}
 
 Status: partially superseded. Kit conversion landed; the proposal to drop
 `.map` is superseded by `2026-07-27-prototype-content-reset-and-pipeline.md`:

@@ -3936,6 +3936,10 @@ void Renderer::setNodeShaderBlock(NodeHandle node, const ShaderBlock& block)
         case FieldType::Float:
             record->blocks[field.name] = *static_cast<const float*>(value);
             break;
+        case FieldType::Vec2:
+            record->blocks[field.name] =
+                *static_cast<const glm::vec2*>(value);
+            break;
         case FieldType::Vec3:
         case FieldType::Colour:
             record->blocks[field.name] =

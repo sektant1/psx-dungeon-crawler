@@ -1,4 +1,4 @@
-# Raven Engine Design Document (GEDD)
+# Raven Engine Design Document (GEDD) {#doc-design-gedd}
 
 _Raven Engine implementation reference for the untitled PSX dungeon crawler._
 _Companion to the player-facing [GDD.md](GDD.md). Started 2026-07-24._

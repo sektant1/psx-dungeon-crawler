@@ -1,0 +1,32 @@
+{
+  "$schema": "../../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.dialogue",
+  "component": true,
+  "entities": [
+    { "id": "root", "name": "Conversation",
+      "ui": { "rect": { "anchorMin": [0.0, 1.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [24.0, -128.0], "offsetMax": [-24.0, -12.0] },
+              "panel": { "style": 0, "rail": 1, "railTone": 2, "opacity": 0.96 } } },
+
+    { "id": "speaker", "name": "Speaker", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [1.0, 0.0],
+                        "offsetMin": [8.0, 4.0], "offsetMax": [-8.0, 22.0] },
+              "label": { "text": "Someone", "binding": "dialogue.speaker",
+                         "tone": 2, "align": 0 } } },
+
+    { "id": "line", "name": "Line", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [1.0, 0.0],
+                        "offsetMin": [8.0, 24.0], "offsetMax": [-8.0, 42.0] },
+              "label": { "text": "...", "binding": "dialogue.text", "tone": 0,
+                         "align": 0 } } },
+
+    { "id": "choices", "name": "Replies", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [8.0, 46.0], "offsetMax": [-8.0, -6.0] },
+              "list": { "source": "dialogue.choices", "action": "reply", "maxRows": 5,
+                        "rowHeight": 17.0, "rowGap": 2.0, "showValues": false,
+                        "tone": 0, "selectedTone": 2 } } }
+  ]
+}

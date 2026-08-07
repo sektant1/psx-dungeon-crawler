@@ -1,4 +1,4 @@
-# Render presets
+# Render presets {#doc-render-presets}
 
 A render preset is one complete look: framebuffer resolution, lighting model,
 stylize pass, colour grade, dither, and the era filter that resolves the frame.

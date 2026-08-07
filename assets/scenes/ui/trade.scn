@@ -1,0 +1,50 @@
+{
+  "$schema": "../../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.trade",
+  "component": true,
+  "entities": [
+    { "id": "root", "name": "Trade",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [28.0, 18.0], "offsetMax": [-28.0, -18.0] },
+              "panel": { "style": 0, "rail": 1, "railTone": 2, "opacity": 0.94 } } },
+
+    { "id": "title", "name": "Title", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [0.5, 0.0],
+                        "offsetMin": [8.0, 4.0], "offsetMax": [-4.0, 22.0] },
+              "label": { "text": "TRADE", "tone": 2, "align": 0 } } },
+
+    { "id": "coin", "name": "Coin", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.5, 0.0], "anchorMax": [1.0, 0.0],
+                        "offsetMin": [4.0, 4.0], "offsetMax": [-8.0, 22.0] },
+              "label": { "text": "0", "binding": "inventory.currency",
+                         "tone": 0, "align": 2 } } },
+
+    { "id": "shelf_title", "name": "Shelf title", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [0.5, 0.0],
+                        "offsetMin": [8.0, 25.0], "offsetMax": [-4.0, 43.0] },
+              "label": { "text": "THEIRS", "tone": 1, "align": 0 } } },
+
+    { "id": "shelf", "name": "Shelf", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [0.5, 1.0],
+                        "offsetMin": [8.0, 46.0], "offsetMax": [-4.0, -8.0] },
+              "panel": { "style": 2, "rail": 0, "opacity": 0.6 },
+              "list": { "source": "trade.stock", "action": "buy", "maxRows": 14,
+                        "rowHeight": 17.0, "rowGap": 2.0, "showValues": true,
+                        "tone": 0, "selectedTone": 2 } } },
+
+    { "id": "pack_title", "name": "Pack title", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.5, 0.0], "anchorMax": [1.0, 0.0],
+                        "offsetMin": [4.0, 25.0], "offsetMax": [-8.0, 43.0] },
+              "label": { "text": "YOURS", "tone": 1, "align": 0 } } },
+
+    { "id": "pack", "name": "Pack", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.5, 0.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [4.0, 46.0], "offsetMax": [-8.0, -8.0] },
+              "panel": { "style": 2, "rail": 0, "opacity": 0.6 },
+              "list": { "source": "inventory.backpack", "action": "sell", "maxRows": 14,
+                        "rowHeight": 17.0, "rowGap": 2.0, "showValues": true,
+                        "tone": 0, "selectedTone": 2 } } }
+  ]
+}

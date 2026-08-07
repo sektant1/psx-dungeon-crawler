@@ -1,4 +1,4 @@
-# P7–P10 Execution Plan — Mesh Importer Registry, Logical Ids, UV Normalisation
+# P7–P10 Execution Plan — Mesh Importer Registry, Logical Ids, UV Normalisation {#doc-design-2026-07-31-mesh-importer-plan}
 
 Status: survey, 2026-07-31, branch `major-refactor`.
 Companion to `docs/design/2026-07-31-unified-asset-root.md` (D8, D9, D13, §4.3,

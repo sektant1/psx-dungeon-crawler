@@ -233,6 +233,13 @@ max_voices = 96
 # Player-facing HUD is rendered at native output resolution after the PSX post
 # chain. Scale and contrast are accessibility controls; reduced_motion removes
 # fades/flashes without changing combat timing or information.
+# The typeface every in-game surface is drawn with: the HUD, the tooltip, the
+# banner and the authored UI scenes all share one canvas font. Names a metrics
+# file in assets/fonts, generated from a TTF by tools/gen_font_atlas.py -- the
+# runtime never reads a TTF, so text measurement is identical on every machine.
+[ui]
+font = "antiquity.toml"
+
 [hud]
 scale = 1.0
 opacity = 0.92
@@ -245,6 +252,17 @@ numeric_values = true
 safe_area_percent = 5.0
 
 [bindings]
+# The authored screens (assets/scenes/ui/*.scn). `ui_back` closes whichever is
+# open; a conversation has no key of its own because it is opened by talking to
+# somebody.
+inventory = "Tab"
+trade = "B"
+ui_back = "Escape"
+ui_up = ["Up", "W"]
+ui_down = ["Down", "S"]
+ui_accept = ["Return", "E"]
+ui_left = ["Left", "A"]
+ui_right = ["Right", "D"]
 move_forward = "W"
 move_back = "S"
 move_left = "A"

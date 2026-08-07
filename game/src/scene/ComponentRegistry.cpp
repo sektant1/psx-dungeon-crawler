@@ -148,6 +148,31 @@ void deMarker(entt::registry& r, entt::entity e, ByteReader& b, uint32_t bytes)
     r.emplace_or_replace<game::SceneMarker>(e, game::SceneMarker{type});
 }
 
+void serSceneCondition(const entt::registry& r, entt::entity e, ByteWriter& w)
+{
+    const auto& c = r.get<game::SceneCondition>(e);
+    w.str(c.kind);
+    w.str(c.subject);
+    w.u32(uint32_t(c.value));
+    w.u8(c.negate ? 1u : 0u);
+}
+void deSceneCondition(entt::registry& r, entt::entity e, ByteReader& b,
+                      uint32_t bytes)
+{
+    if (bytes < 9) { b.invalidate(); return; }
+    game::SceneCondition c;
+    c.kind = b.str();
+    c.subject = b.str();
+    c.value = int(b.u32());
+    c.negate = b.u8() != 0;
+    // An unnamed condition is one that can never be evaluated, and an entity
+    // carrying one would be silently present or silently absent depending on
+    // which way the evaluator happened to fail. Refusing the payload puts the
+    // complaint where the author can act on it.
+    if (c.kind.empty()) { b.invalidate(); return; }
+    r.emplace_or_replace<game::SceneCondition>(e, std::move(c));
+}
+
 void serEnvironment(const entt::registry& r, entt::entity e, ByteWriter& w)
 { w.str(r.get<game::SceneEnvironment>(e).palette); }
 void deEnvironment(entt::registry& r, entt::entity e, ByteReader& b,
@@ -237,6 +262,12 @@ ComponentRegistry buildCore()
     reg.add({"SceneMarker", 16, addDefault<game::SceneMarker>,
              has<game::SceneMarker>, remove<game::SceneMarker>,
              serMarker, deMarker});
+    // 65, in the application block (kFirstApplicationTypeId is 64 and Npc has
+    // it): the game's low reservation is spent, and a stable id is a file
+    // format that cannot be reshuffled.
+    reg.add({"SceneCondition", eng::ecs::kFirstApplicationTypeId + 1,
+             addDefault<game::SceneCondition>, has<game::SceneCondition>,
+             remove<game::SceneCondition>, serSceneCondition, deSceneCondition});
     reg.add({"SceneEnvironment", 17, addDefault<game::SceneEnvironment>,
              has<game::SceneEnvironment>, remove<game::SceneEnvironment>,
              serEnvironment, deEnvironment});

@@ -1,4 +1,4 @@
-# RenderDoc and AI Visual Testing
+# RenderDoc and AI Visual Testing {#doc-renderdoc-ai-testing}
 
 This project can produce deterministic screenshots, frame-time reports, and
 single-frame RenderDoc captures. Codex can inspect the resulting `.rdc` through

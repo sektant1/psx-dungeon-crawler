@@ -204,3 +204,22 @@ count = 2
 id = "apprentice_coat"
 count = 1
 equipped = true
+
+# --- the risk loop -----------------------------------------------------------
+#
+# What a death takes and what an extraction banks (see game/src/rpg/LossPolicy.h).
+# This is the single most consequential block in the game: GDD §7 promises that
+# what you carry in is at risk, and GDD §10 leaves "how punishing" open. These
+# are the dials that answer it, and they are meant to be moved while playing.
+#
+# The defaults are the honest Tarkov reading: everything in the pack is at
+# stake, worn gear is not (losing your only armour to one bad landing ends a
+# campaign, not a run), and two seals let the player protect the one find that
+# made the descent worth it.
+[raid]
+loses_findings = true   # what you picked up down there
+loses_carried = true    # what you walked in with, in the pack
+loses_equipped = false  # what you are wearing. The harshest dial in the game.
+secured_slots = 2       # stacks the player may seal against one death
+insurance_rate = 0.0    # fraction of lost market value refunded as coin
+banks_findings_on_extract = true  # the haul goes to the vault, the kit stays on you

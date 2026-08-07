@@ -1,4 +1,4 @@
-# RHI seam, module contracts, and removing OGRE
+# RHI seam, module contracts, and removing OGRE {#doc-design-2026-07-29-rhi-and-module-contracts}
 
 Status: accepted, not started
 Date: 2026-07-29

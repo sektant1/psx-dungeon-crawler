@@ -7,8 +7,17 @@ CREATE_SUBDIRS         = NO
 ALLOW_UNICODE_NAMES    = YES
 OUTPUT_LANGUAGE        = English
 
-INPUT                  = "@CMAKE_CURRENT_SOURCE_DIR@/README.md" \
-                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/mainpage.md" \
+# `docs` is in here whole rather than file by file, so a new handbook page is a
+# page on the site the moment it is written. What that sweeps up in exchange is
+# the imported material under docs/ -- book conversions, vendored skill
+# packs, the survival kit's own built site -- which EXCLUDE below removes by
+# directory. Anything the repository actually authored stays.
+#
+# README.md is deliberately absent: it opens with a centred HTML banner meant
+# for the repository front page, and everything it says about building and
+# running is covered here by ARCHITECTURE.md and the build page.
+INPUT                  = "@CMAKE_CURRENT_SOURCE_DIR@/ARCHITECTURE.md" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs" \
                          "@CMAKE_CURRENT_SOURCE_DIR@/engine/include" \
                          "@CMAKE_CURRENT_SOURCE_DIR@/editor/include" \
                          "@CMAKE_CURRENT_SOURCE_DIR@/editor/src" \
@@ -16,9 +25,34 @@ INPUT                  = "@CMAKE_CURRENT_SOURCE_DIR@/README.md" \
                          "@CMAKE_CURRENT_SOURCE_DIR@/samples/common"
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.hpp *.cpp *.md
+EXCLUDE                = "@CMAKE_CURRENT_SOURCE_DIR@/docs/game_engine_architecture_3e_markdown" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/editor_impl_reference_manual" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/skills" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/skills_repo" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/superpowers" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/vulkan-impl-survival-kit" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/media" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/baselines" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/references"
 EXCLUDE_PATTERNS       = */build/* */build-*/* */vendor/* */third_party/* \
                          */_deps/*
 USE_MDFILE_AS_MAINPAGE = "@CMAKE_CURRENT_SOURCE_DIR@/docs/mainpage.md"
+# Handbook pages carry their own `{#id}` anchors and are hung off the main page
+# with \subpage, so the navigation tree mirrors the contents page rather than
+# listing 40-odd pages alphabetically.
+MARKDOWN_SUPPORT       = YES
+TOC_INCLUDE_HEADINGS   = 3
+# The handbook is read on GitHub as often as it is read here, and several pages
+# link to their own sections with `[text](#slugified-heading)`. GITHUB ids make
+# those anchors the same in both places; under Doxygen's own scheme they are
+# `autotoc_md41` and every one of those links dangles.
+MARKDOWN_ID_STYLE      = GITHUB
+# A README.md inside an input directory otherwise becomes that *directory's*
+# documentation rather than a page, which silently swallows docs/design's
+# index and its `{#doc-design-readme}` anchor with it.
+IMPLICIT_DIR_DOCS      = NO
+IMAGE_PATH             = "@CMAKE_CURRENT_SOURCE_DIR@/docs/media" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/docs/references"
 
 EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO
@@ -38,15 +72,28 @@ GENERATE_LATEX         = NO
 # Same skin as docs/vulkan-impl-survival-kit. Order matters: kit.css owns the
 # palette and type scale, doxygen-kit.css maps Doxygen's markup onto them.
 # Doxygen copies both into the html output, so the generated site stays
-# self-contained. Both sheets are token-driven, so Doxygen's dark-mode toggle
-# and the reader's OS preference both work.
+# self-contained.
 HTML_EXTRA_STYLESHEET  = "@CMAKE_CURRENT_SOURCE_DIR@/docs/vulkan-impl-survival-kit/kit.css" \
                          "@CMAKE_CURRENT_SOURCE_DIR@/docs/doxygen-kit.css"
-# Desaturate Doxygen's own generated stylesheet so anything the overrides miss
-# reads as neutral grey instead of stock blue. HTML_COLORSTYLE needs Doxygen
-# 1.9.5+; older versions log an unknown-tag warning and are otherwise fine.
-HTML_COLORSTYLE        = LIGHT
-HTML_COLORSTYLE_SAT    = 0
+#
+# TOGGLE, and nothing else, is what makes the skin work.
+#
+# Doxygen bakes its palette into the generated doxygen.css at run time. Under
+# LIGHT or DARK it writes literal hex -- ~200 hardcoded colours, white and pale
+# grey among them -- and an override sheet then has to name every selector that
+# carries one. Miss a corner and it stays white: group-header box-shadows,
+# inline `span.tt`, member-list borders and the search dropdown all leaked
+# through that way.
+#
+# Under TOGGLE (or the AUTO_* styles) Doxygen instead emits ~160 CSS custom
+# properties on `html`, plus a dark override block on `html.dark-mode`, and
+# every stock rule reads from them. doxygen-kit.css redefines those properties
+# in terms of the kit's own tokens, so the whole stock stylesheet follows the
+# palette -- including the parts the skin never mentions. It also gives the
+# reader a light/dark toggle in the title bar, which is what drives
+# `html.dark-mode`. Needs Doxygen 1.9.5+; older versions log an unknown-value
+# warning and fall back to LIGHT.
+HTML_COLORSTYLE        = TOGGLE
 
 SOURCE_BROWSER         = YES
 INLINE_SOURCES         = NO

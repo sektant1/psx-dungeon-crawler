@@ -38,6 +38,7 @@ void writeStacks(ByteWriter& w, const std::vector<ItemStackSnapshot>& stacks)
         w.u32(uint32_t(s.count));
         w.u8(s.foundThisRun ? 1 : 0);
         w.f32(s.condition);
+        w.u8(s.secured ? 1 : 0);
     }
 }
 
@@ -52,6 +53,7 @@ bool readStacks(ByteReader& r, std::vector<ItemStackSnapshot>& out)
         s.count = int32_t(r.u32());
         s.foundThisRun = r.u8() != 0;
         s.condition = r.f32();
+        s.secured = r.u8() != 0;
     }
     return r.ok();
 }
@@ -390,7 +392,8 @@ std::vector<ItemStackSnapshot> snapshotOf(const Container& c)
     std::vector<ItemStackSnapshot> out;
     out.reserve(c.stacks().size());
     for (const ItemStack& s : c.stacks())
-        out.push_back({s.item, int32_t(s.count), s.foundThisRun, s.condition});
+        out.push_back({s.item, int32_t(s.count), s.foundThisRun, s.condition,
+                       s.secured});
     return out;
 }
 
@@ -405,7 +408,7 @@ void restoreInto(Container& c, const std::vector<ItemStackSnapshot>& snaps)
     for (const ItemStackSnapshot& s : snaps)
         if (s.count > 0)
             c.stacks().push_back(
-                {s.item, int(s.count), s.foundThisRun, s.condition});
+                {s.item, int(s.count), s.foundThisRun, s.condition, s.secured});
 }
 
 } // namespace

@@ -382,6 +382,7 @@ if(BUILD_TESTING)
 
   eng_add_test(rpg_inventory
     SOURCES game/tests/RpgInventoryTests.cpp game/src/rpg/Inventory.cpp game/src/rpg/Items.cpp
+            game/src/rpg/LossPolicy.cpp game/src/rpg/Trading.cpp
             game/src/rpg/RpgTypes.cpp game/src/combat/CombatVocabulary.cpp
     INCLUDES game/src engine/include third_party
     LIBS eng_toml eng_core glm::glm EnTT::EnTT)
@@ -784,6 +785,18 @@ if(BUILD_TESTING)
   # The inspector's layout arithmetic, on a headless ImGui context: no window,
   # no backend. Widget sizing is the part that was measured by hand and drifted,
   # and it is checkable without drawing anything.
+  # Authoring UI in the 2D viewport: handle hit-testing and the drag maths that
+  # turns a grabbed pixel back into the offsets the document stores. No window
+  # -- every assertion is arithmetic over a document.
+  eng_add_test(editor_ui_scene
+    SOURCES editor/tests/UiSceneEditorTests.cpp editor/src/ui/UiSceneEditor.cpp
+            editor/src/content/SceneInstancing.cpp
+            editor/src/content/SceneDocument.cpp
+            editor/src/content/SceneSource.cpp
+    INCLUDES editor/include engine/include game/src third_party
+    LIBS eng_framework eng game_content glm::glm EnTT::EnTT
+         nlohmann_json::nlohmann_json)
+
   eng_add_test(editor_inspector_layout
     SOURCES editor/tests/EditorInspectorLayoutTests.cpp editor/src/ui/EditorUi.cpp
     INCLUDES editor/include engine/include
@@ -1033,6 +1046,13 @@ if(BUILD_TESTING)
             engine/src/runtime/ProjectComponents.cpp
     INCLUDES engine/include third_party
     LIBS eng_framework eng_toml glm::glm EnTT::EnTT)
+
+  # Screen-space UI layout. Pure registry maths -- anchors, nesting and picking
+  # -- so it needs no canvas and no window; the painting is exercised on screen.
+  eng_add_test(ui_scene
+    SOURCES engine/tests/UiSceneTests.cpp
+    INCLUDES engine/include third_party
+    LIBS eng_framework glm::glm EnTT::EnTT)
 
   # SceneRuntime needs a World, so it links eng_framework -- still headless:
   # every assertion here is registry work, and none of it opens a window.

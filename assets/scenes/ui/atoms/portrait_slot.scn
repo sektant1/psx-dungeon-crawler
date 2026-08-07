@@ -1,0 +1,67 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.portrait_slot",
+  "component": true,
+  "entities": [
+    {
+      "id": "frame",
+      "name": "Slot",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        },
+        "panel": {
+          "style": 2,
+          "rail": 0,
+          "opacity": 0.8
+        }
+      }
+    },
+    {
+      "id": "chip",
+      "parent": "frame",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            3.0,
+            3.0
+          ],
+          "offsetMax": [
+            -3.0,
+            -3.0
+          ],
+          "order": 0
+        },
+        "icon": {
+          "tone": 1,
+          "inset": 0
+        }
+      }
+    }
+  ]
+}

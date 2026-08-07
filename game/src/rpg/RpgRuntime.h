@@ -4,6 +4,7 @@
 #include "Hideout.h"
 #include "Inventory.h"
 #include "Items.h"
+#include "LossPolicy.h"
 #include "NpcSystem.h"
 #include "Npcs.h"
 #include "PickupSystem.h"
@@ -162,10 +163,25 @@ public:
     void onEnemyKilled(GameContext&, const std::string& enemyId, int64_t xp,
                        const std::string& lootTable, glm::vec3 at);
     void onDepthReached(int depth);
-    void onExtracted(int depth);
-    // The player died: findings are lost per §14.3. Returns what was taken, so
-    // the caller can tell them.
-    std::vector<ItemStack> onPlayerDied(const std::string& killerId);
+    // Getting out. Settles ownership and banks the haul per the loss rules;
+    // returns what was banked so the caller can show the run's takings.
+    ExtractReport onExtracted(int depth);
+    // The player died. Applies the loss rules and returns the full report --
+    // what was taken, what survived and why, and what insurance paid back --
+    // because the after-action screen is the only place those rules are ever
+    // explained to a player.
+    LossReport onPlayerDied(const std::string& killerId);
+
+    // The dials the two edges above run on, from `[raid]` in progression.toml.
+    const LossRules& lossRules() const { return mLossRules; }
+    // What a death would cost right now. The inventory screen shows this while
+    // the player is still deciding what to carry, which is the whole point of
+    // the policy being a pure function.
+    LossReport previewLoss() const;
+    // Seal or release one stack against the next death. Returns false when the
+    // seal would be wasted (the stack is already safe) or when every slot is
+    // spent, both of which the screen reports rather than silently ignoring.
+    bool setSecured(const std::string& item, bool secured);
 
     // --- inventory actions --------------------------------------------------
     // All of these keep the channels and the modifier layer in step, which is
@@ -187,6 +203,18 @@ public:
     bool chooseReply(int offeredIndex);
     void endConversation();
     const std::string& conversationPartner() const { return mPartner; }
+
+    // Remove every entity in `registry` whose SceneCondition does not hold.
+    //
+    // This is how the village changes: an entity gated on "the forge is lit" is
+    // simply not built until it is. Destroying rather than hiding, because a
+    // hidden entity still has a collider, still costs a draw call's worth of
+    // culling, and is still findable by everything that walks the level looking
+    // for something to interact with.
+    //
+    // Returns how many were removed, for the log line that tells a designer
+    // their gate is working.
+    int applySceneConditions(entt::registry& registry) const;
 
     // --- conditions and effects --------------------------------------------
     bool evaluate(const Condition&) const;
@@ -239,6 +267,7 @@ private:
     void syncHideout();
 
     Paths mPaths;
+    LossRules mLossRules;
     SkillTable mSkillTable;
     SkillSet mSkills;
     TraderLibrary mTraders;

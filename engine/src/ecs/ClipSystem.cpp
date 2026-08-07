@@ -163,6 +163,7 @@ void applyField(void* instance, const Field& field, const glm::vec3& value)
     case FieldType::Float:
         *static_cast<float*>(at) = value.x;
         break;
+    case FieldType::Vec2:
     case FieldType::Vec3:
     case FieldType::Colour:
         *static_cast<glm::vec3*>(at) = value;

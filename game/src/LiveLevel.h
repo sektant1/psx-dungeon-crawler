@@ -46,7 +46,9 @@ public:
     void update(eng::Renderer& r, float animationTime, float dt);
     void updateVisibility(eng::Renderer& r, glm::vec3 cameraPos);
     void appendTargets(std::vector<GameplayTarget>& targets, int depth) const;
+    float spawnYaw = 0.0f;
     glm::vec3 spawnPosition() const { return spawn; }
+    float spawnFacing() const { return spawnYaw; }
     glm::vec3 exitPosition() const { return exit; }
     float exitYawDegrees() const { return exitYaw; }
     glm::vec3 markerPosition(const std::string& type,
@@ -73,6 +75,15 @@ public:
     // dungeon, which has no .scn to carry components: the caller then applies
     // the game's own config, so a transition from an authored level back into
     // a generated one restores the defaults rather than keeping the override.
+    // The authored level's registry, or null for a procedural one. Exposed so
+    // the app can apply scene conditions to it before anything reads its
+    // placements -- gating is game policy and LiveLevel owns no world state to
+    // decide it with.
+    entt::registry* authoredRegistry()
+    {
+        return authoredMap ? &authoredMap->registry() : nullptr;
+    }
+
     game::MapRuntime::AuthoredPlayerRig playerRig() const
     {
         return authoredMap ? authoredMap->playerRig()

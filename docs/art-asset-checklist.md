@@ -1,4 +1,5 @@
-**Asset Pipeline Checklist**  
+# Asset pipeline checklist {#doc-art-asset-checklist}
+
 Fast-paced dark fantasy FPS bullet-hell boomer shooter with Souls-style bosses, Tarkov extraction loops, Pathologic 2-style village progression, Stalker/Zone dungeon risk-reward, occult/Golden Dawn framing, and Dark and Darker atmosphere. Visual target: 3D pixel-art shaders + modernized Heretic (1994) enemy/gun/VFX language + Quake 3 movement feel + Boltgun-style weapon weight.
 
 ### 1. Style & Technical Foundations (Lock First)

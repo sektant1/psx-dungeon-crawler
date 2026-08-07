@@ -1,5 +1,7 @@
 #include <eng/ui/UiCanvas.h>
 
+#include <eng/Log.h>
+
 #include <imgui.h>
 
 #include <algorithm>
@@ -53,6 +55,12 @@ void UiCanvas::begin(glm::vec2 displayPixels, glm::ivec2 preferred,
     mOrigin = {0.0f, 0.0f};
     mTarget = nullptr;
     mClipToTarget = false;
+}
+
+glm::ivec2 UiCanvas::toVirtual(glm::vec2 windowPixels) const {
+    const glm::vec2 local =
+        (windowPixels - mOrigin) * mFramebufferScale / float(std::max(mScale, 1));
+    return {int(std::floor(local.x)), int(std::floor(local.y))};
 }
 
 void UiCanvas::beginTarget(glm::vec2 originPixels, glm::ivec2 virtualSize,
@@ -186,6 +194,53 @@ void UiCanvas::panel(glm::ivec2 at, glm::ivec2 size,
             rect({at.x + size.x - 3, at.y + size.y - 3}, {2, 2}, rail);
         }
     }
+}
+
+const BitmapFont& UiCanvas::fontFor(const std::string& definition) const {
+    if (definition.empty())
+        return mFont;
+    const auto found = mFonts.find(definition);
+    if (found != mFonts.end())
+        return found->second ? *found->second : mFont;
+
+    auto face = std::make_unique<BitmapFont>();
+    if (!face->load(definition)) {
+        // Remembered as a failure so a missing atlas is one log line rather
+        // than one per frame, and the canvas's own font is used instead.
+        log::error("UiCanvas: font '%s' failed to load; using the default",
+                   definition.c_str());
+        mFonts.emplace(definition, nullptr);
+        return mFont;
+    }
+    const BitmapFont& ref = *face;
+    mFonts.emplace(definition, std::move(face));
+    return ref;
+}
+
+void UiCanvas::text(glm::ivec2 at, std::string_view value, unsigned int colour,
+                    Align align, bool shadow, const std::string& fontDefinition,
+                    int textScale) const {
+    if (value.empty())
+        return;
+    const BitmapFont& face = fontFor(fontDefinition);
+    const int magnify = std::clamp(textScale, 1, 8);
+    glm::ivec2 pos = at;
+    if (align != Align::Left) {
+        const int width = face.measure(value).x * magnify;
+        pos.x -= align == Align::Centre ? width / 2 : width;
+    }
+    ImDrawList* draw = list();
+    pushClip(draw);
+    face.draw(draw, toScreen(pos),
+              float(mScale * magnify) / mFramebufferScale.x, value, colour,
+              shadow ? mStyle.palette.shadow : 0u);
+    popClip(draw);
+}
+
+glm::ivec2 UiCanvas::measureIn(std::string_view value,
+                               const std::string& fontDefinition,
+                               int textScale) const {
+    return fontFor(fontDefinition).measure(value) * std::clamp(textScale, 1, 8);
 }
 
 void UiCanvas::text(glm::ivec2 at, std::string_view value, unsigned int colour,

@@ -1,4 +1,4 @@
-# The ECS
+# The ECS {#doc-ecs}
 
 What an object *is* in this engine, who owns its lifetime, and how to add a
 component. Follows *Game Engine Architecture* (Gregory, 4th ed.) vol. I §1.5.15

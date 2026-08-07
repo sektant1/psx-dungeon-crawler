@@ -52,6 +52,7 @@ add_executable(
   editor/src/scene/PickTarget.cpp
   editor/src/viewport/PreviewBridge.cpp
   editor/src/ui/UiStage.cpp
+  editor/src/ui/UiSceneEditor.cpp
   # The game's palette loader, shared rather than approximated: the editor's
   # light switch answers a question about the shipped look, and an editor that
   # answers it with its own numbers is an editor that lies about the level.
@@ -82,7 +83,11 @@ target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/include)
 # eng_runtime for eng::runtime::Project: what a project IS has one definition,
 # read by the editor that writes it and the player that plays it.
-target_link_libraries(scene_editor PRIVATE eng eng_runtime game_content eng_imgui
+# game_rpg for the condition vocabulary: the inspector offers the kinds the RPG
+# layer actually knows rather than a free-text field, because the field is a
+# string and a typo is an entity that silently never appears.
+target_link_libraries(scene_editor PRIVATE eng eng_runtime game_content game_rpg
+                                             eng_imgui
                                              eng_model_import eng_acp
                                              nlohmann_json::nlohmann_json)
 # No asset defines: the editor mounts the `editor` set and resolves logical

@@ -1,0 +1,72 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.list_frame",
+  "component": true,
+  "entities": [
+    {
+      "id": "frame",
+      "name": "List",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        },
+        "panel": {
+          "style": 2,
+          "rail": 0,
+          "opacity": 0.6
+        }
+      }
+    },
+    {
+      "id": "rows",
+      "parent": "frame",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            2.0,
+            2.0
+          ],
+          "offsetMax": [
+            -2.0,
+            -2.0
+          ],
+          "order": 0
+        },
+        "list": {
+          "source": "",
+          "maxRows": 12,
+          "rowHeight": 17.0,
+          "rowGap": 2.0,
+          "showValues": true,
+          "tone": 0,
+          "selectedTone": 2
+        }
+      }
+    }
+  ]
+}

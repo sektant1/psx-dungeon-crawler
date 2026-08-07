@@ -1,4 +1,5 @@
 {
+  "$schema": "../schemas/scene.schema.json",
   "format": "raven-scene",
   "version": 2,
   "id": "scene.chest",
@@ -7,16 +8,50 @@
     {
       "id": "base",
       "name": "Chest",
-      "prefab": "kit.chest"
+      "prefab": "kit.chest",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -4.119900226593018
+        ]
+      }
+    },
+    {
+      "id": "camera_0001",
+      "name": "Camera",
+      "transform": {
+        "position": [
+          0.0,
+          1.7000000476837158,
+          0.0
+        ]
+      },
+      "camera": {
+        "fov_degrees": 70.0
+      }
     },
     {
       "id": "lid",
       "name": "Chest Lid",
       "parent": "base",
-      "transform": { "position": [0.0, 0.893, -0.8] },
       "prefab": "kit.chest_lid",
+      "transform": {
+        "position": [
+          0.0,
+          0.7860000133514404,
+          -0.800000011920929
+        ]
+      },
       "scripts": [
-        { "path": "scripts/chest_lid.lua", "props": { "auto": true, "closed_degrees": 0, "open_degrees": -100 } }
+        {
+          "path": "scripts/chest_lid.lua",
+          "props": {
+            "auto": true,
+            "closed_degrees": 0.0,
+            "open_degrees": -100.0
+          }
+        }
       ]
     }
   ]

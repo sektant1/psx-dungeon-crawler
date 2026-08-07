@@ -5,23 +5,291 @@
  * for the palette and the type scale -- this file only maps Doxygen's own
  * markup onto those tokens. Change a colour there, not here.
  *
- * Three parts, in order:
- *   1. undo the generic element rules kit.css sets for its own page shell,
- *      which would otherwise leak into Doxygen's tables and code blocks
- *   2. hook Doxygen's dark-mode class onto the kit's dark tokens
- *   3. restyle Doxygen's components
+ * Four parts, in order:
+ *   1. resolve the kit's light/dark tokens against Doxygen's mode class
+ *   2. the bridge -- restate Doxygen's own custom properties in kit tokens
+ *   3. undo the generic element rules kit.css sets for its own page shell
+ *   4. restyle the components the bridge cannot reach (shape, type, spacing)
  *
- * Doxygen's own doxygen.css loads first, so anything not overridden here keeps
- * its stock look. HTML_COLORSTYLE_SAT = 0 in the Doxyfile desaturates that
- * stock look, so a missed corner reads as neutral grey rather than blue.
+ * Part 2 is the load-bearing one and depends on HTML_COLORSTYLE = TOGGLE; see
+ * the note beside that setting in Doxyfile.in for why. Under TOGGLE, Doxygen's
+ * generated stylesheet reads every colour from a custom property, so restating
+ * those properties reskins the whole site -- including the corners this file
+ * never names. Part 4 is then free to be about shape and type rather than a
+ * hunt for leftover white boxes.
  */
 
-/* --- 1. de-leak kit.css ---------------------------------------------------
+/* --- 1. theme resolution --------------------------------------------------
+ * Doxygen's toggle stamps `dark-mode` on <html>; it seeds that from the OS
+ * preference on first load and from its own cookie afterwards. So the toggle,
+ * not the media query, has to be what the kit's tokens follow -- otherwise a
+ * reader on a dark desktop who asks for the light page gets light chrome and
+ * dark prose. kit.css already flips on `prefers-color-scheme`, so the second
+ * rule here puts the light values back whenever Doxygen says light. */
+
+html.dark-mode {
+  --ground: #141112;
+  --surface: #1c1819;
+  --surface-sunk: #100e0f;
+  --rule: #302a2b;
+  --rule-strong: #4a4142;
+  --ink: #ede8e7;
+  --ink-dim: #a29797;
+  --ink-faint: #8b807f;
+  --accent: #e2564f;
+  --accent-soft: #2c1b1c;
+  --blocker: #e2564f;
+  --hazard: #d9a441;
+  --chore: #57c0b8;
+  --shadow: rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.dark-mode) {
+    --ground: #efecec;
+    --surface: #f8f6f6;
+    --surface-sunk: #e6e1e1;
+    --rule: #d6cfcf;
+    --rule-strong: #b9afaf;
+    --ink: #1c1818;
+    --ink-dim: #635b5b;
+    --ink-faint: #736969;
+    --accent: #a6192e;
+    --accent-soft: #f3e2e4;
+    --blocker: #a6192e;
+    --hazard: #7d5a0e;
+    --chore: #1f6f6b;
+    --shadow: rgba(28, 24, 24, 0.16);
+    color-scheme: light;
+  }
+}
+
+/* --- 2. the bridge --------------------------------------------------------
+ * Every knob Doxygen 1.16 exposes, expressed in kit tokens. The selector
+ * carries `html.dark-mode` as well as `html` on purpose: Doxygen's own dark
+ * block is written at that specificity, and a bare `html` here would lose to
+ * it in dark mode. Because these are all `var()` references, the theme switch
+ * happens once, in part 1, and everything below follows. */
+
+html,
+html.dark-mode {
+  /* page */
+  --page-background-color: var(--ground);
+  --page-foreground-color: var(--ink);
+  --page-link-color: var(--accent);
+  --page-visited-link-color: var(--accent);
+  --page-external-link-color: var(--accent);
+
+  /* alphabetical class index */
+  --index-odd-item-bg-color: var(--surface);
+  --index-even-item-bg-color: transparent;
+  --index-header-color: var(--ink);
+  --index-separator-color: var(--rule);
+
+  /* page + section headers */
+  --header-background-color: var(--ground);
+  --header-separator-color: var(--rule);
+  --group-header-separator-color: var(--rule-strong);
+  --group-header-color: var(--ink);
+  --title-background-color: var(--ground);
+  --title-separator-color: var(--ink);
+
+  --footer-foreground-color: var(--ink-faint);
+  --citation-label-color: var(--ink-dim);
+  --glow-color: var(--accent);
+
+  --blockquote-background-color: var(--surface);
+  --blockquote-border-color: var(--rule-strong);
+
+  --scrollbar-thumb-color: var(--rule-strong);
+  --scrollbar-background-color: var(--ground);
+
+  /* file/folder glyphs in the directory listings */
+  --icon-background-color: var(--ink-faint);
+  --icon-foreground-color: var(--ground);
+  --icon-folder-open-fill-color: var(--rule-strong);
+  --icon-folder-fill-color: var(--rule);
+  --icon-folder-border-color: var(--ink-faint);
+  --icon-doc-fill-color: var(--surface-sunk);
+  --icon-doc-border-color: var(--ink-faint);
+
+  /* brief member declaration list */
+  --memdecl-background-color: transparent;
+  --memdecl-foreground-color: var(--ink-dim);
+  --memdecl-template-color: var(--ink-faint);
+  --memdecl-border-color: var(--rule);
+
+  /* detailed member list */
+  --memdef-border-color: var(--rule);
+  --memdef-title-background-color: var(--surface-sunk);
+  --memdef-proto-background-color: var(--surface-sunk);
+  --memdef-proto-text-color: var(--ink);
+  --memdef-param-name-color: var(--accent);
+  --memdef-template-color: var(--ink-faint);
+
+  /* authored tables */
+  --table-cell-border-color: var(--rule);
+  --table-header-background-color: transparent;
+  --table-header-foreground-color: var(--ink-faint);
+
+  /* member labels (static, virtual, ...) */
+  --label-background-color: transparent;
+  --label-left-top-border-color: var(--accent);
+  --label-right-bottom-border-color: var(--accent);
+  --label-foreground-color: var(--accent);
+
+  /* navigation bar, tree and menu */
+  --nav-background-color: var(--ground);
+  --nav-foreground-color: var(--ink-dim);
+  --nav-border-color: var(--rule);
+  --nav-breadcrumb-separator-color: var(--rule);
+  --nav-breadcrumb-active-bg: var(--surface);
+  --nav-breadcrumb-color: var(--ink-faint);
+  --nav-splitbar-bg-color: var(--rule);
+  --nav-splitbar-handle-color: var(--rule-strong);
+  --nav-text-normal-color: var(--ink-dim);
+  --nav-menu-button-color: var(--ink-dim);
+  --nav-menu-background-color: var(--surface);
+  --nav-menu-foreground-color: var(--ink-dim);
+  --nav-menu-active-bg: var(--accent-soft);
+  --nav-menu-active-color: var(--accent);
+  --nav-arrow-color: var(--ink-faint);
+  --nav-arrow-selected-color: var(--accent);
+  /* Doxygen shrinks the tree a step per level; two steps down it stops being
+     readable, so hold the last two together. */
+  --nav-font-size-level1: 13px;
+  --nav-font-size-level2: 12px;
+  --nav-font-size-level3: 12px;
+
+  /* "sync tree with page" control */
+  --sync-icon-border-color: var(--rule);
+  --sync-icon-background-color: var(--surface);
+  --sync-icon-selected-background-color: var(--surface-sunk);
+  --sync-icon-color: var(--ink-faint);
+  --sync-icon-selected-color: var(--accent);
+
+  /* in-page table of contents */
+  --toc-background-color: var(--surface);
+  --toc-border-color: var(--rule);
+  --toc-header-color: var(--ink-faint);
+
+  /* search field and results */
+  --search-background-color: var(--surface);
+  --search-foreground-color: var(--ink-faint);
+  --search-active-color: var(--ink);
+  --search-box-border-color: var(--rule);
+  --search-filter-background-color: var(--surface);
+  --search-filter-foreground-color: var(--ink);
+  --search-filter-border-color: var(--rule-strong);
+  --search-filter-backdrop-filter: none;
+  --search-filter-highlight-text-color: var(--ground);
+  --search-filter-highlight-bg-color: var(--accent);
+  --search-results-background-color: var(--surface);
+  --search-results-foreground-color: var(--ink-dim);
+  --search-results-border-color: var(--rule-strong);
+  --search-results-backdrop-filter: none;
+  --search-close-icon-bg-color: var(--ink-faint);
+  --search-close-icon-fg-color: var(--ground);
+
+  /* Syntax colouring, restrained: the accent carries keywords, the two
+     secondary hues carry preprocessor and literals, everything else is ink.
+     Loud multi-hue highlighting fights the palette. */
+  --code-keyword-color: var(--accent);
+  --code-type-keyword-color: var(--accent);
+  --code-flow-keyword-color: var(--accent);
+  --code-comment-color: var(--ink-faint);
+  --code-preprocessor-color: var(--chore);
+  --code-string-literal-color: var(--hazard);
+  --code-char-literal-color: var(--hazard);
+  --code-xml-cdata-color: var(--ink);
+  --code-vhdl-digit-color: var(--ink-dim);
+  --code-vhdl-char-color: var(--ink-dim);
+  --code-vhdl-keyword-color: var(--accent);
+  --code-vhdl-logic-color: var(--blocker);
+
+  --fragment-foreground-color: var(--ink);
+  --fragment-background-color: var(--surface);
+  --fragment-border-color: var(--rule);
+  --fragment-lineno-border-color: var(--rule);
+  --fragment-lineno-background-color: var(--surface-sunk);
+  --fragment-lineno-foreground-color: var(--ink-faint);
+  --fragment-lineno-link-fg-color: var(--ink-faint);
+  --fragment-lineno-link-bg-color: var(--surface-sunk);
+  --fragment-lineno-link-hover-fg-color: var(--accent);
+  --fragment-lineno-link-hover-bg-color: var(--accent-soft);
+  --fragment-copy-ok-color: var(--chore);
+
+  --tooltip-foreground-color: var(--ink);
+  --tooltip-background-color: var(--surface);
+  --tooltip-arrow-background-color: var(--surface);
+  --tooltip-border-color: var(--rule-strong);
+  --tooltip-backdrop-filter: none;
+  --tooltip-doc-color: var(--ink-dim);
+  --tooltip-declaration-color: var(--chore);
+  --tooltip-link-color: var(--accent);
+  --tooltip-shadow: none;
+
+  --fold-line-color: var(--rule-strong);
+
+  --font-family-normal: var(--sans);
+  --font-family-monospace: var(--mono);
+  --font-family-nav: var(--sans);
+  --font-family-title: var(--sans);
+  --font-family-toc: var(--sans);
+  --font-family-search: var(--mono);
+  --font-family-icon: var(--sans);
+  --font-family-tooltip: var(--sans);
+
+  /* \warning, \note and friends. Doxygen ships nine differently-tinted boxes;
+     the kit has three semantic hues, so they collapse onto those by severity
+     and every box sits on the same surface. */
+  --warning-color-bg: var(--surface);
+  --warning-color-hl: var(--blocker);
+  --warning-color-text: var(--ink);
+  --bug-color-bg: var(--surface);
+  --bug-color-hl: var(--blocker);
+  --bug-color-text: var(--ink);
+  --satisfies-color-bg: var(--surface);
+  --satisfies-color-hl: var(--blocker);
+  --verifies-color-bg: var(--surface);
+  --verifies-color-hl: var(--blocker);
+
+  --note-color-bg: var(--surface);
+  --note-color-hl: var(--hazard);
+  --note-color-text: var(--ink);
+  --deprecated-color-bg: var(--surface);
+  --deprecated-color-hl: var(--hazard);
+  --deprecated-color-text: var(--ink);
+
+  --todo-color-bg: var(--surface);
+  --todo-color-hl: var(--chore);
+  --todo-color-text: var(--ink);
+  --test-color-bg: var(--surface);
+  --test-color-hl: var(--chore);
+  --test-color-text: var(--ink);
+  --invariant-color-bg: var(--surface);
+  --invariant-color-hl: var(--chore);
+  --invariant-color-text: var(--ink);
+
+  /* The masthead's mark: an ordered-dither checkerboard in the accent, the
+     pattern the renderer itself resolves every frame through. It appears once
+     per page, at 3px cells -- below that it stops reading as a checkerboard
+     and starts reading as a spellcheck underline, which is why the section
+     rules below get a plain accent stub instead of a smaller copy of this.
+     The conic gradient is what makes it a checkerboard; crossed linear
+     gradients give a zigzag. */
+  --stipple: conic-gradient(
+    var(--accent) 0 25%, transparent 0 50%,
+    var(--accent) 0 75%, transparent 0);
+}
+
+/* --- 3. de-leak kit.css ---------------------------------------------------
  * kit.css styles bare `table`, `th`, `td` and `pre` for a documentation page
  * with a handful of hand-written tables. Doxygen emits tables for layout
  * (prototypes, member lists, the title area), and hairline rules under every
  * cell turn those into noise. Reset to something Doxygen-shaped; the specific
- * tables that *should* have rules get them back in part 3. */
+ * tables that *should* have rules get them back in part 4. */
 
 table {
   width: auto;
@@ -32,6 +300,15 @@ th, td {
   border-bottom: 0;
   padding: 0.15rem 0.5rem 0.15rem 0;
   vertical-align: top;
+}
+
+th {
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  color: inherit;
+  white-space: normal;
 }
 
 tbody tr:last-child td { border-bottom: 0; }
@@ -47,27 +324,36 @@ pre {
 /* kit.css constrains its own single column; Doxygen manages its own width. */
 main { max-width: none; }
 
-/* --- 2. Doxygen's dark-mode toggle ---------------------------------------
- * Doxygen 1.9.5+ stamps `dark-mode` on <html> when the reader flips its
- * toggle. Map it onto the same tokens kit.css defines for its own dark theme
- * so both surfaces move together. `prefers-color-scheme` is already handled by
- * kit.css and needs nothing here. */
-
-html.dark-mode {
-  --ground: #141112;
-  --surface: #1c1819;
-  --surface-sunk: #100e0f;
-  --rule: #302a2b;
-  --rule-strong: #4a4142;
-  --ink: #ede8e7;
-  --ink-dim: #a29797;
-  --ink-faint: #7c7171;
-  --accent: #e2564f;
-  --accent-soft: #2c1b1c;
-  color-scheme: dark;
+/* One class name means two different things in the two sheets. kit.css styles
+ * `.entry` as a row of its challenge register -- a two-column grid with a rule
+ * under it -- and Doxygen puts `class="entry"` on the name cell of every row
+ * in every directory, class and file listing (22k of them here). Left alone,
+ * each listing row becomes a grid: the disclosure arrow strands itself in a
+ * 6.5rem first column, the icon and the name drop to the next line, and the
+ * register's hairline draws across the gap. Put the cell back.
+ *
+ * This is the only name the two sheets share. If kit.css grows another one,
+ * the same shape of breakage will show up somewhere in the generated site --
+ * comparing its class selectors against the `class="..."` values in
+ * build/docs/html is how this one was found. */
+td.entry {
+  display: table-cell;
+  grid-template-columns: none;
+  gap: 0;
+  padding: 0;
+  border-top: 0;
+  border-bottom: 0;
 }
 
-/* --- 3. Doxygen components ------------------------------------------------ */
+/* kit.css sets `* { box-sizing: border-box }`. navtree.js indents a row by
+ * writing an inline `padding-left` onto `.arrow`, which doxygen.css has
+ * already given a fixed 16px width -- under border-box the padding eats the
+ * width, the content box collapses to nothing, and the disclosure triangle
+ * lands on the first letter of every label. Doxygen opts back into
+ * content-box everywhere else it does this; `.arrow` is the one it misses. */
+.arrow { box-sizing: content-box; }
+
+/* --- 4. components -------------------------------------------------------- */
 
 body,
 #doc-content,
@@ -84,44 +370,51 @@ div.header {
   padding: 1.25rem 1.5rem 0.75rem;
 }
 
-/* Masthead. The kit's own masthead is a heavy rule under the title with a
- * short accent stub; reproduce that here rather than Doxygen's gradient. */
+/* Masthead. A heavy rule under the title, with the dither stub riding it. */
 
 #titlearea {
   background: var(--ground);
   border-bottom: 2px solid var(--ink);
-  padding: 1.25rem 1.5rem 1rem;
+  padding: 1.25rem 1.25rem 1rem;
   position: relative;
 }
 
 #titlearea::after {
   content: "";
   position: absolute;
-  left: 1.5rem;
-  bottom: -2px;
-  width: 5.5rem;
-  height: 2px;
-  background: var(--accent);
+  /* Sits on top of the rule, inside the masthead. Anything below zero reaches
+     into the nav tree, which scrolls its first row right up under the rule. */
+  left: 1.25rem;
+  bottom: 0;
+  width: 5.25rem;
+  height: 6px;
+  background-image: var(--stipple);
+  background-size: 6px 6px;
 }
 
-#projectname {
+#projectname,
+#side-nav #projectname {
   font-family: var(--sans);
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  line-height: 1.15;
   color: var(--ink);
 }
 
 #projectnumber {
   font-family: var(--mono);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  font-weight: 400;
   letter-spacing: 0.12em;
   color: var(--ink-faint);
 }
 
 #projectbrief {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
   color: var(--ink-dim);
+  margin-top: 0.35rem;
 }
 
 /* Tab bar / menu. Doxygen ships this as either ul.tablist or the sm-dox menu
@@ -136,11 +429,11 @@ ul.sm-dox {
 }
 
 /* Doxygen's own stylesheet already unbullets these; restate it so the skin
- * does not depend on that, and so a stale doxygen.css cannot leave marker
- * dots down the sidebar. */
+ * does not depend on that. `#nav-tree ul` is deliberately not in the list:
+ * navtree.css builds the tree's indentation out of that padding, and zeroing
+ * it slides every row under the sidebar's left edge. */
 #main-nav ul.tablist,
 ul.sm-dox,
-#nav-tree ul,
 #nav-path ul,
 .navpath ul {
   list-style: none;
@@ -148,11 +441,16 @@ ul.sm-dox,
   padding-left: 0;
 }
 
+#nav-tree ul { list-style: none; }
+
 #main-nav a,
 ul.tablist li a,
-ul.sm-dox a {
+ul.sm-dox a,
+ul.sm-dox a:focus,
+ul.sm-dox a:hover,
+ul.sm-dox a:active {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-dim);
@@ -161,14 +459,29 @@ ul.sm-dox a {
 }
 
 ul.tablist li.current a,
+ul.sm-dox a.current,
 ul.sm-dox a:hover,
 #main-nav a:hover {
   color: var(--accent);
   background-image: none;
   background: transparent;
+  border-radius: 0 !important;
 }
 
-/* Sidebar. The kit's rail: hairline separator, mono labels, quiet links. */
+/* tabs.css is minified and keeps a few literal colours for the dropdowns. */
+ul.sm-dox ul {
+  border: 1px solid var(--rule-strong);
+  border-radius: 0 !important;
+  box-shadow: none;
+  background: var(--surface);
+}
+
+ul.sm-dox > li > ul::before,
+ul.sm-dox > li > ul::after { display: none; }
+
+ul.sm-dox a.disabled { color: var(--ink-faint); }
+
+/* Sidebar. The kit's rail: hairline separator, quiet links, accent on hover. */
 
 #side-nav,
 #nav-tree {
@@ -192,13 +505,34 @@ ul.sm-dox a:hover,
 #nav-tree .selected {
   background-image: none;
   background: var(--accent-soft);
+  border-radius: 0;
   color: var(--ink);
   text-shadow: none;
 }
 
 #nav-tree .selected a { color: var(--ink); font-weight: 600; }
 
-#nav-tree .arrow { color: var(--ink-faint); }
+/* `.arrow` is not the triangle -- Doxygen hides a literal "\25b8" inside it by
+ * painting it in the nav background colour, and draws the visible triangle
+ * with `span.arrowhead`'s borders. Giving `.arrow` an ink colour reveals that
+ * character on top of the first letter of every row. The bridge's
+ * --nav-arrow-color is what to change instead. */
+
+/* The right-hand page outline. Doxygen fills the row of every section
+ * currently on screen, which on a long page is most of the list at once and
+ * reads as stripes. A left rule says the same thing without the fill. */
+
+#page-nav { background: var(--ground); }
+
+ul.page-outline a { color: var(--ink-dim); }
+ul.page-outline a:hover { color: var(--accent); }
+
+ul.page-outline li.vis {
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+ul.page-outline li.vis > div.item > a { color: var(--ink); }
 
 #splitbar,
 .ui-resizable-handle {
@@ -212,7 +546,8 @@ ul.sm-dox a:hover,
   background: var(--surface);
   border-top: 1px solid var(--rule);
   font-family: var(--mono);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
 }
 
 .navpath li.navelem a,
@@ -221,31 +556,86 @@ ul.sm-dox a:hover,
   text-shadow: none;
 }
 
-/* Headings and prose, on the kit's scale. */
+/* Page title and section headings.
+ *
+ * Doxygen consumes a markdown page's `#` as the page title, so `##` arrives as
+ * <h1> and `###` as <h2>. kit.css sizes those for a standalone page, which
+ * leaves a section heading larger than the title above it. Shift the kit's
+ * scale down one step inside the content column to put the hierarchy back. */
 
 div.contents { padding: 0 1.5rem 4rem; }
 
 .title,
 div.headertitle .title {
-  font-size: 1.6rem;
+  font-size: clamp(1.6rem, 1.35rem + 0.9vw, 2.1rem);
   font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
   text-wrap: balance;
   color: var(--ink);
+  margin: 0;
 }
 
+.textblock h1,
 h2.groupheader {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: -0.015em;
+  line-height: 1.25;
   color: var(--ink);
+  text-wrap: balance;
   border-bottom: 1px solid var(--rule-strong);
-  padding-bottom: 0.35rem;
-  margin-top: 2.5rem;
+  box-shadow: none;
+  padding: 0 0 0.4rem;
+  margin: 2.75rem 0 1rem;
+  position: relative;
+  width: auto;
 }
 
-.textblock { max-width: var(--measure); }
+/* A short accent stub riding the section rule, echoing the masthead. */
+.textblock h1::after,
+h2.groupheader::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 2rem;
+  height: 2px;
+  background: var(--accent);
+}
+
+td h2.groupheader { box-shadow: none; }
+
+.textblock h2,
+h3.groupheader {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  margin: 2rem 0 0.6rem;
+}
+
+.textblock h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.4rem;
+}
+
+/* Anything a heading anchors to needs room under the sticky title bar. */
+.textblock [id] { scroll-margin-top: 2rem; }
+
+/* Two measures, the kit's rule: prose sets at --measure, structural blocks
+   (tables, code, callouts) run to --wide so their rules share a right edge. */
+.textblock { max-width: var(--wide); }
+
+.textblock > p,
+.textblock > ul,
+.textblock > ol,
+.textblock > dl.section { max-width: var(--measure); }
+
+.textblock > ul,
+.textblock > ol { padding-left: 1.25rem; }
 
 /* Member lists. These are the tables that earn their hairlines back. */
 
@@ -259,6 +649,7 @@ table.memberdecls { width: 100%; }
   font-family: var(--mono);
   font-size: 0.8rem;
   background: transparent;
+  border-radius: 0;
   padding-top: 0.45rem;
   padding-bottom: 0.1rem;
 }
@@ -268,8 +659,28 @@ table.memberdecls { width: 100%; }
   font-size: 0.85rem;
   color: var(--ink-dim);
   background: transparent;
+  border-radius: 0;
   padding-bottom: 0.5rem;
 }
+
+/* Doxygen boxes the member list -- a border down each side, a rounded corner
+ * at each end, and an inset shadow under every description row. The kit's
+ * index is a run of hairline separators and nothing else. */
+.memberdecls td,
+.memberdecls td.mdescLeft,
+.memberdecls td.mdescRight,
+.memberdecls td.memItemLeft,
+.memberdecls td.memItemRight,
+.memberdecls td.memTemplParams,
+.memberdecls td.memTemplItemLeft,
+.memberdecls td.memTemplItemRight {
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0;
+}
+
+.memberdecls tr[class^='memdesc'] { box-shadow: none; }
 
 .memberdecls td.memSeparator {
   border-bottom: 1px solid var(--rule);
@@ -277,7 +688,7 @@ table.memberdecls { width: 100%; }
   height: 0;
 }
 
-.memberdecls tr.heading h2 { margin: 1.5rem 0 0.5rem; }
+.memberdecls tr.heading h2 { margin: 2.25rem 0 0.5rem; }
 
 /* Member detail. Doxygen's stock look here is a rounded box with a gradient
  * header; the kit uses a flat surface under a hairline instead. */
@@ -291,9 +702,11 @@ table.memberdecls { width: 100%; }
 }
 
 .memproto,
-.memitem .memproto {
+.memitem .memproto,
+.memtitle {
   background: var(--surface-sunk);
   background-image: none;
+  border: 0;
   border-bottom: 1px solid var(--rule);
   border-radius: 0;
   box-shadow: none;
@@ -363,20 +776,29 @@ span.lineno {
   color: var(--ink-faint);
 }
 
-/* Syntax colours, restrained: one accent for keywords, muted for comments,
- * everything else inherits. Loud multi-hue highlighting fights the palette. */
-span.keyword,
-span.keywordtype,
-span.keywordflow  { color: var(--accent); font-style: normal; }
-span.comment      { color: var(--ink-faint); font-style: normal; }
-span.preprocessor { color: var(--chore, var(--ink-dim)); }
-span.stringliteral,
-span.charliteral  { color: var(--ink-dim); }
-
-code, tt, .tt {
+/* Inline code. `span.tt` is what markdown backticks become in 1.16, and it
+   defaults to the fragment background -- a filled block mid-sentence. */
+code, tt, .tt, span.tt {
   font-family: var(--mono);
+  font-size: 0.85em;
   background: var(--surface-sunk);
   color: var(--ink);
+  padding: 0.1em 0.28em;
+  white-space: pre-wrap;
+}
+
+a code, a .tt, a tt,
+.title code, .title .tt,
+.textblock h1 code, .textblock h1 .tt {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+.memname .tt, .memproto .tt, div.fragment .tt {
+  background: none;
+  padding: 0;
+  font-size: inherit;
 }
 
 /* Links. */
@@ -392,11 +814,16 @@ a.anchor { color: inherit; }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Note / warning / see-also blocks -- the kit's callout, top rule and all. */
+/* Note / warning / see-also blocks -- the kit's callout, top rule and all.
+ * Doxygen 1.16 gives these a tinted rounded box; flatten it and let the top
+ * rule carry the severity. */
 
-dl.section {
+dl.section,
+dl.note, dl.remark, dl.warning, dl.attention, dl.important,
+dl.todo, dl.test, dl.bug, dl.deprecated, dl.invariant, dl.pre, dl.post {
+  border: 0;
   border-top: 2px solid var(--rule-strong);
-  border-left: 0;
+  border-radius: 0;
   background: var(--surface);
   padding: 0.75rem 1rem;
   margin: 1.25rem 0;
@@ -411,19 +838,14 @@ dl.section dt {
   color: var(--ink-faint);
 }
 
-dl.warning,
-dl.attention,
-dl.bug { border-top-color: var(--accent); }
+dl.warning, dl.attention, dl.important, dl.bug { border-top-color: var(--blocker); }
+dl.warning dt, dl.attention dt, dl.important dt, dl.bug dt { color: var(--blocker); }
 
-dl.warning dt,
-dl.attention dt,
-dl.bug dt { color: var(--accent); }
+dl.note, dl.remark, dl.deprecated { border-top-color: var(--hazard); }
+dl.note dt, dl.remark dt, dl.deprecated dt { color: var(--hazard); }
 
-dl.note,
-dl.remark { border-top-color: var(--hazard, var(--rule-strong)); }
-
-dl.note dt,
-dl.remark dt { color: var(--hazard, var(--ink-faint)); }
+dl.todo, dl.test, dl.invariant, dl.pre, dl.post { border-top-color: var(--chore); }
+dl.todo dt, dl.test dt, dl.invariant dt, dl.pre dt, dl.post dt { color: var(--chore); }
 
 /* Authored tables in markdown pages, and parameter tables. */
 
@@ -433,6 +855,8 @@ table.markdownTable {
   width: 100%;
   border-collapse: collapse;
   border: 0;
+  border-radius: 0;
+  box-shadow: none;
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   margin: 0 0 1.5rem;
@@ -441,7 +865,8 @@ table.markdownTable {
 table.doxtable th,
 table.fieldtable th,
 table.markdownTable th,
-table.markdownTable tr th {
+table.markdownTable tr th,
+table.markdownTableHead tr th {
   font-family: var(--mono);
   font-size: 0.68rem;
   font-weight: 600;
@@ -462,23 +887,51 @@ table.markdownTable td {
   border-bottom: 1px solid var(--rule);
   padding: 0.55rem 0.9rem 0.55rem 0;
   background: transparent;
+  vertical-align: top;
 }
 
-/* Directory and file listings. */
+blockquote {
+  border: 0;
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-dim);
+  margin: 1.25rem 0;
+  padding: 0.1rem 0 0.1rem 1rem;
+  max-width: var(--measure);
+}
+
+/* Directory and file listings, and the page index. */
 
 .directory tr.even { background: var(--surface); }
 .directory td.entry { font-family: var(--mono); font-size: 0.8rem; }
 .directory .levels { color: var(--ink-faint); }
+.directory .icona, .directory .icon { border-radius: 0; }
 
 /* Search, tooltips, footer. */
 
 #MSearchBox,
 #MSearchField,
-#MSearchSelect {
+#MSearchSelect,
+#MSearchResultsWindow,
+.SRResult, .SRPage {
+  border-radius: 0;
+}
+
+/* One box, not three: Doxygen borders the wrapper, the input and the trailing
+   close-button cell, which nests two empty frames beside the field. */
+#MSearchBox {
   background: var(--surface);
   background-image: none;
   border: 1px solid var(--rule);
-  border-radius: 0;
+}
+
+#MSearchBox .left,
+#MSearchBox .right,
+#MSearchField {
+  background: transparent;
+  background-image: none;
+  border: 0;
   color: var(--ink);
   font-family: var(--mono);
   font-size: 0.75rem;
@@ -487,10 +940,10 @@ table.markdownTable td {
 #MSearchResultsWindow {
   background: var(--surface);
   border: 1px solid var(--rule-strong);
-  border-radius: 0;
+  box-shadow: none;
 }
 
-div.ttc {
+div.ttc, #powerTip {
   background: var(--surface);
   border: 1px solid var(--rule-strong);
   border-radius: 0;
@@ -512,3 +965,34 @@ address.footer,
 }
 
 hr, hr.footer { border: 0; border-top: 1px solid var(--rule); }
+
+/* The light/dark control sits in the title bar; give it the rail's ink. */
+doxygen-toggle-dark-mode,
+.darkmode_toggle_button {
+  color: var(--ink-faint);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+doxygen-toggle-dark-mode:hover,
+.darkmode_toggle_button:hover { color: var(--accent); }
+
+/* Doxygen animates member-list backgrounds and heading text-shadows on
+   navigation; neither survives a reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  h1.glow, h2.glow, h3.glow, h4.glow, h5.glow, h6.glow { text-shadow: none; }
+}
+
+@media (max-width: 48rem) {
+  div.contents { padding: 0 1rem 3rem; }
+  div.header { padding: 1rem 1rem 0.6rem; }
+  #titlearea { padding: 1rem; }
+  #titlearea::after { left: 1rem; }
+}

@@ -1,4 +1,4 @@
-# Engine foundations
+# Engine foundations {#doc-engine-foundations}
 
 Three `eng_core` facilities that sit under everything else: the timelines the
 engine runs on, the id type it names things with, and the profiler it measures

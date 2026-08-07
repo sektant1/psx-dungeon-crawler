@@ -71,6 +71,39 @@ struct Npc {
     std::string id;
 };
 
+// Whether this entity is in the level at all, decided from world state.
+//
+// THE VILLAGE'S WHOLE PROGRESSION MECHANISM, and the reason it is a component
+// rather than a script: GDD §4 wants a hub that visibly changes, and §9 asks
+// that "returning from a descent, the player can point to something new". A
+// village that changed by running code would mean every new plank of scaffolding
+// was a programmer's afternoon; a village that changes by *authoring* means it
+// is a level designer's, which is whose job it is.
+//
+// The condition is the one quests and dialogue already share (rpg::Condition),
+// spelled the way they spell it -- so "the forge is rebuilt" gates a quest
+// prerequisite, a line of dialogue and a pile of coal in the street with one
+// vocabulary and no translation between them.
+//
+// Evaluated once, when the level is built. Not per frame: the world state that
+// drives it only turns over between expeditions (§17), and a scaffolding that
+// popped in while the player watched would be worse than one that was simply
+// there when they came back.
+struct SceneCondition {
+    // Named exactly as rpg::ConditionKind spells it ("flag_set",
+    // "quest_completed", "station_at_least"). Kept as a string on the component
+    // because that is what the .scn holds and what the inspector edits; it
+    // resolves to the enum at level build, where an unknown name is reported
+    // against the entity that used it.
+    std::string kind;
+    std::string subject;
+    int value = 0;
+    // Present when the condition FAILS instead. The natural authoring of "the
+    // rubble is here until the road is repaired" -- without it every such pair
+    // needs two conditions and an inverted flag nobody remembers to clear.
+    bool negate = false;
+};
+
 // Event volume (WC3-style region). event keys into the trigger dispatch.
 // Deciding that a trigger is a sensor body on the trigger layer is game
 // policy, so MapRuntime gives each one a sensor Collider; the engine only

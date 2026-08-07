@@ -387,6 +387,11 @@ bool EditorApp::onStart(eng::Engine& engine)
     // capture it without driving the UI.
     if (std::getenv("RAVEN_EDITOR_MATERIAL"))
         setMainScreen(MainScreen::Material);
+    // The same hook for the 2D screen, which is where UI scenes are authored:
+    // a screenshot run has no way to click a tab, and "does the screen I just
+    // authored actually draw" is the one question worth capturing.
+    if (std::getenv("RAVEN_EDITOR_SCREEN2D"))
+        setMainScreen(MainScreen::Screen2D);
     // The same hook for isolation: a screenshot run can enter the mode on a
     // named entity without anybody driving the outliner.
     if (const char* unpack = std::getenv("RAVEN_EDITOR_UNPACK"))
@@ -2542,7 +2547,7 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
             mStage.setSpin(renderer, mStage.spin() + mStageSpinSpeed * f.dt);
     }
     else {
-        mPreview->sync(mState.document, mState.catalog);
+        mPreview->sync(mState.document, mState.catalog, mState.assetRoot);
         // The previewed hands animate on the frame clock; the document has not
         // changed, so this cannot ride the revision-guarded sync above.
         mPreview->tickViewmodel(f.dt);
@@ -3056,7 +3061,7 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // the document. A final revision-aware sync removes the otherwise visible
     // one-frame delay between an inspector/gizmo edit and the 3D viewport.
     if (!materialMode() && mPreview)
-        mPreview->sync(mState.document, mState.catalog);
+        mPreview->sync(mState.document, mState.catalog, mState.assetRoot);
 }
 
 // The top bar: one row, three zones.
@@ -6071,6 +6076,13 @@ void EditorApp::selectAndReveal(const AuthorId& id, bool toggle)
 // Everything below decides *what state* the HUD is drawn against and *where*
 // on screen; the drawing itself is `game::GameHud`, the class the game runs.
 // A HUD preview that reimplements the HUD tells you about the preview.
+namespace {
+// Kept beside the two canvases that load it rather than read from game.toml:
+// the editor has no game config, and a panel that silently fell back to a
+// different font than the game uses would be lying about the layout it shows.
+constexpr const char* kUiFont = "antiquity.toml";
+} // namespace
+
 void EditorApp::drawUiStage()
 {
     focusPanelIfRequested("ui");
@@ -6082,7 +6094,12 @@ void EditorApp::drawUiStage()
     if (mScreen != MainScreen::Screen2D)
         mScreen = MainScreen::Screen2D;
     if (!mUiHudReady)
-        mUiHudReady = mUiHud.initialise();
+        // The game's own face, so the preview and the game agree about what
+        // text costs: a layout that fits in one font and not the other is
+        // exactly the failure this panel exists to catch. Named once here and
+        // in game.toml's [ui] block; a project that ships its own overrides it
+        // through the same mount.
+        mUiHudReady = mUiHud.initialise(kUiFont);
     if (!mUiHudReady) {
         ImGui::TextColored(kUiDanger, "the HUD font atlas did not load");
         ImGui::End();
@@ -6185,6 +6202,121 @@ void EditorApp::drawUiStage()
     mUiHud.drawInto(hudSnapshotFrom(mUiStage), hudTooltipFrom(mUiStage),
                     mUiStage.dt, {origin.x, origin.y}, virtualSize, scale, draw,
                     safeArea);
+
+    // --- the authored screens ---------------------------------------------
+    //
+    // Drawn over the HUD preview, because that is the truth of it: a screen
+    // opens on top of the HUD in the game too. Everything below edits the
+    // document, so this panel is now an editor and not only a preview.
+    if (!mUiSceneCanvasReady)
+        mUiSceneCanvasReady = mUiSceneCanvas.initialise(kUiFont);
+    if (mUiSceneCanvasReady) {
+        mUiSceneEditor.rebuild(mState.document, virtualSize, mState.assetRoot);
+        mUiSceneCanvas.beginTarget({origin.x, origin.y}, virtualSize, scale,
+                                   draw);
+        mUiSceneEditor.paint(mUiSceneCanvas);
+
+        // Pointer, in virtual pixels. The inverse of the canvas mapping, so a
+        // click lands on the box the author sees under the cursor at any scale.
+        const ImVec2 mouse = ImGui::GetMousePos();
+        const glm::ivec2 point{
+            int(std::floor((mouse.x - origin.x) / float(scale))),
+            int(std::floor((mouse.y - origin.y) / float(scale)))};
+        const bool inside = ImGui::IsWindowHovered() && point.x >= 0 &&
+                            point.y >= 0 && point.x < virtualSize.x &&
+                            point.y < virtualSize.y;
+
+        // The selection's handles. A constant *screen* reach, so a handle is as
+        // easy to grab zoomed out as zoomed in.
+        const int grab = std::max(1, 4 / std::max(scale, 1));
+        const AuthorId selected =
+            mState.selection.size() == 1 ? mState.selection.front() : AuthorId{};
+        eng::ui::UiRect selectedBounds;
+        const bool haveSelection =
+            !selected.empty() && mUiSceneEditor.boundsOf(selected, selectedBounds);
+
+        if (haveSelection) {
+            const ImVec2 a(origin.x + float(selectedBounds.position.x * scale),
+                           origin.y + float(selectedBounds.position.y * scale));
+            const ImVec2 b(a.x + float(selectedBounds.size.x * scale),
+                           a.y + float(selectedBounds.size.y * scale));
+            draw->AddRect(a, b, IM_COL32(239, 172, 240, 220));
+            const float chip = std::max(3.0f, float(scale) * 2.0f);
+            const float xs[3] = {a.x, (a.x + b.x) * 0.5f, b.x};
+            const float ys[3] = {a.y, (a.y + b.y) * 0.5f, b.y};
+            for (int iy = 0; iy < 3; ++iy)
+                for (int ix = 0; ix < 3; ++ix) {
+                    if (ix == 1 && iy == 1)
+                        continue; // the middle is the body, not a handle
+                    draw->AddRectFilled(
+                        ImVec2(xs[ix] - chip, ys[iy] - chip),
+                        ImVec2(xs[ix] + chip, ys[iy] + chip),
+                        IM_COL32(239, 172, 240, 235));
+                }
+        }
+
+        if (inside && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            // A grabbed handle keeps the current selection; a click anywhere
+            // else re-picks. Re-picking on a handle grab is what makes a
+            // resize occasionally select the panel underneath instead.
+            const UiSceneEditor::Handle grabbed =
+                haveSelection
+                    ? UiSceneEditor::handleAt(selectedBounds, point, grab)
+                    : UiSceneEditor::Handle::None;
+            if (grabbed != UiSceneEditor::Handle::None) {
+                mUiDragHandle = grabbed;
+                mUiDragLast = point;
+                mUiDragChanged = false;
+                mUiDragId = selected;
+                if (const Entity* start = mState.document.find(selected))
+                    mUiDragBefore = *start;
+            } else {
+                const AuthorId hit = mUiSceneEditor.pick(point);
+                mState.selection.clear();
+                if (!hit.empty())
+                    mState.selection.push_back(hit);
+                mSelectionAnchor = hit;
+                mUiDragHandle = hit.empty() ? UiSceneEditor::Handle::None
+                                            : UiSceneEditor::Handle::Body;
+                mUiDragLast = point;
+                mUiDragChanged = false;
+                mUiDragId = hit;
+                if (const Entity* start = mState.document.find(hit))
+                    mUiDragBefore = *start;
+            }
+        }
+
+        if (mUiDragHandle != UiSceneEditor::Handle::None &&
+            ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            const glm::ivec2 step = point - mUiDragLast;
+            if (step.x != 0 || step.y != 0) {
+                // Mutated directly for live feedback. The command system is
+                // still the only thing that *records* the change: on release the
+                // document is put back and the whole drag replayed as one edit,
+                // so undo sees one entry and the redo stack stays truthful.
+                if (Entity* entity = mState.document.find(mUiDragId)) {
+                    if (UiSceneEditor::applyDrag(*entity, mUiDragHandle, step))
+                        mUiDragChanged = true;
+                }
+                mUiDragLast = point;
+            }
+        }
+        if (mUiDragHandle != UiSceneEditor::Handle::None &&
+            ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            // One undo entry per drag, not per frame of it: a mouse move that
+            // crossed forty pixels must not cost forty presses of ctrl-Z.
+            if (mUiDragChanged) {
+                if (Entity* entity = mState.document.find(mUiDragId)) {
+                    Entity after = *entity;
+                    *entity = mUiDragBefore;
+                    runCommand(makeEditEntity("move UI element", mUiDragId,
+                                              mUiDragBefore, std::move(after)));
+                }
+            }
+            mUiDragHandle = UiSceneEditor::Handle::None;
+            mUiDragChanged = false;
+        }
+    }
 
     if (mUiStage.showSafeArea) {
         // A console HUD that ignores the safe area is legible on a monitor and

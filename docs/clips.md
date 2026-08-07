@@ -1,4 +1,4 @@
-# Clips: short authored animations
+# Clips: short authored animations {#doc-clips}
 
 A door that opens over 0.8 s, a platform that rises, a light that ramps when a
 lever is pulled, a camera that pushes in for a shot. This is the system for

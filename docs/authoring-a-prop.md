@@ -1,4 +1,4 @@
-# Authoring a prop
+# Authoring a prop {#doc-authoring-a-prop}
 
 Blender to a spinning object in a playable scene, with no C++. The worked
 example is the raccoon head in `assets/scenes/spin_portal.scn`, and every

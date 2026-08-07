@@ -1,0 +1,70 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.panel_titled",
+  "component": true,
+  "entities": [
+    {
+      "id": "body",
+      "name": "Panel",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        },
+        "panel": {
+          "style": 0,
+          "rail": 1,
+          "railTone": 2,
+          "opacity": 0.94
+        }
+      }
+    },
+    {
+      "id": "title",
+      "name": "Title",
+      "parent": "body",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            0
+          ],
+          "offsetMin": [
+            8,
+            4
+          ],
+          "offsetMax": [
+            -8,
+            22
+          ],
+          "order": 0
+        },
+        "label": {
+          "text": "TITLE",
+          "tone": 2,
+          "align": 0
+        }
+      }
+    }
+  ]
+}

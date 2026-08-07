@@ -1,0 +1,38 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.progress",
+  "component": true,
+  "entities": [
+    {
+      "id": "gauge",
+      "name": "Progress",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        },
+        "bar": {
+          "ratio": 0.5,
+          "fillTone": 3,
+          "trackTone": 7
+        }
+      }
+    }
+  ]
+}

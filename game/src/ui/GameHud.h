@@ -32,9 +32,14 @@ enum class HudRegion { Threshold, Interior };
 // input, combat, interaction and level ownership stay with their systems.
 class GameHud {
 public:
-    // Loads the shared canvas font. Returns false when the atlas is missing,
-    // in which case draw() is a no-op rather than a crash.
-    bool initialise();
+    // Loads the canvas font. Returns false when the atlas is missing, in which
+    // case draw() is a no-op rather than a crash.
+    //
+    // The definition is a parameter rather than the canvas default because the
+    // *game's* typeface is an art decision and the engine's default is a
+    // fallback: `ui.font` in game.toml picks it, and a project that ships its
+    // own atlas names that instead.
+    bool initialise(const std::string& fontDefinition = "ui_regular.toml");
 
     void configure(const eng::Config& config);
     void notifyRegion(HudRegion region);

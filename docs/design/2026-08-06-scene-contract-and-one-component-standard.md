@@ -1,4 +1,4 @@
-# Scenes: one component standard, a scene contract, and short animations
+# Scenes: one component standard, a scene contract, and short animations {#doc-design-2026-08-06-scene-contract-and-one-component-standard}
 
 What a scene *is*, what it must carry to work, how a component gets from a
 header to a `.scn` file, and how to animate something for eight tenths of a

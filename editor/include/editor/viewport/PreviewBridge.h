@@ -39,8 +39,16 @@ public:
     // Rebuilds the preview when the document has moved on. Cheap to call every
     // frame: it compares the document's revision and returns immediately when
     // nothing changed.
+    // `assetRoot` is what instance paths resolve against -- the project when
+    // one is open, the content pack otherwise. Not optional in practice: the
+    // preview omitted it for as long as instancing existed, so every instanced
+    // scene resolved relative to the working directory, failed, and the
+    // placement drew as an empty box. The cook resolved the same path
+    // correctly, which is what made it look like a rendering problem rather
+    // than a missing argument.
     void sync(const game::content::SceneDocument& document,
-              const game::content::KitCatalog& catalog);
+              const game::content::KitCatalog& catalog,
+              const std::string& assetRoot = {});
     // Advances the first-person hands shown by a Viewmodel Preview component:
     // the authored clip, and the procedural placement when the rig has motion
     // enabled. Separate from sync() because the document has not changed --

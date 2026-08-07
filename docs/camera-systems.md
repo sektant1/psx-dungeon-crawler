@@ -1,4 +1,4 @@
-# Cameras
+# Cameras {#doc-camera-systems}
 
 Three shapes of camera, one seam. A scene says which shape it plays in by
 carrying one component, and the runtime installs the rig that matches:

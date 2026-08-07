@@ -35,8 +35,11 @@ Entity& emit(SceneDocument& out, const std::string& stem, glm::vec3 position,
 void torch(SceneDocument& out, glm::vec3 at, float range = 9.0f)
 {
     Entity& light = emit(out, "torch", at + glm::vec3(0.0f, 2.6f, 0.0f), "Torch");
-    light.light = LightAuthor{LightAuthor::Type::Point,
-                              {1.0f, 0.62f, 0.30f}, range, false};
+    LightAuthor authored;
+    authored.type = LightAuthor::Type::Point;
+    authored.colour = {1.0f, 0.62f, 0.30f};
+    authored.range = range;
+    light.light = authored;
 }
 
 } // namespace
@@ -255,8 +258,12 @@ bool buildTemplate(SceneTemplate which, const GridConfig& grid,
     Entity& key = emit(out, "key_light", cellPoint(2, -7) + glm::vec3(0, 9, 0),
                        "Arena Key Light");
     key.transform.rotationDegrees = {-62.0f, 24.0f, 0.0f};
-    key.light = LightAuthor{LightAuthor::Type::Directional,
-                            {0.30f, 0.38f, 0.62f}, 0.0f, true};
+    LightAuthor authored;
+    authored.type = LightAuthor::Type::Directional;
+    authored.colour = {0.30f, 0.38f, 0.62f};
+    authored.range = 0.0f;
+    authored.castShadows = true;
+    key.light = authored;
 
     return true;
 }

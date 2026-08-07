@@ -40,6 +40,12 @@ void InteractionSystem::update(GameContext& ctx, LiveLevel& level, int depth,
     // level and cleared the focus, which is why nothing could be picked up. A
     // kind added now fails to compile here instead.
     switch (target->kind) {
+    // Resolved and stopped, the same as Item and Npc above it: this system owns
+    // no hideout and cannot pay for a tier. The app does, so the verb lives
+    // there and this only decides what the crosshair is on.
+    case TargetKind::Station:
+        break;
+
     case TargetKind::Torch:
         mFocus.active = level.torchIsLit(target->id);
         if (in.wasPressed("interact"))

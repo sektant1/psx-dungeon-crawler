@@ -1,5 +1,9 @@
 #include <editor/ui/ComponentInspector.h>
 
+#include "rpg/RpgTypes.h"
+#include <filesystem>
+#include <eng/assets/AssetRoot.h>
+
 #include <eng/render/ImGuiHint.h>
 #include <imgui.h>
 
@@ -1536,39 +1540,270 @@ void drawParticles(Entity& entity, InspectorContext& context)
     track(context);
 }
 
-void drawPortal(Entity& entity, InspectorContext& context)
+// The faces in assets/fonts, by their metrics file.
+//
+// Scanned rather than listed in code: a font is an asset, and an author who
+// drops one in should be able to use it without a rebuild. Cached because the
+// inspector redraws every frame and a directory walk per frame is a stutter
+// nobody can explain.
+const std::vector<std::string>& availableFonts()
 {
-    PortalAuthor& portal = *entity.portal;
-    // Driven straight off the component's field table, so a uniform the shader
-    // gains appears here with no edit to this function -- the whole point of
-    // the reflection layer. The grid gives it the same two columns everything
-    // else has; a generic drawer that looked different from the hand-written
-    // ones would announce that it is generated, which is nobody's business.
-    ui::PropertyGrid grid("##portal", 0.46f);
-    const eng::FieldSpan fields = eng::fieldsOf<PortalAuthor>();
+    static const std::vector<std::string> fonts = [] {
+        std::vector<std::string> found{""}; // the canvas default, first
+        const std::filesystem::path dir = eng::assets::resolve("fonts");
+        std::error_code error;
+        for (std::filesystem::directory_iterator it(dir, error), end;
+             !error && it != end; it.increment(error)) {
+            if (it->is_regular_file() && it->path().extension() == ".toml")
+                found.push_back(it->path().filename().string());
+        }
+        std::sort(found.begin() + 1, found.end());
+        return found;
+    }();
+    return fonts;
+}
+
+// The palette roles, by the name they have in eng::ui::UiTone. A tone is an int
+// on the component and an int in the inspector was a number an author had to
+// keep a table for.
+const char* toneName(int tone)
+{
+    static const char* const kNames[] = {"text",    "muted",   "focus",
+                                         "positive", "warning", "danger",
+                                         "mystic",  "edge"};
+    return tone >= 0 && tone < int(std::size(kNames)) ? kNames[tone] : "?";
+}
+
+// True for the fields the two pickers above handle, so the generic drawer can
+// skip them rather than drawing a raw int or string beside a proper widget.
+bool hasCustomWidget(const eng::Field& field)
+{
+    const std::string_view name = field.name ? field.name : "";
+    return name == "font" || name.find("one") != std::string_view::npos ||
+           name == "align" || name == "style" || name == "rail";
+}
+
+// Every field of a reflected component, from its own table.
+//
+// drawPortal used to be this loop with two of the seven field types handled,
+// which was enough while the only reflected component an author touched was a
+// pile of floats. The UI components are vec2 and int and string, so the loop is
+// now complete and shared -- which is what the reflection layer promised in the
+// first place: adding a component is one table entry, in the inspector too.
+void drawReflectedFields(void* component, const eng::FieldSpan& fields,
+                         const char* gridId, InspectorContext& context)
+{
+    ui::PropertyGrid grid(gridId, 0.46f);
     for (int i = 0; i < fields.count; ++i) {
         const eng::Field& field = fields.data[i];
-        void* value = eng::fieldPtr(&portal, field);
+        void* value = eng::fieldPtr(component, field);
         char id[80];
-        std::snprintf(id, sizeof(id), "##%s", field.name);
-        if (field.type == eng::FieldType::Colour) {
-            grid.row(field.name);
-            ImGui::ColorEdit3(id, &static_cast<glm::vec3*>(value)->x,
-                              ImGuiColorEditFlags_Float);
-            track(context);
+        std::snprintf(id, sizeof(id), "##%s_%d", field.name, i);
+        grid.row(field.name);
+        // The fields with a vocabulary get a named picker. An int spin box for
+        // "which palette role" made the author keep a lookup table in their
+        // head, which is the definition of a bad tool.
+        const std::string_view fname = field.name ? field.name : "";
+        if (fname == "font") {
+            std::string& current = *static_cast<std::string*>(value);
+            const std::string shown = current.empty() ? "(default)" : current;
+            if (ImGui::BeginCombo(id, shown.c_str())) {
+                for (const std::string& option : availableFonts()) {
+                    const std::string label =
+                        option.empty() ? "(default)" : option;
+                    const bool chosen = option == current;
+                    if (ImGui::Selectable(label.c_str(), chosen)) {
+                        current = option;
+                        track(context);
+                    }
+                }
+                ImGui::EndCombo();
+            }
             continue;
         }
-        if (field.type != eng::FieldType::Float)
+        if (field.type == eng::FieldType::Int &&
+            fname.find("one") != std::string_view::npos) {
+            int& tone = *static_cast<int*>(value);
+            if (ImGui::BeginCombo(id, toneName(tone))) {
+                for (int t = 0; t <= 7; ++t)
+                    if (ImGui::Selectable(toneName(t), t == tone)) {
+                        tone = t;
+                        track(context);
+                    }
+                ImGui::EndCombo();
+            }
             continue;
-        float& number = *static_cast<float*>(value);
-        grid.row(field.name);
-        if (field.max > field.min)
-            ImGui::DragFloat(id, &number, 0.01f, field.min, field.max, "%.3f",
-                             ImGuiSliderFlags_AlwaysClamp);
-        else
-            ImGui::DragFloat(id, &number, 0.01f);
-        track(context);
+        }
+        if (field.type == eng::FieldType::Int && fname == "align") {
+            static const char* const kAlign[] = {"left", "centre", "right"};
+            int& align = *static_cast<int*>(value);
+            if (ImGui::BeginCombo(id, kAlign[std::clamp(align, 0, 2)])) {
+                for (int a = 0; a < 3; ++a)
+                    if (ImGui::Selectable(kAlign[a], a == align)) {
+                        align = a;
+                        track(context);
+                    }
+                ImGui::EndCombo();
+            }
+            continue;
+        }
+        if (field.type == eng::FieldType::Int && fname == "style") {
+            static const char* const kStyle[] = {"solid", "frame", "sunken"};
+            int& style = *static_cast<int*>(value);
+            if (ImGui::BeginCombo(id, kStyle[std::clamp(style, 0, 2)])) {
+                for (int v = 0; v < 3; ++v)
+                    if (ImGui::Selectable(kStyle[v], v == style)) {
+                        style = v;
+                        track(context);
+                    }
+                ImGui::EndCombo();
+            }
+            continue;
+        }
+        if (field.type == eng::FieldType::Int && fname == "rail") {
+            static const char* const kRail[] = {"none", "left", "right",
+                                                "bottom"};
+            int& rail = *static_cast<int*>(value);
+            if (ImGui::BeginCombo(id, kRail[std::clamp(rail, 0, 3)])) {
+                for (int v = 0; v < 4; ++v)
+                    if (ImGui::Selectable(kRail[v], v == rail)) {
+                        rail = v;
+                        track(context);
+                    }
+                ImGui::EndCombo();
+            }
+            continue;
+        }
+        switch (field.type) {
+        case eng::FieldType::Bool:
+            ImGui::Checkbox(id, static_cast<bool*>(value));
+            break;
+        case eng::FieldType::Int: {
+            int& number = *static_cast<int*>(value);
+            if (field.max > field.min)
+                ImGui::SliderInt(id, &number, int(field.min), int(field.max));
+            else
+                ImGui::DragInt(id, &number);
+            break;
+        }
+        case eng::FieldType::Float: {
+            float& number = *static_cast<float*>(value);
+            if (field.max > field.min)
+                ImGui::DragFloat(id, &number, 0.01f, field.min, field.max,
+                                 "%.3f", ImGuiSliderFlags_AlwaysClamp);
+            else
+                ImGui::DragFloat(id, &number, 0.01f);
+            break;
+        }
+        case eng::FieldType::Vec2:
+            // A whole-pixel step: UI offsets are virtual pixels and a
+            // fractional one is a box that lands on a different pixel at a
+            // different scale.
+            ImGui::DragFloat2(id, &static_cast<glm::vec2*>(value)->x, 1.0f);
+            break;
+        case eng::FieldType::Vec3:
+            ImGui::DragFloat3(id, &static_cast<glm::vec3*>(value)->x, 0.01f);
+            break;
+        case eng::FieldType::Colour:
+            ImGui::ColorEdit3(id, &static_cast<glm::vec3*>(value)->x,
+                              ImGuiColorEditFlags_Float);
+            break;
+        case eng::FieldType::String:
+            stringInput(id, *static_cast<std::string*>(value), context);
+            break;
+        case eng::FieldType::Quat:
+            ImGui::TextUnformatted("(not authorable)");
+            break;
+        }
+        // stringInput tracks its own edit; everything else is tracked here.
+        if (field.type != eng::FieldType::String)
+            track(context);
     }
+}
+
+void drawPortal(Entity& entity, InspectorContext& context)
+{
+    drawReflectedFields(&*entity.portal, eng::fieldsOf<PortalAuthor>(),
+                        "##portal", context);
+}
+
+// The world-state gate. A dropdown of the condition kinds the RPG layer knows,
+// because the field is a string and a typo is an entity that silently never
+// appears -- the hardest kind of level bug to find.
+void drawSceneCondition(Entity& entity, InspectorContext& context)
+{
+    game::content::ConditionAuthor& gate = *entity.sceneCondition;
+    ui::PropertyGrid grid("##condition", 0.42f);
+
+    grid.row("kind", nullptr, "editor.inspector.condition_kind",
+             "What has to be true. The same vocabulary quests and dialogue "
+             "use.");
+    if (ImGui::BeginCombo("##kind", gate.kind.c_str())) {
+        for (int i = 0; i < int(game::rpg::ConditionKind::Count); ++i) {
+            const char* name = game::rpg::nameOf(game::rpg::ConditionKind(i));
+            const bool chosen = gate.kind == name;
+            if (ImGui::Selectable(name, chosen)) {
+                gate.kind = name;
+                track(context);
+            }
+            if (chosen)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    grid.row("subject", nullptr, "editor.inspector.condition_subject",
+             "The flag, quest, item or person the condition is about. Empty "
+             "for the kinds that take none.");
+    stringInput("##subject", gate.subject, context);
+
+    grid.row("value", nullptr, "editor.inspector.condition_value",
+             "The threshold, for the kinds that compare one: a count, a "
+             "level, a standing.");
+    ImGui::DragInt("##value", &gate.value);
+    track(context);
+
+    grid.row("negate", nullptr, "editor.inspector.condition_negate",
+             "Build it when the condition FAILS. How rubble stays until the "
+             "road is repaired.");
+    ImGui::Checkbox("##negate", &gate.negate);
+    track(context);
+}
+
+// The UI element. Each visual is a checkbox that adds or removes the component,
+// then its own field table -- so which visuals an entity has is one glance, and
+// the fields below are exactly what the runtime reads.
+void drawUiElement(Entity& entity, InspectorContext& context)
+{
+    game::content::UiAuthor& ui = *entity.ui;
+    ImGui::SeparatorText("rect");
+    drawReflectedFields(&ui.rect, eng::fieldsOf<eng::ecs::UiRect>(), "##ui_rect",
+                        context);
+
+    const auto section = [&](const char* label, auto& slot) {
+        using T = typename std::decay_t<decltype(slot)>::value_type;
+        bool present = slot.has_value();
+        char toggleId[64];
+        std::snprintf(toggleId, sizeof(toggleId), "##ui_has_%s", label);
+        ImGui::SeparatorText(label);
+        if (ImGui::Checkbox(toggleId, &present)) {
+            if (present)
+                slot = T{};
+            else
+                slot.reset();
+            track(context);
+        }
+        if (!slot)
+            return;
+        char gridId[64];
+        std::snprintf(gridId, sizeof(gridId), "##ui_%s", label);
+        drawReflectedFields(&*slot, eng::fieldsOf<T>(), gridId, context);
+    };
+    section("panel", ui.panel);
+    section("label", ui.label);
+    section("bar", ui.bar);
+    section("icon", ui.icon);
+    section("list", ui.list);
 }
 
 // The player, authored on the camera that is their eye. Both drawers edit the
@@ -2002,6 +2237,8 @@ constexpr Drawer kDrawers[] = {
     {"shader", drawShader},
     {"particles", drawParticles},
     {"portal", drawPortal},
+    {"ui", drawUiElement},
+    {"condition", drawSceneCondition},
     {"player_spawn", drawPlayerSpawn},
     {"exit", drawExit},
     {"marker", drawMarker},

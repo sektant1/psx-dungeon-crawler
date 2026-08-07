@@ -33,6 +33,12 @@ struct ItemStack {
     // two swords at different conditions are two stacks, which is why anything
     // with durability has stackMax = 1.
     float condition = 1.0f;
+    // The player has spent one of their scarce seals on this stack, so a death
+    // leaves it alone (see LossPolicy.h). A property of the stack rather than of
+    // the item, because sealing is a decision made about *this* haul: the same
+    // ore is worth protecting on the run you nearly died carrying it and not on
+    // the one where you are already home.
+    bool secured = false;
 
     bool operator==(const ItemStack&) const = default;
 };
@@ -110,10 +116,9 @@ public:
     void clear() { mStacks.clear(); }
     // Everything acquired this run stops being provisional.
     void markAllOwned();
-    // Drop every stack a death takes: found-this-run, not a quest item, and not
-    // flagged drop_on_death = false. Returns what was lost, for the report the
-    // player deserves to see.
-    std::vector<ItemStack> loseFindings(const ItemLibrary& library);
+    // What a death takes is NOT here. It was, and it encoded three policy
+    // decisions a container has no business holding -- see LossPolicy.h, which
+    // owns that question now and can answer it about equipment too.
 
 private:
     // remove(), restricted to stacks with a given provenance. moveTo needs it

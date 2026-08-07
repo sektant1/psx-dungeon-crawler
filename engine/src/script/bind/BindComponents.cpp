@@ -79,6 +79,7 @@ sol::object readField(sol::state_view lua, const void* base, const ecs::Field& f
         return sol::make_object(lua, *static_cast<const int*>(p));
     case ecs::FieldType::Float:
         return sol::make_object(lua, *static_cast<const float*>(p));
+    case ecs::FieldType::Vec2:
     case ecs::FieldType::Vec3:
     case ecs::FieldType::Colour:
         return sol::make_object(lua, *static_cast<const glm::vec3*>(p));
@@ -106,6 +107,7 @@ void writeField(void* base, const ecs::Field& f, const sol::object& v)
     case ecs::FieldType::Float:
         if (v.is<float>()) *static_cast<float*>(p) = v.as<float>();
         break;
+    case ecs::FieldType::Vec2:
     case ecs::FieldType::Vec3:
     case ecs::FieldType::Colour:
         if (v.is<glm::vec3>()) *static_cast<glm::vec3*>(p) = v.as<glm::vec3>();

@@ -1,0 +1,64 @@
+{
+  "atoms": [
+    {
+      "id": "panel",
+      "scene": "scenes/ui/atoms/panel.scn",
+      "description": "a plain plate; the ground everything else sits on"
+    },
+    {
+      "id": "panel_titled",
+      "scene": "scenes/ui/atoms/panel_titled.scn",
+      "description": "a plate with a heading and a focus rail"
+    },
+    {
+      "id": "heading",
+      "scene": "scenes/ui/atoms/heading.scn",
+      "description": "large text at 2x, for a screen's name"
+    },
+    {
+      "id": "label",
+      "scene": "scenes/ui/atoms/label.scn",
+      "description": "one line of body text"
+    },
+    {
+      "id": "value_row",
+      "scene": "scenes/ui/atoms/value_row.scn",
+      "description": "a labelled number: name left, value right"
+    },
+    {
+      "id": "stat_bar",
+      "scene": "scenes/ui/atoms/stat_bar.scn",
+      "description": "the HUD vitals row: label, gauge, number"
+    },
+    {
+      "id": "progress",
+      "scene": "scenes/ui/atoms/progress.scn",
+      "description": "a bare gauge, for anything that fills"
+    },
+    {
+      "id": "list_frame",
+      "scene": "scenes/ui/atoms/list_frame.scn",
+      "description": "a sunken frame around rows; set `source` on the inner list"
+    },
+    {
+      "id": "button",
+      "scene": "scenes/ui/atoms/button.scn",
+      "description": "a plate with centred text; no state yet -- see the docs"
+    },
+    {
+      "id": "key_hint",
+      "scene": "scenes/ui/atoms/key_hint.scn",
+      "description": "a key cap and what it does"
+    },
+    {
+      "id": "divider",
+      "scene": "scenes/ui/atoms/divider.scn",
+      "description": "a one-pixel rule across its box"
+    },
+    {
+      "id": "portrait_slot",
+      "scene": "scenes/ui/atoms/portrait_slot.scn",
+      "description": "a sunken square with a chip: an item or portrait slot"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# Architecture
+# Architecture {#doc-architecture}
 
 How the code is layered, and what enforces the layering. For *what the game is*
 see `AGENTS.md`; for how a file an artist made becomes something the game loads

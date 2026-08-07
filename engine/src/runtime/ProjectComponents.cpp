@@ -32,6 +32,7 @@ bool layoutOf(FieldType type, Layout& out)
     case FieldType::Bool:   out = {1, 1}; return true;
     case FieldType::Int:    out = {4, 4}; return true;
     case FieldType::Float:  out = {4, 4}; return true;
+    case FieldType::Vec2:   out = {8, 4};  return true;
     case FieldType::Vec3:
     case FieldType::Colour: out = {12, 4}; return true;
     case FieldType::Quat:   out = {16, 4}; return true;
@@ -49,6 +50,7 @@ bool typeFromName(const std::string& name, FieldType& out)
     if (name == "bool")   { out = FieldType::Bool;   return true; }
     if (name == "int")    { out = FieldType::Int;    return true; }
     if (name == "float")  { out = FieldType::Float;  return true; }
+    if (name == "vec2")   { out = FieldType::Vec2;   return true; }
     if (name == "vec3")   { out = FieldType::Vec3;   return true; }
     if (name == "colour" || name == "color") {
         out = FieldType::Colour;

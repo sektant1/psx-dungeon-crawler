@@ -1,0 +1,96 @@
+{
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.atom.key_hint",
+  "component": true,
+  "entities": [
+    {
+      "id": "row",
+      "name": "Key hint",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            0.0,
+            0.0
+          ],
+          "offsetMax": [
+            -0.0,
+            -0.0
+          ],
+          "order": 0
+        }
+      }
+    },
+    {
+      "id": "cap",
+      "parent": "row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            0,
+            0
+          ],
+          "offsetMin": [
+            0,
+            0
+          ],
+          "offsetMax": [
+            16,
+            16
+          ],
+          "order": 0
+        },
+        "panel": {
+          "style": 1,
+          "rail": 0
+        },
+        "icon": {
+          "tone": 2,
+          "inset": 4
+        }
+      }
+    },
+    {
+      "id": "text",
+      "parent": "row",
+      "ui": {
+        "rect": {
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchorMax": [
+            1,
+            1
+          ],
+          "offsetMin": [
+            20,
+            0
+          ],
+          "offsetMax": [
+            0,
+            0
+          ],
+          "order": 0
+        },
+        "label": {
+          "text": "action",
+          "tone": 1,
+          "align": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# The PSX showcase demo
+# The PSX showcase demo {#doc-psx-demo}
 
 `psx_demo` (`samples/psx-demo/`) is the engine's shop window: three set pieces
 on a turntable — crystal shrine, descent portal, levitating chest — lit and

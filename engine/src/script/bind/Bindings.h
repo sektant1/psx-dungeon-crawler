@@ -95,6 +95,13 @@ void bindSave(sol::state& lua, const std::string& path);
 class TimerSet;
 void bindTimers(sol::state& lua, TimerSet& timers);
 
+// An application's own table of named callbacks (see ScriptModule). Extends the
+// table when it already exists, so one module can be built by several owners.
+void bindModule(sol::state& lua, const ScriptModule& module);
+
+// The arg* readers are declared in the public header beside ScriptModule: the
+// application writing the callbacks needs them and cannot include this file.
+
 // Which entity owns a physics body, or null. Shared with the contact bridge.
 entt::entity entityForBody(ecs::World& world, BodyHandle body);
 

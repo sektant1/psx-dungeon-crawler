@@ -1,5 +1,8 @@
 #include "MapRuntime.h"
 
+
+#include <cmath>
+
 #include "ComponentRegistry.h"
 #include "GameComponents.h"
 
@@ -74,6 +77,26 @@ glm::vec3 MapRuntime::playerSpawn() const
     // No authored marker: fall through to what the engine reads, which is the
     // authored first-person rig and then just above the origin.
     return mScene.playerSpawn();
+}
+
+float MapRuntime::playerSpawnYaw() const
+{
+    const entt::registry& reg = mScene.registry();
+    for (auto e : reg.view<const PlayerSpawn>()) {
+        const auto* transform = reg.try_get<eng::ecs::Transform>(e);
+        if (!transform)
+            continue;
+        // Yaw out of the quaternion rather than the composed world matrix: a
+        // spawn is not parented to anything that turns, and extracting an angle
+        // from a matrix that may also carry scale is a way to get a subtly
+        // wrong one.
+        const glm::vec3 forward =
+            transform->rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+        if (forward.x * forward.x + forward.z * forward.z < 1e-6f)
+            continue; // pointing straight up or down: no yaw to speak of
+        return std::atan2(-forward.x, -forward.z);
+    }
+    return 0.0f;
 }
 
 glm::vec3 MapRuntime::levelExit() const

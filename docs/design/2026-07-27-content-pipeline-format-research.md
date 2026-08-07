@@ -1,4 +1,4 @@
-# Content Pipeline Format Research
+# Content Pipeline Format Research {#doc-design-2026-07-27-content-pipeline-format-research}
 
 _Primary-source findings for the proposed authored-assets, map, and scene
 pipeline. Researched 2026-07-27. This is input to design; it does not replace

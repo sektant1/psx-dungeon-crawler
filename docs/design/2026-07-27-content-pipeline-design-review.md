@@ -1,4 +1,4 @@
-# Content Pipeline Design Review
+# Content Pipeline Design Review {#doc-design-2026-07-27-content-pipeline-design-review}
 
 Reviewed through the repository's architect, technical-design-lead,
 technical-artist, tools-programmer, gameplay-programmer, level-designer,

@@ -1,4 +1,4 @@
-# UI architecture: canvas, bitmap font, tooltips
+# UI architecture: canvas, bitmap font, tooltips {#doc-ui-architecture}
 
 Two UIs share one imgui context, and they want opposite things.
 

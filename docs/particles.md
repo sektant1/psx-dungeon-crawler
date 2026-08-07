@@ -1,4 +1,4 @@
-# Particles, decals and blood
+# Particles, decals and blood {#doc-particles}
 
 The particle runtime is a custom CPU simulation drawn through GPU instancing.
 Ogre's `ParticleSystem` is no longer involved: it billboarded, it approximated

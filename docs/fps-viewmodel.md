@@ -1,4 +1,4 @@
-# The first-person viewmodel
+# The first-person viewmodel {#doc-fps-viewmodel}
 
 Where the player's hands are, how they move, and every place those numbers can
 be authored. For the weapons themselves — fire modes, projectiles, ARC cost —

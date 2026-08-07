@@ -50,7 +50,12 @@ struct ComponentType {
     int fieldCount = 0;
     // The live component on an entity, as raw bytes, or null when absent. This
     // plus `fields` is everything a generic editor needs.
-    std::function<void*(entt::registry&, entt::entity)> instance;
+    //
+    // Defaulted like every other member here, because the hand-written
+    // registrations brace-initialise this struct up to `deserialize` and stop.
+    // Without the initialiser each of those is a -Wmissing-field-initializers
+    // warning for a field they are deliberately leaving empty.
+    std::function<void*(entt::registry&, entt::entity)> instance = nullptr;
 
     // Whether the add-component menu may offer this type. False for components
     // a system owns rather than an author (NodeRef, BodyRef) and for those that

@@ -1,4 +1,4 @@
-# Draw submission: what it cost, and what fixed it
+# Draw submission: what it cost, and what fixed it {#doc-render-batching}
 
 *Companion to `docs/memory-profiling.md`. Same method: measure, fix the one
 thing the measurement points at, measure again — and here, prove the image did

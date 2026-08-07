@@ -47,6 +47,8 @@ add_executable(
   game/src/PlayerWeapons.cpp
   game/src/PlayerSystem.cpp
   game/src/InteractionSystem.cpp
+  game/src/ScriptGameplay.cpp
+  game/src/ScriptEventBridge.cpp
   # Written, used by main.cpp and DebugOverlay.cpp, and never added here, so
   # every link failed on four undefined LockOnSystem symbols.
   game/src/LockOn.cpp

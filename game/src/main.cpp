@@ -33,6 +33,11 @@
 #include <eng/telemetry/Telemetry.h>
 #include "HudModel.h"
 #include "InteractionSystem.h"
+#include "ScriptEventBridge.h"
+#include "ui/UiScreens.h"
+
+#include <imgui.h>
+#include "ScriptGameplay.h"
 #include "PlayerSystem.h"
 #include "PropSystem.h"
 #include "combat/CombatComponents.h"
@@ -130,7 +135,7 @@ protected:
     // The portal preview freezes the sim on top of the console's own freeze.
     bool playerDriven() const override
     {
-        return !mPortalPreviewMode && !uiOpen();
+        return !mPortalPreviewMode && !uiOpen() && !mScreens.anyOpen();
     }
 
 private:
@@ -251,6 +256,9 @@ private:
     LiveLevel mLevel;
     game::PlayerSystem mPlayerSys;
     game::GameHud mHud;
+    // The authored screens (assets/scenes/ui). Drawn over the HUD and,
+    // while one is open, taking the input the world would have had.
+    game::UiScreens mScreens;
     bool mPortalPreviewMode = false;
     std::string mScene;                                  // --scene
     std::string mAuthoredMap; // a cooked .map named on the command line
@@ -265,6 +273,16 @@ private:
     // the safehouse and the raid state machine. One object, wired in
     // onStartGame and driven from the same four callbacks as everything else.
     game::rpg::RpgRuntime mRpg;
+    // MUST stay below mScripts and mRpg: members are destroyed in reverse
+    // declaration order, and this one's destructor unsubscribes from mRpg's
+    // channels. Declared above them it was destroyed *after* them, and the
+    // detach dereferenced a freed RpgRuntime -- which showed up as heap
+    // corruption in an unrelated destructor several frames of teardown later.
+    game::ScriptEventBridge mScriptEvents;
+    // Station ids, in the order they were published as targets this frame. The
+    // target carries an index rather than a string because GameplayTarget is a
+    // small POD copied per frame per target.
+    std::vector<std::string> mStationTargets;
     bool mRpgReady = false;
 
     glm::vec3 mLastPlayerHitDirection{0.0f, 0.0f, -1.0f};
@@ -503,7 +521,31 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     }
     game::loadViewmodelRig(game::assetPath("config/game.toml"), mConfigRig);
     mPlayerSys.setViewmodelRig(mConfigRig);
-    mHud.initialise();
+    // The dungeon's own face. Config-driven so a different look is a line in
+    // game.toml rather than a rebuild; the engine default stays the fallback
+    // for any surface that has no game behind it.
+    const std::string uiFont = cfg.getString("ui.font", "antiquity.toml");
+    mHud.initialise(uiFont);
+    // Same face as the HUD, and the game's component table -- the screens
+    // are cooked maps and their UI components have to deserialise.
+    mScreens.load(mapio::coreRegistry(), uiFont);
+    // Verification hook, the same shape the editor's RAVEN_EDITOR_* hooks use:
+    // a screenshot run has no way to press Tab, and "does the screen I authored
+    // draw with live data" is the one question worth capturing.
+    if (const char* screen = std::getenv("RAVEN_OPEN_SCREEN")) {
+        const std::string want = screen;
+        if (want == "inventory")
+            mScreens.open(game::UiScreens::Screen::Inventory);
+        else if (want == "trade") {
+            // A shelf to look at: the hook exists to capture a screen, and an
+            // empty shop is not one. RAVEN_OPEN_SCREEN_TRADER picks whose.
+            const char* who = std::getenv("RAVEN_OPEN_SCREEN_TRADER");
+            mScreens.data().setTrader(who ? who : "corvin");
+            mScreens.open(game::UiScreens::Screen::Trade);
+        }
+        else if (want == "dialogue")
+            mScreens.open(game::UiScreens::Screen::Dialogue);
+    }
     mHud.configure(cfg);
     mPortalPreviewMode = std::getenv("RAVEN_SHOWCASE_PORTAL") != nullptr ||
                          mScene == "portal";
@@ -540,12 +582,54 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mScripts.emplace(mWorld, scriptConfig, mapio::coreRegistry());
     mScripts->bindInput(engine.input());
     mScripts->bindPhysics(physics());
+    mScripts->bindAudio(audio());
+    // Saves land beside the RPG profile rather than in the working directory,
+    // so a script's flags travel with the character they belong to.
+    mScripts->bindSave("script_save.txt");
+    {
+        // The runtime half. `game.load_scene` is deferred to a frame boundary
+        // the same way the console's level commands are: a script calling it is
+        // inside the dispatch loop whose instances the reload would destroy.
+        eng::script::RuntimeHooks hooks;
+        hooks.quit = [&engine]() { engine.requestClose(); };
+        hooks.cameraPosition = [this]() {
+            return mPlayerSys.controller().eyePosition();
+        };
+        hooks.cameraForward = [this]() {
+            return mPlayerSys.controller().forward();
+        };
+        mScripts->bindRuntime(hooks);
+    }
     eng::script::registerScriptCommands(devConsole(), *mScripts);
 
     enterLevel(engine, false); // depth 0, spawn at entry
 
     mCombat.init(*mCtx);
     mCombatReady = true;
+
+    // This game's own Lua vocabulary, published now that the combat registry
+    // and the player entity both exist. Bound after start(): a module that
+    // appeared later would be nil for the line that wanted it.
+    //
+    // Nothing about this is in eng_script -- `player` and `rpg` are tables of
+    // callbacks this game supplies, so another game on this engine publishes a
+    // different set and shares none of these words. See ScriptGameplay.h.
+    {
+        game::ScriptGameplayDeps deps;
+        deps.rpg = mRpgReady ? &mRpg : nullptr;
+        deps.combat = &mCombat.director().registry();
+        // A provider, not the value: mPlayerEntity is created later by
+        // wireCombatModel() and rebuilt on every level change.
+        deps.player = [this]() { return mPlayerEntity; };
+        mScripts->bindModule(game::playerModule(deps));
+        mScripts->bindModule(game::rpgModule(deps));
+    }
+    // And the event stream. Attached only when the RPG layer loaded: the
+    // channels are its, and subscribing to a runtime that failed to load would
+    // deliver nothing while looking like it worked.
+    if (mRpgReady)
+        mScriptEvents.attach(*mScripts, mRpg);
+
     for (const game::PlayerWeaponDef& weapon : mPlayerSys.weaponDefinitions()) {
         if (!mCombat.director().weapons().contains(weapon.payloadId)) {
             eng::log::error("Player weapon '%s' names missing payload '%s'",
@@ -736,6 +820,16 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     if (portalPreview) {
         player.setViewAngles(portalYaw);
         player.present(r);
+    } else if (!atExit && mLevel.spawnFacing() != 0.0f) {
+        // The spawn marker's own facing, and only on an actual spawn: arriving
+        // back through an exit should leave the player looking the way the exit
+        // points, which the portal path above already decides.
+        //
+        // Applied here rather than inside spawnAt because a *position* is all
+        // spawning needs and the camera's angles are the controller's -- see
+        // the view/body split the controller documents.
+        player.setViewAngles(mLevel.spawnFacing());
+        player.present(r);
     }
     mPlayerSys.attachLoadout(*mCtx);
 
@@ -761,6 +855,17 @@ void DungeonApp::enterLevel(eng::Engine& engine, bool atExit)
     // MapRuntime reported it -- and nothing read that call, so the item simply
     // did not exist. This is the consumer that closes that path.
     if (mRpgReady && mCtx) {
+        // Before anything reads the level's placements: an entity the world
+        // state has not unlocked must not be standing there when the pickup and
+        // NPC passes go looking. This is what makes the village progressive --
+        // see game/src/scene/GameComponents.h, SceneCondition.
+        if (entt::registry* authored = mLevel.authoredRegistry()) {
+            const int gated = mRpg.applySceneConditions(*authored);
+            if (gated > 0)
+                eng::log::info("Level: %d entities held back by scene "
+                               "conditions",
+                               gated);
+        }
         mRpg.setPickupsForLevel(*mCtx, mLevel.pickupPlacements());
         // The same closed path for people: an authored `npc.<id>` was an entity
         // in the file that nobody could ever meet.
@@ -1129,6 +1234,31 @@ void DungeonApp::wireEnemies()
 
 void DungeonApp::onInput(const eng::FrameContext& f)
 {
+    // Before anything else, and consuming: a keypress that closed the pack must
+    // not also swing a weapon, and the movement keys double as the row cursor
+    // while a screen is up.
+    if (mRpgReady) {
+        mScreens.setRuntime(&mRpg);
+        // Pointer first: a click is more specific than a key, and the mouse is
+        // ungrabbed while a screen is open so the cursor is where the player
+        // put it.
+        if (mScreens.anyOpen()) {
+            const ImVec2 mouse = ImGui::GetMousePos();
+            mScreens.handleMouse(mCtx->input, {mouse.x, mouse.y});
+            if (std::string line = mScreens.takeMessage(); !line.empty())
+                mRpg.note(std::move(line));
+        }
+        if (mScreens.handleInput(mCtx->input)) {
+            if (std::string line = mScreens.takeMessage(); !line.empty())
+                mRpg.note(std::move(line));
+            // The cursor is only usable with a pointer to aim it, and the world
+            // camera must not spin while the player reads. Releasing the grab
+            // is what makes both true.
+            if (mScreens.anyOpen() && mCtx->input.mouseGrabbed())
+                mCtx->input.setMouseGrab(false);
+            return;
+        }
+    }
     // Look runs at the render rate; locomotion runs in onPreSimulate. The base
     // class documents that split; this is the game's half of it.
     if (playerDriven())
@@ -1415,6 +1545,26 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
     // Publish the training dummy as a look target so the crosshair can name
     // it. It is not owned by the level, so it goes in through the external
     // seam rather than through LiveLevel::appendTargets.
+    // The safehouse and the street, as things you can walk up to. A marker
+    // named `station.<id>` is a project the player pays for; the ids are
+    // stations.toml's, so adding one is a row there and a marker here.
+    mStationTargets.clear();
+    if (mRpgReady) {
+        for (const game::ScenePlacement& marker :
+             mLevel.markerPlacements("station.")) {
+            GameplayTarget target;
+            target.kind = TargetKind::Station;
+            // The index into the placement list, so the interact handler can
+            // recover which station without the target carrying a string.
+            target.id = int(mStationTargets.size());
+            target.position = marker.position + glm::vec3(0.0f, 0.9f, 0.0f);
+            target.reach = 2.6f;
+            target.radius = 0.7f;
+            mInteraction.pushTarget(target);
+            mStationTargets.push_back(marker.type);
+        }
+    }
+
     if (mDummyAlive && mDummy.alive()) {
         glm::vec3 feet{0.0f};
         glm::quat unused{1.0f, 0.0f, 0.0f, 0.0f};
@@ -1476,6 +1626,26 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         mRpg.takePickup(*mCtx, mInteraction.focus().id);
     }
 
+    // Paying for the next tier of whatever the crosshair is on. The check and
+    // the build are one press: a station whose cost is not met reports why,
+    // which is the only place those requirements are ever explained.
+    if (mRpgReady && in.mouseGrabbed() && mInteraction.focus().available &&
+        mInteraction.focus().kind == TargetKind::Station &&
+        in.wasPressed("interact")) {
+        const int index = mInteraction.focus().id;
+        if (index >= 0 && index < int(mStationTargets.size())) {
+            const std::string station = mStationTargets[std::size_t(index)];
+            const game::rpg::RpgRuntime::BuildCheck check =
+                mRpg.canBuild(station);
+            if (check.ok && mRpg.build(station))
+                mRpg.note("Built: " +
+                          (check.tier ? check.tier->name : station));
+            else
+                mRpg.note(check.blocker.empty() ? "Nothing more to build here."
+                                                : check.blocker);
+        }
+    }
+
     // Speaking to whoever is under the crosshair. Same argument as taking an
     // item: the interaction system resolves the target and stops, because it
     // owns no conversation.
@@ -1487,10 +1657,22 @@ void DungeonApp::onPresent(const eng::FrameContext& f)
         mInteraction.focus().kind == TargetKind::Npc &&
         in.wasPressed("interact")) {
         const int id = mInteraction.focus().id;
-        if (!mRpg.talkToPlacement(id)) {
-            if (const game::rpg::NpcSystem::Entry* e = mRpg.npcs().find(id);
-                e && e->def && e->def->trades())
-                mRpg.note(e->def->name + " has goods to trade.");
+        const game::rpg::NpcSystem::Entry* entry = mRpg.npcs().find(id);
+        // Whoever this is, their shop is the one the trade screen shows. Set
+        // before either screen opens, because a trader whose shelf is somebody
+        // else's is worse than no shelf at all.
+        if (entry && entry->def)
+            mScreens.data().setTrader(entry->def->trader);
+
+        if (mRpg.talkToPlacement(id)) {
+            // A conversation is a screen. Opening it here rather than inside
+            // talkToPlacement keeps the RPG layer unaware that screens exist --
+            // it runs the tree, and what displays it is the app's business.
+            mScreens.open(game::UiScreens::Screen::Dialogue);
+        } else if (entry && entry->def && entry->def->trades()) {
+            // Somebody with stock and no tree is a shopkeeper, not a mute: the
+            // shop *is* the conversation.
+            mScreens.open(game::UiScreens::Screen::Trade);
         }
     }
 
@@ -1697,7 +1879,16 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
                                mPlayerSys.selectedWeapon(),
                                mInteraction.focus());
     mHud.draw(hudFrame, lookTooltip(), f.realDt,
-              !uiOpen() && !mPortalPreviewMode);
+              !uiOpen() && !mPortalPreviewMode && !mScreens.anyOpen());
+    // Over the HUD, because that is where a screen goes: the pack opens on top
+    // of the world, not beside it.
+    // The window, from imgui rather than from the engine: the canvas draws on
+    // imgui's foreground list and has to agree with it about how big the
+    // surface is, which on a hidpi display is not the window's own size.
+    if (!uiOpen()) {
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        mScreens.draw({display.x, display.y});
+    }
 
 
     // renderFrame() (owned by the runner) paints all of the above; it is

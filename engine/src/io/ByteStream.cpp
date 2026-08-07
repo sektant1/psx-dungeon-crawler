@@ -29,6 +29,8 @@ void ByteWriter::f32(float v)
     u32(bits);
 }
 
+void ByteWriter::vec2(const glm::vec2& v) { f32(v.x); f32(v.y); }
+
 void ByteWriter::vec3(const glm::vec3& v) { f32(v.x); f32(v.y); f32(v.z); }
 
 void ByteWriter::quat(const glm::quat& q) { f32(q.w); f32(q.x); f32(q.y); f32(q.z); }
@@ -112,6 +114,12 @@ float ByteReader::f32()
     float v;
     std::memcpy(&v, &bits, 4);
     return v;
+}
+
+glm::vec2 ByteReader::vec2()
+{
+    float x = f32(), y = f32();
+    return {x, y};
 }
 
 glm::vec3 ByteReader::vec3()

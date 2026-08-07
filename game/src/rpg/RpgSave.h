@@ -57,6 +57,10 @@ struct ItemStackSnapshot {
     int32_t count = 1;
     bool foundThisRun = false;
     float condition = 1.0f;
+    // The seal the player spent against the next death (see LossPolicy.h). A
+    // mid-expedition save that forgot this would quietly un-protect everything
+    // the player had already decided to protect.
+    bool secured = false;
 };
 
 // One trader's mutable half: the purse, the shelf, and the trade history the
@@ -113,7 +117,7 @@ struct RpgSaveData {
 namespace rpgsave {
 
 // Bump when the record layout changes.
-inline constexpr uint16_t kVersion = 1;
+inline constexpr uint16_t kVersion = 2;
 
 // --- the pure half ---------------------------------------------------------
 

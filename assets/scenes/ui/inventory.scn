@@ -1,0 +1,75 @@
+{
+  "$schema": "../../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.ui.inventory",
+  "component": true,
+  "entities": [
+    { "id": "root", "name": "Inventory",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [28.0, 18.0], "offsetMax": [-28.0, -18.0] },
+              "panel": { "style": 0, "rail": 1, "railTone": 2, "opacity": 0.94 } } },
+
+    { "id": "title", "name": "Title", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [0.5, 0.0],
+                        "offsetMin": [8.0, 4.0], "offsetMax": [-4.0, 22.0] },
+              "label": { "text": "PACK", "tone": 2, "align": 0 } } },
+
+    { "id": "coin", "name": "Coin", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.5, 0.0], "anchorMax": [1.0, 0.0],
+                        "offsetMin": [4.0, 4.0], "offsetMax": [-8.0, 22.0] },
+              "label": { "text": "0", "binding": "inventory.currency",
+                         "tone": 0, "align": 2 } } },
+
+    { "id": "weight_label", "name": "Weight", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [0.5, 0.0],
+                        "offsetMin": [8.0, 24.0], "offsetMax": [-4.0, 42.0] },
+              "label": { "text": "0.0 / 0.0", "binding": "inventory.weight",
+                         "tone": 1, "align": 0 } } },
+
+    { "id": "weight_bar", "name": "Weight bar", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.5, 0.0], "anchorMax": [1.0, 0.0],
+                        "offsetMin": [4.0, 31.0], "offsetMax": [-8.0, 37.0] },
+              "bar": { "ratio": 0.0, "binding": "inventory.weight_fraction",
+                       "fillTone": 3, "trackTone": 7 } } },
+
+    { "id": "items", "name": "Items", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 0.0], "anchorMax": [0.55, 1.0],
+                        "offsetMin": [8.0, 46.0], "offsetMax": [-4.0, -32.0] },
+              "panel": { "style": 2, "rail": 0, "opacity": 0.6 },
+              "list": { "source": "inventory.backpack", "action": "seal", "maxRows": 14,
+                        "rowHeight": 17.0, "rowGap": 2.0, "showValues": true,
+                        "tone": 0, "selectedTone": 2 } } },
+
+    { "id": "risk_title", "name": "At risk", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.55, 0.0], "anchorMax": [1.0, 0.0],
+                        "offsetMin": [4.0, 46.0], "offsetMax": [-8.0, 64.0] },
+              "label": { "text": "AT RISK", "tone": 5, "align": 0 } } },
+
+    { "id": "risk_items", "name": "At-risk items", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.55, 0.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [4.0, 66.0], "offsetMax": [-8.0, -32.0] },
+              "panel": { "style": 2, "rail": 0, "opacity": 0.6 },
+              "list": { "source": "raid.at_risk_items", "maxRows": 12,
+                        "rowHeight": 17.0, "rowGap": 2.0, "showValues": true,
+                        "tone": 5, "selectedTone": 2 } } },
+
+    { "id": "risk_bar", "name": "Risk bar", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 1.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [8.0, -28.0], "offsetMax": [-8.0, -22.0] },
+              "bar": { "ratio": 0.0, "binding": "raid.at_risk_fraction",
+                       "fillTone": 5, "trackTone": 7 } } },
+
+    { "id": "risk_value", "name": "Risk value", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.0, 1.0], "anchorMax": [0.5, 1.0],
+                        "offsetMin": [8.0, -20.0], "offsetMax": [-4.0, -2.0] },
+              "label": { "text": "0", "binding": "raid.at_risk", "tone": 5,
+                         "align": 0 } } },
+
+    { "id": "seals", "name": "Seals", "parent": "root",
+      "ui": { "rect": { "anchorMin": [0.5, 1.0], "anchorMax": [1.0, 1.0],
+                        "offsetMin": [4.0, -20.0], "offsetMax": [-8.0, -2.0] },
+              "label": { "text": "0 / 0", "binding": "raid.seals", "tone": 1,
+                         "align": 2 } } }
+  ]
+}

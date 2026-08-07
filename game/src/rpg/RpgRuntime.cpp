@@ -3,6 +3,7 @@
 #include "GameAssets.h"
 #include "GameContext.h"
 #include "combat/CombatComponents.h"
+#include "scene/GameComponents.h"
 #include "combat/FeelComponents.h"
 #include "combat/StatusEffectSystem.h"
 
@@ -150,6 +151,10 @@ bool RpgRuntime::load(const Paths& paths, const CombatVocabulary& vocabulary)
         const toml::table& root = parsed.table();
         if (const toml::table* c = root["curve"].as_table())
             readCurve(*c, curve);
+        // The risk dials. Absent block keeps the defaults, which are the
+        // Tarkov reading of GDD §7 -- everything carried is at stake.
+        mLossRules = LossRules{};
+        mLossRules.parse(root["raid"].as_table());
         mSkillTable.parse(&root);
         if (const toml::table* s = root["start"].as_table()) {
             if (const toml::table* attrs = (*s)["attributes"].as_table()) {
@@ -626,6 +631,35 @@ void RpgRuntime::grantRewards(Quest& quest)
 // Conditions and effects
 // ---------------------------------------------------------------------------
 
+int RpgRuntime::applySceneConditions(entt::registry& registry) const
+{
+    // Collected before anything is destroyed: destroying inside a view's
+    // iteration invalidates it, and the failure mode is a level that is
+    // *mostly* gated correctly, which is the hardest kind to notice.
+    std::vector<entt::entity> doomed;
+    for (const auto& [entity, gate] :
+         registry.view<const game::SceneCondition>().each()) {
+        Condition condition;
+        if (!parseConditionKind(gate.kind, condition.kind)) {
+            // Reported and kept. An entity whose gate cannot be read is a
+            // content bug, and deleting it would hide the bug behind a piece of
+            // level that merely went missing.
+            eng::log::error("Scene condition: '%s' is not a condition kind; "
+                            "the entity stays",
+                            gate.kind.c_str());
+            continue;
+        }
+        condition.subject = gate.subject;
+        condition.value = gate.value;
+        condition.negate = gate.negate;
+        if (!evaluate(condition))
+            doomed.push_back(entity);
+    }
+    for (const entt::entity entity : doomed)
+        registry.destroy(entity);
+    return int(doomed.size());
+}
+
 bool RpgRuntime::evaluate(const Condition& c) const
 {
     bool result = false;
@@ -971,31 +1005,67 @@ void RpgRuntime::onDepthReached(int depth)
     mChannels.depth.raise(depth, /*extracted=*/false);
 }
 
-void RpgRuntime::onExtracted(int depth)
+LossReport RpgRuntime::previewLoss() const
 {
-    mWorld.noteDepth(depth);
-    // Everything carried stops being provisional the moment it is out.
-    mInventory.backpack.markAllOwned();
-    mWorld.advanceDay(1);
-    mChannels.depth.raise(depth, /*extracted=*/true);
-    note("You are out, and what you carry is yours.");
+    return loss::preview(mInventory.backpack, mInventory.equipment, mItems,
+                         mLossRules);
 }
 
-std::vector<ItemStack> RpgRuntime::onPlayerDied(const std::string& killerId)
+bool RpgRuntime::setSecured(const std::string& item, bool secured)
 {
-    const std::vector<ItemStack> lost = mInventory.backpack.loseFindings(mItems);
-    for (const ItemStack& s : lost)
-        publishInventory(s.item, -s.count);
+    return loss::setSecured(mInventory.backpack, mItems, mLossRules, item,
+                            secured);
+}
+
+ExtractReport RpgRuntime::onExtracted(int depth)
+{
+    mWorld.noteDepth(depth);
+    // Snapshotted before the move: banking takes stacks *out* of the backpack,
+    // and the inventory channel reports what is held there. A "bring six
+    // reagents home" objective counts the backpack, so it has to be told the
+    // holding changed -- otherwise it reads six on arrival and zero on the next
+    // recount, with nothing in between to explain it.
+    std::vector<std::pair<std::string, int>> banked;
+    for (const ItemStack& stack : mInventory.backpack.stacks())
+        if (stack.foundThisRun)
+            banked.emplace_back(stack.item, stack.count);
+
+    const ExtractReport report = loss::applyExtraction(
+        mInventory.backpack, mInventory.stash, mItems, mLossRules);
+    for (const auto& [item, count] : banked)
+        publishInventory(item, -count);
+    mWorld.advanceDay(1);
+    mChannels.depth.raise(depth, /*extracted=*/true);
+    if (report.bankedUnits > 0)
+        note("You are out. " + std::to_string(report.bankedUnits) +
+             " findings are in the vault.");
+    else
+        note("You are out, and what you carry is yours.");
+    return report;
+}
+
+LossReport RpgRuntime::onPlayerDied(const std::string& killerId)
+{
+    const LossReport report =
+        loss::applyDeath(mInventory.backpack, mInventory.equipment, mItems,
+                         mLossRules, mInventory.currency);
+    for (const LossEntry& entry : report.taken)
+        publishInventory(entry.stack.item, -entry.stack.count);
+    // Worn gear can have been taken, which changes the modifier layer: the
+    // sheet has to be rebuilt or the player walks back into the village still
+    // carrying the bonuses of a breastplate the dungeon kept.
+    rpgsave::syncEquipmentModifiers(mItems, mInventory.equipment, mSheet);
     mWorld.advanceDay(1);
     if (!killerId.empty())
         mWorld.addCounter("killed_by." + killerId, 1);
-    if (!lost.empty()) {
-        int total = 0;
-        for (const ItemStack& s : lost)
-            total += s.count;
-        note("The dungeon kept " + std::to_string(total) + " of your findings.");
+    if (report.anythingLost()) {
+        note("The dungeon kept " + std::to_string(report.lostUnits()) +
+             " things worth " + std::to_string(report.lostValue()) + " coin.");
+        if (report.insurancePaid > 0)
+            note("The lodge's writ returned " +
+                 std::to_string(report.insurancePaid) + " coin of it.");
     }
-    return lost;
+    return report;
 }
 
 // ---------------------------------------------------------------------------

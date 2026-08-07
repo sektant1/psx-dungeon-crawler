@@ -1,4 +1,4 @@
-# The turntable — the model showroom
+# The turntable — the model showroom {#doc-level-turntable}
 
 A small vaulted stone chamber with one moving part: whatever is standing on the
 plinth. It is what `make demo` runs and what the editor opens when no file is

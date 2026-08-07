@@ -1,4 +1,4 @@
-# Scene editor: entities and components
+# Scene editor: entities and components {#doc-scene-editor-entities}
 
 The editor's left panel is a scene tree, the right panel is a component stack.
 An entity is an id and a transform; everything else about it -- a mesh, a light,
