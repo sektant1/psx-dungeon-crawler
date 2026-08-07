@@ -20,6 +20,10 @@ struct AppConfig
     // "editor", "demo". It picks the packs and their priority order, and with
     // them every resource location the renderer registers.
     std::string mountSet = "game";
+    // A project directory to overlay on that set, or empty for an app that is
+    // its own content. Set by raven_player, which is handed one on the command
+    // line; the game, the editor and the samples leave it alone.
+    std::string projectDir;
     // Starting render profile (eng::renderPresetFromArgs / renderPresetFromName).
     // 0 leaves the choice to RAVEN_RENDER_PRESET and then kDefaultRenderPreset.
     // Only the *starting* look: the debug console switches profiles at runtime.

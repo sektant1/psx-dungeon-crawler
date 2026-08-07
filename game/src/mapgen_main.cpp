@@ -2,7 +2,8 @@
 // Generates a BSP dungeon and writes a cooked runtime .map.
 
 #include "scene/LayoutToScene.h"
-#include "scene/MapSerializer.h"
+#include "scene/ComponentRegistry.h"
+#include <eng/ecs/MapSerializer.h>
 #include "DungeonGen.h"
 
 #include <entt/entt.hpp>
@@ -33,7 +34,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (!mapio::writeMap(out, reg, mapio::coreRegistry())) {
+    if (!eng::ecs::writeMap(out, reg, mapio::coreRegistry())) {
         std::printf("mapgen: failed to write %s\n", out.c_str());
         return 1;
     }

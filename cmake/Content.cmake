@@ -20,7 +20,23 @@
 # heavy dependencies" property is unchanged, and a headless tool now gets the
 # content resolver for free. Listing ByteStream.cpp here *as well* would put two
 # definitions in one link.
-add_library(eng_ecs_headless STATIC engine/src/ecs/ComponentRegistry.cpp)
+# MapSerializer sits beside the registry it walks, and is listed here AND in
+# eng_framework for the same reason ComponentRegistry.cpp is: a headless tool
+# links one, a windowed app links the other, and neither links both.
+#
+# It moved out of game_content because it never belonged there. writeMap and
+# readMap are handed a `const eng::ecs::ComponentRegistry&`, so the codec has
+# never known which components exist -- only how to walk a table of them. The
+# game's table was simply the only one anybody passed it. raven_player passes
+# the engine's, which is what lets a project play a scene without linking the
+# game's component vocabulary, its actor sounds and its cooker.
+#
+# The cooker deliberately did NOT move with it: SceneCook emits game::Exit,
+# game::EnemySpawn, game::Pickup and the rest by name, because which authored
+# field becomes which component is this game's model. Making that pluggable is
+# a later milestone; playing a cooked map does not need it.
+add_library(eng_ecs_headless STATIC engine/src/ecs/ComponentRegistry.cpp
+                                    engine/src/ecs/MapSerializer.cpp)
 target_include_directories(eng_ecs_headless PUBLIC engine/include
                            PRIVATE third_party)
 target_link_libraries(eng_ecs_headless PUBLIC glm::glm EnTT::EnTT eng_core)
@@ -29,7 +45,6 @@ eng_target_hardening(eng_ecs_headless)
 add_library(
   game_content STATIC
   game/src/scene/ComponentRegistry.cpp
-  game/src/scene/MapSerializer.cpp
   # The actor/action vocabulary. In the content library rather than beside the
   # audio system because the editor and the headless cooker need it and neither
   # links miniaudio: what an enemy's actions ARE is content, and which clip

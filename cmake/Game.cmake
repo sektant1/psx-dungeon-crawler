@@ -75,7 +75,9 @@ add_executable(
   game/src/scene/MapRuntime.cpp)
 target_include_directories(game PRIVATE third_party samples/common engine/src
                                         game/src game/src/scene)
-target_link_libraries(game PRIVATE demo_scene game_content game_rpg)
+# eng_runtime, because the game plays its levels through the same ProjectApp
+# raven_player does -- the game is what proves that runtime is sufficient.
+target_link_libraries(game PRIVATE demo_scene game_content game_rpg eng_runtime)
 eng_target_hardening(game)
 
 # Explicit source-asset cook. Normal builds consume checked-in cooked content

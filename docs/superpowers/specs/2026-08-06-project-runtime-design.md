@@ -1,7 +1,10 @@
 # Project runtime — M1 of the Godot-like authoring track
 
 **Branch:** `feat/godot-project-runtime`
-**Status:** design approved, not implemented
+**Status:** implemented and verified on screen. See
+[docs/projects.md](../../projects.md) for the resulting documentation, and
+"What running it changed" at the end for the three design points the
+implementation corrected.
 **Scope:** milestone 1 of five (roadmap at the end)
 
 ## The claim this milestone makes true
@@ -281,6 +284,44 @@ running the generated project, read back and checked.
 6. F5.
 7. `raven_player /tmp/my-game` opens, and the cube moves under WASD.
 8. `nm build/raven_player | grep game::` prints nothing.
+
+## What running it changed
+
+Three things the design got wrong, all found by building the slice and reading
+the screenshot rather than by the compiler or the unit tests.
+
+**The `scene_content` split did not survive contact.** The plan was to lift the
+whole authoring half into a renderer-free library. But `SceneCook` emits
+`game::Exit`, `game::EnemySpawn`, `game::Pickup` and the rest *by name* --
+which authored field becomes which component is this game's model, and making
+that pluggable is M2 work, not a prerequisite for playing a map. What actually
+needed to move was much smaller: `MapSerializer` alone, which had always taken
+the component table as a parameter and was in `game_content` only because that
+is where it was written. It went to `engine/src/ecs/`, and its namespace went
+with it -- `mapio::` now means only the game's component table, which is what
+lets `player_purity` tell the two apart.
+
+**`eng::ecs::Collider` was registered in the wrong table.** `game::Collider` is
+an *alias* for the engine's own `Collider`, and `eng::ecs::PhysicsSync` is what
+turns one into a body -- but the type was registered at stable id 10 only in
+the game's table. So a project's floor deserialised into nothing, the player
+fell through the world, and the screen was black with no error anywhere. It
+looks exactly like a broken renderer; it is a missing table entry. Registering
+it in `registerEngineComponents` at the same id 10 is not a format change --
+same type, same id, moved into the table that should always have held it.
+
+**A first-person rig had to become a spawn.** The scene contract and the
+validator both demanded a `game::PlayerSpawn` from any world scene, so a scene
+authored in a project -- which has none of this game's components -- could not
+say where the player starts however it was authored, and every new project's
+first cook was a refusal. An active `first_person` rig states how the player
+moves and, by its transform, where they stand; `SceneRuntime::playerSpawn`
+already read exactly that. Both now count it, so the editor's answer and the
+player's are the same answer. A parked rig counts for neither.
+
+Also worth recording: the starter scene needs a floor collider and the full
+nine locomotion bindings, because `FpsController` treats an unbound action as
+fatal. Both were discovered by the binary refusing to run.
 
 ## Roadmap beyond M1
 

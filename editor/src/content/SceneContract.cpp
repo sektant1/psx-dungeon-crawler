@@ -136,7 +136,20 @@ ContractReport sceneContract(const SceneDocument& document)
     int spawns = 0, listeners = 0, keyLights = 0, exits = 0;
     AuthorId spawnId, listenerId, keyLightId, exitId;
     for (const Entity& e : document.entities) {
-        if (e.playerSpawn) {
+        // A player spawn, or an active first-person rig -- which says the same
+        // thing and more. `first_person` states how the player moves AND, by
+        // its transform, where they are; eng::runtime::SceneRuntime::playerSpawn
+        // reads exactly that and stands the player there.
+        //
+        // This matters beyond tidiness: PlayerSpawn is one of THIS game's
+        // markers, so before this a scene made in a project -- which has no
+        // game components at all -- could not fill the role however it was
+        // authored, and every new project's first cook was a refusal.
+        //
+        // A parked rig (active = false) does not count, for the same reason a
+        // parked camera does not: it is kept, not used.
+        const bool firstPersonSpawn = e.firstPerson && e.firstPerson->active;
+        if (e.playerSpawn || firstPersonSpawn) {
             ++spawns;
             spawnId = e.id;
         }

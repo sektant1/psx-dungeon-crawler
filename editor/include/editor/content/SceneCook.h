@@ -37,7 +37,7 @@ bool buildRegistry(const SceneDocument& document, const KitCatalog& catalog,
                    std::vector<AuthorId>* unresolved = nullptr);
 
 // The whole cook: IR -> registry -> binary .map, written atomically by
-// mapio::writeMap. The one function both scene_cook and the editor call; there
+// eng::ecs::writeMap. The one function both scene_cook and the editor call; there
 // is deliberately no second path from a scene to a map.
 bool cookToMap(const SceneDocument& document, const KitCatalog& catalog,
                const std::string& mapPath, std::string& error);

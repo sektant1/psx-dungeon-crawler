@@ -1,8 +1,8 @@
-#include "MapSerializer.h"
+#include <eng/ecs/MapSerializer.h>
 
 #include <eng/Log.h>
 #include <eng/io/ByteStream.h>
-#include "ComponentRegistry.h"
+#include <eng/ecs/ComponentRegistry.h>
 
 #include <eng/ecs/Components.h> // eng::ecs::Parent
 #include <eng/ecs/components/MeshSource.h>
@@ -17,7 +17,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace mapio {
+namespace eng::ecs {
 
 using eng::io::ByteReader;
 using eng::io::ByteWriter;
@@ -343,4 +343,4 @@ bool dumpMap(const std::string& path, const eng::ecs::ComponentRegistry& types)
     return r.ok() && r.remaining() == 0;
 }
 
-} // namespace mapio
+} // namespace eng::ecs

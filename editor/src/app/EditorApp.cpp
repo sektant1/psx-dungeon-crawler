@@ -28,6 +28,7 @@
 #include <eng/telemetry/Telemetry.h>
 #include <eng/render/Warmup.h>
 #include <eng/render/ImGuiHint.h>
+#include <eng/render/ImGuiTheme.h>
 #include <eng/Renderer.h>
 #include <eng/assets/AssetName.h>
 #include <eng/assets/AssetRoot.h>
@@ -77,51 +78,19 @@ constexpr int kGridRadius = 16; // cells drawn either side of the camera
 // the piece does not sit in the camera's face.
 constexpr float kGhostFallbackDistance = 12.0f;
 
-constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoCollapse;
+// Every dockable panel's flags.
+//
+// HorizontalScrollbar is the backstop against content that cannot be reached.
+// Dear ImGui clips whatever runs past a window's right edge and, without this,
+// offers no way to scroll to it -- so an Inspector docked narrow lost the right
+// half of its transform rows, a wide table lost its last column, and neither
+// said so. Panels should still be built to wrap (see ed::ui::sameLineIfItFits);
+// this is what makes the cases that cannot wrap survivable rather than silent.
+constexpr ImGuiWindowFlags kPanelFlags =
+    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_HorizontalScrollbar;
 
 const ImVec4 kUiWarning(0.780f, 0.604f, 0.314f, 1.0f);
 const ImVec4 kUiDanger(0.890f, 0.416f, 0.333f, 1.0f);
-
-// --- toolbar layout ---------------------------------------------------------
-// The toolbar wraps onto a second row instead of scrolling.
-//
-// It used to be a child window with a forced 1480px content width and a
-// horizontal scrollbar, which meant two things at once: the strip always
-// believed it was too narrow (so the scrollbar was always there, eating the
-// row's height and pushing the buttons under the dock below), and every command
-// past the fold was reachable only by scrolling a bar nobody looks at. A
-// command you cannot see is a command you do not have.
-//
-// ImGui lays out immediately, so wrapping means knowing how wide the next run
-// of controls is before drawing it -- hence the explicit widths below.
-float toolbarTextWidth(const char* text)
-{
-    return ImGui::CalcTextSize(text).x;
-}
-
-float toolbarButtonWidth(const char* label)
-{
-    return ImGui::CalcTextSize(label).x +
-           ImGui::GetStyle().FramePadding.x * 2.0f;
-}
-
-float toolbarIconWidth(float size, int count)
-{
-    const ImGuiStyle& style = ImGui::GetStyle();
-    return float(count) * (size + style.FramePadding.x * 2.0f) +
-           float(count - 1) * style.ItemSpacing.x;
-}
-
-// Continue this row when `nextWidth` still fits, otherwise fall to the next.
-// Not calling SameLine is what starts a new row, so the "else" is silence.
-void toolbarSameLine(float nextWidth)
-{
-    const ImGuiStyle& style = ImGui::GetStyle();
-    const float right =
-        ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-    if (ImGui::GetItemRectMax().x + style.ItemSpacing.x + nextWidth <= right)
-        ImGui::SameLine();
-}
 
 // filterMatches moved to ed::ui: all four asset tabs, the outliner and the
 // command palette were each carrying their own copy of "does this row match
@@ -323,6 +292,10 @@ bool EditorApp::onStart(eng::Engine& engine)
             .string();
     mSettings = loadEditorSettings(mSettingsFile);
     mAutosaveIn = mSettings.autosaveSeconds;
+    mProjectRecentsFile =
+        (eng::assets::project() / "artifacts" / "editor" / "projects.txt")
+            .string();
+    mProject.loadRecents(mProjectRecentsFile);
 
     // The ids the game defines, so a spawn is picked from a list rather than
     // spelled from memory. Resolved through the mount list like any other
@@ -398,15 +371,22 @@ bool EditorApp::onStart(eng::Engine& engine)
         mRecent.touch(mPendingScene);
         mRecent.save(mRecentFile);
         if (autosaveIsStale(mPendingScene, mState.assetRoot + "/scenes"))
-            mStatus += "  |  a newer autosave exists -- File > Recover "
+            mStatus += "  |  a newer autosave exists -- Scene > Recover "
                        "autosave";
     }
+    // The tab set starts with one empty tab; the scene just loaded into mState
+    // has to be folded back into it, or the first tab switch would restore the
+    // blank document over the author's level.
+    captureActiveTab();
+    // The contract decides which editor a scene opens in -- a 2D page in the 3D
+    // view is a page seen edge-on.
+    setMainScreen(mainScreenForKind(contract().kind));
     if (const char* import = std::getenv("RAVEN_EDITOR_IMPORT_MODEL"))
         importModel(import);
     // Verification hook: start in the staging scene so a screenshot run can
     // capture it without driving the UI.
     if (std::getenv("RAVEN_EDITOR_MATERIAL"))
-        setMode(ViewportMode::Material);
+        setMainScreen(MainScreen::Material);
     // The same hook for isolation: a screenshot run can enter the mode on a
     // named entity without anybody driving the outliner.
     if (const char* unpack = std::getenv("RAVEN_EDITOR_UNPACK"))
@@ -707,6 +687,259 @@ bool EditorApp::loadScene(const std::string& path)
               " -- " + std::to_string(mState.document.entities.size()) +
               " entities, " + std::to_string(issues.size()) + " issues";
     return true;
+}
+
+// --- open scenes -------------------------------------------------------------
+//
+// mState is a *mirror* of the active tab, not a second copy of the truth. These
+// two functions are the only place that relationship is maintained, which is
+// why no panel below here knows tabs exist: every one of them still reads
+// mState.document and mState.selection exactly as it did.
+
+void EditorApp::captureActiveTab()
+{
+    SceneTab& tab = mTabs.current();
+    tab.path = mState.scenePath;
+    tab.document = mState.document;
+    tab.dirty = mState.dirty;
+    tab.commands = mCommands;
+    tab.selection = mState.selection;
+    tab.camera = mState.camera;
+    tab.hidden = mState.hidden;
+    tab.locked = mState.locked;
+    tab.layerSession = mState.layerSession;
+    tab.cookStatus = mCookStatus;
+}
+
+void EditorApp::activateTab(std::size_t index)
+{
+    if (index >= mTabs.size() || index == mTabs.active())
+        return;
+
+    // Anything mid-gesture belongs to the document being left. Closing them
+    // here rather than letting them land on the new one is the difference
+    // between a tab switch and a corrupted scene.
+    finishInspectorEdit();
+    finishStroke();
+    stopAudioPreview();
+    if (mState.isolating())
+        leaveIsolation();
+
+    captureActiveTab();
+    mTabs.activate(index);
+    const SceneTab& tab = mTabs.current();
+
+    mState.scenePath = tab.path;
+    mState.document = tab.document;
+    mState.dirty = tab.dirty;
+    mCommands = tab.commands;
+    mState.selection = tab.selection;
+    mState.camera = tab.camera;
+    mState.hidden = tab.hidden;
+    mState.locked = tab.locked;
+    mState.layerSession = tab.layerSession;
+    mCookStatus = tab.cookStatus;
+
+    // Every cache keyed on a document revision has to be dropped, not compared:
+    // two documents keep their own revision counters, so the new one can
+    // legitimately arrive holding the number the old one last had.
+    mIssuesRevision = ~uint64_t(0);
+    mContractRevision = ~uint64_t(0);
+    mOutlinerRevision = ~uint64_t(0);
+    mGizmoMarksRevision = ~uint64_t(0);
+    mLayerRowsRevision = ~uint64_t(0);
+    mSelectionAnchor.clear();
+    mOutlinerReveal.clear();
+    mOutlinerRows.ids.clear();
+    mPickCycle.reset();
+    if (mPreview)
+        mPreview->invalidate();
+
+    // The contract decides which editor this scene wants. Opening a 2D page
+    // into the 3D level view showed it edge-on, and the fix was something you
+    // had to already know about.
+    setMainScreen(mainScreenForKind(contract().kind));
+    mTabBarFollowsActive = true;
+    mStatus = "switched to " + sceneTabName(tab);
+}
+
+void EditorApp::openSceneInTab(const std::string& path)
+{
+    if (path.empty())
+        return;
+
+    const std::size_t existing = mTabs.indexOfPath(path);
+    if (existing < mTabs.size()) {
+        activateTab(existing);
+        mStatus = sceneTabName(mTabs.current()) + " is already open";
+        return;
+    }
+
+    // An untouched blank tab is scaffolding, not work: opening into it is what
+    // an author means, and leaving it behind would put an empty scene beside
+    // every file they open.
+    const bool reuseBlank = mTabs.current().path.empty() && !mState.dirty &&
+                            mState.document.entities.empty();
+    if (!reuseBlank) {
+        captureActiveTab();
+        mTabs.open(SceneTab{});
+        mCommands.clear();
+    }
+
+    if (!loadScene(path)) {
+        // The tab that was just made now holds nothing. Close it rather than
+        // leaving an empty one named after a file that would not open.
+        if (!reuseBlank)
+            closeTab(mTabs.active());
+        mRecent.remove(path);
+        mRecent.save(mRecentFile);
+        return;
+    }
+
+    mCommands.clear();
+    mCookStatus = "not cooked";
+    mAutosaveOffered = false;
+    mContractRevision = ~uint64_t(0);
+    // A recovered backup is not a scene you meant to open: it is one you meant
+    // to *rescue*, and it stops existing the moment it is saved over the real
+    // file.
+    if (!isAutosavePath(path)) {
+        mRecent.touch(path);
+        mRecent.save(mRecentFile);
+    }
+    if (autosaveIsStale(path, mState.assetRoot + "/scenes"))
+        mStatus += "  |  a newer autosave exists -- Scene > Recover autosave";
+
+    captureActiveTab();
+    setMainScreen(mainScreenForKind(contract().kind));
+    mTabBarFollowsActive = true;
+}
+
+void EditorApp::newSceneInTab(SceneTemplate which, SceneKind kind)
+{
+    const bool reuseBlank = mTabs.current().path.empty() && !mState.dirty &&
+                            mState.document.entities.empty();
+    if (!reuseBlank) {
+        captureActiveTab();
+        mTabs.open(SceneTab{});
+        mCommands.clear();
+    }
+
+    newScene(which);
+
+    // The kind is applied after the template, not instead of it: a Room
+    // template already carries a spawn, and setSceneView only decides what the
+    // scene is *looked through*. Empty means "leave whatever the template
+    // brought", which is what a game-driven level wants.
+    if (kind != SceneKind::Empty && kind != SceneKind::GameDriven) {
+        const AuthorId id = setSceneView(mState.document, kind);
+        if (!id.empty())
+            mState.document.touch();
+    }
+    mCommands.clear(); // the template plus its view is the starting state
+    mContractRevision = ~uint64_t(0);
+    captureActiveTab();
+    setMainScreen(mainScreenForKind(contract().kind));
+    mTabBarFollowsActive = true;
+}
+
+void EditorApp::requestCloseTab(std::size_t index)
+{
+    if (index >= mTabs.size())
+        return;
+    // The active tab's unsaved state lives in mState, not yet in the tab.
+    const bool dirty =
+        index == mTabs.active() ? mState.dirty : mTabs.at(index).dirty;
+    if (!dirty) {
+        closeTab(index);
+        return;
+    }
+    mPendingCloseTab = index;
+    // Closing a tab that is not the active one has to become the active one
+    // first: the save/discard prompt saves *the open document*, and offering to
+    // save one scene while showing another is how the wrong file gets written.
+    activateTab(index);
+    mPendingCloseTab = mTabs.active();
+    requestDiscard(Discard::CloseTab);
+}
+
+void EditorApp::closeTab(std::size_t index)
+{
+    if (index >= mTabs.size())
+        return;
+    const bool active = index == mTabs.active();
+    if (!active)
+        captureActiveTab();
+
+    const std::string name = sceneTabName(mTabs.at(index));
+    const bool blanked = mTabs.close(index);
+
+    // Either way the active tab now holds a different document from the one
+    // mState mirrors, so the mirror is rebuilt from scratch. The guard in
+    // activateTab (index == active) would refuse, which is why this restores by
+    // hand instead of calling it.
+    finishInspectorEdit();
+    finishStroke();
+    if (mState.isolating())
+        leaveIsolation();
+    const SceneTab& tab = mTabs.current();
+    mState.scenePath = tab.path;
+    mState.document = tab.document;
+    mState.dirty = tab.dirty;
+    mCommands = tab.commands;
+    mState.selection = tab.selection;
+    mState.camera = tab.camera;
+    mState.hidden = tab.hidden;
+    mState.locked = tab.locked;
+    mState.layerSession = tab.layerSession;
+    mCookStatus = tab.cookStatus;
+    mState.document.touch();
+
+    mIssuesRevision = ~uint64_t(0);
+    mContractRevision = ~uint64_t(0);
+    mOutlinerRevision = ~uint64_t(0);
+    mGizmoMarksRevision = ~uint64_t(0);
+    mLayerRowsRevision = ~uint64_t(0);
+    mSelectionAnchor.clear();
+    mOutlinerReveal.clear();
+    mOutlinerRows.ids.clear();
+    mPickCycle.reset();
+    if (mPreview)
+        mPreview->invalidate();
+    setMainScreen(mainScreenForKind(contract().kind));
+    mTabBarFollowsActive = true;
+    mStatus = "closed " + name + (blanked ? " -- back to an empty scene" : "");
+}
+
+void EditorApp::setMainScreen(MainScreen screen)
+{
+    mScreen = screen;
+    switch (screen) {
+    case MainScreen::Scene3D:
+        if (materialMode())
+            setMode(ViewportMode::Level);
+        requestPanelFocus("viewport");
+        break;
+    case MainScreen::Screen2D:
+        if (materialMode())
+            setMode(ViewportMode::Level);
+        requestPanelFocus("ui");
+        break;
+    case MainScreen::Material:
+        setMode(ViewportMode::Material);
+        mAssetBrowserModeRequest = 1; // the materials tab, beside the stage
+        requestPanelFocus("viewport");
+        break;
+    }
+}
+
+const ContractReport& EditorApp::contract()
+{
+    if (mContractRevision != mState.document.revision) {
+        mContractRevision = mState.document.revision;
+        mContract = sceneContract(mState.document);
+    }
+    return mContract;
 }
 
 bool EditorApp::boundsOf(const std::vector<AuthorId>& ids, glm::vec3& min,
@@ -1168,23 +1401,30 @@ void EditorApp::newScene(SceneTemplate which)
 
 // --- discarding the open document --------------------------------------------
 
-void EditorApp::requestDiscard(Discard what, SceneTemplate which)
+void EditorApp::requestDiscard(Discard what)
 {
     if (what == Discard::Quit && mParticlesDirty) {
         ConfirmDialog::open(
             "Discard unsaved particle changes?", mParticles.path(),
-            [this, which] {
+            [this] {
                 mParticlesDirty = false;
-                requestDiscard(Discard::Quit, which);
+                requestDiscard(Discard::Quit);
             },
             "Discard");
         return;
     }
     mDiscardWhat = what;
-    mDiscardTemplate = which;
     // A clean document has nothing to lose, so the prompt would be pure
     // ceremony. Only unsaved work earns an interruption.
-    if (!mState.dirty) {
+    //
+    // Quitting asks about every open tab, not just the visible one: the whole
+    // point of tabs is that work can be sitting in a scene nobody is looking
+    // at, and a prompt that only knew about the front one would discard it
+    // silently.
+    const bool dirty =
+        what == Discard::Quit ? (mState.dirty || mTabs.anyDirty())
+                              : mState.dirty;
+    if (!dirty) {
         performDiscard();
         return;
     }
@@ -1200,49 +1440,27 @@ void EditorApp::performDiscard()
             mEngine->requestClose();
         break;
     case Discard::Reload:
-        if (!mState.scenePath.empty())
+        if (!mState.scenePath.empty()) {
             loadScene(mState.scenePath);
-        break;
-    case Discard::NewScene:
-        newScene(mDiscardTemplate);
-        break;
-    case Discard::Open:
-        if (!mPendingOpen.empty()) {
-            const std::string path = mPendingOpen;
-            mPendingOpen.clear();
-            if (loadScene(path)) {
-                mCommands.clear();
-                mCookStatus = "not cooked";
-                mAutosaveOffered = false;
-                // A recovered backup is not a scene you meant to open: it is
-                // one you meant to *rescue*, and it stops existing the moment
-                // it is saved over the real file.
-                if (!isAutosavePath(path)) {
-                    mRecent.touch(path);
-                    mRecent.save(mRecentFile);
-                }
-                if (autosaveIsStale(path, mState.assetRoot + "/scenes"))
-                    mStatus += "  |  a newer autosave exists -- File > "
-                               "Recover autosave";
-            }
-            else {
-                // A scene that will not open is usually one that moved. Keep
-                // the list honest rather than offering the same dead row again.
-                mRecent.remove(path);
-                mRecent.save(mRecentFile);
-            }
+            mCommands.clear();
+            captureActiveTab();
         }
+        break;
+    case Discard::CloseTab:
+        closeTab(mPendingCloseTab);
         break;
     }
 }
 
+// Opening no longer discards anything: the scene gets a tab. This is still the
+// one path everything else (recent list, palette, console, the open dialog)
+// goes through, so "already open" is decided in one place.
 void EditorApp::requestOpen(const std::string& path)
 {
     if (path.empty())
         return;
-    mPendingOpen = path;
     mOpenSceneOpen = false;
-    requestDiscard(Discard::Open);
+    openSceneInTab(path);
 }
 
 void EditorApp::drawDiscardPopup()
@@ -1256,8 +1474,7 @@ void EditorApp::drawDiscardPopup()
 
     const char* verb = mDiscardWhat == Discard::Quit     ? "Quitting"
                        : mDiscardWhat == Discard::Reload ? "Reloading"
-                       : mDiscardWhat == Discard::Open ? "Opening another scene"
-                                                       : "Starting a new scene";
+                                                         : "Closing this scene";
     ImGui::Text("%s will discard unsaved changes to", verb);
     ImGui::TextUnformatted(mState.scenePath.empty() ? "this untitled scene."
                                                     : mState.scenePath.c_str());
@@ -1329,6 +1546,10 @@ bool EditorApp::saveSceneTo(const std::string& requestedPath)
     mState.scenePath = path.string();
     mCommands.markSaved();
     mState.dirty = false;
+    // The tab is the identity of an open scene, so a Save As has to reach it:
+    // otherwise the tab keeps its "[unsaved]" label and, worse, reopening the
+    // file it was just written to would not recognise it as already open.
+    captureActiveTab();
     mStatus =
         "saved " + std::filesystem::path(mState.scenePath).filename().string();
     return true;
@@ -1346,11 +1567,10 @@ bool EditorApp::cookScene(std::string& mapPath)
         mCookStatus = "blocked";
         return false;
     }
-    std::filesystem::path target(mState.scenePath.empty()
-                                     ? mState.assetRoot + "/scenes/untitled.scn"
-                                     : mState.scenePath);
-    target.replace_extension(".map");
-    mapPath = target.string();
+    // Beside the .scn normally; inside the project's work directory when one is
+    // open, because a cooked map is a build product and a build product in
+    // somebody's source tree is one they have to gitignore.
+    mapPath = mProject.cookTarget(mState.scenePath, mState.assetRoot);
 
     std::string error;
     if (!cookToMap(mState.document, mState.catalog, mapPath, error)) {
@@ -1363,11 +1583,71 @@ bool EditorApp::cookScene(std::string& mapPath)
     return true;
 }
 
+// --- projects ---------------------------------------------------------------
+//
+// Opening a project repoints the editor's content root at somebody else's
+// tree. Everything downstream -- where a new scene saves, what validate()
+// checks a mesh against, where a cook lands -- already reads that one string,
+// so this is deliberately the whole of the change rather than a parallel set
+// of project-aware paths.
+
+void EditorApp::openProject(const std::string& dir)
+{
+    if (!mProject.open(dir)) {
+        mStatus = "not a project: " + dir;
+        return;
+    }
+    mProject.saveRecents(mProjectRecentsFile);
+    mState.assetRoot = mProject.contentRoot(mState.assetRoot);
+    mStatus = "opened project " + mProject.project().name;
+    // Its main scene, because that is what a project says it is about. A
+    // project whose main scene will not open still counts as open -- the
+    // author is most likely on their way to fixing exactly that.
+    openSceneInTab(mProject.mainScenePath());
+}
+
+void EditorApp::newProject()
+{
+    const std::string dir = mProjectPath;
+    if (dir.empty()) {
+        mStatus = "give the project a directory";
+        return;
+    }
+    if (!mProject.create(dir, mProjectName)) {
+        mStatus = "could not create a project at " + dir;
+        return;
+    }
+    mProject.saveRecents(mProjectRecentsFile);
+    mState.assetRoot = mProject.contentRoot(mState.assetRoot);
+    mNewProjectOpen = false;
+    mStatus = "created project " + mProject.project().name;
+    openSceneInTab(mProject.mainScenePath());
+}
+
+void EditorApp::closeProject()
+{
+    mProject.close();
+    // Back to the tree this editor ships beside, which is what "no project" has
+    // always meant here.
+    mState.assetRoot = eng::assets::packDir("content").string();
+    mStatus = "closed the project";
+}
+
 void EditorApp::runPlaytest()
 {
     if (mPlaytest.running()) {
         stopGame(mPlaytest);
         mStatus = "playtest stopped";
+        return;
+    }
+    // The contract's one hard rule: a scene with no view and no player spawn
+    // loads, cooks, plays and shows nothing. Launching it produced a black
+    // window and no explanation, which is the failure docs/scenes.md was
+    // written to make loud -- so this is where it gets made loud.
+    if (!contract().playable) {
+        mStatus = "this scene has nothing to look through -- see the Contract "
+                  "panel";
+        requestPanelFocus("contract");
         return;
     }
     // F5 means "play what is on screen". The particle panel edits the live
@@ -1397,7 +1677,18 @@ void EditorApp::runPlaytest()
     if (!cookScene(mapPath))
         return;
 
-    const std::string exe = siblingExecutable(mExecutablePath, "game");
+    // Which runtime plays it. A project plays on raven_player, which links no
+    // game code at all -- that is the whole point of a project -- and the
+    // content tree this editor ships beside plays on the game, as it always
+    // has. The argument differs to match: the player is handed the project
+    // directory so it mounts the project's content, and told which map to open
+    // through the environment, the same way every other playtest option is
+    // passed.
+    const bool project = mProject.isOpen();
+    const std::string exe =
+        siblingExecutable(mExecutablePath, project ? "raven_player" : "game");
+    const std::string target =
+        project ? mProject.project().dir.string() : mapPath;
     // Under artifacts/, with every other generated file, rather than dropped in
     // the project root. Asked for by name -- this used to climb "/../.." out of
     // an asset path, which only worked because of where the tree happened to
@@ -1431,7 +1722,11 @@ void EditorApp::runPlaytest()
     options.console = mSettings.playtestConsole;
     options.colliders = mSettings.playtestColliders;
     options.fullscreen = mSettings.playtestFullscreen;
-    mPlaytest = launchGame(exe, mapPath, log, playtestEnvironment(options));
+    // F5 means "play what is on screen", which for a project is the scene in
+    // the active tab rather than whatever the project calls its main.
+    if (project)
+        options.playMap = mapPath;
+    mPlaytest = launchGame(exe, target, log, playtestEnvironment(options));
     if (!mPlaytest.running()) {
         mStatus = mPlaytest.error;
         return;
@@ -1680,6 +1975,14 @@ void EditorApp::runSelfTest(eng::Engine& engine)
 
 void EditorApp::applySettings()
 {
+    // The editor's own theme, applied here rather than left to the engine
+    // default: the game's debug UI and this share one imgui context but not one
+    // job, and the shell drawn above is Godot's arrangement wearing Godot's
+    // palette. Unknown ids fall back rather than failing, so a settings file
+    // naming a theme that has been removed still opens.
+    if (!eng::imguitheme::apply(mSettings.theme))
+        eng::imguitheme::apply("godot_dark");
+
     mGameLighting = mSettings.gameLighting;
     mShowEntityGizmos = mSettings.entityMarks;
     mShowGizmoVolumes = mSettings.volumeMarks;
@@ -1895,20 +2198,33 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
     // authoritative, so a fast Ctrl chord cannot leak its bare letter action.
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_P))
         openPalette(mPalette);
+    // Ctrl+1..3 are the main screens, Ctrl+4.. the docks. Godot's split, and
+    // the reason for it is that switching what the centre shows is a different
+    // and far more frequent act than bringing a side panel forward.
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_1))
-        requestPanelFocus("viewport");
+        setMainScreen(MainScreen::Scene3D);
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_2))
-        requestPanelFocus("catalog");
+        setMainScreen(MainScreen::Screen2D);
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_3))
-        requestPanelFocus("outliner");
+        setMainScreen(MainScreen::Material);
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_4))
-        requestPanelFocus("inspector");
+        requestPanelFocus("outliner");
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_5))
-        requestPanelFocus("ui");
+        requestPanelFocus("catalog");
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_6))
-        requestPanelFocus("issues");
+        requestPanelFocus("inspector");
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_7))
+        requestPanelFocus("contract");
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_8))
         requestPanelFocus("layers");
+    // Scene tabs.
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_N))
+        mNewSceneOpen = true;
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_W))
+        requestCloseTab(mTabs.active());
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Tab) &&
+        mTabs.size() > 1)
+        activateTab((mTabs.active() + 1) % mTabs.size());
 
     // Navigation, Gregory §15.4.1.3. Alt rather than Ctrl for the bookmarks
     // because Ctrl+digit is already panel focus above, and Alt+arrow is the
@@ -2020,7 +2336,7 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
         if (!interactionActive && plain && input.wasPressed("help"))
             mHelpOpen = !mHelpOpen;
         if (!interactionActive && plain && input.wasPressed("dev_console"))
-            mConsole.toggle();
+            mBottom.toggle(BottomTab::Output);
     }
 
     if (!input.wasPressed("quit"))
@@ -2065,10 +2381,9 @@ void EditorApp::handleShortcuts(const eng::FrameContext& f)
 void EditorApp::installConsoleCommands()
 {
     mConsole.captureEngineLog();
-    // Open by default, because the workspace docks it beside Problems and a
-    // hidden window has no tab: the diagnostics rail showed one tab and looked
-    // like the editor had no console, when it had one behind a backtick nobody
-    // presses. Both answer "what is wrong", so both are one click apart.
+    // The console is a bottom-panel body now, so its own visible flag no longer
+    // gates it -- drawBody ignores it and drains the log regardless. Set anyway
+    // so anything that still asks (the palette's "Console" verb) reads true.
     mConsole.setVisible(true);
     mConsole.registerCommand("quit", "close the editor",
                              [this](const eng::DebugConsole::Args&) {
@@ -2361,10 +2676,18 @@ std::vector<PaletteAction> EditorApp::paletteActions()
     };
 
     // --- scene ---------------------------------------------------------------
-    for (const SceneTemplate which :
-         {SceneTemplate::Empty, SceneTemplate::Room, SceneTemplate::TechDemo}) {
-        add(std::string("New scene: ") + sceneTemplateName(which), "scene", "",
-            true, [this, which] { requestDiscard(Discard::NewScene, which); });
+    add("New scene...", "scene", "Ctrl+N", true,
+        [this] { mNewSceneOpen = true; });
+    add("Close scene", "scene", "Ctrl+W", true,
+        [this] { requestCloseTab(mTabs.active()); });
+    // Switching between the scenes already open, by name. The palette is the
+    // only surface that reaches a background tab without the mouse.
+    for (std::size_t i = 0; i < mTabs.size(); ++i) {
+        if (i == mTabs.active())
+            continue;
+        add(
+            "Go to " + sceneTabName(mTabs.at(i)), "scene", "", true,
+            [this, i] { activateTab(i); }, "open scene");
     }
     add("Open scene...", "scene", "Ctrl+O", true,
         [this] { mOpenSceneOpen = true; });
@@ -2492,7 +2815,18 @@ std::vector<PaletteAction> EditorApp::paletteActions()
                 enterIsolation(*id);
         },
         "edit one object alone on the grid");
-    add("Console", "view", "`", true, [this] { mConsole.toggle(); });
+    add("Console", "view", "`", true,
+        [this] { mBottom.toggle(BottomTab::Output); });
+    add("Problems", "view", "", true,
+        [this] { mBottom.toggle(BottomTab::Problems); });
+    add("Timeline", "view", "", true,
+        [this] { mBottom.toggle(BottomTab::Timeline); });
+    for (int i = 0; i < kMainScreenCount; ++i) {
+        const MainScreen screen = MainScreen(i);
+        add(std::string("Main screen: ") + mainScreenName(screen), "view",
+            "Ctrl+" + std::to_string(i + 1), true,
+            [this, screen] { setMainScreen(screen); });
+    }
     add("Shortcuts", "view", "F1", true, [this] { mHelpOpen = !mHelpOpen; });
     add("Settings", "view", "", true,
         [this] { mSettingsOpen = !mSettingsOpen; });
@@ -2569,14 +2903,28 @@ void EditorApp::onGui(const eng::FrameContext& f)
                      ImGuiWindowFlags_NoDocking);
     ImGui::PopStyleVar(3);
 
-    drawMenuBar(f);
+    // The top bar: menus, the main-screen switcher, the play controls. One row,
+    // three zones, laid out by ed::layoutTopBar.
+    drawTopBar(f);
+    // Open scenes, directly under it and spanning the window -- the tabs are
+    // about the whole editor, not about the panel they sit over.
+    drawSceneTabBar();
 
-    // Reserve a persistent one-line status strip below the dockspace. Status is
-    // workspace context, not a diagnostic tab that vanishes behind Console.
+    // What is left is shared between the dockspace, the bottom panel and the
+    // status line, in that order from the top.
     const ImVec2 content = ImGui::GetContentRegionAvail();
+    // One row at the foot, holding the bottom panel's buttons on the left and
+    // the scene context on the right. Godot's arrangement, and it saves the row
+    // a separate button strip would have cost.
     const float statusHeight =
         ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y * 2.0f;
-    const ImVec2 dockSize(content.x, std::max(content.y - statusHeight, 1.0f));
+    const float workspaceHeight = std::max(content.y - statusHeight, 1.0f);
+    // A minimum of roughly six rows of text: below that the console shows its
+    // toolbar and nothing else, which is a panel pretending to be open.
+    const float bottomHeight = bottomPanelHeight(
+        mBottom, workspaceHeight, ImGui::GetTextLineHeightWithSpacing() * 6.0f);
+    const ImVec2 dockSize(content.x,
+                          std::max(workspaceHeight - bottomHeight, 1.0f));
 
     // The version is bumped whenever the shipped topology changes, because a
     // saved .ini wins over the builder: without a new id, an author who has run
@@ -2590,7 +2938,10 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // leave it floating over the viewport -- cannot override the new topology.
     // v6: the Timeline joined the bottom rail beside Problems and Console, for
     // exactly the same reason -- a saved v5 layout has no node for it.
-    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v6");
+    // v7: the Godot workspace. Four of the six windows changed name, the
+    // Command Bar stopped existing, Contract and History are new, and the whole
+    // bottom rail left the dockspace -- a v6 layout can satisfy none of it.
+    const ImGuiID dock = ImGui::GetID("##raven_editor_dock_v7");
     if (!mLayoutBuilt || mResetLayoutRequested) {
         const bool missing = ImGui::DockBuilderGetNode(dock) == nullptr ||
                              ImGui::DockBuilderGetNode(dock)->IsEmpty();
@@ -2605,13 +2956,13 @@ void EditorApp::onGui(const eng::FrameContext& f)
     // No passthru: the central node is the viewport image, not a window onto
     // whatever the main camera happens to be pointing at.
     ImGui::DockSpace(dock, dockSize, ImGuiDockNodeFlags_None);
+    drawBottomPanel(f, bottomHeight);
     drawStatusBar();
     ImGui::End();
 
     if (mFocusPanelFrames > 0)
         --mFocusPanelFrames;
 
-    drawToolbar();
     drawViewport(f);
     // Deferred from the environment hook: framing an elevation needs the open
     // document and a measured viewport, and neither exists when onLoad reads
@@ -2624,15 +2975,16 @@ void EditorApp::onGui(const eng::FrameContext& f)
     drawOutliner();
     drawLayers();
     drawInspector();
+    drawContract();
+    drawHistory();
     // Browser owns shared preview RTT when visible; draw it after Inspector so
     // Materials/Effects mode cannot show one subject under another label.
     drawAssetBrowser();
-    drawIssues();
-    drawTimeline();
-    mConsole.draw();
     drawHelp();
     drawSettings();
     captureSettings();
+    drawNewScenePopup();
+    drawProjectPopup();
     drawSaveAsPopup();
     drawLayerIoPopup();
     drawImportModelPopup();
@@ -2652,24 +3004,295 @@ void EditorApp::onGui(const eng::FrameContext& f)
         mPreview->sync(mState.document, mState.catalog);
 }
 
-void EditorApp::drawMenuBar(const eng::FrameContext& f)
+// The top bar: one row, three zones.
+//
+// Menus at the left, the main-screen switcher centred on the *window* and the
+// play controls hard right -- Godot's, and the reason to copy it exactly is
+// that the switcher's position is what makes it findable. Centred on the space
+// the menus leave over, it would slide sideways every time a menu name changed
+// length, and an author would have to look for it each session.
+//
+// The two moving zones are measured before anything is drawn, because ImGui
+// lays a menu bar out left to right and cannot reserve space it has not
+// reached yet.
+void EditorApp::drawTopBar(const eng::FrameContext& f)
 {
     if (!ImGui::BeginMenuBar())
         return;
-    if (ImGui::BeginMenu("File")) {
-        if (ImGui::BeginMenu("New")) {
-            // The same templates scene_cook --template generates, so what the
-            // menu builds and what ships in assets/scenes cannot diverge.
-            for (const SceneTemplate which :
-                 {SceneTemplate::Empty, SceneTemplate::Room,
-                  SceneTemplate::TechDemo}) {
-                if (ImGui::MenuItem(sceneTemplateName(which)))
-                    requestDiscard(Discard::NewScene, which);
+
+    drawMenuBar(f);
+    const float menusEnd = ImGui::GetCursorPosX();
+
+    const float switcherWidth = drawMainScreenSwitcher(true);
+    const float playWidth = drawPlayControls(true);
+    const TopBarLayout layout =
+        layoutTopBar(ImGui::GetWindowWidth(), menusEnd, switcherWidth,
+                     playWidth, ImGui::GetStyle().ItemSpacing.x * 2.0f);
+
+    if (layout.switcherFits) {
+        ImGui::SetCursorPosX(layout.switcherX);
+        drawMainScreenSwitcher(false);
+    }
+    ImGui::SetCursorPosX(layout.playX);
+    drawPlayControls(false);
+
+    ImGui::EndMenuBar();
+}
+
+float EditorApp::drawMainScreenSwitcher(bool measureOnly)
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    static constexpr MainScreen kScreens[kMainScreenCount] = {
+        MainScreen::Scene3D, MainScreen::Screen2D, MainScreen::Material};
+
+    if (measureOnly) {
+        float width = 0.0f;
+        for (int i = 0; i < kMainScreenCount; ++i) {
+            width += ImGui::CalcTextSize(mainScreenName(kScreens[i])).x +
+                     style.FramePadding.x * 2.0f;
+            if (i > 0)
+                width += style.ItemSpacing.x;
+        }
+        return width;
+    }
+
+    for (int i = 0; i < kMainScreenCount; ++i) {
+        if (i > 0)
+            ImGui::SameLine();
+        const MainScreen screen = kScreens[i];
+        const bool active = mScreen == screen;
+        // The selected screen wears the accent, which is the one place in this
+        // bar that colour means "you are here". Everything else is grey.
+        if (active)
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  ImGui::GetStyleColorVec4(ImGuiCol_Header));
+        if (ImGui::Button(mainScreenName(screen)))
+            setMainScreen(screen);
+        if (active)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s  [Ctrl+%d]\n%s", mainScreenName(screen),
+                              i + 1, mainScreenSummary(screen));
+        }
+    }
+    return 0.0f;
+}
+
+// Play, Stop and Cook, hard right. Play is refused -- visibly, with the reason
+// -- when the contract says nothing in the scene can be looked through: that is
+// the failure this whole vocabulary exists to make loud, and letting F5 launch
+// a black window instead is how it stayed quiet.
+float EditorApp::drawPlayControls(bool measureOnly)
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const bool running = mPlaytest.running();
+    const char* playLabel = running ? "Stop" : "Play";
+
+    if (measureOnly) {
+        return ImGui::CalcTextSize(playLabel).x + style.FramePadding.x * 2.0f +
+               style.ItemSpacing.x + ImGui::CalcTextSize("Cook").x +
+               style.FramePadding.x * 2.0f;
+    }
+
+    const ContractReport& report = contract();
+    const bool blocked = !running && !report.playable;
+    ImGui::BeginDisabled(blocked);
+    if (blocked)
+        ImGui::PushStyleColor(ImGuiCol_Text, kUiDanger);
+    else if (running)
+        ImGui::PushStyleColor(ImGuiCol_Button, kUiWarning);
+    if (ImGui::Button(playLabel))
+        runPlaytest();
+    if (blocked || running)
+        ImGui::PopStyleColor();
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        if (blocked) {
+            ImGui::SetTooltip("This scene has nothing to look through.\n"
+                              "The Contract panel says what is missing, and "
+                              "has the button that fills it.");
+        }
+        else {
+            ImGui::SetTooltip(running ? "F5 -- stop the running playtest"
+                                      : "F5 -- save, cook and launch this "
+                                        "scene");
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Cook")) {
+        std::string mapPath;
+        cookScene(mapPath);
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("F6 -- cook to a .map without launching");
+    return 0.0f;
+}
+
+// Open scenes.
+//
+// The tabs are the visible half of the thing that made opening a scene stop
+// being destructive (see SceneTabs.h). The invisible half is that mState is
+// only ever a mirror of the active tab, which is why no panel below here had to
+// change.
+void EditorApp::drawSceneTabBar()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(ImGui::GetStyle().FramePadding.x,
+                               ImGui::GetStyle().FramePadding.y * 0.8f));
+    if (ImGui::BeginTabBar("##scene_tabs",
+                           ImGuiTabBarFlags_FittingPolicyScroll |
+                               ImGuiTabBarFlags_TabListPopupButton)) {
+        // Resolved after the loop: activating or closing inside it would
+        // reallocate the tab vector while the bar is still walking it.
+        std::size_t activate = mTabs.size();
+        std::size_t close = mTabs.size();
+
+        for (std::size_t i = 0; i < mTabs.size(); ++i) {
+            const SceneTab& tab = mTabs.at(i);
+            // The uid, not the index, is the imgui id: closing a tab shifts
+            // every index after it, and a positional id would make the
+            // survivors inherit each other's scroll and selection state.
+            const std::string label =
+                sceneTabName(tab) + (tab.dirty ? "  \xe2\x80\xa2" : "") +
+                "###scene_tab" + std::to_string(tab.uid);
+            bool open = true;
+            ImGuiTabItemFlags flags = 0;
+            if (i == mTabs.active() && mTabBarFollowsActive)
+                flags |= ImGuiTabItemFlags_SetSelected;
+            if (ImGui::BeginTabItem(label.c_str(), &open, flags)) {
+                if (i != mTabs.active())
+                    activate = i;
+                ImGui::EndTabItem();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s%s", sceneTabTooltip(tab).c_str(),
+                                  tab.dirty ? "\nunsaved changes" : "");
+            }
+            if (!open)
+                close = i;
+        }
+        mTabBarFollowsActive = false;
+
+        if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing |
+                                          ImGuiTabItemFlags_NoTooltip))
+            mNewSceneOpen = true;
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("New scene  [Ctrl+N]");
+
+        ImGui::EndTabBar();
+
+        if (activate < mTabs.size())
+            activateTab(activate);
+        if (close < mTabs.size())
+            requestCloseTab(close);
+    }
+    ImGui::PopStyleVar();
+}
+
+// The bottom panel's body and the handle that resizes it. The buttons that open
+// it live in the status row below (drawStatusBar), which is where Godot puts
+// them and is one row cheaper than a strip of their own.
+void EditorApp::drawBottomPanel(const eng::FrameContext& f, float height)
+{
+    if (height <= 0.0f)
+        return;
+
+    // The drag handle, in the gap the dockspace above just ended at.
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+    ImGui::InvisibleButton("##bottom_splitter",
+                           ImVec2(-1.0f, std::max(4.0f, 5.0f * mAppliedUiScale)));
+    ImGui::PopStyleVar();
+    const bool hovered = ImGui::IsItemHovered();
+    mBottomResizing = ImGui::IsItemActive();
+    if (hovered || mBottomResizing)
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    if (mBottomResizing)
+        mBottom.height -= ImGui::GetIO().MouseDelta.y;
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+        ImGui::GetColorU32(mBottomResizing ? ImGuiCol_SeparatorActive
+                           : hovered      ? ImGuiCol_SeparatorHovered
+                                          : ImGuiCol_Separator));
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(8.0f * mAppliedUiScale, 6.0f * mAppliedUiScale));
+    if (ImGui::BeginChild("##bottom_body", ImVec2(0.0f, height),
+                          ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_HorizontalScrollbar)) {
+        switch (BottomTab(mBottom.open)) {
+        case BottomTab::Output:
+            mConsole.drawBody();
+            break;
+        case BottomTab::Problems:
+            drawIssues();
+            break;
+        case BottomTab::Timeline:
+            drawTimeline();
+            break;
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    (void)f;
+}
+
+void EditorApp::drawMenuBar(const eng::FrameContext& f)
+{
+    // "Scene" rather than "File", which is Godot's name for it and the more
+    // honest one: everything in it is about the open scene, and the editor has
+    // no other kind of document to confuse it with.
+    // A project is a *different* document from a scene -- it is the game, and
+    // the scenes are its contents -- so it gets its own menu rather than three
+    // more entries under Scene. Godot draws the same line.
+    if (ImGui::BeginMenu("Project")) {
+        if (ImGui::MenuItem("New project...")) {
+            mNewProjectOpen = true;
+            std::snprintf(mProjectPath, sizeof(mProjectPath), "%s",
+                          (std::filesystem::path(
+                               eng::assets::project() / "projects" / "my-game")
+                               .string())
+                              .c_str());
+            std::snprintf(mProjectName, sizeof(mProjectName), "My Game");
+        }
+        if (ImGui::MenuItem("Open project...")) {
+            mOpenProjectOpen = true;
+            mProjectPath[0] = '\0';
+        }
+        if (ImGui::BeginMenu("Open recent project",
+                             !mProject.recents().empty())) {
+            for (const std::string& dir : mProject.recents()) {
+                const std::string name =
+                    std::filesystem::path(dir).filename().string();
+                if (ImGui::MenuItem(name.c_str()))
+                    openProject(dir);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", dir.c_str());
             }
             ImGui::EndMenu();
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Close project", nullptr, false,
+                            mProject.isOpen()))
+            closeProject();
+        if (mProject.isOpen()) {
+            ImGui::Separator();
+            ImGui::TextDisabled("%s", mProject.project().name.c_str());
+            ImGui::TextDisabled("%s", mProject.project().dir.c_str());
+            ImGui::TextDisabled("plays on raven_player");
+        } else {
+            ImGui::Separator();
+            ImGui::TextDisabled("no project -- editing the shipped content");
+        }
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Scene")) {
+        if (ImGui::MenuItem("New scene...", "Ctrl+N"))
+            mNewSceneOpen = true;
         if (ImGui::MenuItem("Open...", "Ctrl+O"))
             mOpenSceneOpen = true;
+        if (ImGui::MenuItem("Close scene", "Ctrl+W"))
+            requestCloseTab(mTabs.active());
         if (ImGui::MenuItem("Import model...")) {
             mImportModelOpen = true;
             // Nothing preselected: the dialog lists what is actually there now,
@@ -2685,6 +3308,20 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
                     requestOpen(path);
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("%s", path.c_str());
+            }
+            ImGui::EndMenu();
+        }
+        // Switching between what is already open. The tab bar is the fast way;
+        // this exists so the set is reachable without a mouse, and so a very
+        // narrow window (where the bar scrolls) still lists all of them.
+        if (ImGui::BeginMenu("Open scenes", mTabs.size() > 1)) {
+            for (std::size_t i = 0; i < mTabs.size(); ++i) {
+                const SceneTab& tab = mTabs.at(i);
+                const std::string label =
+                    sceneTabName(tab) + (tab.dirty ? "  *" : "");
+                if (ImGui::MenuItem(label.c_str(), nullptr,
+                                    i == mTabs.active()))
+                    activateTab(i);
             }
             ImGui::EndMenu();
         }
@@ -2736,13 +3373,11 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             duplicateSelection();
         if (ImGui::MenuItem("Delete", "Del", false, !mState.selection.empty()))
             deleteSelection();
-        ImGui::Separator();
-        // Preferences, under Edit where every other editor keeps them. The
-        // autosave interval used to be a constant in this file.
-        ImGui::MenuItem("Settings...", nullptr, &mSettingsOpen);
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Play")) {
+    // Godot's Debug menu: what a playtest is launched WITH. The launch itself
+    // is the button at the top right, not an item buried in a menu.
+    if (ImGui::BeginMenu("Debug")) {
         if (ImGui::MenuItem(mPlaytest.running() ? "Stop playtest" : "Run",
                             "F5"))
             runPlaytest();
@@ -2866,9 +3501,90 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
         }
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Window")) {
+    // "Editor": everything about the tool rather than about the scene, which is
+    // the split Godot draws and the one that stops this from being a Window
+    // menu with the preferences hidden at the bottom of it.
+    if (ImGui::BeginMenu("Editor")) {
         if (ImGui::MenuItem("Command palette", "Ctrl+P"))
             openPalette(mPalette);
+        ImGui::MenuItem("Editor settings...", nullptr, &mSettingsOpen);
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Main screen")) {
+            for (int i = 0; i < kMainScreenCount; ++i) {
+                const MainScreen screen = MainScreen(i);
+                const std::string key = "Ctrl+" + std::to_string(i + 1);
+                if (ImGui::MenuItem(mainScreenName(screen), key.c_str(),
+                                    mScreen == screen))
+                    setMainScreen(screen);
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Docks")) {
+            if (ImGui::MenuItem("Scene tree", "Ctrl+4"))
+                requestPanelFocus("outliner");
+            if (ImGui::MenuItem("FileSystem", "Ctrl+5"))
+                requestPanelFocus("catalog");
+            if (ImGui::MenuItem("Inspector", "Ctrl+6"))
+                requestPanelFocus("inspector");
+            if (ImGui::MenuItem("Contract", "Ctrl+7"))
+                requestPanelFocus("contract");
+            if (ImGui::MenuItem("Layers", "Ctrl+8"))
+                requestPanelFocus("layers");
+            if (ImGui::MenuItem("History"))
+                requestPanelFocus("history");
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Bottom panel")) {
+            for (int i = 0; i < kBottomTabCount; ++i) {
+                const BottomTab tab = BottomTab(i);
+                if (ImGui::MenuItem(bottomTabName(tab),
+                                    tab == BottomTab::Output ? "`" : nullptr,
+                                    mBottom.isOpen(tab)))
+                    mBottom.toggle(tab);
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Reset workspace"))
+            mResetLayoutRequested = true;
+        ImGui::EndMenu();
+    }
+    // Everything about what the viewport SHOWS, which is a question about
+    // looking rather than about editing -- and the reason the Command Bar panel
+    // stopped existing. Duplicated deliberately in the viewport's own toolbar,
+    // where an author flipping them while placing actually reaches for them;
+    // this copy is for discovery and for the keyboard.
+    if (ImGui::BeginMenu("View")) {
+        // The look the game will ship with, switchable while authoring. A room
+        // that reads under flat editor light and disappears under the dungeon
+        // profile is a room that has not been checked -- and the check used to
+        // require cooking the map and launching the game.
+        if (ImGui::BeginMenu("Render preset")) {
+            const int current = mEngine ? mEngine->renderPreset() : 0;
+            for (const eng::RenderPresetInfo& preset : eng::renderPresets()) {
+                if (ImGui::MenuItem(preset.name, nullptr,
+                                    preset.id == current) &&
+                    mEngine)
+                    mEngine->setRenderPreset(preset.id);
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Scene lighting", nullptr, mGameLighting)) {
+            mGameLighting = !mGameLighting;
+            if (mEngine)
+                applySceneEnvironment(mEngine->renderer());
+        }
+        ImGui::Separator();
+        ImGui::MenuItem("Entity marks", nullptr, &mShowEntityGizmos);
+        ImGui::MenuItem("Trigger and light volumes", nullptr,
+                        &mShowGizmoVolumes);
+        ImGui::MenuItem("Frame stats", nullptr, &mShowFrameStats);
+        ImGui::MenuItem("Viewport grid", nullptr, &mShowGrid);
+        ImGui::Separator();
+        ImGui::MenuItem("Snap to grid", "G", &mState.gridState.snap);
+        if (ImGui::MenuItem("Frame selection", "F"))
+            frameSelectionOrAll();
+        if (ImGui::MenuItem("Walk the scene", "V", mState.camera.walking()))
+            toggleWalk();
         ImGui::Separator();
         // Navigation history and bookmarks, Gregory §15.4.1.3.
         if (ImGui::MenuItem("Back", "Alt+Left", false,
@@ -2896,32 +3612,245 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             }
             ImGui::EndMenu();
         }
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Help")) {
+        ImGui::MenuItem("Keyboard shortcuts", "F1", &mHelpOpen);
+        ImGui::EndMenu();
+    }
+}
+
+// The viewport's own toolbar: one row across the top of the 3D view.
+//
+// This used to be two strips in two places -- a docked "Command Bar" panel at
+// the very top of the window holding the tools, the grid and the transform
+// space, and a second row inside the viewport holding the view toggles. The
+// split was defensible on paper (edits above, ways of looking below) and
+// unusable in practice: choosing a tool and choosing what that tool snaps to
+// are one thought, and they were four hundred pixels apart with a scene view
+// between them.
+//
+// Godot's answer, and now this one: everything that acts on the viewport lives
+// on the viewport, and the row stays short by putting the settings behind three
+// named menus rather than spelling every one of them out.
+//
+//   [select][place][room] | [move][rotate][scale] | Transform | Snap | View
+//                                     ... [3D][Top][Front][Side] [Frame][Walk]
+namespace {
+
+// A toolbar menu: a button that opens a popup under itself. Godot's viewport
+// menus, and the reason the row fits on a 1280px window.
+bool toolbarMenu(const char* label)
+{
+    if (ImGui::Button(label))
+        ImGui::OpenPopup(label);
+    return ImGui::BeginPopup(label);
+}
+
+} // namespace
+
+void EditorApp::drawViewportToolbar()
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
+
+    const float icon = 18.0f;
+
+    // --- what the pointer does -----------------------------------------------
+    if (iconButton(Icon::Select, "##tool_select",
+                   "Select  [Q]\nPick without transform handles",
+                   mState.tool == Tool::Select && mGizmoOperation < 0, icon)) {
+        mState.tool = Tool::Select;
+        mGizmoOperation = -1;
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(materialMode() || mGizmoDragging);
+    if (iconButton(Icon::Move, "##gizmo_move",
+                   "Move  [W]\nTranslate the selection",
+                   mState.tool == Tool::Select && mGizmoOperation == 0, icon)) {
+        mState.tool = Tool::Select;
+        mGizmoOperation = 0;
+    }
+    ImGui::SameLine();
+    if (iconButton(Icon::Rotate, "##gizmo_rotate",
+                   "Rotate  [E]\nRotate the selection",
+                   mState.tool == Tool::Select && mGizmoOperation == 1, icon)) {
+        mState.tool = Tool::Select;
+        mGizmoOperation = 1;
+    }
+    ImGui::SameLine();
+    if (iconButton(Icon::Scale, "##gizmo_scale",
+                   "Scale  [R]\nScale the selection",
+                   mState.tool == Tool::Select && mGizmoOperation == 2, icon)) {
+        mState.tool = Tool::Select;
+        mGizmoOperation = 2;
+    }
+    ImGui::EndDisabled();
+
+    // The viewport cannot scroll -- it is an image, and a scrollbar over it
+    // would move the image rather than the toolbar -- so every run below wraps
+    // instead. The alternative is the last control silently falling off a
+    // narrow viewport, which is where "Room" and the walk toggle used to go.
+    if (ui::sameLineIfItFits(ui::buttonWidth("|") +
+                             ui::iconRowWidth(icon, 2))) {
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+    }
+
+    // --- what the pointer builds ---------------------------------------------
+    ImGui::BeginDisabled(materialMode());
+    if (iconButton(Icon::Place, "##tool_place",
+                   "Place  [P]\nPaint the FileSystem panel's current brush",
+                   mState.tool == Tool::Place, icon))
+        mState.tool = Tool::Place;
+    ImGui::SameLine();
+    if (iconButton(Icon::Room, "##tool_room",
+                   "Room  [B]\nDrag out a complete room rectangle",
+                   mState.tool == Tool::Room, icon))
+        mState.tool = Tool::Room;
+    ImGui::EndDisabled();
+
+    if (ui::sameLineIfItFits(ui::buttonWidth("|") +
+                             ui::buttonWidth("Transform"))) {
+        ImGui::TextDisabled("|");
+        ImGui::SameLine();
+    }
+
+    // --- Transform ------------------------------------------------------------
+    // The gizmo's frame of reference, and the batch operations that move a
+    // selection without one. Both answer "how does this move", which is why
+    // they are one menu rather than a toggle and a top-level menu.
+    if (toolbarMenu("Transform")) {
+        if (materialMode()) {
+            ImGui::TextDisabled("the stage turns about Y");
+        }
+        else if (mGizmoOperation < 0) {
+            ImGui::TextDisabled("pick only -- choose Move, Rotate or Scale");
+        }
+        else {
+            const bool worldForced = mState.selection.size() > 1;
+            const bool localForced = mGizmoOperation == 2 && !worldForced;
+            ImGui::BeginDisabled(mGizmoDragging || worldForced || localForced);
+            if (ImGui::MenuItem("World axes", "X", !mGizmoLocal))
+                mGizmoLocal = false;
+            if (ImGui::MenuItem("Local axes", "X", mGizmoLocal))
+                mGizmoLocal = true;
+            ImGui::EndDisabled();
+            if (worldForced)
+                ImGui::TextDisabled("multiple objects always use world axes");
+            else if (localForced)
+                ImGui::TextDisabled("scale is always local");
+        }
         ImGui::Separator();
-        if (ImGui::MenuItem("Reset workspace"))
-            mResetLayoutRequested = true;
+        const bool many = mState.selection.size() > 1;
+        const bool any = !mState.selection.empty();
+        if (ImGui::BeginMenu("Align", many)) {
+            struct Row { const char* label; align::Mode mode; };
+            static const Row kRows[] = {{"min", align::Mode::Min},
+                                        {"centre", align::Mode::Centre},
+                                        {"max", align::Mode::Max}};
+            for (const align::Axis axis :
+                 {align::Axis::X, align::Axis::Y, align::Axis::Z}) {
+                if (!ImGui::BeginMenu(align::axisName(axis)))
+                    continue;
+                for (const Row& row : kRows)
+                    if (ImGui::MenuItem(row.label))
+                        alignSelection(axis, row.mode);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Distribute evenly", mState.selection.size() > 2)) {
+            for (const align::Axis axis :
+                 {align::Axis::X, align::Axis::Y, align::Axis::Z})
+                if (ImGui::MenuItem(align::axisName(axis)))
+                    distributeSelection(axis);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Drop to surface", nullptr, false, any))
+            dropSelectionToSurface();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("rests each entity's underside on whatever is "
+                              "below it");
+        ImGui::EndPopup();
+    }
+
+    // --- Snap -----------------------------------------------------------------
+    // The grid step, the work plane and the storey cut. The button's own label
+    // is the live step, so the setting is readable without opening it -- a
+    // coarse grid that silently changed meaning is exactly the failure the
+    // "(drawn x2)" note below was written for.
+    ui::sameLineIfItFits(ui::buttonWidth("Snap 0.25 m"));
+    {
+        char label[64];
+        std::snprintf(label, sizeof(label), "%s %.2g m###snap",
+                      mState.gridState.snap ? "Snap" : "Free",
+                      double(mState.gridState.step()));
+        if (mState.gridState.snap)
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  ImGui::GetStyleColorVec4(ImGuiCol_Header));
+        const bool open = toolbarMenu(label);
+        if (mState.gridState.snap)
+            ImGui::PopStyleColor();
+        if (open) {
+            ImGui::Checkbox("snap to grid  [G]", &mState.gridState.snap);
+            eng::imguihint::hover(
+                "editor.grid.snap",
+                "Off, pieces land exactly where the cursor is.");
+            ImGui::Separator();
+            ImGui::Text("grid  %.2g m", double(mState.gridState.step()));
+            if (mGridMultiple > 1) {
+                // The drawn grid coarsened with the camera's height. Say so: a
+                // line spacing that silently changes meaning is worse than no
+                // grid at all.
+                ImGui::SameLine();
+                ImGui::TextDisabled("(drawn x%d)", mGridMultiple);
+            }
+            if (ImGui::SmallButton("coarser  [ [ ]"))
+                mState.gridState.coarser();
+            ImGui::SameLine();
+            if (ImGui::SmallButton("finer  [ ] ]"))
+                mState.gridState.finer();
+            ImGui::Separator();
+            ImGui::Text("work plane  %.1f m", double(mState.gridState.level));
+            if (ImGui::SmallButton("down a storey"))
+                mState.gridState.level -= mState.grid.cell;
+            ImGui::SameLine();
+            if (ImGui::SmallButton("up a storey"))
+                mState.gridState.level += mState.grid.cell;
+            ImGui::Checkbox("hide everything above it",
+                            &mState.gridState.cutAboveLevel);
+            eng::imguihint::hover(
+                "editor.grid.cutabove",
+                "Off, the viewport shows every storey; the level control then "
+                "only moves the grid and what new pieces snap to.");
+            ImGui::EndPopup();
+        }
+    }
+
+    // --- View -----------------------------------------------------------------
+    // Everything that changes what is drawn without changing the document.
+    ui::sameLineIfItFits(ui::buttonWidth("View"));
+    if (toolbarMenu("View")) {
+        ImGui::MenuItem("Entity marks", nullptr, &mShowEntityGizmos);
+        ImGui::MenuItem("Trigger and light volumes", nullptr,
+                        &mShowGizmoVolumes);
+        ImGui::MenuItem("Frame stats", nullptr, &mShowFrameStats);
+        ImGui::MenuItem("Grid", nullptr, &mShowGrid);
         ImGui::Separator();
-        if (ImGui::MenuItem("Scene View", "Ctrl+1"))
-            requestPanelFocus("viewport");
-        if (ImGui::MenuItem("Asset Browser", "Ctrl+2"))
-            requestPanelFocus("catalog");
-        if (ImGui::MenuItem("Hierarchy", "Ctrl+3"))
-            requestPanelFocus("outliner");
-        if (ImGui::MenuItem("Inspector", "Ctrl+4"))
-            requestPanelFocus("inspector");
-        if (ImGui::MenuItem("HUD Preview", "Ctrl+5"))
-            requestPanelFocus("ui");
-        if (ImGui::MenuItem("Problems", "Ctrl+6"))
-            requestPanelFocus("issues");
-        if (ImGui::MenuItem("Layers", "Ctrl+7"))
-            requestPanelFocus("layers");
-        bool console = mConsole.visible();
-        if (ImGui::MenuItem("Console", "`", &console))
-            mConsole.setVisible(console);
-        ImGui::Separator();
-        // The look the game will ship with, switchable while authoring. A room
-        // that reads under flat editor light and disappears under the dungeon
-        // profile is a room that has not been checked -- and the check used to
-        // require cooking the map and launching the game.
+        // Lighting is the one switch here that costs something to apply, so it
+        // is pushed to the renderer on the frame it changes rather than every
+        // frame.
+        if (ImGui::MenuItem("Scene lighting", nullptr, mGameLighting)) {
+            mGameLighting = !mGameLighting;
+            if (mEngine)
+                applySceneEnvironment(mEngine->renderer());
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Off: the editor's flat work light, which is what "
+                              "placing things needs.\nOn: the level's own "
+                              "lighting, which is the only way to see whether "
+                              "it guides the eye.");
         if (ImGui::BeginMenu("Render preset")) {
             const int current = mEngine ? mEngine->renderPreset() : 0;
             for (const eng::RenderPresetInfo& preset : eng::renderPresets()) {
@@ -2932,342 +3861,74 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             }
             ImGui::EndMenu();
         }
-        ImGui::MenuItem("Entity marks", nullptr, &mShowEntityGizmos);
-        ImGui::MenuItem("Trigger and light volumes", nullptr,
-                        &mShowGizmoVolumes);
-        ImGui::MenuItem("Frame stats", nullptr, &mShowFrameStats);
-        ImGui::MenuItem("Viewport grid", nullptr, &mShowGrid);
-        ImGui::Separator();
-        ImGui::MenuItem("Snap to grid", "G", &mState.gridState.snap);
-        ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("Help")) {
-        ImGui::MenuItem("Keyboard shortcuts", "F1", &mHelpOpen);
-        ImGui::EndMenu();
+        ImGui::EndPopup();
     }
 
-    // Quiet product signature: logo palette and hard-edged type treatment,
-    // without spending command-bar space on a decorative raster.
-    const char* raven = "RAVEN";
-    const char* editor = "// SCENE EDITOR";
-    const float brandWidth =
-        ImGui::CalcTextSize(raven).x + ImGui::CalcTextSize(editor).x + 12.0f;
-    const float brandX = ImGui::GetWindowWidth() - brandWidth - 12.0f;
-    if (brandX > ImGui::GetCursorPosX() + 24.0f) {
-        ImGui::SetCursorPosX(brandX);
-        ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), "%s",
-                           raven);
-        ImGui::SameLine(0.0f, 4.0f);
-        ImGui::TextDisabled("%s", editor);
-    }
-    ImGui::EndMenuBar();
-}
-
-void EditorApp::drawToolbar()
-{
-    // No horizontal scrollbar: the strip wraps (see toolbarSameLine). The
-    // vertical one is off too, because a toolbar tall enough to need one is a
-    // toolbar the workspace has mis-sized, and hiding that behind a scrollbar
-    // is how it stayed mis-sized.
-    if (ImGui::Begin(workspace_window::kCommandBar, nullptr,
-                     kPanelFlags | ImGuiWindowFlags_NoScrollbar |
-                         ImGuiWindowFlags_NoScrollWithMouse)) {
-        {
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3.0f, 4.0f));
-            ImGui::TextDisabled("SCENE");
-            ImGui::SameLine();
-            if (ImGui::Button(mPlaytest.running() ? "Stop" : "Play"))
-                runPlaytest();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("F5 -- save, cook and launch this scene");
-            ImGui::SameLine();
-            if (ImGui::Button("Cook")) {
-                std::string mapPath;
-                cookScene(mapPath);
-            }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("F6 -- cook without launching");
-            ImGui::SameLine();
-            if (ImGui::Button("Save"))
-                saveScene();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Ctrl+S");
-
-            toolbarSameLine(toolbarTextWidth("|  HISTORY") +
-                            toolbarButtonWidth("Undo") +
-                            toolbarButtonWidth("Redo"));
-            ImGui::TextDisabled("|  HISTORY");
-            ImGui::SameLine();
-            ImGui::BeginDisabled(!mCommands.canUndo());
-            if (ImGui::Button("Undo"))
-                applyHistory(false);
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Ctrl+Z -- %s",
-                                  mCommands.canUndo()
-                                      ? mCommands.undoLabel().c_str()
-                                      : "history empty");
-            ImGui::SameLine();
-            ImGui::BeginDisabled(!mCommands.canRedo());
-            if (ImGui::Button("Redo"))
-                applyHistory(true);
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Ctrl+Y -- %s",
-                                  mCommands.canRedo()
-                                      ? mCommands.redoLabel().c_str()
-                                      : "history empty");
-
-            toolbarSameLine(toolbarTextWidth("|  MODE") +
-                            toolbarIconWidth(18.0f, 3));
-            ImGui::TextDisabled("|  MODE");
-            ImGui::SameLine();
-            if (iconButton(Icon::Select, "##tool_select",
-                           "Select mode  [Q]\nPick without transform handles",
-                           mState.tool == Tool::Select && mGizmoOperation < 0,
-                           18.0f)) {
-                mState.tool = Tool::Select;
-                mGizmoOperation = -1;
-            }
-            ImGui::SameLine();
-            if (iconButton(Icon::Place, "##tool_place",
-                           "Place mode  [P]\nPaint the current Catalog brush",
-                           mState.tool == Tool::Place, 18.0f))
-                mState.tool = Tool::Place;
-            ImGui::SameLine();
-            if (iconButton(Icon::Room, "##tool_room",
-                           "Room tool  [B]\nDrag a complete room rectangle",
-                           mState.tool == Tool::Room, 18.0f))
-                mState.tool = Tool::Room;
-
-            toolbarSameLine(toolbarTextWidth("|  TRANSFORM") +
-                            toolbarIconWidth(18.0f, 3));
-            ImGui::TextDisabled("|  TRANSFORM");
-            ImGui::SameLine();
-            ImGui::BeginDisabled(materialMode() || mGizmoDragging);
-            if (iconButton(Icon::Move, "##gizmo_move",
-                           "Move  [W]\nTranslate the selection",
-                           mState.tool == Tool::Select && mGizmoOperation == 0,
-                           18.0f)) {
-                mState.tool = Tool::Select;
-                mGizmoOperation = 0;
-            }
-            ImGui::SameLine();
-            if (iconButton(Icon::Rotate, "##gizmo_rotate",
-                           "Rotate  [E]\nRotate the selection",
-                           mState.tool == Tool::Select && mGizmoOperation == 1,
-                           18.0f)) {
-                mState.tool = Tool::Select;
-                mGizmoOperation = 1;
-            }
-            ImGui::SameLine();
-            if (iconButton(Icon::Scale, "##gizmo_scale",
-                           "Scale  [R]\nScale the selection",
-                           mState.tool == Tool::Select && mGizmoOperation == 2,
-                           18.0f)) {
-                mState.tool = Tool::Select;
-                mGizmoOperation = 2;
-            }
-            ImGui::EndDisabled();
-
-            // The grid run is the widest of them, and the natural place for the
-            // strip to fold on a narrow viewport: everything before it is a
-            // command, everything from here is a setting.
-            toolbarSameLine(toolbarTextWidth("| grid 0.25 m") +
-                            toolbarButtonWidth("[") +
-                            toolbarButtonWidth("]") +
-                            toolbarButtonWidth("snap"));
-            ImGui::TextDisabled("|");
-            ImGui::SameLine();
-            ImGui::Text("grid %.2g m", double(mState.gridState.step()));
-            if (mGridMultiple > 1) {
-                // The drawn grid coarsened with the camera's height. Say so: a
-                // line spacing that silently changes meaning is worse than no
-                // grid.
-                ImGui::SameLine();
-                ImGui::TextDisabled("(drawn x%d)", mGridMultiple);
-            }
-            ImGui::SameLine();
-            // The keys are the gesture; the buttons exist so the shortcut is
-            // discoverable. Their labels ARE the keys, which is why they are
-            // bracket glyphs and not arrows -- and why each says so on hover,
-            // because a bare "[" on a toolbar means nothing.
-            if (ImGui::SmallButton("["))
-                mState.gridState.coarser();
-            eng::imguihint::hover("editor.grid.coarser",
-                                  "Coarser grid  [ [ ]\nDoubles the step new "
-                                  "pieces snap to.");
-            ImGui::SameLine();
-            if (ImGui::SmallButton("]"))
-                mState.gridState.finer();
-            eng::imguihint::hover("editor.grid.finer",
-                                  "Finer grid  [ ] ]\nHalves the step new "
-                                  "pieces snap to.");
-            ImGui::SameLine();
-            ImGui::Checkbox("snap", &mState.gridState.snap);
-            eng::imguihint::hover(
-                "editor.grid.snap",
-                "Snap placement to the grid. Off, pieces land exactly where "
-                "the cursor is.");
-            toolbarSameLine(toolbarTextWidth("| level 0.0 m") +
-                            toolbarButtonWidth("-") + toolbarButtonWidth("+") +
-                            toolbarButtonWidth("cut above"));
-            ImGui::Text("| level %.1f m", double(mState.gridState.level));
-            ImGui::SameLine();
-            if (ImGui::SmallButton("-"))
-                mState.gridState.level -= mState.grid.cell;
-            eng::imguihint::hover("editor.grid.level_down",
-                                  "Work plane down one storey.");
-            ImGui::SameLine();
-            if (ImGui::SmallButton("+"))
-                mState.gridState.level += mState.grid.cell;
-            eng::imguihint::hover("editor.grid.level_up",
-                                  "Work plane up one storey. New pieces land "
-                                  "on this height.");
-            ImGui::SameLine();
-            ImGui::Checkbox("cut above", &mState.gridState.cutAboveLevel);
-            eng::imguihint::hover(
-                "editor.grid.cutabove",
-                "Hide everything above the work plane. Off, the viewport shows "
-                "every storey; the level control then only moves the grid and "
-                "what new pieces snap to.");
-
-            toolbarSameLine(toolbarTextWidth("| ") +
-                            toolbarButtonWidth("world (multi)"));
-            ImGui::TextDisabled("|");
-            ImGui::SameLine();
-            if (materialMode()) {
-                ImGui::TextDisabled("stage Y rotate");
-            }
-            else {
-                if (mGizmoOperation < 0) {
-                    ImGui::TextDisabled("pick only");
-                }
-                else {
-                    const bool worldForced = mState.selection.size() > 1;
-                    const bool localForced =
-                        mGizmoOperation == 2 && !worldForced;
-                    const char* spaceLabel = worldForced   ? "world (multi)"
-                                             : localForced ? "local (scale)"
-                                             : mGizmoLocal ? "local (X)"
-                                                           : "world (X)";
-                    ImGui::BeginDisabled(mGizmoDragging || worldForced ||
-                                         localForced);
-                    if (ImGui::SmallButton(spaceLabel))
-                        mGizmoLocal = !mGizmoLocal;
-                    ImGui::EndDisabled();
-                    if (ImGui::IsItemHovered(
-                            ImGuiHoveredFlags_AllowWhenDisabled))
-                        ImGui::SetTooltip(
-                            worldForced ? "Multiple objects use world axes."
-                                        : "Axes the gizmo acts along.");
-                }
-            }
-
-            // Framing, walking, lighting, playing and cooking used to live here
-            // as well. They are questions about what is on screen, so they
-            // moved into the strip above the viewport, next to the thing they
-            // change. Two controls for one piece of state is worse than either
-            // alone: the one you are not looking at is the one that looks
-            // stale.
-            if (mState.dirty) {
-                toolbarSameLine(toolbarTextWidth("* unsaved"));
-                ImGui::TextColored(kUiWarning, "* unsaved");
-            }
-            ImGui::PopStyleVar();
-        }
-    }
-    ImGui::End();
-}
-
-// A compact strip of toggles across the top of the 3D view.
-//
-// Everything here changes what the viewport *shows* without changing the
-// document. That is the line: the tools, the grid step and the work plane are
-// edits waiting to happen and live in the Toolbar panel; these are ways of
-// looking, and an author flips them constantly while placing.
-void EditorApp::drawViewportToolbar()
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
-
-    // Projection first, because it is the biggest change to what the view IS.
-    // Gregory §15.4.1.2: the perspective view answers "does this room read",
-    // an elevation answers "are these two things in line", and no amount of
-    // orbiting answers the second reliably.
+    // --- right: what the camera is ------------------------------------------
     //
-    // Text rather than icons: "Top" and "Front" are already the shortest
-    // possible names for themselves, and a drawn glyph for an axis is a
-    // guessing game.
-    {
-        struct Choice {
-            EditorCamera::Projection projection;
-            const char* label;
-            const char* tip;
-        };
-        static const Choice kChoices[] = {
-            {EditorCamera::Projection::Perspective, "3D",
-             "perspective -- fly with the right mouse button"},
-            {EditorCamera::Projection::Top, "Top",
-             "plan view, looking down -- drag to pan, wheel to zoom"},
-            {EditorCamera::Projection::Front, "Front",
-             "front elevation, looking along -Z"},
-            {EditorCamera::Projection::Side, "Side",
-             "side elevation, looking along -X"},
-        };
-        const bool walking = mState.camera.walking();
-        ImGui::BeginDisabled(walking);
-        for (const Choice& choice : kChoices) {
-            const bool active = mState.camera.projection() == choice.projection;
-            if (active)
-                ImGui::PushStyleColor(ImGuiCol_Button,
-                                      ImGui::GetStyleColorVec4(
-                                          ImGuiCol_ButtonActive));
-            if (ImGui::SmallButton(choice.label))
-                setViewProjection(choice.projection);
-            if (active)
-                ImGui::PopStyleColor();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", choice.tip);
-            ImGui::SameLine();
+    // Right-aligned because it is the answer to a different question -- "where
+    // am I looking from" rather than "what am I doing" -- and because the row
+    // then reads outward from both ends instead of trailing off.
+    struct Choice {
+        EditorCamera::Projection projection;
+        const char* label;
+        const char* tip;
+    };
+    static const Choice kChoices[] = {
+        {EditorCamera::Projection::Perspective, "3D",
+         "perspective -- fly with the right mouse button"},
+        {EditorCamera::Projection::Top, "Top",
+         "plan view, looking down -- drag to pan, wheel to zoom"},
+        {EditorCamera::Projection::Front, "Front",
+         "front elevation, looking along -Z"},
+        {EditorCamera::Projection::Side, "Side",
+         "side elevation, looking along -X"},
+    };
+
+    float rightWidth = 0.0f;
+    for (const Choice& choice : kChoices) {
+        rightWidth += ImGui::CalcTextSize(choice.label).x +
+                      style.FramePadding.x * 2.0f + 4.0f;
+    }
+    rightWidth += ImGui::CalcTextSize("Frame").x + style.FramePadding.x * 2.0f +
+                  4.0f + icon + style.FramePadding.x * 2.0f;
+
+    const float rightX = ImGui::GetContentRegionMax().x - rightWidth;
+    // Right-aligned when there is room, and on its own row when there is not.
+    // Never both: pushing the cursor to a rightX that is behind where the row
+    // already reached is what draws two controls on top of each other.
+    if (ui::sameLineIfItFits(rightWidth) &&
+        rightX > ImGui::GetCursorPosX()) {
+        ImGui::SetCursorPosX(rightX);
+    }
+    else if (ImGui::GetCursorPosX() > 0.0f &&
+             ImGui::GetItemRectMax().x > ImGui::GetWindowPos().x) {
+        // sameLineIfItFits already left us on a new row; only right-align it
+        // when the whole cluster still fits on one.
+        if (rightX > 0.0f)
+            ImGui::SetCursorPosX(rightX);
+    }
+
+    const bool walking = mState.camera.walking();
+    ImGui::BeginDisabled(walking);
+    for (const Choice& choice : kChoices) {
+        const bool active = mState.camera.projection() == choice.projection;
+        if (active)
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  ImGui::GetStyleColorVec4(ImGuiCol_Header));
+        if (ImGui::Button(choice.label))
+            setViewProjection(choice.projection);
+        if (active)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("%s", walking
+                                        ? "walk mode is always a perspective "
+                                          "view"
+                                        : choice.tip);
         }
-        ImGui::EndDisabled();
-        if (walking && ImGui::IsItemHovered())
-            ImGui::SetTooltip("walk mode is always a perspective view");
-        ImGui::TextDisabled("|");
         ImGui::SameLine();
     }
-
-    // The view switches are icons: they are states, they are flipped
-    // constantly, and four labelled checkboxes were most of the strip.
-    if (iconButton(Icon::Marker, "##marks",
-                   "entity marks -- spawns, lights, triggers, markers",
-                   mShowEntityGizmos))
-        mShowEntityGizmos = !mShowEntityGizmos;
-    ImGui::SameLine();
-    if (iconButton(Icon::Collider, "##volumes",
-                   "trigger boxes, collider boxes and light ranges",
-                   mShowGizmoVolumes))
-        mShowGizmoVolumes = !mShowGizmoVolumes;
-    ImGui::SameLine();
-    if (iconButton(Icon::Trigger, "##stats",
-                   "frame cost, in the corner of the view", mShowFrameStats))
-        mShowFrameStats = !mShowFrameStats;
-    ImGui::SameLine();
-    // Lighting is the one switch here that costs something to apply, so it is
-    // pushed to the renderer on the frame it changes rather than every frame.
-    if (iconButton(Icon::Light, "##gamelight",
-                   mGameLighting
-                       ? "the scene's own lighting"
-                       : "the editor's flat work light -- click for the "
-                         "scene's own",
-                   mGameLighting)) {
-        mGameLighting = !mGameLighting;
-        if (mEngine)
-            applySceneEnvironment(mEngine->renderer());
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("|");
-    ImGui::SameLine();
+    ImGui::EndDisabled();
 
     if (ImGui::Button("Frame"))
         frameSelectionOrAll();
@@ -3275,12 +3936,12 @@ void EditorApp::drawViewportToolbar()
         ImGui::SetTooltip("F -- fit the selection, or the whole scene");
     ImGui::SameLine();
     if (iconButton(Icon::Spawn, "##walk",
-                   mState.camera.walking()
-                       ? "standing at the player's eye -- click to leave"
-                       : "V -- judge the room from where the player's head "
-                         "will be",
-                   mState.camera.walking()))
+                   walking ? "standing at the player's eye -- click to leave"
+                           : "V -- judge the room from where the player's head "
+                             "will be",
+                   walking, icon))
         toggleWalk();
+
     ImGui::PopStyleVar();
     ImGui::Separator();
 }
@@ -3327,9 +3988,20 @@ void EditorApp::drawViewport(const eng::FrameContext& f)
 {
     focusPanelIfRequested("viewport");
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    if (ImGui::Begin(workspace_window::kSceneView, nullptr,
+    if (ImGui::Begin(workspace_window::kViewport3D, nullptr,
                      kPanelFlags | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse)) {
+        // The centre node keeps its own tab bar, and clicking a tab is a
+        // perfectly reasonable way to switch the main screen -- so it has to
+        // mean the same thing the top bar's switcher means. A docked window
+        // that is not the selected tab is skipped by Begin, so "this one drew"
+        // is exactly "this one is showing".
+        //
+        // Read here rather than driven from the tab bar because the dependency
+        // only runs one way: the switcher raises a window, and a raised window
+        // reports what the switcher should say. Two writers would fight.
+        if (mScreen == MainScreen::Screen2D)
+            mScreen = MainScreen::Scene3D;
         // Above the image, inside the panel: these toggles answer questions
         // about what is on screen, so they belong next to the screen rather
         // than in a toolbar at the far top of the window.
@@ -3614,6 +4286,12 @@ void EditorApp::drawEntityGizmos()
     overlay.viewportOrigin = glm::vec2(mViewportX, mViewportY);
     overlay.viewportSize = glm::vec2(mViewportW, mViewportH);
     overlay.selected = &mState.selection;
+    // The entity the Inspector is editing. It outranks the rest of a
+    // multi-selection for the volume and label budgets, and wears a ring, so
+    // "which of these eleven is the panel on the right about" has an answer on
+    // screen instead of only in the panel's own header.
+    if (const AuthorId* primary = mState.primary())
+        overlay.primary = primary;
     overlay.hidden = &mState.hidden;
     overlay.locked = &mState.locked;
     overlay.volumes = mShowGizmoVolumes;
@@ -4962,6 +5640,7 @@ const OutlinerTree& EditorApp::outlinerTree()
     OutlinerOptions options;
     options.filter = mOutlinerFilter;
     options.showGeometry = mOutlinerShowGeometry;
+    options.groupRepeats = mOutlinerGroupRepeats;
     // While isolated the panel is the object's own tree, not the level with one
     // object visible in it. That is the difference between a mode and a filter.
     options.root = mState.isolating() ? mState.isolation.root : AuthorId{};
@@ -4971,6 +5650,7 @@ const OutlinerTree& EditorApp::outlinerTree()
     if (mOutlinerRevision != mState.document.revision ||
         options.filter != mOutlinerOptions.filter ||
         options.showGeometry != mOutlinerOptions.showGeometry ||
+        options.groupRepeats != mOutlinerOptions.groupRepeats ||
         options.root != mOutlinerOptions.root) {
         mOutlinerRevision = mState.document.revision;
         mOutlinerOptions = options;
@@ -5199,8 +5879,19 @@ void EditorApp::requestPanelFocus(const char* name)
 {
     if (!name || !*name)
         return;
-    if (std::strcmp(name, "console") == 0) {
-        mConsole.setVisible(true);
+    // The bottom panel is not part of the dockspace, so bringing one of its
+    // tabs forward means opening it rather than focusing a window.
+    if (std::strcmp(name, "console") == 0 ||
+        std::strcmp(name, "output") == 0) {
+        mBottom.show(BottomTab::Output);
+        return;
+    }
+    if (std::strcmp(name, "issues") == 0) {
+        mBottom.show(BottomTab::Problems);
+        return;
+    }
+    if (std::strcmp(name, "timeline") == 0) {
+        mBottom.show(BottomTab::Timeline);
         return;
     }
     mFocusPanel = name;
@@ -5240,10 +5931,13 @@ void EditorApp::selectAndReveal(const AuthorId& id, bool toggle)
 void EditorApp::drawUiStage()
 {
     focusPanelIfRequested("ui");
-    if (!ImGui::Begin(workspace_window::kHudPreview, nullptr, kPanelFlags)) {
+    if (!ImGui::Begin(workspace_window::kViewport2D, nullptr, kPanelFlags)) {
         ImGui::End();
         return;
     }
+    // The other half of the tab/switcher agreement -- see drawViewport.
+    if (mScreen != MainScreen::Screen2D)
+        mScreen = MainScreen::Screen2D;
     if (!mUiHudReady)
         mUiHudReady = mUiHud.initialise();
     if (!mUiHudReady) {
@@ -5436,7 +6130,7 @@ void EditorApp::drawUiStage()
 void EditorApp::drawOutliner()
 {
     focusPanelIfRequested("outliner");
-    if (!ImGui::Begin(workspace_window::kHierarchy, nullptr, kPanelFlags)) {
+    if (!ImGui::Begin(workspace_window::kSceneTree, nullptr, kPanelFlags)) {
         ImGui::End();
         return;
     }
@@ -5471,10 +6165,41 @@ void EditorApp::drawOutliner()
             addGameplayEntity(Gameplay::DirectionalLight);
         ImGui::EndPopup();
     }
-    ImGui::SameLine();
+    ui::sameLineIfItFits(ui::buttonWidth("Hierarchy"));
+    // What a row in this panel MEANS, switched here.
+    //
+    // Grouped collapses repeats: a blockout's hundred and forty-six identical
+    // walls are one row, which is the only way a dense level is readable. The
+    // cost is that a row then means two different things -- an object and its
+    // parts, or a pile of unrelated entities -- and the second is destructive
+    // to mistake for the first.
+    //
+    // Hierarchy is the document's own structure: one row, one entity, children
+    // under their parent, nothing merged and nothing invented. It is the answer
+    // to "what is parented to what", and until it existed that question had no
+    // surface in the editor for a scene whose entities are mostly flat.
+    {
+        const bool grouped = mOutlinerGroupRepeats;
+        if (grouped)
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  ImGui::GetStyleColorVec4(ImGuiCol_Header));
+        if (ImGui::SmallButton(grouped ? "Grouped" : "Hierarchy"))
+            mOutlinerGroupRepeats = !grouped;
+        if (grouped)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                grouped
+                    ? "Grouped: repeats collapse onto one row.\nClick for the "
+                      "document's own hierarchy -- one row per entity."
+                    : "Hierarchy: one row per entity, children under their "
+                      "parent.\nClick to collapse repeats again.");
+        }
+    }
+    ui::sameLineIfItFits(ui::buttonWidth("Expand all"));
     if (ImGui::SmallButton("Expand all"))
         mOutlinerOpenRequest = 1;
-    ImGui::SameLine();
+    ui::sameLineIfItFits(ui::buttonWidth("Collapse all"));
     if (ImGui::SmallButton("Collapse all"))
         mOutlinerOpenRequest = 0;
 
@@ -6307,7 +7032,7 @@ void EditorApp::drawAssetBrowser()
                                    : mFocusPanel == "resourcedb" ? 3
                                                                  : 0;
     }
-    if (!ImGui::Begin(workspace_window::kAssetBrowser, nullptr, kPanelFlags)) {
+    if (!ImGui::Begin(workspace_window::kFileSystem, nullptr, kPanelFlags)) {
         ImGui::End();
         return;
     }
@@ -6703,38 +7428,32 @@ void EditorApp::drawCatalog()
 //
 // Shown in the Inspector when nothing is selected, which is where every engine
 // puts world settings and which was two lines of dead space here.
+// What the Inspector shows with nothing selected.
+//
+// Deliberately thin, and it did not used to be: it carried the level's palette,
+// which is the Environment role and belongs beside the other five in the
+// Contract dock. Two panels editing one field is how they end up disagreeing
+// about which of them owns it.
 void EditorApp::drawSceneProperties()
 {
-    ImGui::SeparatorText("scene");
-    ImGui::TextDisabled("id      %s", mState.document.id.c_str());
-    ImGui::TextDisabled("%zu entities", mState.document.entities.size());
-
+    ImGui::TextDisabled("Nothing selected.");
+    ImGui::TextWrapped(
+        "Click an entity in the viewport or the Scene tree to edit it.");
     ImGui::Spacing();
-    ImGui::SeparatorText("look");
-    // The palette is the level's, not the session's: a crypt and a cathedral
-    // are not the same room with different props, and until now the format
-    // could not say which one this was.
-    const std::string current = mState.document.palette.empty()
-                                    ? std::string("(the game's default)")
-                                    : mState.document.palette;
-    if (ImGui::BeginCombo("palette", current.c_str())) {
-        if (ImGui::Selectable("(the game's default)",
-                              mState.document.palette.empty()))
-            setScenePalette({});
-        for (const std::string& name : mPalettes) {
-            if (ImGui::Selectable(name.c_str(),
-                                  name == mState.document.palette))
-                setScenePalette(name);
-        }
-        ImGui::EndCombo();
-    }
-    if (!mState.document.palette.empty() &&
-        std::find(mPalettes.begin(), mPalettes.end(),
-                  mState.document.palette) == mPalettes.end()) {
-        ImGui::TextColored(kUiDanger, "'%s' is not in palettes.toml",
-                           mState.document.palette.c_str());
-    }
-    ImGui::TextDisabled("turn on the viewport's light switch to see it");
+    ImGui::SeparatorText("this scene");
+
+    const ContractReport& report = contract();
+    ImGui::Text("%s", sceneKindName(report.kind));
+    ImGui::SameLine();
+    ImGui::TextDisabled("scene, %zu entities",
+                        mState.document.entities.size());
+    ImGui::TextWrapped("%s", sceneKindSummary(report.kind));
+    ImGui::Spacing();
+    if (ImGui::Button("Open the Contract panel"))
+        requestPanelFocus("contract");
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("its kind, the roles it fills, what is missing, and "
+                          "the palette it is graded with");
 }
 
 // Changing the palette is a document edit like any other, so it undoes.
@@ -7005,53 +7724,89 @@ void EditorApp::drawInspector()
     ImGui::End();
 }
 
+// A bottom-panel body rather than a window: the timeline is read against the
+// viewport above it while something plays, which is exactly the shape a
+// full-width region has and a dock tab does not.
 void EditorApp::drawTimeline()
 {
-    focusPanelIfRequested("timeline");
-    if (ImGui::Begin(workspace_window::kTimeline, nullptr, kPanelFlags)) {
-        // The panel edits the PREVIEW world's clips, not the document's.
-        //
-        // That is the honest state of this feature and worth saying plainly:
-        // the preview is rebuilt from the document on every edit, so a clip
-        // scrubbed here is a clip the author is *watching*, and retiming a key
-        // is lost on the next rebuild. Authoring a clip into the .scn needs the
-        // Clip component in the inspector, which is the next step and is not
-        // built. Previewing is still the half that cannot be done any other
-        // way -- a timeline you cannot play is not a timeline.
-        mClipPanel.setSources(mPreview ? &mPreview->world() : nullptr,
-                              &mapio::coreRegistry());
-        ImGui::TextDisabled(
-            "Previews clips in the viewport. Edits are not saved to the scene "
-            "yet.");
-        ImGui::Separator();
-        mClipPanel.drawBody();
-    }
-    ImGui::End();
+    // The panel edits the PREVIEW world's clips, not the document's.
+    //
+    // That is the honest state of this feature and worth saying plainly: the
+    // preview is rebuilt from the document on every edit, so a clip scrubbed
+    // here is a clip the author is *watching*, and retiming a key is lost on
+    // the next rebuild. Authoring a clip into the .scn needs the Clip component
+    // in the inspector, which is the next step and is not built. Previewing is
+    // still the half that cannot be done any other way -- a timeline you cannot
+    // play is not a timeline.
+    mClipPanel.setSources(mPreview ? &mPreview->world() : nullptr,
+                          &mapio::coreRegistry());
+    ImGui::TextDisabled(
+        "Previews clips in the viewport. Edits are not saved to the scene "
+        "yet.");
+    ImGui::Separator();
+    mClipPanel.drawBody();
 }
 
-void EditorApp::drawSceneContract()
+// What this scene IS.
+//
+// A dock beside the Inspector, which is a promotion: the same table used to be
+// drawn at the top of the Problems tab, where "I opened a scene and I do not
+// know what it does" is a question nobody thinks to ask. Here it is one click
+// from the properties of whatever is selected, and it is where the workflow
+// starts -- the kind decides which main screen opens, whether Play is allowed,
+// and what the roles below are judged against.
+//
+// One table, shared with the validator and the cooker, so a person reading this
+// and a build failing cannot disagree. See docs/scenes.md.
+void EditorApp::drawContract()
 {
-    const ContractReport contract = sceneContract(mState.document);
+    focusPanelIfRequested("contract");
+    if (!ImGui::Begin(workspace_window::kContract, nullptr, kPanelFlags)) {
+        ImGui::End();
+        return;
+    }
+
+    const ContractReport& report = contract();
 
     // The kind, and what it means. A scene nobody can look through is the one
     // state worth shouting about, so it is the only one drawn in the danger
     // colour.
-    const bool empty = contract.kind == SceneKind::Empty;
+    const bool empty = report.kind == SceneKind::Empty;
     if (empty)
-        ImGui::TextColored(kUiDanger, "%s", sceneKindName(contract.kind));
+        ImGui::TextColored(kUiDanger, "%s", sceneKindName(report.kind));
     else
-        ImGui::Text("%s", sceneKindName(contract.kind));
+        ImGui::Text("%s", sceneKindName(report.kind));
     ImGui::SameLine();
     ImGui::TextDisabled("scene");
-    ImGui::TextWrapped("%s", sceneKindSummary(contract.kind));
+    ImGui::SameLine();
+    if (report.playable)
+        ImGui::TextDisabled("| playable");
+    else
+        ImGui::TextColored(kUiDanger, "| will not play");
+    ImGui::TextWrapped("%s", sceneKindSummary(report.kind));
 
-    // Changing the shape is one click, and it keeps the camera where the
-    // author put it (setSceneView). This was four manual component edits.
+    ImGui::Spacing();
+    ImGui::SeparatorText("shape");
+
+    // Changing the shape is one click, and it keeps the camera where the author
+    // put it (setSceneView). This was four manual component edits.
     //
     // Expressed as an edit or a create rather than a whole-document swap: the
     // operation touches exactly one entity, and the undo stack should say so.
-    const auto setView = [this](SceneKind kind, const char* label) {
-        if (!ImGui::Button(label))
+    const auto setView = [this, &report](SceneKind kind, const char* label) {
+        const bool current = report.kind == kind;
+        if (current)
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  ImGui::GetStyleColorVec4(ImGuiCol_Header));
+        const bool clicked = ImGui::Button(label);
+        if (current)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s\n\nThe camera entity is reused, keeping its "
+                              "transform and its name.",
+                              sceneKindSummary(kind));
+        }
+        if (!clicked)
             return;
         Doc after = mState.document;
         const AuthorId id = setSceneView(after, kind);
@@ -7066,59 +7821,258 @@ void EditorApp::drawSceneContract()
             runCommand(makeEditEntity(label2, id, *before, *fixed));
         else
             runCommand(makeCreateEntity(*fixed));
+        // The kind decides which editor the scene wants. Making a level flat
+        // and staying in the 3D view would show the page edge-on.
+        setMainScreen(mainScreenForKind(kind));
     };
+    // Wrapped rather than run off the edge: four buttons is more than a
+    // 296-pixel dock holds, and "2D screen" disappearing is the one that turns
+    // a menu scene into an unauthorable one.
     setView(SceneKind::FirstPerson, "First person");
-    ImGui::SameLine();
+    ui::sameLineIfItFits(ui::buttonWidth("Third person"));
     setView(SceneKind::ThirdPerson, "Third person");
-    ImGui::SameLine();
+    ui::sameLineIfItFits(ui::buttonWidth("Shot"));
     setView(SceneKind::Shot, "Shot");
-    ImGui::SameLine();
+    ui::sameLineIfItFits(ui::buttonWidth("2D screen"));
     setView(SceneKind::Screen, "2D screen");
 
-    if (ImGui::BeginTable("##roles", 3,
-                          ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                              ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("Role", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-        ImGui::TableSetupColumn("Filled by", ImGuiTableColumnFlags_WidthFixed,
-                                150.0f);
-        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
-        for (const RoleStatus& status : contract.roles) {
-            // A role this kind of scene does not have is not a hole. Reporting
-            // "no player spawn" on a menu is how a checklist gets ignored.
-            if (!status.applicable)
-                continue;
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            const bool hole = status.count == 0 &&
-                              status.severity != Severity::Info;
-            ImGui::TextColored(hole ? (status.severity == Severity::Error
-                                           ? kUiDanger
-                                           : kUiWarning)
-                                    : ImGui::GetStyleColorVec4(ImGuiCol_Text),
-                               "%s", sceneRoleName(status.role));
-            ImGui::TableNextColumn();
-            // Clicking the filler selects it: the fastest possible answer to
-            // "which entity is the camera in this scene".
-            if (!status.filledBy.empty()) {
-                ImGui::PushID(int(status.role));
-                if (ImGui::Selectable(status.filledBy.c_str(),
-                                      mState.isSelected(status.filledBy)))
-                    selectAndReveal(status.filledBy, false);
-                ImGui::PopID();
-            } else {
-                ImGui::TextDisabled("--");
+    ImGui::Spacing();
+    ImGui::SeparatorText("roles");
+
+    // Rows, not a table.
+    //
+    // This was a four-column table and it did not survive its own dock: at the
+    // Inspector rail's default width the detail column got about ninety pixels,
+    // and TextWrapped in ninety pixels renders a sentence one character per
+    // line. The panel was a vertical alphabet. Nothing about a role is tabular
+    // -- there is no column an author scans down -- so each one is now a block
+    // that reflows at any width.
+    for (const RoleStatus& status : report.roles) {
+        // A role this kind of scene does not have is not a hole. Reporting "no
+        // player spawn" on a menu is how a checklist gets ignored.
+        if (!status.applicable)
+            continue;
+        ImGui::PushID(int(status.role));
+
+        const bool hole = status.count == 0 && status.severity != Severity::Info;
+        const ImVec4 nameColour =
+            hole ? (status.severity == Severity::Error ? kUiDanger : kUiWarning)
+                 : ImGui::GetStyleColorVec4(ImGuiCol_Text);
+
+        // The name and what fills it, on one line. The fix button is pushed to
+        // the right of that same line rather than given a column, so a role
+        // with nothing to fix costs no width at all.
+        ImGui::TextColored(nameColour, "%s", sceneRoleName(status.role));
+        if (status.fix != QuickFix::None) {
+            const float button = ui::buttonWidth("Add");
+            const float at = ImGui::GetContentRegionMax().x - button;
+            if (at > ImGui::GetCursorPosX()) {
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(at);
             }
-            ImGui::TableNextColumn();
-            ImGui::TextWrapped("%s", status.detail.c_str());
+            else {
+                ImGui::SameLine();
+            }
+            // The button the docs promised. "Every unfilled required role
+            // carries a QuickFix" was true of the data and not of the panel:
+            // the fix reached the Problems list and never this table, so the
+            // one surface that named the hole could not close it.
+            if (ImGui::SmallButton("Add")) {
+                Issue synthetic;
+                synthetic.severity = status.severity;
+                synthetic.code = "scene.role_unfilled";
+                synthetic.message = status.detail;
+                synthetic.entity = status.filledBy;
+                synthetic.fix = status.fix;
+                Doc after = mState.document;
+                if (applyQuickFix(after, mState.catalog, synthetic)) {
+                    runCommand(Command{
+                        std::string("fill ") + sceneRoleName(status.role),
+                        [after](Doc& doc) { doc = after; },
+                        [before = mState.document](Doc& doc) { doc = before; }});
+                }
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("add what fills this role");
         }
-        ImGui::EndTable();
+
+        ImGui::Indent();
+        // Clicking the filler selects it: the fastest possible answer to
+        // "which entity is the camera in this scene".
+        if (!status.filledBy.empty()) {
+            if (ImGui::Selectable(status.filledBy.c_str(),
+                                  mState.isSelected(status.filledBy)))
+                selectAndReveal(status.filledBy, false);
+        }
+        else {
+            ImGui::TextDisabled("--");
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextWrapped("%s", status.detail.c_str());
+        ImGui::PopStyleColor();
+        ImGui::Unindent();
+        ImGui::Spacing();
+        ImGui::PopID();
     }
+
+    // Two views is legal -- a debug or death cam takes over by existing at a
+    // higher priority -- so it is reported rather than refused.
+    if (report.views.size() > 1) {
+        ImGui::Spacing();
+        ImGui::TextColored(kUiWarning, "%zu entities carry a view",
+                           report.views.size());
+        for (const AuthorId& id : report.views) {
+            ImGui::Bullet();
+            ImGui::SameLine();
+            if (ImGui::SmallButton(id.c_str()))
+                selectAndReveal(id, false);
+        }
+        ImGui::TextDisabled("legal: the higher Camera priority wins.");
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("environment");
+    // The palette is the level's, not the session's: a crypt and a cathedral
+    // are not the same room with different props. It lives here rather than in
+    // the Inspector's nothing-selected state because the contract lists
+    // Environment as a role, and the role and the control that fills it
+    // belonging to two different panels is how the role went unnoticed.
+    const std::string current = mState.document.palette.empty()
+                                    ? std::string("(the game's default)")
+                                    : mState.document.palette;
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::BeginCombo("##palette", current.c_str())) {
+        if (ImGui::Selectable("(the game's default)",
+                              mState.document.palette.empty()))
+            setScenePalette({});
+        for (const std::string& name : mPalettes) {
+            if (ImGui::Selectable(name.c_str(),
+                                  name == mState.document.palette))
+                setScenePalette(name);
+        }
+        ImGui::EndCombo();
+    }
+    if (!mState.document.palette.empty() &&
+        std::find(mPalettes.begin(), mPalettes.end(),
+                  mState.document.palette) == mPalettes.end()) {
+        ImGui::TextColored(kUiDanger, "'%s' is not in palettes.toml",
+                           mState.document.palette.c_str());
+    }
+    ImGui::TextDisabled("View > Scene lighting shows it in the viewport.");
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("this scene");
+    ImGui::TextDisabled("id        %s", mState.document.id.c_str());
+    ImGui::TextDisabled("entities  %zu", mState.document.entities.size());
+    ImGui::TextDisabled("file      %s",
+                        mState.scenePath.empty() ? "not saved yet"
+                                                 : mState.scenePath.c_str());
+    ImGui::TextDisabled("cook      %s", mCookStatus.c_str());
+
+    ImGui::End();
 }
 
+// The undo stack, as a list. Godot's History dock.
+//
+// Undo had two surfaces before this -- a menu item and a keybind -- and both
+// answered "step back one" without ever saying what the steps were. A blockout
+// session is two hundred of them, and "which of these was the one where I
+// deleted the corridor" is not a question Ctrl+Z answers.
+void EditorApp::drawHistory()
+{
+    focusPanelIfRequested("history");
+    if (!ImGui::Begin(workspace_window::kHistory, nullptr, kPanelFlags)) {
+        ImGui::End();
+        return;
+    }
+
+    const std::vector<std::string> done = mCommands.doneLabels();
+    const std::vector<std::string> undone = mCommands.undoneLabels();
+
+    ImGui::BeginDisabled(!mCommands.canUndo());
+    if (ImGui::Button("Undo"))
+        applyHistory(false);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!mCommands.canRedo());
+    if (ImGui::Button("Redo"))
+        applyHistory(true);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled("%zu of %zu", done.size(), done.size() + undone.size());
+    ImGui::Separator();
+
+    if (ImGui::BeginChild("##history_list")) {
+        std::size_t walkTo = ~std::size_t(0);
+
+        // Undone entries first and greyed: they are the future, drawn above the
+        // present the same way the stack is drawn in every editor that has one.
+        for (std::size_t i = undone.size(); i-- > 0;) {
+            ImGui::PushID(int(1000 + i));
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImGui::GetStyleColorVec4(
+                                      ImGuiCol_TextDisabled));
+            if (ImGui::Selectable(undone[i].c_str()))
+                walkTo = done.size() + (undone.size() - i);
+            ImGui::PopStyleColor();
+            ImGui::PopID();
+        }
+
+        // The line the document is currently at. Named rather than drawn as a
+        // bare separator, because "you are here" is the only thing in this
+        // panel that is not a command.
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
+        ImGui::TextUnformatted("--- now ---");
+        ImGui::PopStyleColor();
+
+        for (std::size_t i = done.size(); i-- > 0;) {
+            ImGui::PushID(int(i));
+            if (ImGui::Selectable(done[i].c_str()))
+                walkTo = i + 1; // clicking a row leaves that command applied
+            ImGui::PopID();
+        }
+        if (done.empty()) {
+            if (ImGui::Selectable("(the scene as it opened)"))
+                walkTo = 0;
+        }
+        else if (ImGui::Selectable("(the scene as it opened)")) {
+            walkTo = 0;
+        }
+
+        if (walkTo != ~std::size_t(0)) {
+            const std::size_t steps = mCommands.walkTo(mState.document, walkTo);
+            if (steps > 0) {
+                // The same bookkeeping applyHistory does, and for the same
+                // reason: an undone placement that stays on screen until the
+                // next unrelated edit is the bug three copies of this code once
+                // had between them.
+                mState.dirty = !mCommands.savedStateReached();
+                mState.document.touch();
+                finishInspectorEdit();
+                if (mPreview)
+                    mPreview->invalidate();
+                mStatus = "walked " + std::to_string(steps) +
+                          (steps == 1 ? " step" : " steps") + " of history";
+            }
+        }
+    }
+    ImGui::EndChild();
+    ImGui::End();
+}
+
+// The validator's output, in the bottom panel.
+//
+// It used to open with the scene contract -- what the scene IS -- on the
+// argument that "what does this do" comes before "what is wrong with it". That
+// argument was right and the placement was wrong: nobody opens a Problems tab
+// to find out what a scene is for. The contract is a dock of its own now, next
+// to the Inspector, and this is what it always should have been: a list of what
+// is broken, and the buttons that fix it.
 void EditorApp::drawIssues()
 {
-    focusPanelIfRequested("issues");
-    if (ImGui::Begin(workspace_window::kProblems, nullptr, kPanelFlags)) {
+    {
         // Revalidated when the document changes rather than every frame: it
         // walks every entity and the panel is often open while dragging.
         if (mIssuesRevision != mState.document.revision) {
@@ -7133,13 +8087,12 @@ void EditorApp::drawIssues()
         ImGui::Text("%d issues (%d blocking)", int(mIssues.size()), errors);
         ImGui::SameLine();
         ImGui::TextDisabled("| cook: %s", mCookStatus.c_str());
-        ImGui::Separator();
-
-        // What this scene IS, before what is wrong with it. The roles below are
-        // the whole answer to "I opened a scene and I do not know what it does"
-        // -- one table, shared with the validator and the cooker, so a person
-        // reading this and a build failing cannot disagree (see docs/scenes.md).
-        drawSceneContract();
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Contract"))
+            requestPanelFocus("contract");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("what this scene IS -- its kind, and the roles "
+                              "it fills");
         ImGui::Separator();
 
         if (ImGui::BeginChild("##issues")) {
@@ -7260,7 +8213,6 @@ void EditorApp::drawIssues()
         }
         ImGui::EndChild();
     }
-    ImGui::End();
 }
 
 // --- material staging mode ---------------------------------------------------
@@ -8483,9 +9435,31 @@ void EditorApp::drawSettings()
         ImGui::SetTooltip(
             "Scales tool text and controls together. Use a larger "
             "value for high-resolution displays or TV viewing.");
+
+    // The chrome. Applied on the frame it changes rather than on restart: a
+    // theme picker you have to relaunch to evaluate is a theme picker nobody
+    // uses twice.
+    if (ImGui::BeginCombo("Theme", mSettings.theme.c_str())) {
+        for (const std::string& id : eng::imguitheme::ids()) {
+            if (!ImGui::Selectable(id.c_str(), id == mSettings.theme))
+                continue;
+            mSettings.theme = id;
+            eng::imguitheme::apply(id);
+            // The theme resets the whole ImGuiStyle, including the sizes
+            // ScaleAllSizes multiplied. Re-apply the scale or the interface
+            // silently drops back to 1x.
+            applyUiScale(mSettings.uiScale);
+            changed = true;
+        }
+        ImGui::EndCombo();
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("godot_dark is this editor's own: the shell is "
+                          "Godot's arrangement, so the palette is too.\n"
+                          "raven_editor is the engine's hard-edged chrome.");
     ImGui::TextDisabled(
-        "Viewport state lives in Window and Scene View. Launch state lives in "
-        "Play. Those controls are saved when changed.");
+        "Viewport state lives in the View menu and the viewport's own toolbar. "
+        "Launch state lives in Debug. Those controls are saved when changed.");
 
     ImGui::Spacing();
     ImGui::SeparatorText("Where these live");
@@ -8595,6 +9569,168 @@ void EditorApp::drawHelp()
         "Letter keys are mute while a text field has focus, and while the "
         "camera is flying -- W is both 'forward' and 'place tool'.");
     ImGui::End();
+}
+
+// Godot's Create New Scene, and the place the contract becomes the workflow
+// rather than a report on it.
+//
+// A new scene needs two answers -- what it IS, and what it starts with -- and
+// the editor used to ask only the second. "New > Empty" produced a document
+// with no view component and no spawn, which loads, cooks, plays and shows
+// nothing; docs/scenes.md calls that the failure the whole vocabulary exists to
+// make loud, and the New menu was quietly manufacturing it.
+void EditorApp::drawNewScenePopup()
+{
+    static constexpr const char* kTitle = "New scene";
+    if (mNewSceneOpen && !ImGui::IsPopupOpen(kTitle)) {
+        ImGui::OpenPopup(kTitle);
+        mNewSceneOpen = false;
+    }
+    ed::ui::centreNextModal(34.0f, 26.0f, 26.0f, 18.0f);
+    if (!ImGui::BeginPopupModal(kTitle, nullptr, ImGuiWindowFlags_NoSavedSettings))
+        return;
+
+    struct KindRow {
+        SceneKind kind;
+        const char* label;
+    };
+    // GameDriven first: it is what nearly every dungeon level is, and the one
+    // whose name ("no authored camera") reads like a mistake until the summary
+    // beside it explains that the game supplies one.
+    static const KindRow kKinds[] = {
+        {SceneKind::GameDriven, "Level"},
+        {SceneKind::FirstPerson, "First person"},
+        {SceneKind::ThirdPerson, "Third person"},
+        {SceneKind::Shot, "Shot"},
+        {SceneKind::Screen, "2D screen"},
+    };
+    static const SceneTemplate kTemplates[] = {
+        SceneTemplate::Empty, SceneTemplate::Room, SceneTemplate::TechDemo,
+        SceneTemplate::Screen};
+
+    mNewSceneKind = std::clamp(mNewSceneKind, 0, int(std::size(kKinds)) - 1);
+    mNewSceneTemplate =
+        std::clamp(mNewSceneTemplate, 0, int(std::size(kTemplates)) - 1);
+
+    ImGui::TextDisabled("What is this scene looked through?");
+    ImGui::Spacing();
+    for (int i = 0; i < int(std::size(kKinds)); ++i) {
+        if (ImGui::RadioButton(kKinds[i].label, mNewSceneKind == i)) {
+            mNewSceneKind = i;
+            // Choosing the flat page picks its template too. The two are not
+            // independent -- a Room template with a ScreenCamera over it is a
+            // dungeon nobody can see -- and making the author discover that by
+            // producing one is not a choice worth offering.
+            if (kKinds[i].kind == SceneKind::Screen)
+                mNewSceneTemplate = 3;
+            else if (mNewSceneTemplate == 3)
+                mNewSceneTemplate = 1;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("--");
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", sceneKindSummary(kKinds[i].kind));
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("starting content");
+    const bool screen = kKinds[mNewSceneKind].kind == SceneKind::Screen;
+    ImGui::BeginDisabled(screen);
+    for (int i = 0; i < int(std::size(kTemplates)); ++i) {
+        // The page template only makes sense under the page kind, and vice
+        // versa; neither is offered against the other.
+        if ((kTemplates[i] == SceneTemplate::Screen) != screen)
+            continue;
+        if (ImGui::RadioButton(sceneTemplateName(kTemplates[i]),
+                               mNewSceneTemplate == i))
+            mNewSceneTemplate = i;
+    }
+    ImGui::EndDisabled();
+    if (screen)
+        ImGui::TextDisabled("a 2D screen always starts as a blank page");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    const float width = ed::ui::dialogButtonWidth();
+    if (ImGui::Button("Create", ImVec2(width, 0.0f))) {
+        newSceneInTab(kTemplates[mNewSceneTemplate], kKinds[mNewSceneKind].kind);
+        ImGui::CloseCurrentPopup();
+    }
+    if (ImGui::IsWindowAppearing())
+        ImGui::SetItemDefaultFocus();
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(width, 0.0f)) ||
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+}
+
+// New Project / Open Project.
+//
+// One function for both because they differ in two things -- whether there is
+// a name field and what the button does -- and two near-identical popups would
+// be two places to fix the next thing wrong with either.
+void EditorApp::drawProjectPopup()
+{
+    const bool creating = mNewProjectOpen;
+    const char* title = creating ? "New project" : "Open project";
+    if ((mNewProjectOpen || mOpenProjectOpen) && !ImGui::IsPopupOpen(title))
+        ImGui::OpenPopup(title);
+    if (!ImGui::BeginPopupModal(title, nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+
+    const auto dismiss = [this] {
+        mNewProjectOpen = false;
+        mOpenProjectOpen = false;
+        ImGui::CloseCurrentPopup();
+    };
+
+    ImGui::TextUnformatted("Project directory");
+    const float available = ImGui::GetMainViewport()->WorkSize.x;
+    ImGui::SetNextItemWidth(std::clamp(available - 64.0f, 160.0f, 520.0f));
+    if (ImGui::IsWindowAppearing())
+        ImGui::SetKeyboardFocusHere();
+    const bool entered =
+        ImGui::InputText("##projectdir", mProjectPath, sizeof(mProjectPath),
+                         ImGuiInputTextFlags_EnterReturnsTrue);
+    if (creating) {
+        ImGui::TextUnformatted("Name");
+        ImGui::SetNextItemWidth(std::clamp(available - 64.0f, 160.0f, 520.0f));
+        ImGui::InputText("##projectname", mProjectName, sizeof(mProjectName));
+    }
+
+    const std::string dir = mProjectPath;
+    std::string validation;
+    if (dir.empty())
+        validation = "Enter a directory.";
+    else if (creating && eng::runtime::isProjectDir(dir))
+        validation = "There is already a project here.";
+    else if (!creating && !eng::runtime::isProjectDir(dir))
+        validation = "No project.toml in this directory.";
+    if (!validation.empty())
+        ImGui::TextColored(kUiDanger, "%s", validation.c_str());
+    else if (creating)
+        ImGui::TextDisabled("Writes project.toml, a starter scene and a script.");
+
+    ImGui::BeginDisabled(!validation.empty());
+    const bool go =
+        ImGui::Button(creating ? "Create" : "Open",
+                      ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
+        (entered && validation.empty());
+    if (go) {
+        if (creating)
+            newProject();
+        else
+            openProject(dir);
+        dismiss();
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(ui::dialogButtonWidth(), 0.0f)) ||
+        ImGui::IsKeyPressed(ImGuiKey_Escape))
+        dismiss();
+    ImGui::EndPopup();
 }
 
 void EditorApp::drawSaveAsPopup()
@@ -8935,6 +10071,9 @@ void EditorApp::drawImportModelPopup()
     ImGui::EndPopup();
 }
 
+// The bottom bar: the panel buttons on the left, what the editor is doing on
+// the right. Godot's, and one row cheaper than a button strip plus a status
+// line -- which is what this was, before the bottom rail left the dockspace.
 void EditorApp::drawStatusBar()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
@@ -8943,101 +10082,120 @@ void EditorApp::drawStatusBar()
                           ImGuiChildFlags_Borders,
                           ImGuiWindowFlags_NoScrollbar |
                               ImGuiWindowFlags_NoScrollWithMouse)) {
-        const float scale = mAppliedUiScale;
-        if (ImGui::BeginTable("##status_fields", 4,
-                              ImGuiTableFlags_SizingStretchProp |
-                                  ImGuiTableFlags_BordersInnerV |
-                                  ImGuiTableFlags_NoSavedSettings)) {
-            ImGui::TableSetupColumn("brand", ImGuiTableColumnFlags_WidthFixed,
-                                    142.0f * scale);
-            ImGui::TableSetupColumn("scene", ImGuiTableColumnFlags_WidthFixed,
-                                    250.0f * scale);
-            ImGui::TableSetupColumn("activity",
-                                    ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn(
-                "selection", ImGuiTableColumnFlags_WidthFixed, 260.0f * scale);
-            ImGui::TableNextRow();
-
-            ImGui::TableNextColumn();
-            ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark),
-                               "RAVEN");
-            ImGui::SameLine(0.0f, 4.0f);
-            ImGui::TextDisabled("// EDIT");
-
-            ImGui::TableNextColumn();
-            const std::string scene =
-                mState.scenePath.empty()
-                    ? std::string("untitled")
-                    : std::filesystem::path(mState.scenePath)
-                          .filename()
-                          .string();
-            ImGui::Text("%s%s", scene.c_str(), mState.dirty ? "  *" : "");
+        // --- left: the bottom panel's tabs -----------------------------------
+        for (int i = 0; i < kBottomTabCount; ++i) {
+            const BottomTab tab = BottomTab(i);
+            const bool open = mBottom.isOpen(tab);
+            if (i > 0)
+                ImGui::SameLine();
+            if (open)
+                ImGui::PushStyleColor(ImGuiCol_Button,
+                                      ImGui::GetStyleColorVec4(
+                                          ImGuiCol_Header));
+            // Problems carries its count, which is the reason to look at it.
+            // Zero is drawn as nothing rather than as "0": a badge that is
+            // always there stops being a signal.
+            std::string label = bottomTabName(tab);
+            int errors = 0;
+            if (tab == BottomTab::Problems) {
+                for (const Issue& issue : mIssues)
+                    errors += issue.severity == Severity::Error ? 1 : 0;
+                if (errors > 0)
+                    label += "  " + std::to_string(errors);
+            }
+            if (errors > 0)
+                ImGui::PushStyleColor(ImGuiCol_Text, kUiDanger);
+            if (ImGui::Button(label.c_str()))
+                mBottom.toggle(tab);
+            if (errors > 0)
+                ImGui::PopStyleColor();
+            if (open)
+                ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
-                    "%s\ncook: %s\nundo: %s",
-                    mState.scenePath.empty() ? "not saved"
-                                             : mState.scenePath.c_str(),
-                    mCookStatus.c_str(),
-                    mCommands.canUndo() ? mCommands.undoLabel().c_str()
-                                        : "empty");
+                ImGui::SetTooltip("%s%s", bottomTabName(tab),
+                                  open ? " -- click to close" : "");
             }
+        }
 
-            ImGui::TableNextColumn();
-            if (!mPreview->lastError().empty()) {
-                ImGui::TextColored(kUiDanger, "preview: %s",
-                                   mPreview->lastError().c_str());
-            }
-            else if (!mImportWarnings.empty()) {
-                ImGui::TextColored(kUiWarning, "%zu import warning%s",
-                                   mImportWarnings.size(),
-                                   mImportWarnings.size() == 1 ? "" : "s");
-                if (ImGui::IsItemHovered()) {
-                    ImGui::BeginTooltip();
-                    for (const std::string& warning : mImportWarnings)
-                        ImGui::TextWrapped("%s", warning.c_str());
-                    ImGui::EndTooltip();
-                }
+        // --- right: what the editor is doing ---------------------------------
+        //
+        // Measured and right-aligned rather than tabled: the left half is a
+        // variable number of buttons, and a fixed column layout across both
+        // would leave a gap that grows with the theme's padding.
+        const ContractReport& report = contract();
+        const std::string scene =
+            mState.scenePath.empty()
+                ? std::string("untitled")
+                : std::filesystem::path(mState.scenePath).filename().string();
+
+        std::string right;
+        if (!mPreview->lastError().empty())
+            right = "preview: " + mPreview->lastError();
+        else if (!mImportWarnings.empty())
+            right = std::to_string(mImportWarnings.size()) + " import warning" +
+                    (mImportWarnings.size() == 1 ? "" : "s");
+        else
+            right = mStatus.empty() ? "ready" : mStatus;
+
+        std::string context = scene + (mState.dirty ? " *" : "");
+        context += "   |   ";
+        context += sceneKindName(report.kind);
+        if (!mState.selection.empty()) {
+            const Entity* primary = mState.document.find(*mState.primary());
+            const std::string name =
+                primary ? (primary->name.empty() ? primary->id : primary->name)
+                        : std::string("(gone)");
+            context += "   |   " + name;
+            if (mState.selection.size() > 1)
+                context += " +" + std::to_string(mState.selection.size() - 1);
+        }
+        else {
+            const glm::vec3 eye = mState.camera.activeEye();
+            char at[64];
+            std::snprintf(at, sizeof(at), "   |   %.1f %.1f %.1f",
+                          double(eye.x), double(eye.y), double(eye.z));
+            context += at;
+        }
+
+        const float contextWidth = ImGui::CalcTextSize(context.c_str()).x;
+        const float available = ImGui::GetContentRegionMax().x;
+        const float contextX = available - contextWidth;
+        // The activity line takes whatever is between the buttons and the
+        // context, and is clipped rather than allowed to push it off the edge:
+        // where the scene is and whether it is saved must never be the part
+        // that falls off.
+        ImGui::SameLine();
+        const float statusX = ImGui::GetCursorPosX() + 16.0f;
+        if (contextX > statusX + 40.0f) {
+            ImGui::SetCursorPosX(statusX);
+            ImGui::PushTextWrapPos(contextX - 12.0f);
+            if (!mPreview->lastError().empty())
+                ImGui::TextColored(kUiDanger, "%s", right.c_str());
+            else if (!mImportWarnings.empty())
+                ImGui::TextColored(kUiWarning, "%s", right.c_str());
+            else
+                ImGui::TextUnformatted(right.c_str());
+            ImGui::PopTextWrapPos();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", right.c_str());
+            if (!mImportWarnings.empty()) {
                 ImGui::SameLine();
                 if (ImGui::SmallButton("dismiss"))
                     mImportWarnings.clear();
             }
-            else {
-                ImGui::TextUnformatted(mStatus.empty() ? "ready"
-                                                       : mStatus.c_str());
-                if (!mStatus.empty() && ImGui::IsItemHovered())
-                    ImGui::SetTooltip("%s", mStatus.c_str());
-            }
-
-            ImGui::TableNextColumn();
-            const glm::vec3 eye = mState.camera.activeEye();
-            if (mState.selection.empty()) {
-                ImGui::TextDisabled("camera %.1f  %.1f  %.1f", double(eye.x),
-                                    double(eye.y), double(eye.z));
-            }
-            else {
-                const Entity* primary = mState.document.find(*mState.primary());
-                const std::string name =
-                    primary
-                        ? (primary->name.empty() ? primary->id : primary->name)
-                        : std::string("(gone)");
-                ImGui::Text(
-                    "%s%s", name.c_str(),
-                    mState.selection.size() > 1
-                        ? ("  +" + std::to_string(mState.selection.size() - 1))
-                              .c_str()
-                        : "");
-                if (ImGui::IsItemHovered() && primary &&
-                    !primary->parent.empty()) {
-                    const AuthorId root = rootOf(mState.document, primary->id);
-                    const Entity* object = mState.document.find(root);
-                    ImGui::SetTooltip("inside %s",
-                                      object ? (object->name.empty()
-                                                    ? object->id.c_str()
-                                                    : object->name.c_str())
-                                             : root.c_str());
-                }
-            }
-            ImGui::EndTable();
+            ImGui::SameLine();
+        }
+        if (contextX > statusX)
+            ImGui::SetCursorPosX(contextX);
+        ImGui::TextDisabled("%s", context.c_str());
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s\n%s\ncook: %s\nundo: %s",
+                              mState.scenePath.empty() ? "not saved"
+                                                       : mState.scenePath.c_str(),
+                              sceneKindSummary(report.kind),
+                              mCookStatus.c_str(),
+                              mCommands.canUndo() ? mCommands.undoLabel().c_str()
+                                                  : "empty");
         }
     }
     ImGui::EndChild();

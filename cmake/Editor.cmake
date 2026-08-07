@@ -16,6 +16,8 @@ add_executable(
   editor/src/scene/DocumentRaycast.cpp
   editor/src/app/EditorApp.cpp
   editor/src/ui/EditorWorkspace.cpp
+  editor/src/ui/EditorShell.cpp
+  editor/src/app/SceneTabs.cpp
   editor/src/viewport/EditorCamera.cpp
   editor/src/ui/EditorIcons.cpp
   editor/src/project/EditorSettings.cpp
@@ -70,11 +72,14 @@ add_executable(
   game/src/SpriteViewmodel.cpp
   game/src/ViewmodelMotion.cpp
   game/src/PlayerWeapons.cpp
-  editor/src/project/RunGame.cpp)
+  editor/src/project/RunGame.cpp
+  editor/src/project/ProjectSession.cpp)
 target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/src third_party
                                                 engine/include)
-target_link_libraries(scene_editor PRIVATE eng game_content eng_imgui
+# eng_runtime for eng::runtime::Project: what a project IS has one definition,
+# read by the editor that writes it and the player that plays it.
+target_link_libraries(scene_editor PRIVATE eng eng_runtime game_content eng_imgui
                                              eng_model_import eng_acp
                                              nlohmann_json::nlohmann_json)
 # No asset defines: the editor mounts the `editor` set and resolves logical
@@ -116,6 +121,19 @@ add_executable(scene_cook editor/tools/scene_cook/main.cpp)
 target_include_directories(scene_cook PRIVATE editor/include)
 target_link_libraries(scene_cook PRIVATE game_content eng_ecs_headless)
 eng_target_hardening(scene_cook)
+
+# raven_player: plays a project.
+#
+# The one target in the tree that must NOT link anything under game/. That is
+# the whole claim it exists to make -- a game authored in the editor and
+# scripted in Lua runs on this, and the dungeon crawler's combat, dungeon
+# generation and enemy library are not part of what it means to play a project.
+# The claim is enforced rather than asserted: player_purity_test reads this
+# binary's symbol table and fails on any game:: symbol. Before adding a library
+# here, check it is not a way in.
+add_executable(raven_player engine/tools/player/main.cpp)
+target_link_libraries(raven_player PRIVATE eng_runtime)
+eng_target_hardening(raven_player)
 
 # Static-model production gate. Emits Markdown suitable for build artifacts and
 # production briefs; no renderer/window required.

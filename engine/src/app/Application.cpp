@@ -286,7 +286,8 @@ int runApplication(Application& app, int argc, char** argv)
     const AppConfig cfg = app.configure(argc, argv);
 
     Engine engine;
-    if (!engine.init(cfg.configPath, cfg.mountSet, cfg.renderPreset))
+    if (!engine.init(cfg.configPath, cfg.mountSet, cfg.renderPreset,
+                     cfg.projectDir))
         return app.exitCode ? app.exitCode : 1;
 
     if (!runLoadPlan(app, engine, cfg)) {

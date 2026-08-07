@@ -308,7 +308,15 @@ std::vector<Issue> validate(const SceneDocument& document,
     }
 
     for (const Entity& entity : document.entities) {
-        if (entity.playerSpawn) {
+        // An active first-person rig is a spawn: it says how the player moves
+        // and, by its transform, where they stand, which is what
+        // eng::runtime::SceneRuntime::playerSpawn reads. Counted alongside
+        // PlayerSpawn -- which is one of THIS game's markers -- so a scene
+        // authored in a project, with no game components in it at all, can
+        // still say where the player starts. See sceneContract(), which
+        // applies the same rule to the Spawn role.
+        if (entity.playerSpawn ||
+            (entity.firstPerson && entity.firstPerson->active)) {
             ++playerSpawns;
             if (!spawnEntity) spawnEntity = &entity;
         }

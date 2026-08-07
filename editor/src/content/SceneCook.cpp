@@ -1,7 +1,7 @@
 #include <editor/content/SceneCook.h>
 
 #include "GameComponents.h"
-#include "MapSerializer.h"
+#include <eng/ecs/MapSerializer.h>
 #include "scene/ComponentRegistry.h"
 
 #include <eng/ecs/Components.h>
@@ -521,7 +521,7 @@ bool cookToMap(const SceneDocument& document, const KitCatalog& catalog,
     entt::registry registry;
     if (!buildRegistry(document, catalog, registry, error))
         return false;
-    if (!mapio::writeMap(mapPath, registry, mapio::coreRegistry())) {
+    if (!eng::ecs::writeMap(mapPath, registry, mapio::coreRegistry())) {
         error = mapPath + ": failed to write cooked map";
         return false;
     }

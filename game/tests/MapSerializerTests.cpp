@@ -1,5 +1,6 @@
 #include "GameComponents.h"
-#include "MapSerializer.h"
+#include "ComponentRegistry.h"
+#include <eng/ecs/MapSerializer.h>
 #include <eng/ecs/components/MeshSource.h>
 
 #include <eng/ecs/Components.h>
@@ -55,10 +56,10 @@ int main()
     src.emplace<eng::ecs::LightRef>(torch, eng::ecs::LightRef{ld, {}});
     src.emplace<eng::ecs::Parent>(torch, eng::ecs::Parent{room});
 
-    require(mapio::writeMap(path, src, mapio::coreRegistry()), "write succeeds");
+    require(eng::ecs::writeMap(path, src, mapio::coreRegistry()), "write succeeds");
 
     entt::registry dst;
-    require(mapio::readMap(path, dst, mapio::coreRegistry()), "read succeeds");
+    require(eng::ecs::readMap(path, dst, mapio::coreRegistry()), "read succeeds");
 
     int srcCount = 0, dstCount = 0;
     src.view<eng::ecs::Transform>().each([&](auto...) { ++srcCount; });
@@ -89,7 +90,7 @@ int main()
             "parent children bookkeeping is reconstructed");
 
     const std::string deterministicPath = "map_serializer_deterministic.map";
-    require(mapio::writeMap(deterministicPath, src, mapio::coreRegistry()),
+    require(eng::ecs::writeMap(deterministicPath, src, mapio::coreRegistry()),
             "second deterministic write succeeds");
     require(readBytes(path) == readBytes(deterministicPath),
             "same registry cooks to identical map bytes");
@@ -98,7 +99,7 @@ int main()
     for (const eng::ecs::ComponentType& t : mapio::coreRegistry().types())
         if (t.stableTypeId == 2) tiny.add(t);
     entt::registry partial;
-    require(mapio::readMap(path, partial, tiny), "read with tiny registry succeeds");
+    require(eng::ecs::readMap(path, partial, tiny), "read with tiny registry succeeds");
     int partialCount = 0;
     partial.view<eng::ecs::Transform>().each([&](auto...) { ++partialCount; });
     require(partialCount == 2, "all entities load even with unknown components");
@@ -111,7 +112,7 @@ int main()
     entt::registry preserved;
     const entt::entity sentinel = preserved.create();
     preserved.emplace<eng::ecs::Name>(sentinel, eng::ecs::Name{"keep"});
-    require(!mapio::readMap(corruptPath, preserved, mapio::coreRegistry()),
+    require(!eng::ecs::readMap(corruptPath, preserved, mapio::coreRegistry()),
             "truncated component payload is rejected");
     require(preserved.valid(sentinel) &&
                 preserved.get<eng::ecs::Name>(sentinel).value == "keep",
@@ -121,7 +122,7 @@ int main()
     oldVersion[8] = 0;
     const std::string oldVersionPath = "map_serializer_old_version.map";
     writeBytes(oldVersionPath, oldVersion);
-    require(!mapio::readMap(oldVersionPath, preserved, mapio::coreRegistry()),
+    require(!eng::ecs::readMap(oldVersionPath, preserved, mapio::coreRegistry()),
             "versions without an explicit reader are rejected");
 
     entt::registry cyclic;
@@ -131,7 +132,7 @@ int main()
     cyclic.emplace<eng::ecs::Transform>(cycleB);
     cyclic.emplace<eng::ecs::Parent>(cycleA, eng::ecs::Parent{cycleB});
     cyclic.emplace<eng::ecs::Parent>(cycleB, eng::ecs::Parent{cycleA});
-    require(!mapio::writeMap("map_serializer_cycle.map", cyclic,
+    require(!eng::ecs::writeMap("map_serializer_cycle.map", cyclic,
                              mapio::coreRegistry()),
             "cyclic hierarchy is rejected before writing");
 
@@ -139,12 +140,12 @@ int main()
     const entt::entity meshOnly = incompleteMesh.create();
     incompleteMesh.emplace<eng::ecs::Transform>(meshOnly);
     incompleteMesh.emplace<eng::ecs::MeshRenderer>(meshOnly);
-    require(!mapio::writeMap("map_serializer_bad_mesh.map", incompleteMesh,
+    require(!eng::ecs::writeMap("map_serializer_bad_mesh.map", incompleteMesh,
                              mapio::coreRegistry()),
             "persisted MeshRenderer requires a source asset reference");
 
-    require(mapio::dumpMap(path, mapio::coreRegistry()), "dumpMap succeeds on a valid file");
-    require(!mapio::dumpMap("does_not_exist.map", mapio::coreRegistry()),
+    require(eng::ecs::dumpMap(path, mapio::coreRegistry()), "dumpMap succeeds on a valid file");
+    require(!eng::ecs::dumpMap("does_not_exist.map", mapio::coreRegistry()),
             "dumpMap fails on a missing file");
 
     std::remove(path.c_str());

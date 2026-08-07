@@ -32,16 +32,6 @@ static std::string writeScript(const std::string& name, const std::string& body)
     return file.string();
 }
 
-static const eng::ecs::ComponentRegistry& engineRegistry()
-{
-    static eng::ecs::ComponentRegistry reg = [] {
-        eng::ecs::ComponentRegistry r;
-        eng::ecs::registerEngineComponents(r);
-        return r;
-    }();
-    return reg;
-}
-
 // Attaches one script with no props.
 static void attach(eng::ecs::World& w, entt::entity e, const std::string& path)
 {
@@ -159,7 +149,7 @@ int main()
     // --- a runtime error quarantines exactly one instance ------------------
     {
         eng::ecs::World world;
-        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        ScriptHost host(world, ScriptConfig{}, eng::ecs::engineRegistry());
         const std::string path = writeScript("boom.lua",
                                              "local M = {}\n"
                                              "function M:update(dt)\n"
@@ -191,7 +181,7 @@ int main()
     // --- one broken instance does not stop its siblings --------------------
     {
         eng::ecs::World world;
-        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        ScriptHost host(world, ScriptConfig{}, eng::ecs::engineRegistry());
         const std::string bad = writeScript("bad_sibling.lua",
                                             "local M = {}\n"
                                             "function M:update(dt) error('no') end\n"
@@ -215,7 +205,7 @@ int main()
     // --- a failing start does not retry every frame ------------------------
     {
         eng::ecs::World world;
-        ScriptHost host(world, ScriptConfig{}, engineRegistry());
+        ScriptHost host(world, ScriptConfig{}, eng::ecs::engineRegistry());
         const std::string path =
             writeScript("badstart.lua",
                         "local M = {}\n"

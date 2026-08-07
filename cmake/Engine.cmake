@@ -318,6 +318,10 @@ add_library(
                        engine/src/ecs/MeshResolve.cpp
                        engine/src/ecs/PhysicsSync.cpp
                        engine/src/ecs/ComponentRegistry.cpp
+                       # Also in eng_ecs_headless, like ComponentRegistry above
+                       # and for the same reason: a headless tool links that,
+                       # a windowed app links this, and nothing links both.
+                       engine/src/ecs/MapSerializer.cpp
                        engine/src/ecs/RendererSceneBackend.cpp
                        engine/src/ecs/Systems.cpp
                        engine/src/ecs/ClipSystem.cpp
@@ -366,8 +370,25 @@ target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_script>"
   target_compile_definitions(eng_platform PRIVATE ENG_RENDERER_RHI=1)
   target_compile_definitions(eng PRIVATE ENG_RENDERER_RHI=1)
 
+# The project runtime: reads a project.toml, boots its scene into a World and
+# runs the script host over it.
+#
+# Above `eng` rather than inside it, for the reason eng_script is its own
+# target: only raven_player and the game link this, and "who plays a project"
+# should be a link fact rather than a habit. It is also what keeps the engine
+# facade free of a scene-boot policy -- a sample that just wants a window and a
+# renderer still links `eng` and gets none of this.
+add_library(eng_runtime STATIC engine/src/runtime/Project.cpp
+                               engine/src/runtime/SceneRuntime.cpp
+                               engine/src/runtime/ProjectApp.cpp)
+target_include_directories(eng_runtime PRIVATE third_party engine/src)
+# eng_toml for project.toml, PRIVATE: reading a project is this library's job,
+# not something its consumers should inherit a TOML parser to do.
+target_link_libraries(eng_runtime PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng>"
+                      PRIVATE eng_toml)
+
 foreach(_layer eng_imgui eng_core eng_rhi eng_platform eng_model_import eng_systems
-               eng_framework eng_script eng)
+               eng_framework eng_script eng eng_runtime)
   eng_target_hardening(${_layer})
 endforeach()
 # imgui is third-party: build it without our warning set.

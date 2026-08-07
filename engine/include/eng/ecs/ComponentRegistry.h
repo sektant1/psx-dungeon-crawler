@@ -139,6 +139,16 @@ private:
 // own types from kFirstApplicationTypeId up.
 void registerEngineComponents(ComponentRegistry&);
 
+// The engine's components and nothing else, built once and shared.
+//
+// This is the table a runtime uses when it has no application vocabulary of
+// its own to add -- raven_player playing somebody's project, a headless test
+// reading a .map. An application that registers its own types keeps building
+// its own table (this game's is mapio::coreRegistry()) and passes that instead;
+// the two never meet, which is the whole point of the registry being a
+// parameter everywhere rather than a global.
+const ComponentRegistry& engineRegistry();
+
 // Copies every entity of `src` into `dst`, carrying the components `types`
 // knows about. Returns how many entities were added.
 //

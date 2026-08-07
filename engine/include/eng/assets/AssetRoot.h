@@ -66,6 +66,29 @@ const std::filesystem::path& project();
 bool mount(const std::string& mountSet);
 const std::vector<Pack>& mounted();
 
+// Overlay a project's own content on top of what is already mounted.
+//
+// This is the one place the content model admits a second root. Everything
+// above assumes exactly one tree, discovered once, because for this game there
+// is exactly one -- but a project made in the editor lives wherever its author
+// put it, and it cannot render from there alone: it has no shaders, no
+// compositors, no fonts and no default materials, and shipping a copy of all
+// of them into every new project would be worse than the coupling.
+//
+// So a project is mounted OVER the engine's own content rather than instead of
+// it. `projectDir` must contain an assets.toml declaring [[pack]] entries;
+// [mounts] is not read, because a project's packs are all of them, in
+// declaration order. They go in at the highest priority, so first-hit-wins --
+// already the rule resolve() follows -- means a file a project ships shadows
+// the builtin of the same logical path, and overriding a default material is
+// therefore a matter of putting a file in the right place.
+//
+// Accumulates, unlike mount(): calling it does not disturb what is already
+// mounted. Fails and mounts nothing on a missing or malformed manifest, or on
+// a pack id that collides with one already declared -- a silent shadow there
+// would make "which pack did this come from" unanswerable.
+bool mountProject(const std::filesystem::path& projectDir);
+
 // Every pack the manifest declares, whether or not it is mounted.
 const std::vector<Pack>& packs();
 

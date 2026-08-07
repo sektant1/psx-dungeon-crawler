@@ -16,9 +16,12 @@
 #include <eng/debug/ClipPanel.h> // Timeline: engine component, engine panel
 #include <editor/assets/ModelImportPipeline.h>
 #include <editor/ui/EditorUi.h>
+#include <editor/ui/EditorShell.h>
+#include <editor/app/SceneTabs.h>
 #include "RenderPalette.h"
 #include <editor/viewport/ViewportOverlay.h>
 #include <editor/project/SceneBrowser.h>
+#include <editor/content/SceneContract.h>
 #include <editor/content/SceneValidate.h>
 #include <editor/project/EditorSettings.h>
 #include <editor/app/EditorState.h>
@@ -34,6 +37,7 @@
 #include <editor/viewport/CameraNavigation.h>
 #include <editor/viewport/PreviewBridge.h>
 #include <editor/content/SceneTemplates.h>
+#include <editor/project/ProjectSession.h>
 #include <editor/project/RunGame.h>
 
 #include <eng/app/Application.h>
@@ -78,8 +82,29 @@ public:
     void onShutdown(eng::Engine& engine) override;
 
 private:
+    // --- the shell -----------------------------------------------------------
+    //
+    // Godot's arrangement, and the reason for it is that an author already
+    // knows it: menus at the top left, the main-screen switcher centred, the
+    // play controls at the top right, open scenes as tabs under them, and a
+    // bottom panel that stays a strip of buttons until you click one.
+    //
+    // These four draw the frame. Everything else in this class draws something
+    // *inside* it.
+    void drawTopBar(const eng::FrameContext& f);
     void drawMenuBar(const eng::FrameContext& f);
-    void drawToolbar();
+    // The centre of the top bar: 3D / 2D / Material. Returns the width it
+    // wants, so drawTopBar can lay the three zones out before drawing any of
+    // them (`measureOnly` draws nothing).
+    float drawMainScreenSwitcher(bool measureOnly);
+    float drawPlayControls(bool measureOnly);
+    // Open scenes. Clicking one switches the whole document; the plus opens the
+    // new-scene dialog; the cross closes, asking first if there is unsaved work.
+    void drawSceneTabBar();
+    // The strip of buttons and, when one is lit, the region above them. Drawn
+    // between the dockspace and the status line, and NOT a dock node -- see
+    // EditorShell.h for why.
+    void drawBottomPanel(const eng::FrameContext& f, float height);
     void drawViewport(const eng::FrameContext& f);
     // The 2D viewport: the game's real HUD drawn against a dialled-in state.
     void drawUiStage();
@@ -150,10 +175,19 @@ private:
     void drawAssetBrowser();
     void drawCatalog();
     void drawIssues();
-    // What this scene IS -- its kind, the roles it fills, and the buttons that
-    // fill the empty ones. Drawn above the issue list because "what does this
-    // scene do" comes before "what is wrong with it". See docs/scenes.md.
-    void drawSceneContract();
+    // What this scene IS -- its kind, the roles it fills, the buttons that fill
+    // the empty ones, and the environment it is graded with. A dock of its own,
+    // beside the Inspector: the contract is the answer to "I opened a scene and
+    // I do not know what it does", and it spent its first life at the bottom of
+    // a Problems tab where that question is never asked. See docs/scenes.md.
+    void drawContract();
+    // The contract's own report, cached per document revision. Read by the
+    // panel, by the play controls (which refuse to launch a scene nothing can
+    // look through) and by the status line, so all three agree.
+    const game::content::ContractReport& contract();
+    // The undo stack as a list, Godot's History dock. Clicking a row walks the
+    // document to that point.
+    void drawHistory();
     // The clip timeline, docked along the bottom with Problems and Console.
     // The panel itself is the engine's (eng::ClipPanel): it edits eng::ecs::Clip
     // through the component registry, and neither is an editor concept.
@@ -273,6 +307,40 @@ private:
     bool saveScene();
     bool saveSceneTo(const std::string& path);
     void newScene(game::content::SceneTemplate which);
+    // --- open scenes ---------------------------------------------------------
+    //
+    // Everything that is *about one scene* -- the document, its undo history,
+    // its selection, its camera, what the author has hidden in it -- lives in a
+    // tab (see SceneTabs.h). mState still holds the active one, so no panel had
+    // to learn about tabs; these two are the whole mechanism.
+    //
+    // captureActiveTab folds mState back into the tab it came from; activateTab
+    // does the reverse and re-points everything derived from a document at the
+    // new one.
+    void captureActiveTab();
+    void activateTab(std::size_t index);
+    // Opens `path`, raising the tab that already holds it rather than loading a
+    // second copy. Nothing is discarded and nothing is prompted for -- which is
+    // the point, and what made "open" a destructive act before this existed.
+    void openSceneInTab(const std::string& path);
+    // A new tab holding a fresh scene of this shape. `kind` gives it its view
+    // component, so the scene is playable the moment it exists.
+    void newSceneInTab(game::content::SceneTemplate which,
+                       game::content::SceneKind kind);
+    // Closes a tab, asking first when it has unsaved work.
+    void requestCloseTab(std::size_t index);
+    void closeTab(std::size_t index);
+    // Which screen the centre shows, and the one operation that changes it.
+    // Also sets the viewport mode, because Material is a mode of the 3D view
+    // rather than a fourth panel -- two controls for one piece of state is how
+    // the two end up disagreeing.
+    void setMainScreen(MainScreen screen);
+    // Godot's Create New Scene: pick what the scene IS (its contract kind) and
+    // what it starts with (a template). One dialog, because those are the two
+    // things a new scene needs and asking them separately is how a scene ends
+    // up with no camera.
+    void drawNewScenePopup();
+    void drawProjectPopup();
     void drawSaveAsPopup();
     void drawImportModelPopup();
     // Converts a source model into kit pieces and drops them into the scene.
@@ -347,11 +415,13 @@ private:
     // most expensive thing in this program and four separate paths used to
     // discard it without asking -- Escape most dangerously of all, since that
     // is the key people press to leave a mode, not the editor.
-    enum class Discard { Quit, Reload, NewScene, Open };
+    //
+    // Opening is no longer one of them. It gets a tab, so there is nothing to
+    // lose and nothing to ask -- which is the single biggest thing tabs bought.
+    enum class Discard { Quit, Reload, CloseTab };
     // Runs `what` immediately on a clean document, otherwise parks it behind
     // the save/discard/cancel prompt.
-    void requestDiscard(Discard what, game::content::SceneTemplate which =
-                                          game::content::SceneTemplate::Empty);
+    void requestDiscard(Discard what);
     void performDiscard();
     void drawDiscardPopup();
     // F6 / F5: cook the authored scene to a runtime map, and play it.
@@ -417,6 +487,31 @@ private:
     void installConsoleCommands();
 
     EditorState mState;
+    // The open scenes. mState mirrors whichever is active, so every panel keeps
+    // reading mState and none of them knows tabs exist.
+    SceneTabs mTabs;
+    // The frame around the panels: which main screen the centre is showing, and
+    // what the bottom panel is doing.
+    MainScreen mScreen = MainScreen::Scene3D;
+    // Set when something other than the tab bar changed the active tab -- a
+    // menu, a shortcut, an open. Consumed on the next draw, so a click *in* the
+    // bar is never fought by a SetSelected flag from the same frame.
+    bool mTabBarFollowsActive = true;
+    BottomPanel mBottom;
+    // Set while the bottom splitter is being dragged, so the panel does not
+    // also try to interpret the drag as a click on its own body.
+    bool mBottomResizing = false;
+    // The contract, recomputed when the document moves rather than per frame.
+    // It is pure and cheap, but three surfaces read it and a scene with two
+    // thousand entities is walked once for all of them.
+    game::content::ContractReport mContract;
+    uint64_t mContractRevision = ~uint64_t(0);
+    // The new-scene dialog's two answers, held while it is open.
+    bool mNewSceneOpen = false;
+    int mNewSceneKind = 0;     // index into the dialog's kind rows
+    int mNewSceneTemplate = 0; // index into its template rows
+    // The tab a close is waiting on the unsaved-work prompt for.
+    std::size_t mPendingCloseTab = 0;
     eng::DebugConsole mConsole;
     std::unique_ptr<PreviewBridge> mPreview;
     std::unique_ptr<eng::Audio> mAudio;
@@ -505,6 +600,20 @@ private:
     // the arrival itself.
     bool mPlayFromCamera = true;
     std::string mExecutablePath; // argv[0], for finding the game binary
+
+    // The project this editor has open, if any. None means the mode this
+    // editor was built in -- authoring the content tree it ships beside -- and
+    // that path is unchanged. One open points the same editor at somebody
+    // else's tree and F5 at raven_player instead of the game.
+    ProjectSession mProject;
+    std::string mProjectRecentsFile; // artifacts/editor/projects.txt
+    bool mNewProjectOpen = false;
+    bool mOpenProjectOpen = false;
+    char mProjectPath[512] = {};
+    char mProjectName[128] = {};
+    void newProject();
+    void openProject(const std::string& dir);
+    void closeProject();
 
     // Material staging mode. A separate scene rather than a panel over the
     // level: the point of a reference stage is that nothing else is in it.
@@ -634,8 +743,6 @@ private:
     // Set when a discard is waiting on the prompt; consumed by performDiscard.
     bool mDiscardOpen = false;
     Discard mDiscardWhat = Discard::Quit;
-    game::content::SceneTemplate mDiscardTemplate =
-        game::content::SceneTemplate::Empty;
     PaletteState mPalette;
     RecentScenes mRecent;
     std::string mRecentFile; // artifacts/editor/recent.txt, resolved in onLoad
@@ -643,7 +750,6 @@ private:
     char mOpenFilter[64] = {};
     std::vector<SceneEntry> mOpenSceneEntries;
     std::string mOpenSceneSelection;
-    std::string mPendingOpen; // parked behind the unsaved-work prompt
     // Entities lifted with Ctrl+C, held as authored data rather than as ids:
     // the originals may be deleted, or the document replaced, before the paste.
     std::vector<game::content::Entity> mClipboard;
@@ -671,6 +777,12 @@ private:
     FrameBudget mFrameBudget;
     char mOutlinerFilter[64] = {};
     bool mOutlinerShowGeometry = true;
+    // Whether the tree collapses repeats, or shows the document's own
+    // parent/child structure. A member of its own rather than a field of
+    // mOutlinerOptions, because that struct is the *cache key*: writing the
+    // toggle straight into it would make the comparison that rebuilds the tree
+    // compare a value against itself and never fire.
+    bool mOutlinerGroupRepeats = true;
     OutlinerTree mOutliner;
     uint64_t mOutlinerRevision = ~uint64_t(0);
     OutlinerOptions mOutlinerOptions;

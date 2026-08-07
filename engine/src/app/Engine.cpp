@@ -72,7 +72,7 @@ void Engine::updateSystems(float dt) {
 }
 
 bool Engine::init(const std::string& configPath, const std::string& mountSet,
-                  int renderPreset)
+                  int renderPreset, const std::string& projectDir)
 {
     // The content root comes up first: everything below -- the config file, the
     // renderer's resource locations, the font, the hint table -- is resolved
@@ -91,6 +91,15 @@ bool Engine::init(const std::string& configPath, const std::string& mountSet,
     // is what makes the pipeline something a project adopts rather than
     // something it must have before it can start.
     assets::mountCooked();
+
+    // A project's own content goes on last and therefore resolves first, which
+    // is what lets the line below find a config the project ships rather than
+    // the engine's. Before this point there is nothing to overlay it onto; any
+    // earlier and assets::init() above would have wiped it.
+    if (!projectDir.empty() && !assets::mountProject(projectDir)) {
+        log::error("Engine: cannot mount project '%s'", projectDir.c_str());
+        return false;
+    }
 
     const std::string configFile = assets::resolve(configPath).string();
     if (configFile.empty()) {

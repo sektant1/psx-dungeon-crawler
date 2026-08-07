@@ -10,6 +10,13 @@ if(BUILD_TESTING)
     add_test(NAME assetlint
              COMMAND ${Python3_EXECUTABLE}
                      ${CMAKE_CURRENT_SOURCE_DIR}/tools/assetlint.py)
+    # raven_player must contain no game code. The claim the target exists to
+    # make, checked against the built binary rather than trusted -- see
+    # tools/check_player_purity.py.
+    add_test(NAME player_purity
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/check_player_purity.py
+                     $<TARGET_FILE:raven_player>)
   else()
     message(WARNING "Python3 not found: layering + assetlint tests disabled")
   endif()
@@ -670,7 +677,7 @@ if(BUILD_TESTING)
   eng_add_test(map_runtime
     SOURCES game/tests/MapRuntimeTests.cpp game/src/scene/MapRuntime.cpp
     INCLUDES game/src game/src/scene engine/include engine/src third_party third_party/imgui
-    LIBS eng game_content EnTT::EnTT glm::glm)
+    LIBS eng eng_runtime game_content EnTT::EnTT glm::glm)
 
   # --- authoring pipeline (.scn -> IR -> .map) --------------------------------
   # These run against the REAL assets/game/kit.toml and the real shipped scene:
@@ -791,6 +798,24 @@ if(BUILD_TESTING)
     SOURCES editor/tests/EditorWorkspaceTests.cpp editor/src/ui/EditorWorkspace.cpp
     INCLUDES editor/include engine/include third_party
     LIBS eng_imgui)
+
+  # The shell's arithmetic: the top bar's three zones and the bottom panel's
+  # height. Pure, so it needs neither an imgui context nor a window.
+  eng_add_test(editor_shell
+    SOURCES editor/tests/EditorShellTests.cpp editor/src/ui/EditorShell.cpp
+            editor/src/content/SceneContract.cpp
+            editor/src/content/SceneDocument.cpp
+    INCLUDES editor/include game/src engine/include
+    LIBS glm::glm)
+
+  eng_add_test(editor_scene_tabs
+    SOURCES editor/tests/SceneTabsTests.cpp editor/src/app/SceneTabs.cpp
+            editor/src/commands/Commands.cpp
+            editor/src/content/SceneDocument.cpp
+            editor/src/viewport/EditorCamera.cpp
+            editor/src/scene/Layers.cpp
+    INCLUDES editor/include game/src engine/include
+    LIBS glm::glm)
 
   eng_add_test(editor_scene_browser
     SOURCES editor/tests/EditorSceneBrowserTests.cpp editor/src/project/SceneBrowser.cpp
@@ -957,6 +982,21 @@ if(BUILD_TESTING)
     SOURCES game/tests/LayoutToSceneTests.cpp game/src/DungeonGen.cpp
     INCLUDES game/src/scene game/src engine/include third_party
     LIBS game_content eng_ecs_headless)
+
+  # --- the project runtime ----------------------------------------------
+  # Project is pure data -- TOML in, a struct out -- so it tests against
+  # eng_core alone, with no renderer and no window to stand up.
+  eng_add_test(project
+    SOURCES engine/tests/ProjectTests.cpp engine/src/runtime/Project.cpp
+    INCLUDES engine/include third_party
+    LIBS eng_core eng_toml)
+
+  # SceneRuntime needs a World, so it links eng_framework -- still headless:
+  # every assertion here is registry work, and none of it opens a window.
+  eng_add_test(scene_runtime
+    SOURCES engine/tests/SceneRuntimeTests.cpp engine/src/runtime/SceneRuntime.cpp
+    INCLUDES engine/include third_party
+    LIBS eng_framework glm::glm EnTT::EnTT)
 
   # The tests that assert against shipped content share game/tests/TestAssets.h,
   # which mounts the game pack and resolves logical paths. It replaced a
