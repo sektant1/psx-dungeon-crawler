@@ -1625,6 +1625,43 @@ void EditorApp::newProject()
     openSceneInTab(mProject.mainScenePath());
 }
 
+// Export, from the editor. The same function raven_export calls, so a build
+// made here and one made on a build machine are the same build.
+//
+// Into `<project>/../<name>-build`, beside the project rather than inside it:
+// a build directory inside the source is one somebody has to gitignore, and the
+// exporter refuses to write into a directory that already has things in it.
+void EditorApp::exportProjectBuild()
+{
+    if (!mProject.isOpen())
+        return;
+
+    ExportOptions options;
+    options.projectDir = mProject.project().dir.string();
+    options.outDir = (mProject.project().dir.parent_path() /
+                      (mProject.project().dir.filename().string() + "-build"))
+                         .string();
+    options.playerPath = siblingExecutable(mExecutablePath, "raven_player");
+    options.overwrite = true; // re-exporting over the last build is the norm
+
+    mStatus = "exporting...";
+    const ExportReport report = exportProject(options);
+    if (!report.ok) {
+        mStatus = "export failed: " + report.error;
+        return;
+    }
+    char summary[512];
+    std::snprintf(summary, sizeof(summary),
+                  "exported %zu scene(s) to %s (%.1f MB)%s",
+                  report.cookedScenes.size(), report.executable.c_str(),
+                  double(report.bytesCopied) / (1024.0 * 1024.0),
+                  report.skippedScenes.empty() ? ""
+                                               : " -- SOME SCENES SKIPPED");
+    mStatus = summary;
+    for (const std::string& skipped : report.skippedScenes)
+        eng::log::error("Export: skipped %s", skipped.c_str());
+}
+
 void EditorApp::closeProject()
 {
     mProject.close();
@@ -3367,6 +3404,8 @@ void EditorApp::drawMenuBar(const eng::FrameContext& f)
             ImGui::EndMenu();
         }
         ImGui::Separator();
+        if (ImGui::MenuItem("Export...", nullptr, false, mProject.isOpen()))
+            exportProjectBuild();
         if (ImGui::MenuItem("Close project", nullptr, false,
                             mProject.isOpen()))
             closeProject();

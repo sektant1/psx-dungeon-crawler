@@ -38,6 +38,7 @@
 #include <editor/viewport/PreviewBridge.h>
 #include <editor/content/SceneTemplates.h>
 #include <editor/project/ProjectSession.h>
+#include <editor/project/ProjectExport.h>
 #include <editor/project/ScriptWorkshop.h>
 #include <editor/project/RunGame.h>
 
@@ -627,6 +628,7 @@ private:
     void newProject();
     void openProject(const std::string& dir);
     void closeProject();
+    void exportProjectBuild();
 
     // Material staging mode. A separate scene rather than a panel over the
     // level: the point of a reference stage is that nothing else is in it.

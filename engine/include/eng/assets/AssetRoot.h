@@ -47,6 +47,17 @@ struct Pack {
 // Returns false and logs on a missing or malformed manifest. Never throws.
 bool init(const std::string& rootOverride = {});
 
+// The directory holding the running executable.
+//
+// Public because a shipped build has to be able to find what was shipped
+// beside it -- raven_player with no argument looks for a `project/` there, so
+// double-clicking an exported game plays it. Everything discovery does is
+// relative to this, which is what makes an installed build possible: no
+// absolute source path survives into the binary except the dev fallback.
+//
+// Empty when it cannot be determined, which no supported platform does.
+std::filesystem::path exeDirectory();
+
 // True once init() has succeeded. Everything below is safe to call either way;
 // this exists so a caller can tell "nothing mounted" from "never initialised".
 bool ready();

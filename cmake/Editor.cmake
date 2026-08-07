@@ -74,7 +74,8 @@ add_executable(
   game/src/PlayerWeapons.cpp
   editor/src/project/RunGame.cpp
   editor/src/project/ProjectSession.cpp
-  editor/src/project/ScriptWorkshop.cpp)
+  editor/src/project/ScriptWorkshop.cpp
+  editor/src/project/ProjectExport.cpp)
 target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/src third_party
                                                 engine/include)
@@ -135,6 +136,20 @@ eng_target_hardening(scene_cook)
 add_executable(raven_player engine/tools/player/main.cpp)
 target_link_libraries(raven_player PRIVATE eng_runtime)
 eng_target_hardening(raven_player)
+
+# raven_export: a project -> a directory somebody else can run.
+#
+# Links the authoring half because it has to cook, which is exactly why it is a
+# tool and not part of the player: the binary it SHIPS still has no game or
+# editor code in it, and player_purity checks that independently.
+add_executable(raven_export editor/tools/project_export/main.cpp
+                            editor/src/project/ProjectExport.cpp)
+target_include_directories(raven_export PRIVATE editor/include)
+# eng_runtime brings `eng`, which already contains the component registry and
+# the .map codec whole-archive -- so eng_ecs_headless must NOT be here as well.
+# Linking both is a duplicate-symbol error; see the note in Content.cmake.
+target_link_libraries(raven_export PRIVATE game_content eng_runtime)
+eng_target_hardening(raven_export)
 
 # Static-model production gate. Emits Markdown suitable for build artifacts and
 # production briefs; no renderer/window required.

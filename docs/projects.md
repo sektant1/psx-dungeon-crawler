@@ -260,6 +260,71 @@ anything else with it — spawned objects get groups distinct from the level's,
 so changing scene does not destroy a script's effects and vice versa. `0` means
 it did not load, which a script can test.
 
+## Shipping a build
+
+```sh
+raven_export <project-dir> --out <dir> [--name <exe>] [--overwrite]
+```
+
+or **Project → Export…** in the editor, which writes to `<project>-build`
+beside the project and calls the same function — so a build made in the editor
+and one made on a build machine are the same build.
+
+The result runs on its own:
+
+```
+my-game-build/
+  my-game            the player, named from the project, stripped
+  assets/            engine content + a generated assets.toml
+  project/           project.toml, scripts, scenes, and .raven/cooked/*.map
+```
+
+Run the executable. No arguments, no install, nothing from the source tree.
+That works because of two things that already existed: `eng::assets::init`
+discovers `<exe>/assets`, and `raven_player` with no argument now looks for a
+`project/` beside itself.
+
+**Every scene is cooked fresh** into the build, including `component: true`
+ones — a prop is not playable but it is spawnable, so it needs its `.map`. The
+project's own `.raven/` is never copied: it holds whatever the last playtest
+left, which may be older than the scenes beside it, and shipping a stale map is
+a bug that only appears on somebody else's machine.
+
+### What gets included, and why it is a list
+
+`engineRuntimeDirectories()` names the parts of the engine's content a runtime
+cannot start without: shaders, compositors, fonts, ui, materials, textures,
+particles, config. About 14 MB.
+
+It is a list rather than "everything" because the content tree this engine
+ships beside is **412 MB** — 302 MB of which is `source/`, pipeline inputs that
+nothing ever loads, and 92 MB this game's meshes, which somebody else's project
+has no use for. Exporting the lot would make every game built with this engine
+a 400 MB download of somebody else's art.
+
+This is the honest version of the "carve engine builtins out of `assets/`" job
+the runtime has owed since M1. It does not reorganise the tree; it states which
+parts of it are the engine's. Splitting it for real would let this list become
+"the engine pack", and until then this is where the answer lives.
+
+**The binary is stripped.** This tree builds RelWithDebInfo, so the player
+carries ~200 MB of DWARF into a 15 MB program — an unstripped export of a
+project with 14 MB of content came to 219 MB, and the symbols are no use to
+somebody handed a binary. `--strip-debug`, not `--strip-all`, so a crash in a
+shipped game still produces function names. Pass `keepDebugSymbols` to opt out.
+
+### Refusals
+
+The exporter would rather produce nothing than something broken:
+
+- a directory that is not a project;
+- an output directory that is not empty, unless `--overwrite` — the directory
+  somebody types by mistake usually has something in it;
+- a missing player binary;
+- **no scene that cooked** — a build with nothing playable in it opens to a
+  black window on somebody else's machine. Scenes that fail individually are
+  reported by name and the rest still ship.
+
 ## Writing scripts in the editor
 
 The editor deliberately does **not** edit script text. A code editor is a large
@@ -420,5 +485,10 @@ Named so nobody looks for them:
   and error reporting are covered; typing the code happens in your own editor.
 - **Jump to the failing line.** The Scripts panel opens the file, but not at
   the line — the log carries it and nothing parses it out yet.
-- **Export.** Running a project means running `raven_player` against a
-  directory; there is no distributable yet.
+- **Windows and macOS builds.** Export ships the player it is given, for the
+  platform it was built on. There is no cross-compilation and no installer.
+- **Trimming unused assets.** The engine content set is a fixed list, not a
+  trace of what a project actually references, so a small game still ships
+  ~14 MB of engine content.
+- **A window icon.** An exported build logs a warning about the engine's own
+  icon path; a game should ship its own, and there is no field for one yet.

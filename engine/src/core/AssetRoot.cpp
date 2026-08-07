@@ -50,11 +50,7 @@ const char* kManifest = "assets.toml";
 // and that one is only consulted last.
 fs::path exeDir()
 {
-    std::error_code ec;
-    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
-    if (ec)
-        return {};
-    return exe.parent_path();
+    return exeDirectory();
 }
 
 bool hasManifest(const fs::path& dir)
@@ -360,6 +356,15 @@ bool init(const std::string& rootOverride)
     log::info("assets: root %s (%s), %zu packs", s.root.c_str(),
               originName(origin), s.packs.size());
     return true;
+}
+
+fs::path exeDirectory()
+{
+    std::error_code ec;
+    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+    if (ec)
+        return {};
+    return exe.parent_path();
 }
 
 bool ready()

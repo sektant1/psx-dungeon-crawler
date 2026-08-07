@@ -957,6 +957,15 @@ if(BUILD_TESTING)
   # attachments fails the build rather than making the test pass vacuously.
   # The mechanical repairs: cell records never move an entity, and only an
   # exact copy is ever deleted.
+  # Exporting a project: the build's layout, and what the exporter refuses.
+  # eng_runtime (not eng_ecs_headless) because it reads a Project -- linking
+  # both would be a duplicate-symbol error, see Content.cmake.
+  eng_add_test(project_export
+    SOURCES editor/tests/ProjectExportTests.cpp
+            editor/src/project/ProjectExport.cpp
+    INCLUDES editor/include engine/include third_party
+    LIBS game_content eng_runtime)
+
   # Making a script, and reading errors back out of a playtest log. The log
   # format is the contract between the runtime and the editor -- two processes,
   # no shared type -- so this test is what keeps them agreeing.

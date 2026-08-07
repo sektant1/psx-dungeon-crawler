@@ -14,6 +14,7 @@
 // the project fields left empty.
 
 #include <eng/Log.h>
+#include <eng/assets/AssetRoot.h>
 #include <eng/app/Application.h>
 #include <eng/render/GifRecorder.h>
 #include <eng/runtime/Project.h>
@@ -56,9 +57,19 @@ int main(int argc, char** argv)
             target = arg;
     }
 
+    // No argument: an exported build. The exporter puts the project in
+    // `project/` beside the executable, so double-clicking the shipped binary
+    // plays the game it was shipped with -- which is the whole point of an
+    // export, and the one case where naming a directory would be absurd.
     if (target.empty()) {
-        usage();
-        return 2;
+        const std::filesystem::path beside =
+            eng::assets::exeDirectory() / "project";
+        if (eng::runtime::isProjectDir(beside)) {
+            target = beside.string();
+        } else {
+            usage();
+            return 2;
+        }
     }
 
     std::error_code ec;
