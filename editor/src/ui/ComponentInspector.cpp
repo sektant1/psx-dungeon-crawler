@@ -1223,7 +1223,10 @@ void drawScripts(Entity& entity, InspectorContext& context)
     const float gap = ImGui::GetStyle().ItemSpacing.x;
     const float removeWidth = ImGui::CalcTextSize("remove").x +
                               ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float controls = button * 3.0f + removeWidth + gap * 4.0f;
+    const float editWidth = ImGui::CalcTextSize("edit").x +
+                            ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float controls =
+        button * 3.0f + removeWidth + editWidth + gap * 5.0f;
 
     for (int i = 0; i < int(entity.scripts.size()); ++i) {
         game::content::ScriptAuthor& script = entity.scripts[i];
@@ -1255,6 +1258,11 @@ void drawScripts(Entity& entity, InspectorContext& context)
         ImGui::SameLine();
         if (ImGui::Button("remove"))
             removeAt = i;
+        if (context.openScript && pathKnown) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("edit"))
+                context.openScript(script.path);
+        }
 
         // Under the row rather than beside it: a warning on the same line would
         // push the controls around as it appeared and disappeared.
@@ -1279,6 +1287,25 @@ void drawScripts(Entity& entity, InspectorContext& context)
     if (ImGui::Button("add script")) {
         entity.scripts.emplace_back();
         track(context);
+    }
+    // "New" is the one that matters. Attaching an existing script is a picker
+    // away, but writing a correctly shaped file into the right directory and
+    // wiring it up is the step that otherwise sends somebody to the docs, a
+    // terminal and back -- and it is the first thing anybody does on a new
+    // project, where scripts/ holds nothing to pick.
+    if (context.createScript) {
+        ImGui::SameLine();
+        if (ImGui::Button("new script...")) {
+            const std::string created = context.createScript(entity.name);
+            if (!created.empty()) {
+                game::content::ScriptAuthor script;
+                script.path = created;
+                entity.scripts.push_back(std::move(script));
+                track(context);
+                if (context.openScript)
+                    context.openScript(created);
+            }
+        }
     }
     ImGui::TextDisabled("props reach the script as self.props");
 }

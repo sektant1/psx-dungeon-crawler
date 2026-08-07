@@ -73,7 +73,8 @@ add_executable(
   game/src/ViewmodelMotion.cpp
   game/src/PlayerWeapons.cpp
   editor/src/project/RunGame.cpp
-  editor/src/project/ProjectSession.cpp)
+  editor/src/project/ProjectSession.cpp
+  editor/src/project/ScriptWorkshop.cpp)
 target_include_directories(scene_editor PRIVATE editor/include game/src
                                                 engine/src third_party
                                                 engine/include)

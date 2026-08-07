@@ -38,6 +38,7 @@
 #include <editor/viewport/PreviewBridge.h>
 #include <editor/content/SceneTemplates.h>
 #include <editor/project/ProjectSession.h>
+#include <editor/project/ScriptWorkshop.h>
 #include <editor/project/RunGame.h>
 
 #include <eng/app/Application.h>
@@ -175,6 +176,18 @@ private:
     void drawAssetBrowser();
     void drawCatalog();
     void drawIssues();
+    // What the running game said when a script broke, read back from the
+    // playtest log. See ScriptWorkshop.h for why the log is the channel.
+    void drawScriptIssues();
+    void refreshScriptIssues();
+    std::vector<ScriptIssue> mScriptIssues;
+    std::string mPlaytestLogPath;
+    // Re-read on a timer rather than every frame: it is a file read, and a
+    // playtest that is not erroring should cost the editor nothing.
+    float mScriptIssuePoll = 0.0f;
+    // Set when a playtest starts, so the panel can say "nothing yet" rather
+    // than showing the previous run's errors as if they were current.
+    bool mScriptIssuesFromCurrentRun = false;
     // What this scene IS -- its kind, the roles it fills, the buttons that fill
     // the empty ones, and the environment it is graded with. A dock of its own,
     // beside the Inspector: the contract is the answer to "I opened a scene and

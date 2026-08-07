@@ -1699,6 +1699,11 @@ void EditorApp::runPlaytest()
     std::error_code logDirEc;
     std::filesystem::create_directories(logDir, logDirEc);
     const std::string log = (logDir / "playtest.log").string();
+    // Remembered so the Scripts panel knows what to read, and cleared of the
+    // previous run's errors so the panel cannot show stale ones as current.
+    mPlaytestLogPath = log;
+    mScriptIssues.clear();
+    mScriptIssuesFromCurrentRun = true;
 
     // Start where the author is looking, unless they asked for the spawn.
     // Adjusting a room at the far end of a level and then walking to it from
@@ -2568,8 +2573,20 @@ void EditorApp::onUpdate(const eng::FrameContext& f)
         updateGridLines(renderer);
     renderer.frameStats(mBatches, mTriangles);
 
+    // While the game is up, re-read its log on a timer. Twice a second is far
+    // below anything a person notices and far above what a file read costs.
+    if (mPlaytest.running()) {
+        mScriptIssuePoll -= f.realDt;
+        if (mScriptIssuePoll <= 0.0f) {
+            mScriptIssuePoll = 0.5f;
+            refreshScriptIssues();
+        }
+    }
+
     int exitCode = 0;
     if (mPlaytest.running() && !pollGame(mPlaytest, exitCode)) {
+        // Once more after it exits: the errors that killed it are written last.
+        refreshScriptIssues();
         mStatus = exitCode == 0 ? "playtest finished"
                                 : "playtest exited with code " +
                                       std::to_string(exitCode) +
@@ -3194,6 +3211,80 @@ void EditorApp::drawSceneTabBar()
 // The bottom panel's body and the handle that resizes it. The buttons that open
 // it live in the status row below (drawStatusBar), which is where Godot puts
 // them and is one row cheaper than a strip of their own.
+// --- script errors ----------------------------------------------------------
+//
+// The playtest is a separate process by design (see RunGame.h), so there is no
+// in-memory channel between the running game and the editor. Its stdout is
+// already redirected to a log; reading the errors back out of that is the whole
+// mechanism, and it costs the runtime nothing.
+
+void EditorApp::refreshScriptIssues()
+{
+    if (mPlaytestLogPath.empty())
+        return;
+    mScriptIssues = parseScriptIssues(tailFile(mPlaytestLogPath));
+}
+
+void EditorApp::drawScriptIssues()
+{
+    ImGui::TextDisabled("errors the running game reported");
+    ImGui::SameLine();
+    if (ImGui::SmallButton("refresh"))
+        refreshScriptIssues();
+    if (!mPlaytestLogPath.empty()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(%s)", mPlaytestLogPath.c_str());
+    }
+    ImGui::Separator();
+
+    if (mScriptIssues.empty()) {
+        // Three different nothings, because they mean different things to
+        // somebody staring at an empty panel.
+        if (mPlaytest.running())
+            ImGui::TextDisabled("playtest running -- no script errors so far.");
+        else if (mScriptIssuesFromCurrentRun)
+            ImGui::TextDisabled("the last playtest reported no script errors.");
+        else
+            ImGui::TextDisabled("press F5 to play; script errors appear here.");
+        return;
+    }
+
+    for (int i = 0; i < int(mScriptIssues.size()); ++i) {
+        const ScriptIssue& issue = mScriptIssues[std::size_t(i)];
+        ImGui::PushID(i);
+
+        const std::string header =
+            issue.script + " -- " +
+            (issue.callback.empty() ? std::string("?") : issue.callback) + "()";
+        ImGui::TextColored(kUiDanger, "%s", header.c_str());
+        if (!issue.subject.empty()) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("on %s", issue.subject.c_str());
+        }
+        ImGui::TextWrapped("%s", issue.message.c_str());
+
+        // The script is a path the editor can act on: opening it is the next
+        // thing anybody does after reading the error, and making them find it
+        // in the file browser is the reason this panel would go unused.
+        if (ImGui::SmallButton("open script")) {
+            const std::filesystem::path file =
+                std::filesystem::path(mState.assetRoot) / issue.script;
+            std::string error;
+            if (!openInExternalEditor(file.string(), error))
+                mStatus = error;
+        }
+        if (!issue.detail.empty()) {
+            ImGui::SameLine();
+            if (ImGui::TreeNode("traceback")) {
+                ImGui::TextUnformatted(issue.detail.c_str());
+                ImGui::TreePop();
+            }
+        }
+        ImGui::Separator();
+        ImGui::PopID();
+    }
+}
+
 void EditorApp::drawBottomPanel(const eng::FrameContext& f, float height)
 {
     if (height <= 0.0f)
@@ -3230,6 +3321,9 @@ void EditorApp::drawBottomPanel(const eng::FrameContext& f, float height)
             break;
         case BottomTab::Timeline:
             drawTimeline();
+            break;
+        case BottomTab::Scripts:
+            drawScriptIssues();
             break;
         }
     }
@@ -7531,6 +7625,28 @@ void EditorApp::drawInspector()
     context.materialNames = &mMaterialNames;
     context.enemyIds = &mEnemyIds;
     context.scriptPaths = &mScriptPaths;
+    // Making a script, and opening one. The editor owns both because only it
+    // knows where the project's scripts/ is; see ScriptWorkshop.h.
+    context.createScript = [this](const std::string& entityName) -> std::string {
+        const std::string logical = suggestedScriptPath(entityName);
+        const std::filesystem::path file =
+            std::filesystem::path(mState.assetRoot) / logical;
+        std::string error;
+        if (!createScript(file.string(), classNameFromPath(logical), error)) {
+            mStatus = error;
+            return {};
+        }
+        mStatus = "created " + logical;
+        rescanScriptPaths();
+        return logical;
+    };
+    context.openScript = [this](const std::string& logical) {
+        const std::filesystem::path file =
+            std::filesystem::path(mState.assetRoot) / logical;
+        std::string error;
+        if (!openInExternalEditor(file.string(), error))
+            mStatus = error;
+    };
     context.rescanScripts = [this] { rescanScriptPaths(); };
     // Rebuilt per frame: an entity added this frame is a legitimate target for
     // a script prop, and a cached list would not offer it.

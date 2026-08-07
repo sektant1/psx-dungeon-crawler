@@ -957,6 +957,15 @@ if(BUILD_TESTING)
   # attachments fails the build rather than making the test pass vacuously.
   # The mechanical repairs: cell records never move an entity, and only an
   # exact copy is ever deleted.
+  # Making a script, and reading errors back out of a playtest log. The log
+  # format is the contract between the runtime and the editor -- two processes,
+  # no shared type -- so this test is what keeps them agreeing.
+  eng_add_test(script_workshop
+    SOURCES editor/tests/ScriptWorkshopTests.cpp
+            editor/src/project/ScriptWorkshop.cpp
+    INCLUDES editor/include engine/include
+    LIBS eng_core)
+
   # Scene instancing: one .scn placed inside another.
   eng_add_test(scene_instancing
     SOURCES editor/tests/SceneInstancingTests.cpp

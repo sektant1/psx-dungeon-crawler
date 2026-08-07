@@ -260,6 +260,60 @@ anything else with it — spawned objects get groups distinct from the level's,
 so changing scene does not destroy a script's effects and vice versa. `0` means
 it did not load, which a script can test.
 
+## Writing scripts in the editor
+
+The editor deliberately does **not** edit script text. A code editor is a large
+thing to build badly and everyone already has one they prefer, so the editor's
+job is the parts a text editor cannot do.
+
+**New script.** In the Inspector's Scripts block, `new script...` writes a
+correctly shaped file into the project's `scripts/`, attaches it to the
+selected entity, and opens it. The name comes from the entity — "My Door"
+becomes `scripts/my_door.lua` with a `MyDoor` class — and it never overwrites
+an existing file. The template is a working script rather than a stub, because
+the class-table shape is the one thing you have to know before you can write
+anything:
+
+```lua
+local MyDoor = {}
+function MyDoor:start()  self.speed = self.props.speed or 1.0 end
+function MyDoor:update(dt) end
+-- function MyDoor:on_trigger(other) end   -- and the rest, commented
+return MyDoor
+```
+
+**Edit.** Each attached script has an `edit` button. It opens `$VISUAL`, then
+`$EDITOR`, then the desktop default — checked in that order because a desktop
+handler that opens `.lua` in a web browser is a real configuration people have.
+It is spawned detached and never waited on.
+
+**Hot reload** is already on: `raven_player` watches the project's script root,
+so saving a `.lua` in your editor swaps the class table under every live
+instance while the game runs. Instance state on `self` survives, `start()` is
+not re-run, and `on_reload()` fires if the script defines it. A file that will
+not compile leaves the running one alone — a half-typed save must not kill a
+level.
+
+### Seeing what broke
+
+The **Scripts** tab at the bottom of the editor shows the errors the running
+game reported: which script, which entity, which callback, the Lua message and
+the traceback, with a button to open the file.
+
+It is beside Problems rather than inside it because the two answer different
+questions — Problems is what is wrong with the scene on disk, Scripts is what
+went wrong when it ran, and only one of them can be fixed without pressing
+play.
+
+The channel is the playtest log. A playtest is a separate process by design, so
+there is no in-memory path from the running game back to the editor; its stdout
+is already redirected to `artifacts/playtest.log`, and the editor tails that
+twice a second while the game is up, then once more when it exits (the error
+that killed it is written last). That means the format
+`eng::script::reportScriptError` writes is a contract between two processes
+with no shared type — which is exactly what `script_workshop`'s tests exist to
+keep honest.
+
 ## The Lua surface
 
 On top of the object model in [scripting.md](scripting.md) — `world`, `entity`,
@@ -362,6 +416,9 @@ Named so nobody looks for them:
   its contents appear when cooked, not in the tree.
 - **UI from Lua.** No HUD or menu drawing; gameplay must not depend on ImGui,
   so this needs the engine's own UI canvas exposed rather than ImGui bound.
-- **In-editor script editing.** Scripts are files the editor references by path.
+- **In-editor script text editing.** Deliberate: creating, attaching, opening
+  and error reporting are covered; typing the code happens in your own editor.
+- **Jump to the failing line.** The Scripts panel opens the file, but not at
+  the line — the log carries it and nothing parses it out yet.
 - **Export.** Running a project means running `raven_player` against a
   directory; there is no distributable yet.
