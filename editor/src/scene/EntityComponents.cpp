@@ -368,20 +368,22 @@ const std::vector<ComponentType>& table()
 
         {"enemy_spawn", "Enemy Spawn", "spawns one enemy of a type",
          [](const Entity& e) { return e.enemySpawn.has_value(); },
-         [](Entity& e, const ComponentDefaults&) { e.enemySpawn = "goblin"; },
+         [](Entity& e, const ComponentDefaults&) { e.enemySpawn = "hollow"; },
          [](Entity& e) { e.enemySpawn.reset(); }, always,
          ComponentGroup::Gameplay},
 
         {"pickup", "Pickup", "item the player can take",
          [](const Entity& e) { return e.pickup.has_value(); },
-         [](Entity& e, const ComponentDefaults&) { e.pickup = "potion"; },
+         [](Entity& e, const ComponentDefaults&) { e.pickup = "tallow_candle"; },
          [](Entity& e) { e.pickup.reset(); }, always,
          ComponentGroup::Gameplay},
 
-        // Deliberately no default id. "potion" above is a placeholder an author
-        // corrects; an NPC id that is wrong is a person who stands in the
-        // village and cannot be spoken to, so the empty string is what the
-        // picker and the validator both read as "unfinished".
+        // Deliberately no default id. The ids above are placeholders an author
+        // corrects, but they are placeholders that RESOLVE -- a default that
+        // fails validation the instant the component is added teaches authors
+        // to ignore the validator. An NPC id that is wrong is a person who
+        // stands in the village and cannot be spoken to, so the empty string is
+        // what the picker and the validator both read as "unfinished".
         {"npc", "NPC", "a person: dialogue, trade and quests",
          [](const Entity& e) { return e.npc.has_value(); },
          [](Entity& e, const ComponentDefaults&) { e.npc = ""; },

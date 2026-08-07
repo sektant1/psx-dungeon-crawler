@@ -232,24 +232,43 @@ Three properties are shipped results. The plan is built around preserving them.
    PNG decoder over zlib + numpy, because Pillow is not installed and the
    gate should not be the most fragile thing in the build).
 
-   **(c) The gate cannot arm yet: captures are not reproducible.** Two
-   consecutive runs at the same `--seed` and `--fixed-dt` differ in **65% of
-   pixels** — the camera has advanced further and exposure differs. Cause:
-   `Engine::renderFrame` returns early during the loading phase *without*
-   incrementing `frameCount`, while the simulation keeps advancing, so a
-   variable number of load frames (disk cache, shader warm-up) leaves a
-   variable world state at "frame 90". Until that is fixed, a golden would
-   fail on the very next run and train everyone to ignore the gate — so the
-   comparison stays unarmed unless a golden is placed deliberately with
-   `--adopt-golden`.
+   **(c) The gate is armed, and arming it found a real bug.** Captures were
+   intermittently non-reproducible — roughly one run in six came back with the
+   camera pitched at the ceiling while the world, HUD and enemies were pixel-
+   identical. Only the view orientation differed, which pointed at input rather
+   than simulation.
 
-   **This is now the top of the queue.** Determinism is a prerequisite for the
-   golden gate, which is a prerequisite for Phase 5. Meanwhile, verify by
-   capturing and *looking*:
+   Cause: entering SDL relative-mouse mode warps the pointer to the window
+   centre, and SDL reports that warp as an ordinary `SDL_MOUSEMOTION` whose
+   `xrel`/`yrel` is the whole jump from wherever the pointer happened to be.
+   `InputImpl` accumulated it like any other motion, so it went straight into
+   mouse look. **This was never only a capture problem**: it is a view snap of
+   arbitrary size on launch, and again on every alt-tab back into the window.
+   Fixed by discarding the motion tick that follows a grab transition or a
+   focus gain (`InputImpl::discardNextMotion`).
 
-   ```sh
-   RAVEN_SCREENSHOT=/tmp/x.png RAVEN_SCREENSHOT_FRAME=120 ./build/game
-   ```
+   Now 8/8 identical directly and 3/3 through `make visual-test`, where before
+   the fix 1/6 diverged.
+
+   Two lessons worth keeping. First, a golden-image gate earns its cost on day
+   one: this bug was live in the shipped game and no test could see it. Second,
+   an earlier revision of this document declared determinism fine on the
+   strength of three consecutive passes — with a 1-in-6 failure rate, three
+   passes is a coin landing heads twice. Intermittent faults need a run count
+   chosen against the rate you are trying to exclude.
+
+   The golden lives in `tests/visual/golden/`, deliberately **not** under
+   `artifacts/` — that is gitignored, and a golden nobody can commit is a
+   golden nobody else and no CI ever compares against.
+
+   Verified end to end: identical capture → `identical`, 0 differing pixels;
+   a deliberately wrong golden → `image_regression` with the pixel count and
+   max channel delta. A missing golden reports "not checked" rather than
+   silently passing, and adoption requires `--adopt-golden`, so the gate can
+   never quietly re-baseline a regression.
+
+   The 65% and 84% differences first seen were this same bug: a large enough
+   spurious pitch takes most of the frame with it.
 2. **`raven_player` links nothing under `game/`** — enforced by the
    `player_purity` ctest reading the built binary's symbol table. This is
    already the "engine is reusable" invariant in miniature; the migration
@@ -391,7 +410,7 @@ engine.
   untested code path.
 - Fix the remaining ~90 stale comments, or delete them where they describe a
   trade-off no longer being made.
-- **Repair `make visual-test`** (see §2). Nothing in Phase 5 is safe without it.
+- **[done]** Repair `make visual-test` and arm the golden gate (see §2).
 - Record the baseline: full `ctest` output, golden images, binary sizes,
   clean-build wall time. Commit it as `docs/baseline-2026-08-07.md`.
 - Tag the pre-migration commit.
@@ -503,7 +522,7 @@ Nothing in this plan is trusted because it compiles.
 | Property | Check | When |
 |---|---|---|
 | Behaviour preserved | the 131 ctests, moving with their modules | every phase |
-| Image unchanged | `make visual-test` golden images — **currently broken, see §2**; until repaired, `RAVEN_SCREENSHOT` against the real display | every render-touching step |
+| Image unchanged | `make visual-test` against `tests/visual/golden/` — armed, exact (tolerance 0) | every render-touching step |
 | No upward dependency | layering lint, extended to modules | every phase |
 | Module is standalone | build + test the module with the rest of the engine absent | module exit |
 | No third-party leak | `tools/check_modules.py` in the new tree (only `raven.math` may match glm) | module exit |
@@ -578,11 +597,8 @@ seam. 4/4 tests pass.
 
 ### Next
 
-1. **Repair `make visual-test`** (§2). It is the migration's safety net for the
-   frozen image and it does not currently run — this is now the highest-value
-   item in the plan, ahead of any further module work.
-2. Finish Phase 0's baseline: commit `docs/baseline-2026-08-07.md` and tag.
-3. Phase 2's second half: `raven.core` — `Log`, `StringId`, `Clock`, `Config`,
+1. Finish Phase 0's baseline: commit `docs/baseline-2026-08-07.md` and tag.
+2. Phase 2's second half: `raven.core` — `Log`, `StringId`, `Clock`, `Config`,
    `FileSystem`, `Handles`, `Profiler`, events; toml++ leaves the public API.
-4. Phase 3: `raven.platform` + `raven.input`, which is the module most likely to
+3. Phase 3: `raven.platform` + `raven.input`, which is the module most likely to
    be reused first somewhere else.

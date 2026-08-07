@@ -90,9 +90,21 @@ float Input::wheelDelta() const { return mImpl->wheel; }
 
 void Input::setMouseGrab(bool grab)
 {
-    if (SDL_SetRelativeMouseMode(grab ? SDL_TRUE : SDL_FALSE) != 0)
+    // Callers set this every frame from a boolean they already hold, so only a
+    // real transition matters here.
+    const bool was = SDL_GetRelativeMouseMode() == SDL_TRUE;
+    if (SDL_SetRelativeMouseMode(grab ? SDL_TRUE : SDL_FALSE) != 0) {
         log::error("Input: SDL_SetRelativeMouseMode(%d) failed: %s",
                    int(grab), SDL_GetError());
+        return;
+    }
+    if (grab && !was) {
+        // Entering relative mode warps the pointer to the centre and SDL
+        // reports the warp as motion. Drop SDL's own accumulator and the next
+        // tick's events, or that jump becomes a view snap.
+        SDL_GetRelativeMouseState(nullptr, nullptr);
+        mImpl->discardNextMotion();
+    }
 }
 
 bool Input::mouseGrabbed() const

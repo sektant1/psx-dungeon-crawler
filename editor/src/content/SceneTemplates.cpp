@@ -213,11 +213,15 @@ bool buildTemplate(SceneTemplate which, const GridConfig& grid,
     Entity& shrine = emit(out, "shrine", cellPoint(0, 1), "Offering Shrine");
     shrine.marker = "shrine.treasure";
 
-    Entity& goblin = emit(out, "enemy", cellPoint(4, -6), "Sentry");
-    goblin.enemySpawn = "goblin";
+    // Ids that enemies.toml and items.toml actually define. These read
+    // "goblin" and "potion" until the content was renamed out from under the
+    // template, which left the tech demo -- the thing an author opens first --
+    // spawning two entities that resolve to nothing.
+    Entity& sentry = emit(out, "enemy", cellPoint(4, -6), "Sentry");
+    sentry.enemySpawn = "hollow_soldier";
 
-    Entity& potion = emit(out, "pickup", cellPoint(0, -8), "Cached Potion");
-    potion.pickup = "potion";
+    Entity& draught = emit(out, "pickup", cellPoint(0, -8), "Cached Draught");
+    draught.pickup = "draught_clarity";
 
     // A trigger across the corridor mouth: the arena wakes up when the player
     // commits to it, which is the shape every boss room in this game wants.

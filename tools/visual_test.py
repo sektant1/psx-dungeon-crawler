@@ -540,7 +540,9 @@ def build_parser() -> argparse.ArgumentParser:
         # The regression gate. A capture is compared against a committed
         # golden; a missing golden is adopted (loudly) rather than failed.
         child.add_argument(
-            "--golden-dir", default=os.environ.get("GOLDEN_DIR", "artifacts/visual/golden")
+            # NOT under artifacts/ -- that is gitignored, and a golden nobody
+            # can commit is a golden nobody else (or CI) ever compares against.
+            "--golden-dir", default=os.environ.get("GOLDEN_DIR", "tests/visual/golden")
         )
         child.add_argument(
             "--golden-name",
