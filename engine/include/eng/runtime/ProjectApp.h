@@ -7,11 +7,13 @@
 #include <eng/particles/ParticleLibrary.h>
 #include <eng/render/GifRecorder.h>
 #include <eng/runtime/Project.h>
+#include <eng/runtime/ProjectComponents.h>
 #include <eng/runtime/SceneRuntime.h>
 #include <eng/script/ScriptHost.h>
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace eng::runtime {
 
@@ -114,13 +116,38 @@ private:
     // instance that the switch is about to destroy.
     void applyPendingScene(Engine& engine);
 
-    // The lifetime group the current scene's entities carry, so a switch
-    // destroys exactly them. Starts at 1 because group 0 means "ungrouped" and
-    // World::destroyGroup rejects it -- it would take the player with it.
-    uint32_t mSceneGroup = 1;
+    // Decides what the camera is: an authored one makes the scene a shot, a
+    // ScreenCamera makes it a page, neither means the player controller drives.
+    // Called after every scene build, because a switch can change the answer.
+    void adoptSceneCamera(Engine& engine);
+
+    // Lifetime groups, handed out monotonically and never reused.
+    //
+    // One allocator for both the scene and everything spawned into it, because
+    // the two must never collide and only this class sees both. It lives here
+    // rather than in SceneRuntime because SceneRuntime is REPLACED on every
+    // scene change -- a counter in there restarts, and would hand a new spawn
+    // the group a survivor of the previous scene was already using.
+    //
+    // Starts at 1: group 0 means "ungrouped" and World::destroyGroup rejects
+    // it, since destroying it would take the player with it.
+    uint32_t nextGroup() { return ++mLastGroup; }
+    uint32_t mLastGroup = 0;
+    uint32_t mSceneGroup = 0;
+    // Everything game.spawn_scene has produced and not despawned. Destroyed
+    // with the scene that spawned it: before this they outlived it, in groups
+    // nothing held a handle to any more, which is a leak no script could clear.
+    std::vector<uint32_t> mSpawnedGroups;
     std::string mPendingScene; // non-empty between the request and the switch
 
     Project mProject;
+    // What the project declared for itself, and the table the engine's
+    // components plus those make. Both must outlive every scene read with them,
+    // so they sit here rather than being rebuilt per scene: the registry holds
+    // raw pointers into the schema's names and field tables.
+    ProjectComponents mDeclared;
+    ecs::ComponentRegistry mComponents;
+    bool mComponentsBuilt = false;
     ecs::World mWorld;
     std::optional<ecs::RendererSceneBackend> mBackend;
     std::optional<SceneRuntime> mScene;

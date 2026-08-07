@@ -14,6 +14,7 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -72,7 +73,32 @@ void ProjectApp::setRecording(std::optional<RecordingOptions> options)
 
 const ecs::ComponentRegistry& ProjectApp::components() const
 {
-    return ecs::engineRegistry();
+    // The engine's components plus whatever the project declared in
+    // components.toml. Built once, lazily, because configure() runs before
+    // anything has mounted the project and this is first asked for at scene
+    // load -- and cached, because the table is what every scene read and every
+    // Lua component access walks.
+    if (!mComponentsBuilt) {
+        auto* self = const_cast<ProjectApp*>(this);
+        self->mComponentsBuilt = true;
+        ecs::registerEngineComponents(self->mComponents);
+
+        if (!mProject.dir.empty()) {
+            std::string error;
+            const std::filesystem::path file =
+                mProject.dir / ProjectComponents::kFileName;
+            if (!self->mDeclared.load(file, error)) {
+                // Refused, not partially applied: a component that silently
+                // lost a field would corrupt every scene saved after it. The
+                // project still runs, without its own components, which is far
+                // easier to diagnose than a scene that decodes wrongly.
+                log::error("ProjectApp: %s", error.c_str());
+            } else if (!self->mDeclared.registerInto(self->mComponents, error)) {
+                log::error("ProjectApp: %s", error.c_str());
+            }
+        }
+    }
+    return mComponents;
 }
 
 AppConfig ProjectApp::configure(int argc, char** argv)
@@ -179,9 +205,15 @@ void ProjectApp::applyPendingScene(Engine& engine)
     // still whole. Then the group, which takes exactly the old scene's entities
     // and leaves anything the game spawned outside it alone.
     mScripts.reset();
+    // Everything the outgoing scene spawned goes with it. Their handles lived
+    // in scripts that are being torn down, so anything left here could never be
+    // despawned by anybody again.
+    for (const uint32_t group : mSpawnedGroups)
+        mWorld.destroyGroup(group);
+    mSpawnedGroups.clear();
     mWorld.destroyGroup(mSceneGroup);
     mScene.reset();
-    ++mSceneGroup;
+    mSceneGroup = nextGroup();
 
     if (!buildScene(engine, path)) {
         log::error("ProjectApp: '%s' failed to build; the world is now empty",
@@ -191,6 +223,7 @@ void ProjectApp::applyPendingScene(Engine& engine)
 
     mPlayer.init(engine.renderer(), physics(), playerStart(*mScene), 6.0f,
                  0.0025f, glm::vec3(-500.0f), glm::vec3(500.0f));
+    adoptSceneCamera(engine);
     startScripts(engine);
     log::info("ProjectApp: loaded scene '%s'", requested.c_str());
 }
@@ -282,9 +315,18 @@ void ProjectApp::startScripts(Engine& engine)
         const std::string path = cookedPathFor(scene);
         if (path.empty())
             return 0;
-        return mScene->instantiate(path, at);
+        const uint32_t group = nextGroup();
+        if (!mScene->instantiate(path, at, group))
+            return 0;
+        mSpawnedGroups.push_back(group);
+        return group;
     };
-    hooks.despawn = [this](uint32_t group) { mWorld.destroyGroup(group); };
+    hooks.despawn = [this](uint32_t group) {
+        mWorld.destroyGroup(group);
+        mSpawnedGroups.erase(
+            std::remove(mSpawnedGroups.begin(), mSpawnedGroups.end(), group),
+            mSpawnedGroups.end());
+    };
     hooks.cameraPosition = [this]() { return mPlayer.eyePosition(); };
     hooks.cameraForward = [this]() { return mPlayer.forward(); };
     hooks.elapsed = [&engine]() { return engine.gameClock().elapsed(); };
@@ -305,6 +347,51 @@ void ProjectApp::startScripts(Engine& engine)
     script::registerScriptCommands(devConsole(), *mScripts);
 }
 
+// What the camera is, decided from the scene just built.
+//
+// Called after EVERY build, not only the first: a switch from a level to a shot
+// changes the answer, and before this ran on a switch the player controller
+// kept driving through an authored camera, and a screen rig outlived the page
+// it was fitted for.
+void ProjectApp::adoptSceneCamera(Engine& engine)
+{
+    Renderer& r = engine.renderer();
+
+    // A screen rig belongs to the scene that asked for one. Dropped first, so
+    // leaving a page for a world gives the camera back rather than presenting
+    // a rig fitted to a scene that is gone.
+    if (mScreen) {
+        mScreen->detach(r);
+        mScreen.reset();
+        mWorld.setDrivesCamera(true);
+    }
+
+    // A scene that authored its own camera is a *shot*, not a level: it plays
+    // itself, and the player controller would fight it for the renderer's one
+    // camera every frame. So the controller stands down and the mouse stays
+    // free -- which is also what makes such a scene recordable with --record
+    // without a hand on the mouse.
+    mCinematic = mScene && mScene->hasAuthoredCamera();
+    if (mCinematic)
+        log::info("Scene: authored camera -- playing as a shot");
+
+    // A scene carrying a ScreenCamera is not a world at all but a 2D screen --
+    // a menu, a HUD plate, a dialogue page -- and the camera belongs to the rig
+    // that fits the page rather than to the authored entity transform.
+    if (mScene) {
+        if (const auto& screen = mScene->rig().screen) {
+            mScreen.emplace();
+            mScreen->setPage(*screen);
+            mWorld.setDrivesCamera(false);
+            mScreen->attach(r);
+            mCinematic = true;
+            log::info("Scene: screen scene -- %.0fx%.0f virtual pixels",
+                      double(screen->pageWidth), double(screen->pageHeight));
+        }
+    }
+    engine.input().setMouseGrab(!mCinematic);
+}
+
 bool ProjectApp::onStartGame(Engine& engine)
 {
     const std::string path = scenePath();
@@ -320,6 +407,7 @@ bool ProjectApp::onStartGame(Engine& engine)
     mWorld.attachAudio(audio(), /*drivesListener=*/true);
     onWorldAttached(engine);
 
+    mSceneGroup = nextGroup();
     if (!buildScene(engine, path)) {
         exitCode = 1;
         return false;
@@ -329,28 +417,7 @@ bool ProjectApp::onStartGame(Engine& engine)
     mPlayer.init(r, physics(), applyPlayFromOverride(playerStart(scene)), 6.0f,
                  0.0025f, glm::vec3(-500.0f), glm::vec3(500.0f));
 
-    // A scene that authored its own camera is a *shot*, not a level: it plays
-    // itself, and the player controller would fight it for the renderer's one
-    // camera every frame. So the controller stands down and the mouse stays
-    // free -- which is also what makes such a scene recordable with --record
-    // without a hand on the mouse.
-    mCinematic = scene.hasAuthoredCamera();
-    if (mCinematic)
-        log::info("Scene: authored camera -- playing as a shot");
-
-    // A scene carrying a ScreenCamera is not a world at all but a 2D screen --
-    // a menu, a HUD plate, a dialogue page -- and the camera belongs to the rig
-    // that fits the page rather than to the authored entity transform.
-    if (const auto& screen = scene.rig().screen) {
-        mScreen.emplace();
-        mScreen->setPage(*screen);
-        mWorld.setDrivesCamera(false);
-        mScreen->attach(r);
-        mCinematic = true;
-        log::info("Scene: screen scene -- %.0fx%.0f virtual pixels",
-                  double(screen->pageWidth), double(screen->pageHeight));
-    }
-    engine.input().setMouseGrab(!mCinematic);
+    adoptSceneCamera(engine);
 
     startScripts(engine);
 

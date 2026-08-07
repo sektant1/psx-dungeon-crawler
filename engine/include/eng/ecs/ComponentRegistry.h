@@ -5,6 +5,8 @@
 
 #include <entt/entt.hpp>
 
+#include <functional>
+
 #include <cstdint>
 #include <vector>
 
@@ -20,14 +22,22 @@ struct ComponentType {
     // types without colliding with a future engine one.
     uint16_t stableTypeId = 0;
 
-    void (*addDefault)(entt::registry&, entt::entity) = nullptr;
-    bool (*has)(const entt::registry&, entt::entity) = nullptr;
-    void (*remove)(entt::registry&, entt::entity) = nullptr;
-    void (*serialize)(const entt::registry&, entt::entity, io::ByteWriter&) = nullptr;
+    // std::function rather than plain function pointers, so a component whose
+    // C++ type is not known at compile time can carry which storage it is --
+    // that is what makes a project able to declare its own components (see
+    // eng/runtime/ProjectComponents.h). Every existing registration assigns a
+    // function pointer and is unchanged; the indirection is paid once per
+    // component per entity at load, not per frame.
+    std::function<void(entt::registry&, entt::entity)> addDefault;
+    std::function<bool(const entt::registry&, entt::entity)> has;
+    std::function<void(entt::registry&, entt::entity)> remove;
+    std::function<void(const entt::registry&, entt::entity, io::ByteWriter&)>
+        serialize;
     // payloadBytes lets a component add optional trailing fields while still
     // decoding older payloads with safe defaults.
-    void (*deserialize)(entt::registry&, entt::entity, io::ByteReader&,
-                        uint32_t payloadBytes) = nullptr;
+    std::function<void(entt::registry&, entt::entity, io::ByteReader&,
+                       uint32_t payloadBytes)>
+        deserialize;
 
     // --- reflection ------------------------------------------------------
     // The component's own data, for the inspector and for the generic
@@ -40,7 +50,7 @@ struct ComponentType {
     int fieldCount = 0;
     // The live component on an entity, as raw bytes, or null when absent. This
     // plus `fields` is everything a generic editor needs.
-    void* (*instance)(entt::registry&, entt::entity) = nullptr;
+    std::function<void*(entt::registry&, entt::entity)> instance;
 
     // Whether the add-component menu may offer this type. False for components
     // a system owns rather than an author (NodeRef, BodyRef) and for those that

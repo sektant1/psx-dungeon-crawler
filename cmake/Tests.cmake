@@ -1026,6 +1026,14 @@ if(BUILD_TESTING)
     INCLUDES engine/include third_party
     LIBS eng_core eng_toml)
 
+  # Components a project declares in TOML. Headless: a declared component is
+  # registry work plus the .map codec, and neither needs a window.
+  eng_add_test(project_components
+    SOURCES engine/tests/ProjectComponentTests.cpp
+            engine/src/runtime/ProjectComponents.cpp
+    INCLUDES engine/include third_party
+    LIBS eng_framework eng_toml glm::glm EnTT::EnTT)
+
   # SceneRuntime needs a World, so it links eng_framework -- still headless:
   # every assertion here is registry work, and none of it opens a window.
   eng_add_test(scene_runtime

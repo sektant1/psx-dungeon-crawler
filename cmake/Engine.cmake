@@ -384,6 +384,7 @@ target_link_libraries(eng PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,eng_script>"
 # facade free of a scene-boot policy -- a sample that just wants a window and a
 # renderer still links `eng` and gets none of this.
 add_library(eng_runtime STATIC engine/src/runtime/Project.cpp
+                               engine/src/runtime/ProjectComponents.cpp
                                engine/src/runtime/SceneRuntime.cpp
                                engine/src/runtime/ProjectApp.cpp)
 target_include_directories(eng_runtime PRIVATE third_party engine/src)

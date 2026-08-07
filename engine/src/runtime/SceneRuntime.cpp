@@ -12,9 +12,6 @@ SceneRuntime::SceneRuntime(ecs::World& world, uint32_t group,
                            const ecs::ComponentRegistry& components)
     : mWorld(world), mComponents(components), mGroup(group)
 {
-    // Spawn groups start above the scene's, so the first instantiate() cannot
-    // collide with the level's own group however the level was numbered.
-    mLastSpawnGroup = group + 1000;
 }
 
 bool SceneRuntime::load(const std::string& path)
@@ -47,13 +44,13 @@ void SceneRuntime::resolvePrimitives(Renderer& renderer)
     ecs::resolvePrimitiveMeshes(mWorld.registry(), renderer, mPrimitives);
 }
 
-uint32_t SceneRuntime::instantiate(const std::string& path,
-                                   const glm::vec3& origin)
+bool SceneRuntime::instantiate(const std::string& path,
+                               const glm::vec3& origin, uint32_t group)
 {
     entt::registry parsed;
     if (!eng::ecs::readMap(path, parsed, mComponents)) {
         log::error("Scene: instantiate failed: %s", path.c_str());
-        return 0;
+        return false;
     }
 
     // Offset the roots only. A child's transform is relative to its parent, so
@@ -66,15 +63,11 @@ uint32_t SceneRuntime::instantiate(const std::string& path,
         parsed.get<ecs::Transform>(e).position += origin;
     }
 
-    // Its own group, so despawning it is one call and cannot take the level
-    // with it. Counted up from the scene's, which is what keeps the two apart
-    // for the life of the world.
-    const uint32_t group = ++mLastSpawnGroup;
     const std::size_t added =
         ecs::copyEntities(mWorld.registry(), parsed, mComponents, group);
     log::info("Scene: instantiated '%s' -- %zu entities in group %u",
               path.c_str(), added, group);
-    return group;
+    return true;
 }
 
 void SceneRuntime::resolveNewPrimitives(Renderer& renderer)

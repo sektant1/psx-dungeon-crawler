@@ -260,6 +260,67 @@ anything else with it — spawned objects get groups distinct from the level's,
 so changing scene does not destroy a script's effects and vice versa. `0` means
 it did not load, which a script can test.
 
+## Declaring your own components
+
+A project adds components in TOML, with no C++, in `<project>/components.toml`:
+
+```toml
+[component.Health]
+id = 64
+fields.max     = { type = "float", default = 100.0, min = 0.0, max = 999.0 }
+fields.current = { type = "float", default = 100.0 }
+
+[component.Team]
+id = 65
+fields.index  = { type = "int", default = 1 }
+fields.colour = { type = "colour", default = [1.0, 0.5, 0.25] }
+```
+
+They then behave exactly like engine components — from Lua through the same
+generic accessors, with no binding code:
+
+```lua
+self.entity:add("Health")
+self.entity:set("Health", { current = 42.5 })
+if self.entity:has("Health") then print(self.entity:get("Health").max) end
+```
+
+and they serialise into `.map` through the same codec, so a value authored on
+an entity survives a save and reload.
+
+**How it works, since it looks like it should need code generation.** The
+payload is a flat byte buffer laid out exactly as the equivalent C++ struct
+would be. `eng::Field` already addresses fields by *offset*, so the generic
+serialiser, the inspector and the Lua bindings all operate on a declared
+component with no special case anywhere. entt keys storages by id as well as by
+type, so every declared component gets its own storage while sharing one C++
+payload type — which is why adding `Team` cannot disturb `Health`.
+
+`ComponentType`'s hooks became `std::function` to make this possible: a
+component whose C++ type is not known at compile time has to carry *which*
+storage it is. Every compiled-in registration assigns a function pointer and is
+unchanged, and the indirection is paid once per component per entity at load,
+never per frame.
+
+### Rules
+
+- **`id` is a file format.** It must be ≥ 64 (`kFirstApplicationTypeId`) —
+  below that is the engine's own range, and taking one would make your scenes
+  decode as engine components. Renumbering later reinterprets every scene on
+  disk.
+- **Field types:** `bool`, `int`, `float`, `vec3`, `colour`, `quat`. **Not
+  `string`** — a `std::string` inside a byte buffer needs a constructor, a
+  destructor and a copy that knows about it, while every other type is bytes.
+  It is diagnosed rather than half-supported; use the entity's `properties`,
+  which already carry strings.
+- **Adding a field later is safe.** A payload written before it existed decodes
+  with that field at its declared default, the same forward compatibility a
+  hand-written deserialiser gets from checking `payloadBytes`.
+- A malformed file is **refused whole**, not partially applied: a component
+  that silently lost a field would corrupt every scene saved afterwards. The
+  project still runs, without its declared components, which is much easier to
+  diagnose than a scene that decodes wrongly.
+
 ## Shipping a build
 
 ```sh
@@ -472,9 +533,11 @@ to ask for it again.
 
 Named so nobody looks for them:
 
-- **Project-defined components.** The player registers the engine set only, and
-  the editor's add-component menu still offers this game's markers. This is the
-  largest remaining piece and is its own milestone.
+- **Declared components in the editor.** They are live at runtime and from Lua,
+  but the add-component menu and the cooker still work from the compiled-in
+  table, so a declared component is added from a script rather than placed in a
+  scene. That is the remaining half of this feature.
+- **String fields on declared components.** See the rules above.
 - **Per-instance overrides.** A placed scene cannot be tweaked in place; make
   a variant scene instead.
 - **Instanced contents in the outliner.** A placement is one row in the editor;
