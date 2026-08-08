@@ -23,6 +23,22 @@ bool FirstPersonHands::init(eng::Renderer& renderer, eng::NodeHandle headNode,
     shutdown(renderer);
     mHands = hands;
 
+    // A rig that states its own framing replaces the global placement.
+    //
+    // [player_viewmodel] is one offset/rotation/scale for every rig, and it
+    // cannot be: it yaws 180 degrees because the SHIPPED rig faces glTF +z,
+    // and the imported animation rigs already face -z. Applying it to those
+    // turned them twice. Only the three placement fields are overridden -- bob,
+    // sway, recoil and the rest stay global, because those are feel and feel
+    // should not change with the hands.
+    if (mHands.hasFraming) {
+        ViewmodelRig framed = mMotion.tuning();
+        framed.offset = mHands.framingOffset;
+        framed.rotation = mHands.framingRotationDegrees;
+        framed.scale = mHands.framingScale;
+        mMotion.setTuning(framed);
+    }
+
     const std::filesystem::path skeleton = eng::assets::resolve(mHands.skeleton);
     const std::filesystem::path model = eng::assets::resolve(mHands.model);
     if (skeleton.empty() || model.empty()) {
@@ -188,14 +204,25 @@ void FirstPersonHands::setWeapon(eng::Renderer& renderer,
         mSprite.clear(renderer);
         if (mSkinNode.valid())
             renderer.setNodeVisible(mSkinNode, true);
-        // Rebuild the held visual even when the skeleton did not come up: the
-        // socket set is empty then, build() sees an invalid node and leaves the
-        // weapon empty, which is the honest outcome rather than a crash.
-        mWeapon.build(renderer, mSockets.node(definition.socket), definition,
-                      glow);
-        if (!definition.socket.empty() && !mWeapon.valid() && !mSockets.empty())
-            eng::log::warn("First-person hands: no socket '%s' on this rig",
-                           definition.socket.c_str());
+        if (mHands.bundledWeapon) {
+            // The rig IS the weapon. These are the imported FPS animation
+            // packs, authored as hands already holding a gun -- which is why
+            // their reloads work at all. Attaching the weapon's own model on
+            // top would put a second gun in the same fist, and it is the rig's
+            // clips, not a socket, that make the thing move.
+            mWeapon.clear(renderer);
+        } else {
+            // Rebuild the held visual even when the skeleton did not come up:
+            // the socket set is empty then, build() sees an invalid node and
+            // leaves the weapon empty, which is the honest outcome rather than
+            // a crash.
+            mWeapon.build(renderer, mSockets.node(definition.socket),
+                          definition, glow);
+            if (!definition.socket.empty() && !mWeapon.valid() &&
+                !mSockets.empty())
+                eng::log::warn("First-person hands: no socket '%s' on this rig",
+                               definition.socket.c_str());
+        }
     }
     if (!mAnimator.valid())
         return;

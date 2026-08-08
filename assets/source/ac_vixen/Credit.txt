@@ -1,4 +1,0 @@
-Source: Armored Core: Project Phantasma
-Platform: PSX
-Rip and cleanup by: DrDoctor
-Note: Some assets may scaled too big compared to other assets. This has something to do with how the game engine renders objects at a certain distance from the player.

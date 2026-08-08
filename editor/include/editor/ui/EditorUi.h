@@ -110,6 +110,17 @@ struct AssetPreviewLayout {
     // of beside it. A 96-pixel image and three lines of text do not fit in 220
     // pixels, and forcing them produced a column of single words.
     bool metadataBeside = true;
+    // The height the preview block occupies, whatever it contains.
+    //
+    // It used to be whatever the content came to, and that is what made the
+    // panel restless: a texture with four metadata lines pushed the list down
+    // relative to one with two, so arrowing through a list moved every row
+    // under the cursor and the selection appeared to jump. Reserving the space
+    // costs a little of it on the sparse subjects and makes the list a fixed
+    // target -- which is what a browser is for.
+    //
+    // Content taller than this scrolls within the block rather than growing it.
+    float headerHeight = 0.0f;
 };
 
 AssetPreviewLayout assetPreviewLayout(float availableWidth);

@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "c71a2a4822c410e0"
+type = "texture"
+name = "Apocalypse Telescopic Baton Albedo"
+tags = ["apocalypse"]

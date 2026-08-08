@@ -45,6 +45,7 @@ add_executable(
   game/src/actor/ActorAnimator.cpp
   game/src/actor/ActorVisual.cpp
   game/src/PlayerWeapons.cpp
+  game/src/Ammunition.cpp
   game/src/PlayerSystem.cpp
   game/src/InteractionSystem.cpp
   game/src/ScriptGameplay.cpp

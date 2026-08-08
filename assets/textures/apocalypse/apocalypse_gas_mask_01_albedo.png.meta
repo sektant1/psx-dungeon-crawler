@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "d680a0832cbd3541"
+type = "texture"
+name = "Apocalypse Gas Mask 01 Albedo"
+tags = ["apocalypse"]

@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "dc324b99b18a85d0"
+type = "mesh"
+name = "Katana 01"
+tags = ["medieval"]

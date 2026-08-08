@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "1a1a683eb3d6cc06"
+type = "texture"
+name = "Medieval Roundshield Albedo"
+tags = ["medieval"]

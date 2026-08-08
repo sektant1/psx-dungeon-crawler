@@ -1,0 +1,15 @@
+# Resource database record. Written by tools/author_hand_rigs.py.
+#
+# This .glb feeds TWO rows of the asset pipeline -- Skel. Hierarchy
+# and Animation Clips -- both of which gltf2ozz owns. It is NOT a
+# static mesh: baking a skinned rig to an .rmesh would silently
+# publish its bind pose.
+schema = 1
+guid = "5577567808ea3140"
+type = "mesh"
+name = "Human 03 Hands"
+tags = ["viewmodel", "skinned", "hands"]
+
+[import]
+skip = true
+skip_reason = "skinned rig: gltf2ozz owns it"

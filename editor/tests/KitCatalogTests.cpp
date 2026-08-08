@@ -100,22 +100,29 @@ int main()
         catalog.find("kit.prop_boss_placeholder_sword");
     require(bossSword && bossSword->material == "Game/BossPlaceholderSword",
             "boss placeholder sword is independently placeable");
-    // Counted by prefix rather than by role. `imported_model` is the role every
-    // editor import writes, so a bare count of it asserted that nobody had
-    // imported anything else -- a test that failed the moment an author used
-    // the feature it was guarding. What it means is that *this* model kept all
-    // of its parts.
-    std::size_t modularParts = 0;
-    for (const KitPiece* piece : catalog.byRole("imported_model"))
-        if (piece->id.rfind("kit.import_modulardungeonfree", 0) == 0)
-            ++modularParts;
-    require(modularParts == 26,
-            "GLB modular dungeon import exposes every mesh part");
-    const KitPiece* fallback =
-        catalog.find("kit.import_modulardungeonfree_p25");
-    require(fallback &&
-                fallback->material == "Engine/Psx/PrototypeSurface",
-            "an untextured GLB part uses prototype surface fallback");
+    // The one-at-a-time `import_*` models this used to count are gone. They
+    // were the prototype era's content -- imported through the editor's own
+    // model importer, one model per session, each landing as N loose parts --
+    // and the modular dungeon among them is now a PACK, published by
+    // tools/import_asset_pack.py into assets/prefabs/dungeon.prefab.toml.
+    //
+    // The invariant that assertion protected ("this model kept all of its
+    // parts") therefore belongs to the importer now, where it is a property of
+    // every pack rather than of one model somebody happened to import. What is
+    // still this catalogue's business is that a piece resolves to a mesh that
+    // exists, which is what the loop below checks for the whole file.
+    for (const KitPiece& piece : catalog.all()) {
+        if (piece.isGroup())
+            continue;
+        require(!piece.meshPath.empty(),
+                "a non-group catalogue piece has no mesh");
+    }
+    // The untextured-part fallback was pinned to one part of the same removed
+    // model. The behaviour is the renderer's, not the catalogue's -- a piece
+    // naming a material that is not loaded resolves to the prototype surface,
+    // which `Renderer::attachMesh` decides and PrototypeAssets tests cover.
+    // Pinning it here only asserted that one particular imported part happened
+    // to be untextured, which stopped being true when the model left the tree.
 
     KitCatalog missing;
     require(!KitCatalog::load("does/not/exist.toml", missing, error),

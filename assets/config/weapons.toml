@@ -413,3 +413,56 @@ base_damage    = 26.0
 damage_type    = "fire"
 knockback      = 3.0
 cc_on_hit      = [ { kind = "burn", magnitude = 8.0, duration = 4.0 } ]
+
+# --- ballistic payloads -------------------------------------------------------
+#
+# What a bullet does when it lands, for the firearm loadout in firearms.toml.
+#
+# THESE ARE NOT THE CARTRIDGE. `ammo.toml` owns what a round IS -- its velocity,
+# its drag, the armour class it defeats -- and that is where the interesting
+# decisions live. This is the damage system's side of the same event: the number
+# a hit contributes and how much it staggers. They are separate because the
+# damage pipeline is shared with enemies and melee, and it must not have to know
+# what a ballistic coefficient is.
+#
+# `pierce` throughout: a bullet is a small fast thing that goes through, which is
+# the type the armour and resistance tables already model that way. Knockback is
+# small and poise damage is what does the staggering -- a rifle round should
+# interrupt somebody, not launch them.
+
+[weapon.bullet_9mm]
+name = "9mm"
+base_damage = 24.0
+damage_type = "pierce"
+knockback = 1.2
+poise_damage = 6.0
+
+[weapon.bullet_556]
+name = "5.56mm"
+base_damage = 30.0
+damage_type = "pierce"
+knockback = 1.8
+poise_damage = 9.0
+
+[weapon.bullet_762]
+name = "7.62mm"
+base_damage = 38.0
+damage_type = "pierce"
+knockback = 2.6
+poise_damage = 13.0
+
+[weapon.bullet_338]
+name = ".338 Lapua"
+base_damage = 120.0
+damage_type = "pierce"
+knockback = 6.0
+poise_damage = 45.0
+
+# Per PELLET. Eight of these land per shell, so the shot totals ~112 at point
+# blank and much less at range once the spread opens -- which is the weapon.
+[weapon.buckshot]
+name = "12ga Buckshot"
+base_damage = 14.0
+damage_type = "pierce"
+knockback = 1.0
+poise_damage = 5.0

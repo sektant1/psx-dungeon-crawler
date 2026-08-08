@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "370c5d2be8165051"
+type = "mesh"
+name = "Fruits Single Part 12"
+tags = ["cozy"]

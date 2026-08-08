@@ -1,0 +1,146 @@
+# First-person hand rigs -- written by tools/author_hand_rigs.py.
+# One material per rig, each naming that rig's atlas.
+# Re-running the authoring tool regenerates this file.
+
+[material."Builtin/Viewmodel/Human01"]
+shader = "lit"
+texture = "hands_human_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Human02"]
+shader = "lit"
+texture = "hands_human_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Human03"]
+shader = "lit"
+texture = "hands_human_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Human04"]
+shader = "lit"
+texture = "hands_human_04_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Human05"]
+shader = "lit"
+texture = "hands_human_05_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Human06"]
+shader = "lit"
+texture = "hands_human_06_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Glove01"]
+shader = "lit"
+texture = "hands_glove_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Glove02"]
+shader = "lit"
+texture = "hands_glove_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Glove03"]
+shader = "lit"
+texture = "hands_glove_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Alien01"]
+shader = "lit"
+texture = "hands_alien_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Alien02"]
+shader = "lit"
+texture = "hands_alien_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Alien03"]
+shader = "lit"
+texture = "hands_alien_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Werewolf01"]
+shader = "lit"
+texture = "hands_werewolf_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Werewolf02"]
+shader = "lit"
+texture = "hands_werewolf_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Werewolf03"]
+shader = "lit"
+texture = "hands_werewolf_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+
+# --- animated hand+weapon rigs (tools/author_animated_hands.py) ---
+
+[material."Builtin/Viewmodel/Rifle"]
+shader = "lit"
+texture = "hands_rifle_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Aks74"]
+shader = "lit"
+texture = "hands_aks74_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Scar"]
+shader = "lit"
+texture = "hands_scar_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Shotgun"]
+shader = "lit"
+texture = "hands_shotgun_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false
+
+[material."Builtin/Viewmodel/Pp19"]
+shader = "lit"
+texture = "hands_pp19_albedo.png"
+filter = "nearest"
+address = "clamp"
+highlight = false

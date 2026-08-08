@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "16b35c7d86a034d0"
+type = "texture"
+name = "Apocalypse Syrienge 02 Albedo"
+tags = ["apocalypse"]

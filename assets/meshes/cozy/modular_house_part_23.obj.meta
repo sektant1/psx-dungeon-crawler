@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "a53ad7d204b77562"
+type = "mesh"
+name = "Modular House Part 23"
+tags = ["cozy"]

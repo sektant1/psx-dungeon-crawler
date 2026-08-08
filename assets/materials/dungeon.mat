@@ -1,0 +1,95 @@
+# Modular Dungeon (PSX) -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Dungeon/DungeonBrick"]
+shader = "lit"
+texture = "dungeon_brick_albedo.png"
+filter = "nearest"
+address = "clamp"
+# brick
+
+[material."Builtin/Dungeon/DungeonColumn"]
+shader = "lit"
+texture = "dungeon_column_albedo.png"
+filter = "nearest"
+address = "clamp"
+# column
+
+[material."Builtin/Dungeon/DungeonDoor"]
+shader = "lit"
+texture = "dungeon_door_albedo.png"
+filter = "nearest"
+address = "clamp"
+# door
+
+[material."Builtin/Dungeon/DungeonFountain"]
+shader = "lit"
+texture = "dungeon_fountain_albedo.png"
+filter = "nearest"
+address = "clamp"
+# fountain
+
+[material."Builtin/Dungeon/DungeonIronGate"]
+shader = "lit"
+texture = "dungeon_iron_gate_albedo.png"
+filter = "nearest"
+address = "clamp"
+# iron_gate
+
+[material."Builtin/Dungeon/DungeonLever"]
+shader = "lit"
+texture = "dungeon_lever_albedo.png"
+filter = "nearest"
+address = "clamp"
+# lever
+
+[material."Builtin/Dungeon/DungeonRoots"]
+shader = "lit"
+texture = "dungeon_roots_albedo.png"
+filter = "nearest"
+address = "clamp"
+# roots
+
+[material."Builtin/Dungeon/DungeonSpike"]
+shader = "lit"
+texture = "dungeon_spike_albedo.png"
+filter = "nearest"
+address = "clamp"
+# spike
+
+[material."Builtin/Dungeon/DungeonStairs"]
+shader = "lit"
+texture = "dungeon_stairs_albedo.png"
+filter = "nearest"
+address = "clamp"
+# stairs
+
+[material."Builtin/Dungeon/DungeonTorch"]
+shader = "lit"
+texture = "dungeon_torch_albedo.png"
+filter = "nearest"
+address = "clamp"
+# torch
+
+[material."Builtin/Dungeon/DungeonWall02"]
+shader = "lit"
+texture = "dungeon_wall_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# wall_02
+
+[material."Builtin/Dungeon/DungeonWall"]
+shader = "lit"
+texture = "dungeon_wall_albedo.png"
+filter = "nearest"
+address = "clamp"
+# wall
+
+[material."Builtin/Dungeon/DungeonWalls03"]
+shader = "lit"
+texture = "dungeon_walls_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# floor
+

@@ -1,0 +1,46 @@
+# Cozy Village Props -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Cozy/CozyDoor"]
+shader = "lit"
+texture = "cozy_door_albedo.png"
+filter = "nearest"
+address = "clamp"
+# modular_house_part_01, modular_house_part_02, modular_house_part_03, modular_house_part_04, modular_house_part_05, modular_house_part_06, modular_house_part_07, modular_house_part_08
+
+[material."Builtin/Cozy/CozyFence"]
+shader = "lit"
+texture = "cozy_fence_albedo.png"
+filter = "nearest"
+address = "clamp"
+# fence
+
+[material."Builtin/Cozy/CozyFruits"]
+shader = "lit"
+texture = "cozy_fruits_albedo.png"
+filter = "nearest"
+address = "clamp"
+# fruits_single_part_01, fruits_single_part_02, fruits_single_part_03, fruits_single_part_04, fruits_single_part_05, fruits_single_part_06, fruits_single_part_07, fruits_single_part_08
+
+[material."Builtin/Cozy/CozyGroundStuff"]
+shader = "lit"
+texture = "cozy_ground_stuff_albedo.png"
+filter = "nearest"
+address = "clamp"
+# hole
+
+[material."Builtin/Cozy/CozyTools"]
+shader = "lit"
+texture = "cozy_tools_albedo.png"
+filter = "nearest"
+address = "clamp"
+# shovel_part_01, shovel_part_02, shovel_part_03, shovel_part_04, shovel_part_05, shovel_part_06, shovel_part_07, shovel_part_08
+
+[material."Builtin/Cozy/CozyTrees"]
+shader = "lit"
+texture = "cozy_trees_albedo.png"
+filter = "nearest"
+address = "clamp"
+# trees_single_part_01, trees_single_part_02, trees_single_part_03, trees_single_part_04, trees_single_part_05, trees_single_part_06, trees_single_part_07, trees_single_part_08
+

@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "ad3b020bc4193cb4"
+type = "texture"
+name = "Apocalypse Crank Flashlight 02 Albedo"
+tags = ["apocalypse"]

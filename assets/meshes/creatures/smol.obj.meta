@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "4f96a5adbe6e3777"
+type = "mesh"
+name = "Smol"
+tags = ["creatures"]

@@ -285,6 +285,7 @@ set(_eng_systems_sources
   engine/src/particles/ParticleTextureCatalog.cpp
   engine/src/render/ImGuiLayout.cpp
   engine/src/physics/Physics.cpp
+  engine/src/render/Terrain.cpp
   engine/src/audio/SoundResource.cpp
   engine/src/audio/SoundInstance.cpp
   engine/src/audio/Audio.cpp)

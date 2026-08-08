@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "ab17c65019fdf1c3"
+type = "texture"
+name = "Firearms Sg 553 Albedo"
+tags = ["firearms"]

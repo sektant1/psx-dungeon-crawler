@@ -79,7 +79,8 @@ int main()
     Mana arc;
     arc.current = arc.max = 100.0f;
     arc.regenRate = 0.0f;
-    controller.sample({true, true, true, false, -1});
+    controller.sample({.enabled = true, .fireHeld = true,
+                       .firePressed = true});
     const auto first = controller.fixedUpdate(1.0f / 60.0f, arc);
     require(first && *first == 0, "automatic weapon did not fire immediately");
     // Against slot 0's own cost rather than a literal: which weapon starts in
@@ -90,7 +91,7 @@ int main()
     require(!controller.fixedUpdate(1.0f / 60.0f, arc),
             "cooldown allowed a duplicate fixed-step shot");
 
-    controller.sample({true, false, false, false, 1});
+    controller.sample({.enabled = true, .selectSlot = 1});
     require(!controller.fixedUpdate(1.0f / 60.0f, arc),
             "weapon switch emitted a shot");
     require(controller.selectedIndex() == 1 &&
@@ -98,7 +99,7 @@ int main()
             "direct slot selection did not update runtime state");
     for (int i = 0; i < 12; ++i)
         controller.fixedUpdate(1.0f / 60.0f, arc);
-    controller.sample({true, false, true, false, -1});
+    controller.sample({.enabled = true, .firePressed = true});
     const auto heavy = controller.fixedUpdate(1.0f / 60.0f, arc);
     require(heavy && *heavy == 1, "press weapon did not fire after switch lock");
     require(near(arc.current, 100.0f - library.defs().front().arcCost -
@@ -240,6 +241,147 @@ fire_mode = "conjuration"
     stale.melee.active = 0.0f;
     require(!validPlayerWeaponDefinition(stale),
             "a melee weapon with no active window was accepted");
+
+    // --- magazines and reloading -------------------------------------------
+    //
+    // The shooter's pacing mechanism. Every assertion here is a rule a player
+    // would notice being broken.
+    {
+        const std::string gunSource =
+            std::string(R"(
+[player_weapon.probe]
+slot = 0
+name = "PROBE"
+discipline = "TEST"
+payload = "riven_spark"
+fire_mode = "hitscan"
+trigger = "automatic"
+fire_interval = 0.1
+arc_cost = 0.0
+[player_weapon.probe.hitscan]
+range = 60.0
+[player_weapon.probe.ammo]
+magazine = 4
+reserve = 6
+reload_seconds = 1.0
+reload_empty_seconds = 2.0
+auto_reload = false
+)") + kCommonTail;
+
+        PlayerWeaponLibrary guns;
+        require(guns.loadFromString(gunSource.c_str()),
+                "a weapon with an ammo block failed to load");
+        const PlayerWeaponDef* gun = guns.find("probe");
+        require(gun && gun->usesMagazine(), "magazine was not parsed");
+        require(gun->ammo.magazine == 4 && gun->ammo.reserve == 6,
+                "magazine or reserve was not parsed");
+
+        WeaponController controller;
+        controller.bind(&guns.defs());
+        Mana arc;
+        arc.current = arc.max = 100.0f;
+        arc.regenRate = 0.0f;
+
+        // A fresh weapon starts loaded.
+        require(controller.ammoState().magazine == 4,
+                "a fresh magazine was not full");
+
+        // Firing spends rounds, and the magazine bottoms out rather than
+        // going negative.
+        WeaponCommand command;
+        command.enabled = true;
+        command.fireHeld = true;
+        int shots = 0;
+        for (int step = 0; step < 40; ++step) {
+            controller.sample(command);
+            if (controller.fixedUpdate(0.1f, arc, true))
+                ++shots;
+        }
+        require(shots == 4, "an empty magazine kept firing");
+        require(controller.ammoState().magazine == 0,
+                "the magazine did not empty");
+        require(controller.consumeDryFire(),
+                "firing an empty weapon reported no dry fire");
+
+        // auto_reload is off in this definition, so nothing reloaded on its
+        // own -- the shot count above proves it, and this proves a reload is
+        // still available to ask for.
+        require(controller.beginReload(), "an empty weapon refused to reload");
+        require(controller.ammoState().reloading,
+                "beginReload did not start a reload");
+        // Empty reload is the slower of the two.
+        require(near(controller.ammoState().reloadTotal, 2.0f),
+                "an empty reload did not use reload_empty_seconds");
+
+        // Mid-reload the weapon does not fire.
+        controller.sample(command);
+        require(!controller.fixedUpdate(0.5f, arc, true).has_value(),
+                "a reloading weapon fired");
+
+        // Finishing it draws from reserve, and only as much as fits.
+        //
+        // The trigger is RELEASED for this: holding it would fire the rounds
+        // back off as fast as they arrive, and the total below would be
+        // measuring the cadence rather than the reload.
+        WeaponCommand idle;
+        idle.enabled = true;
+        for (int step = 0; step < 30; ++step) {
+            controller.sample(idle);
+            controller.fixedUpdate(0.1f, arc, true);
+        }
+        const WeaponAmmoState after = controller.ammoState();
+        require(!after.reloading, "the reload never finished");
+        require(after.magazine + after.reserve == 6,
+                "reloading created or destroyed rounds");
+
+        // Switching away cancels a reload rather than finishing it in the
+        // holster.
+        controller.beginReload();
+        WeaponCommand swap;
+        swap.enabled = true;
+        swap.selectSlot = 0;
+        controller.sample(swap);
+        controller.fixedUpdate(0.1f, arc, true);
+    }
+
+    // A weapon with no [.ammo] block is not gated on ammunition at all, which
+    // is what keeps every weapon authored before magazines existed working.
+    {
+        PlayerWeaponLibrary fantasy;
+        const std::string source =
+            std::string(R"(
+[player_weapon.probe]
+slot = 0
+name = "PROBE"
+discipline = "TEST"
+payload = "riven_spark"
+fire_mode = "hitscan"
+trigger = "automatic"
+fire_interval = 0.1
+arc_cost = 0.0
+[player_weapon.probe.hitscan]
+range = 60.0
+)") + kCommonTail;
+        require(fantasy.loadFromString(source.c_str()), "no-ammo load failed");
+        require(!fantasy.find("probe")->usesMagazine(),
+                "a weapon with no ammo block claimed a magazine");
+
+        WeaponController controller;
+        controller.bind(&fantasy.defs());
+        Mana arc;
+        arc.current = arc.max = 100.0f;
+        arc.regenRate = 0.0f;
+        WeaponCommand command;
+        command.enabled = true;
+        command.fireHeld = true;
+        int shots = 0;
+        for (int step = 0; step < 20; ++step) {
+            controller.sample(command);
+            if (controller.fixedUpdate(0.1f, arc, true))
+                ++shots;
+        }
+        require(shots > 10, "a weapon with no magazine ran out of ammunition");
+    }
 
     std::cout << "PlayerWeaponTests OK\n";
     return EXIT_SUCCESS;

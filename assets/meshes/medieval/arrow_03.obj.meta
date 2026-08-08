@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "cecd090178ae201e"
+type = "mesh"
+name = "Arrow 03"
+tags = ["medieval"]

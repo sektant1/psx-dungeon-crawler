@@ -1,0 +1,1235 @@
+# Cozy Village Props.
+#
+# Written by tools/import_asset_pack.py from
+#   assets/source/props/CozyPack
+# Every size below is measured off the exported mesh in metres.
+# Re-running the importer regenerates this file.
+
+[library]
+domain = "cozy"
+scale = 1.0        # meshes are published in metres
+mesh_dir = "meshes/cozy"
+
+[[prefab]]
+id = "cozy.body_part_01"
+role = "prop"
+mesh = "body_part_01.obj"
+placement = "prop"
+size = [0.6343, 1.7000, 0.4096]
+y_offset = -0.9846
+collider = "box"
+# 84 tris, from source/props/CozyPack/ModularCharacter/Body/Body.fbx
+
+[[prefab]]
+id = "cozy.body_part_01_02"
+role = "prop"
+mesh = "body_part_01_02.obj"
+placement = "prop"
+size = [0.6343, 1.7000, 0.4096]
+y_offset = -0.9846
+collider = "box"
+# 84 tris, from source/props/CozyPack/RiggedCharacter/Body.fbx
+
+[[prefab]]
+id = "cozy.body_part_02"
+role = "prop"
+mesh = "body_part_02.obj"
+placement = "prop"
+size = [1.7000, 0.5822, 0.6969]
+y_offset = 0.5184
+collider = "box"
+# 34 tris, from source/props/CozyPack/ModularCharacter/Body/Body.fbx
+
+[[prefab]]
+id = "cozy.body_part_02_02"
+role = "prop"
+mesh = "body_part_02_02.obj"
+placement = "prop"
+size = [1.7000, 0.5822, 0.6969]
+y_offset = 0.5184
+collider = "box"
+# 36 tris, from source/props/CozyPack/RiggedCharacter/Body.fbx
+
+[[prefab]]
+id = "cozy.body_part_03"
+role = "prop"
+mesh = "body_part_03.obj"
+placement = "prop"
+size = [1.7000, 0.5822, 0.6969]
+y_offset = 0.5184
+collider = "box"
+# 34 tris, from source/props/CozyPack/ModularCharacter/Body/Body.fbx
+
+[[prefab]]
+id = "cozy.body_part_03_02"
+role = "prop"
+mesh = "body_part_03_02.obj"
+placement = "prop"
+size = [1.7000, 0.5822, 0.6969]
+y_offset = 0.5184
+collider = "box"
+# 36 tris, from source/props/CozyPack/RiggedCharacter/Body.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_01"
+role = "prop"
+mesh = "characters_single_part_01.obj"
+placement = "prop"
+size = [1.5923, 1.1862, 1.7000]
+y_offset = -0.4977
+collider = "box"
+# 104 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_02"
+role = "prop"
+mesh = "characters_single_part_02.obj"
+placement = "prop"
+size = [1.3970, 1.4845, 1.7000]
+y_offset = -0.7064
+collider = "box"
+# 132 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_03"
+role = "prop"
+mesh = "characters_single_part_03.obj"
+placement = "prop"
+size = [0.6343, 1.7000, 0.4096]
+y_offset = -2.7589
+collider = "box"
+# 84 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_04"
+role = "prop"
+mesh = "characters_single_part_04.obj"
+placement = "prop"
+size = [1.2574, 1.4167, 1.7000]
+y_offset = -0.6628
+collider = "box"
+# 64 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_05"
+role = "prop"
+mesh = "characters_single_part_05.obj"
+placement = "prop"
+size = [1.7000, 0.5822, 0.6969]
+y_offset = -3.1011
+collider = "box"
+# 34 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_06"
+role = "prop"
+mesh = "characters_single_part_06.obj"
+placement = "prop"
+size = [1.7000, 0.5822, 0.6969]
+y_offset = -3.1011
+collider = "box"
+# 34 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_07"
+role = "prop"
+mesh = "characters_single_part_07.obj"
+placement = "prop"
+size = [0.7533, 0.8816, 1.7000]
+y_offset = -3.0705
+collider = "box"
+# 36 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_08"
+role = "prop"
+mesh = "characters_single_part_08.obj"
+placement = "prop"
+size = [1.1146, 1.1782, 1.7000]
+y_offset = -4.7865
+collider = "box"
+# 36 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_09"
+role = "prop"
+mesh = "characters_single_part_09.obj"
+placement = "prop"
+size = [0.2656, 0.2974, 1.7000]
+y_offset = -2.7366
+collider = "box"
+# 36 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_10"
+role = "prop"
+mesh = "characters_single_part_10.obj"
+placement = "prop"
+size = [1.2706, 1.7000, 0.8619]
+y_offset = -7.6442
+collider = "box"
+# 28 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_11"
+role = "prop"
+mesh = "characters_single_part_11.obj"
+placement = "prop"
+size = [1.3031, 1.4074, 1.7000]
+y_offset = -24.2964
+collider = "box"
+# 8 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_12"
+role = "prop"
+mesh = "characters_single_part_12.obj"
+placement = "prop"
+size = [1.3031, 1.4074, 1.7000]
+y_offset = -24.2964
+collider = "box"
+# 8 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_13"
+role = "prop"
+mesh = "characters_single_part_13.obj"
+placement = "prop"
+size = [1.7000, 1.2349, 1.1326]
+y_offset = -14.9759
+collider = "box"
+# 16 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_14"
+role = "prop"
+mesh = "characters_single_part_14.obj"
+placement = "prop"
+size = [1.5380, 1.7000, 1.0376]
+y_offset = -16.7343
+collider = "box"
+# 32 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_15"
+role = "prop"
+mesh = "characters_single_part_15.obj"
+placement = "prop"
+size = [0.3542, 1.7000, 0.5350]
+y_offset = 8.3277
+collider = "box"
+# 68 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_16"
+role = "prop"
+mesh = "characters_single_part_16.obj"
+placement = "prop"
+size = [0.3554, 1.7000, 0.6938]
+y_offset = 8.3669
+collider = "box"
+# 68 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_17"
+role = "prop"
+mesh = "characters_single_part_17.obj"
+placement = "prop"
+size = [0.3790, 1.7000, 1.0626]
+y_offset = 9.7596
+collider = "box"
+# 68 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_18"
+role = "prop"
+mesh = "characters_single_part_18.obj"
+placement = "prop"
+size = [1.0105, 1.7000, 0.7491]
+y_offset = 8.0011
+collider = "box"
+# 12 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_19"
+role = "prop"
+mesh = "characters_single_part_19.obj"
+placement = "prop"
+size = [0.6676, 1.7000, 0.2912]
+y_offset = 3.4199
+collider = "box"
+# 12 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_20"
+role = "prop"
+mesh = "characters_single_part_20.obj"
+placement = "prop"
+size = [1.0746, 0.6687, 1.7000]
+y_offset = 2.2575
+collider = "box"
+# 76 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_21"
+role = "prop"
+mesh = "characters_single_part_21.obj"
+placement = "prop"
+size = [1.7000, 1.7000, 0.5137]
+y_offset = 3.9351
+collider = "box"
+# 32 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_22"
+role = "prop"
+mesh = "characters_single_part_22.obj"
+placement = "prop"
+size = [1.7000, 1.7000, 0.0000]
+y_offset = 0.0926
+collider = "box"
+# 2 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.characters_single_part_23"
+role = "prop"
+mesh = "characters_single_part_23.obj"
+placement = "prop"
+size = [1.7000, 1.2074, 0.0000]
+y_offset = -1.2887
+collider = "box"
+# 2 tris, from source/props/CozyPack/ModularCharacter/CharactersSingle.fbx
+
+[[prefab]]
+id = "cozy.fence"
+role = "prop"
+mesh = "fence.obj"
+material = "Builtin/Cozy/CozyFence"
+placement = "prop"
+size = [0.9079, 1.2000, 0.9079]
+y_offset = -0.6000
+collider = "box"
+# 28 tris, from source/props/CozyPack/Fence/Fence.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_01"
+role = "prop"
+mesh = "fruits_single_part_01.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0573, 0.1200, 0.0512]
+y_offset = 0.1837
+collider = "box"
+# 16 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_02"
+role = "prop"
+mesh = "fruits_single_part_02.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0840, 0.1200, 0.0883]
+y_offset = -0.0463
+collider = "box"
+# 80 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_03"
+role = "prop"
+mesh = "fruits_single_part_03.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0610, 0.1200, 0.0498]
+y_offset = 0.2313
+collider = "box"
+# 16 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_04"
+role = "prop"
+mesh = "fruits_single_part_04.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0912, 0.1200, 0.0923]
+y_offset = -0.0556
+collider = "box"
+# 80 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_05"
+role = "prop"
+mesh = "fruits_single_part_05.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.1186, 0.1026, 0.1200]
+y_offset = -0.0592
+collider = "box"
+# 80 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_06"
+role = "prop"
+mesh = "fruits_single_part_06.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0573, 0.1200, 0.0512]
+y_offset = 0.0853
+collider = "box"
+# 16 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_07"
+role = "prop"
+mesh = "fruits_single_part_07.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0751, 0.1200, 0.0741]
+y_offset = -0.1002
+collider = "box"
+# 16 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_08"
+role = "prop"
+mesh = "fruits_single_part_08.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.1039, 0.0502, 0.1200]
+y_offset = -0.0131
+collider = "box"
+# 32 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_09"
+role = "prop"
+mesh = "fruits_single_part_09.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.1186, 0.1026, 0.1200]
+y_offset = -0.1122
+collider = "box"
+# 80 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_10"
+role = "prop"
+mesh = "fruits_single_part_10.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0727, 0.1200, 0.0235]
+y_offset = -0.0165
+collider = "box"
+# 16 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_11"
+role = "prop"
+mesh = "fruits_single_part_11.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.1200, 0.1027, 0.1189]
+y_offset = -0.1194
+collider = "box"
+# 80 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.fruits_single_part_12"
+role = "prop"
+mesh = "fruits_single_part_12.obj"
+material = "Builtin/Cozy/CozyFruits"
+placement = "prop"
+size = [0.0628, 0.1200, 0.0280]
+y_offset = -0.0174
+collider = "box"
+# 16 tris, from source/props/CozyPack/Fruits/FruitsSingle.fbx
+
+[[prefab]]
+id = "cozy.head"
+role = "prop"
+mesh = "head.obj"
+placement = "prop"
+size = [0.1923, 0.2167, 0.2600]
+y_offset = -0.1014
+collider = "box"
+# 64 tris, from source/props/CozyPack/ModularCharacter/Body/Head.fbx
+
+[[prefab]]
+id = "cozy.head_02"
+role = "prop"
+mesh = "head_02.obj"
+placement = "prop"
+size = [0.1923, 0.2167, 0.2600]
+y_offset = -0.1014
+collider = "box"
+# 64 tris, from source/props/CozyPack/RiggedCharacter/Head.fbx
+
+[[prefab]]
+id = "cozy.hole"
+role = "prop"
+mesh = "hole.obj"
+material = "Builtin/Cozy/CozyGroundStuff"
+placement = "prop"
+size = [1.2117, 0.3061, 1.4000]
+y_offset = -0.1702
+collider = "box"
+# 50 tris, from source/props/CozyPack/GroundStuff/Hole.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_01"
+role = "prop"
+mesh = "modular_house_part_01.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [5.4562, 6.0000, 0.6990]
+y_offset = -1.3868
+collider = "box"
+# 36 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_02"
+role = "prop"
+mesh = "modular_house_part_02.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [1.5283, 5.6731, 6.0000]
+y_offset = -2.0407
+collider = "box"
+# 12 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_03"
+role = "prop"
+mesh = "modular_house_part_03.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [6.0000, 3.0131, 3.9933]
+y_offset = 4.4506
+collider = "box"
+# 22 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_04"
+role = "prop"
+mesh = "modular_house_part_04.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [5.4562, 6.0000, 0.6990]
+y_offset = -1.3868
+collider = "box"
+# 36 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_05"
+role = "prop"
+mesh = "modular_house_part_05.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 17.7227
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_06"
+role = "prop"
+mesh = "modular_house_part_06.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 18.1954
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_07"
+role = "prop"
+mesh = "modular_house_part_07.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5008, 2.6694, 6.0000]
+y_offset = 17.6619
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_08"
+role = "prop"
+mesh = "modular_house_part_08.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 18.0887
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_09"
+role = "prop"
+mesh = "modular_house_part_09.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 20.1395
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_10"
+role = "prop"
+mesh = "modular_house_part_10.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 20.6122
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_11"
+role = "prop"
+mesh = "modular_house_part_11.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5008, 2.6694, 6.0000]
+y_offset = 20.0787
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_12"
+role = "prop"
+mesh = "modular_house_part_12.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5008, 2.6694, 6.0000]
+y_offset = 20.5055
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_13"
+role = "prop"
+mesh = "modular_house_part_13.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.2730
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_14"
+role = "prop"
+mesh = "modular_house_part_14.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.7457
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_15"
+role = "prop"
+mesh = "modular_house_part_15.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.2122
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_16"
+role = "prop"
+mesh = "modular_house_part_16.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.6390
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_17"
+role = "prop"
+mesh = "modular_house_part_17.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 24.9622
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_18"
+role = "prop"
+mesh = "modular_house_part_18.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 25.4349
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_19"
+role = "prop"
+mesh = "modular_house_part_19.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 24.9013
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_20"
+role = "prop"
+mesh = "modular_house_part_20.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 25.3282
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_21"
+role = "prop"
+mesh = "modular_house_part_21.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [4.2020, 6.0000, 1.0239]
+y_offset = -3.0678
+collider = "box"
+# 22 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_22"
+role = "prop"
+mesh = "modular_house_part_22.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [1.0425, 6.0000, 5.1962]
+y_offset = -5.1682
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_23"
+role = "prop"
+mesh = "modular_house_part_23.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 17.7227
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_24"
+role = "prop"
+mesh = "modular_house_part_24.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 18.1954
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_25"
+role = "prop"
+mesh = "modular_house_part_25.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5008, 2.6694, 6.0000]
+y_offset = 17.6619
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_26"
+role = "prop"
+mesh = "modular_house_part_26.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 18.0887
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_27"
+role = "prop"
+mesh = "modular_house_part_27.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 20.1395
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_28"
+role = "prop"
+mesh = "modular_house_part_28.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 20.6122
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_29"
+role = "prop"
+mesh = "modular_house_part_29.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5008, 2.6694, 6.0000]
+y_offset = 20.0787
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_30"
+role = "prop"
+mesh = "modular_house_part_30.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5008, 2.6694, 6.0000]
+y_offset = 20.5055
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_31"
+role = "prop"
+mesh = "modular_house_part_31.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.2730
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_32"
+role = "prop"
+mesh = "modular_house_part_32.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.7457
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_33"
+role = "prop"
+mesh = "modular_house_part_33.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.2122
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_34"
+role = "prop"
+mesh = "modular_house_part_34.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 22.6390
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_35"
+role = "prop"
+mesh = "modular_house_part_35.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 24.9622
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_36"
+role = "prop"
+mesh = "modular_house_part_36.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 25.4349
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_37"
+role = "prop"
+mesh = "modular_house_part_37.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 24.9013
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_38"
+role = "prop"
+mesh = "modular_house_part_38.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [3.5009, 2.6694, 6.0000]
+y_offset = 25.3282
+collider = "box"
+# 20 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_39"
+role = "prop"
+mesh = "modular_house_part_39.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [1.0400, 6.0000, 1.0400]
+y_offset = -2.2634
+collider = "box"
+# 36 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_40"
+role = "prop"
+mesh = "modular_house_part_40.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [4.2269, 6.0000, 4.2269]
+y_offset = 8.3369
+collider = "box"
+# 36 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.modular_house_part_41"
+role = "prop"
+mesh = "modular_house_part_41.obj"
+material = "Builtin/Cozy/CozyDoor"
+placement = "prop"
+size = [6.0000, 3.2746, 3.2746]
+y_offset = -3.2094
+collider = "box"
+# 12 tris, from source/props/CozyPack/ModularHouse/ModularHouse.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_01"
+role = "prop"
+mesh = "shovel_part_01.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.9466, 1.1000, 0.2406]
+y_offset = -0.6749
+collider = "box"
+# 56 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_02"
+role = "prop"
+mesh = "shovel_part_02.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [1.1000, 1.1000, 0.2224]
+y_offset = -0.5500
+collider = "box"
+# 20 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_03"
+role = "prop"
+mesh = "shovel_part_03.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.3985, 1.1000, 0.0878]
+y_offset = -0.6142
+collider = "box"
+# 224 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_04"
+role = "prop"
+mesh = "shovel_part_04.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.0970, 1.1000, 0.1121]
+y_offset = -1.0044
+collider = "box"
+# 68 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_05"
+role = "prop"
+mesh = "shovel_part_05.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [1.1000, 0.7403, 0.7403]
+y_offset = -1.2986
+collider = "box"
+# 76 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_06"
+role = "prop"
+mesh = "shovel_part_06.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.0858, 1.1000, 0.0991]
+y_offset = -0.9140
+collider = "box"
+# 68 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_07"
+role = "prop"
+mesh = "shovel_part_07.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.1067, 1.1000, 0.1668]
+y_offset = -1.2528
+collider = "box"
+# 92 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_08"
+role = "prop"
+mesh = "shovel_part_08.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [1.1000, 0.6867, 0.2477]
+y_offset = -3.3786
+collider = "box"
+# 72 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_09"
+role = "prop"
+mesh = "shovel_part_09.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.3979, 1.1000, 0.3979]
+y_offset = -4.2705
+collider = "box"
+# 12 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_10"
+role = "prop"
+mesh = "shovel_part_10.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.9839, 1.1000, 0.9357]
+y_offset = -1.2204
+collider = "box"
+# 20 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_11"
+role = "prop"
+mesh = "shovel_part_11.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.9170, 1.0552, 1.1000]
+y_offset = 0.0521
+collider = "box"
+# 92 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_12"
+role = "prop"
+mesh = "shovel_part_12.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.9106, 1.1000, 0.6060]
+y_offset = -2.3010
+collider = "box"
+# 28 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_13"
+role = "prop"
+mesh = "shovel_part_13.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [0.9041, 0.8651, 1.1000]
+y_offset = -1.0849
+collider = "box"
+# 28 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.shovel_part_14"
+role = "prop"
+mesh = "shovel_part_14.obj"
+material = "Builtin/Cozy/CozyTools"
+placement = "prop"
+size = [1.1000, 0.7092, 0.3239]
+y_offset = -0.8222
+collider = "box"
+# 172 tris, from source/props/CozyPack/Tools/Tools/Shovel.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_01"
+role = "prop"
+mesh = "trees_single_part_01.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [1.4520, 5.0000, 1.6766]
+y_offset = -1.3010
+collider = "box"
+# 32 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_02"
+role = "prop"
+mesh = "trees_single_part_02.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [3.4655, 5.0000, 4.0016]
+y_offset = 0.2136
+collider = "box"
+# 44 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_03"
+role = "prop"
+mesh = "trees_single_part_03.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [2.1878, 5.0000, 2.5263]
+y_offset = -1.0785
+collider = "box"
+# 32 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_04"
+role = "prop"
+mesh = "trees_single_part_04.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [4.7553, 4.4370, 5.0000]
+y_offset = 0.1192
+collider = "box"
+# 80 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_05"
+role = "prop"
+mesh = "trees_single_part_05.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [2.1878, 5.0000, 2.5263]
+y_offset = -1.0785
+collider = "box"
+# 32 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_06"
+role = "prop"
+mesh = "trees_single_part_06.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [3.7472, 5.0000, 2.3374]
+y_offset = -1.7786
+collider = "box"
+# 32 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_07"
+role = "prop"
+mesh = "trees_single_part_07.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [4.7553, 4.4370, 5.0000]
+y_offset = 0.7276
+collider = "box"
+# 80 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_08"
+role = "prop"
+mesh = "trees_single_part_08.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [4.7553, 4.4370, 5.0000]
+y_offset = -0.1743
+collider = "box"
+# 80 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_09"
+role = "prop"
+mesh = "trees_single_part_09.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [4.7553, 4.4370, 5.0000]
+y_offset = 0.0927
+collider = "box"
+# 80 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_10"
+role = "prop"
+mesh = "trees_single_part_10.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [1.4693, 5.0000, 1.6882]
+y_offset = -1.3100
+collider = "box"
+# 32 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_11"
+role = "prop"
+mesh = "trees_single_part_11.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [2.5289, 5.0000, 1.0439]
+y_offset = 2.9336
+collider = "box"
+# 32 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_12"
+role = "prop"
+mesh = "trees_single_part_12.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [2.8296, 5.0000, 1.0581]
+y_offset = 4.2444
+collider = "box"
+# 32 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_13"
+role = "prop"
+mesh = "trees_single_part_13.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [4.8503, 4.4177, 5.0000]
+y_offset = -1.6679
+collider = "box"
+# 80 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+
+[[prefab]]
+id = "cozy.trees_single_part_14"
+role = "prop"
+mesh = "trees_single_part_14.obj"
+material = "Builtin/Cozy/CozyTrees"
+placement = "prop"
+size = [4.8503, 4.4177, 5.0000]
+y_offset = -2.0852
+collider = "box"
+# 80 tris, from source/props/CozyPack/Trees/treesSingle.fbx
+

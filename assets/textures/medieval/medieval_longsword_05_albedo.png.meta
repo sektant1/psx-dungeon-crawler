@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "e73543c438804ea3"
+type = "texture"
+name = "Medieval Longsword 05 Albedo"
+tags = ["medieval"]

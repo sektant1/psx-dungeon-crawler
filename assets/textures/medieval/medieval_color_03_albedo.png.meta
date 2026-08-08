@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "da36b7d592b33ae3"
+type = "texture"
+name = "Medieval Color 03 Albedo"
+tags = ["medieval"]

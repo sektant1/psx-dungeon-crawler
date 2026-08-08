@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "cfb607c68cb21ea3"
+type = "mesh"
+name = "Crossbow 02"
+tags = ["medieval"]

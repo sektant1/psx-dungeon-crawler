@@ -1,4 +1,5 @@
 #include <eng/Renderer.h>
+#include <eng/render/MaterialPreview.h>
 
 #include "LabelRaster.h"
 #include "MaterialLibrary.h"
@@ -40,6 +41,14 @@
 #include <vector>
 
 namespace eng {
+
+// The public MaterialPreview cannot see RenderCore, which is private to the
+// engine, so it declares its own slot count. This is where the two meet: a
+// mismatch would give the editor rigs for slots the renderer has no target for,
+// and the symptom would be a preview that is simply blank.
+static_assert(MaterialPreview::kThumbnailSlots == RenderCore::kThumbnailSlots,
+              "MaterialPreview and RenderCore disagree about thumbnail slots");
+
 namespace {
 
 struct MeshVertex {
@@ -403,7 +412,10 @@ struct Renderer::Impl {
         std::vector<NodeHandle> children;
         NodeTransform local;
         bool visible = true;
-        bool thumbnailOnly = false;
+        // Which thumbnail slot draws this node; -1 is an ordinary world node.
+        // A slot rather than a bool because several panels preview at once --
+        // see Renderer::setNodeThumbnailSlot.
+        int thumbnailSlot = -1;
         std::vector<MeshAttachment> meshes;
         ShaderUniforms shader;
         bool hasShader = false;
@@ -562,7 +574,9 @@ struct Renderer::Impl {
     // can change at any time. A particle carries its instance slot, so this is
     // all the draw loop needs to make the same Thumbnail/level split the mesh
     // loops make.
-    std::vector<uint8_t> particleInstanceThumbnail;
+    // Which thumbnail slot each particle instance belongs to, or -1 for an
+    // ordinary world emitter. Rebuilt every frame from the emitters' parents.
+    std::vector<int8_t> particleInstanceThumbnail;
     std::vector<DecalRequest> decalRequests;
     DecalSystem decals;
     IParticleCollider* particleCollider = nullptr;
@@ -924,10 +938,24 @@ struct Renderer::Impl {
         return true;
     }
 
-    bool instanceIsThumbnailOnly(uint16_t instance) const
+    // Does this node belong in the view being drawn?
+    //
+    // A thumbnail view draws ONLY the nodes assigned to its own slot; every
+    // other view draws only nodes assigned to no slot at all. One predicate, so
+    // meshes, skinned meshes, sprites, particles and lights cannot drift into
+    // disagreeing about what a preview contains.
+    static bool nodeDrawsIn(int thumbnailSlot, const RenderCore::View& view)
     {
-        return instance < particleInstanceThumbnail.size() &&
-               particleInstanceThumbnail[instance] != 0;
+        if (view.target == RenderCore::SceneTarget::Thumbnail)
+            return thumbnailSlot == view.thumbnailSlot;
+        return thumbnailSlot < 0;
+    }
+
+    int instanceThumbnailSlot(uint16_t instance) const
+    {
+        return instance < particleInstanceThumbnail.size()
+                   ? int(particleInstanceThumbnail[instance])
+                   : -1;
     }
 
     // The vertex buffer this view builds into, created on first use. The index
@@ -1498,11 +1526,7 @@ struct Renderer::Impl {
             const Node* owner = node(light.node);
             if (!owner)
                 continue;
-            if (requested.target == RenderCore::SceneTarget::Thumbnail &&
-                !owner->thumbnailOnly)
-                continue;
-            if (requested.target != RenderCore::SceneTarget::Thumbnail &&
-                owner->thumbnailOnly)
+            if (!nodeDrawsIn(owner->thumbnailSlot, requested))
                 continue;
             const NodeTransform transform = worldTransform(light.node);
             if (light.desc.type == LightDesc::Type::Point) {
@@ -2144,8 +2168,6 @@ struct Renderer::Impl {
         // level shows everything else, matching how the mesh loops above split
         // the same two sets. Without it the level's fires burn inside the
         // swatch and the swatch's fire burns inside the level.
-        const bool thumbnailView =
-            view.target == RenderCore::SceneTarget::Thumbnail;
         glm::quat cameraOrientation = view.orientation;
         glm::vec3 cameraPosition = view.position;
         if (view.target == RenderCore::SceneTarget::Main) {
@@ -2234,7 +2256,8 @@ struct Renderer::Impl {
             for (uint32_t index : particleOrder) {
                 if (quadCount >= capacity)
                     break;
-                if (instanceIsThumbnailOnly(pool.owner[index]) != thumbnailView)
+                if (!nodeDrawsIn(instanceThumbnailSlot(pool.owner[index]),
+                                 view))
                     continue;
                 // Wall-clock cadence, not normalised life, so a flipbook keeps
                 // its authored speed however long the particle lives.
@@ -2364,9 +2387,6 @@ struct Renderer::Impl {
         const ParticleSlice slice = particleSliceFor(view.target);
         if (slice == ParticleSlice::Count || sprites.empty())
             return;
-        const bool thumbnailView =
-            view.target == RenderCore::SceneTarget::Thumbnail;
-
         glm::quat cameraOrientation = view.orientation;
         glm::vec3 cameraPosition = view.position;
         if (view.target == RenderCore::SceneTarget::Main) {
@@ -2394,7 +2414,7 @@ struct Renderer::Impl {
             if (!sprite.alive || !sprite.visible || !worldVisible(sprite.node))
                 continue;
             const Node* owner = node(sprite.node);
-            if (!owner || owner->thumbnailOnly != thumbnailView)
+            if (!owner || !nodeDrawsIn(owner->thumbnailSlot, view))
                 continue;
             resolveSprite(sprite);
             if (!sprite.texture.valid())
@@ -2570,7 +2590,7 @@ struct Renderer::Impl {
         for (size_t index = 0; index < nodes.size(); ++index) {
             const Node& nodeRecord = nodes[index];
             const NodeHandle handle{uint32_t(index + 1)};
-            if (!nodeRecord.alive || nodeRecord.thumbnailOnly ||
+            if (!nodeRecord.alive || nodeRecord.thumbnailSlot >= 0 ||
                 !worldVisible(handle))
                 continue;
             const glm::mat4 model = worldMatrix(handle);
@@ -2584,7 +2604,7 @@ struct Renderer::Impl {
                 continue;
             const Node* nodeRecord = node(instance.node);
             const SkinnedMesh* resource = skinnedMesh(instance.mesh);
-            if (!nodeRecord || !resource || nodeRecord->thumbnailOnly)
+            if (!nodeRecord || !resource || nodeRecord->thumbnailSlot >= 0)
                 continue;
             const glm::mat4 model = worldMatrix(instance.node);
             for (size_t i = 0; i < resource->submeshes.size(); ++i) {
@@ -2652,12 +2672,8 @@ struct Renderer::Impl {
             Node& nodeRecord = nodes[index];
             if (!nodeRecord.alive || !worldVisible(NodeHandle{uint32_t(index + 1)}))
                 continue;
-            if (view.target == RenderCore::SceneTarget::Thumbnail) {
-                if (!nodeRecord.thumbnailOnly)
-                    continue;
-            } else if (nodeRecord.thumbnailOnly) {
+            if (!nodeDrawsIn(nodeRecord.thumbnailSlot, view))
                 continue;
-            }
             const glm::mat4 model = worldMatrix(NodeHandle{uint32_t(index + 1)});
             for (const MeshAttachment& attachment : nodeRecord.meshes) {
                 if (attachment.renderOnTop != viewmodelPass)
@@ -2672,12 +2688,8 @@ struct Renderer::Impl {
             const Node* nodeRecord = node(instance.node);
             if (!nodeRecord)
                 continue;
-            if (view.target == RenderCore::SceneTarget::Thumbnail) {
-                if (!nodeRecord->thumbnailOnly)
-                    continue;
-            } else if (nodeRecord->thumbnailOnly) {
+            if (!nodeDrawsIn(nodeRecord->thumbnailSlot, view))
                 continue;
-            }
             const glm::mat4 model = worldMatrix(instance.node);
             if (instance.renderOnTop != viewmodelPass)
                 continue;
@@ -2851,6 +2863,35 @@ MeshHandle Renderer::createPrimitiveMesh(const PrimitiveMeshDesc& desc)
     return mImpl->uploadMesh(
         mImpl->nextName("primitive"), {vertices}, {geometry->indices}, {{}},
         std::move(collision), geometry->indices);
+}
+
+MeshHandle Renderer::createMesh(const std::string& name,
+                                const content::MeshData& data)
+{
+    if (data.submeshes.empty())
+        return {};
+    std::vector<std::vector<MeshVertex>> vertices;
+    std::vector<std::vector<uint32_t>> indices;
+    std::vector<std::string> sourceMaterials;
+    vertices.reserve(data.submeshes.size());
+    indices.reserve(data.submeshes.size());
+    sourceMaterials.reserve(data.submeshes.size());
+    for (const content::MeshSubmesh& submesh : data.submeshes) {
+        std::vector<MeshVertex> converted;
+        converted.reserve(submesh.vertices.size());
+        // The same narrowing loadMesh does: the content vertex carries a
+        // tangent frame the PSX pipeline has no use for.
+        for (const content::MeshVertex& vertex : submesh.vertices)
+            converted.push_back({vertex.position, vertex.normal,
+                                 vertex.texcoord, vertex.colour});
+        vertices.push_back(std::move(converted));
+        indices.push_back(submesh.indices);
+        sourceMaterials.push_back(submesh.sourceMaterial);
+    }
+    return mImpl->uploadMesh(
+        mImpl->nextName(name.empty() ? "generated" : name.c_str()), vertices,
+        indices, sourceMaterials, data.collisionVertices,
+        data.collisionIndices);
 }
 
 void Renderer::setPrototypeCatalog(prototype::PrototypeCatalog catalog)
@@ -3171,6 +3212,73 @@ std::vector<std::string> Renderer::materialNames() const
 bool Renderer::materialAvailable(const std::string& name) const
 {
     return !name.empty() && mImpl->materials.find(name);
+}
+
+// --- retexturing -----------------------------------------------------------
+//
+// See docs/design/2026-08-07-retexturing-and-material-variants.md. In short: a
+// retexture is a new MATERIAL, so that "what texture does this draw with" keeps
+// exactly one answer and every system that already reasons about materials --
+// the batcher, the editor's fit advice, the thumbnail rig -- keeps working
+// without learning a second concept.
+
+bool Renderer::setMaterialTexture(const std::string& materialName,
+                                  const std::string& texture)
+{
+    rhi_renderer::Material* material = mImpl->materials.find(materialName);
+    if (!material || texture.empty())
+        return false;
+    if (material->textureName == texture)
+        return true; // already bound; a hover calls this every frame
+    const std::filesystem::path path = mImpl->materials.texturePath(texture);
+    if (path.empty()) {
+        log::error("RHI renderer: texture '%s' not found", texture.c_str());
+        return false;
+    }
+    material->textureName = texture;
+    mImpl->materials.refreshTexture(mImpl->core, *material);
+    return true;
+}
+
+bool Renderer::createMaterialVariant(const std::string& base,
+                                     const std::string& name,
+                                     const std::string& texture)
+{
+    const rhi_renderer::Material* source = mImpl->materials.find(base);
+    if (!source || name.empty())
+        return false;
+    // Refusing rather than replacing: silently redefining a loaded material
+    // changes how everything already wearing it draws, at a distance from the
+    // call that did it.
+    if (mImpl->materials.find(name))
+        return false;
+
+    rhi_renderer::Material variant = *source;
+    variant.name = name;
+    if (!texture.empty())
+        variant.textureName = texture;
+    mImpl->materials.adopt(mImpl->core, std::move(variant));
+    return mImpl->materials.find(name) != nullptr;
+}
+
+std::string Renderer::materialTexture(const std::string& materialName) const
+{
+    const rhi_renderer::Material* material =
+        mImpl->materials.find(materialName);
+    return material ? material->textureName : std::string();
+}
+
+std::string Renderer::materialShaderName(const std::string& materialName) const
+{
+    const rhi_renderer::Material* material =
+        mImpl->materials.find(materialName);
+    return material ? rhi_renderer::materialShaderId(material->shader)
+                    : std::string();
+}
+
+void Renderer::reloadMaterials()
+{
+    mImpl->materials.loadAll(mImpl->core);
 }
 
 bool Renderer::nodeWorldBounds(NodeHandle handle, glm::vec3& center,
@@ -3770,16 +3878,18 @@ void Renderer::updateParticles(float dt)
     // marked for the thumbnail after the effect is already running, and this
     // walk is already being made for the transforms.
     std::fill(mImpl->particleInstanceThumbnail.begin(),
-              mImpl->particleInstanceThumbnail.end(), uint8_t(0));
+              mImpl->particleInstanceThumbnail.end(), int8_t(-1));
     for (auto& [handle, live] : mImpl->liveParticles) {
         const Impl::Node* parent = mImpl->node(live.parent);
         if (live.followsNode && parent)
             mImpl->particleSim.setInstanceTransform(
                 live.instance, mImpl->worldMatrix(live.parent));
-        if (parent && parent->thumbnailOnly) {
+        if (parent && parent->thumbnailSlot >= 0) {
             if (live.instance >= mImpl->particleInstanceThumbnail.size())
-                mImpl->particleInstanceThumbnail.resize(live.instance + 1, 0);
-            mImpl->particleInstanceThumbnail[live.instance] = 1;
+                mImpl->particleInstanceThumbnail.resize(live.instance + 1,
+                                                       int8_t(-1));
+            mImpl->particleInstanceThumbnail[live.instance] =
+                int8_t(parent->thumbnailSlot);
         }
     }
     mImpl->particleTime += dt;
@@ -4104,26 +4214,27 @@ void Renderer::setEditorCameraOrtho(float worldHeight)
 {
     mImpl->core.setEditorCameraOrtho(worldHeight);
 }
-void Renderer::enableMaterialThumbnail(int size)
+void Renderer::enableMaterialThumbnail(int size, int slot)
 {
-    mImpl->core.enableThumbnailViewport(size);
+    mImpl->core.enableThumbnailViewport(size, slot);
 }
 void Renderer::setMaterialThumbnailCamera(const glm::vec3& position,
                                           const glm::quat& orientation,
-                                          float fovDeg)
+                                          float fovDeg, int slot)
 {
     mImpl->core.setThumbnailCameraPose(
         position.x, position.y, position.z, orientation.w, orientation.x,
-        orientation.y, orientation.z, fovDeg);
+        orientation.y, orientation.z, fovDeg, slot);
 }
-uint64_t Renderer::materialThumbnailTextureId() const
+uint64_t Renderer::materialThumbnailTextureId(int slot) const
 {
-    return mImpl->core.thumbnailTextureId();
+    return mImpl->core.thumbnailTextureId(slot);
 }
-void Renderer::setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly)
+void Renderer::setNodeThumbnailSlot(NodeHandle node, int slot)
 {
-    if (Impl::Node* record = mImpl->node(node, "setNodeThumbnailOnly"))
-        record->thumbnailOnly = thumbnailOnly;
+    if (Impl::Node* record = mImpl->node(node, "setNodeThumbnailSlot"))
+        record->thumbnailSlot =
+            slot >= 0 && slot < RenderCore::kThumbnailSlots ? slot : -1;
 }
 void Renderer::setDebugLines(const std::vector<DebugLine>& lines)
 {

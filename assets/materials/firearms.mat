@@ -1,0 +1,116 @@
+# Modern Firearms -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Firearms/FirearmsAk"]
+shader = "lit"
+texture = "firearms_ak_albedo.png"
+filter = "nearest"
+address = "clamp"
+# ak
+
+[material."Builtin/Firearms/FirearmsAug"]
+shader = "lit"
+texture = "firearms_aug_albedo.png"
+filter = "nearest"
+address = "clamp"
+# aug
+
+[material."Builtin/Firearms/FirearmsAwp"]
+shader = "lit"
+texture = "firearms_awp_albedo.png"
+filter = "nearest"
+address = "clamp"
+# awp
+
+[material."Builtin/Firearms/FirearmsBeretta"]
+shader = "lit"
+texture = "firearms_beretta_albedo.png"
+filter = "nearest"
+address = "clamp"
+# beretta
+
+[material."Builtin/Firearms/FirearmsFamas"]
+shader = "lit"
+texture = "firearms_famas_albedo.png"
+filter = "nearest"
+address = "clamp"
+# famas
+
+[material."Builtin/Firearms/FirearmsGalil"]
+shader = "lit"
+texture = "firearms_galil_albedo.png"
+filter = "nearest"
+address = "clamp"
+# galil
+
+[material."Builtin/Firearms/FirearmsGlock"]
+shader = "lit"
+texture = "firearms_glock_albedo.png"
+filter = "nearest"
+address = "clamp"
+# glock
+
+[material."Builtin/Firearms/FirearmsM4a01"]
+shader = "lit"
+texture = "firearms_m4a_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# m4a_01
+
+[material."Builtin/Firearms/FirearmsM"]
+shader = "lit"
+texture = "firearms_m_albedo.png"
+filter = "nearest"
+address = "clamp"
+# m_249
+
+[material."Builtin/Firearms/FirearmsMag07"]
+shader = "lit"
+texture = "firearms_mag_07_albedo.png"
+filter = "nearest"
+address = "clamp"
+# mag_07
+
+[material."Builtin/Firearms/FirearmsR08"]
+shader = "lit"
+texture = "firearms_r_08_albedo.png"
+filter = "nearest"
+address = "clamp"
+# r_08
+
+[material."Builtin/Firearms/FirearmsSawedOff"]
+shader = "lit"
+texture = "firearms_sawed_off_albedo.png"
+filter = "nearest"
+address = "clamp"
+# sawed_off
+
+[material."Builtin/Firearms/FirearmsSg553"]
+shader = "lit"
+texture = "firearms_sg_553_albedo.png"
+filter = "nearest"
+address = "clamp"
+# sg_553
+
+[material."Builtin/Firearms/FirearmsTec09"]
+shader = "lit"
+texture = "firearms_tec_09_albedo.png"
+filter = "nearest"
+address = "clamp"
+# tec_09
+
+[material."Builtin/Firearms/FirearmsUsp"]
+shader = "lit"
+texture = "firearms_usp_albedo.png"
+filter = "nearest"
+address = "clamp"
+# uspp
+
+[material."Builtin/Firearms/FirearmsXm1014"]
+shader = "lit"
+texture = "firearms_xm_1014_albedo.png"
+filter = "nearest"
+address = "clamp"
+# xm
+

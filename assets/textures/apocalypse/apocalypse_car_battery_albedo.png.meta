@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "1fd15a5a119ce75f"
+type = "texture"
+name = "Apocalypse Car Battery Albedo"
+tags = ["apocalypse"]

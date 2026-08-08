@@ -130,7 +130,11 @@ struct PreviewBridge::Impl
         if (const std::filesystem::path path =
                 eng::assets::resolve("config/viewmodel_hands.toml");
             !path.empty())
-            game::loadHandsDefinition(path.string(), handsDefinition);
+        {
+            game::HandsLibrary library;
+            if (game::loadHandsLibrary(path.string(), library))
+                handsDefinition = library.active();
+        }
     }
 
     void hideViewmodel()

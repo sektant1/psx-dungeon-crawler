@@ -149,6 +149,39 @@ MaterialShader materialShaderFromName(const std::string& id, bool& known)
     return MaterialShader::Lit;
 }
 
+const char* materialShaderId(MaterialShader shader)
+{
+    // The inverse of the table above, for the tools that have to *show* which
+    // family a material is drawn by. Several ids map to Other, so this cannot
+    // round-trip those -- it answers "which family", which is the question, not
+    // "which spelling was in the file".
+    switch (shader) {
+    case MaterialShader::Lit: return "lit";
+    case MaterialShader::LitUntextured: return "lit.untextured";
+    case MaterialShader::LitMetal: return "lit.metal";
+    case MaterialShader::Unlit: return "unlit";
+    case MaterialShader::UnlitMetal: return "unlit.metal";
+    case MaterialShader::UnlitLightVolume: return "unlit.light_volume";
+    case MaterialShader::SurfaceLiquid: return "surface.liquid";
+    case MaterialShader::SurfaceLava: return "surface.lava";
+    case MaterialShader::SurfacePortal: return "surface.portal";
+    case MaterialShader::ParticleTextured: return "particle.textured";
+    case MaterialShader::ParticleAtlas: return "particle.atlas";
+    case MaterialShader::ParticleFlame: return "particle.flame";
+    case MaterialShader::ParticleSmoke: return "particle.smoke";
+    case MaterialShader::ParticleRain: return "particle.rain";
+    case MaterialShader::ParticleBlock: return "particle.block";
+    case MaterialShader::ParticleMote: return "particle.mote";
+    case MaterialShader::ParticleShard: return "particle.shard";
+    case MaterialShader::ParticleBubble: return "particle.bubble";
+    case MaterialShader::ParticleWisp: return "particle.wisp";
+    case MaterialShader::ParticleVoxel: return "particle.voxel";
+    case MaterialShader::Post: return "post";
+    case MaterialShader::Other: return "other";
+    }
+    return "other";
+}
+
 bool MaterialLibrary::loadAll(RenderCore& core)
 {
     mMaterials.clear();

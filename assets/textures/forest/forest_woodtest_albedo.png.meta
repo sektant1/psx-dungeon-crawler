@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "5868d8a3f4847cf3"
+type = "texture"
+name = "Forest Woodtest Albedo"
+tags = ["forest"]

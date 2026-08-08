@@ -687,6 +687,28 @@ void DebugPanels::drawViewmodelTab()
     ImGui::Separator();
     copyButton("Copy [player_viewmodel]", viewmodelRigToml(rig),
                "Paste into assets/config/game.toml");
+    // A rig with its own framing does not read [player_viewmodel]'s placement,
+    // so pasting that block would tune something this rig ignores. It gets its
+    // own three lines, for its own entry in viewmodel_hands.toml.
+    if (const game::HandsDefinition& hands = player->hands().definitionRef();
+        hands.hasFraming) {
+        // The live values, not the ones loaded: the point of the panel is that
+        // you drag until it looks right and then keep THAT.
+        player->hands().captureFraming();
+        char block[320];
+        std::snprintf(block, sizeof(block),
+                      "# in the [[rig]] entry for \"%s\"\n"
+                      "offset = [%.4f, %.4f, %.4f]\n"
+                      "rotation = [%.2f, %.2f, %.2f]\n"
+                      "scale = %.4f\n",
+                      hands.id.c_str(), rig.offset.x, rig.offset.y,
+                      rig.offset.z, rig.rotation.x, rig.rotation.y,
+                      rig.rotation.z, rig.scale);
+        ImGui::SameLine();
+        copyButton("Copy rig framing", block,
+                   "Paste into this rig's [[rig]] entry in "
+                   "assets/config/viewmodel_hands.toml");
+    }
     ImGui::SameLine();
     if (!validViewmodelRig(rig))
         ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f),

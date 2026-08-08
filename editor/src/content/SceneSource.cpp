@@ -911,6 +911,61 @@ bool parseCollider(const Json& source, ColliderAuthor& out,
     return true;
 }
 
+bool parseTerrain(const Json& source, TerrainAuthor& out,
+                  const std::string& location, std::string& error)
+{
+    if (!source.is_object()) {
+        error = location + " must be an object";
+        return false;
+    }
+    out.resolution = source.value("resolution", out.resolution);
+    out.size = source.value("size", out.size);
+    out.heightScale = source.value("height_scale", out.heightScale);
+    out.heightmap = source.value("heightmap", out.heightmap);
+    out.seed = source.value("seed", out.seed);
+    out.octaves = source.value("octaves", out.octaves);
+    out.frequency = source.value("frequency", out.frequency);
+    out.roughness = source.value("roughness", out.roughness);
+    out.uvScale = source.value("uv_scale", out.uvScale);
+    out.material = source.value("material", out.material);
+    out.collision = source.value("collision", out.collision);
+    if (out.resolution < 2 || out.resolution > 513) {
+        error = location + "/resolution must be between 2 and 513";
+        return false;
+    }
+    if (!(out.size > 0.0f)) {
+        error = location + "/size must be positive";
+        return false;
+    }
+
+    // The sculpted field, if there is one. Rejected outright when it is the
+    // wrong length rather than padded: a short array would load as a terrain
+    // with a cliff at the row the data ran out on, which looks like a sculpting
+    // bug and is a file problem.
+    if (source.contains("samples")) {
+        const Json& samples = source["samples"];
+        if (!samples.is_array()) {
+            error = location + "/samples must be an array";
+            return false;
+        }
+        const std::size_t expected =
+            std::size_t(out.resolution) * std::size_t(out.resolution);
+        if (samples.size() != expected) {
+            error = location + "/samples has " +
+                    std::to_string(samples.size()) + " values; resolution " +
+                    std::to_string(out.resolution) + " needs " +
+                    std::to_string(expected);
+            return false;
+        }
+        out.samples.reserve(expected);
+        for (const Json& value : samples)
+            out.samples.push_back(std::uint16_t(value.get<int>()));
+        out.minHeight = source.value("min_height", 0.0f);
+        out.maxHeight = source.value("max_height", 0.0f);
+    }
+    return true;
+}
+
 bool parseTrigger(const Json& source, TriggerAuthor& out,
                   const std::string& location, std::string& error)
 {
@@ -1030,6 +1085,13 @@ bool parseEntity(const Json& source, const std::string& location, Entity& out,
                            error))
             return false;
         out.collider = collider;
+    }
+    if (source.contains("terrain")) {
+        TerrainAuthor terrain;
+        if (!parseTerrain(source["terrain"], terrain, location + "/terrain",
+                          error))
+            return false;
+        out.terrain = terrain;
     }
     if (source.contains("light")) {
         LightAuthor light;

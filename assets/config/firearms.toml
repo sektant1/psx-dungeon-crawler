@@ -1,0 +1,370 @@
+# The modern firearm loadout.
+#
+# Read by the same PlayerWeaponLibrary that reads weapons.toml, in the same
+# format -- see the long comment at the top of that file for what every key
+# means. This is a second file rather than more tables in the first because the
+# two are different games' loadouts: weapons.toml is the fantasy set (ARC-costed
+# spells and bolts) and this is the shooter's.
+#
+# --- what makes these different from the fantasy set -------------------------
+#
+# MAGAZINES. Every weapon here carries an `[.ammo]` block, which the fantasy set
+# does not, and that block is the pacing mechanism: ARC regenerates on its own,
+# a magazine does not. `arc_cost = 0.0` throughout, so ammunition is the ONLY
+# resource these spend.
+#
+# BALLISTICS. Every round here is a simulated projectile, not a hitscan: it
+# leaves the barrel at a muzzle velocity, it falls, it slows against drag, and
+# it is pushed by wind. At the ranges a level actually offers, that reads as a
+# flat trajectory with a noticeable drop past ~80 m -- which is the point. A
+# hitscan rifle cannot miss for a reason the player can see and correct.
+#
+# Muzzle velocities are SCALED DOWN. A real 5.56 leaves the barrel at ~920 m/s,
+# which at a 60 Hz fixed step is 15 metres per tick -- through most rooms in one
+# frame, so the round is never drawn in flight and the physics has to sweep it
+# anyway. The numbers here are ~1/3 of real, which keeps the trajectory readable
+# and the relative ordering of the cartridges honest (the AWP still outruns the
+# Glock by the same ratio).
+#
+# BARREL EXIT. `barrel_offset` in each viewmodel block is the muzzle in the gun
+# MODEL's own space, so a round leaves the end of the barrel you can see rather
+# than the camera or the player's fist. It rides the weapon node, so recoil
+# moves the muzzle with the gun.
+#
+# NUMBERS. Fire intervals are real cyclic rates (an AK is ~600 rpm, so 0.1 s),
+# magazine sizes are the real capacities, and reload times are roughly what the
+# real handling takes. They are a starting point tuned for readability, not a
+# simulation -- damage in particular is game numbers, not ballistics.
+#
+# `slot` is the number key that selects the weapon. Slots need not be unique
+# across the two files; whichever loadout the level loads owns its own slots.
+
+# --- sidearm ------------------------------------------------------------------
+
+[player_weapon.glock]
+slot = 0
+name = "GLOCK 18"
+discipline = "SIDEARM / 9MM"
+payload = "bullet_9mm"
+fire_mode = "projectile"
+trigger = "press"
+fire_interval = 0.11
+arc_cost = 0.0
+projectile_count = 1
+spread_degrees = 0.9
+switch_time = 0.16
+muzzle_offset = [0.10, -0.12, 0.32]
+muzzle_effect = "eidolon_muzzle"
+fire_sound = "weapon.eidolon.fire"
+
+[player_weapon.glock.projectile]
+shape = "sphere"
+visual_scale = [0.006, 0.024, 0.006]
+material = "Game/Prototype/Bolt"
+trail_effect = ""
+impact_effect = "eidolon_impact"
+impact_sound = "weapon.eidolon.impact"
+# Scaled muzzle velocity -- see the note at the head of this file.
+speed = 190.0
+lifetime = 2.20
+radius = 0.0100
+mass = 0.0080
+# A real bullet: it falls, and it slows.
+gravity_factor = 1.0
+drag = 0.0200
+aim_range = 250.0
+
+[player_weapon.glock.ammo]
+magazine = 17
+reserve = 68
+reserve_max = 136
+reload_seconds = 1.5
+reload_empty_seconds = 2.1
+ammo_type = "9mm"
+reload_animation = "draw"
+
+[player_weapon.glock.viewmodel]
+# This weapon wears an ANIMATED rig: the gun is part of the hands
+# mesh and the reload/fire clips were authored against it, so there
+# is no separate model to attach and no socket to hang it on.
+hands_rig = "hands_pp19"
+hands_idle_animation = "idle"
+hands_fire_animation = "fire"
+hands_draw_animation = "draw"
+hands_reload_animation = "reload"
+# Barrel tip, in the weapon model's own space: half the mesh's
+# 0.19 m length forward, on the bore line.
+barrel_offset = [0.0, 0.0100, -0.1150]
+position = [0.13, -0.20, -0.42]
+rotation = [-3.0, 3.0, 0.0]
+glow_school = "none"
+glow_strength = 0.0
+material = "Builtin/Firearms/FirearmsGlock"
+muzzle_socket = "weapon_muzzle"
+
+# --- assault rifle ------------------------------------------------------------
+
+[player_weapon.ak]
+slot = 1
+name = "AK PATTERN RIFLE"
+discipline = "RIFLE / 7.62"
+payload = "bullet_762"
+fire_mode = "projectile"
+trigger = "automatic"
+# ~600 rpm. The AK's rhythm is the slowest of the rifles and the hardest
+# hitting, which is the whole reason to carry it over the M4.
+fire_interval = 0.10
+arc_cost = 0.0
+projectile_count = 1
+spread_degrees = 1.6
+switch_time = 0.24
+muzzle_offset = [0.11, -0.11, 0.52]
+muzzle_effect = "eidolon_muzzle"
+fire_sound = "weapon.eidolon.fire"
+
+[player_weapon.ak.projectile]
+shape = "sphere"
+visual_scale = [0.007, 0.026, 0.007]
+material = "Game/Prototype/Bolt"
+trail_effect = ""
+impact_effect = "eidolon_impact"
+impact_sound = "weapon.eidolon.impact"
+# Scaled muzzle velocity -- see the note at the head of this file.
+speed = 300.0
+lifetime = 2.20
+radius = 0.0110
+mass = 0.0080
+# A real bullet: it falls, and it slows.
+gravity_factor = 1.0
+drag = 0.0140
+aim_range = 250.0
+
+[player_weapon.ak.ammo]
+magazine = 30
+reserve = 120
+reserve_max = 240
+reload_seconds = 2.3
+reload_empty_seconds = 3.0
+ammo_type = "7.62"
+reload_animation = "draw"
+
+[player_weapon.ak.viewmodel]
+# This weapon wears an ANIMATED rig: the gun is part of the hands
+# mesh and the reload/fire clips were authored against it, so there
+# is no separate model to attach and no socket to hang it on.
+hands_rig = "hands_aks74"
+hands_idle_animation = "idle"
+hands_fire_animation = "fire"
+hands_draw_animation = "draw"
+hands_reload_animation = "reload"
+# Barrel tip, in the weapon model's own space: half the mesh's
+# 0.90 m length forward, on the bore line.
+barrel_offset = [0.0, 0.0140, -0.4700]
+position = [0.16, -0.24, -0.50]
+rotation = [-4.0, 4.0, 0.5]
+glow_school = "none"
+glow_strength = 0.0
+material = "Builtin/Firearms/FirearmsAk"
+muzzle_socket = "weapon_muzzle"
+
+# --- carbine ------------------------------------------------------------------
+
+[player_weapon.m4a1]
+slot = 2
+name = "M4A1 CARBINE"
+discipline = "RIFLE / 5.56"
+payload = "bullet_556"
+fire_mode = "projectile"
+trigger = "automatic"
+# ~800 rpm: faster and flatter than the AK, less damage per hit.
+fire_interval = 0.075
+arc_cost = 0.0
+projectile_count = 1
+spread_degrees = 1.1
+switch_time = 0.22
+muzzle_offset = [0.11, -0.11, 0.50]
+muzzle_effect = "eidolon_muzzle"
+fire_sound = "weapon.eidolon.fire"
+
+[player_weapon.m4a1.projectile]
+shape = "sphere"
+visual_scale = [0.006, 0.024, 0.006]
+material = "Game/Prototype/Bolt"
+trail_effect = ""
+impact_effect = "eidolon_impact"
+impact_sound = "weapon.eidolon.impact"
+# Scaled muzzle velocity -- see the note at the head of this file.
+speed = 320.0
+lifetime = 2.20
+radius = 0.0100
+mass = 0.0040
+# A real bullet: it falls, and it slows.
+gravity_factor = 1.0
+drag = 0.0130
+aim_range = 250.0
+
+[player_weapon.m4a1.ammo]
+magazine = 30
+reserve = 120
+reserve_max = 240
+reload_seconds = 2.1
+reload_empty_seconds = 2.9
+ammo_type = "5.56"
+reload_animation = "draw"
+
+[player_weapon.m4a1.viewmodel]
+# This weapon wears an ANIMATED rig: the gun is part of the hands
+# mesh and the reload/fire clips were authored against it, so there
+# is no separate model to attach and no socket to hang it on.
+hands_rig = "hands_rifle"
+hands_idle_animation = "idle"
+hands_fire_animation = "fire"
+hands_draw_animation = "draw"
+hands_reload_animation = "reload"
+# Barrel tip, in the weapon model's own space: half the mesh's
+# 0.84 m length forward, on the bore line.
+barrel_offset = [0.0, 0.0130, -0.4400]
+position = [0.15, -0.23, -0.48]
+rotation = [-4.0, 4.0, 0.5]
+glow_school = "none"
+glow_strength = 0.0
+material = "Builtin/Firearms/FirearmsM4a01"
+muzzle_socket = "weapon_muzzle"
+
+# --- shotgun ------------------------------------------------------------------
+#
+# The shell-by-shell reload is the point of this weapon. It can be interrupted
+# by firing, so a player with two shells loaded can break off and shoot, which
+# is a decision the magazine weapons never offer.
+
+[player_weapon.xm1014]
+slot = 3
+name = "XM1014 SHOTGUN"
+discipline = "SHOTGUN / 12G"
+payload = "buckshot"
+fire_mode = "projectile"
+trigger = "press"
+fire_interval = 0.30
+arc_cost = 0.0
+# Eight pellets on one trigger pull, spending one shell -- `cost_per_shot`
+# is 1 while `projectile_count` is 8, which is exactly why they are separate.
+projectile_count = 8
+spread_degrees = 9.0
+switch_time = 0.30
+muzzle_offset = [0.12, -0.12, 0.52]
+muzzle_effect = "eidolon_muzzle"
+fire_sound = "weapon.eidolon.fire"
+
+[player_weapon.xm1014.projectile]
+shape = "sphere"
+visual_scale = [0.005, 0.022, 0.005]
+material = "Game/Prototype/Bolt"
+trail_effect = ""
+impact_effect = "eidolon_impact"
+impact_sound = "weapon.eidolon.impact"
+# Scaled muzzle velocity -- see the note at the head of this file.
+speed = 150.0
+lifetime = 2.20
+radius = 0.0090
+mass = 0.0030
+# A real bullet: it falls, and it slows.
+gravity_factor = 1.0
+drag = 0.0700
+aim_range = 250.0
+
+[player_weapon.xm1014.ammo]
+magazine = 7
+reserve = 32
+reserve_max = 64
+# One shell at a time. `reload_seconds` is the time PER SHELL here, not for the
+# whole magazine, which is why it is so much shorter than a rifle's.
+shell_by_shell = true
+reload_seconds = 0.55
+reload_empty_seconds = 0.75
+cost_per_shot = 1
+ammo_type = "12g"
+reload_animation = "draw"
+
+[player_weapon.xm1014.viewmodel]
+# This weapon wears an ANIMATED rig: the gun is part of the hands
+# mesh and the reload/fire clips were authored against it, so there
+# is no separate model to attach and no socket to hang it on.
+hands_rig = "hands_shotgun"
+hands_idle_animation = "idle"
+hands_fire_animation = "fire"
+hands_draw_animation = "draw"
+hands_reload_animation = "reload"
+# Barrel tip, in the weapon model's own space: half the mesh's
+# 1.00 m length forward, on the bore line.
+barrel_offset = [0.0, 0.0120, -0.5200]
+position = [0.16, -0.25, -0.52]
+rotation = [-4.0, 4.0, 0.5]
+glow_school = "none"
+glow_strength = 0.0
+material = "Builtin/Firearms/FirearmsXm1014"
+muzzle_socket = "weapon_muzzle"
+
+# --- sniper -------------------------------------------------------------------
+
+[player_weapon.awp]
+slot = 4
+name = "AWP"
+discipline = "SNIPER / .338"
+payload = "bullet_338"
+fire_mode = "projectile"
+trigger = "press"
+# The long recovery IS the weapon: one shot, then a second and a half of being
+# defenceless.
+fire_interval = 1.45
+arc_cost = 0.0
+projectile_count = 1
+spread_degrees = 0.0
+switch_time = 0.45
+muzzle_offset = [0.10, -0.10, 0.62]
+muzzle_effect = "eidolon_muzzle"
+fire_sound = "weapon.eidolon.fire"
+
+[player_weapon.awp.projectile]
+shape = "sphere"
+visual_scale = [0.007, 0.029, 0.007]
+material = "Game/Prototype/Bolt"
+trail_effect = ""
+impact_effect = "eidolon_impact"
+impact_sound = "weapon.eidolon.impact"
+# Scaled muzzle velocity -- see the note at the head of this file.
+speed = 420.0
+lifetime = 2.20
+radius = 0.0120
+mass = 0.0160
+# A real bullet: it falls, and it slows.
+gravity_factor = 1.0
+drag = 0.0080
+aim_range = 250.0
+
+[player_weapon.awp.ammo]
+magazine = 10
+reserve = 30
+reserve_max = 60
+reload_seconds = 2.8
+reload_empty_seconds = 3.6
+ammo_type = ".338"
+reload_animation = "draw"
+
+[player_weapon.awp.viewmodel]
+# This weapon wears an ANIMATED rig: the gun is part of the hands
+# mesh and the reload/fire clips were authored against it, so there
+# is no separate model to attach and no socket to hang it on.
+hands_rig = "hands_scar"
+hands_idle_animation = "idle"
+hands_fire_animation = "fire"
+hands_draw_animation = "draw"
+hands_reload_animation = "reload"
+# Barrel tip, in the weapon model's own space: half the mesh's
+# 1.20 m length forward, on the bore line.
+barrel_offset = [0.0, 0.0150, -0.6200]
+position = [0.15, -0.22, -0.56]
+rotation = [-3.0, 4.0, 0.5]
+glow_school = "none"
+glow_strength = 0.0
+material = "Builtin/Firearms/FirearmsAwp"
+muzzle_socket = "weapon_muzzle"

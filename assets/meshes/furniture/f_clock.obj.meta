@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "74aa70f7a495f2b1"
+type = "mesh"
+name = "F Clock"
+tags = ["furniture"]

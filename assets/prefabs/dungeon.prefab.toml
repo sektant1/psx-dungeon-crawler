@@ -1,0 +1,165 @@
+# Modular Dungeon (PSX).
+#
+# Written by tools/import_asset_pack.py from
+#   assets/source/modular-dungeon
+# Every size below is measured off the exported mesh in metres.
+# Re-running the importer regenerates this file.
+
+[library]
+domain = "dungeon"
+scale = 1.0        # meshes are published in metres
+mesh_dir = "meshes/dungeon"
+
+[[prefab]]
+id = "dungeon.brick"
+role = "architecture"
+mesh = "brick.obj"
+material = "Builtin/Dungeon/DungeonBrick"
+placement = "wall"
+size = [1.4245, 0.6667, 0.6770]
+y_offset = -0.3333
+collider = "box"
+# 44 tris, from source/modular-dungeon/Brick/Brick.fbx
+
+[[prefab]]
+id = "dungeon.chain"
+role = "architecture"
+mesh = "chain.obj"
+placement = "wall"
+size = [2.4000, 2.4000, 0.4800]
+y_offset = -1.2000
+collider = "box"
+# 288 tris, from source/modular-dungeon/Chain/chain.fbx
+
+[[prefab]]
+id = "dungeon.column"
+role = "architecture"
+mesh = "column.obj"
+material = "Builtin/Dungeon/DungeonColumn"
+placement = "wall"
+size = [0.8680, 4.1663, 0.8680]
+y_offset = -2.0831
+collider = "box"
+# 220 tris, from source/modular-dungeon/Column/Column.fbx
+
+[[prefab]]
+id = "dungeon.door"
+role = "architecture"
+mesh = "door.obj"
+material = "Builtin/Dungeon/DungeonDoor"
+placement = "wall"
+size = [1.5603, 2.6156, 0.8672]
+y_offset = -0.9201
+collider = "box"
+# 692 tris, from source/modular-dungeon/Door/door.fbx
+
+[[prefab]]
+id = "dungeon.floor"
+role = "architecture"
+mesh = "floor.obj"
+material = "Builtin/Dungeon/DungeonWalls03"
+placement = "wall"
+size = [3.9807, 0.4023, 3.9900]
+y_offset = -0.0591
+collider = "box"
+# 316 tris, from source/modular-dungeon/Walls3/Floor.fbx
+
+[[prefab]]
+id = "dungeon.fountain"
+role = "architecture"
+mesh = "fountain.obj"
+material = "Builtin/Dungeon/DungeonFountain"
+placement = "wall"
+size = [2.2930, 1.5733, 2.2930]
+y_offset = 0.0567
+collider = "box"
+# 812 tris, from source/modular-dungeon/Fountain/fountain.fbx
+
+[[prefab]]
+id = "dungeon.iron_gate"
+role = "architecture"
+mesh = "iron_gate.obj"
+material = "Builtin/Dungeon/DungeonIronGate"
+placement = "wall"
+size = [2.0836, 2.6000, 0.1732]
+y_offset = -1.0476
+collider = "box"
+# 132 tris, from source/modular-dungeon/IronGate/IronGate.fbx
+
+[[prefab]]
+id = "dungeon.lever"
+role = "architecture"
+mesh = "lever.obj"
+material = "Builtin/Dungeon/DungeonLever"
+placement = "wall"
+size = [0.1778, 0.6000, 0.4838]
+y_offset = -0.0392
+collider = "box"
+# 388 tris, from source/modular-dungeon/Lever/lever.fbx
+
+[[prefab]]
+id = "dungeon.roots"
+role = "architecture"
+mesh = "roots.obj"
+material = "Builtin/Dungeon/DungeonRoots"
+placement = "wall"
+size = [1.3315, 4.0000, 0.5815]
+y_offset = -1.6661
+collider = "box"
+# 168 tris, from source/modular-dungeon/Roots/Roots.fbx
+
+[[prefab]]
+id = "dungeon.spike"
+role = "architecture"
+mesh = "spike.obj"
+material = "Builtin/Dungeon/DungeonSpike"
+placement = "wall"
+size = [0.2341, 1.2000, 0.2703]
+y_offset = -0.4482
+collider = "box"
+# 22 tris, from source/modular-dungeon/Spike/spike.fbx
+
+[[prefab]]
+id = "dungeon.stairs"
+role = "architecture"
+mesh = "stairs.obj"
+material = "Builtin/Dungeon/DungeonStairs"
+placement = "wall"
+size = [4.0236, 2.5068, 3.9900]
+y_offset = -1.4026
+collider = "box"
+# 932 tris, from source/modular-dungeon/Stairs/Stairs.fbx
+
+[[prefab]]
+id = "dungeon.torch"
+role = "architecture"
+mesh = "torch.obj"
+material = "Builtin/Dungeon/DungeonTorch"
+placement = "wall"
+size = [0.2072, 0.9000, 0.2041]
+y_offset = -0.6066
+collider = "box"
+# 488 tris, from source/modular-dungeon/Torch/torch.fbx
+
+[[prefab]]
+id = "dungeon.wall"
+role = "architecture"
+mesh = "wall.obj"
+material = "Builtin/Dungeon/DungeonWall"
+placement = "wall"
+size = [4.0236, 3.9900, 0.5424]
+y_offset = -1.9955
+collider = "box"
+# 932 tris, from source/modular-dungeon/Wall/Wall.fbx
+
+[[prefab]]
+id = "dungeon.wall_02"
+role = "architecture"
+mesh = "wall_02.obj"
+material = "Builtin/Dungeon/DungeonWall02"
+placement = "wall"
+size = [4.0236, 3.9900, 0.4497]
+y_offset = -1.9955
+collider = "box"
+# 932 tris, from source/modular-dungeon/Wall2/Wall2.fbx
+

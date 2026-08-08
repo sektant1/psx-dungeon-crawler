@@ -309,6 +309,37 @@ Json writeEntity(const Entity& entity)
             node["offset"] = vec3(entity.collider->offset);
         out["collider"] = std::move(node);
     }
+    if (entity.terrain) {
+        const TerrainAuthor& terrain = *entity.terrain;
+        Json node = Json::object();
+        node["resolution"] = terrain.resolution;
+        node["size"] = canonical(terrain.size);
+        node["height_scale"] = canonical(terrain.heightScale);
+        if (!terrain.heightmap.empty())
+            node["heightmap"] = terrain.heightmap;
+        node["seed"] = terrain.seed;
+        node["octaves"] = terrain.octaves;
+        node["frequency"] = canonical(terrain.frequency);
+        node["roughness"] = canonical(terrain.roughness);
+        node["uv_scale"] = canonical(terrain.uvScale);
+        if (!terrain.material.empty())
+            node["material"] = terrain.material;
+        if (!terrain.collision)
+            node["collision"] = false;
+        // The sculpted field, written only when there is one. A terrain still
+        // at its generated shape is fully described by the numbers above, and
+        // writing 16641 identical-on-reload samples into every scene would make
+        // an unedited terrain a 33 KB diff.
+        if (!terrain.samples.empty()) {
+            node["min_height"] = canonical(terrain.minHeight);
+            node["max_height"] = canonical(terrain.maxHeight);
+            Json samples = Json::array();
+            for (const std::uint16_t sample : terrain.samples)
+                samples.push_back(int(sample));
+            node["samples"] = std::move(samples);
+        }
+        out["terrain"] = std::move(node);
+    }
     if (entity.light) {
         const LightAuthor& light = *entity.light;
         Json node = Json::object();

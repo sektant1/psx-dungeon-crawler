@@ -72,6 +72,24 @@ public:
     ViewmodelRig& rig() { return mMotion.tuning(); }
     const ViewmodelRig& rig() const { return mMotion.tuning(); }
     void setRig(const ViewmodelRig& tuning) { mMotion.setTuning(tuning); }
+    // Copy the live placement back into the rig's own framing.
+    //
+    // The Viewmodel panel edits the live ViewmodelRig, which is where a rig's
+    // framing was applied at init -- so without this, dialling in a rig and then
+    // switching weapons discards the work: the next init() re-applies the
+    // framing the file still holds. Called by the panel after an edit, so the
+    // number in hand survives a rig swap and can be read back out for the TOML.
+    void captureFraming()
+    {
+        if (!mHands.hasFraming)
+            return;
+        const ViewmodelRig& live = mMotion.tuning();
+        mHands.framingOffset = live.offset;
+        mHands.framingRotationDegrees = live.rotation;
+        mHands.framingScale = live.scale;
+    }
+    // What the rig's framing currently is, for the panel to print as TOML.
+    const HandsDefinition& definitionRef() const { return mHands; }
     const ViewmodelMotion& motion() const { return mMotion; }
     // Re-reads the weapon's feel numbers after the panel edited them.
     void refreshFeel(const WeaponViewmodelDef& definition)

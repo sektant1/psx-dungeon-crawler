@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "5ac5ea348c1cae9e"
+type = "texture"
+name = "Apocalypse Nails Albedo"
+tags = ["apocalypse"]

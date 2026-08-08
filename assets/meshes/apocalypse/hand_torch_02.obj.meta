@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "25398c4f4b568e5a"
+type = "mesh"
+name = "Hand Torch 02"
+tags = ["apocalypse"]

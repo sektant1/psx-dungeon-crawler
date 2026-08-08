@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "52163d8054522a5a"
+type = "texture"
+name = "Apocalypse Pngimg Com Credit Card Png 204 Albedo"
+tags = ["apocalypse"]

@@ -494,7 +494,12 @@ bool DungeonApp::onStartGame(eng::Engine& engine)
     mPlayerSys.setControllerTuning(mConfigController);
     mPlayerSys.controller().setMovementTuning(mMovement);
     mPlayerSys.controller().setDashTuning(mDashTuning);
-    mPlayerSys.loadWeapons(game::assetPath("config/weapons.toml"));
+    // The shooter's loadout. `RAVEN_LOADOUT` picks a different one -- the
+    // fantasy set is still authored and still loads, and switching between them
+    // is how each is checked without editing a file.
+    const char* loadout = std::getenv("RAVEN_LOADOUT");
+    mPlayerSys.loadWeapons(game::assetPath(
+        std::string("config/") + (loadout ? loadout : "firearms") + ".toml"));
     // The hands rig and the socket names weapons hang off. Before the weapons,
     // in load order but not in dependency: a weapon naming a socket this file
     // does not define is warned about when it is equipped, not here.
@@ -1874,10 +1879,11 @@ void DungeonApp::onGameGui(const eng::FrameContext& f)
     deps.playerForward = mPlayerSys.controller().forward();
     deps.dt = f.dt;
     mPanels.update(deps);
+    const game::WeaponAmmoState ammo = mPlayerSys.weapons().ammoState();
     const game::HudSnapshot hudFrame =
         game::buildHudSnapshot(mCombat.director().registry(), mPlayerEntity,
                                mPlayerSys.selectedWeapon(),
-                               mInteraction.focus());
+                               mInteraction.focus(), &ammo);
     mHud.draw(hudFrame, lookTooltip(), f.realDt,
               !uiOpen() && !mPortalPreviewMode && !mScreens.anyOpen());
     // Over the HUD, because that is where a screen goes: the pack opens on top

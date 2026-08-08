@@ -1,0 +1,520 @@
+# The built-in content library: which vendor pack becomes which domain.
+#
+# Everything under assets/source/ ships WITH the engine -- it is the default
+# content a project starts with, not one game's art. This file is the only
+# place that says how a downloaded pack maps onto the engine's naming, and
+# `tools/import_asset_pack.py` is the only thing that reads it. Re-running the
+# importer regenerates every published mesh, texture, material and prefab
+# library from this description, so a mistake here is a re-import, not a
+# migration.
+#
+# WHAT A PACK ENTRY DECIDES
+#
+#   domain            the one word every published name is filed under:
+#                     meshes/<domain>/, textures/<domain>/, materials/
+#                     <domain>.mat, prefabs/<domain>.prefab.toml, and the
+#                     prefab id prefix `<domain>.<name>`.
+#   models            glob(s), relative to `source`, of what to import.
+#   exclude           globs importing would otherwise pick up. Several packs
+#                     nest a second copy of themselves; identical bytes are
+#                     deduplicated automatically, so this is only for files
+#                     that differ AND should not ship.
+#   scale             source unit -> metre. Run the importer with --dry-run to
+#                     see measured bounds before choosing one; every number
+#                     below was picked that way, not from a vendor readme.
+#   split_objects     true publishes one mesh per object in the file, which is
+#                     what a pack shipping `ToolsAll.fbx` means. false joins
+#                     them, which is what a model shipped as loose panels
+#                     means.
+#   role/placement    what the prefab library says the piece is for. See
+#                     docs/prefabs.md for the vocabulary.
+#   collider          box | cylinder | none. Stated per pack because "this is
+#                     decoration" is a design decision and should look like one.
+#
+# UNITS. The PSX packs here are authored at wildly different scales -- one
+# vendor's sword is 0.9 units long and another's is 90. `scale` is what makes
+# a forest tree and a dungeon wall placeable in the same scene without anyone
+# doing arithmetic at the call site.
+
+schema = 1
+
+# --- environment -------------------------------------------------------------
+
+[[pack]]
+id = "forest"
+label = "PSX Forest"
+source = "environments/PSXForest/PSXForest"
+domain = "forest"
+models = ["fbx/*.fbx"]
+# Measured: the grass cross is 2.0 units tall and big_tree_01 is 69. At 0.5 the
+# player (1.7 m) wades through 1 m grass under a 35 m canopy, which is the
+# reading the art was drawn for.
+scale = 0.5
+split_objects = true
+role = "scenery"
+placement = "prop"
+# Foliage is modelled as intersecting planes: culling a back face deletes half
+# of every bush. This is the one pack that must draw two-sided.
+two_sided = true
+collider = "none"
+material_address = "clamp"
+
+# The mushroom is the same billboard cross as the grass, so it inherits the
+# grass's height. At pack scale it would be a metre tall.
+[pack.model_scale]
+mushroom_01 = 0.25
+
+# --- architecture ------------------------------------------------------------
+
+[[pack]]
+id = "dungeon"
+label = "Modular Dungeon (PSX)"
+source = "modular-dungeon"
+domain = "dungeon"
+models = ["*/*.fbx"]
+# Wall, floor, stairs and column all measure ~12 units, so 12 units is this
+# pack's cell and 1/3 puts it on the engine's 4 m grid exactly.
+scale = 0.333333
+split_objects = false
+role = "architecture"
+placement = "wall"
+collider = "box"
+
+# The pieces that are not on the grid: a torch is not four metres tall.
+[[pack.size_rule]]
+match = "iron_gate"
+length = 2.6
+[[pack.size_rule]]
+match = "torch"
+length = 0.9
+[[pack.size_rule]]
+match = "roots"
+length = 4.0
+[[pack.size_rule]]
+match = "lever"
+length = 0.6
+[[pack.size_rule]]
+match = "spike"
+length = 1.2
+[[pack.size_rule]]
+match = "chain"
+length = 2.4
+
+# --- props -------------------------------------------------------------------
+
+[[pack]]
+id = "props_furniture"
+label = "Furniture"
+source = "props/FurnitureUpdate"
+domain = "furniture"
+models = ["fbx/*.fbx"]
+scale = 1.0
+split_objects = false
+role = "prop"
+placement = "prop"
+collider = "box"
+
+[[pack]]
+id = "props_cozy"
+label = "Cozy Village Props"
+source = "props/CozyPack"
+domain = "cozy"
+models = ["**/*.fbx"]
+# The "All" files are the same subjects as the "Single" files, packed into one
+# scene for a vendor preview render. Importing both publishes everything twice.
+exclude = [
+    "Fruits/Fruits.fbx",
+    "ModularCharacter/Characters.fbx",
+    "Tools/Tools/ToolsAll.fbx",
+    "Trees/Trees.fbx",
+]
+scale = 1.0
+split_objects = true
+# The "Single" files are one object holding every fruit, every tree and every
+# villager as disconnected islands. Without loose splitting the whole set
+# publishes as three unplaceable meshes.
+split_loose = true
+role = "prop"
+placement = "prop"
+collider = "box"
+
+[[pack.size_rule]]
+match = "modular_house"
+length = 6.00
+[[pack.size_rule]]
+match = "fence"
+length = 1.20
+[[pack.size_rule]]
+match = "hole"
+length = 1.40
+[[pack.size_rule]]
+match = "tree"
+length = 5.00
+[[pack.size_rule]]
+match = "fruit"
+length = 0.12
+[[pack.size_rule]]
+match = "character"
+length = 1.70
+[[pack.size_rule]]
+match = "body"
+length = 1.70
+[[pack.size_rule]]
+match = "head"
+length = 0.26
+[[pack.size_rule]]
+match = "shovel"
+length = 1.10
+[[pack.size_rule]]
+match = "tool"
+length = 0.90
+[[pack.size_rule]]
+match = ""
+length = 0.60
+
+[[pack]]
+id = "props_apocalypse"
+label = "Post-Apocalyptic Props"
+source = "props/Post-Apocaliptic-Pack"
+domain = "apocalypse"
+models = ["**/*.fbx"]
+scale = 1.0
+split_objects = false
+role = "pickup"
+placement = "prop"
+collider = "box"
+
+# Loot, sized as loot. The trailing catch-all is what stops an unmatched item
+# from publishing at pack units -- a tin of food thirty times life size reads
+# as a broken importer, not as a prop nobody has tuned yet.
+[[pack.size_rule]]
+match = "backpack"
+length = 0.52
+[[pack.size_rule]]
+match = "gas_mask"
+length = 0.28
+[[pack.size_rule]]
+match = "flashlight"
+length = 0.22
+[[pack.size_rule]]
+match = "hand_torch"
+length = 0.20
+[[pack.size_rule]]
+match = "walkietalkie"
+length = 0.22
+[[pack.size_rule]]
+match = "crowbar"
+length = 0.90
+[[pack.size_rule]]
+match = "machete"
+length = 0.55
+[[pack.size_rule]]
+match = "siekiera"          # axe
+length = 0.70
+[[pack.size_rule]]
+match = "nail_bat"
+length = 0.85
+[[pack.size_rule]]
+match = "baton"
+length = 0.55
+[[pack.size_rule]]
+match = "saw"
+length = 0.50
+[[pack.size_rule]]
+match = "scissors"
+length = 0.20
+[[pack.size_rule]]
+match = "kanister"         # jerrycan
+length = 0.42
+[[pack.size_rule]]
+match = "bottle"
+length = 0.30
+[[pack.size_rule]]
+match = "butelka"          # bottle
+length = 0.28
+[[pack.size_rule]]
+match = "kroplowka"        # drip bag
+length = 0.30
+[[pack.size_rule]]
+match = "health_pack"
+length = 0.25
+[[pack.size_rule]]
+match = "blood_pack"
+length = 0.20
+[[pack.size_rule]]
+match = "syrienge"
+length = 0.15
+[[pack.size_rule]]
+match = "bandaz"           # bandage
+length = 0.10
+[[pack.size_rule]]
+match = "pill"
+length = 0.09
+[[pack.size_rule]]
+match = "pojemnik"         # pill container
+length = 0.10
+[[pack.size_rule]]
+match = "bread"
+length = 0.24
+[[pack.size_rule]]
+match = "konserwa"         # tinned food
+length = 0.11
+[[pack.size_rule]]
+match = "water"
+length = 0.26
+[[pack.size_rule]]
+match = "mre"
+length = 0.20
+[[pack.size_rule]]
+match = "battery"
+length = 0.10
+[[pack.size_rule]]
+match = "bateria"          # car battery
+length = 0.26
+[[pack.size_rule]]
+match = "lighter"
+length = 0.08
+[[pack.size_rule]]
+match = "lockpick"
+length = 0.12
+[[pack.size_rule]]
+match = "karta"            # card
+length = 0.09
+[[pack.size_rule]]
+match = "case"
+length = 0.35
+[[pack.size_rule]]
+match = ""
+length = 0.25
+
+[[pack]]
+id = "props_secret"
+label = "Secret Pack"
+source = "props/Secret Pack"
+domain = "secret"
+models = ["**/*.fbx"]
+scale = 1.0
+split_objects = true
+split_loose = true
+role = "prop"
+placement = "prop"
+collider = "box"
+
+[[pack.size_rule]]
+match = ""
+length = 1.00
+
+# --- weapons -----------------------------------------------------------------
+
+[[pack]]
+id = "weapons_medieval"
+label = "Medieval Weapons"
+source = "medieval-weapons"
+domain = "medieval"
+models = ["**/*.fbx"]
+scale = 1.0
+split_objects = false
+role = "weapon"
+placement = "prop"
+# A weapon on the ground is a pickup you walk onto, not a wall.
+collider = "none"
+
+# Swords come out of this pack in metres and everything else does not -- a
+# katana measures 4.7 and an estoc 5.4. Rules in order, longest name first
+# where one contains another (`heavycrossbow` before `crossbow`, `crossbow`
+# before `bow`), each stating the weapon's real length.
+[[pack.size_rule]]
+match = "brokensword"
+length = 0.70
+[[pack.size_rule]]
+match = "zweihander"
+length = 1.75
+[[pack.size_rule]]
+match = "katana"
+length = 1.05
+[[pack.size_rule]]
+match = "estoc"
+length = 1.15
+[[pack.size_rule]]
+match = "sword"
+length = 1.15
+[[pack.size_rule]]
+match = "poleaxe"
+length = 2.10
+[[pack.size_rule]]
+match = "doubleaxe"
+length = 1.80
+[[pack.size_rule]]
+match = "billhook"
+length = 2.20
+[[pack.size_rule]]
+match = "heavycrossbow"
+length = 0.95
+[[pack.size_rule]]
+match = "crossbow"
+length = 0.80
+[[pack.size_rule]]
+match = "bow"
+length = 1.70
+[[pack.size_rule]]
+match = "arrow"
+length = 0.80
+[[pack.size_rule]]
+match = "bolt"
+length = 0.40
+[[pack.size_rule]]
+match = "mace"
+length = 0.75
+[[pack.size_rule]]
+match = "roundshield"
+length = 0.65
+[[pack.size_rule]]
+match = "shield"
+length = 1.05
+
+[[pack]]
+id = "weapons_modern"
+label = "Modern Firearms"
+source = "modern-guns"
+domain = "firearms"
+models = ["**/*.fbx"]
+# `Guns/guns/` is a verbatim second copy; the deduplicator catches the ones
+# that are byte-identical and this catches the rest.
+exclude = ["Guns/guns/**/*.fbx"]
+scale = 1.0
+split_objects = false
+role = "weapon"
+placement = "prop"
+collider = "none"
+
+# Every gun in this pack measures 3.9-5.0 units regardless of what it is: a
+# Glock and an AWP come out the same length. That is the scale problem the
+# vendor's own comment thread describes, and stating each weapon's real length
+# is the only thing that separates a pistol from a sniper rifle again.
+[[pack.size_rule]]
+match = "glock"
+length = 0.19
+[[pack.size_rule]]
+match = "beretta"
+length = 0.21
+[[pack.size_rule]]
+match = "uspp"
+length = 0.22
+[[pack.size_rule]]
+match = "tec"
+length = 0.32
+[[pack.size_rule]]
+match = "r_08"
+length = 0.30
+[[pack.size_rule]]
+match = "sawed_off"
+length = 0.60
+[[pack.size_rule]]
+match = "mag_07"
+length = 0.95
+[[pack.size_rule]]
+match = "xm"
+length = 1.00
+[[pack.size_rule]]
+match = "awp"
+length = 1.20
+[[pack.size_rule]]
+match = "sg_553"
+length = 0.95
+[[pack.size_rule]]
+match = "aug"
+length = 0.79
+[[pack.size_rule]]
+match = "m_249"
+length = 1.04
+[[pack.size_rule]]
+match = "m4a"
+length = 0.84
+[[pack.size_rule]]
+match = ""            # every remaining rifle: ak, galil, famas
+length = 0.90
+
+# --- creatures ---------------------------------------------------------------
+#
+# Imported as static meshes. Several of these files carry an armature, and a
+# rigged import belongs to the animation rows (gltf2ozz), not to the mesh row
+# -- see tools/author_hand_rigs.py for how a rigged pack is published. A static
+# bind-pose mesh is still the right thing to ship: it is what the editor draws
+# in a placement ghost and what a non-animated background creature needs.
+
+[[pack]]
+id = "units"
+label = "Creatures"
+source = "units"
+domain = "creatures"
+models = ["**/*.fbx"]
+# The vendor preview file: every spider in the set joined into one object.
+exclude = ["SpiderUpdate/FBX/spiders.fbx"]
+scale = 1.0
+split_objects = false
+role = "actor"
+placement = "prop"
+collider = "box"
+
+# Humanoids come out near 2.0 units and a chicken comes out at 2.1, so the
+# pack's unit means nothing across families. Each creature's real height (or
+# length, for the ones that are longer than they are tall) instead.
+[[pack.size_rule]]
+match = "zombie"
+length = 1.75
+[[pack.size_rule]]
+match = "human"
+length = 1.75
+[[pack.size_rule]]
+match = "smol"
+length = 0.22
+[[pack.size_rule]]
+match = "chicken"
+length = 0.42
+[[pack.size_rule]]
+match = "goat"
+length = 0.85
+[[pack.size_rule]]
+match = "cow"
+length = 1.55
+[[pack.size_rule]]
+match = "deer"
+length = 1.70
+[[pack.size_rule]]
+match = "roe"
+length = 1.20
+[[pack.size_rule]]
+match = "wolf"
+length = 1.45
+[[pack.size_rule]]
+match = "fox"
+length = 0.95
+[[pack.size_rule]]
+match = "squirrel"
+length = 0.28
+[[pack.size_rule]]
+match = "bird"
+length = 0.26
+[[pack.size_rule]]
+match = "tick"
+length = 0.35
+[[pack.size_rule]]
+match = "widow"
+length = 0.70
+[[pack.size_rule]]
+match = ""            # the remaining spiders: spider, fluffy, toxic, skull
+length = 0.60
+
+# --- rigged ------------------------------------------------------------------
+#
+# Declared so the manifest is a complete account of the source tree, and
+# skipped by the mesh importer: a rigged arm published as a static OBJ is a
+# viewmodel frozen in its bind pose. tools/author_hand_rigs.py owns this row.
+
+[[pack]]
+id = "hands"
+label = "First-Person Hands"
+source = "hands"
+domain = "hands"
+models = ["*.fbx"]
+skinned = true

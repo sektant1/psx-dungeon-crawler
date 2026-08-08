@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "4549d97540b3429e"
+type = "mesh"
+name = "Brokensword 02"
+tags = ["medieval"]

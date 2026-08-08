@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "512b69ad03c7abf6"
+type = "texture"
+name = "Medieval Poleaxe 04 Albedo"
+tags = ["medieval"]

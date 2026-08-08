@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "ba62e87701d16700"
+type = "texture"
+name = "Apocalypse Health Pack 01 Albedo"
+tags = ["apocalypse"]

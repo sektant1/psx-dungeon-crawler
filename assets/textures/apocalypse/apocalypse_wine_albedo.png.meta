@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "a229fa68ab786661"
+type = "texture"
+name = "Apocalypse Wine Albedo"
+tags = ["apocalypse"]

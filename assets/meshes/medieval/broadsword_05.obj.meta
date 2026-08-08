@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "2da80ee46b6227c6"
+type = "mesh"
+name = "Broadsword 05"
+tags = ["medieval"]

@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "dafce5269cebb3a3"
+type = "texture"
+name = "Apocalypse Breakable Pill Albedo"
+tags = ["apocalypse"]

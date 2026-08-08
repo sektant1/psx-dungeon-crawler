@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "31f4a27bfc8ff719"
+type = "texture"
+name = "Apocalypse Lockpick Albedo"
+tags = ["apocalypse"]

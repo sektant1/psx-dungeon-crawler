@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "860100f9bc32c14e"
+type = "texture"
+name = "Apocalypse Food Can Albedo"
+tags = ["apocalypse"]

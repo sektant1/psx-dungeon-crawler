@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "4fbd60c9617ed575"
+type = "texture"
+name = "Furniture Furniture Update Albedo 09"
+tags = ["furniture"]

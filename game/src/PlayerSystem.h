@@ -46,6 +46,15 @@ public:
     // Read before attachLoadout; a missing or rejected file keeps the shipped
     // arms rather than leaving the player with nothing to hold a weapon with.
     bool loadHands(const std::string& definitionsPath);
+    // Choose which of the loaded rigs the player wears. False for an unknown
+    // id. The rig is not rebuilt here -- call attachLoadout() after, which is
+    // what the debug panel does.
+    bool setHandsRig(const std::string& id);
+    // Swap to the rig a weapon names, if it names one and it is not already
+    // worn. Rebuilds the viewmodel, so it belongs on the equip path rather
+    // than anywhere a caller might reach for it per frame.
+    bool equipRigFor(GameContext& ctx, const PlayerWeaponDef& weapon);
+    const HandsLibrary& handsLibrary() const { return mHandsLibrary; }
     // (Re)attach the carried light + viewmodels to the fresh head node (the old
     // one is destroyed by clearScene) and apply active-weapon visibility.
     void attachLoadout(GameContext& ctx);
@@ -124,6 +133,9 @@ public:
 
     int weapon() const { return int(mWeapons.selectedIndex()); }
     const PlayerWeaponDef* selectedWeapon() const { return mWeapons.selected(); }
+    // The loadout's runtime, for the HUD and the debug panel. Const: firing and
+    // reloading go through fixedUpdate, never through a caller reaching in.
+    const WeaponController& weapons() const { return mWeapons; }
     const PlayerWeaponDef* weaponDefinition(std::size_t index) const;
     std::vector<PlayerWeaponDef>& weaponDefinitions() { return mWeaponLibrary.defs(); }
     const std::vector<PlayerWeaponDef>& weaponDefinitions() const {
@@ -165,6 +177,7 @@ private:
     PlayerWeaponLibrary mWeaponLibrary;
     WeaponController mWeapons;
     FirstPersonHands mHands;
+    HandsLibrary mHandsLibrary;
     HandsDefinition mHandsDefinition = defaultHandsDefinition();
     eng::ecs::FirstPersonController mTuning{};
     float mFootstepFxCooldown = 0.0f;

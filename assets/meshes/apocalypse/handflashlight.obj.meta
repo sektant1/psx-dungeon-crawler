@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "e6aab57448ef058b"
+type = "mesh"
+name = "Handflashlight"
+tags = ["apocalypse"]

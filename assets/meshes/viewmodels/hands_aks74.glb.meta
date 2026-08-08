@@ -1,0 +1,12 @@
+# Resource database record. Written by tools/author_animated_hands.py.
+#
+# A skinned rig: gltf2ozz owns it, not the static mesh row.
+schema = 1
+guid = "97c603a5a1994e70"
+type = "mesh"
+name = "AKS-74 Hands"
+tags = ["viewmodel", "skinned", "hands", "animated"]
+
+[import]
+skip = true
+skip_reason = "skinned rig: gltf2ozz owns it"

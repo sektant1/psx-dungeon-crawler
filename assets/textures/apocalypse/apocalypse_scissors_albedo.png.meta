@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "30b67db5fdfe34b5"
+type = "texture"
+name = "Apocalypse Scissors Albedo"
+tags = ["apocalypse"]

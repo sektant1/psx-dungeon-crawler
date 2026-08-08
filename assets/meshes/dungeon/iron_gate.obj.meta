@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "6b22f42b38677fa1"
+type = "mesh"
+name = "Iron Gate"
+tags = ["dungeon"]

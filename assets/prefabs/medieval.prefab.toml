@@ -1,0 +1,606 @@
+# Medieval Weapons.
+#
+# Written by tools/import_asset_pack.py from
+#   assets/source/medieval-weapons
+# Every size below is measured off the exported mesh in metres.
+# Re-running the importer regenerates this file.
+
+[library]
+domain = "medieval"
+scale = 1.0        # meshes are published in metres
+mesh_dir = "meshes/medieval"
+
+[[prefab]]
+id = "medieval.arrow_01"
+role = "weapon"
+mesh = "arrow_01.obj"
+material = "Builtin/Medieval/MedievalArrows"
+placement = "prop"
+size = [0.8000, 0.0484, 0.0559]
+y_offset = 0.1433
+collider = "none"
+# 116 tris, from source/medieval-weapons/Ammo/Arrows/arrow_01.fbx
+
+[[prefab]]
+id = "medieval.arrow_02"
+role = "weapon"
+mesh = "arrow_02.obj"
+material = "Builtin/Medieval/MedievalArrows"
+placement = "prop"
+size = [0.8000, 0.0497, 0.0574]
+y_offset = -0.0181
+collider = "none"
+# 196 tris, from source/medieval-weapons/Ammo/Arrows/arrow_02.fbx
+
+[[prefab]]
+id = "medieval.arrow_03"
+role = "weapon"
+mesh = "arrow_03.obj"
+material = "Builtin/Medieval/MedievalArrows"
+placement = "prop"
+size = [0.8000, 0.0581, 0.0609]
+y_offset = -0.0245
+collider = "none"
+# 140 tris, from source/medieval-weapons/Ammo/Arrows/arrow_03.fbx
+
+[[prefab]]
+id = "medieval.billhook_01"
+role = "weapon"
+mesh = "billhook_01.obj"
+material = "Builtin/Medieval/MedievalBillHook"
+placement = "prop"
+size = [0.2430, 2.2000, 0.0395]
+y_offset = -1.0436
+collider = "none"
+# 160 tris, from source/medieval-weapons/Polearms/BillHook/billhook_01.fbx
+
+[[prefab]]
+id = "medieval.bolt_01"
+role = "weapon"
+mesh = "bolt_01.obj"
+material = "Builtin/Medieval/MedievalBelt"
+placement = "prop"
+size = [0.4000, 0.0561, 0.0512]
+y_offset = -0.0234
+collider = "none"
+# 112 tris, from source/medieval-weapons/Ammo/Belt/bolt_01.fbx
+
+[[prefab]]
+id = "medieval.broadsword_01"
+role = "weapon"
+mesh = "broadsword_01.obj"
+material = "Builtin/Medieval/MedievalBroadsword01"
+placement = "prop"
+size = [0.2674, 1.1500, 0.0464]
+y_offset = -0.5134
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/BroadSword/Default/broadsword_01/broadsword_01.fbx
+
+[[prefab]]
+id = "medieval.broadsword_02"
+role = "weapon"
+mesh = "broadsword_02.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo04"
+placement = "prop"
+size = [0.2674, 1.1500, 0.0464]
+y_offset = -0.5134
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/BroadSword/Default/broadsword_02/broadsword_02.fbx
+
+[[prefab]]
+id = "medieval.broadsword_03"
+role = "weapon"
+mesh = "broadsword_03.obj"
+material = "Builtin/Medieval/MedievalBroadsword03"
+placement = "prop"
+size = [0.2674, 1.1500, 0.0464]
+y_offset = -0.5134
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/BroadSword/Bronze/broadsword_03/broadsword_03.fbx
+
+[[prefab]]
+id = "medieval.broadsword_04"
+role = "weapon"
+mesh = "broadsword_04.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo03"
+placement = "prop"
+size = [0.2674, 1.1500, 0.0464]
+y_offset = -0.5134
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/BroadSword/Bronze/broadsword_04/broadsword_04.fbx
+
+[[prefab]]
+id = "medieval.broadsword_05"
+role = "weapon"
+mesh = "broadsword_05.obj"
+material = "Builtin/Medieval/MedievalBroadsword05"
+placement = "prop"
+size = [0.2674, 1.1500, 0.0464]
+y_offset = -0.5134
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/BroadSword/Stylized/broadsword_05/broadsword_05.fbx
+
+[[prefab]]
+id = "medieval.broadsword_06"
+role = "weapon"
+mesh = "broadsword_06.obj"
+material = "Builtin/Medieval/MedievalBroadsword06"
+placement = "prop"
+size = [0.2674, 1.1500, 0.0464]
+y_offset = -0.5134
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/BroadSword/Stylized/broadsword_06/broadsword_06.fbx
+
+[[prefab]]
+id = "medieval.broadsword_06_02"
+role = "weapon"
+mesh = "broadsword_06_02.obj"
+material = "Builtin/Medieval/MedievalBroadsword07"
+placement = "prop"
+size = [0.2674, 1.1500, 0.0464]
+y_offset = -0.5134
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/BroadSword/Stylized/broadsword_07/broadsword_06.fbx
+
+[[prefab]]
+id = "medieval.brokensword_01"
+role = "weapon"
+mesh = "brokensword_01.obj"
+material = "Builtin/Medieval/MedievalBrokensword01"
+placement = "prop"
+size = [0.1253, 0.7000, 0.0237]
+y_offset = -0.3273
+collider = "none"
+# 360 tris, from source/medieval-weapons/Swords/BrokenSword/brokensword_01/brokensword_01.fbx
+
+[[prefab]]
+id = "medieval.brokensword_02"
+role = "weapon"
+mesh = "brokensword_02.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo05"
+placement = "prop"
+size = [0.1253, 0.7000, 0.0237]
+y_offset = -0.3273
+collider = "none"
+# 360 tris, from source/medieval-weapons/Swords/BrokenSword/brokensword_02/brokensword_02.fbx
+
+[[prefab]]
+id = "medieval.compositebow_01"
+role = "weapon"
+mesh = "compositebow_01.obj"
+material = "Builtin/Medieval/MedievalCompositeBow"
+placement = "prop"
+size = [0.4038, 1.7000, 0.0739]
+y_offset = -0.8500
+collider = "none"
+# 292 tris, from source/medieval-weapons/RangedWeapons/Bows/CompositeBow/compositebow_01.fbx
+
+[[prefab]]
+id = "medieval.crossbow_01"
+role = "weapon"
+mesh = "crossbow_01.obj"
+material = "Builtin/Medieval/MedievalCrossbow01"
+placement = "prop"
+size = [0.7312, 0.1172, 0.8000]
+y_offset = -0.0525
+collider = "none"
+# 660 tris, from source/medieval-weapons/RangedWeapons/Crossbow/crossbow_01/crossbow_01.fbx
+
+[[prefab]]
+id = "medieval.crossbow_02"
+role = "weapon"
+mesh = "crossbow_02.obj"
+material = "Builtin/Medieval/MedievalBase02"
+placement = "prop"
+size = [0.7312, 0.1172, 0.8000]
+y_offset = -0.0525
+collider = "none"
+# 660 tris, from source/medieval-weapons/RangedWeapons/Crossbow/crossbow_02/crossbow_02.fbx
+
+[[prefab]]
+id = "medieval.defaultbow_01"
+role = "weapon"
+mesh = "defaultbow_01.obj"
+material = "Builtin/Medieval/MedievalCompositeBow"
+placement = "prop"
+size = [0.3851, 1.7000, 0.0683]
+y_offset = -0.8500
+collider = "none"
+# 244 tris, from source/medieval-weapons/RangedWeapons/Bows/DefaultBow/defaultbow_01.fbx
+
+[[prefab]]
+id = "medieval.doubleaxe_01"
+role = "weapon"
+mesh = "doubleaxe_01.obj"
+material = "Builtin/Medieval/MedievalDoubleAxe"
+placement = "prop"
+size = [0.4571, 1.8000, 0.0735]
+y_offset = -0.9231
+collider = "none"
+# 452 tris, from source/medieval-weapons/Polearms/DoubleAxe/doubleaxe_01.fbx
+
+[[prefab]]
+id = "medieval.estoc_01"
+role = "weapon"
+mesh = "estoc_01.obj"
+material = "Builtin/Medieval/MedievalEstoc01"
+placement = "prop"
+size = [0.2616, 1.1500, 0.0388]
+y_offset = -0.3133
+collider = "none"
+# 308 tris, from source/medieval-weapons/Swords/Estoc/estoc_01/estoc_01.fbx
+
+[[prefab]]
+id = "medieval.estoc_02"
+role = "weapon"
+mesh = "estoc_02.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo06"
+placement = "prop"
+size = [0.2616, 1.1500, 0.0388]
+y_offset = -0.3133
+collider = "none"
+# 308 tris, from source/medieval-weapons/Swords/Estoc/estoc_02/estoc_02.fbx
+
+[[prefab]]
+id = "medieval.heavycrossbow_01"
+role = "weapon"
+mesh = "heavycrossbow_01.obj"
+material = "Builtin/Medieval/MedievalHeavycrossbow01"
+placement = "prop"
+size = [0.8895, 0.2380, 0.9500]
+y_offset = -0.1887
+collider = "none"
+# 672 tris, from source/medieval-weapons/RangedWeapons/HeavyCrossbow/heavycrossbow_01/heavycrossbow_01.fbx
+
+[[prefab]]
+id = "medieval.heavycrossbow_02"
+role = "weapon"
+mesh = "heavycrossbow_02.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo02"
+placement = "prop"
+size = [0.8895, 0.2380, 0.9500]
+y_offset = -0.1887
+collider = "none"
+# 672 tris, from source/medieval-weapons/RangedWeapons/HeavyCrossbow/heavycrossbow_02/heavycrossbow_02.fbx
+
+[[prefab]]
+id = "medieval.hunterbow_01"
+role = "weapon"
+mesh = "hunterbow_01.obj"
+material = "Builtin/Medieval/MedievalCompositeBow"
+placement = "prop"
+size = [0.3445, 1.7000, 0.0793]
+y_offset = -0.8500
+collider = "none"
+# 292 tris, from source/medieval-weapons/RangedWeapons/Bows/HunterBow/hunterbow_01.fbx
+
+[[prefab]]
+id = "medieval.katana_01"
+role = "weapon"
+mesh = "katana_01.obj"
+material = "Builtin/Medieval/MedievalKatana01"
+placement = "prop"
+size = [0.0938, 1.0500, 0.0937]
+y_offset = -0.5053
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/Katana/katana_01/katana_01.fbx
+
+[[prefab]]
+id = "medieval.katana_02"
+role = "weapon"
+mesh = "katana_02.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo07"
+placement = "prop"
+size = [0.0938, 1.0500, 0.0937]
+y_offset = -0.5053
+collider = "none"
+# 284 tris, from source/medieval-weapons/Swords/Katana/katana_02/katana_02.fbx
+
+[[prefab]]
+id = "medieval.longsword_01"
+role = "weapon"
+mesh = "longsword_01.obj"
+material = "Builtin/Medieval/MedievalLongsword01"
+placement = "prop"
+size = [0.2644, 1.1500, 0.0242]
+y_offset = -0.5926
+collider = "none"
+# 208 tris, from source/medieval-weapons/Swords/Longsword/Default/longsword_01/longsword_01.fbx
+
+[[prefab]]
+id = "medieval.longsword_02"
+role = "weapon"
+mesh = "longsword_02.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo08"
+placement = "prop"
+size = [0.2644, 1.1500, 0.0242]
+y_offset = -0.5926
+collider = "none"
+# 208 tris, from source/medieval-weapons/Swords/Longsword/Default/longsword_02/longsword_02.fbx
+
+[[prefab]]
+id = "medieval.longsword_03"
+role = "weapon"
+mesh = "longsword_03.obj"
+material = "Builtin/Medieval/MedievalLongsword03"
+placement = "prop"
+size = [0.2644, 1.1500, 0.0242]
+y_offset = -0.5926
+collider = "none"
+# 208 tris, from source/medieval-weapons/Swords/Longsword/Iron/longsword_03/longsword_03.fbx
+
+[[prefab]]
+id = "medieval.longsword_04"
+role = "weapon"
+mesh = "longsword_04.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo09"
+placement = "prop"
+size = [0.2644, 1.1500, 0.0242]
+y_offset = -0.5926
+collider = "none"
+# 208 tris, from source/medieval-weapons/Swords/Longsword/Iron/longsword_04/longsword_04.fbx
+
+[[prefab]]
+id = "medieval.longsword_05"
+role = "weapon"
+mesh = "longsword_05.obj"
+material = "Builtin/Medieval/MedievalLongsword05"
+placement = "prop"
+size = [0.2644, 1.1500, 0.0242]
+y_offset = -0.5926
+collider = "none"
+# 208 tris, from source/medieval-weapons/Swords/Longsword/Stylized/longsword_05/longsword_05.fbx
+
+[[prefab]]
+id = "medieval.longsword_06"
+role = "weapon"
+mesh = "longsword_06.obj"
+material = "Builtin/Medieval/MedievalLongsword06"
+placement = "prop"
+size = [0.2644, 1.1500, 0.0242]
+y_offset = -0.5926
+collider = "none"
+# 208 tris, from source/medieval-weapons/Swords/Longsword/Stylized/longsword_06/longsword_06.fbx
+
+[[prefab]]
+id = "medieval.mace_01"
+role = "weapon"
+mesh = "mace_01.obj"
+material = "Builtin/Medieval/MedievalMace01"
+placement = "prop"
+size = [0.1708, 0.7500, 0.1708]
+y_offset = -0.3731
+collider = "none"
+# 424 tris, from source/medieval-weapons/Maces/Mace_01/mace_01.fbx
+
+[[prefab]]
+id = "medieval.mace_02"
+role = "weapon"
+mesh = "mace_02.obj"
+material = "Builtin/Medieval/MedievalMace01"
+placement = "prop"
+size = [0.1118, 0.7500, 0.1118]
+y_offset = -0.3677
+collider = "none"
+# 348 tris, from source/medieval-weapons/Maces/Mace_02/mace_02.fbx
+
+[[prefab]]
+id = "medieval.mace_03"
+role = "weapon"
+mesh = "mace_03.obj"
+material = "Builtin/Medieval/MedievalMace03"
+placement = "prop"
+size = [0.1973, 0.7500, 0.1973]
+y_offset = -0.3242
+collider = "none"
+# 384 tris, from source/medieval-weapons/Maces/Mace_03/mace_03.fbx
+
+[[prefab]]
+id = "medieval.poleaxe_01"
+role = "weapon"
+mesh = "poleaxe_01.obj"
+material = "Builtin/Medieval/MedievalDoubleAxe"
+placement = "prop"
+size = [0.4792, 2.1000, 0.0867]
+y_offset = -1.0770
+collider = "none"
+# 452 tris, from source/medieval-weapons/Polearms/Poleaxes/PoleaxesDefault/poleaxe_01/poleaxe_01.fbx
+
+[[prefab]]
+id = "medieval.poleaxe_02"
+role = "weapon"
+mesh = "poleaxe_02.obj"
+material = "Builtin/Medieval/MedievalColor02"
+placement = "prop"
+size = [0.4792, 2.1000, 0.0867]
+y_offset = -1.0770
+collider = "none"
+# 452 tris, from source/medieval-weapons/Polearms/Poleaxes/PoleaxesDefault/poleaxe_02/poleaxe_02.fbx
+
+[[prefab]]
+id = "medieval.poleaxe_03"
+role = "weapon"
+mesh = "poleaxe_03.obj"
+material = "Builtin/Medieval/MedievalColor03"
+placement = "prop"
+size = [0.4792, 2.1000, 0.0867]
+y_offset = -1.0770
+collider = "none"
+# 452 tris, from source/medieval-weapons/Polearms/Poleaxes/PoleaxesDefault/poleaxe_03/poleaxe_03.fbx
+
+[[prefab]]
+id = "medieval.poleaxe_04"
+role = "weapon"
+mesh = "poleaxe_04.obj"
+material = "Builtin/Medieval/MedievalPoleaxe04"
+placement = "prop"
+size = [0.2429, 2.1000, 0.0425]
+y_offset = -0.9320
+collider = "none"
+# 372 tris, from source/medieval-weapons/Polearms/Poleaxes/PoleaxesVariant/poleaxe_04/poleaxe_04.fbx
+
+[[prefab]]
+id = "medieval.poleaxe_05"
+role = "weapon"
+mesh = "poleaxe_05.obj"
+material = "Builtin/Medieval/MedievalColor02Albedo02"
+placement = "prop"
+size = [0.2429, 2.1000, 0.0425]
+y_offset = -0.9320
+collider = "none"
+# 372 tris, from source/medieval-weapons/Polearms/Poleaxes/PoleaxesVariant/poleaxe_05/poleaxe_05.fbx
+
+[[prefab]]
+id = "medieval.roundshield_01"
+role = "weapon"
+mesh = "roundshield_01.obj"
+material = "Builtin/Medieval/MedievalRoundshield"
+placement = "prop"
+size = [0.6500, 0.6500, 0.1246]
+y_offset = -0.3250
+collider = "none"
+# 494 tris, from source/medieval-weapons/Shields/Roundshield/default/roundshield_01.fbx
+
+[[prefab]]
+id = "medieval.roundshield_02"
+role = "weapon"
+mesh = "roundshield_02.obj"
+material = "Builtin/Medieval/MedievalBlue"
+placement = "prop"
+size = [0.6500, 0.6500, 0.1246]
+y_offset = -0.3250
+collider = "none"
+# 494 tris, from source/medieval-weapons/Shields/Roundshield/colored/blue/roundshield_02.fbx
+
+[[prefab]]
+id = "medieval.roundshield_03"
+role = "weapon"
+mesh = "roundshield_03.obj"
+material = "Builtin/Medieval/MedievalGreen"
+placement = "prop"
+size = [0.6500, 0.6500, 0.1246]
+y_offset = -0.3250
+collider = "none"
+# 494 tris, from source/medieval-weapons/Shields/Roundshield/colored/green/roundshield_03.fbx
+
+[[prefab]]
+id = "medieval.roundshield_04"
+role = "weapon"
+mesh = "roundshield_04.obj"
+material = "Builtin/Medieval/MedievalRed"
+placement = "prop"
+size = [0.6500, 0.6500, 0.1246]
+y_offset = -0.3250
+collider = "none"
+# 494 tris, from source/medieval-weapons/Shields/Roundshield/colored/red/roundshield_04.fbx
+
+[[prefab]]
+id = "medieval.rustedsword_01"
+role = "weapon"
+mesh = "rustedsword_01.obj"
+material = "Builtin/Medieval/MedievalRustedsword01"
+placement = "prop"
+size = [0.2815, 1.1500, 0.0482]
+y_offset = -0.6968
+collider = "none"
+# 292 tris, from source/medieval-weapons/Swords/RustedSword/rustedsword_01/rustedsword_01.fbx
+
+[[prefab]]
+id = "medieval.rustedsword_02"
+role = "weapon"
+mesh = "rustedsword_02.obj"
+material = "Builtin/Medieval/MedievalBase02Albedo10"
+placement = "prop"
+size = [0.2815, 1.1500, 0.0482]
+y_offset = -0.6968
+collider = "none"
+# 292 tris, from source/medieval-weapons/Swords/RustedSword/rustedsword_02/rustedsword_02.fbx
+
+[[prefab]]
+id = "medieval.shield_01"
+role = "weapon"
+mesh = "shield_01.obj"
+material = "Builtin/Medieval/MedievalShield"
+placement = "prop"
+size = [0.6235, 1.0500, 0.2239]
+y_offset = -0.5315
+collider = "none"
+# 476 tris, from source/medieval-weapons/Shields/Shield/default/shield_01.fbx
+
+[[prefab]]
+id = "medieval.shield_02"
+role = "weapon"
+mesh = "shield_02.obj"
+material = "Builtin/Medieval/MedievalBlueAlbedo02"
+placement = "prop"
+size = [0.6235, 1.0500, 0.2239]
+y_offset = -0.5315
+collider = "none"
+# 476 tris, from source/medieval-weapons/Shields/Shield/colored/blue/shield_02.fbx
+
+[[prefab]]
+id = "medieval.shield_03"
+role = "weapon"
+mesh = "shield_03.obj"
+material = "Builtin/Medieval/MedievalGreenAlbedo02"
+placement = "prop"
+size = [0.6235, 1.0500, 0.2239]
+y_offset = -0.5315
+collider = "none"
+# 476 tris, from source/medieval-weapons/Shields/Shield/colored/green/shield_03.fbx
+
+[[prefab]]
+id = "medieval.shield_04"
+role = "weapon"
+mesh = "shield_04.obj"
+material = "Builtin/Medieval/MedievalRedAlbedo02"
+placement = "prop"
+size = [0.6235, 1.0500, 0.2239]
+y_offset = -0.5315
+collider = "none"
+# 476 tris, from source/medieval-weapons/Shields/Shield/colored/red/shield_04.fbx
+
+[[prefab]]
+id = "medieval.shield_05"
+role = "weapon"
+mesh = "shield_05.obj"
+material = "Builtin/Medieval/MedievalWhite"
+placement = "prop"
+size = [0.6235, 1.0500, 0.2239]
+y_offset = -0.5315
+collider = "none"
+# 476 tris, from source/medieval-weapons/Shields/Shield/colored/white/shield_05.fbx
+
+[[prefab]]
+id = "medieval.zweihander"
+role = "weapon"
+mesh = "zweihander.obj"
+material = "Builtin/Medieval/MedievalZweihander"
+placement = "prop"
+size = [0.4072, 1.7500, 0.1144]
+y_offset = -0.4356
+collider = "none"
+# 644 tris, from source/medieval-weapons/Swords/Zweihander/Zweihander.fbx
+
+[[prefab]]
+id = "medieval.zweihander_01"
+role = "weapon"
+mesh = "zweihander_01.obj"
+material = "Builtin/Medieval/MedievalZweihander"
+placement = "prop"
+size = [0.4072, 1.7500, 0.1144]
+y_offset = -0.4356
+collider = "none"
+# 644 tris, from source/medieval-weapons/Swords/Zweihander/zweihander_01/zweihander_01.fbx
+
+[[prefab]]
+id = "medieval.zweihander_02"
+role = "weapon"
+mesh = "zweihander_02.obj"
+material = "Builtin/Medieval/MedievalZweihander02"
+placement = "prop"
+size = [0.4072, 1.7500, 0.1144]
+y_offset = -0.4356
+collider = "none"
+# 644 tris, from source/medieval-weapons/Swords/Zweihander/zweihander_02/zweihander_02.fbx
+

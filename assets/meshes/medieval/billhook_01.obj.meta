@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "56e140fcfb382168"
+type = "mesh"
+name = "Billhook 01"
+tags = ["medieval"]

@@ -1,0 +1,251 @@
+# Cartridges: what a round IS, independently of what fires it.
+#
+# A weapon says which cartridge it chambers (`ammo_type` in its `[.ammo]`
+# block); this file says what that cartridge does. The split matters because
+# they vary independently — the interesting decision in a shooter with real
+# ammunition is not which rifle you carry, it is which round you feed it. Two
+# players with the same AK and different boxes of 7.62 are playing differently,
+# and that is only expressible if the round is its own thing.
+#
+# --- what a round carries ----------------------------------------------------
+#
+# BALLISTICS.
+#   muzzle_velocity  metres/second at the barrel. SCALED — see firearms.toml on
+#                    why these are ~1/3 of real velocities.
+#   mass             kilograms. Feeds momentum, so a heavy slow round and a
+#                    light fast one hit differently even at equal damage.
+#   drag             fraction of speed shed per second. Stands in for the
+#                    ballistic coefficient: a boat-tail round has a lower number
+#                    than a blunt one and keeps its energy further out.
+#   gravity          multiplier on world gravity. 1.0 is a real bullet. Kept
+#                    per-cartridge rather than fixed so a tracer or a grenade
+#                    can differ without a second system.
+#   wind_factor      how much the world wind pushes this round sideways. Light
+#                    rounds are moved more; 0 opts out entirely.
+#
+# TERMINAL.
+#   damage           to unarmoured flesh, before any penetration loss.
+#   penetration      the armour class this round defeats. Compared against the
+#                    target's `armour_class`; see the resolution rule below.
+#   armour_damage    how much the round degrades armour it hits, 0..1 per hit.
+#   fragmentation    chance the round fragments inside a target, adding damage.
+#                    Real ammunition fragments only after penetrating, and this
+#                    is modelled that way.
+#   ricochet         chance of glancing off a hard surface struck at a shallow
+#                    angle rather than stopping in it.
+#
+# --- how penetration resolves ------------------------------------------------
+#
+# When a round hits something with an armour class:
+#
+#   penetration >= armour_class          it goes through. Damage is reduced by
+#                                        the ratio of the two, and the round
+#                                        keeps travelling at reduced speed.
+#   penetration <  armour_class          it is stopped. The armour takes
+#                                        `armour_damage`, the target takes a
+#                                        fraction of the damage as blunt
+#                                        trauma, and the round is spent.
+#
+# The consequence is the one worth having: armour is not a hit-point pool that
+# a big enough number always beats. A round that cannot defeat a plate never
+# will, however many you fire — you change ammunition, or you shoot somewhere
+# else. Degradation is what stops that being a hard wall.
+#
+# Levels 0-6 roughly mirror the class system every game with armour uses:
+#   0 unarmoured   1 soft/cloth   2 light vest   3 kevlar
+#   4 steel plate  5 ceramic      6 composite
+
+schema = 1
+
+# World wind. One vector for the level, in metres/second, applied to every
+# projectile scaled by its own `wind_factor`. A per-zone wind is a later
+# problem; a single vector is enough for the effect to be visible on a long
+# shot and costs one multiply per projectile per tick.
+[wind]
+direction = [1.0, 0.0, 0.3]
+speed = 0.0        # 0 disables it entirely, which is the shipped default
+gust_speed = 0.0   # amplitude of a slow sinusoidal variation on top
+gust_period = 7.0  # seconds
+
+# --- pistol -------------------------------------------------------------------
+
+[[cartridge]]
+id = "9mm_fmj"
+name = "9x19mm FMJ"
+calibre = "9mm"
+muzzle_velocity = 190.0
+mass = 0.0080
+drag = 0.020
+gravity = 1.0
+wind_factor = 1.0
+damage = 24.0
+penetration = 1
+armour_damage = 0.08
+fragmentation = 0.05
+ricochet = 0.15
+tracer = false
+
+[[cartridge]]
+id = "9mm_ap"
+name = "9x19mm AP"
+calibre = "9mm"
+# Armour-piercing: lighter, faster, and it defeats a vest — at the cost of
+# passing through soft targets without doing much on the way.
+muzzle_velocity = 215.0
+mass = 0.0061
+drag = 0.017
+gravity = 1.0
+wind_factor = 1.1
+damage = 18.0
+penetration = 3
+armour_damage = 0.18
+fragmentation = 0.0
+ricochet = 0.08
+tracer = false
+
+# --- intermediate rifle -------------------------------------------------------
+
+[[cartridge]]
+id = "556_fmj"
+name = "5.56x45mm FMJ"
+calibre = "5.56"
+muzzle_velocity = 320.0
+mass = 0.0040
+drag = 0.013
+gravity = 1.0
+# Light and fast: the round the wind moves most, which is what makes a long
+# shot with it a different problem from the same shot with 7.62.
+wind_factor = 1.6
+damage = 30.0
+penetration = 3
+armour_damage = 0.14
+# The 5.56's actual signature: it tumbles and fragments in tissue.
+fragmentation = 0.35
+ricochet = 0.10
+tracer = false
+
+[[cartridge]]
+id = "556_ap"
+name = "5.56x45mm AP"
+calibre = "5.56"
+muzzle_velocity = 335.0
+mass = 0.0042
+drag = 0.011
+gravity = 1.0
+wind_factor = 1.5
+damage = 26.0
+penetration = 5
+armour_damage = 0.26
+fragmentation = 0.05
+ricochet = 0.06
+tracer = false
+
+[[cartridge]]
+id = "556_tracer"
+name = "5.56x45mm Tracer"
+calibre = "5.56"
+muzzle_velocity = 310.0
+mass = 0.0043
+drag = 0.014
+gravity = 1.0
+wind_factor = 1.6
+damage = 28.0
+penetration = 2
+armour_damage = 0.10
+fragmentation = 0.20
+ricochet = 0.10
+# Draws a visible trail. Cuts both ways, which is the trade: you can see your
+# own fall of shot, and so can whatever you are shooting at.
+tracer = true
+
+# --- full-power rifle ---------------------------------------------------------
+
+[[cartridge]]
+id = "762_fmj"
+name = "7.62x39mm FMJ"
+calibre = "7.62"
+muzzle_velocity = 300.0
+mass = 0.0080
+drag = 0.014
+gravity = 1.0
+# Heavy: it drops more than the 5.56 but the wind moves it less.
+wind_factor = 0.9
+damage = 38.0
+penetration = 3
+armour_damage = 0.16
+fragmentation = 0.12
+ricochet = 0.12
+tracer = false
+
+[[cartridge]]
+id = "762_bp"
+name = "7.62x39mm BP"
+calibre = "7.62"
+muzzle_velocity = 310.0
+mass = 0.0078
+drag = 0.012
+gravity = 1.0
+wind_factor = 0.9
+damage = 34.0
+penetration = 5
+armour_damage = 0.30
+fragmentation = 0.08
+ricochet = 0.05
+tracer = false
+
+# --- shotgun ------------------------------------------------------------------
+
+[[cartridge]]
+id = "12g_buck"
+name = "12ga Buckshot"
+calibre = "12g"
+muzzle_velocity = 150.0
+mass = 0.0030
+# Round lead pellets: the worst ballistic shape there is, which is exactly why
+# a shotgun is a short-range weapon and needs no separate range cap to be one.
+drag = 0.070
+gravity = 1.0
+wind_factor = 1.2
+# Per pellet. Eight of them is the shell.
+damage = 14.0
+penetration = 1
+armour_damage = 0.04
+fragmentation = 0.0
+ricochet = 0.20
+tracer = false
+
+[[cartridge]]
+id = "12g_slug"
+name = "12ga Slug"
+calibre = "12g"
+muzzle_velocity = 175.0
+mass = 0.0285
+drag = 0.045
+gravity = 1.0
+wind_factor = 0.7
+damage = 82.0
+penetration = 4
+armour_damage = 0.35
+fragmentation = 0.0
+ricochet = 0.03
+tracer = false
+
+# --- sniper -------------------------------------------------------------------
+
+[[cartridge]]
+id = "338_lm"
+name = ".338 Lapua Magnum"
+calibre = ".338"
+muzzle_velocity = 420.0
+mass = 0.0160
+# The best ballistic shape in the file: it keeps its speed further than anything
+# else here, which is the whole reason to carry the weapon that fires it.
+drag = 0.008
+gravity = 1.0
+wind_factor = 0.6
+damage = 120.0
+penetration = 6
+armour_damage = 0.55
+fragmentation = 0.10
+ricochet = 0.02
+tracer = false

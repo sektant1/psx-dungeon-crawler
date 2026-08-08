@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "517377a17da57acb"
+type = "mesh"
+name = "Shovel Part 10"
+tags = ["cozy"]

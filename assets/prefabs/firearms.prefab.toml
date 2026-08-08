@@ -1,0 +1,188 @@
+# Modern Firearms.
+#
+# Written by tools/import_asset_pack.py from
+#   assets/source/modern-guns
+# Every size below is measured off the exported mesh in metres.
+# Re-running the importer regenerates this file.
+
+[library]
+domain = "firearms"
+scale = 1.0        # meshes are published in metres
+mesh_dir = "meshes/firearms"
+
+[[prefab]]
+id = "firearms.ak"
+role = "weapon"
+mesh = "ak.obj"
+material = "Builtin/Firearms/FirearmsAk"
+placement = "prop"
+size = [0.9000, 0.2557, 0.0609]
+y_offset = -0.1385
+collider = "none"
+# 920 tris, from source/modern-guns/Guns/Ak/ak.fbx
+
+[[prefab]]
+id = "firearms.aug"
+role = "weapon"
+mesh = "aug.obj"
+material = "Builtin/Firearms/FirearmsAug"
+placement = "prop"
+size = [0.7900, 0.7630, 0.1967]
+y_offset = -0.6032
+collider = "none"
+# 2656 tris, from source/modern-guns/Sniper/ScopeRifles/Aug/Aug.fbx
+
+[[prefab]]
+id = "firearms.awp"
+role = "weapon"
+mesh = "awp.obj"
+material = "Builtin/Firearms/FirearmsAwp"
+placement = "prop"
+size = [1.2000, 0.2180, 0.0711]
+y_offset = -0.1169
+collider = "none"
+# 1442 tris, from source/modern-guns/Guns/Awp/awp.fbx
+
+[[prefab]]
+id = "firearms.beretta"
+role = "weapon"
+mesh = "beretta.obj"
+material = "Builtin/Firearms/FirearmsBeretta"
+placement = "prop"
+size = [0.2100, 0.1460, 0.1629]
+y_offset = -0.0767
+collider = "none"
+# 948 tris, from source/modern-guns/Guns/Beretta/beretta.fbx
+
+[[prefab]]
+id = "firearms.famas"
+role = "weapon"
+mesh = "famas.obj"
+material = "Builtin/Firearms/FirearmsFamas"
+placement = "prop"
+size = [0.9000, 0.2907, 0.0402]
+y_offset = -0.1446
+collider = "none"
+# 1060 tris, from source/modern-guns/Guns/Famas/famas.fbx
+
+[[prefab]]
+id = "firearms.galil"
+role = "weapon"
+mesh = "galil.obj"
+material = "Builtin/Firearms/FirearmsGalil"
+placement = "prop"
+size = [0.9000, 0.2447, 0.0681]
+y_offset = -0.1260
+collider = "none"
+# 1016 tris, from source/modern-guns/Guns/Galil/galil.fbx
+
+[[prefab]]
+id = "firearms.glock"
+role = "weapon"
+mesh = "glock.obj"
+material = "Builtin/Firearms/FirearmsGlock"
+placement = "prop"
+size = [0.1900, 0.1165, 0.0259]
+y_offset = -0.0596
+collider = "none"
+# 356 tris, from source/modern-guns/Guns/Glock/glock.fbx
+
+[[prefab]]
+id = "firearms.m4a_01"
+role = "weapon"
+mesh = "m4a_01.obj"
+material = "Builtin/Firearms/FirearmsM4a01"
+placement = "prop"
+size = [0.8400, 0.2085, 0.0579]
+y_offset = -0.1147
+collider = "none"
+# 1000 tris, from source/modern-guns/Guns/M4a1/m4a1.fbx
+
+[[prefab]]
+id = "firearms.m_249"
+role = "weapon"
+mesh = "m_249.obj"
+material = "Builtin/Firearms/FirearmsM"
+placement = "prop"
+size = [0.3831, 0.2700, 1.0400]
+y_offset = -0.1338
+collider = "none"
+# 2606 tris, from source/modern-guns/Rifles/m/m249.fbx
+
+[[prefab]]
+id = "firearms.mag_07"
+role = "weapon"
+mesh = "mag_07.obj"
+material = "Builtin/Firearms/FirearmsMag07"
+placement = "prop"
+size = [0.9500, 0.5957, 0.2600]
+y_offset = -0.3888
+collider = "none"
+# 980 tris, from source/modern-guns/Shotguns/ShotgunUpdate/Mag7/mag7.fbx
+
+[[prefab]]
+id = "firearms.r_08"
+role = "weapon"
+mesh = "r_08.obj"
+material = "Builtin/Firearms/FirearmsR08"
+placement = "prop"
+size = [0.3000, 0.1710, 0.0454]
+y_offset = -0.0795
+collider = "none"
+# 1676 tris, from source/modern-guns/Shotguns/ShotgunUpdate/R8/r8.fbx
+
+[[prefab]]
+id = "firearms.sawed_off"
+role = "weapon"
+mesh = "sawed_off.obj"
+material = "Builtin/Firearms/FirearmsSawedOff"
+placement = "prop"
+size = [0.6000, 0.1186, 0.0350]
+y_offset = -0.0619
+collider = "none"
+# 540 tris, from source/modern-guns/SawedOff/SawedOff.fbx
+
+[[prefab]]
+id = "firearms.sg_553"
+role = "weapon"
+mesh = "sg_553.obj"
+material = "Builtin/Firearms/FirearmsSg553"
+placement = "prop"
+size = [0.9500, 0.6161, 0.0839]
+y_offset = -0.3045
+collider = "none"
+# 3556 tris, from source/modern-guns/Sniper/ScopeRifles/Sg553/Sg553.fbx
+
+[[prefab]]
+id = "firearms.tec_09"
+role = "weapon"
+mesh = "tec_09.obj"
+material = "Builtin/Firearms/FirearmsTec09"
+placement = "prop"
+size = [0.3200, 0.2904, 0.0436]
+y_offset = -0.1262
+collider = "none"
+# 1770 tris, from source/modern-guns/Shotguns/ShotgunUpdate/Tec9/tec9.fbx
+
+[[prefab]]
+id = "firearms.uspp"
+role = "weapon"
+mesh = "uspp.obj"
+material = "Builtin/Firearms/FirearmsUsp"
+placement = "prop"
+size = [0.2200, 0.0785, 0.0192]
+y_offset = -0.0413
+collider = "none"
+# 818 tris, from source/modern-guns/Shotguns/ShotgunUpdate/usp/uspp.fbx
+
+[[prefab]]
+id = "firearms.xm"
+role = "weapon"
+mesh = "xm.obj"
+material = "Builtin/Firearms/FirearmsXm1014"
+placement = "prop"
+size = [1.0000, 0.1866, 0.0486]
+y_offset = -0.1330
+collider = "none"
+# 1488 tris, from source/modern-guns/Shotguns/ShotgunUpdate/Xm1014/xm.fbx
+

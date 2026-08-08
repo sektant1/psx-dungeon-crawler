@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "9dbdf97226958361"
+type = "texture"
+name = "Creatures Txt Naked Alt 01 Albedo"
+tags = ["creatures"]

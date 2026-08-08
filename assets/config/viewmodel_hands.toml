@@ -1,99 +1,1258 @@
-# The player's first-person hands, authored once for every weapon.
+# The player's first-person hands: every rig the viewmodel can wear.
+#
+# Written by tools/author_hand_rigs.py from assets/source/hands. Re-running the
+# authoring tool regenerates this file, so a change belongs in the RIGS table
+# there rather than here.
 #
 # This file answers two questions the game used to answer in C++:
 #
-#   * which rig the hands are -- swap `model` and `skeleton` and the whole
-#     loadout is holding different hands, with no code change; and
-#   * what a weapon is allowed to hang off, which is the `[[hands.socket]]`
-#     list below. A socket is a named point on the skeleton, and it is the
-#     vocabulary weapons.toml picks from (`socket = "right_hand"`) and the
-#     editor offers in a combo box. An author never types a joint name.
+#   * which rig the hands are -- `default_rig` below, or a rig id from the
+#     Viewmodel panel, and the whole loadout is holding different hands with no
+#     code change; and
+#   * what a weapon is allowed to hang off, which is each rig's `[[socket]]`
+#     list. A socket is a named point on the skeleton, and it is the vocabulary
+#     weapons.toml picks from (`socket = "right_hand"`) and the editor offers
+#     in a combo box. An author never types a joint name.
+#
+# Sockets are declared per rig because the rigs are not the same shape: the
+# alien arm has three fingers, so `right_ring_tip` exists on the human hand and
+# does not exist on that one. A weapon naming a socket its rig does not have is
+# reported at load rather than silently seated at the wrist.
 #
 # See docs/fps-viewmodel.md; the placement of the rig as a whole (how low, how
 # close to the eye) is [player_viewmodel] in game.toml, not here.
 
-[hands]
-skeleton = "animations/viewmodels/arms/arms_rig.skeleton.ozz"
-model = "meshes/viewmodels/arms_rig.glb"
-material = "Game/FirstPersonHands"
-# Played whenever a weapon names no idle clip of its own, and the clip the rig
-# returns to after a draw or a shot.
+schema = 2
+default_rig = "hands_human_01"
+
+[[rig]]
+id = "hands_human_01"
+name = "Human 01 Hands"
+model = "meshes/viewmodels/hands_human_01.glb"
+skeleton = "animations/viewmodels/hands_human_01/hands_human_01.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_human_01"
+material = "Builtin/Viewmodel/Human01"
 idle_animation = "relax"
 
-# --- sockets ----------------------------------------------------------------
-# name     what weapons.toml calls it
-# joint    the skeleton joint it rides (see the rig's joint list)
-# offset   joint space, applied after the joint's pose
-# rotation degrees: pitch, yaw, roll
-# scale    multiplies whatever hangs here
-#
-# Offsets are zero here on purpose. A socket says *where on the skeleton*; the
-# weapon's own attach_offset says *where in the hand*. Splitting one distance
-# across both makes a weapon impossible to seat -- you drag one number and two
-# things move.
-
-[[hands.socket]]
+[[rig.socket]]
 name = "right_hand"
 joint = "hand.R"
 offset = [0.0, 0.0, 0.0]
 rotation = [0.0, 0.0, 0.0]
 scale = 1.0
 
-[[hands.socket]]
+[[rig.socket]]
 name = "left_hand"
 joint = "hand.L"
 offset = [0.0, 0.0, 0.0]
 rotation = [0.0, 0.0, 0.0]
 scale = 1.0
 
-# The fingertips the finger-gun weapons fire from. A muzzle is a socket like
-# any other: `muzzle_socket = "right_index_tip"` in a weapon definition.
-[[hands.socket]]
-name = "right_index_tip"
-joint = "f_index.03.R"
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
 offset = [0.0, 0.0, 0.0]
 rotation = [0.0, 0.0, 0.0]
 scale = 1.0
 
-[[hands.socket]]
-name = "right_middle_tip"
-joint = "f_middle.03.R"
-offset = [0.0, 0.0, 0.0]
-rotation = [0.0, 0.0, 0.0]
-scale = 1.0
-
-# The forearm, for a shield or a bracer that should not follow the wrist.
-[[hands.socket]]
+[[rig.socket]]
 name = "left_forearm"
 joint = "forearm.L"
 offset = [0.0, 0.0, 0.0]
 rotation = [0.0, 0.0, 0.0]
 scale = 1.0
 
-# --- sprite layers ----------------------------------------------------------
-# The sprite-mode equivalent of the sockets above: the player's hands as flat
-# layers, drawn under whatever a `presentation = "sprite"` weapon composites
-# over them. Replacing the player's hands in sprite mode is this one block,
-# exactly as replacing the skinned rig is `model` above.
-#
-# Unused by model weapons, so both presentations are authored here at once and
-# a weapon picks which it wants.
-#
-#   offset    camera space, metres, on the sprite plane (+x right, +y up)
-#   size      quad width/height in metres
-#   distance  metres in front of the eye -- AND the layer order, since layers
-#             are sorted farthest-first and drawn with depth off
-#   grid      atlas columns, rows
-#
-# The sheet is 2:1, so the size is too. Low and wide: the hands frame the bottom
-# corners and leave the centre of the screen to the weapon, which is what the
-# reference art does and what keeps a crosshair readable.
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
 
-[[hands.sprite_layer]]
-id = "hands"
-material = "Game/Viewmodel/Sprite/Hands"
-offset = [0.0, -0.40]
-size = [1.10, 0.55]
-distance = 0.52
-grid = [1, 1]
-idle_frame = 0
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_human_02"
+name = "Human 02 Hands"
+model = "meshes/viewmodels/hands_human_02.glb"
+skeleton = "animations/viewmodels/hands_human_02/hands_human_02.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_human_02"
+material = "Builtin/Viewmodel/Human02"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_human_03"
+name = "Human 03 Hands"
+model = "meshes/viewmodels/hands_human_03.glb"
+skeleton = "animations/viewmodels/hands_human_03/hands_human_03.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_human_03"
+material = "Builtin/Viewmodel/Human03"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_human_04"
+name = "Human 04 Hands"
+model = "meshes/viewmodels/hands_human_04.glb"
+skeleton = "animations/viewmodels/hands_human_04/hands_human_04.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_human_04"
+material = "Builtin/Viewmodel/Human04"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_human_05"
+name = "Human 05 Hands"
+model = "meshes/viewmodels/hands_human_05.glb"
+skeleton = "animations/viewmodels/hands_human_05/hands_human_05.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_human_05"
+material = "Builtin/Viewmodel/Human05"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_human_06"
+name = "Human 06 Hands"
+model = "meshes/viewmodels/hands_human_06.glb"
+skeleton = "animations/viewmodels/hands_human_06/hands_human_06.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_human_06"
+material = "Builtin/Viewmodel/Human06"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_glove_01"
+name = "Glove 01 Hands"
+model = "meshes/viewmodels/hands_glove_01.glb"
+skeleton = "animations/viewmodels/hands_glove_01/hands_glove_01.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_glove_01"
+material = "Builtin/Viewmodel/Glove01"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_glove_02"
+name = "Glove 02 Hands"
+model = "meshes/viewmodels/hands_glove_02.glb"
+skeleton = "animations/viewmodels/hands_glove_02/hands_glove_02.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_glove_02"
+material = "Builtin/Viewmodel/Glove02"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_glove_03"
+name = "Glove 03 Hands"
+model = "meshes/viewmodels/hands_glove_03.glb"
+skeleton = "animations/viewmodels/hands_glove_03/hands_glove_03.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_glove_03"
+material = "Builtin/Viewmodel/Glove03"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_alien_01"
+name = "Alien 01 Hands"
+model = "meshes/viewmodels/hands_alien_01.glb"
+skeleton = "animations/viewmodels/hands_alien_01/hands_alien_01.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_alien_01"
+material = "Builtin/Viewmodel/Alien01"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_alien_02"
+name = "Alien 02 Hands"
+model = "meshes/viewmodels/hands_alien_02.glb"
+skeleton = "animations/viewmodels/hands_alien_02/hands_alien_02.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_alien_02"
+material = "Builtin/Viewmodel/Alien02"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_alien_03"
+name = "Alien 03 Hands"
+model = "meshes/viewmodels/hands_alien_03.glb"
+skeleton = "animations/viewmodels/hands_alien_03/hands_alien_03.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_alien_03"
+material = "Builtin/Viewmodel/Alien03"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_werewolf_01"
+name = "Werewolf 01 Hands"
+model = "meshes/viewmodels/hands_werewolf_01.glb"
+skeleton = "animations/viewmodels/hands_werewolf_01/hands_werewolf_01.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_werewolf_01"
+material = "Builtin/Viewmodel/Werewolf01"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_werewolf_02"
+name = "Werewolf 02 Hands"
+model = "meshes/viewmodels/hands_werewolf_02.glb"
+skeleton = "animations/viewmodels/hands_werewolf_02/hands_werewolf_02.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_werewolf_02"
+material = "Builtin/Viewmodel/Werewolf02"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig]]
+id = "hands_werewolf_03"
+name = "Werewolf 03 Hands"
+model = "meshes/viewmodels/hands_werewolf_03.glb"
+skeleton = "animations/viewmodels/hands_werewolf_03/hands_werewolf_03.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_werewolf_03"
+material = "Builtin/Viewmodel/Werewolf03"
+idle_animation = "relax"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_index_tip"
+joint = "f_index.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_middle_tip"
+joint = "f_middle.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_ring_tip"
+joint = "f_ring.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_thumb_tip"
+joint = "thumb.02.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+# --- animated hand+weapon rigs -----------------------------------------------
+#
+# Written by tools/author_animated_hands.py from assets/source/animations.
+# Everything ABOVE this line belongs to tools/author_hand_rigs.py; everything
+# below is regenerated whole on each run.
+#
+# These differ from the rigs above in one way that matters: the WEAPON IS PART
+# OF THE RIG. They were authored as hands already holding a gun, so the clips
+# have the left hand on the foregrip and the reload actually finds the magazine
+# well -- which is the whole reason to prefer them over a weapon hung on a
+# socket and animated separately.
+#
+# `bundled_weapon = true` is how a weapon definition knows not to attach its own
+# model on top: naming one of these rigs IS choosing the weapon's presentation.
+#
+# Each states its own `offset`/`rotation`/`scale`, because the global
+# [player_viewmodel] block cannot serve them -- see the comment on
+# HandsDefinition::hasFraming.
+
+[[rig]]
+id = "hands_rifle"
+name = "Rifle Hands"
+model = "meshes/viewmodels/hands_rifle.glb"
+skeleton = "animations/viewmodels/hands_rifle/hands_rifle.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_rifle"
+material = "Builtin/Viewmodel/Rifle"
+bundled_weapon = true
+offset = [0.0, -0.10, -0.32]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+idle_animation = "idle"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "Hand_R_038"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "Hand_L_016"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "Forearm_R_010"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "Forearm_L_04"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "weapon_magazine"
+joint = "Pmag_061"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+
+[[rig]]
+id = "hands_aks74"
+name = "AKS-74 Hands"
+model = "meshes/viewmodels/hands_aks74.glb"
+skeleton = "animations/viewmodels/hands_aks74/hands_aks74.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_aks74"
+material = "Builtin/Viewmodel/Aks74"
+bundled_weapon = true
+offset = [0.0, -0.10, -0.32]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+idle_animation = "idle"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand_r"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand_l"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "forearm_r"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "forearm_l"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "weapon"
+joint = "wpn_body"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "weapon_bolt"
+joint = "wpn_zatvor"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "weapon_magazine"
+joint = "wpn_cartrige"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "weapon_muzzle"
+joint = "wpn_silencer"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+
+[[rig]]
+id = "hands_scar"
+name = "SCAR Hands"
+model = "meshes/viewmodels/hands_scar.glb"
+skeleton = "animations/viewmodels/hands_scar/hands_scar.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_scar"
+material = "Builtin/Viewmodel/Scar"
+bundled_weapon = true
+offset = [0.0, -0.10, -0.32]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+idle_animation = "idle"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand_L.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand_L.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "lowerarm_L.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "lowerarm_L.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "weapon_magazine"
+joint = "Mag_end"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+
+[[rig]]
+id = "hands_shotgun"
+name = "Shotgun Hands"
+model = "meshes/viewmodels/hands_shotgun.glb"
+skeleton = "animations/viewmodels/hands_shotgun/hands_shotgun.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_shotgun"
+material = "Builtin/Viewmodel/Shotgun"
+bundled_weapon = true
+offset = [0.0, -0.10, -0.32]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+idle_animation = "draw"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "hand_L.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "hand_L.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "lowerarm_L.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "lowerarm_L.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+
+[[rig]]
+id = "hands_pp19"
+name = "PP-19 Hands"
+model = "meshes/viewmodels/hands_pp19.glb"
+skeleton = "animations/viewmodels/hands_pp19/hands_pp19.skeleton.ozz"
+clip_dir = "animations/viewmodels/hands_pp19"
+material = "Builtin/Viewmodel/Pp19"
+bundled_weapon = true
+offset = [0.0, -0.10, -0.32]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+idle_animation = "idle"
+
+[[rig.socket]]
+name = "right_hand"
+joint = "Hand.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_hand"
+joint = "Hand.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "right_forearm"
+joint = "Forearm.R"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "left_forearm"
+joint = "Forearm.L"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+
+[[rig.socket]]
+name = "weapon_magazine"
+joint = "Mag_end"
+offset = [0.0, 0.0, 0.0]
+rotation = [0.0, 0.0, 0.0]
+scale = 1.0
+

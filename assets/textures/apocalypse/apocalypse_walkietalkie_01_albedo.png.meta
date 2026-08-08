@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "4347fa6b687ab99b"
+type = "texture"
+name = "Apocalypse Walkietalkie 01 Albedo"
+tags = ["apocalypse"]

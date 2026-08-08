@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "faeb6a8c6262292b"
+type = "mesh"
+name = "Poleaxe 04"
+tags = ["medieval"]

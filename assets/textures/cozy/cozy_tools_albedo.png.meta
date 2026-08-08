@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "31dc2ae06933dae3"
+type = "texture"
+name = "Cozy Tools Albedo"
+tags = ["cozy"]

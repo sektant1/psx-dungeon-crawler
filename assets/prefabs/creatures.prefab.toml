@@ -1,0 +1,317 @@
+# Creatures.
+#
+# Written by tools/import_asset_pack.py from
+#   assets/source/units
+# Every size below is measured off the exported mesh in metres.
+# Re-running the importer regenerates this file.
+
+[library]
+domain = "creatures"
+scale = 1.0        # meshes are published in metres
+mesh_dir = "meshes/creatures"
+
+[[prefab]]
+id = "creatures.bird"
+role = "actor"
+mesh = "bird.obj"
+material = "Builtin/Creatures/CreaturesBird"
+placement = "prop"
+size = [0.2600, 0.1834, 0.2283]
+y_offset = -0.0895
+collider = "box"
+# 508 tris, from source/units/Bird/bird.fbx
+
+[[prefab]]
+id = "creatures.chicken"
+role = "actor"
+mesh = "chicken.obj"
+material = "Builtin/Creatures/CreaturesChicken"
+placement = "prop"
+size = [0.4159, 0.4200, 0.4102]
+y_offset = -0.1449
+collider = "box"
+# 760 tris, from source/units/FarmAnimals/Chicken/Chicken.fbx
+
+[[prefab]]
+id = "creatures.cow"
+role = "actor"
+mesh = "cow.obj"
+material = "Builtin/Creatures/CreaturesCow"
+placement = "prop"
+size = [1.4252, 1.3078, 1.5500]
+y_offset = -0.6908
+collider = "box"
+# 902 tris, from source/units/FarmAnimals/Cow/Cow.fbx
+
+[[prefab]]
+id = "creatures.deer"
+role = "actor"
+mesh = "deer.obj"
+material = "Builtin/Creatures/CreaturesDeer"
+placement = "prop"
+size = [1.3239, 1.7000, 1.6806]
+y_offset = -0.8603
+collider = "box"
+# 1004 tris, from source/units/Deer/deer.fbx
+
+[[prefab]]
+id = "creatures.fluffy"
+role = "actor"
+mesh = "fluffy.obj"
+material = "Builtin/Creatures/CreaturesBase04"
+placement = "prop"
+size = [0.6000, 0.2535, 0.5558]
+y_offset = -0.0751
+collider = "box"
+# 1324 tris, from source/units/SpiderUpdate/FBX/Fluffy.fbx
+
+[[prefab]]
+id = "creatures.fox"
+role = "actor"
+mesh = "fox.obj"
+material = "Builtin/Creatures/CreaturesFox"
+placement = "prop"
+size = [0.2075, 0.4891, 0.9500]
+y_offset = -0.2327
+collider = "box"
+# 582 tris, from source/units/Fox/fox.fbx
+
+[[prefab]]
+id = "creatures.goat"
+role = "actor"
+mesh = "goat.obj"
+material = "Builtin/Creatures/CreaturesGoat"
+placement = "prop"
+size = [0.8391, 0.8500, 0.8160]
+y_offset = -0.4202
+collider = "box"
+# 1024 tris, from source/units/FarmAnimals/Goat/Goat.fbx
+
+[[prefab]]
+id = "creatures.human"
+role = "actor"
+mesh = "human.obj"
+material = "Builtin/Creatures/CreaturesHumanMaleBlack"
+placement = "prop"
+size = [1.3121, 1.7500, 0.2995]
+y_offset = -0.8539
+collider = "box"
+# 1246 tris, from source/units/Human/Humans/human.fbx
+
+[[prefab]]
+id = "creatures.roe"
+role = "actor"
+mesh = "roe.obj"
+material = "Builtin/Creatures/CreaturesRoe"
+placement = "prop"
+size = [1.2000, 1.0570, 0.3068]
+y_offset = -0.6143
+collider = "box"
+# 1076 tris, from source/units/Roe/roe.fbx
+
+[[prefab]]
+id = "creatures.skull"
+role = "actor"
+mesh = "skull.obj"
+material = "Builtin/Creatures/CreaturesSkullSpider"
+placement = "prop"
+size = [0.6000, 0.1757, 0.3957]
+y_offset = -0.0721
+collider = "box"
+# 3746 tris, from source/units/SkullSpider/Skull.fbx
+
+[[prefab]]
+id = "creatures.smol"
+role = "actor"
+mesh = "smol.obj"
+material = "Builtin/Creatures/CreaturesSmallChicken"
+placement = "prop"
+size = [0.1670, 0.2200, 0.2070]
+y_offset = -0.0720
+collider = "box"
+# 592 tris, from source/units/FarmAnimals/SmallChicken/Smol.fbx
+
+[[prefab]]
+id = "creatures.spider"
+role = "actor"
+mesh = "spider.obj"
+material = "Builtin/Creatures/CreaturesSpiders"
+placement = "prop"
+size = [0.5520, 0.2617, 0.6000]
+y_offset = -0.1572
+collider = "box"
+# 2356 tris, from source/units/Spiders/spider.fbx
+
+[[prefab]]
+id = "creatures.squirrel"
+role = "actor"
+mesh = "squirrel.obj"
+placement = "prop"
+size = [0.2800, 0.1147, 0.0872]
+y_offset = -0.0541
+collider = "box"
+# 748 tris, from source/units/Squirrel/Squirrel.fbx
+
+[[prefab]]
+id = "creatures.tick"
+role = "actor"
+mesh = "tick.obj"
+material = "Builtin/Creatures/CreaturesSpiderUpdate"
+placement = "prop"
+size = [0.3500, 0.1218, 0.2083]
+y_offset = -0.0656
+collider = "box"
+# 548 tris, from source/units/SpiderUpdate/FBX/Tick.fbx
+
+[[prefab]]
+id = "creatures.tick_02"
+role = "actor"
+mesh = "tick_02.obj"
+material = "Builtin/Creatures/CreaturesSpiderUpdateAlbedo02"
+placement = "prop"
+size = [0.3500, 0.1288, 0.1648]
+y_offset = -0.0373
+collider = "box"
+# 844 tris, from source/units/SpiderUpdate/FBX/Tick2.fbx
+
+[[prefab]]
+id = "creatures.toxic"
+role = "actor"
+mesh = "toxic.obj"
+material = "Builtin/Creatures/CreaturesSpiderUpdateAlbedo03"
+placement = "prop"
+size = [0.6000, 0.1539, 0.4605]
+y_offset = -0.0414
+collider = "box"
+# 1160 tris, from source/units/SpiderUpdate/FBX/Toxic.fbx
+
+[[prefab]]
+id = "creatures.widow"
+role = "actor"
+mesh = "widow.obj"
+material = "Builtin/Creatures/CreaturesBase05"
+placement = "prop"
+size = [0.7000, 0.1666, 0.3969]
+y_offset = -0.0496
+collider = "box"
+# 1536 tris, from source/units/SpiderUpdate/FBX/Widow.fbx
+
+[[prefab]]
+id = "creatures.wolf"
+role = "actor"
+mesh = "wolf.obj"
+placement = "prop"
+size = [0.3167, 0.9067, 1.4500]
+y_offset = -0.5153
+collider = "box"
+# 582 tris, from source/units/Wolf/wolf.fbx
+
+[[prefab]]
+id = "creatures.zombie"
+role = "actor"
+mesh = "zombie.obj"
+material = "Builtin/Creatures/CreaturesZombie"
+placement = "prop"
+size = [1.4348, 1.7500, 0.3556]
+y_offset = -0.8678
+collider = "box"
+# 1246 tris, from source/units/ZombieDefault/zombie.fbx
+
+[[prefab]]
+id = "creatures.zombie_badly_damaged"
+role = "actor"
+mesh = "zombie_badly_damaged.obj"
+material = "Builtin/Creatures/CreaturesTxtDamaged02"
+placement = "prop"
+size = [1.5151, 1.7500, 0.3375]
+y_offset = -0.8675
+collider = "box"
+# 1246 tris, from source/units/ZombieBadlyDamaged/ZombieBadlyDamaged.fbx
+
+[[prefab]]
+id = "creatures.zombie_damaged"
+role = "actor"
+mesh = "zombie_damaged.obj"
+material = "Builtin/Creatures/CreaturesTxtDamaged01"
+placement = "prop"
+size = [1.5151, 1.7500, 0.3375]
+y_offset = -0.8675
+collider = "box"
+# 1246 tris, from source/units/ZombieDamaged/zombieDamaged.fbx
+
+[[prefab]]
+id = "creatures.zombie_naked"
+role = "actor"
+mesh = "zombie_naked.obj"
+material = "Builtin/Creatures/CreaturesNoFace"
+placement = "prop"
+size = [1.1102, 1.7500, 0.4715]
+y_offset = -0.7789
+collider = "box"
+# 2251 tris, from source/units/Asylum Zombie/NoFace/zombieNaked.fbx
+
+[[prefab]]
+id = "creatures.zombie_naked_face"
+role = "actor"
+mesh = "zombie_naked_face.obj"
+placement = "prop"
+size = [0.9106, 1.7500, 0.2961]
+y_offset = -0.7691
+collider = "box"
+# 2107 tris, from source/units/Asylum Zombie/Face/zombieNakedFace.fbx
+
+[[prefab]]
+id = "creatures.zombie_shirt"
+role = "actor"
+mesh = "zombie_shirt.obj"
+material = "Builtin/Creatures/CreaturesTxtShirt"
+placement = "prop"
+size = [1.4348, 1.7500, 0.3556]
+y_offset = -0.8678
+collider = "box"
+# 1246 tris, from source/units/ZombieShirt/zombieShirt.fbx
+
+[[prefab]]
+id = "creatures.zombie_shirt_white"
+role = "actor"
+mesh = "zombie_shirt_white.obj"
+material = "Builtin/Creatures/CreaturesTxtShirt"
+placement = "prop"
+size = [1.4348, 1.7500, 0.3556]
+y_offset = -0.8678
+collider = "box"
+# 1246 tris, from source/units/ZombieShirt/zombieShirtWhite.fbx
+
+[[prefab]]
+id = "creatures.zombie_variant_02"
+role = "actor"
+mesh = "zombie_variant_02.obj"
+material = "Builtin/Creatures/CreaturesTxtNakedAlt01"
+placement = "prop"
+size = [1.4072, 1.7500, 0.2995]
+y_offset = -0.8508
+collider = "box"
+# 1246 tris, from source/units/ZombieNaked/zombieVariant2.fbx
+
+[[prefab]]
+id = "creatures.zombie_variant_03"
+role = "actor"
+mesh = "zombie_variant_03.obj"
+material = "Builtin/Creatures/CreaturesTxtNakedAlt01"
+placement = "prop"
+size = [1.3131, 1.7500, 0.2995]
+y_offset = -0.8508
+collider = "box"
+# 1246 tris, from source/units/ZombieNaked/zombieVariant3.fbx
+
+[[prefab]]
+id = "creatures.zombie_woman"
+role = "actor"
+mesh = "zombie_woman.obj"
+material = "Builtin/Creatures/CreaturesZombieWomanVariant01"
+placement = "prop"
+size = [1.3929, 1.7500, 0.3753]
+y_offset = -0.8422
+collider = "box"
+# 1353 tris, from source/units/ZombieWomanVariant1/zombieWoman.fbx
+

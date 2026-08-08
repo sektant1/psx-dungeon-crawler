@@ -275,6 +275,9 @@ slide = "C"
 quit = "Escape"
 interact = "E"
 swap_weapon = "X"
+# Reload the loaded weapon. R because every shooter since Half-Life uses R, and
+# a weapon with no magazine (`[.ammo]` absent) simply ignores it.
+reload = "R"
 weapon_1 = "1"
 weapon_2 = "2"
 weapon_3 = "3"

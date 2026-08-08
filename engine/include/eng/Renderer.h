@@ -6,6 +6,7 @@
 #include <eng/particles/DecalSystem.h>
 #include <eng/particles/ParticleCollider.h>
 #include <eng/particles/ParticleEffectDesc.h>
+#include <eng/content/MeshData.h>
 #include <eng/render/Enchantment.h>
 #include <eng/render/ModelImport.h>
 #include <eng/render/PrototypeAssets.h>
@@ -104,6 +105,14 @@ public:
     // Sole generic primitive entry point. The descriptor's dimensions are
     // baked into the mesh; node scale remains available for placement.
     MeshHandle createPrimitiveMesh(const PrimitiveMeshDesc&);
+    // Geometry built in code rather than loaded from a file: a terrain patch,
+    // a procedural shape, anything an authoring tool produces at runtime.
+    //
+    // `content::MeshData` is the importer's own vertex form, so a caller does
+    // not have to know the GPU layout -- the same narrowing loadMesh does on a
+    // model happens here. The collision copy travels with it, so a generated
+    // mesh can be handed to Physics::createMeshBody without being rebuilt.
+    MeshHandle createMesh(const std::string& name, const content::MeshData&);
     // Stand-in for a mesh that failed to load, mirroring the
     // Engine/Psx/PrototypeSurface material fallback: a missing asset should read as
     // an obviously untextured placeholder, not abort the frame. The primitive is
@@ -169,6 +178,36 @@ public:
     // -- discovered, never hard-coded.
     std::vector<std::string> materialNames() const;
     bool materialAvailable(const std::string& materialName) const;
+
+    // --- retexturing --------------------------------------------------------
+    // Point a loaded material at a different image, in place. Every mesh
+    // wearing it changes at once, which is what makes this the right call for
+    // previewing a texture while an author scrubs a list -- and the wrong one
+    // for keeping the result, since the material's own file still says
+    // otherwise. `texture` is a texture name resolved the way a material
+    // script's own `texture` field is: logical id, relative path, or file.
+    bool setMaterialTexture(const std::string& materialName,
+                            const std::string& texture);
+    // Clone `base` under a new name with a different texture, and register it.
+    // The clone is a material like any other from that moment: it appears in
+    // materialNames(), an entity can wear it by name, and nothing downstream
+    // knows it was made at runtime.
+    //
+    // False if `base` is not loaded or `name` is already taken -- silently
+    // redefining a material would change how something else draws.
+    //
+    // See docs/design/2026-08-07-retexturing-and-material-variants.md for why
+    // retexturing is a new material rather than a per-entity texture override.
+    bool createMaterialVariant(const std::string& base, const std::string& name,
+                               const std::string& texture);
+    // What a material draws with now, for a panel that has to show it and for
+    // the writer that persists a variant. Empty if the material is unknown.
+    std::string materialTexture(const std::string& materialName) const;
+    std::string materialShaderName(const std::string& materialName) const;
+    // Re-read every material script from disk. Materials adopted at runtime --
+    // sprite materials, and variants not yet written to a file -- are lost, so
+    // this is a deliberate action rather than something to call per frame.
+    void reloadMaterials();
     // World-space bounds of everything attached under a node (recursive), for
     // editor auto-framing. Returns false if the node has no renderable bounds.
     bool nodeWorldBounds(NodeHandle node, glm::vec3& center, float& radius) const;
@@ -426,14 +465,29 @@ public:
     // material-swatch grid every engine editor has. Separate from the main
     // editor viewport: different size, different camera, different subject.
     //
-    // Nodes marked setNodeThumbnailOnly() appear in this target and NOWHERE
-    // else, so the preview sphere can sit at the world origin of a loaded level
+    // Nodes assigned a thumbnail slot appear in that slot's target and NOWHERE
+    // else, so a preview sphere can sit at the world origin of a loaded level
     // without ever showing up in it.
-    void enableMaterialThumbnail(int size);
+    //
+    // SLOTS. Several panels show a preview at once -- an asset list, the
+    // inspector, a hover tooltip. With one target they all displayed whatever
+    // wrote to it last, so hovering a texture changed the swatch in three
+    // panels at once. Each preview site now takes a slot and gets its own
+    // image. Slot 0 is the default everywhere, so a caller that does not care
+    // behaves exactly as before.
+    void enableMaterialThumbnail(int size, int slot = 0);
     void setMaterialThumbnailCamera(const glm::vec3& position,
-                                    const glm::quat& orientation, float fovDeg);
-    uint64_t materialThumbnailTextureId() const;
-    void setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly);
+                                    const glm::quat& orientation, float fovDeg,
+                                    int slot = 0);
+    uint64_t materialThumbnailTextureId(int slot = 0) const;
+    // Which thumbnail slot draws this node; -1 (the default) means it is an
+    // ordinary world node and appears in no thumbnail.
+    void setNodeThumbnailSlot(NodeHandle node, int slot);
+    // Compatibility spelling: true assigns slot 0, false clears the assignment.
+    void setNodeThumbnailOnly(NodeHandle node, bool thumbnailOnly)
+    {
+        setNodeThumbnailSlot(node, thumbnailOnly ? 0 : -1);
+    }
     void setEditorCameraPose(const glm::vec3& pos, const glm::quat& orient,
                              float fovDeg);
     // Switches the editor viewport to an orthographic projection spanning

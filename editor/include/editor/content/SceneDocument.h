@@ -100,6 +100,44 @@ struct ColliderAuthor {
     glm::vec3 offset{0.0f};
 };
 
+// Non-flat ground: a heightfield patch, placed like anything else.
+//
+// Mirrors eng::TerrainDesc, which is where the meaning of each field is
+// documented; this is the authoring form, so it carries the heights an author
+// sculpted rather than only the recipe that generated them.
+//
+// WHY THE SAMPLES ARE IN THE SCENE. A terrain could store only its descriptor
+// and regenerate, which would keep scenes small. But then sculpting has nowhere
+// to live: the first brush stroke produces a field no descriptor describes, and
+// the choice is to discard the author's work or to invent a sidecar format for
+// it. So the samples are the document, and the descriptor is what produced the
+// first version of them.
+//
+// They are stored as 16-bit fixed point over [minHeight, maxHeight] rather than
+// floats: a 129x129 patch is 16641 samples, which is 33 KB this way and 65 KB
+// as text-encoded floats, and a heightfield does not need 24 bits of mantissa
+// to say where the ground is.
+struct TerrainAuthor {
+    int resolution = 129;
+    float size = 128.0f;
+    float heightScale = 8.0f;
+    std::string heightmap;   // empty = procedural, or sculpted from procedural
+    std::uint32_t seed = 1337;
+    int octaves = 4;
+    float frequency = 2.5f;
+    float roughness = 0.5f;
+    float uvScale = 24.0f;
+    std::string material;
+    // Empty means "whatever the descriptor generates". Non-empty is the
+    // authored field and wins outright -- see above.
+    std::vector<std::uint16_t> samples;
+    float minHeight = 0.0f;
+    float maxHeight = 0.0f;
+    // Whether the patch is collided with. A backdrop ridge the player can never
+    // reach costs nothing to draw and a triangle-mesh body to collide.
+    bool collision = true;
+};
+
 // How a light modulates over time. Cooks to eng::ecs::LightAnimation, whose
 // header is where the modes are defined; Steady means the light is not animated
 // and is what a light with no `animation` block gets.
@@ -434,6 +472,11 @@ struct Entity {
 
     std::optional<CellPlacement> cell;
     std::optional<ColliderAuthor> collider;
+    // Ground. Mutually exclusive with mesh/prefab/primitive in practice --
+    // a terrain patch IS the entity's geometry -- but not enforced, because the
+    // cooker resolves in a fixed order and a scene that carries both draws the
+    // most specific thing rather than failing to load.
+    std::optional<TerrainAuthor> terrain;
     std::optional<LightAuthor> light;
     std::optional<CameraAuthor> camera;
     std::optional<FirstPersonAuthor> firstPerson;

@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "dc45474fda42376c"
+type = "mesh"
+name = "Regulated Crowbar"
+tags = ["apocalypse"]

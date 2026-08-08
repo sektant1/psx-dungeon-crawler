@@ -3,6 +3,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -73,6 +74,11 @@ private:
 class MaterialPreview
 {
 public:
+    // How many preview sites can show different subjects at once. Mirrors
+    // RenderCore::kThumbnailSlots, which is private to the engine, and is
+    // static_asserted against it in MaterialPreview.cpp so the two cannot drift.
+    static constexpr int kThumbnailSlots = 4;
+
     void build(Renderer& renderer);
     // Studio backdrop: dark and neutral, so the rim light reads against it and
     // nothing in frame competes with the material for attention. Applied on
@@ -122,8 +128,9 @@ public:
     //
     // It follows the same catalog mode as the big stage, so hovering an animated
     // shader shows the animated square rather than a confusing lit sphere.
-    void buildThumbnail(Renderer& renderer, int size);
-    void setThumbnailMaterial(Renderer& renderer, const std::string& material);
+    void buildThumbnail(Renderer& renderer, int size, int slot = 0);
+    void setThumbnailMaterial(Renderer& renderer, const std::string& material,
+                              int slot = 0);
 
     // Puts an arbitrary mesh in the swatch instead of the sphere.
     //
@@ -138,16 +145,25 @@ public:
     // candle both fill the square, which is the only way a list of mixed scales
     // is browsable. Pass an invalid handle to go back to the material sphere.
     void setThumbnailMesh(Renderer& renderer, MeshHandle mesh,
-                          const std::string& material);
-    MeshHandle thumbnailMesh() const { return mThumbMesh; }
-    const std::string& thumbnailMaterial() const { return mThumbMaterial; }
-    StagePreview thumbnailPreviewMode() const { return mThumbMode; }
+                          const std::string& material, int slot = 0);
+    MeshHandle thumbnailMesh(int slot = 0) const { return rigFor(slot).mesh; }
+    const std::string& thumbnailMaterial(int slot = 0) const
+    {
+        return rigFor(slot).material;
+    }
+    StagePreview thumbnailPreviewMode(int slot = 0) const
+    {
+        return rigFor(slot).mode;
+    }
     // The thumbnail target is shared by editor asset tabs. Particles hide the
     // material subject and draw a thumbnail-only emitter into the same square.
-    void setThumbnailVisible(Renderer& renderer, bool visible);
-    void spinThumbnail(Renderer& renderer, float radians);
-    float thumbnailSpin() const { return mThumbSpin; }
-    bool thumbnailBuilt() const { return mThumbSubject.valid(); }
+    void setThumbnailVisible(Renderer& renderer, bool visible, int slot = 0);
+    void spinThumbnail(Renderer& renderer, float radians, int slot = 0);
+    float thumbnailSpin(int slot = 0) const { return rigFor(slot).spin; }
+    bool thumbnailBuilt(int slot = 0) const
+    {
+        return rigFor(slot).subject.valid();
+    }
 
     // Where a camera should sit to frame the subject. A studio three-quarter
     // view, not the steep top-down a dungeon wants: a material is judged from
@@ -173,8 +189,8 @@ private:
     void buildSphereRig(Renderer& renderer);
     void buildQuadRig(Renderer& renderer);
     void destroyStage(Renderer& renderer);   // big viewport rig only
-    void buildThumbnailRig(Renderer& renderer);
-    void destroyThumbnailRig(Renderer& renderer);
+    void buildThumbnailRig(Renderer& renderer, int slot);
+    void destroyThumbnailRig(Renderer& renderer, int slot);
 
     StagePreviewCatalog mCatalog;
     bool mCatalogLoaded = false;
@@ -189,20 +205,39 @@ private:
     float mSpin = 0.0f;
     bool mVisible = true;
 
-    StagePreview mThumbMode = StagePreview::Sphere;
-    int mThumbSize = 256;
-    // The mesh standing in for the sphere, when the mesh browser asked for one.
-    // Invalid means the swatch is showing a material, which is every other
-    // caller and the state buildThumbnailRig produces.
-    MeshHandle mThumbMesh;
-    NodeHandle mThumbSubject;
-    // Child of mThumbSubject, offset so the mesh's centre sits on the parent's
-    // origin. Only used in mesh mode; the sphere and the quad are already
-    // centred on theirs.
-    NodeHandle mThumbMeshNode;
-    std::vector<NodeHandle> mThumbLightNodes;
-    std::string mThumbMaterial;
-    float mThumbSpin = 0.0f;
+    // One preview site's swatch: its own subject, its own lights, its own
+    // material. There are several because several panels preview at once -- an
+    // asset list, the inspector, a hover tooltip -- and with one rig between
+    // them they all showed whatever wrote to it last. See
+    // Renderer::setNodeThumbnailSlot.
+    struct ThumbnailRig {
+        StagePreview mode = StagePreview::Sphere;
+        int size = 256;
+        // The mesh standing in for the sphere, when the mesh browser asked for
+        // one. Invalid means the swatch is showing a material, which is every
+        // other caller and the state buildThumbnailRig produces.
+        MeshHandle mesh;
+        NodeHandle subject;
+        // Child of `subject`, offset so the mesh's centre sits on the parent's
+        // origin. Only used in mesh mode; the sphere and the quad are already
+        // centred on theirs.
+        NodeHandle meshNode;
+        std::vector<NodeHandle> lightNodes;
+        std::string material;
+        float spin = 0.0f;
+    };
+    std::array<ThumbnailRig, kThumbnailSlots> mThumbs;
+
+    ThumbnailRig& rigFor(int slot)
+    {
+        return mThumbs[std::size_t(slot >= 0 && slot < kThumbnailSlots ? slot
+                                                                      : 0)];
+    }
+    const ThumbnailRig& rigFor(int slot) const
+    {
+        return mThumbs[std::size_t(slot >= 0 && slot < kThumbnailSlots ? slot
+                                                                      : 0)];
+    }
 };
 
 } // namespace eng

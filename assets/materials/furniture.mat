@@ -1,0 +1,137 @@
+# Furniture -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdate"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo.png"
+filter = "nearest"
+address = "clamp"
+# f_armchair, f_couch, f_small_couch
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo02"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_02.png"
+filter = "nearest"
+address = "clamp"
+# f_bed, f_doublebed
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo03"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_03.png"
+filter = "nearest"
+address = "clamp"
+# f_chair
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo04"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_04.png"
+filter = "nearest"
+address = "clamp"
+# f_clock
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo05"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_05.png"
+filter = "nearest"
+address = "clamp"
+# f_desk
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo06"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_06.png"
+filter = "nearest"
+address = "clamp"
+# f_drawer, f_wardrobe
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo07"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_07.png"
+filter = "nearest"
+address = "clamp"
+# f_keyboard
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo08"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_08.png"
+filter = "nearest"
+address = "clamp"
+# f_lamp
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo09"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_09.png"
+filter = "nearest"
+address = "clamp"
+# f_mouse
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo10"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_10.png"
+filter = "nearest"
+address = "clamp"
+# f_painting
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo11"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_11.png"
+filter = "nearest"
+address = "clamp"
+# f_pc
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo12"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_12.png"
+filter = "nearest"
+address = "clamp"
+# f_small_wardrobe
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo13"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_13.png"
+filter = "nearest"
+address = "clamp"
+# f_stool
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo14"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_14.png"
+filter = "nearest"
+address = "clamp"
+# f_stool_wood
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo15"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_15.png"
+filter = "nearest"
+address = "clamp"
+# f_table
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo16"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_16.png"
+filter = "nearest"
+address = "clamp"
+# f_wall
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo17"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_17.png"
+filter = "nearest"
+address = "clamp"
+# f_washing_machine
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo18"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_18.png"
+filter = "nearest"
+address = "clamp"
+# f_wooded_wall
+
+[material."Builtin/Furniture/FurnitureFurnitureUpdateAlbedo19"]
+shader = "lit"
+texture = "furniture_furniture_update_albedo_19.png"
+filter = "nearest"
+address = "clamp"
+# f_wooden_wall
+

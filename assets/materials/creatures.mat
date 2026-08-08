@@ -1,0 +1,165 @@
+# Creatures -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Creatures/CreaturesBase04"]
+shader = "lit"
+texture = "creatures_base_04_albedo.png"
+filter = "nearest"
+address = "clamp"
+# fluffy
+
+[material."Builtin/Creatures/CreaturesBase05"]
+shader = "lit"
+texture = "creatures_base_05_albedo.png"
+filter = "nearest"
+address = "clamp"
+# widow
+
+[material."Builtin/Creatures/CreaturesBird"]
+shader = "lit"
+texture = "creatures_bird_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bird
+
+[material."Builtin/Creatures/CreaturesChicken"]
+shader = "lit"
+texture = "creatures_chicken_albedo.png"
+filter = "nearest"
+address = "clamp"
+# chicken
+
+[material."Builtin/Creatures/CreaturesCow"]
+shader = "lit"
+texture = "creatures_cow_albedo.png"
+filter = "nearest"
+address = "clamp"
+# cow
+
+[material."Builtin/Creatures/CreaturesDeer"]
+shader = "lit"
+texture = "creatures_deer_albedo.png"
+filter = "nearest"
+address = "clamp"
+# deer
+
+[material."Builtin/Creatures/CreaturesFox"]
+shader = "lit"
+texture = "creatures_fox_albedo.png"
+filter = "nearest"
+address = "clamp"
+# fox
+
+[material."Builtin/Creatures/CreaturesGoat"]
+shader = "lit"
+texture = "creatures_goat_albedo.png"
+filter = "nearest"
+address = "clamp"
+# goat
+
+[material."Builtin/Creatures/CreaturesHumanMaleBlack"]
+shader = "lit"
+texture = "creatures_human_male_black_albedo.png"
+filter = "nearest"
+address = "clamp"
+# human
+
+[material."Builtin/Creatures/CreaturesNoFace"]
+shader = "lit"
+texture = "creatures_no_face_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zombie_naked
+
+[material."Builtin/Creatures/CreaturesRoe"]
+shader = "lit"
+texture = "creatures_roe_albedo.png"
+filter = "nearest"
+address = "clamp"
+# roe
+
+[material."Builtin/Creatures/CreaturesSkullSpider"]
+shader = "lit"
+texture = "creatures_skull_spider_albedo.png"
+filter = "nearest"
+address = "clamp"
+# skull
+
+[material."Builtin/Creatures/CreaturesSmallChicken"]
+shader = "lit"
+texture = "creatures_small_chicken_albedo.png"
+filter = "nearest"
+address = "clamp"
+# smol
+
+[material."Builtin/Creatures/CreaturesSpiderUpdate"]
+shader = "lit"
+texture = "creatures_spider_update_albedo.png"
+filter = "nearest"
+address = "clamp"
+# tick
+
+[material."Builtin/Creatures/CreaturesSpiderUpdateAlbedo02"]
+shader = "lit"
+texture = "creatures_spider_update_albedo_02.png"
+filter = "nearest"
+address = "clamp"
+# tick_02
+
+[material."Builtin/Creatures/CreaturesSpiderUpdateAlbedo03"]
+shader = "lit"
+texture = "creatures_spider_update_albedo_03.png"
+filter = "nearest"
+address = "clamp"
+# toxic
+
+[material."Builtin/Creatures/CreaturesSpiders"]
+shader = "lit"
+texture = "creatures_spiders_albedo.png"
+filter = "nearest"
+address = "clamp"
+# spider
+
+[material."Builtin/Creatures/CreaturesTxtDamaged01"]
+shader = "lit"
+texture = "creatures_txt_damaged_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zombie_damaged
+
+[material."Builtin/Creatures/CreaturesTxtDamaged02"]
+shader = "lit"
+texture = "creatures_txt_damaged_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zombie_badly_damaged
+
+[material."Builtin/Creatures/CreaturesTxtNakedAlt01"]
+shader = "lit"
+texture = "creatures_txt_naked_alt_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zombie_variant_02, zombie_variant_03
+
+[material."Builtin/Creatures/CreaturesTxtShirt"]
+shader = "lit"
+texture = "creatures_txt_shirt_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zombie_shirt, zombie_shirt_white
+
+[material."Builtin/Creatures/CreaturesZombie"]
+shader = "lit"
+texture = "creatures_zombie_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zombie
+
+[material."Builtin/Creatures/CreaturesZombieWomanVariant01"]
+shader = "lit"
+texture = "creatures_zombie_woman_variant_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zombie_woman
+

@@ -28,23 +28,38 @@ glm::vec3 vector3(const toml::table& table, const char* key,
             float((*values)[2].value_or(double(fallback.z)))};
 }
 
-bool parseTable(const toml::table& root, HandsDefinition& out)
+// One rig, out of whichever table holds it: `[hands]` in the schema-1 file, or
+// an element of `[[rig]]` in the schema-2 one. The two forms differ only in
+// where they sit, so they must not differ in how they are read.
+bool parseRig(const toml::table& hands, HandsDefinition& out)
 {
-    const toml::table* hands = root["hands"].as_table();
-    if (!hands)
-        return true; // no section is not an error: the default is the ship
-
     HandsDefinition parsed = out;
-    parsed.skeleton = (*hands)["skeleton"].value_or(parsed.skeleton);
-    parsed.model = (*hands)["model"].value_or(parsed.model);
-    parsed.material = (*hands)["material"].value_or(parsed.material);
+    parsed.id = hands["id"].value_or(parsed.id);
+    parsed.displayName = hands["name"].value_or(parsed.displayName);
+    parsed.skeleton = hands["skeleton"].value_or(parsed.skeleton);
+    parsed.model = hands["model"].value_or(parsed.model);
+    parsed.material = hands["material"].value_or(parsed.material);
     parsed.idleAnimation =
-        (*hands)["idle_animation"].value_or(parsed.idleAnimation);
+        hands["idle_animation"].value_or(parsed.idleAnimation);
+    parsed.bundledWeapon =
+        hands["bundled_weapon"].value_or(parsed.bundledWeapon);
+    // Framing is all-or-nothing: a rig that states one of the three states the
+    // set, so a half-authored override cannot inherit a global that was tuned
+    // for a different rig's proportions.
+    if (hands["offset"] || hands["rotation"] || hands["scale"]) {
+        parsed.hasFraming = true;
+        parsed.framingOffset =
+            vector3(*hands.as_table(), "offset", parsed.framingOffset);
+        parsed.framingRotationDegrees = vector3(
+            *hands.as_table(), "rotation", parsed.framingRotationDegrees);
+        parsed.framingScale =
+            number(*hands.as_table(), "scale", parsed.framingScale);
+    }
 
     // An authored socket array replaces the defaults rather than merging with
     // them: half a vocabulary is the confusing case, where a weapon names a
     // socket the file appears not to define and the game finds one anyway.
-    if (const toml::array* sockets = (*hands)["socket"].as_array()) {
+    if (const toml::array* sockets = hands["socket"].as_array()) {
         parsed.sockets.clear();
         for (const toml::node& node : *sockets) {
             const toml::table* table = node.as_table();
@@ -62,7 +77,7 @@ bool parseTable(const toml::table& root, HandsDefinition& out)
     }
 
     // Same replace-don't-merge rule the sockets follow, for the same reason.
-    if (const toml::array* layers = (*hands)["sprite_layer"].as_array()) {
+    if (const toml::array* layers = hands["sprite_layer"].as_array()) {
         parsed.spriteLayers.clear();
         for (const toml::node& node : *layers) {
             const toml::table* table = node.as_table();
@@ -74,6 +89,58 @@ bool parseTable(const toml::table& root, HandsDefinition& out)
 
     if (!validHandsDefinition(parsed))
         return false;
+    out = std::move(parsed);
+    return true;
+}
+
+bool parseTable(const toml::table& root, HandsDefinition& out)
+{
+    const toml::table* hands = root["hands"].as_table();
+    if (!hands)
+        return true; // no section is not an error: the default is the ship
+    return parseRig(*hands, out);
+}
+
+bool parseLibraryTable(const toml::table& root, HandsLibrary& out)
+{
+    HandsLibrary parsed;
+    parsed.defaultRig = root["default_rig"].value_or(std::string{});
+
+    if (const toml::array* rigs = root["rig"].as_array()) {
+        for (const toml::node& node : *rigs) {
+            const toml::table* table = node.as_table();
+            if (!table)
+                return false;
+            // Each rig starts from the shipped default, so a file may state
+            // only what differs -- and a rig that names no material still has
+            // one rather than failing validation.
+            HandsDefinition rig = defaultHandsDefinition();
+            if (!parseRig(*table, rig))
+                return false;
+            if (rig.id.empty())
+                return false;
+            for (const HandsDefinition& existing : parsed.rigs)
+                if (existing.id == rig.id)
+                    return false; // two rigs answering to one id
+            parsed.rigs.push_back(std::move(rig));
+        }
+    }
+
+    // The single-rig form. Read only when there is no array, so a schema-2 file
+    // that also happens to carry a legacy [hands] block does not end up with a
+    // sixteenth rig nobody declared.
+    if (parsed.rigs.empty()) {
+        HandsDefinition single = defaultHandsDefinition();
+        if (!parseTable(root, single))
+            return false;
+        if (single.id.empty())
+            single.id = "hands";
+        parsed.rigs.push_back(std::move(single));
+    }
+
+    if (!parsed.defaultRig.empty() && !parsed.find(parsed.defaultRig))
+        return false; // a default naming a rig that is not in the file
+
     out = std::move(parsed);
     return true;
 }
@@ -127,6 +194,59 @@ bool parseHandsDefinition(const char* tomlSource, HandsDefinition& out)
     if (!result)
         return false;
     return parseTable(result.table(), out);
+}
+
+const HandsDefinition* HandsLibrary::find(std::string_view id) const
+{
+    for (const HandsDefinition& rig : rigs)
+        if (rig.id == id)
+            return &rig;
+    return nullptr;
+}
+
+const HandsDefinition& HandsLibrary::active() const
+{
+    if (const HandsDefinition* named = find(defaultRig))
+        return *named;
+    if (!rigs.empty())
+        return rigs.front();
+    // A library with no rigs at all can still hand back something loadable, so
+    // an empty or unreadable file costs the player their choice of hands rather
+    // than their hands.
+    static const HandsDefinition fallback = defaultHandsDefinition();
+    return fallback;
+}
+
+std::vector<std::string> HandsLibrary::ids() const
+{
+    std::vector<std::string> out;
+    out.reserve(rigs.size());
+    for (const HandsDefinition& rig : rigs)
+        out.push_back(rig.id);
+    return out;
+}
+
+bool parseHandsLibrary(const char* tomlSource, HandsLibrary& out)
+{
+    const toml::parse_result result = toml::parse(tomlSource);
+    if (!result)
+        return false;
+    return parseLibraryTable(result.table(), out);
+}
+
+bool loadHandsLibrary(const std::string& tomlPath, HandsLibrary& out)
+{
+    const toml::parse_result result = toml::parse_file(tomlPath);
+    if (!result) {
+        eng::log::warn("Hands library: %s could not be parsed",
+                       tomlPath.c_str());
+        return false;
+    }
+    if (!parseLibraryTable(result.table(), out)) {
+        eng::log::warn("Hands library: %s was rejected", tomlPath.c_str());
+        return false;
+    }
+    return true;
 }
 
 bool loadHandsDefinition(const std::string& tomlPath, HandsDefinition& out)

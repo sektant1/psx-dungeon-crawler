@@ -1,0 +1,2666 @@
+{
+  "$schema": "../schemas/scene.schema.json",
+  "format": "raven-scene",
+  "version": 2,
+  "id": "scene.hands_showroom",
+  "palette": "forest",
+  "entities": [
+    {
+      "id": "terrain_clearing",
+      "terrain": {
+        "resolution": 129,
+        "size": 96.0,
+        "height_scale": 9.0,
+        "seed": 20260807,
+        "octaves": 4,
+        "frequency": 2.2,
+        "roughness": 0.52,
+        "uv_scale": 32.0,
+        "material": "Builtin/Forest/Ground",
+        "collision": true
+      },
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "display_hands_human_01",
+      "name": "Human 01 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_human_01",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          -15.4,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_human_01"
+        }
+      ]
+    },
+    {
+      "id": "plinth_00",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -15.4,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          154.358,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_human_02",
+      "name": "Human 02 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_human_02",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          -13.2,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_human_02"
+        }
+      ]
+    },
+    {
+      "id": "plinth_01",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -13.2,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          58.253,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_human_03",
+      "name": "Human 03 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_human_03",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          -11.0,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_human_03"
+        }
+      ]
+    },
+    {
+      "id": "plinth_02",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -11.0,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          126.353,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_human_04",
+      "name": "Human 04 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_human_04",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          -8.8,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_human_04"
+        }
+      ]
+    },
+    {
+      "id": "plinth_03",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -8.8,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          85.093,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_human_05",
+      "name": "Human 05 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_human_05",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          -6.6,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_human_05"
+        }
+      ]
+    },
+    {
+      "id": "plinth_04",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -6.6,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          -122.585,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_human_06",
+      "name": "Human 06 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_human_06",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          -4.4,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_human_06"
+        }
+      ]
+    },
+    {
+      "id": "plinth_05",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -4.4,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          143.942,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_glove_01",
+      "name": "Glove 01 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_glove_01",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          -2.2,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_glove_01"
+        }
+      ]
+    },
+    {
+      "id": "plinth_06",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -2.2,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          104.671,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_glove_02",
+      "name": "Glove 02 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_glove_02",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          0.0,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_glove_02"
+        }
+      ]
+    },
+    {
+      "id": "plinth_07",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          -32.358,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_glove_03",
+      "name": "Glove 03 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_glove_03",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          2.2,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_glove_03"
+        }
+      ]
+    },
+    {
+      "id": "plinth_08",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          2.2,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          -75.892,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_alien_01",
+      "name": "Alien 01 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_alien_01",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          4.4,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_alien_01"
+        }
+      ]
+    },
+    {
+      "id": "plinth_09",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          4.4,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          1.794,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_alien_02",
+      "name": "Alien 02 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_alien_02",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          6.6,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_alien_02"
+        }
+      ]
+    },
+    {
+      "id": "plinth_10",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          6.6,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          -144.563,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_alien_03",
+      "name": "Alien 03 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_alien_03",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          8.8,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_alien_03"
+        }
+      ]
+    },
+    {
+      "id": "plinth_11",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          8.8,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          73.349,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_werewolf_01",
+      "name": "Werewolf 01 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_werewolf_01",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          11.0,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_werewolf_01"
+        }
+      ]
+    },
+    {
+      "id": "plinth_12",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          11.0,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          -26.557,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_werewolf_02",
+      "name": "Werewolf 02 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_werewolf_02",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          13.2,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_werewolf_02"
+        }
+      ]
+    },
+    {
+      "id": "plinth_13",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          13.2,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          -128.572,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "display_hands_werewolf_03",
+      "name": "Werewolf 03 Hands",
+      "viewmodel_preview": {
+        "hands_rig": "hands_werewolf_03",
+        "animation": "idle"
+      },
+      "transform": {
+        "position": [
+          15.4,
+          1.45,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      },
+      "properties": [
+        {
+          "key": "hands_rig",
+          "value": "hands_werewolf_03"
+        }
+      ]
+    },
+    {
+      "id": "plinth_14",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          15.4,
+          0.0,
+          -12.0
+        ],
+        "rotation": [
+          0.0,
+          76.337,
+          0.0
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_000",
+      "prefab": "forest.bush_01",
+      "transform": {
+        "position": [
+          27.2984,
+          0.0,
+          0.138
+        ],
+        "rotation": [
+          0.0,
+          -120.832,
+          0.0
+        ],
+        "scale": [
+          1.0762,
+          1.0762,
+          1.0762
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_001",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          22.2027,
+          0.0,
+          7.8061
+        ],
+        "rotation": [
+          0.0,
+          26.672,
+          0.0
+        ],
+        "scale": [
+          0.9948,
+          0.9948,
+          0.9948
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_002",
+      "prefab": "forest.long_grass_02",
+      "transform": {
+        "position": [
+          19.8598,
+          0.0,
+          17.6381
+        ],
+        "rotation": [
+          0.0,
+          41.499,
+          0.0
+        ],
+        "scale": [
+          1.1025,
+          1.1025,
+          1.1025
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_003",
+      "prefab": "forest.mushroom_01",
+      "transform": {
+        "position": [
+          13.1537,
+          0.0,
+          20.759
+        ],
+        "rotation": [
+          0.0,
+          -60.308,
+          0.0
+        ],
+        "scale": [
+          0.9804,
+          0.9804,
+          0.9804
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_004",
+      "prefab": "forest.bush_01",
+      "transform": {
+        "position": [
+          4.295,
+          0.0,
+          25.5362
+        ],
+        "rotation": [
+          0.0,
+          -103.842,
+          0.0
+        ],
+        "scale": [
+          1.0366,
+          1.0366,
+          1.0366
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_005",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -3.7804,
+          0.0,
+          25.4794
+        ],
+        "rotation": [
+          0.0,
+          -26.7,
+          0.0
+        ],
+        "scale": [
+          0.9309,
+          0.9309,
+          0.9309
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_006",
+      "prefab": "forest.long_grass_02",
+      "transform": {
+        "position": [
+          -12.9304,
+          0.0,
+          22.0856
+        ],
+        "rotation": [
+          0.0,
+          -35.028,
+          0.0
+        ],
+        "scale": [
+          1.0484,
+          1.0484,
+          1.0484
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_007",
+      "prefab": "forest.mushroom_01",
+      "transform": {
+        "position": [
+          -19.824,
+          0.0,
+          15.5229
+        ],
+        "rotation": [
+          0.0,
+          50.672,
+          0.0
+        ],
+        "scale": [
+          1.0393,
+          1.0393,
+          1.0393
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_008",
+      "prefab": "forest.bush_01",
+      "transform": {
+        "position": [
+          -23.6407,
+          0.0,
+          8.3541
+        ],
+        "rotation": [
+          0.0,
+          -113.922,
+          0.0
+        ],
+        "scale": [
+          0.9109,
+          0.9109,
+          0.9109
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_009",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -24.5828,
+          0.0,
+          -0.96
+        ],
+        "rotation": [
+          0.0,
+          -159.884,
+          0.0
+        ],
+        "scale": [
+          1.0084,
+          1.0084,
+          1.0084
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_010",
+      "prefab": "forest.long_grass_02",
+      "transform": {
+        "position": [
+          -21.8424,
+          0.0,
+          -8.1994
+        ],
+        "rotation": [
+          0.0,
+          -159.812,
+          0.0
+        ],
+        "scale": [
+          1.1198,
+          1.1198,
+          1.1198
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_011",
+      "prefab": "forest.mushroom_01",
+      "transform": {
+        "position": [
+          -20.3963,
+          0.0,
+          -17.6917
+        ],
+        "rotation": [
+          0.0,
+          99.535,
+          0.0
+        ],
+        "scale": [
+          1.0155,
+          1.0155,
+          1.0155
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_012",
+      "prefab": "forest.bush_01",
+      "transform": {
+        "position": [
+          -13.5792,
+          0.0,
+          -24.0298
+        ],
+        "rotation": [
+          0.0,
+          -138.416,
+          0.0
+        ],
+        "scale": [
+          1.0835,
+          1.0835,
+          1.0835
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_013",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -3.6209,
+          0.0,
+          -24.8611
+        ],
+        "rotation": [
+          0.0,
+          41.977,
+          0.0
+        ],
+        "scale": [
+          1.1067,
+          1.1067,
+          1.1067
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_014",
+      "prefab": "forest.long_grass_02",
+      "transform": {
+        "position": [
+          4.4358,
+          0.0,
+          -25.0314
+        ],
+        "rotation": [
+          0.0,
+          -19.268,
+          0.0
+        ],
+        "scale": [
+          0.8813,
+          0.8813,
+          0.8813
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_015",
+      "prefab": "forest.mushroom_01",
+      "transform": {
+        "position": [
+          14.8311,
+          0.0,
+          -23.9327
+        ],
+        "rotation": [
+          0.0,
+          30.166,
+          0.0
+        ],
+        "scale": [
+          1.1152,
+          1.1152,
+          1.1152
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_016",
+      "prefab": "forest.bush_01",
+      "transform": {
+        "position": [
+          19.0301,
+          0.0,
+          -16.465
+        ],
+        "rotation": [
+          0.0,
+          169.145,
+          0.0
+        ],
+        "scale": [
+          0.968,
+          0.968,
+          0.968
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_017",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          23.4394,
+          0.0,
+          -8.573
+        ],
+        "rotation": [
+          0.0,
+          119.734,
+          0.0
+        ],
+        "scale": [
+          0.9991,
+          0.9991,
+          0.9991
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_018",
+      "prefab": "forest.small_tree_01",
+      "transform": {
+        "position": [
+          29.2733,
+          0.0,
+          0.9208
+        ],
+        "rotation": [
+          0.0,
+          119.453,
+          0.0
+        ],
+        "scale": [
+          1.0956,
+          1.0956,
+          1.0956
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_019",
+      "prefab": "forest.trunk_03",
+      "transform": {
+        "position": [
+          28.1374,
+          0.0,
+          11.7081
+        ],
+        "rotation": [
+          0.0,
+          134.73,
+          0.0
+        ],
+        "scale": [
+          0.9529,
+          0.9529,
+          0.9529
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_020",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          24.2874,
+          0.0,
+          22.9024
+        ],
+        "rotation": [
+          0.0,
+          -17.427,
+          0.0
+        ],
+        "scale": [
+          1.0758,
+          1.0758,
+          1.0758
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_021",
+      "prefab": "forest.small_tree_01",
+      "transform": {
+        "position": [
+          11.6825,
+          0.0,
+          28.09
+        ],
+        "rotation": [
+          0.0,
+          -164.229,
+          0.0
+        ],
+        "scale": [
+          0.9869,
+          0.9869,
+          0.9869
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_022",
+      "prefab": "forest.trunk_03",
+      "transform": {
+        "position": [
+          -0.5468,
+          0.0,
+          33.0163
+        ],
+        "rotation": [
+          0.0,
+          -170.98,
+          0.0
+        ],
+        "scale": [
+          1.0221,
+          1.0221,
+          1.0221
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_023",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -12.5231,
+          0.0,
+          31.0039
+        ],
+        "rotation": [
+          0.0,
+          -18.823,
+          0.0
+        ],
+        "scale": [
+          1.0564,
+          1.0564,
+          1.0564
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_024",
+      "prefab": "forest.small_tree_01",
+      "transform": {
+        "position": [
+          -22.9154,
+          0.0,
+          23.691
+        ],
+        "rotation": [
+          0.0,
+          137.554,
+          0.0
+        ],
+        "scale": [
+          0.9952,
+          0.9952,
+          0.9952
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_025",
+      "prefab": "forest.trunk_03",
+      "transform": {
+        "position": [
+          -30.6243,
+          0.0,
+          14.3511
+        ],
+        "rotation": [
+          0.0,
+          44.273,
+          0.0
+        ],
+        "scale": [
+          1.0385,
+          1.0385,
+          1.0385
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_026",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -34.9933,
+          0.0,
+          0.4452
+        ],
+        "rotation": [
+          0.0,
+          -106.308,
+          0.0
+        ],
+        "scale": [
+          0.9476,
+          0.9476,
+          0.9476
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_027",
+      "prefab": "forest.small_tree_01",
+      "transform": {
+        "position": [
+          -30.2691,
+          0.0,
+          -12.3419
+        ],
+        "rotation": [
+          0.0,
+          138.433,
+          0.0
+        ],
+        "scale": [
+          0.9638,
+          0.9638,
+          0.9638
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_028",
+      "prefab": "forest.trunk_03",
+      "transform": {
+        "position": [
+          -21.5761,
+          0.0,
+          -22.0133
+        ],
+        "rotation": [
+          0.0,
+          33.385,
+          0.0
+        ],
+        "scale": [
+          1.0281,
+          1.0281,
+          1.0281
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_029",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          -12.6099,
+          0.0,
+          -29.5027
+        ],
+        "rotation": [
+          0.0,
+          106.077,
+          0.0
+        ],
+        "scale": [
+          0.9267,
+          0.9267,
+          0.9267
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_030",
+      "prefab": "forest.small_tree_01",
+      "transform": {
+        "position": [
+          -0.5965,
+          0.0,
+          -34.7226
+        ],
+        "rotation": [
+          0.0,
+          -67.042,
+          0.0
+        ],
+        "scale": [
+          0.9445,
+          0.9445,
+          0.9445
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_031",
+      "prefab": "forest.trunk_03",
+      "transform": {
+        "position": [
+          12.2968,
+          0.0,
+          -29.3729
+        ],
+        "rotation": [
+          0.0,
+          117.641,
+          0.0
+        ],
+        "scale": [
+          1.0537,
+          1.0537,
+          1.0537
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_032",
+      "prefab": "forest.trunk_04",
+      "transform": {
+        "position": [
+          24.8778,
+          0.0,
+          -24.4334
+        ],
+        "rotation": [
+          0.0,
+          81.27,
+          0.0
+        ],
+        "scale": [
+          1.0212,
+          1.0212,
+          1.0212
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_033",
+      "prefab": "forest.small_tree_01",
+      "transform": {
+        "position": [
+          26.3301,
+          0.0,
+          -12.5646
+        ],
+        "rotation": [
+          0.0,
+          -131.742,
+          0.0
+        ],
+        "scale": [
+          1.0256,
+          1.0256,
+          1.0256
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_034",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          40.3418,
+          0.0,
+          0.703
+        ],
+        "rotation": [
+          0.0,
+          153.176,
+          0.0
+        ],
+        "scale": [
+          1.1105,
+          1.1105,
+          1.1105
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_035",
+      "prefab": "forest.small_tree_02",
+      "transform": {
+        "position": [
+          31.4342,
+          0.0,
+          14.5234
+        ],
+        "rotation": [
+          0.0,
+          136.384,
+          0.0
+        ],
+        "scale": [
+          1.0322,
+          1.0322,
+          1.0322
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_036",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          26.35,
+          0.0,
+          32.0862
+        ],
+        "rotation": [
+          0.0,
+          41.966,
+          0.0
+        ],
+        "scale": [
+          1.0871,
+          1.0871,
+          1.0871
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_037",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          8.3566,
+          0.0,
+          36.2954
+        ],
+        "rotation": [
+          0.0,
+          -93.141,
+          0.0
+        ],
+        "scale": [
+          0.8905,
+          0.8905,
+          0.8905
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_038",
+      "prefab": "forest.small_tree_02",
+      "transform": {
+        "position": [
+          -9.0905,
+          0.0,
+          35.9313
+        ],
+        "rotation": [
+          0.0,
+          62.192,
+          0.0
+        ],
+        "scale": [
+          1.0124,
+          1.0124,
+          1.0124
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_039",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          -22.3268,
+          0.0,
+          28.617
+        ],
+        "rotation": [
+          0.0,
+          -62.324,
+          0.0
+        ],
+        "scale": [
+          1.0921,
+          1.0921,
+          1.0921
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_040",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          -34.4564,
+          0.0,
+          16.4809
+        ],
+        "rotation": [
+          0.0,
+          26.738,
+          0.0
+        ],
+        "scale": [
+          0.9673,
+          0.9673,
+          0.9673
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_041",
+      "prefab": "forest.small_tree_02",
+      "transform": {
+        "position": [
+          -40.3663,
+          0.0,
+          -0.616
+        ],
+        "rotation": [
+          0.0,
+          -33.709,
+          0.0
+        ],
+        "scale": [
+          0.9632,
+          0.9632,
+          0.9632
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_042",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          -37.3434,
+          0.0,
+          -18.6401
+        ],
+        "rotation": [
+          0.0,
+          -148.612,
+          0.0
+        ],
+        "scale": [
+          1.0571,
+          1.0571,
+          1.0571
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_043",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          -23.3901,
+          0.0,
+          -27.5136
+        ],
+        "rotation": [
+          0.0,
+          -153.825,
+          0.0
+        ],
+        "scale": [
+          1.0456,
+          1.0456,
+          1.0456
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_044",
+      "prefab": "forest.small_tree_02",
+      "transform": {
+        "position": [
+          -9.8797,
+          0.0,
+          -36.6554
+        ],
+        "rotation": [
+          0.0,
+          16.219,
+          0.0
+        ],
+        "scale": [
+          0.8928,
+          0.8928,
+          0.8928
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_045",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          8.3715,
+          0.0,
+          -40.3972
+        ],
+        "rotation": [
+          0.0,
+          -90.422,
+          0.0
+        ],
+        "scale": [
+          1.0079,
+          1.0079,
+          1.0079
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_046",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          26.6846,
+          0.0,
+          -32.3843
+        ],
+        "rotation": [
+          0.0,
+          156.137,
+          0.0
+        ],
+        "scale": [
+          1.0718,
+          1.0718,
+          1.0718
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_047",
+      "prefab": "forest.small_tree_02",
+      "transform": {
+        "position": [
+          37.9635,
+          0.0,
+          -17.9924
+        ],
+        "rotation": [
+          0.0,
+          -123.881,
+          0.0
+        ],
+        "scale": [
+          0.9445,
+          0.9445,
+          0.9445
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_048",
+      "prefab": "forest.big_tree_01",
+      "transform": {
+        "position": [
+          42.1324,
+          0.0,
+          -1.4553
+        ],
+        "rotation": [
+          0.0,
+          -79.82,
+          0.0
+        ],
+        "scale": [
+          0.9946,
+          0.9946,
+          0.9946
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_049",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          40.8325,
+          0.0,
+          23.7396
+        ],
+        "rotation": [
+          0.0,
+          -122.266,
+          0.0
+        ],
+        "scale": [
+          1.0055,
+          1.0055,
+          1.0055
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_050",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          22.7828,
+          0.0,
+          38.1649
+        ],
+        "rotation": [
+          0.0,
+          17.378,
+          0.0
+        ],
+        "scale": [
+          0.8901,
+          0.8901,
+          0.8901
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_051",
+      "prefab": "forest.big_tree_01",
+      "transform": {
+        "position": [
+          1.3016,
+          0.0,
+          42.5868
+        ],
+        "rotation": [
+          0.0,
+          -43.641,
+          0.0
+        ],
+        "scale": [
+          0.9562,
+          0.9562,
+          0.9562
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_052",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          -21.1391,
+          0.0,
+          40.0071
+        ],
+        "rotation": [
+          0.0,
+          166.833,
+          0.0
+        ],
+        "scale": [
+          1.0809,
+          1.0809,
+          1.0809
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_053",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          -39.7787,
+          0.0,
+          24.8191
+        ],
+        "rotation": [
+          0.0,
+          72.915,
+          0.0
+        ],
+        "scale": [
+          1.0754,
+          1.0754,
+          1.0754
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_054",
+      "prefab": "forest.big_tree_01",
+      "transform": {
+        "position": [
+          -50.4084,
+          0.0,
+          0.1658
+        ],
+        "rotation": [
+          0.0,
+          58.429,
+          0.0
+        ],
+        "scale": [
+          1.0549,
+          1.0549,
+          1.0549
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_055",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          -37.8274,
+          0.0,
+          -23.1945
+        ],
+        "rotation": [
+          0.0,
+          10.039,
+          0.0
+        ],
+        "scale": [
+          0.8817,
+          0.8817,
+          0.8817
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_056",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          -20.8094,
+          0.0,
+          -37.0101
+        ],
+        "rotation": [
+          0.0,
+          89.246,
+          0.0
+        ],
+        "scale": [
+          1.006,
+          1.006,
+          1.006
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_057",
+      "prefab": "forest.big_tree_01",
+      "transform": {
+        "position": [
+          1.6885,
+          0.0,
+          -45.2155
+        ],
+        "rotation": [
+          0.0,
+          -167.761,
+          0.0
+        ],
+        "scale": [
+          1.0481,
+          1.0481,
+          1.0481
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_058",
+      "prefab": "forest.tree_01",
+      "transform": {
+        "position": [
+          21.4464,
+          0.0,
+          -41.0851
+        ],
+        "rotation": [
+          0.0,
+          -176.479,
+          0.0
+        ],
+        "scale": [
+          1.054,
+          1.054,
+          1.054
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "tree_059",
+      "prefab": "forest.spiky_tree",
+      "transform": {
+        "position": [
+          39.9329,
+          0.0,
+          -25.0988
+        ],
+        "rotation": [
+          0.0,
+          10.099,
+          0.0
+        ],
+        "scale": [
+          1.0483,
+          1.0483,
+          1.0483
+        ]
+      },
+      "cast_shadows": true
+    },
+    {
+      "id": "cover_000",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -3.7579,
+          0.0,
+          -5.1992
+        ],
+        "rotation": [
+          0.0,
+          -165.674,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_001",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -14.4539,
+          0.0,
+          -3.3143
+        ],
+        "rotation": [
+          0.0,
+          54.402,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_002",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -15.3962,
+          0.0,
+          4.0659
+        ],
+        "rotation": [
+          0.0,
+          100.172,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_003",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -13.4809,
+          0.0,
+          -4.455
+        ],
+        "rotation": [
+          0.0,
+          172.183,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_005",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          9.6234,
+          0.0,
+          -8.6245
+        ],
+        "rotation": [
+          0.0,
+          -101.106,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_006",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          2.4578,
+          0.0,
+          17.8871
+        ],
+        "rotation": [
+          0.0,
+          146.865,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_007",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          14.5761,
+          0.0,
+          12.4875
+        ],
+        "rotation": [
+          0.0,
+          38.472,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_008",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -6.0431,
+          0.0,
+          14.0609
+        ],
+        "rotation": [
+          0.0,
+          -162.389,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_009",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -2.835,
+          0.0,
+          11.9285
+        ],
+        "rotation": [
+          0.0,
+          63.554,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_010",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -4.6962,
+          0.0,
+          -16.3592
+        ],
+        "rotation": [
+          0.0,
+          105.451,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_012",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -0.5951,
+          0.0,
+          -7.4642
+        ],
+        "rotation": [
+          0.0,
+          -25.733,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_013",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -14.9364,
+          0.0,
+          4.1489
+        ],
+        "rotation": [
+          0.0,
+          43.619,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_014",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          6.2336,
+          0.0,
+          12.0418
+        ],
+        "rotation": [
+          0.0,
+          -108.407,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_015",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          12.9642,
+          0.0,
+          -15.1157
+        ],
+        "rotation": [
+          0.0,
+          -82.517,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_016",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          7.0259,
+          0.0,
+          -16.0521
+        ],
+        "rotation": [
+          0.0,
+          -75.15,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_018",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          11.8212,
+          0.0,
+          11.6181
+        ],
+        "rotation": [
+          0.0,
+          4.342,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_019",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -6.1049,
+          0.0,
+          4.6839
+        ],
+        "rotation": [
+          0.0,
+          -148.859,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_020",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -13.854,
+          0.0,
+          3.8898
+        ],
+        "rotation": [
+          0.0,
+          8.748,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_021",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -6.3772,
+          0.0,
+          -4.564
+        ],
+        "rotation": [
+          0.0,
+          27.859,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_022",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -18.2984,
+          0.0,
+          2.0524
+        ],
+        "rotation": [
+          0.0,
+          -138.499,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_023",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -2.927,
+          0.0,
+          14.8805
+        ],
+        "rotation": [
+          0.0,
+          88.466,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_024",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -9.4434,
+          0.0,
+          8.3925
+        ],
+        "rotation": [
+          0.0,
+          -109.22,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_025",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -12.1751,
+          0.0,
+          6.6239
+        ],
+        "rotation": [
+          0.0,
+          -112.84,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_026",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -6.1419,
+          0.0,
+          8.2552
+        ],
+        "rotation": [
+          0.0,
+          89.559,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_027",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          7.0478,
+          0.0,
+          1.832
+        ],
+        "rotation": [
+          0.0,
+          46.866,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_028",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          6.2866,
+          0.0,
+          -4.1854
+        ],
+        "rotation": [
+          0.0,
+          -155.533,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_029",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          -13.0274,
+          0.0,
+          5.5225
+        ],
+        "rotation": [
+          0.0,
+          -154.989,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_030",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -19.169,
+          0.0,
+          -2.0589
+        ],
+        "rotation": [
+          0.0,
+          93.498,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_031",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -1.9139,
+          0.0,
+          19.7468
+        ],
+        "rotation": [
+          0.0,
+          160.224,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_032",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          0.5386,
+          0.0,
+          17.2653
+        ],
+        "rotation": [
+          0.0,
+          177.165,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_033",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          6.7224,
+          0.0,
+          -15.9291
+        ],
+        "rotation": [
+          0.0,
+          -43.306,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_034",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          11.0655,
+          0.0,
+          4.9261
+        ],
+        "rotation": [
+          0.0,
+          142.042,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_035",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          10.1421,
+          0.0,
+          5.0985
+        ],
+        "rotation": [
+          0.0,
+          143.937,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_036",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -6.6646,
+          0.0,
+          5.5557
+        ],
+        "rotation": [
+          0.0,
+          1.667,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_037",
+      "prefab": "forest.grass_02",
+      "transform": {
+        "position": [
+          -6.5371,
+          0.0,
+          -3.3032
+        ],
+        "rotation": [
+          0.0,
+          -3.321,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_038",
+      "prefab": "forest.long_grass_01",
+      "transform": {
+        "position": [
+          5.7418,
+          0.0,
+          -4.1995
+        ],
+        "rotation": [
+          0.0,
+          175.556,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "cover_039",
+      "prefab": "forest.grass_01",
+      "transform": {
+        "position": [
+          -2.3355,
+          0.0,
+          18.373
+        ],
+        "rotation": [
+          0.0,
+          -31.699,
+          0.0
+        ]
+      },
+      "cast_shadows": false
+    },
+    {
+      "id": "player_spawn",
+      "marker": "spawn",
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          6.0
+        ],
+        "rotation": [
+          0.0,
+          180.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "sun",
+      "light": {
+        "type": "directional",
+        "direction": [
+          -0.35,
+          -0.82,
+          -0.45
+        ],
+        "colour_srgb": [
+          1.3,
+          1.16,
+          0.88
+        ],
+        "energy": 2.1
+      },
+      "transform": {
+        "position": [
+          0.0,
+          20.0,
+          0.0
+        ]
+      }
+    }
+  ]
+}

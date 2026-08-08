@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "b23f0ace6e6ac70d"
+type = "texture"
+name = "Medieval Double Axe Albedo"
+tags = ["medieval"]

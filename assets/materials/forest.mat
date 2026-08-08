@@ -1,0 +1,12 @@
+# PSX Forest -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Forest/ForestWoodtest"]
+shader = "lit"
+texture = "forest_woodtest_albedo.png"
+filter = "nearest"
+address = "clamp"
+cull = "none"
+# big_tree_01, bush_01, grass_01, grass_02, long_grass_01, long_grass_02, mushroom_01, small_tree_01
+

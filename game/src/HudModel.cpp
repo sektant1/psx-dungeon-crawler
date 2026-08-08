@@ -68,7 +68,8 @@ HudResource resourceFrom(const entt::registry& registry, entt::entity entity)
 HudSnapshot buildHudSnapshot(const entt::registry& registry,
                               entt::entity player,
                               const PlayerWeaponDef* weapon,
-                              const InteractionFocus& interaction)
+                              const InteractionFocus& interaction,
+                              const WeaponAmmoState* ammo)
 {
     HudSnapshot snapshot;
     if (player == entt::null || !registry.valid(player))
@@ -79,8 +80,17 @@ HudSnapshot buildHudSnapshot(const entt::registry& registry,
     snapshot.stamina = resourceFrom<Stamina>(registry, player);
     snapshot.mana = resourceFrom<Mana>(registry, player);
     snapshot.poise = resourceFrom<Poise>(registry, player);
-    if (weapon)
-        snapshot.weapon = {weapon->displayName, weapon->discipline};
+    if (weapon) {
+        snapshot.weapon.name = weapon->displayName;
+        snapshot.weapon.discipline = weapon->discipline;
+    }
+    if (ammo) {
+        snapshot.weapon.magazine = ammo->magazine;
+        snapshot.weapon.magazineMax = ammo->magazineMax;
+        snapshot.weapon.reserve = ammo->reserve;
+        snapshot.weapon.reloading = ammo->reloading;
+        snapshot.weapon.reloadProgress = ammo->reloadProgress();
+    }
     snapshot.interaction = interaction;
 
     if (const ActionState* action = registry.try_get<ActionState>(player))

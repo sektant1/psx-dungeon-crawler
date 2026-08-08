@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "52b7fe79d393304d"
+type = "mesh"
+name = "M4A 01"
+tags = ["firearms"]

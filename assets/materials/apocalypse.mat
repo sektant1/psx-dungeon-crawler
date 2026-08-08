@@ -1,0 +1,382 @@
+# Post-Apocalyptic Props -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Apocalypse/ApocalypseAxe"]
+shader = "lit"
+texture = "apocalypse_axe_albedo.png"
+filter = "nearest"
+address = "clamp"
+# siekierastara
+
+[material."Builtin/Apocalypse/ApocalypseBackpack01"]
+shader = "lit"
+texture = "apocalypse_backpack_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# backpack
+
+[material."Builtin/Apocalypse/ApocalypseBackpack02"]
+shader = "lit"
+texture = "apocalypse_backpack_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# backpack_02
+
+[material."Builtin/Apocalypse/ApocalypseBackpack03"]
+shader = "lit"
+texture = "apocalypse_backpack_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# backpack_03
+
+[material."Builtin/Apocalypse/ApocalypseBandage"]
+shader = "lit"
+texture = "apocalypse_bandage_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bandaz
+
+[material."Builtin/Apocalypse/ApocalypseBigWalkieTalkie"]
+shader = "lit"
+texture = "apocalypse_big_walkie_talkie_albedo.png"
+filter = "nearest"
+address = "clamp"
+# big_walkietalkie
+
+[material."Builtin/Apocalypse/ApocalypseBloodPack"]
+shader = "lit"
+texture = "apocalypse_blood_pack_albedo.png"
+filter = "nearest"
+address = "clamp"
+# blood_pack
+
+[material."Builtin/Apocalypse/ApocalypseBottle02"]
+shader = "lit"
+texture = "apocalypse_bottle_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bottle
+
+[material."Builtin/Apocalypse/ApocalypseBread"]
+shader = "lit"
+texture = "apocalypse_bread_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bread, bread_end
+
+[material."Builtin/Apocalypse/ApocalypseBreakablePill"]
+shader = "lit"
+texture = "apocalypse_breakable_pill_albedo.png"
+filter = "nearest"
+address = "clamp"
+# breakable_pill
+
+[material."Builtin/Apocalypse/ApocalypseCanister01"]
+shader = "lit"
+texture = "apocalypse_canister_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# kanister10l
+
+[material."Builtin/Apocalypse/ApocalypseCanister02"]
+shader = "lit"
+texture = "apocalypse_canister_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# kanisternieskon
+
+[material."Builtin/Apocalypse/ApocalypseCarBattery"]
+shader = "lit"
+texture = "apocalypse_car_battery_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bateria_samochodowa
+
+[material."Builtin/Apocalypse/ApocalypseCrankFlashlight01"]
+shader = "lit"
+texture = "apocalypse_crank_flashlight_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# hand_torch_03
+
+[material."Builtin/Apocalypse/ApocalypseCrankFlashlight02"]
+shader = "lit"
+texture = "apocalypse_crank_flashlight_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# hand_torch_02
+
+[material."Builtin/Apocalypse/ApocalypseCrowbar02"]
+shader = "lit"
+texture = "apocalypse_crowbar_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# crowbar_02
+
+[material."Builtin/Apocalypse/ApocalypseCrowbar"]
+shader = "lit"
+texture = "apocalypse_crowbar_albedo.png"
+filter = "nearest"
+address = "clamp"
+# crowbars
+
+[material."Builtin/Apocalypse/ApocalypseDrip"]
+shader = "lit"
+texture = "apocalypse_drip_albedo.png"
+filter = "nearest"
+address = "clamp"
+# kroplowka
+
+[material."Builtin/Apocalypse/ApocalypseFirefighterAxe"]
+shader = "lit"
+texture = "apocalypse_firefighter_axe_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zwyklasiekiera
+
+[material."Builtin/Apocalypse/ApocalypseFoodCan"]
+shader = "lit"
+texture = "apocalypse_food_can_albedo.png"
+filter = "nearest"
+address = "clamp"
+# konserwa
+
+[material."Builtin/Apocalypse/ApocalypseGasMask01"]
+shader = "lit"
+texture = "apocalypse_gas_mask_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# gas_mask_01
+
+[material."Builtin/Apocalypse/ApocalypseGasMask02"]
+shader = "lit"
+texture = "apocalypse_gas_mask_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# gas_mask_02
+
+[material."Builtin/Apocalypse/ApocalypseGasMask03"]
+shader = "lit"
+texture = "apocalypse_gas_mask_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# gas_mask
+
+[material."Builtin/Apocalypse/ApocalypseHandSaw"]
+shader = "lit"
+texture = "apocalypse_hand_saw_albedo.png"
+filter = "nearest"
+address = "clamp"
+# saw
+
+[material."Builtin/Apocalypse/ApocalypseHealthPack01"]
+shader = "lit"
+texture = "apocalypse_health_pack_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# health_pack
+
+[material."Builtin/Apocalypse/ApocalypseHealthPack02"]
+shader = "lit"
+texture = "apocalypse_health_pack_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# health_pack_02
+
+[material."Builtin/Apocalypse/ApocalypseHeavyCrowbar"]
+shader = "lit"
+texture = "apocalypse_heavy_crowbar_albedo.png"
+filter = "nearest"
+address = "clamp"
+# heavy_crowbar
+
+[material."Builtin/Apocalypse/ApocalypseIndustrialFlashlight"]
+shader = "lit"
+texture = "apocalypse_industrial_flashlight_albedo.png"
+filter = "nearest"
+address = "clamp"
+# handflashlight
+
+[material."Builtin/Apocalypse/ApocalypseLighter"]
+shader = "lit"
+texture = "apocalypse_lighter_albedo.png"
+filter = "nearest"
+address = "clamp"
+# lighter
+
+[material."Builtin/Apocalypse/ApocalypseLine"]
+shader = "lit"
+texture = "apocalypse_line_albedo.png"
+filter = "nearest"
+address = "clamp"
+# line_01
+
+[material."Builtin/Apocalypse/ApocalypseLockpick"]
+shader = "lit"
+texture = "apocalypse_lockpick_albedo.png"
+filter = "nearest"
+address = "clamp"
+# lockpick
+
+[material."Builtin/Apocalypse/ApocalypseLongBattery"]
+shader = "lit"
+texture = "apocalypse_long_battery_albedo.png"
+filter = "nearest"
+address = "clamp"
+# long_battery
+
+[material."Builtin/Apocalypse/ApocalypseMilitaryFlashlight"]
+shader = "lit"
+texture = "apocalypse_military_flashlight_albedo.png"
+filter = "nearest"
+address = "clamp"
+# militaryflashlight
+
+[material."Builtin/Apocalypse/ApocalypseMre"]
+shader = "lit"
+texture = "apocalypse_mre_albedo.png"
+filter = "nearest"
+address = "clamp"
+# mre
+
+[material."Builtin/Apocalypse/ApocalypseNailBat"]
+shader = "lit"
+texture = "apocalypse_nail_bat_albedo.png"
+filter = "nearest"
+address = "clamp"
+# nail_bat
+
+[material."Builtin/Apocalypse/ApocalypseNails"]
+shader = "lit"
+texture = "apocalypse_nails_albedo.png"
+filter = "nearest"
+address = "clamp"
+# gwo_dzie
+
+[material."Builtin/Apocalypse/ApocalypseNormalBattery02"]
+shader = "lit"
+texture = "apocalypse_normal_battery_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# battery_02
+
+[material."Builtin/Apocalypse/ApocalypsePillBottle"]
+shader = "lit"
+texture = "apocalypse_pill_bottle_albedo.png"
+filter = "nearest"
+address = "clamp"
+# pojemniknatabsy
+
+[material."Builtin/Apocalypse/ApocalypsePillPack"]
+shader = "lit"
+texture = "apocalypse_pill_pack_albedo.png"
+filter = "nearest"
+address = "clamp"
+# pill_pack
+
+[material."Builtin/Apocalypse/ApocalypsePngimgComCreditCardPng204"]
+shader = "lit"
+texture = "apocalypse_pngimg_com_credit_card_png_204_albedo.png"
+filter = "nearest"
+address = "clamp"
+# karta
+
+[material."Builtin/Apocalypse/ApocalypseRegulatedCrowbar"]
+shader = "lit"
+texture = "apocalypse_regulated_crowbar_albedo.png"
+filter = "nearest"
+address = "clamp"
+# regulated_crowbar
+
+[material."Builtin/Apocalypse/ApocalypseSaw"]
+shader = "lit"
+texture = "apocalypse_saw_albedo.png"
+filter = "nearest"
+address = "clamp"
+# saw_02
+
+[material."Builtin/Apocalypse/ApocalypseScissors"]
+shader = "lit"
+texture = "apocalypse_scissors_albedo.png"
+filter = "nearest"
+address = "clamp"
+# scissors_01
+
+[material."Builtin/Apocalypse/ApocalypseSyrienge02"]
+shader = "lit"
+texture = "apocalypse_syrienge_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# syrienge_02
+
+[material."Builtin/Apocalypse/ApocalypseSyrup"]
+shader = "lit"
+texture = "apocalypse_syrup_albedo.png"
+filter = "nearest"
+address = "clamp"
+# butelka
+
+[material."Builtin/Apocalypse/ApocalypseTelescopicBaton02"]
+shader = "lit"
+texture = "apocalypse_telescopic_baton_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# baton_02
+
+[material."Builtin/Apocalypse/ApocalypseTelescopicBaton03"]
+shader = "lit"
+texture = "apocalypse_telescopic_baton_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# baton_03
+
+[material."Builtin/Apocalypse/ApocalypseTelescopicBaton"]
+shader = "lit"
+texture = "apocalypse_telescopic_baton_albedo.png"
+filter = "nearest"
+address = "clamp"
+# baton_01
+
+[material."Builtin/Apocalypse/ApocalypseTwoColoredPill"]
+shader = "lit"
+texture = "apocalypse_two_colored_pill_albedo.png"
+filter = "nearest"
+address = "clamp"
+# pill
+
+[material."Builtin/Apocalypse/ApocalypseWalkietalkie01"]
+shader = "lit"
+texture = "apocalypse_walkietalkie_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# walkietalkie_01
+
+[material."Builtin/Apocalypse/ApocalypseWater"]
+shader = "lit"
+texture = "apocalypse_water_albedo.png"
+filter = "nearest"
+address = "clamp"
+# water
+
+[material."Builtin/Apocalypse/ApocalypseWeaponCase"]
+shader = "lit"
+texture = "apocalypse_weapon_case_albedo.png"
+filter = "nearest"
+address = "clamp"
+# case
+
+[material."Builtin/Apocalypse/ApocalypseWhisky"]
+shader = "lit"
+texture = "apocalypse_whisky_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bottle_03
+
+[material."Builtin/Apocalypse/ApocalypseWine"]
+shader = "lit"
+texture = "apocalypse_wine_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bottle_04
+

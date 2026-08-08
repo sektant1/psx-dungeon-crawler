@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "165cdc515d90bb34"
+type = "texture"
+name = "Apocalypse Backpack 02 Albedo"
+tags = ["apocalypse"]

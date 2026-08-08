@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "bbdc621f0f5e3f02"
+type = "mesh"
+name = "Wall"
+tags = ["dungeon"]

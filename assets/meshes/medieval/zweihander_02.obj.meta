@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "8a68a5810e28e4b0"
+type = "mesh"
+name = "Zweihander 02"
+tags = ["medieval"]

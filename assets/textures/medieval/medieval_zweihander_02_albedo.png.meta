@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "7724276424c0de66"
+type = "texture"
+name = "Medieval Zweihander 02 Albedo"
+tags = ["medieval"]

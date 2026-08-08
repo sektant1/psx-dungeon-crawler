@@ -26,6 +26,17 @@ struct HudStatus {
 struct HudWeapon {
     std::string name = "EMPTY HAND";
     std::string discipline = "NO DISCIPLINE";
+    // Ammunition, for the shooter loadout. `magazineMax == 0` means this weapon
+    // has no magazine and the HUD should draw no ammo readout at all -- which
+    // is what every fantasy weapon reports, so one HUD serves both loadouts
+    // without a mode flag.
+    int magazine = 0;
+    int magazineMax = 0;
+    int reserve = 0;         // -1 is infinite: draw an infinity glyph, not "-1"
+    bool reloading = false;
+    float reloadProgress = 0.0f; // 0..1, for a ring or bar under the readout
+
+    bool usesMagazine() const { return magazineMax > 0; }
     bool operator==(const HudWeapon&) const = default;
 };
 
@@ -53,6 +64,10 @@ const char* hudStatusName(CrowdControl status);
 HudSnapshot buildHudSnapshot(const entt::registry& registry,
                               entt::entity player,
                               const PlayerWeaponDef* weapon,
-                              const InteractionFocus& interaction);
+                              const InteractionFocus& interaction,
+                              // Null for a loadout with no magazines, which
+                              // leaves the ammo fields at zero and tells the
+                              // HUD to draw no readout.
+                              const WeaponAmmoState* ammo = nullptr);
 
 } // namespace game

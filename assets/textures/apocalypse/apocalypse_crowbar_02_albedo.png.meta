@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "99790f09b2c3720f"
+type = "texture"
+name = "Apocalypse Crowbar 02 Albedo"
+tags = ["apocalypse"]

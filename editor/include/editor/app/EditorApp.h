@@ -48,6 +48,7 @@
 #include <eng/particles/ParticleLibrary.h>
 
 #include <memory>
+#include <array>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -73,6 +74,22 @@ namespace ed {
 // overlay is what made the previous one flicker badly enough to be deleted.
 class EditorApp : public eng::Application {
 public:
+    // Which preview site a request is for.
+    //
+    // These used to share one swatch, and the result was the bug this enum
+    // exists to fix: hovering a texture in the browser changed the material
+    // sphere in the Inspector and the prop in the tooltip at the same time,
+    // because all three drew the same target and the last writer won.
+    //
+    // The panels are addressed rather than the targets, so a call site says
+    // what it IS, not which buffer it happens to own.
+    enum class PreviewSlot {
+        Browser = 0,   // the Asset Library's five tabs -- one visible at a time
+        Inspector = 1, // the entity inspector's material and mesh swatches
+        Tooltip = 2,   // a hover popup over either of the above
+    };
+    static int slotIndex(PreviewSlot slot) { return int(slot); }
+
     EditorApp();
     ~EditorApp() override;
 
@@ -176,7 +193,37 @@ private:
     // One browser shell, three resource modes. These content functions never
     // open their own windows, so search, tabs and sizing stay consistent.
     void drawAssetBrowser();
-    void drawCatalog();
+    // Which half of the placeable vocabulary a tab shows.
+    //
+    // One list of everything was right when the only content was a dungeon kit
+    // of forty pieces. The built-in library is now several hundred, and the two
+    // questions an author asks of it are different jobs at different times:
+    // building the shell of a level, and dressing it. The split is by the
+    // prefab's own `role`, so it follows the data rather than a list of ids
+    // somebody has to maintain.
+    enum class CatalogScope { Worldbuilding, Props };
+    void drawCatalog(CatalogScope scope);
+    // The Textures tab: every image in the project, with a preview, and the
+    // retexturing this engine grew for the PSX pixelizer workflow. See
+    // docs/design/2026-08-07-retexturing-and-material-variants.md.
+    void drawTexturePanel();
+    // The Shaders tab: the shader families materials name, and what draws with
+    // each. Read-only -- editing GLSL is a text editor's job -- but a shader
+    // that failed to compile is reported here rather than only in the console.
+    void drawShaderPanel();
+    // Re-read assets/textures into mTextureLibrary, sorted by domain then name.
+    void rescanTextureLibrary();
+    // Bind a texture to the scratch preview material and stage it. Cheap enough
+    // to call every frame from a hover, because rebinding an already-bound
+    // texture is a no-op.
+    void previewTexture(const std::string& logicalPath);
+    // Append a variant to assets/materials/variants.mat, the file the asset
+    // importer does not own. Creating a variant in the renderer makes it exist
+    // for this session; this is what makes it exist for the next one.
+    bool writeMaterialVariant(const std::string& name, const std::string& base,
+                              const std::string& texture);
+    // Re-read every material script into the live library.
+    void reloadMaterials();
     void drawIssues();
     // What the running game said when a script broke, read back from the
     // playtest log. See ScriptWorkshop.h for why the log is the channel.
@@ -223,11 +270,13 @@ private:
     // Puts a mesh in the shared swatch. Deduplicated like the material and
     // effect requests, so calling it for a hovered row every frame is free.
     void requestMeshPreview(const std::string& meshPath,
-                            const std::string& material);
+                            const std::string& material,
+                            PreviewSlot slot = PreviewSlot::Browser);
     // The same for a generated primitive, which has no path to key on -- the
     // swatch is keyed on the parameters, so two boxes of different sizes are
     // two previews.
-    void requestPrimitivePreview(const eng::ecs::PrimitiveMesh& primitive);
+    void requestPrimitivePreview(const eng::ecs::PrimitiveMesh& primitive,
+                                 PreviewSlot slot = PreviewSlot::Browser);
     // Applies the browser's current subject to the selection, replacing
     // whichever of prefab/mesh/primitive each entity carried.
     void applyMeshToSelection(const std::string& meshPath);
@@ -603,6 +652,11 @@ private:
     bool mRoomDragging = false;
     int mRoomStartCol = 0, mRoomStartRow = 0;
     char mCatalogFilter[64] = {};
+    // Per-tab, because the two catalog tabs are searched for different things
+    // and sharing one box means every switch starts by clearing it.
+    char mPropFilter[64] = {};
+    char mTextureFilter[64] = {};
+    char mShaderFilter[64] = {};
 
     // Issues, recomputed when the document changes rather than every frame.
     std::vector<game::content::Issue> mIssues;
@@ -641,6 +695,26 @@ private:
     std::vector<std::string> mMaterialNames;
     std::vector<MaterialInfo> mMaterialCatalog;
     bool mMaterialCatalogLoaded = false;
+
+    // --- the texture library ------------------------------------------------
+    // Every image under assets/textures, scanned once. The list is long (the
+    // built-in library alone is several hundred) and it does not change while
+    // the editor runs unless someone drops a file in, which the Rescan button
+    // is for.
+    struct TextureAsset {
+        std::string logical;   // "textures/forest/grass_albedo.png"
+        std::string name;      // "grass_albedo"
+        std::string domain;    // "forest" -- the directory it came from
+        std::uint64_t sizeBytes = 0;
+    };
+    std::vector<TextureAsset> mTextureLibrary;
+    bool mTextureLibraryLoaded = false;
+    int mSelectedTexture = -1;
+    // The material a texture is previewed through, and the one a variant would
+    // be based on. Previewing rebinds this material's texture in place, so it
+    // must be a scratch material and never a shipped one.
+    std::string mRetextureBase;
+    char mVariantName[96] = {};
     // Off by default: the catalogue is mostly materials that cannot go on an
     // entity, and offering them is how a compositor pass ends up on a wall.
     bool mShowAllMaterials = false;
@@ -717,16 +791,26 @@ private:
     char mParticleFilter[64] = {};
     std::vector<eng::ParticlesHandle> mParticlePreviews;
     float mParticlePreviewScale = 1.0f;
-    // The offscreen swatch has one subject at a time: a lit sphere wearing a
-    // material, or a running particle effect. These route every request through
-    // one place so the Inspector, the Material panel and the Particles panel
-    // hand it over cleanly instead of half-configuring it behind each other.
-    // Both deduplicate, so calling them every frame for a hovered row is free.
-    void requestMaterialPreview(const std::string& material);
-    void requestEffectPreview(const std::string& effect);
+    // These route every request through one place so the panels hand the swatch
+    // over cleanly instead of half-configuring it behind each other. All
+    // deduplicate PER SLOT, so calling one every frame for a hovered row is
+    // free and two panels asking for different things both get them.
+    void requestMaterialPreview(const std::string& material,
+                                PreviewSlot slot = PreviewSlot::Browser);
+    void requestEffectPreview(const std::string& effect,
+                              PreviewSlot slot = PreviewSlot::Browser);
     enum class PreviewSubject { None, Material, Effect, Mesh };
-    PreviewSubject mPreviewSubject = PreviewSubject::None;
-    std::string mPreviewName;
+    // Per slot: shared dedup state would make the second panel's request look
+    // like a repeat of the first's and get dropped.
+    struct PreviewState {
+        PreviewSubject subject = PreviewSubject::None;
+        std::string name;
+    };
+    std::array<PreviewState, 3> mPreviews;
+    PreviewState& previewState(PreviewSlot slot)
+    {
+        return mPreviews[std::size_t(slotIndex(slot))];
+    }
 
     eng::NodeHandle mParticleThumbnailNode;
     eng::ParticlesHandle mParticleThumbnail;

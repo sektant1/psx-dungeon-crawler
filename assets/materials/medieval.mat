@@ -1,0 +1,333 @@
+# Medieval Weapons -- written by tools/import_asset_pack.py.
+# Re-running the importer regenerates this file; hand edits
+# belong in the pack's manifest entry, not here.
+
+[material."Builtin/Medieval/MedievalArrows"]
+shader = "lit"
+texture = "medieval_arrows_albedo.png"
+filter = "nearest"
+address = "clamp"
+# arrow_01, arrow_02, arrow_03
+
+[material."Builtin/Medieval/MedievalBase02"]
+shader = "lit"
+texture = "medieval_base_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# crossbow_02
+
+[material."Builtin/Medieval/MedievalBase02Albedo02"]
+shader = "lit"
+texture = "medieval_base_02_albedo_02.png"
+filter = "nearest"
+address = "clamp"
+# heavycrossbow_02
+
+[material."Builtin/Medieval/MedievalBase02Albedo03"]
+shader = "lit"
+texture = "medieval_base_02_albedo_03.png"
+filter = "nearest"
+address = "clamp"
+# broadsword_04
+
+[material."Builtin/Medieval/MedievalBase02Albedo04"]
+shader = "lit"
+texture = "medieval_base_02_albedo_04.png"
+filter = "nearest"
+address = "clamp"
+# broadsword_02
+
+[material."Builtin/Medieval/MedievalBase02Albedo05"]
+shader = "lit"
+texture = "medieval_base_02_albedo_05.png"
+filter = "nearest"
+address = "clamp"
+# brokensword_02
+
+[material."Builtin/Medieval/MedievalBase02Albedo06"]
+shader = "lit"
+texture = "medieval_base_02_albedo_06.png"
+filter = "nearest"
+address = "clamp"
+# estoc_02
+
+[material."Builtin/Medieval/MedievalBase02Albedo07"]
+shader = "lit"
+texture = "medieval_base_02_albedo_07.png"
+filter = "nearest"
+address = "clamp"
+# katana_02
+
+[material."Builtin/Medieval/MedievalBase02Albedo08"]
+shader = "lit"
+texture = "medieval_base_02_albedo_08.png"
+filter = "nearest"
+address = "clamp"
+# longsword_02
+
+[material."Builtin/Medieval/MedievalBase02Albedo09"]
+shader = "lit"
+texture = "medieval_base_02_albedo_09.png"
+filter = "nearest"
+address = "clamp"
+# longsword_04
+
+[material."Builtin/Medieval/MedievalBase02Albedo10"]
+shader = "lit"
+texture = "medieval_base_02_albedo_10.png"
+filter = "nearest"
+address = "clamp"
+# rustedsword_02
+
+[material."Builtin/Medieval/MedievalBelt"]
+shader = "lit"
+texture = "medieval_belt_albedo.png"
+filter = "nearest"
+address = "clamp"
+# bolt_01
+
+[material."Builtin/Medieval/MedievalBillHook"]
+shader = "lit"
+texture = "medieval_bill_hook_albedo.png"
+filter = "nearest"
+address = "clamp"
+# billhook_01
+
+[material."Builtin/Medieval/MedievalBlue"]
+shader = "lit"
+texture = "medieval_blue_albedo.png"
+filter = "nearest"
+address = "clamp"
+# roundshield_02
+
+[material."Builtin/Medieval/MedievalBlueAlbedo02"]
+shader = "lit"
+texture = "medieval_blue_albedo_02.png"
+filter = "nearest"
+address = "clamp"
+# shield_02
+
+[material."Builtin/Medieval/MedievalBroadsword01"]
+shader = "lit"
+texture = "medieval_broadsword_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# broadsword_01
+
+[material."Builtin/Medieval/MedievalBroadsword03"]
+shader = "lit"
+texture = "medieval_broadsword_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# broadsword_03
+
+[material."Builtin/Medieval/MedievalBroadsword05"]
+shader = "lit"
+texture = "medieval_broadsword_05_albedo.png"
+filter = "nearest"
+address = "clamp"
+# broadsword_05
+
+[material."Builtin/Medieval/MedievalBroadsword06"]
+shader = "lit"
+texture = "medieval_broadsword_06_albedo.png"
+filter = "nearest"
+address = "clamp"
+# broadsword_06
+
+[material."Builtin/Medieval/MedievalBroadsword07"]
+shader = "lit"
+texture = "medieval_broadsword_07_albedo.png"
+filter = "nearest"
+address = "clamp"
+# broadsword_06_02
+
+[material."Builtin/Medieval/MedievalBrokensword01"]
+shader = "lit"
+texture = "medieval_brokensword_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# brokensword_01
+
+[material."Builtin/Medieval/MedievalColor02"]
+shader = "lit"
+texture = "medieval_color_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# poleaxe_02
+
+[material."Builtin/Medieval/MedievalColor02Albedo02"]
+shader = "lit"
+texture = "medieval_color_02_albedo_02.png"
+filter = "nearest"
+address = "clamp"
+# poleaxe_05
+
+[material."Builtin/Medieval/MedievalColor03"]
+shader = "lit"
+texture = "medieval_color_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# poleaxe_03
+
+[material."Builtin/Medieval/MedievalCompositeBow"]
+shader = "lit"
+texture = "medieval_composite_bow_albedo.png"
+filter = "nearest"
+address = "clamp"
+# compositebow_01, defaultbow_01, hunterbow_01
+
+[material."Builtin/Medieval/MedievalCrossbow01"]
+shader = "lit"
+texture = "medieval_crossbow_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# crossbow_01
+
+[material."Builtin/Medieval/MedievalDoubleAxe"]
+shader = "lit"
+texture = "medieval_double_axe_albedo.png"
+filter = "nearest"
+address = "clamp"
+# doubleaxe_01, poleaxe_01
+
+[material."Builtin/Medieval/MedievalEstoc01"]
+shader = "lit"
+texture = "medieval_estoc_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# estoc_01
+
+[material."Builtin/Medieval/MedievalGreen"]
+shader = "lit"
+texture = "medieval_green_albedo.png"
+filter = "nearest"
+address = "clamp"
+# roundshield_03
+
+[material."Builtin/Medieval/MedievalGreenAlbedo02"]
+shader = "lit"
+texture = "medieval_green_albedo_02.png"
+filter = "nearest"
+address = "clamp"
+# shield_03
+
+[material."Builtin/Medieval/MedievalHeavycrossbow01"]
+shader = "lit"
+texture = "medieval_heavycrossbow_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# heavycrossbow_01
+
+[material."Builtin/Medieval/MedievalKatana01"]
+shader = "lit"
+texture = "medieval_katana_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# katana_01
+
+[material."Builtin/Medieval/MedievalLongsword01"]
+shader = "lit"
+texture = "medieval_longsword_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# longsword_01
+
+[material."Builtin/Medieval/MedievalLongsword03"]
+shader = "lit"
+texture = "medieval_longsword_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# longsword_03
+
+[material."Builtin/Medieval/MedievalLongsword05"]
+shader = "lit"
+texture = "medieval_longsword_05_albedo.png"
+filter = "nearest"
+address = "clamp"
+# longsword_05
+
+[material."Builtin/Medieval/MedievalLongsword06"]
+shader = "lit"
+texture = "medieval_longsword_06_albedo.png"
+filter = "nearest"
+address = "clamp"
+# longsword_06
+
+[material."Builtin/Medieval/MedievalMace01"]
+shader = "lit"
+texture = "medieval_mace_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# mace_01, mace_02
+
+[material."Builtin/Medieval/MedievalMace03"]
+shader = "lit"
+texture = "medieval_mace_03_albedo.png"
+filter = "nearest"
+address = "clamp"
+# mace_03
+
+[material."Builtin/Medieval/MedievalPoleaxe04"]
+shader = "lit"
+texture = "medieval_poleaxe_04_albedo.png"
+filter = "nearest"
+address = "clamp"
+# poleaxe_04
+
+[material."Builtin/Medieval/MedievalRed"]
+shader = "lit"
+texture = "medieval_red_albedo.png"
+filter = "nearest"
+address = "clamp"
+# roundshield_04
+
+[material."Builtin/Medieval/MedievalRedAlbedo02"]
+shader = "lit"
+texture = "medieval_red_albedo_02.png"
+filter = "nearest"
+address = "clamp"
+# shield_04
+
+[material."Builtin/Medieval/MedievalRoundshield"]
+shader = "lit"
+texture = "medieval_roundshield_albedo.png"
+filter = "nearest"
+address = "clamp"
+# roundshield_01
+
+[material."Builtin/Medieval/MedievalRustedsword01"]
+shader = "lit"
+texture = "medieval_rustedsword_01_albedo.png"
+filter = "nearest"
+address = "clamp"
+# rustedsword_01
+
+[material."Builtin/Medieval/MedievalShield"]
+shader = "lit"
+texture = "medieval_shield_albedo.png"
+filter = "nearest"
+address = "clamp"
+# shield_01
+
+[material."Builtin/Medieval/MedievalWhite"]
+shader = "lit"
+texture = "medieval_white_albedo.png"
+filter = "nearest"
+address = "clamp"
+# shield_05
+
+[material."Builtin/Medieval/MedievalZweihander02"]
+shader = "lit"
+texture = "medieval_zweihander_02_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zweihander_02
+
+[material."Builtin/Medieval/MedievalZweihander"]
+shader = "lit"
+texture = "medieval_zweihander_albedo.png"
+filter = "nearest"
+address = "clamp"
+# zweihander, zweihander_01
+

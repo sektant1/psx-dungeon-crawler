@@ -82,6 +82,15 @@ AssetPreviewLayout assetPreviewLayout(float availableWidth)
     // the list it is supposed to be helping you read.
     layout.thumbnailSize = std::clamp(availableWidth * 0.36f, 80.0f, 144.0f);
     layout.metadataBeside = availableWidth >= 300.0f;
+    // Beside the swatch, the block is exactly the swatch. Under it, the swatch
+    // plus the four text lines a stacked layout has room for -- a number, not a
+    // measurement of the content, which is the whole point.
+    layout.headerHeight =
+        layout.thumbnailSize +
+        (layout.metadataBeside
+             ? 0.0f
+             : ImGui::GetTextLineHeightWithSpacing() * 4.0f) +
+        ImGui::GetStyle().ItemSpacing.y;
     return layout;
 }
 
@@ -151,6 +160,14 @@ void drawAssetPanel(const AssetPanelView& view)
     const AssetPreviewLayout layout =
         assetPreviewLayout(ImGui::GetContentRegionAvail().x);
 
+    // The preview block is a fixed-height child, so the list below it starts at
+    // the same y in every tab and for every subject. A subject with more to say
+    // than fits scrolls inside here; it never moves the list.
+    ImGui::BeginChild("##assetheader", ImVec2(0.0f, layout.headerHeight),
+                      ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoScrollbar |
+                          ImGuiWindowFlags_NoScrollWithMouse);
+
     // --- preview -----------------------------------------------------------
     if (view.previewTexture != 0) {
         ImGui::Image(static_cast<ImTextureID>(view.previewTexture),
@@ -173,6 +190,7 @@ void drawAssetPanel(const AssetPanelView& view)
         view.actions();
     }
     ImGui::EndGroup();
+    ImGui::EndChild();
 
     // --- toggles -----------------------------------------------------------
     if (view.toggles) {

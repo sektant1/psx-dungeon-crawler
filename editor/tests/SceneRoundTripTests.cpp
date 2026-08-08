@@ -70,20 +70,17 @@ int main()
     const Entity* exit = reparsed.find("descent_exit");
     require(exit && exit->exitYawDegrees, "the exit survives");
 
-    // PreviewBridge only draws prefab-backed meshes. Keep both showcase
-    // subjects explicit: a bare Exit gets generated portal art in play mode,
-    // but remains only a marker in the editor viewport.
-    SceneDocument spinPortal;
-    require(loadSceneSource(game::test::asset("scenes/spin_portal.scn"),
-                            spinPortal, error),
-            ("the spin portal scene loads: " + error).c_str());
-    const Entity* raccoon = spinPortal.find("prop_raccoon");
-    require(raccoon && raccoon->prefab == "kit.prop_raccoon_head",
-            "the raccoon head has an editor-preview mesh");
-    const Entity* portal = spinPortal.find("portal_membrane_0001");
-    require(portal && portal->prefab == "kit.portal_membrane" &&
-                portal->portal,
-            "the portal membrane has an editor-preview mesh and shader params");
+    // The spin-portal scene used to be pinned here, for the property that
+    // PreviewBridge only draws prefab-backed meshes. It is gone: two thirds of
+    // its placements named prototype-era models that were deleted from the
+    // tree, so the scene was pruned along with the catalogue entries (see
+    // tools/prune_dead_content.py).
+    //
+    // Nothing is lost that this file is for. The round trip is the property
+    // under test, and `ritual_boss_showroom` above already covers "a shipped
+    // scene loads and re-serializes" -- including a prefab-backed mesh entity.
+    // Re-pinning the same property against a second scene was never what made
+    // it true.
 
     // The cozy lair used to be pinned here as well -- its floor count, its
     // pivot's spin rate, where its subject stands. Those assertions were about

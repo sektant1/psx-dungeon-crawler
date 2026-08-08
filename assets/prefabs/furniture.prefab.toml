@@ -1,0 +1,265 @@
+# Furniture.
+#
+# Written by tools/import_asset_pack.py from
+#   assets/source/props/FurnitureUpdate
+# Every size below is measured off the exported mesh in metres.
+# Re-running the importer regenerates this file.
+
+[library]
+domain = "furniture"
+scale = 1.0        # meshes are published in metres
+mesh_dir = "meshes/furniture"
+
+[[prefab]]
+id = "furniture.f_armchair"
+role = "prop"
+mesh = "f_armchair.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdate"
+placement = "prop"
+size = [1.3973, 1.1046, 1.0704]
+y_offset = -0.6797
+collider = "box"
+# 164 tris, from source/props/FurnitureUpdate/fbx/f_armchair.fbx
+
+[[prefab]]
+id = "furniture.f_bed"
+role = "prop"
+mesh = "f_bed.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo02"
+placement = "prop"
+size = [2.1643, 1.1192, 1.3777]
+y_offset = -3.9212
+collider = "box"
+# 96 tris, from source/props/FurnitureUpdate/fbx/f_bed.fbx
+
+[[prefab]]
+id = "furniture.f_chair"
+role = "prop"
+mesh = "f_chair.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo03"
+placement = "prop"
+size = [0.9408, 1.4648, 0.9945]
+y_offset = -3.9392
+collider = "box"
+# 136 tris, from source/props/FurnitureUpdate/fbx/f_chair.fbx
+
+[[prefab]]
+id = "furniture.f_clock"
+role = "prop"
+mesh = "f_clock.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo04"
+placement = "prop"
+size = [0.8138, 1.9885, 0.6856]
+y_offset = -2.2220
+collider = "box"
+# 252 tris, from source/props/FurnitureUpdate/fbx/f_clock.fbx
+
+[[prefab]]
+id = "furniture.f_couch"
+role = "prop"
+mesh = "f_couch.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdate"
+placement = "prop"
+size = [2.7899, 1.1046, 1.0704]
+y_offset = -0.6797
+collider = "box"
+# 164 tris, from source/props/FurnitureUpdate/fbx/f_couch.fbx
+
+[[prefab]]
+id = "furniture.f_desk"
+role = "prop"
+mesh = "f_desk.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo05"
+placement = "prop"
+size = [1.9931, 0.7347, 1.3217]
+y_offset = -5.5634
+collider = "box"
+# 92 tris, from source/props/FurnitureUpdate/fbx/f_desk.fbx
+
+[[prefab]]
+id = "furniture.f_doublebed"
+role = "prop"
+mesh = "f_doublebed.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo02"
+placement = "prop"
+size = [2.1643, 1.1192, 2.2621]
+y_offset = -5.7000
+collider = "box"
+# 116 tris, from source/props/FurnitureUpdate/fbx/f_doublebed.fbx
+
+[[prefab]]
+id = "furniture.f_drawer"
+role = "prop"
+mesh = "f_drawer.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo06"
+placement = "prop"
+size = [2.0468, 1.2411, 1.1100]
+y_offset = -4.0854
+collider = "box"
+# 36 tris, from source/props/FurnitureUpdate/fbx/f_drawer.fbx
+
+[[prefab]]
+id = "furniture.f_keyboard"
+role = "prop"
+mesh = "f_keyboard.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo07"
+placement = "prop"
+size = [0.9982, 0.1643, 0.4000]
+y_offset = -3.8899
+collider = "box"
+# 12 tris, from source/props/FurnitureUpdate/fbx/f_keyboard.fbx
+
+[[prefab]]
+id = "furniture.f_lamp"
+role = "prop"
+mesh = "f_lamp.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo08"
+placement = "prop"
+size = [0.9418, 3.1836, 1.0875]
+y_offset = -2.3278
+collider = "box"
+# 136 tris, from source/props/FurnitureUpdate/fbx/f_lamp.fbx
+
+[[prefab]]
+id = "furniture.f_mouse"
+role = "prop"
+mesh = "f_mouse.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo09"
+placement = "prop"
+size = [0.1717, 0.1149, 0.2899]
+y_offset = -3.8728
+collider = "box"
+# 28 tris, from source/props/FurnitureUpdate/fbx/f_mouse.fbx
+
+[[prefab]]
+id = "furniture.f_painting"
+role = "prop"
+mesh = "f_painting.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo10"
+placement = "prop"
+size = [0.8412, 0.8412, 0.1134]
+y_offset = -3.8306
+collider = "box"
+# 28 tris, from source/props/FurnitureUpdate/fbx/f_painting.fbx
+
+[[prefab]]
+id = "furniture.f_pc"
+role = "prop"
+mesh = "f_pc.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo11"
+placement = "prop"
+size = [0.8412, 0.8412, 0.7598]
+y_offset = -3.8180
+collider = "box"
+# 44 tris, from source/props/FurnitureUpdate/fbx/f_pc.fbx
+
+[[prefab]]
+id = "furniture.f_small_couch"
+role = "prop"
+mesh = "f_small_couch.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdate"
+placement = "prop"
+size = [1.7899, 1.1046, 1.0704]
+y_offset = -0.6797
+collider = "box"
+# 164 tris, from source/props/FurnitureUpdate/fbx/f_small_couch.fbx
+
+[[prefab]]
+id = "furniture.f_small_wardrobe"
+role = "prop"
+mesh = "f_small_wardrobe.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo12"
+placement = "prop"
+size = [0.8845, 1.6340, 0.8845]
+y_offset = -3.9275
+collider = "box"
+# 60 tris, from source/props/FurnitureUpdate/fbx/f_small_wardrobe.fbx
+
+[[prefab]]
+id = "furniture.f_stool"
+role = "prop"
+mesh = "f_stool.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo13"
+placement = "prop"
+size = [0.8253, 0.7359, 0.9530]
+y_offset = -2.1149
+collider = "box"
+# 80 tris, from source/props/FurnitureUpdate/fbx/f_stool.fbx
+
+[[prefab]]
+id = "furniture.f_stool_wood"
+role = "prop"
+mesh = "f_stool_wood.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo14"
+placement = "prop"
+size = [0.9685, 0.6011, 0.9498]
+y_offset = -3.9591
+collider = "box"
+# 108 tris, from source/props/FurnitureUpdate/fbx/f_stool_wood.fbx
+
+[[prefab]]
+id = "furniture.f_table"
+role = "prop"
+mesh = "f_table.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo15"
+placement = "prop"
+size = [1.7473, 0.6168, 0.9747]
+y_offset = -3.9691
+collider = "box"
+# 108 tris, from source/props/FurnitureUpdate/fbx/f_table.fbx
+
+[[prefab]]
+id = "furniture.f_wall"
+role = "prop"
+mesh = "f_wall.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo16"
+placement = "prop"
+size = [3.8748, 3.8443, 0.0000]
+y_offset = -11.1674
+collider = "box"
+# 2 tris, from source/props/FurnitureUpdate/fbx/f_wall.fbx
+
+[[prefab]]
+id = "furniture.f_wardrobe"
+role = "prop"
+mesh = "f_wardrobe.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo06"
+placement = "prop"
+size = [1.2411, 2.0468, 1.1100]
+y_offset = -2.2891
+collider = "box"
+# 36 tris, from source/props/FurnitureUpdate/fbx/f_wardrobe.fbx
+
+[[prefab]]
+id = "furniture.f_washing_machine"
+role = "prop"
+mesh = "f_washing_machine.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo17"
+placement = "prop"
+size = [0.9499, 1.0760, 1.0507]
+y_offset = -1.8513
+collider = "box"
+# 64 tris, from source/props/FurnitureUpdate/fbx/f_washing_machine.fbx
+
+[[prefab]]
+id = "furniture.f_wooded_wall"
+role = "prop"
+mesh = "f_wooded_wall.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo18"
+placement = "prop"
+size = [3.8748, 3.8748, 0.3276]
+y_offset = -11.1979
+collider = "box"
+# 26 tris, from source/props/FurnitureUpdate/fbx/f_wooded_wall.fbx
+
+[[prefab]]
+id = "furniture.f_wooden_wall"
+role = "prop"
+mesh = "f_wooden_wall.obj"
+material = "Builtin/Furniture/FurnitureFurnitureUpdateAlbedo19"
+placement = "prop"
+size = [3.8748, 3.8443, 0.7081]
+y_offset = -11.1674
+collider = "box"
+# 230 tris, from source/props/FurnitureUpdate/fbx/f_wooden_wall.fbx
+

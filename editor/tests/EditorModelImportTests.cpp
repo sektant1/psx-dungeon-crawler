@@ -1,9 +1,17 @@
-// The model import pipeline, run against a real source model.
+// The model import pipeline: a multi-submesh OBJ with a sidecar .mtl and its
+// textures, imported into a scratch pack.
 //
-// The model is assets/source/models/mecha-dl: an OBJ with a sidecar .mtl and
-// two 64x64 PNGs beside it. It is deliberately not a fixture -- it is the file
-// that was in the repository when the importer was widened past .glb, and the
-// case the old GLB-only path could not touch at all.
+// The fixture is WRITTEN BY THIS TEST, and that is the point. It used to be a
+// real model that happened to be in the tree (`assets/source/models/mecha-dl`),
+// on the reasoning that a real file exercises the importer more honestly than a
+// synthetic one. That reasoning was wrong in a specific way: the model was
+// prototype content, it was deleted when the project's direction changed, and
+// the test then failed for a reason that had nothing to do with the importer.
+//
+// A test of the importer should depend on the importer. So the fixture below is
+// the smallest thing that covers every branch this file asserts on -- two
+// submeshes with different materials, a .mtl naming textures by a path relative
+// to the model, and PNGs to find at the end of those paths.
 //
 // Everything is written into a scratch asset root, because a successful import
 // rewrites kit.toml and a test that edits the shipped catalogue is a test that
@@ -38,22 +46,65 @@ static std::string readAll(const fs::path& path)
     return buffer.str();
 }
 
+// A 1x1 PNG, encoded by hand. Small enough to sit in the source, real enough
+// that the importer's "is this a readable image" path is the same one it runs
+// on shipped art.
+static void writeTinyPng(const fs::path& path)
+{
+    static const unsigned char kPng[] = {
+        0x89, 'P',  'N',  'G',  0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        'I',  'H',  'D',  'R',  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 'I',  'D',  'A',  'T',  0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D, 0xB0, 0x00, 0x00, 0x00,
+        0x00, 'I',  'E',  'N',  'D',  0xAE, 0x42, 0x60, 0x82,
+    };
+    std::ofstream out(path, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(kPng), sizeof(kPng));
+}
+
+// Two submeshes, two materials, two textures named relative to the model.
+// Resolving those against the MODEL's directory rather than the working
+// directory is the whole reason ModelImportPipeline::resolveTexture exists, so
+// the fixture has to be somewhere that is not the working directory.
+static fs::path writeFixture(const fs::path& directory)
+{
+    std::error_code ec;
+    fs::create_directories(directory, ec);
+    writeTinyPng(directory / "386.png");
+    writeTinyPng(directory / "387.png");
+
+    {
+        std::ofstream mtl(directory / "mechademonlord.mtl");
+        mtl << "newmtl hull\nKd 0.8 0.8 0.8\nmap_Kd 386.png\n\n"
+               "newmtl trim\nKd 0.6 0.6 0.6\nmap_Kd 387.png\n";
+    }
+
+    const fs::path model = directory / "mechademonlord.obj";
+    std::ofstream obj(model);
+    obj << "mtllib mechademonlord.mtl\n";
+    // Two disjoint triangles, each with its own material, so the importer sees
+    // a genuinely multi-part model and the group/attachment logic is exercised.
+    obj << "v 0 0 0\nv 1 0 0\nv 0 1 0\n";
+    obj << "v 4 0 0\nv 5 0 0\nv 4 1 0\n";
+    obj << "vt 0 0\nvt 1 0\nvt 0 1\n";
+    obj << "vn 0 0 1\n";
+    obj << "usemtl hull\no hull\nf 1/1/1 2/2/1 3/3/1\n";
+    obj << "usemtl trim\no trim\nf 4/1/1 5/2/1 6/3/1\n";
+    return model;
+}
+
 int main()
 {
-    const fs::path project = PROJECT_SOURCE_DIR;
-    const fs::path model =
-        project / "assets" / "source" / "models" / "mecha-dl" /
-        "mechademonlord.obj";
-    require(fs::is_regular_file(model),
-            "the mecha-dl source model is still in the repository");
-
-    // A scratch pack with only what the importer touches.
     std::error_code ec;
     const fs::path root =
         fs::temp_directory_path() / "raven_model_import_tests";
     fs::remove_all(root, ec);
     fs::create_directories(root / "config", ec);
     require(!ec, "scratch asset root was created");
+
+    const fs::path model = writeFixture(root / "source" / "mecha-dl");
+    require(fs::is_regular_file(model), "the fixture model was written");
     {
         std::ofstream kit(root / "config" / "kit.toml");
         kit << "scale = 0.2\ncell_size = 20\nmesh_dir = \"meshes\"\n";
@@ -257,7 +308,7 @@ int main()
     // --- refusals ----------------------------------------------------------
     {
         const ModelImportResult missing =
-            importModelToKit((project / "no_such_model.obj").string(),
+            importModelToKit((root / "no_such_model.obj").string(),
                              root.string());
         require(!missing.ok && missing.error.find("no such file") !=
                                    std::string::npos,

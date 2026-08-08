@@ -49,6 +49,23 @@ resources = [
     "textures/surfaces",
     "textures/vfx",
     "textures/viewmodels",
+    # The built-in content library's domains. Each pack the asset importer
+    # publishes gets its own textures/<domain>/ directory, and a material names
+    # its texture by BASENAME -- so a domain that is not registered here has
+    # every one of its materials fall back to the prototype checker, which is
+    # exactly how this was found.
+    #
+    # tools/import_asset_pack.py guarantees the basenames are globally unique
+    # (they are prefixed with the domain), so adding directories to this flat
+    # group cannot make two textures collide.
+    "textures/apocalypse",
+    "textures/cozy",
+    "textures/creatures",
+    "textures/firearms",
+    "textures/forest",
+    "textures/furniture",
+    "textures/medieval",
+    "textures/secret",
     "particles/textures",
     "particles/textures/sheets",
 ]

@@ -36,6 +36,11 @@ public:
         // expected to offer (Gregory §15.4.1.2). The game's rendered image
         // cannot be affected by a field nothing in the game writes.
         float orthoHeight = 0.0f;
+        // Which thumbnail slot this view draws, when `target` is Thumbnail.
+        // Ignored by every other target. The scene draw compares it against
+        // each node's own slot, which is what keeps three panels' previews from
+        // being the same picture.
+        int thumbnailSlot = 0;
     };
 
     struct TextureBinding {
@@ -145,10 +150,28 @@ public:
     // this many world metres vertically. Zero is perspective. See View.
     void setEditorCameraOrtho(float worldHeight);
 
-    void enableThumbnailViewport(int size);
-    uint64_t thumbnailTextureId() const;
+    // --- thumbnail slots ----------------------------------------------------
+    //
+    // Several panels show a preview at once -- an asset list, the inspector,
+    // and a hover tooltip over either. There used to be ONE thumbnail target
+    // and one subject, so all of them displayed whatever had written to it
+    // last: hovering a texture changed the material swatch in the inspector and
+    // the prop in the browser at the same time.
+    //
+    // So a thumbnail is addressed by slot. Each slot has its own colour target,
+    // its own imgui token and its own camera, and the pass for a slot draws only
+    // the nodes assigned to that slot (Renderer::setNodeThumbnailSlot).
+    //
+    // Four, because the editor has three simultaneous preview sites and a
+    // spare is cheaper than discovering the limit later. Each is a 256px RGBA
+    // target -- 256 KB, and only the ones actually enabled are allocated.
+    static constexpr int kThumbnailSlots = 4;
+
+    void enableThumbnailViewport(int size, int slot = 0);
+    uint64_t thumbnailTextureId(int slot = 0) const;
     void setThumbnailCameraPose(float px, float py, float pz, float qw,
-                                float qx, float qy, float qz, float fovDeg);
+                                float qx, float qy, float qz, float fovDeg,
+                                int slot = 0);
 
     TextureBinding loadTexture(const std::filesystem::path& path,
                                rhi::FilterMode filter,

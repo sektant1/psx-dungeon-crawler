@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "2ab3b35e3bc4ba34"
+type = "texture"
+name = "Creatures Spider Update Albedo 03"
+tags = ["creatures"]

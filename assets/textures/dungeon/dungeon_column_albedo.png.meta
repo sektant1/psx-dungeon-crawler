@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "baefe43a22ee8825"
+type = "texture"
+name = "Dungeon Column Albedo"
+tags = ["dungeon"]

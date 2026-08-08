@@ -1230,16 +1230,19 @@ void EditorApp::runCommand(Command command)
     mCookStatus = "stale";
 }
 
-void EditorApp::requestMaterialPreview(const std::string& material)
+void EditorApp::requestMaterialPreview(const std::string& material,
+                                       PreviewSlot slot)
 {
-    if (material.empty() || (mPreviewSubject == PreviewSubject::Material &&
-                             mPreviewName == material))
+    const int index = slotIndex(slot);
+    PreviewState& state = previewState(slot);
+    if (material.empty() || (state.subject == PreviewSubject::Material &&
+                             state.name == material))
         return;
     if (!mEngine)
         return;
     eng::Renderer& renderer = mEngine->renderer();
-    if (!mStage.thumbnailBuilt())
-        mStage.buildThumbnail(renderer, 256);
+    if (!mStage.thumbnailBuilt(index))
+        mStage.buildThumbnail(renderer, 256, index);
     // Take the swatch back off the particle subject: the effect keeps running
     // otherwise, and the sphere would be composited over a live burst.
     if (mParticleThumbnail.valid()) {
@@ -1249,26 +1252,29 @@ void EditorApp::requestMaterialPreview(const std::string& material)
     if (mParticleThumbnailNode.valid())
         renderer.setNodeVisible(mParticleThumbnailNode, false);
     mParticleThumbnailEffect.clear();
-    mStage.setThumbnailVisible(renderer, true);
-    mStage.setThumbnailMaterial(renderer, material);
-    mPreviewSubject = PreviewSubject::Material;
-    mPreviewName = material;
+    mStage.setThumbnailVisible(renderer, true, index);
+    mStage.setThumbnailMaterial(renderer, material, index);
+    state.subject = PreviewSubject::Material;
+    state.name = material;
 }
 
-void EditorApp::requestEffectPreview(const std::string& effect)
+void EditorApp::requestEffectPreview(const std::string& effect,
+                                     PreviewSlot slot)
 {
+    const int index = slotIndex(slot);
+    PreviewState& state = previewState(slot);
     if (effect.empty() ||
-        (mPreviewSubject == PreviewSubject::Effect && mPreviewName == effect))
+        (state.subject == PreviewSubject::Effect && state.name == effect))
         return;
     if (!mEngine)
         return;
     eng::Renderer& renderer = mEngine->renderer();
-    if (!mStage.thumbnailBuilt())
-        mStage.buildThumbnail(renderer, 256);
+    if (!mStage.thumbnailBuilt(index))
+        mStage.buildThumbnail(renderer, 256, index);
     // The swatch RTT is a generic isolated square despite its legacy name: hide
     // the material sphere and put the effect at the camera's focus, marked
     // thumbnail-only so it cannot leak into the scene viewport.
-    mStage.setThumbnailVisible(renderer, false);
+    mStage.setThumbnailVisible(renderer, false, index);
     if (!mParticleThumbnailNode.valid())
         mParticleThumbnailNode =
             renderer.createNode(eng::kRootNode, glm::vec3(0.0f, -1000.0f, 0.0f),
@@ -1284,8 +1290,8 @@ void EditorApp::requestEffectPreview(const std::string& effect)
     mParticleThumbnailEffect = effect;
     mParticleThumbnailScale = mParticlePreviewScale;
     mParticleThumbnailRestartAt = std::numeric_limits<double>::max();
-    mPreviewSubject = PreviewSubject::Effect;
-    mPreviewName = effect;
+    state.subject = PreviewSubject::Effect;
+    state.name = effect;
 }
 
 void EditorApp::finishInspectorEdit()
@@ -7302,10 +7308,14 @@ void EditorApp::drawAssetBrowser()
         // "meshes" still resolves, to Placeables: the meshes are in it now, and
         // a verification hook that started failing because a tab was merged
         // would be reporting on the hook rather than on the editor.
-        mAssetBrowserModeRequest = mFocusPanel == "material"     ? 1
-                                   : mFocusPanel == "particles"  ? 2
-                                   : mFocusPanel == "resourcedb" ? 3
-                                                                 : 0;
+        // "material" and "resourcedb" still resolve rather than being dropped:
+        // a verification hook that started failing because a tab was renamed
+        // would be reporting on the hook rather than on the editor. Materials
+        // are reached through Textures now, which is where retexturing lives.
+        mAssetBrowserModeRequest = mFocusPanel == "material"    ? 2
+                                   : mFocusPanel == "particles" ? 3
+                                   : mFocusPanel == "shaders"   ? 4
+                                                                : 0;
     }
     if (!ImGui::Begin(workspace_window::kFileSystem, nullptr, kPanelFlags)) {
         ImGui::End();
@@ -7323,31 +7333,34 @@ void EditorApp::drawAssetBrowser()
                        ? ImGuiTabItemFlags_SetSelected
                        : 0;
         };
-        // Placeables is everything that can go in a level -- kit pieces,
-        // gameplay entities, generated primitives and every mesh file in the
-        // project. There is no second geometry tab: a Meshes tab beside this
-        // one split the same question ("what can I put here") by where the
-        // asset came from, which is the one thing an author placing it does not
-        // care about.
-        if (ImGui::BeginTabItem("Placeables", nullptr, flagsFor(0))) {
-            drawCatalog();
+        // Five tabs, one layout.
+        //
+        // Each answers a different question, and the order is the order a level
+        // is made in: build the shell, dress it, skin it, add effects, and --
+        // rarely -- check what is drawing it. Every one of them uses the same
+        // wireframe (fixed-height preview block, metadata, actions, toggles,
+        // search, list, footer) so moving between them never means re-finding a
+        // control; what differs is only what the actions do.
+        if (ImGui::BeginTabItem("Worldbuilding", nullptr, flagsFor(0))) {
+            drawCatalog(CatalogScope::Worldbuilding);
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Materials", nullptr, flagsFor(1))) {
-            drawMaterialPanel();
+        if (ImGui::BeginTabItem("Props", nullptr, flagsFor(1))) {
+            drawCatalog(CatalogScope::Props);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Textures", nullptr, flagsFor(2))) {
+            drawTexturePanel();
             ImGui::EndTabItem();
         }
         const std::string effectsLabel =
-            mParticlesDirty ? "Effects *" : "Effects";
-        if (ImGui::BeginTabItem(effectsLabel.c_str(), nullptr, flagsFor(2))) {
+            mParticlesDirty ? "Particles *" : "Particles";
+        if (ImGui::BeginTabItem(effectsLabel.c_str(), nullptr, flagsFor(3))) {
             drawParticlePanel();
             ImGui::EndTabItem();
         }
-        // The Resource Database Management Tool. Last, because it answers a
-        // different question from the other three: not "what can I place" but
-        // "what does the engine know about, and is it built".
-        if (ImGui::BeginTabItem("Resource DB", nullptr, flagsFor(3))) {
-            mResourceDb.draw();
+        if (ImGui::BeginTabItem("Shaders", nullptr, flagsFor(4))) {
+            drawShaderPanel();
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -7373,14 +7386,49 @@ void EditorApp::drawAssetBrowser()
 // Layout is the shared asset-panel shape (preview, metadata, actions, toggles,
 // list); the subject of all of it is the BRUSH, because the brush is now what a
 // selection in this panel means.
-void EditorApp::drawCatalog()
+namespace {
+
+// Which tab a prefab role belongs in.
+//
+// Worldbuilding is what a level is MADE of -- the shell you walk through and
+// the ground you walk on. Props are what stands in it. The test is on the role
+// string the prefab library authors, so a new imported pack lands in the right
+// tab by declaring `role`, with no editor change.
+//
+// Unknown roles go to Props deliberately. A misfiled prop is a thing in a
+// slightly odd list; a misfiled wall is a piece of level geometry nobody can
+// find, and the whole shell of a level is a much shorter list to check.
+bool isWorldbuildingRole(std::string_view role)
 {
+    static constexpr std::string_view kRoles[] = {
+        "architecture", "wall", "floor", "floor_feature", "ceiling",
+        "stairs", "opening", "door", "terrain", "scenery",
+    };
+    for (const std::string_view candidate : kRoles)
+        if (role == candidate)
+            return true;
+    // Compound roles the packs author: "wall_ruin", "floor_tiles". Prefix
+    // rather than exact, so a variant does not have to be listed.
+    for (const std::string_view candidate : kRoles)
+        if (role.size() > candidate.size() && role.starts_with(candidate) &&
+            role[candidate.size()] == '_')
+            return true;
+    return false;
+}
+
+} // namespace
+
+void EditorApp::drawCatalog(CatalogScope scope)
+{
+    const int kBrowser = slotIndex(PreviewSlot::Browser);
     eng::Renderer& renderer = mEngine->renderer();
-    if (!mStage.thumbnailBuilt())
-        mStage.buildThumbnail(renderer, 256);
+    const bool worldbuilding = scope == CatalogScope::Worldbuilding;
+    char* filterBuffer = worldbuilding ? mCatalogFilter : mPropFilter;
+    if (!mStage.thumbnailBuilt(kBrowser))
+        mStage.buildThumbnail(renderer, 256, kBrowser);
     if (mParticleThumbnailNode.valid())
         renderer.setNodeVisible(mParticleThumbnailNode, false);
-    mStage.setThumbnailVisible(renderer, true);
+    mStage.setThumbnailVisible(renderer, true, kBrowser);
 
     const MeshCatalog& meshes = meshCatalog();
     const KitPiece* piece = mState.brush.kind == Brush::Kind::Piece
@@ -7406,13 +7454,13 @@ void EditorApp::drawCatalog()
     const bool hasSwatch = mState.brush.kind != Brush::Kind::Gameplay &&
                            mState.brush.kind != Brush::Kind::Particles &&
                            !(piece && piece->isGroup());
-    view.previewTexture = hasSwatch ? renderer.materialThumbnailTextureId() : 0;
+    view.previewTexture = hasSwatch ? renderer.materialThumbnailTextureId(kBrowser) : 0;
     view.previewTooltip =
         "The brush, in its own material. Drag to turn; hovering a row previews "
         "it, clicking arms it.";
     view.onPreviewDrag = [&](float dx) {
         mThumbAutoSpin = false;
-        mStage.spinThumbnail(renderer, mStage.thumbnailSpin() + dx * 0.01f);
+        mStage.spinThumbnail(renderer, mStage.thumbnailSpin(kBrowser) + dx * 0.01f, kBrowser);
     };
 
     view.metadata = [&] {
@@ -7550,9 +7598,10 @@ void EditorApp::drawCatalog()
             drawPrimitiveFields(mState.brush.primitive, grid);
     };
 
-    view.filter = mCatalogFilter;
+    view.filter = filterBuffer;
     view.filterCapacity = sizeof(mCatalogFilter);
-    view.filterHint = "Search placeables...";
+    view.filterHint = worldbuilding ? "Search worldbuilding..."
+                                    : "Search props...";
 
     std::size_t pieceCount = 0;
     for (const std::string& role : mState.catalog.roles())
@@ -7567,11 +7616,14 @@ void EditorApp::drawCatalog()
                   std::to_string(meshes.all().size()) + " meshes";
 
     view.list = [&] {
-        const std::string filter = mCatalogFilter;
+        const std::string filter = filterBuffer;
 
         // Gameplay entities are authored here too: they are part of the level's
         // vocabulary even though they have no mesh, and selecting one arms the
-        // Place tool exactly as selecting a wall does.
+        // Place tool exactly as selecting a wall does. They belong to
+        // Worldbuilding -- a spawn point and a light are structure, not
+        // dressing.
+        if (worldbuilding) {
         ImGui::SeparatorText("gameplay");
         for (const Gameplay kind : paintableGameplay()) {
             if (!ed::ui::filterMatches(gameplayName(kind), filter))
@@ -7592,10 +7644,13 @@ void EditorApp::drawCatalog()
                               ImVec2(-1.0f, 0.0f)))
                 addGameplayEntity(Gameplay::DirectionalLight);
         }
+        } // worldbuilding-only gameplay section
 
-        // Grouped by role, which is how kit.toml is authored and how an author
-        // thinks: "I need a wall", not "I need piece 17".
+        // Grouped by role, which is how the prefab libraries are authored and
+        // how an author thinks: "I need a wall", not "I need piece 17".
         for (const std::string& role : mState.catalog.roles()) {
+            if (isWorldbuildingRole(role) != worldbuilding)
+                continue;
             std::vector<const KitPiece*> shown;
             for (const KitPiece* candidate : mState.catalog.byRole(role)) {
                 if (ed::ui::filterMatches(candidate->id, filter) ||
@@ -7639,7 +7694,8 @@ void EditorApp::drawCatalog()
         }
 
         // Generated: they need no file and they are the fastest way to block
-        // out a room.
+        // out a room -- which is worldbuilding, so that is where they live.
+        if (worldbuilding) {
         ImGui::SeparatorText("generated");
         for (const PrimitivePreset& preset : primitivePresets()) {
             if (!ed::ui::filterMatches(preset.label, filter) &&
@@ -7659,11 +7715,18 @@ void EditorApp::drawCatalog()
                 ImGui::SetTooltip("%s\n%s", preset.label, preset.hint);
             }
         }
+        } // worldbuilding-only primitives
 
         // Every mesh file in the project. Last, because it is the longest list
-        // and the least specific: a kit piece brings a material and a socket, a
-        // raw mesh brings neither, so the kit is the better answer whenever it
-        // has one.
+        // and the least specific: a prefab brings a material and a placement, a
+        // raw mesh brings neither, so the prefab is the better answer whenever
+        // it has one.
+        //
+        // Raw mesh files appear under Props: a file with no prefab has declared
+        // no role, and an undeclared thing is dressing until someone says
+        // otherwise.
+        if (!worldbuilding)
+        {
         std::string group = "\x01"; // no group can equal this
         for (const MeshAsset& asset : meshes.all()) {
             if (mHideKitMeshes && !asset.kitPrefab.empty())
@@ -7689,11 +7752,367 @@ void EditorApp::drawCatalog()
                                       : asset.material.c_str(),
                                   asset.kitPrefab.empty()
                                       ? ""
-                                      : "\nalso a kit piece");
+                                      : "\nalso a prefab");
+            }
+        }
+        } // props-only raw mesh list
+    };
+
+    ed::ui::drawAssetPanel(view);
+}
+
+void EditorApp::rescanTextureLibrary()
+{
+    mTextureLibrary.clear();
+    mTextureLibraryLoaded = true;
+    mSelectedTexture = -1;
+
+    const std::filesystem::path root = eng::assets::resolve("textures");
+    if (root.empty() || !std::filesystem::is_directory(root))
+        return;
+
+    std::error_code ec;
+    for (std::filesystem::recursive_directory_iterator it(root, ec), end;
+         it != end; it.increment(ec)) {
+        if (ec)
+            break;
+        if (!it->is_regular_file(ec))
+            continue;
+        const std::filesystem::path& path = it->path();
+        // PNG only. The engine's texture row accepts more, but everything in
+        // this tree is PNG and listing formats nothing uses would be a promise
+        // the retexture path has never been tried against.
+        if (path.extension() != ".png")
+            continue;
+
+        TextureAsset asset;
+        asset.name = path.stem().string();
+        asset.logical =
+            std::filesystem::relative(path, root.parent_path(), ec)
+                .generic_string();
+        // The directory under textures/ is the domain, which is also how the
+        // asset importer files them -- so a pack's textures list together
+        // without the editor knowing anything about packs.
+        const std::filesystem::path relative =
+            std::filesystem::relative(path, root, ec);
+        asset.domain = relative.has_parent_path()
+                           ? relative.begin()->string()
+                           : std::string();
+        asset.sizeBytes = std::filesystem::file_size(path, ec);
+        if (ec)
+            asset.sizeBytes = 0;
+        mTextureLibrary.push_back(std::move(asset));
+    }
+
+    std::sort(mTextureLibrary.begin(), mTextureLibrary.end(),
+              [](const TextureAsset& a, const TextureAsset& b) {
+                  return a.domain != b.domain ? a.domain < b.domain
+                                              : a.name < b.name;
+              });
+}
+
+void EditorApp::previewTexture(const std::string& logicalPath)
+{
+    if (!mEngine || mRetextureBase.empty())
+        return;
+    eng::Renderer& renderer = mEngine->renderer();
+    // The preview binds the texture into a SCRATCH material, never into the
+    // base: rebinding is in-place and global, so previewing through the real
+    // material would silently repaint every mesh already wearing it.
+    static constexpr const char* kScratch = "Editor/RetexturePreview";
+    if (!renderer.materialAvailable(kScratch)) {
+        if (!renderer.createMaterialVariant(mRetextureBase, kScratch,
+                                            logicalPath))
+            return;
+    } else if (!renderer.setMaterialTexture(kScratch, logicalPath)) {
+        return;
+    }
+    mStage.setThumbnailMaterial(renderer, kScratch);
+}
+
+bool EditorApp::writeMaterialVariant(const std::string& name,
+                                     const std::string& base,
+                                     const std::string& texture)
+{
+    const std::filesystem::path materials = eng::assets::resolve("materials");
+    if (materials.empty())
+        return false;
+    const std::filesystem::path path = materials / "variants.mat";
+
+    // Appended, and the header written only when the file is new. This file is
+    // authored content that happens to be machine-written; rewriting it whole
+    // would mean holding every variant in memory and would lose any a person
+    // had hand-edited.
+    const bool fresh = !std::filesystem::exists(path);
+    std::ofstream out(path, std::ios::app);
+    if (!out)
+        return false;
+    if (fresh)
+        out << "# Material variants: a material, with a different texture.\n"
+               "#\n"
+               "# Written by the editor's Textures tab. This file is NOT\n"
+               "# regenerated by tools/import_asset_pack.py, which is the whole\n"
+               "# reason it is separate from the per-pack .mat files -- a\n"
+               "# retexture written into one of those is lost on the next\n"
+               "# import.\n"
+               "#\n"
+               "# Ordinary material syntax, read by the ordinary loader.\n";
+
+    const std::string shader = mEngine
+                                   ? mEngine->renderer().materialShaderName(base)
+                                   : std::string("lit");
+    out << "\n[material.\"" << name << "\"]\n";
+    out << "shader = \"" << (shader.empty() ? "lit" : shader) << "\"\n";
+    out << "texture = \"" << texture << "\"\n";
+    out << "filter = \"nearest\"\n";
+    out << "# variant of " << base << "\n";
+    return bool(out);
+}
+
+void EditorApp::reloadMaterials()
+{
+    if (!mEngine)
+        return;
+    mEngine->renderer().reloadMaterials();
+    mMaterialNames = mEngine->renderer().materialNames();
+    std::sort(mMaterialNames.begin(), mMaterialNames.end());
+    mMaterialCatalogLoaded = false;
+}
+
+// Textures: every image in the project, and what can be done with one.
+//
+// The tab exists because retexturing became a workflow. A PSX pixelizer can
+// turn one model into dozens of skins, and before this there was nowhere to see
+// them and no way to apply one that survived the next asset import. See
+// docs/design/2026-08-07-retexturing-and-material-variants.md for why applying
+// a texture creates a *material variant* rather than an override on the entity.
+//
+// The preview is the shared thumbnail rig, staging a scratch material bound to
+// the hovered texture -- so the swatch and the variant it would create are the
+// same object, and the preview cannot promise something the apply does not
+// deliver.
+void EditorApp::drawTexturePanel()
+{
+    const int kBrowser = slotIndex(PreviewSlot::Browser);
+    eng::Renderer& renderer = mEngine->renderer();
+    if (!mStage.thumbnailBuilt(kBrowser))
+        mStage.buildThumbnail(renderer, 256, kBrowser);
+    if (mParticleThumbnailNode.valid())
+        renderer.setNodeVisible(mParticleThumbnailNode, false);
+    mStage.setThumbnailVisible(renderer, true, kBrowser);
+
+    if (!mTextureLibraryLoaded)
+        rescanTextureLibrary();
+    if (mRetextureBase.empty())
+        mRetextureBase = "Editor/RetexturePreview";
+
+    const bool haveSelection = mSelectedTexture >= 0 &&
+                               mSelectedTexture < int(mTextureLibrary.size());
+    const TextureAsset* selected =
+        haveSelection ? &mTextureLibrary[std::size_t(mSelectedTexture)]
+                      : nullptr;
+
+    ed::ui::AssetPanelView view;
+    view.previewTexture = renderer.materialThumbnailTextureId(kBrowser);
+    view.previewTooltip =
+        "The selected texture on the staging subject, in the material it would "
+        "be applied through. Drag to turn.";
+    view.onPreviewDrag = [&](float dx) {
+        mThumbAutoSpin = false;
+        mStage.spinThumbnail(renderer, mStage.thumbnailSpin(kBrowser) + dx * 0.01f, kBrowser);
+    };
+
+    view.metadata = [&] {
+        if (!selected) {
+            ImGui::TextDisabled("(no texture selected)");
+            ImGui::TextDisabled("Pick one below to preview it.");
+            return;
+        }
+        ImGui::TextUnformatted(selected->name.c_str());
+        ImGui::TextDisabled("%s", selected->logical.c_str());
+        ImGui::TextDisabled("%s  |  %s", selected->domain.c_str(),
+                            ed::ui::humanBytes(selected->sizeBytes).c_str());
+    };
+
+    view.actions = [&] {
+        if (!selected) {
+            ImGui::TextDisabled("Select a texture to retexture with it.");
+            return;
+        }
+        // Which material the variant is cloned FROM. It carries everything but
+        // the image -- shader, filter, address, culling, uv scale -- and those
+        // are what make a texture read correctly on the thing it goes on. A
+        // variant of the material a prop already wears is therefore the right
+        // default and almost always the right answer.
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::BeginCombo("##retexbase", mRetextureBase.c_str())) {
+            for (const std::string& name : mMaterialNames) {
+                if (ImGui::Selectable(name.c_str(), name == mRetextureBase))
+                    mRetextureBase = name;
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SetItemTooltip(
+            "The material to copy. The variant keeps its shader, filtering and "
+            "UV settings and changes only the image.");
+
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##variantname", "Game/Retex/NewName",
+                                 mVariantName, sizeof(mVariantName));
+
+        const std::string variant = mVariantName;
+        const bool nameOk = variant.find('/') != std::string::npos &&
+                            !renderer.materialAvailable(variant);
+        ImGui::BeginDisabled(!nameOk || mRetextureBase.empty());
+        if (ImGui::Button("Create variant", ImVec2(-1.0f, 0.0f))) {
+            if (renderer.createMaterialVariant(mRetextureBase, variant,
+                                               selected->logical)) {
+                writeMaterialVariant(variant, mRetextureBase,
+                                     selected->logical);
+                mMaterialNames = renderer.materialNames();
+                std::sort(mMaterialNames.begin(), mMaterialNames.end());
+                mStatus = "created material variant " + variant;
+                mVariantName[0] = '\0';
+            } else {
+                mStatus = "could not create variant " + variant;
+            }
+        }
+        ImGui::EndDisabled();
+        if (!nameOk)
+            ImGui::SetItemTooltip(
+                variant.empty()
+                    ? "Name the variant first, as Owner/Domain/Name."
+                    : "That name is taken, or is not Owner/Domain/Name.");
+
+        // Applying to the selection is the second half of the workflow: make
+        // the variant, then put it on the thing you were looking at.
+        ImGui::BeginDisabled(mState.selection.empty());
+        if (ImGui::Button("Apply base material to selection",
+                          ImVec2(-1.0f, 0.0f)))
+            applyMaterialToSelection(mRetextureBase);
+        ImGui::EndDisabled();
+    };
+
+    view.toggles = [&] {
+        if (ImGui::Button("Rescan")) {
+            mTextureLibraryLoaded = false;
+            rescanTextureLibrary();
+        }
+        ImGui::SetItemTooltip(
+            "Re-read assets/textures. Use after dropping in new art.");
+    };
+
+    view.filter = mTextureFilter;
+    view.filterCapacity = sizeof(mTextureFilter);
+    view.filterHint = "Search textures...";
+
+    std::size_t shown = 0;
+    view.list = [&] {
+        const std::string filter = mTextureFilter;
+        std::string domain = "\x01"; // no domain can equal this
+        for (std::size_t i = 0; i < mTextureLibrary.size(); ++i) {
+            const TextureAsset& asset = mTextureLibrary[i];
+            if (!ed::ui::filterMatches(asset.name, filter) &&
+                !ed::ui::filterMatches(asset.domain, filter))
+                continue;
+            ++shown;
+            if (asset.domain != domain) {
+                domain = asset.domain;
+                ImGui::SeparatorText(domain.empty() ? "textures"
+                                                    : domain.c_str());
+            }
+            const std::string label = asset.name + "###" + asset.logical;
+            if (ImGui::Selectable(label.c_str(), int(i) == mSelectedTexture)) {
+                mSelectedTexture = int(i);
+                previewTexture(asset.logical);
+            }
+            // Hovering previews and selecting commits, the same split every
+            // list in this browser uses.
+            if (ImGui::IsItemHovered()) {
+                previewTexture(asset.logical);
+                ImGui::SetTooltip("%s", asset.logical.c_str());
             }
         }
     };
 
+    view.footer = std::to_string(mTextureLibrary.size()) + " textures";
+    ed::ui::drawAssetPanel(view);
+    if (shown != mTextureLibrary.size())
+        view.footer += "  |  " +
+                       std::to_string(mTextureLibrary.size() - shown) +
+                       " hidden by filter";
+}
+
+// Shaders: the families a material can name, and what is using each.
+//
+// Read-only. Editing GLSL belongs in a text editor and this tab does not
+// pretend otherwise; what it answers is the question the console answered badly
+// -- "which shader is this material actually drawn by, and did it compile" --
+// which used to mean scrolling start-up output for a line about supportable
+// techniques.
+void EditorApp::drawShaderPanel()
+{
+    eng::Renderer& renderer = mEngine->renderer();
+
+    // Grouped by the shader each material names, so the list is "who draws with
+    // this" rather than a directory listing -- a .frag on disk that no material
+    // references cannot affect anything on screen.
+    std::map<std::string, std::vector<std::string>> byShader;
+    for (const std::string& material : mMaterialNames)
+        byShader[renderer.materialShaderName(material)].push_back(material);
+
+    ed::ui::AssetPanelView view;
+    view.previewTexture = 0; // a shader has no swatch of its own
+    view.metadata = [&] {
+        ImGui::TextUnformatted("Shader families");
+        ImGui::TextDisabled("%zu families  |  %zu materials", byShader.size(),
+                            mMaterialNames.size());
+        ImGui::TextDisabled("Source: assets/shaders");
+    };
+    view.actions = [&] {
+        if (ImGui::Button("Reload materials", ImVec2(-1.0f, 0.0f))) {
+            reloadMaterials();
+            mStatus = "reloaded material scripts";
+        }
+        ImGui::SetItemTooltip(
+            "Re-read every .mat. Picks up an edited material without "
+            "restarting; does NOT recompile GLSL.");
+    };
+
+    view.filter = mShaderFilter;
+    view.filterCapacity = sizeof(mShaderFilter);
+    view.filterHint = "Search shaders...";
+
+    view.list = [&] {
+        const std::string filter = mShaderFilter;
+        for (const auto& [shader, materials] : byShader) {
+            std::vector<std::string> matching;
+            for (const std::string& material : materials)
+                if (ed::ui::filterMatches(material, filter) ||
+                    ed::ui::filterMatches(shader, filter))
+                    matching.push_back(material);
+            if (matching.empty())
+                continue;
+            const std::string label =
+                (shader.empty() ? "(unnamed)" : shader) + "  (" +
+                std::to_string(matching.size()) + ")";
+            if (ImGui::TreeNode(label.c_str())) {
+                for (const std::string& material : matching) {
+                    ImGui::Selectable(material.c_str(), false);
+                    if (ImGui::IsItemHovered()) {
+                        const std::string texture =
+                            renderer.materialTexture(material);
+                        ImGui::SetTooltip("%s\n%s", material.c_str(),
+                                          texture.empty() ? "(no texture)"
+                                                          : texture.c_str());
+                    }
+                }
+                ImGui::TreePop();
+            }
+        }
+    };
+
+    view.footer = std::to_string(byShader.size()) + " shader families";
     ed::ui::drawAssetPanel(view);
 }
 
@@ -7851,12 +8270,16 @@ void EditorApp::drawInspector()
     context.particleEffects = &mParticleEffectNames;
     context.audioAssets = &mAudioAssets;
     context.audioCues = &mAudioCues;
-    context.previewTexture = mEngine->renderer().materialThumbnailTextureId();
+    // The Inspector's own slot. It is on screen at the same time as the Asset
+    // Library, so sharing the browser's swatch meant hovering a row over there
+    // silently redressed the material shown for the selected entity here.
+    context.previewTexture = mEngine->renderer().materialThumbnailTextureId(
+        slotIndex(PreviewSlot::Inspector));
     context.requestMaterialPreview = [this](const std::string& name) {
-        requestMaterialPreview(name);
+        requestMaterialPreview(name, PreviewSlot::Inspector);
     };
     context.requestEffectPreview = [this](const std::string& name) {
-        requestEffectPreview(name);
+        requestEffectPreview(name, PreviewSlot::Inspector);
     };
     context.requestAudioPreview = [this](const AuthorId& id) {
         previewAudio(id);
@@ -8589,18 +9012,19 @@ void EditorApp::setMode(ViewportMode mode)
 
 void EditorApp::drawMaterialPanel()
 {
+    const int kBrowser = slotIndex(PreviewSlot::Browser);
     eng::Renderer& renderer = mEngine->renderer();
 
     // The swatch exists in both modes. Picking a material for a wall is the
     // common case, and it should not require leaving the level to see what the
     // material looks like.
-    if (!mStage.thumbnailBuilt())
-        mStage.buildThumbnail(renderer, 256);
+    if (!mStage.thumbnailBuilt(kBrowser))
+        mStage.buildThumbnail(renderer, 256, kBrowser);
     if (mMaterialNames.empty()) {
         mMaterialNames = renderer.materialNames();
         std::sort(mMaterialNames.begin(), mMaterialNames.end());
     }
-    mStage.setThumbnailVisible(renderer, true);
+    mStage.setThumbnailVisible(renderer, true, kBrowser);
     if (mParticleThumbnailNode.valid())
         renderer.setNodeVisible(mParticleThumbnailNode, false);
 
@@ -8628,7 +9052,7 @@ void EditorApp::drawMaterialPanel()
             }
             if (!worn.empty()) {
                 mSelectedMaterial = worn;
-                mStage.setThumbnailMaterial(renderer, worn);
+                mStage.setThumbnailMaterial(renderer, worn, kBrowser);
             }
         }
     }
@@ -8641,11 +9065,11 @@ void EditorApp::drawMaterialPanel()
     const MeshKind targetMesh = selectionMeshKind();
 
     ed::ui::AssetPanelView view;
-    view.previewTexture = renderer.materialThumbnailTextureId();
+    view.previewTexture = renderer.materialThumbnailTextureId(kBrowser);
     view.previewTooltip = "Drag to turn the sphere. Hovering a row previews it.";
     view.onPreviewDrag = [&](float dx) {
         mThumbAutoSpin = false;
-        mStage.spinThumbnail(renderer, mStage.thumbnailSpin() + dx * 0.01f);
+        mStage.spinThumbnail(renderer, mStage.thumbnailSpin(kBrowser) + dx * 0.01f, kBrowser);
     };
 
     view.metadata = [&] {
@@ -8773,7 +9197,7 @@ void EditorApp::drawMaterialPanel()
 
             if (picked) {
                 mSelectedMaterial = name;
-                mStage.setThumbnailMaterial(renderer, name);
+                mStage.setThumbnailMaterial(renderer, name, kBrowser);
                 if (materialMode())
                     mStage.setMaterial(renderer, name);
             }
@@ -8781,7 +9205,7 @@ void EditorApp::drawMaterialPanel()
             // scrubbing a long list to find the right material actually work.
             if (ImGui::IsItemHovered()) {
                 hoveredMaterial = true;
-                mStage.setThumbnailMaterial(renderer, name);
+                mStage.setThumbnailMaterial(renderer, name, kBrowser);
                 if (warn && !advice.reason.empty()) {
                     ImGui::SetTooltip("%s\n\n%s\n%s", name.c_str(),
                                       advice.fit == Fit::Broken
@@ -8815,7 +9239,7 @@ void EditorApp::drawMaterialPanel()
     // another row is clicked.
     if (!hoveredMaterial && !mSelectedMaterial.empty() &&
         mStage.thumbnailMaterial() != mSelectedMaterial)
-        mStage.setThumbnailMaterial(renderer, mSelectedMaterial);
+        mStage.setThumbnailMaterial(renderer, mSelectedMaterial, kBrowser);
 }
 
 // Everything the shipped .material scripts declare, classified. Loaded once:
@@ -8954,19 +9378,22 @@ const MeshCatalog& EditorApp::meshCatalog()
 }
 
 void EditorApp::requestMeshPreview(const std::string& meshPath,
-                                   const std::string& material)
+                                   const std::string& material,
+                                   PreviewSlot slot)
 {
+    const int index = slotIndex(slot);
+    PreviewState& state = previewState(slot);
     if (!mEngine)
         return;
     eng::Renderer& renderer = mEngine->renderer();
-    if (!mStage.thumbnailBuilt())
-        mStage.buildThumbnail(renderer, 256);
+    if (!mStage.thumbnailBuilt(index))
+        mStage.buildThumbnail(renderer, 256, index);
 
     const std::string subject = meshPath + "|" + material;
-    if (mPreviewSubject == PreviewSubject::Mesh && mMeshPreviewName == subject)
+    if (state.subject == PreviewSubject::Mesh && state.name == subject)
         return;
-    mPreviewSubject = PreviewSubject::Mesh;
-    mMeshPreviewName = subject;
+    state.subject = PreviewSubject::Mesh;
+    state.name = subject;
 
     // Cached across frames: hovering down a list re-enters this every frame,
     // and re-parsing an OBJ each time is the difference between a browsable
@@ -8989,22 +9416,25 @@ void EditorApp::requestMeshPreview(const std::string& meshPath,
                                              : material);
 }
 
-void EditorApp::requestPrimitivePreview(const eng::ecs::PrimitiveMesh& primitive)
+void EditorApp::requestPrimitivePreview(
+    const eng::ecs::PrimitiveMesh& primitive, PreviewSlot slot)
 {
+    const int index = slotIndex(slot);
+    PreviewState& state = previewState(slot);
     if (!mEngine)
         return;
     eng::Renderer& renderer = mEngine->renderer();
-    if (!mStage.thumbnailBuilt())
-        mStage.buildThumbnail(renderer, 256);
+    if (!mStage.thumbnailBuilt(index))
+        mStage.buildThumbnail(renderer, 256, index);
 
     // Keyed on the parameters, through the same string the ghost cache uses:
     // two boxes of different sizes are two subjects, and a two-metre pillar
     // previewed as the last capsule teaches nothing.
     const std::string subject = primitiveGhostKey(primitive);
-    if (mPreviewSubject == PreviewSubject::Mesh && mMeshPreviewName == subject)
+    if (state.subject == PreviewSubject::Mesh && state.name == subject)
         return;
-    mPreviewSubject = PreviewSubject::Mesh;
-    mMeshPreviewName = subject;
+    state.subject = PreviewSubject::Mesh;
+    state.name = subject;
     mStage.setThumbnailMesh(renderer,
                             mPrimitivePreviewMeshes.get(renderer, primitive),
                             "Game/Kit/Dungeon");
@@ -9118,6 +9548,7 @@ void EditorApp::drawMeshGeometryInfo(const std::string& meshPath)
 // the game uses.
 void EditorApp::drawParticlePanel()
 {
+    const int kBrowser = slotIndex(PreviewSlot::Browser);
     eng::Renderer& renderer = mEngine->renderer();
     std::vector<eng::ParticleEffectDesc>& descs = mParticles.descs();
 
@@ -9139,9 +9570,9 @@ void EditorApp::drawParticlePanel()
     // name. Hide the material subject, put a real particle system at its camera
     // focus, and mark that system thumbnail-only so it cannot leak into the
     // scene viewport.
-    if (!mStage.thumbnailBuilt())
-        mStage.buildThumbnail(renderer, 256);
-    mStage.setThumbnailVisible(renderer, false);
+    if (!mStage.thumbnailBuilt(kBrowser))
+        mStage.buildThumbnail(renderer, 256, kBrowser);
+    mStage.setThumbnailVisible(renderer, false, kBrowser);
     if (!mParticleThumbnailNode.valid()) {
         mParticleThumbnailNode =
             renderer.createNode(eng::kRootNode, glm::vec3(0.0f, -1000.0f, 0.0f),
@@ -9180,7 +9611,7 @@ void EditorApp::drawParticlePanel()
     };
 
     ed::ui::AssetPanelView view;
-    view.previewTexture = renderer.materialThumbnailTextureId();
+    view.previewTexture = renderer.materialThumbnailTextureId(kBrowser);
     view.previewTooltip = "Live isolated preview. One-shot effects replay "
                           "automatically while this tab is visible.";
 

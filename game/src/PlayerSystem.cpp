@@ -2,6 +2,7 @@
 
 #include "GameContext.h"
 
+#include <eng/Log.h>
 #include <eng/LightDesc.h>
 #include <eng/Physics.h>
 #include <eng/Input.h>
@@ -199,7 +200,48 @@ bool PlayerSystem::loadWeapons(const std::string& definitionsPath)
 
 bool PlayerSystem::loadHands(const std::string& definitionsPath)
 {
-    return loadHandsDefinition(definitionsPath, mHandsDefinition);
+    if (!loadHandsLibrary(definitionsPath, mHandsLibrary))
+        return false;
+    mHandsDefinition = mHandsLibrary.active();
+    return true;
+}
+
+bool PlayerSystem::equipRigFor(GameContext& ctx, const PlayerWeaponDef& weapon)
+{
+    // A weapon that names a rig brings it. These are the animated packs, where
+    // the gun is part of the hands mesh -- so switching to one is not attaching
+    // a model, it is rebuilding the whole viewmodel on a different skeleton.
+    //
+    // Nothing happens when the weapon names no rig, or names the one already
+    // worn: rebuilding a skinned rig reloads a skeleton, which is the one thing
+    // in this system that costs real time, and a weapon switch happens every
+    // few seconds.
+    const std::string& wanted = weapon.viewmodel.handsRig;
+    if (wanted.empty() || wanted == mHandsDefinition.id)
+        return false;
+    const HandsDefinition* rig = mHandsLibrary.find(wanted);
+    if (!rig) {
+        eng::log::warn("PlayerSystem: weapon '%s' wants hands rig '%s', which "
+                       "is not in viewmodel_hands.toml",
+                       weapon.id.c_str(), wanted.c_str());
+        return false;
+    }
+    mHandsDefinition = *rig;
+    mHands.init(ctx.renderer, mPlayer.headNode(), mHandsDefinition);
+    return true;
+}
+
+bool PlayerSystem::setHandsRig(const std::string& id)
+{
+    const HandsDefinition* rig = mHandsLibrary.find(id);
+    if (!rig)
+        return false;
+    mHandsDefinition = *rig;
+    mHandsLibrary.defaultRig = id;
+    // The caller re-attaches: building a skinned rig needs the renderer and
+    // the head node, and handing those to a setter would make every future
+    // caller of this function need a GameContext to change a preference.
+    return true;
 }
 
 void PlayerSystem::attachLoadout(GameContext& ctx)
@@ -211,6 +253,14 @@ void PlayerSystem::attachLoadout(GameContext& ctx)
     carry.range = 6.0f;
     r.attachLight(mPlayer.headNode(), carry);
     mWeapons.resetRuntime();
+    // The rig the weapon in hand wants, before the rig is built -- otherwise
+    // attachLoadout builds the default hands and equipRigFor immediately
+    // rebuilds them, which is a skeleton load nobody sees.
+    if (const PlayerWeaponDef* selected = mWeapons.selected()) {
+        if (const HandsDefinition* rig =
+                mHandsLibrary.find(selected->viewmodel.handsRig))
+            mHandsDefinition = *rig;
+    }
     if (mHands.init(r, mPlayer.headNode(), mHandsDefinition) &&
         mWeapons.selected())
         mHands.setWeapon(r, mWeapons.selected()->viewmodel, false);
@@ -265,6 +315,7 @@ void PlayerSystem::sampleWeaponInput(GameContext& ctx, bool enabled)
     command.firePressed = enabled && !recapturedThisFrame &&
                           ctx.input.wasMouseClicked();
     command.swapPressed = enabled && ctx.input.wasPressed("swap_weapon");
+    command.reloadPressed = enabled && ctx.input.wasPressed("reload");
     if (enabled && ctx.input.wasPressed("weapon_1")) command.selectSlot = 0;
     if (enabled && ctx.input.wasPressed("weapon_2")) command.selectSlot = 1;
     if (enabled && ctx.input.wasPressed("weapon_3")) command.selectSlot = 2;
@@ -277,8 +328,10 @@ std::optional<std::size_t> PlayerSystem::fixedStepWeapons(
     const std::optional<std::size_t> fired =
         mWeapons.fixedUpdate(fixedDt, arc, canFire);
     if (mWeapons.consumeSelectionChanged()) {
-        if (mWeapons.selected())
-            mHands.setWeapon(ctx.renderer, mWeapons.selected()->viewmodel, true);
+        if (const PlayerWeaponDef* selected = mWeapons.selected()) {
+            equipRigFor(ctx, *selected);
+            mHands.setWeapon(ctx.renderer, selected->viewmodel, true);
+        }
     }
     if (fired)
         mHands.triggerFire(ctx.renderer);

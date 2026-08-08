@@ -201,21 +201,30 @@ bool valid(const PlayerWeaponDef& def)
         def.viewmodel.movementBob < 0.0f ||
         def.viewmodel.movementBobSpeed < 0.0f ||
         def.viewmodel.idleSway < 0.0f || def.viewmodel.lookSway < 0.0f ||
-        // A weapon must present *something*: sprite layers, a model, or the
-        // placeholder primitives. None of those is an empty hand, which is what
-        // shipped before this and what the requirement is here to stop
-        // recurring. A sprite weapon satisfies it with its own layers -- the
-        // hands' shared layers are not enough, or a weapon could be invisible
-        // and still load.
+        // A weapon must present *something*: sprite layers, a model, the
+        // placeholder primitives, or a rig that already contains the weapon.
+        // None of those is an empty hand, which is what shipped before this and
+        // what the requirement is here to stop recurring. A sprite weapon
+        // satisfies it with its own layers -- the hands' shared layers are not
+        // enough, or a weapon could be invisible and still load.
+        //
+        // `hands_rig` is the fourth answer and the newest: the imported FPS
+        // animation packs put the gun IN the hands mesh, so such a weapon has
+        // no model of its own by design and requiring one would reject exactly
+        // the weapons that are most completely presented.
         (def.viewmodel.presentation == ViewmodelPresentation::Sprite
              ? def.viewmodel.spriteLayers.empty()
-             : (def.viewmodel.parts.empty() && def.viewmodel.model.empty())) ||
+             : (def.viewmodel.parts.empty() && def.viewmodel.model.empty() &&
+                def.viewmodel.handsRig.empty())) ||
         !std::all_of(def.viewmodel.spriteLayers.begin(),
                      def.viewmodel.spriteLayers.end(),
                      validViewmodelSpriteLayer) ||
         (!def.viewmodel.model.empty() && def.viewmodel.modelMaterial.empty()) ||
         !finiteVec(def.viewmodel.spriteMuzzle) ||
-        def.viewmodel.socket.empty() ||
+        // A socket is where a weapon hangs on the hands. A weapon whose rig
+        // already holds it hangs nowhere, so the requirement applies only to
+        // the weapons it means something for.
+        (def.viewmodel.handsRig.empty() && def.viewmodel.socket.empty()) ||
         !finiteVec(def.viewmodel.attachOffset) ||
         !finiteVec(def.viewmodel.attachRotationDegrees) ||
         !std::isfinite(def.viewmodel.attachScale) ||
@@ -223,7 +232,11 @@ bool valid(const PlayerWeaponDef& def)
         def.viewmodel.handsIdleAnimation.empty() ||
         def.viewmodel.handsDrawAnimation.empty() ||
         def.viewmodel.handsFireAnimation.empty() ||
-        def.viewmodel.handsMuzzleJoint.empty())
+        // Likewise the muzzle joint: a bundled rig names its muzzle through a
+        // socket on its own skeleton (`muzzle_socket`), not a joint on the
+        // shared hands.
+        (def.viewmodel.handsRig.empty() &&
+         def.viewmodel.handsMuzzleJoint.empty()))
         return false;
 
     // Only the selected delivery's block is checked. A weapon that once fired
@@ -273,8 +286,10 @@ bool parseDefinitions(const toml::table& root,
                       std::vector<PlayerWeaponDef>& definitions)
 {
     const toml::table* authored = root["player_weapon"].as_table();
-    if (!authored)
+    if (!authored) {
+        eng::log::error("PlayerWeaponLibrary: no [player_weapon] table");
         return false;
+    }
 
     std::map<int, PlayerWeaponDef> slots;
     for (auto&& [key, node] : *authored) {
@@ -292,14 +307,21 @@ bool parseDefinitions(const toml::table& root,
             (*table)["trigger"].value_or(std::string{"press"});
         if (trigger == "automatic") def.trigger = WeaponTrigger::Automatic;
         else if (trigger == "press") def.trigger = WeaponTrigger::Press;
-        else return false;
+        else {
+            eng::log::error("PlayerWeaponLibrary: weapon '%s' has unknown "
+                            "trigger '%s'", def.id.c_str(), trigger.c_str());
+            return false;
+        }
         // Absent means projectile: every weapon that predates fire modes is a
         // projectile weapon, and a default that silently changed their delivery
         // would be a content migration disguised as a parser default.
         const std::optional<WeaponFireMode> fireMode = weaponFireModeFromName(
             (*table)["fire_mode"].value_or(std::string{"projectile"}));
-        if (!fireMode)
+        if (!fireMode) {
+            eng::log::error("PlayerWeaponLibrary: weapon '%s' has unknown "
+                            "fire_mode", def.id.c_str());
             return false;
+        }
         def.fireMode = *fireMode;
         def.fireInterval = number(*table, "fire_interval", def.fireInterval);
         def.arcCost = number(*table, "arc_cost", def.arcCost);
@@ -317,15 +339,56 @@ bool parseDefinitions(const toml::table& root,
         const toml::table* melee = (*table)["melee"].as_table();
         const toml::table* hitscan = (*table)["hitscan"].as_table();
         const toml::table* viewmodel = (*table)["viewmodel"].as_table();
-        if (!viewmodel || slot < 0 || slots.count(slot))
+        if (!viewmodel || slot < 0 || slots.count(slot)) {
+            eng::log::error("PlayerWeaponLibrary: weapon '%s' %s",
+                            def.id.c_str(),
+                            !viewmodel ? "has no [.viewmodel] block"
+                            : slot < 0 ? "has no slot"
+                                       : "reuses another weapon's slot");
             return false;
+        }
         // The selected delivery must have brought its numbers. The other two
         // blocks are optional and read when present, so flipping `fire_mode`
         // back to a delivery a weapon used before is a one-line edit.
         if ((def.fireMode == WeaponFireMode::Projectile && !projectile) ||
             (def.fireMode == WeaponFireMode::Melee && !melee) ||
             (def.fireMode == WeaponFireMode::Hitscan && !hitscan))
+        {
+            eng::log::error("PlayerWeaponLibrary: weapon '%s' selects a "
+                            "delivery whose block is missing", def.id.c_str());
             return false;
+        }
+
+        // Ammunition is optional for every delivery. A weapon with no [.ammo]
+        // block has no magazine and is gated only on ARC, exactly as before
+        // this existed -- which is what keeps the shipped fantasy loadout
+        // working while the guns get magazines.
+        if (const toml::table* ammo = (*table)["ammo"].as_table()) {
+            def.ammo.magazine =
+                int((*ammo)["magazine"].value_or(int64_t{def.ammo.magazine}));
+            def.ammo.reserve =
+                int((*ammo)["reserve"].value_or(int64_t{def.ammo.reserve}));
+            def.ammo.reserveMax = int(
+                (*ammo)["reserve_max"].value_or(int64_t{def.ammo.reserveMax}));
+            def.ammo.costPerShot = int((*ammo)["cost_per_shot"].value_or(
+                int64_t{def.ammo.costPerShot}));
+            def.ammo.reloadSeconds =
+                number(*ammo, "reload_seconds", def.ammo.reloadSeconds);
+            def.ammo.reloadEmptySeconds = number(
+                *ammo, "reload_empty_seconds", def.ammo.reloadEmptySeconds);
+            def.ammo.shellByShell =
+                (*ammo)["shell_by_shell"].value_or(def.ammo.shellByShell);
+            def.ammo.autoReload =
+                (*ammo)["auto_reload"].value_or(def.ammo.autoReload);
+            def.ammo.ammoType =
+                (*ammo)["ammo_type"].value_or(def.ammo.ammoType);
+            def.ammo.reloadSound =
+                (*ammo)["reload_sound"].value_or(def.ammo.reloadSound);
+            def.ammo.emptySound =
+                (*ammo)["empty_sound"].value_or(def.ammo.emptySound);
+            def.ammo.reloadAnimation =
+                (*ammo)["reload_animation"].value_or(def.ammo.reloadAnimation);
+        }
 
         if (melee) {
             def.melee.reach = number(*melee, "reach", def.melee.reach);
@@ -384,6 +447,8 @@ bool parseDefinitions(const toml::table& root,
                                                   def.projectile.gravityFactor);
             def.projectile.aimRange =
                 number(*projectile, "aim_range", def.projectile.aimRange);
+            def.projectile.drag =
+                number(*projectile, "drag", def.projectile.drag);
         }
 
         // Absent means model, so every weapon authored before sprite
@@ -465,6 +530,13 @@ bool parseDefinitions(const toml::table& root,
                     def.viewmodel.attachRotationDegrees);
         def.viewmodel.attachScale =
             number(*viewmodel, "attach_scale", def.viewmodel.attachScale);
+        def.viewmodel.handsRig =
+            (*viewmodel)["hands_rig"].value_or(def.viewmodel.handsRig);
+        def.viewmodel.handsReloadAnimation =
+            (*viewmodel)["hands_reload_animation"].value_or(
+                def.viewmodel.handsReloadAnimation);
+        def.viewmodel.barrelOffset =
+            vector3(*viewmodel, "barrel_offset", def.viewmodel.barrelOffset);
         def.viewmodel.muzzleSocket =
             (*viewmodel)["muzzle_socket"].value_or(std::string{});
 
@@ -472,8 +544,17 @@ bool parseDefinitions(const toml::table& root,
         // valid() enforces that, because the alternative is an empty hand with
         // nothing in the console saying why.
         const toml::array* parts = (*viewmodel)["part"].as_array();
-        if (!parts && def.viewmodel.model.empty())
+        // A weapon presents itself with placeholder primitives, a model, or a
+        // rig that already contains it. The third is the animated FPS packs,
+        // where the gun IS the hands mesh -- so requiring geometry here would
+        // reject exactly the weapons that need none.
+        if (!parts && def.viewmodel.model.empty() &&
+            def.viewmodel.handsRig.empty()) {
+            eng::log::error("PlayerWeaponLibrary: weapon '%s' presents nothing "
+                            "-- it needs a model, a [[...part]], or a "
+                            "hands_rig", def.id.c_str());
             return false;
+        }
         static const toml::array kNoParts;
         for (const toml::node& partNode : parts ? *parts : kNoParts) {
             const toml::table* partTable = partNode.as_table();
@@ -495,19 +576,36 @@ bool parseDefinitions(const toml::table& root,
             def.viewmodel.parts.push_back(std::move(parsed));
         }
 
-        if (!valid(def))
+        if (!valid(def)) {
+            // Name the weapon. "invalid player weapons in <file>" was the whole
+            // diagnostic, and finding which of five definitions a validator with
+            // forty clauses objected to meant bisecting the file by hand.
+            eng::log::error("PlayerWeaponLibrary: weapon '%s' (slot %d) failed "
+                            "validation", def.id.c_str(), slot);
             return false;
+        }
         slots.emplace(slot, std::move(def));
     }
 
-    if (slots.empty())
+    if (slots.empty()) {
+        eng::log::error("PlayerWeaponLibrary: [player_weapon] defines nothing");
         return false;
+    }
     std::vector<PlayerWeaponDef> parsed;
     parsed.reserve(slots.size());
     int expectedSlot = 0;
     for (auto& [slot, def] : slots) {
-        if (slot != expectedSlot++)
+        if (slot != expectedSlot) {
+            // Slots are the number keys, so they must run 0..n-1: a gap means a
+            // key that selects nothing, which reads in game as a weapon that
+            // will not equip.
+            eng::log::error("PlayerWeaponLibrary: weapon '%s' is at slot %d, "
+                            "but slot %d has no weapon -- slots must run from "
+                            "0 with no gaps", def.id.c_str(), slot,
+                            expectedSlot);
             return false;
+        }
+        ++expectedSlot;
         parsed.push_back(std::move(def));
     }
     definitions = std::move(parsed);
@@ -594,7 +692,17 @@ PlayerWeaponLibrary::PlayerWeaponLibrary() : mDefs(defaults()) {}
 bool PlayerWeaponLibrary::load(const std::string& tomlPath)
 {
     toml::parse_result parsed = toml::parse_file(tomlPath);
-    if (!parsed || !parseDefinitions(parsed.table(), mDefs)) {
+    if (!parsed) {
+        // The parse error, not just "invalid": a misplaced bracket and a
+        // rejected definition are different problems and used to look
+        // identical from the log.
+        eng::log::error("PlayerWeaponLibrary: '%s' is not valid TOML: %s "
+                        "(line %u)", tomlPath.c_str(),
+                        std::string(parsed.error().description()).c_str(),
+                        parsed.error().source().begin.line);
+        return false;
+    }
+    if (!parseDefinitions(parsed.table(), mDefs)) {
         eng::log::error("PlayerWeaponLibrary: invalid player weapons in '%s'",
                         tomlPath.c_str());
         return false;
@@ -629,12 +737,14 @@ void WeaponController::sample(const WeaponCommand& command)
         mFireHeld = false;
         mFirePressed = false;
         mSwapPressed = false;
+        mReloadPressed = false;
         mSelectSlot = -1;
         return;
     }
     mFireHeld = command.fireHeld;
     mFirePressed = mFirePressed || command.firePressed;
     mSwapPressed = mSwapPressed || command.swapPressed;
+    mReloadPressed = mReloadPressed || command.reloadPressed;
     if (command.selectSlot >= 0)
         mSelectSlot = command.selectSlot;
 }
@@ -648,6 +758,8 @@ std::optional<std::size_t> WeaponController::fixedUpdate(float dt, Mana& arc,
     for (float& cooldown : mCooldowns)
         cooldown = std::max(0.0f, cooldown - dt);
     arc.current = std::min(arc.max, arc.current + arc.regenRate * dt);
+    syncAmmoRuntime();
+    updateReload(dt);
 
     std::size_t next = mSelected;
     if (mSelectSlot >= 0 && mSelectSlot < int(mDefinitions->size()))
@@ -657,11 +769,26 @@ std::optional<std::size_t> WeaponController::fixedUpdate(float dt, Mana& arc,
     mSelectSlot = -1;
     mSwapPressed = false;
     if (next != mSelected) {
+        // Switching away cancels a reload rather than letting it finish in the
+        // holster. That is the rule every shooter uses, and it is what makes
+        // "swap instead of reloading" a real decision rather than a free one.
+        if (mSelected < mAmmo.size()) {
+            mAmmo[mSelected].reloading = false;
+            mAmmo[mSelected].reloadRemaining = 0.0f;
+        }
         mSelected = next;
         mSwitchRemaining = (*mDefinitions)[mSelected].switchTime;
         mSelectionChanged = true;
         mFirePressed = false;
+        mReloadPressed = false;
         return std::nullopt;
+    }
+
+    // A requested reload outranks firing: a player who pressed R while holding
+    // the trigger meant the R.
+    if (mReloadPressed) {
+        mReloadPressed = false;
+        beginReload(mSelected);
     }
 
     if (mSwitchRemaining > 0.0f) {
@@ -688,10 +815,192 @@ std::optional<std::size_t> WeaponController::fixedUpdate(float dt, Mana& arc,
         return std::nullopt;
     }
 
+    // Ammunition last, because it is the check that can start a reload: an
+    // empty magazine should not also have spent ARC or reset the cooldown.
+    if (!consumeAmmo(mSelected)) {
+        if (def.trigger == WeaponTrigger::Press)
+            mFirePressed = false;
+        return std::nullopt;
+    }
+
+    // Firing interrupts a shell-by-shell reload. A pump shotgun with two shells
+    // in it should be able to answer the door.
+    if (mSelected < mAmmo.size() && mAmmo[mSelected].reloading &&
+        def.ammo.shellByShell) {
+        mAmmo[mSelected].reloading = false;
+        mAmmo[mSelected].reloadRemaining = 0.0f;
+    }
+
     arc.current = std::max(0.0f, arc.current - def.arcCost);
     mCooldowns[mSelected] = def.fireInterval;
     mFirePressed = false;
     return mSelected;
+}
+
+// --- ammunition -------------------------------------------------------------
+
+void WeaponController::syncAmmoRuntime()
+{
+    if (!mDefinitions)
+        return;
+    if (mAmmo.size() == mDefinitions->size())
+        return;
+    // Sized lazily rather than in bind(), so a library reloaded at runtime --
+    // which the debug panel does -- picks up new weapons without the caller
+    // having to remember to re-arm anything.
+    mAmmo.assign(mDefinitions->size(), AmmoRuntime{});
+    for (std::size_t i = 0; i < mDefinitions->size(); ++i) {
+        const WeaponAmmoDef& ammo = (*mDefinitions)[i].ammo;
+        mAmmo[i].magazine = ammo.magazine;
+        mAmmo[i].reserve = ammo.reserve;
+    }
+}
+
+void WeaponController::updateReload(float dt)
+{
+    if (mSelected >= mAmmo.size())
+        return;
+    AmmoRuntime& runtime = mAmmo[mSelected];
+    if (!runtime.reloading)
+        return;
+
+    runtime.reloadRemaining = std::max(0.0f, runtime.reloadRemaining - dt);
+    if (runtime.reloadRemaining > 0.0f)
+        return;
+
+    const WeaponAmmoDef& ammo = (*mDefinitions)[mSelected].ammo;
+    const int wanted = ammo.shellByShell
+                           ? 1
+                           : ammo.magazine - runtime.magazine;
+    const int available = runtime.reserve < 0
+                              ? wanted
+                              : std::min(wanted, runtime.reserve);
+    runtime.magazine += available;
+    if (runtime.reserve >= 0)
+        runtime.reserve -= available;
+    runtime.reloading = false;
+    runtime.reloadRemaining = 0.0f;
+    runtime.reloadTotal = 0.0f;
+    mReloadFinished = true;
+
+    // A shell-by-shell reload keeps going until the magazine is full or the
+    // reserve is gone; beginReload answers both.
+    if (ammo.shellByShell)
+        beginReload(mSelected);
+}
+
+bool WeaponController::beginReload(std::size_t index)
+{
+    syncAmmoRuntime();
+    if (!mDefinitions || index >= mDefinitions->size() || index >= mAmmo.size())
+        return false;
+    const PlayerWeaponDef& def = (*mDefinitions)[index];
+    if (!def.usesMagazine())
+        return false;
+
+    AmmoRuntime& runtime = mAmmo[index];
+    if (runtime.reloading)
+        return false;
+    if (runtime.magazine >= def.ammo.magazine)
+        return false;
+    if (runtime.reserve == 0)
+        return false;
+
+    // Empty is slower than topping up: the chambered round is the difference,
+    // and it is the one piece of gun handling every player already expects.
+    runtime.reloadTotal = runtime.magazine <= 0
+                              ? def.ammo.reloadEmptySeconds
+                              : def.ammo.reloadSeconds;
+    runtime.reloadRemaining = runtime.reloadTotal;
+    runtime.reloading = true;
+    return true;
+}
+
+bool WeaponController::consumeAmmo(std::size_t index)
+{
+    syncAmmoRuntime();
+    if (index >= mAmmo.size())
+        return true;
+    const PlayerWeaponDef& def = (*mDefinitions)[index];
+    if (!def.usesMagazine())
+        return true; // no magazine: this weapon is not gated on ammunition
+
+    AmmoRuntime& runtime = mAmmo[index];
+    // Mid-reload the weapon is not ready. Shell-by-shell is the exception --
+    // it is interruptible, and the caller above cancels it.
+    if (runtime.reloading && !def.ammo.shellByShell)
+        return false;
+
+    const int cost = std::max(1, def.ammo.costPerShot);
+    if (runtime.magazine < cost) {
+        mDryFire = true;
+        if (def.ammo.autoReload)
+            beginReload(index);
+        return false;
+    }
+    runtime.magazine -= cost;
+    if (runtime.magazine <= 0 && def.ammo.autoReload)
+        beginReload(index);
+    return true;
+}
+
+WeaponAmmoState WeaponController::ammoState(std::size_t index) const
+{
+    WeaponAmmoState state;
+    if (!mDefinitions || index >= mDefinitions->size())
+        return state;
+    state.magazineMax = (*mDefinitions)[index].ammo.magazine;
+    if (index >= mAmmo.size()) {
+        // Before the first fixedUpdate the runtime does not exist yet; report
+        // the definition rather than zeroes, so a HUD drawn on the first frame
+        // shows a full magazine instead of an empty one.
+        state.magazine = state.magazineMax;
+        state.reserve = (*mDefinitions)[index].ammo.reserve;
+        return state;
+    }
+    const AmmoRuntime& runtime = mAmmo[index];
+    state.magazine = runtime.magazine;
+    state.reserve = runtime.reserve;
+    state.reloading = runtime.reloading;
+    state.reloadRemaining = runtime.reloadRemaining;
+    state.reloadTotal = runtime.reloadTotal;
+    return state;
+}
+
+int WeaponController::addReserve(const std::string& ammoType, int rounds)
+{
+    syncAmmoRuntime();
+    if (!mDefinitions || rounds <= 0)
+        return 0;
+    int taken = 0;
+    for (std::size_t i = 0; i < mDefinitions->size() && i < mAmmo.size(); ++i) {
+        const WeaponAmmoDef& ammo = (*mDefinitions)[i].ammo;
+        if (ammo.magazine <= 0 || ammo.ammoType != ammoType)
+            continue;
+        if (mAmmo[i].reserve < 0)
+            continue; // infinite reserve: a pickup adds nothing to it
+        const int room = std::max(0, ammo.reserveMax - mAmmo[i].reserve);
+        const int added = std::min(room, rounds);
+        mAmmo[i].reserve += added;
+        // Weapons sharing an ammo type share a pool, so the pickup is counted
+        // once however many weapons drew from it.
+        taken = std::max(taken, added);
+    }
+    return taken;
+}
+
+bool WeaponController::consumeReloadFinished()
+{
+    const bool finished = mReloadFinished;
+    mReloadFinished = false;
+    return finished;
+}
+
+bool WeaponController::consumeDryFire()
+{
+    const bool dry = mDryFire;
+    mDryFire = false;
+    return dry;
 }
 
 const PlayerWeaponDef* WeaponController::selected() const
@@ -711,12 +1020,20 @@ bool WeaponController::consumeSelectionChanged()
 void WeaponController::resetRuntime()
 {
     mCooldowns.assign(mDefinitions ? mDefinitions->size() : 0, 0.0f);
+    // Cleared rather than refilled, so syncAmmoRuntime rebuilds it from the
+    // definitions -- a level restart hands the player full magazines, which is
+    // what resetRuntime means everywhere else in this class.
+    mAmmo.clear();
+    syncAmmoRuntime();
     mSwitchRemaining = 0.0f;
     mFireHeld = false;
     mFirePressed = false;
     mSwapPressed = false;
+    mReloadPressed = false;
     mSelectSlot = -1;
     mSelectionChanged = true;
+    mReloadFinished = false;
+    mDryFire = false;
 }
 
 std::vector<glm::vec3> projectileDirections(glm::vec3 direction, int count,

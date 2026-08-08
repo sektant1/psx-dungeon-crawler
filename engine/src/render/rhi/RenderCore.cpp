@@ -137,10 +137,19 @@ struct RenderCore::Impl {
     glm::vec3 editorBackground{0.10f, 0.11f, 0.13f};
 
     View editorView{SceneTarget::Editor};
-    View thumbnailView{SceneTarget::Thumbnail};
     uint32_t editorWidth = 0;
     uint32_t editorHeight = 0;
-    uint32_t thumbnailSize = 0;
+
+    // One preview site's swatch: its own target, its own camera, its own imgui
+    // token. See RenderCore::kThumbnailSlots for why there are several.
+    struct ThumbnailSlot {
+        View view{SceneTarget::Thumbnail};
+        rhi::TextureHandle colour;
+        rhi::TextureHandle depth;
+        uint32_t size = 0;
+        uint64_t token = 0;
+    };
+    std::array<ThumbnailSlot, RenderCore::kThumbnailSlots> thumbnails;
 
     rhi::TextureHandle sceneColour;
     rhi::TextureHandle sceneNormalDepth; // MRT surface 1 for the stylize pass
@@ -160,12 +169,9 @@ struct RenderCore::Impl {
     rhi::TextureHandle finalColour;
     rhi::TextureHandle editorColour;
     rhi::TextureHandle editorDepth;
-    rhi::TextureHandle thumbnailColour;
-    rhi::TextureHandle thumbnailDepth;
     rhi::SamplerHandle sceneSampler;
 
     uint64_t editorToken = 0;
-    uint64_t thumbnailToken = 0;
     uint64_t nextToken = 1;
     std::unordered_map<uint64_t, TextureEntry> textures;
     std::unordered_map<std::string, uint64_t> textureCache;
@@ -356,43 +362,67 @@ struct RenderCore::Impl {
         return editorColour.valid() && editorDepth.valid();
     }
 
+    void destroyThumbnailTargets(int slot)
+    {
+        if (!device || slot < 0 || slot >= RenderCore::kThumbnailSlots)
+            return;
+        ThumbnailSlot& target = thumbnails[std::size_t(slot)];
+        if (target.token)
+            replaceToken(target.token, {}, 0, 0);
+        if (target.depth.valid())
+            device->destroyTexture(target.depth);
+        if (target.colour.valid())
+            device->destroyTexture(target.colour);
+        target.depth = {};
+        target.colour = {};
+    }
+
     void destroyThumbnailTargets()
     {
-        if (!device)
-            return;
-        if (thumbnailToken)
-            replaceToken(thumbnailToken, {}, 0, 0);
-        if (thumbnailDepth.valid())
-            device->destroyTexture(thumbnailDepth);
-        if (thumbnailColour.valid())
-            device->destroyTexture(thumbnailColour);
-        thumbnailDepth = {};
-        thumbnailColour = {};
+        for (int slot = 0; slot < RenderCore::kThumbnailSlots; ++slot)
+            destroyThumbnailTargets(slot);
+    }
+
+    bool rebuildThumbnailTargets(int slot)
+    {
+        if (!device || slot < 0 || slot >= RenderCore::kThumbnailSlots)
+            return false;
+        ThumbnailSlot& target = thumbnails[std::size_t(slot)];
+        if (target.size == 0)
+            return false;
+        device->waitIdle();
+        destroyThumbnailTargets(slot);
+        // Named per slot, so a RenderDoc capture says which panel's swatch a
+        // target belongs to rather than showing four identical "thumbnail"s.
+        const std::string colourName =
+            "renderer.thumbnail" + std::to_string(slot) + "-colour";
+        const std::string depthName =
+            "renderer.thumbnail" + std::to_string(slot) + "-depth";
+        target.colour = makeTarget(
+            target.size, target.size, rhi::Format::RGBA8Unorm,
+            rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+            colourName.c_str());
+        target.depth = makeTarget(
+            target.size, target.size, rhi::Format::Depth32Float,
+            rhi::TextureUsage::DepthStencil, depthName.c_str());
+        if (!target.token) {
+            TextureBinding binding{target.colour, sceneSampler, 0, target.size,
+                                   target.size};
+            target.token = addTexture(binding, false, false);
+        }
+        else {
+            replaceToken(target.token, target.colour, target.size, target.size);
+        }
+        return target.colour.valid() && target.depth.valid();
     }
 
     bool rebuildThumbnailTargets()
     {
-        if (!device || thumbnailSize == 0)
-            return false;
-        device->waitIdle();
-        destroyThumbnailTargets();
-        thumbnailColour = makeTarget(
-            thumbnailSize, thumbnailSize, rhi::Format::RGBA8Unorm,
-            rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
-            "renderer.thumbnail-colour");
-        thumbnailDepth = makeTarget(
-            thumbnailSize, thumbnailSize, rhi::Format::Depth32Float,
-            rhi::TextureUsage::DepthStencil, "renderer.thumbnail-depth");
-        if (!thumbnailToken) {
-            TextureBinding binding{thumbnailColour, sceneSampler, 0,
-                                   thumbnailSize, thumbnailSize};
-            thumbnailToken = addTexture(binding, false, false);
-        }
-        else {
-            replaceToken(thumbnailToken, thumbnailColour, thumbnailSize,
-                         thumbnailSize);
-        }
-        return thumbnailColour.valid() && thumbnailDepth.valid();
+        bool any = false;
+        for (int slot = 0; slot < RenderCore::kThumbnailSlots; ++slot)
+            if (thumbnails[std::size_t(slot)].size != 0)
+                any = rebuildThumbnailTargets(slot) || any;
+        return any;
     }
 
     rhi::PipelineHandle makeFullscreenPipeline(rhi::Format format,
@@ -977,10 +1007,16 @@ void RenderCore::renderFrame(float)
         mImpl->scenePass(mImpl->editorColour, mImpl->editorDepth,
                          mImpl->editorWidth, mImpl->editorHeight,
                          mImpl->editorBackground, mImpl->editorView);
-    if (mImpl->thumbnailColour.valid())
-        mImpl->scenePass(mImpl->thumbnailColour, mImpl->thumbnailDepth,
-                         mImpl->thumbnailSize, mImpl->thumbnailSize,
-                         {0.13f, 0.14f, 0.16f}, mImpl->thumbnailView);
+    // One pass per enabled slot. Each draws only the nodes assigned to it, so
+    // three panels showing three different subjects at once is three passes of
+    // one object each rather than one pass everybody fights over.
+    for (auto& thumbnail : mImpl->thumbnails) {
+        if (!thumbnail.colour.valid())
+            continue;
+        mImpl->scenePass(thumbnail.colour, thumbnail.depth, thumbnail.size,
+                         thumbnail.size, {0.13f, 0.14f, 0.16f},
+                         thumbnail.view);
+    }
 
     const uint32_t sceneWidth =
         mImpl->targetWidth > 0
@@ -1297,27 +1333,35 @@ void RenderCore::setEditorCameraOrtho(float worldHeight)
     mImpl->editorView.orthoHeight = std::max(worldHeight, 0.0f);
 }
 
-void RenderCore::enableThumbnailViewport(int size)
+void RenderCore::enableThumbnailViewport(int size, int slot)
 {
-    const uint32_t wanted = uint32_t(std::max(size, 32));
-    if (wanted == mImpl->thumbnailSize && mImpl->thumbnailColour.valid())
+    if (slot < 0 || slot >= kThumbnailSlots)
         return;
-    mImpl->thumbnailSize = wanted;
-    mImpl->thumbnailView.farClip = 100.0f;
-    mImpl->rebuildThumbnailTargets();
+    auto& thumbnail = mImpl->thumbnails[std::size_t(slot)];
+    const uint32_t wanted = uint32_t(std::max(size, 32));
+    if (wanted == thumbnail.size && thumbnail.colour.valid())
+        return;
+    thumbnail.size = wanted;
+    thumbnail.view.farClip = 100.0f;
+    thumbnail.view.thumbnailSlot = slot;
+    mImpl->rebuildThumbnailTargets(slot);
 }
-uint64_t RenderCore::thumbnailTextureId() const
+uint64_t RenderCore::thumbnailTextureId(int slot) const
 {
-    return mImpl->thumbnailToken;
+    if (slot < 0 || slot >= kThumbnailSlots)
+        return 0;
+    return mImpl->thumbnails[std::size_t(slot)].token;
 }
 void RenderCore::setThumbnailCameraPose(float px, float py, float pz, float qw,
                                         float qx, float qy, float qz,
-                                        float fovDeg)
+                                        float fovDeg, int slot)
 {
-    mImpl->thumbnailView.position = {px, py, pz};
-    mImpl->thumbnailView.orientation =
-        glm::normalize(glm::quat(qw, qx, qy, qz));
-    mImpl->thumbnailView.fovDeg = std::clamp(fovDeg, 1.0f, 179.0f);
+    if (slot < 0 || slot >= kThumbnailSlots)
+        return;
+    auto& view = mImpl->thumbnails[std::size_t(slot)].view;
+    view.position = {px, py, pz};
+    view.orientation = glm::normalize(glm::quat(qw, qx, qy, qz));
+    view.fovDeg = std::clamp(fovDeg, 1.0f, 179.0f);
 }
 
 RenderCore::TextureBinding

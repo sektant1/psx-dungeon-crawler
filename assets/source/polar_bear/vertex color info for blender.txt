@@ -1,9 +1,0 @@
-the crash 2 models use vertex coloring in order to color most of the models, the way i got the colors to display close to how they are in crashedit (the program i used to rip it) goes as so...
-
-in general, what you want to do is first, change the surface from principled bsdf to emission and change the strength to 4.6, then add both a color attribute and mix color node. change the settings on the mix color node from mix to multiply and set the factor to 1, then connect the color node on "color attribute" to b, the color node on the texture to a, then connect the result to the color node on "emission". you also want to set the texture filtering from linear to closest.
-
-for some materials, you need to tweak the settings on a case by case basis
-
-for notex, since there are no textures, there's nothing to connect to a, you do however want to set the color on it to pure white and set the strength on the emission to 1.
-
-hope this helps (:

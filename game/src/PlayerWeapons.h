@@ -95,6 +95,15 @@ struct PlayerProjectileDef {
     float mass = 0.1f;
     float gravityFactor = 0.0f;
     float aimRange = 80.0f;
+    // Air resistance, as a fraction of speed shed per second. 0 is the magical
+    // default -- a bolt that flies straight forever until its lifetime ends.
+    //
+    // A real bullet is the other case, and it is why this exists: with
+    // `gravity_factor = 1` and a drag term, a round drops and slows over
+    // distance, so range is a property of the weapon rather than a number in
+    // its definition. See docs/fps-gameplay.md on why muzzle velocities are
+    // scaled down rather than real.
+    float drag = 0.0f;
 };
 
 struct WeaponViewmodelPart {
@@ -155,10 +164,39 @@ struct WeaponViewmodelDef {
     // a socket is named once in viewmodel_hands.toml and reused, a joint name
     // is a Blender detail every weapon otherwise has to repeat.
     std::string muzzleSocket;
+    // THE BARREL TIP, in the weapon MODEL's own local space, metres.
+    //
+    // The muzzle socket above is a point on the HAND -- a fingertip, a wrist --
+    // which is the right answer for a weapon that is a spell and the wrong one
+    // for a rifle, where the bullet leaves a barrel 40 cm further forward. A
+    // socket-derived muzzle on a gun puts the flash inside the player's fist
+    // and starts the round behind its own foregrip.
+    //
+    // So a model weapon states where its own barrel ends. The point rides the
+    // weapon node, which means it inherits the attach transform, the recoil and
+    // every viewmodel layer for free -- a gun that kicks fires from where the
+    // kicked barrel actually is.
+    //
+    // Non-zero switches the muzzle resolution to this; zero keeps the socket
+    // behaviour, so nothing authored before this existed moves. Measured off
+    // the imported mesh's bounds, which the prefab library records.
+    glm::vec3 barrelOffset{0.0f};
 
+    // Which hand rig this weapon is held in. Empty means "whatever the player
+    // is wearing", which is what every weapon meant before the animated packs
+    // arrived and is still right for a weapon that hangs on a socket.
+    //
+    // Naming one of the animated rigs (viewmodel_hands.toml, bundled_weapon)
+    // makes equipping this weapon SWAP THE RIG: the gun is part of that mesh
+    // and the clips were authored against it, so the hands and the weapon
+    // arrive together or not at all.
+    std::string handsRig;
     std::string handsIdleAnimation = "relax";
     std::string handsDrawAnimation = "relax";
     std::string handsFireAnimation = "grab.R";
+    // Played while reloading. Empty falls back to idle, so a rig with no
+    // reload clip still reloads -- it just does not show it.
+    std::string handsReloadAnimation;
     std::string handsMuzzleJoint = "f_index.03.R";
     glm::vec3 handsMuzzleOffset{0.0f, 0.025f, 0.0f};
     // Per-weapon nudge on top of the shared rig socket (see ViewmodelRig.h).
@@ -178,6 +216,51 @@ struct WeaponViewmodelDef {
     float movementBobSpeed = 7.5f;
     float idleSway = 0.004f;
     float lookSway = 0.0012f;
+};
+
+// Magazine ammunition and reloading.
+//
+// The loadout's original resource was ARC, a shared mana pool: every weapon
+// drew from one number and nothing ever ran out mid-burst in a way you had to
+// answer. That is a fantasy design and this is a gun game now, where the pacing
+// mechanism IS the magazine -- when to break contact and reload is most of the
+// moment-to-moment decision making.
+//
+// Both exist. ARC is still spent (`arc_cost`), so a weapon can cost both or
+// neither, and a weapon with `magazine = 0` has no magazine at all and behaves
+// exactly as it did before this struct existed. That is what keeps the shipped
+// fantasy weapons working while the guns get magazines.
+struct WeaponAmmoDef {
+    // Rounds per magazine. 0 disables the whole system for this weapon.
+    int magazine = 0;
+    // Rounds carried beyond the loaded magazine, and the cap when picking up
+    // more. -1 is infinite reserve, which is what a starter weapon wants and
+    // what every weapon wants while a level's pickups are still being authored.
+    int reserve = -1;
+    int reserveMax = 240;
+    // Rounds consumed per shot. A shotgun firing eight pellets spends one.
+    int costPerShot = 1;
+    // A reload from a partly-full magazine keeps the chambered round and is
+    // quicker than one from empty, which is the distinction every shooter makes
+    // and the reason there are two numbers rather than one.
+    float reloadSeconds = 2.1f;
+    float reloadEmptySeconds = 2.8f;
+    // Reload one round at a time -- a pump shotgun -- rather than swapping a
+    // magazine. Each round takes `reloadSeconds`, and the reload can be
+    // interrupted by firing, which is the whole point of the mechanism.
+    bool shellByShell = false;
+    // Start a reload automatically when the magazine empties. On by default:
+    // the alternative is a player holding the trigger on an empty gun.
+    bool autoReload = true;
+    // Named pool this weapon draws from. Two weapons sharing an id share their
+    // reserve, which is how a pistol and an SMG in the same calibre behave.
+    // Empty means the weapon owns its reserve alone.
+    std::string ammoType;
+    std::string reloadSound;
+    std::string emptySound;
+    // Clip on the hands rig played while reloading. Empty falls back to the
+    // rig's own idle, so a rig with no reload animation still reloads.
+    std::string reloadAnimation;
 };
 
 struct PlayerWeaponDef {
@@ -206,6 +289,9 @@ struct PlayerWeaponDef {
     WeaponMeleeDef melee;
     WeaponHitscanDef hitscan;
     WeaponViewmodelDef viewmodel;
+    WeaponAmmoDef ammo;
+
+    bool usesMagazine() const { return ammo.magazine > 0; }
 };
 
 // The impact cue for whichever delivery this weapon uses. Callers that want to
@@ -236,7 +322,29 @@ struct WeaponCommand {
     bool fireHeld = false;
     bool firePressed = false;
     bool swapPressed = false;
+    bool reloadPressed = false;
     int selectSlot = -1;
+};
+
+// What the HUD and the viewmodel need to know about ammunition, in one place so
+// neither has to reach into the controller's private state.
+struct WeaponAmmoState {
+    int magazine = 0;      // rounds loaded
+    int magazineMax = 0;   // 0 means this weapon has no magazine
+    int reserve = 0;       // -1 is infinite
+    bool reloading = false;
+    float reloadRemaining = 0.0f;
+    float reloadTotal = 0.0f;
+
+    bool usesMagazine() const { return magazineMax > 0; }
+    bool empty() const { return usesMagazine() && magazine <= 0; }
+    // 0..1 through the current reload, for a HUD ring or a bar. 0 when idle.
+    float reloadProgress() const
+    {
+        return reloadTotal > 0.0f
+                   ? 1.0f - (reloadRemaining / reloadTotal)
+                   : 0.0f;
+    }
 };
 
 // Fixed-step mutable state for one player loadout. Definitions remain immutable;
@@ -253,16 +361,57 @@ public:
     bool consumeSelectionChanged();
     void resetRuntime();
 
+    // --- ammunition ---------------------------------------------------------
+    WeaponAmmoState ammoState(std::size_t index) const;
+    WeaponAmmoState ammoState() const { return ammoState(mSelected); }
+    // Begin a reload if one is possible: the weapon has a magazine, it is not
+    // full, there is reserve to draw on, and no reload is already running.
+    // False when none of that holds, which is also what makes it safe to call
+    // from a key press every frame.
+    bool beginReload(std::size_t index);
+    bool beginReload() { return beginReload(mSelected); }
+    // Give a weapon (or every weapon sharing an ammo type) more reserve, and
+    // return how much was actually taken -- a pickup that would overflow
+    // reserveMax should not vanish entirely.
+    int addReserve(const std::string& ammoType, int rounds);
+    // True on the frame a reload finished, so a caller can play a cue without
+    // polling the timer. Consumed by reading.
+    bool consumeReloadFinished();
+    // True on the frame a shot was refused for want of ammunition -- the dry
+    // click. Consumed by reading, for the same reason.
+    bool consumeDryFire();
+
 private:
+    // Per-weapon ammunition. Parallel to `mDefinitions` like mCooldowns is,
+    // rather than a map keyed by id: the controller already indexes weapons by
+    // position everywhere else, and a second addressing scheme for one field is
+    // how the two get out of step.
+    struct AmmoRuntime {
+        int magazine = 0;
+        int reserve = 0;
+        float reloadRemaining = 0.0f;
+        float reloadTotal = 0.0f;
+        bool reloading = false;
+    };
+
+    void syncAmmoRuntime();
+    void updateReload(float dt);
+    // Spend a shot's ammunition; false means the shot must not happen.
+    bool consumeAmmo(std::size_t index);
+
     const std::vector<PlayerWeaponDef>* mDefinitions = nullptr;
     std::vector<float> mCooldowns;
+    std::vector<AmmoRuntime> mAmmo;
     std::size_t mSelected = 0;
     float mSwitchRemaining = 0.0f;
     bool mFireHeld = false;
     bool mFirePressed = false;
     bool mSwapPressed = false;
+    bool mReloadPressed = false;
     int mSelectSlot = -1;
     bool mSelectionChanged = false;
+    bool mReloadFinished = false;
+    bool mDryFire = false;
 };
 
 // Deterministic horizontal fan around a camera-derived aim direction.

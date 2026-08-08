@@ -1,0 +1,677 @@
+# Post-Apocalyptic Props.
+#
+# Written by tools/import_asset_pack.py from
+#   assets/source/props/Post-Apocaliptic-Pack
+# Every size below is measured off the exported mesh in metres.
+# Re-running the importer regenerates this file.
+
+[library]
+domain = "apocalypse"
+scale = 1.0        # meshes are published in metres
+mesh_dir = "meshes/apocalypse"
+
+[[prefab]]
+id = "apocalypse.backpack"
+role = "pickup"
+mesh = "backpack.obj"
+material = "Builtin/Apocalypse/ApocalypseBackpack01"
+placement = "prop"
+size = [0.3511, 0.5200, 0.2704]
+y_offset = -0.2513
+collider = "box"
+# 980 tris, from source/props/Post-Apocaliptic-Pack/Gear/Backpacks/Backpack1/backpack.fbx
+
+[[prefab]]
+id = "apocalypse.backpack_02"
+role = "pickup"
+mesh = "backpack_02.obj"
+material = "Builtin/Apocalypse/ApocalypseBackpack02"
+placement = "prop"
+size = [0.4518, 0.5200, 0.3955]
+y_offset = -0.2046
+collider = "box"
+# 1028 tris, from source/props/Post-Apocaliptic-Pack/Gear/Backpacks/Backpack2/Backpack2.fbx
+
+[[prefab]]
+id = "apocalypse.backpack_03"
+role = "pickup"
+mesh = "backpack_03.obj"
+material = "Builtin/Apocalypse/ApocalypseBackpack03"
+placement = "prop"
+size = [0.4111, 0.5200, 0.4396]
+y_offset = -0.0994
+collider = "box"
+# 1390 tris, from source/props/Post-Apocaliptic-Pack/Gear/Backpacks/Backpack3/Backpack3.fbx
+
+[[prefab]]
+id = "apocalypse.bandaz"
+role = "pickup"
+mesh = "bandaz.obj"
+material = "Builtin/Apocalypse/ApocalypseBandage"
+placement = "prop"
+size = [0.0813, 0.1000, 0.0813]
+y_offset = -0.0503
+collider = "box"
+# 240 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Bandage/bandaz.fbx
+
+[[prefab]]
+id = "apocalypse.bateria_samochodowa"
+role = "pickup"
+mesh = "bateria_samochodowa.obj"
+material = "Builtin/Apocalypse/ApocalypseCarBattery"
+placement = "prop"
+size = [0.1877, 0.2275, 0.2600]
+y_offset = -0.0916
+collider = "box"
+# 880 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Baterries/CarBattery/BateriaSamochodowa.fbx
+
+[[prefab]]
+id = "apocalypse.baton_01"
+role = "pickup"
+mesh = "baton_01.obj"
+material = "Builtin/Apocalypse/ApocalypseTelescopicBaton"
+placement = "prop"
+size = [0.0219, 0.5500, 0.0219]
+y_offset = -0.2754
+collider = "box"
+# 236 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/TelescopicBatons/TelescopicBaton/Baton1.fbx
+
+[[prefab]]
+id = "apocalypse.baton_02"
+role = "pickup"
+mesh = "baton_02.obj"
+material = "Builtin/Apocalypse/ApocalypseTelescopicBaton02"
+placement = "prop"
+size = [0.0236, 0.5500, 0.0236]
+y_offset = 0.0307
+collider = "box"
+# 748 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/TelescopicBatons/TelescopicBaton2/Baton2.fbx
+
+[[prefab]]
+id = "apocalypse.baton_03"
+role = "pickup"
+mesh = "baton_03.obj"
+material = "Builtin/Apocalypse/ApocalypseTelescopicBaton03"
+placement = "prop"
+size = [0.0229, 0.5500, 0.0229]
+y_offset = 0.0288
+collider = "box"
+# 748 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/TelescopicBatons/TelescopicBaton3/Baton3.fbx
+
+[[prefab]]
+id = "apocalypse.battery"
+role = "pickup"
+mesh = "battery.obj"
+placement = "prop"
+size = [0.0327, 0.1000, 0.0340]
+y_offset = -0.0393
+collider = "box"
+# 140 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Baterries/Normal Battery/NormalBattery 1/Battery.fbx
+
+[[prefab]]
+id = "apocalypse.battery_02"
+role = "pickup"
+mesh = "battery_02.obj"
+material = "Builtin/Apocalypse/ApocalypseNormalBattery02"
+placement = "prop"
+size = [0.0327, 0.1000, 0.0340]
+y_offset = -0.0393
+collider = "box"
+# 140 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Baterries/Normal Battery/NormalBattery 2/Battery.fbx
+
+[[prefab]]
+id = "apocalypse.big_walkietalkie"
+role = "pickup"
+mesh = "big_walkietalkie.obj"
+material = "Builtin/Apocalypse/ApocalypseBigWalkieTalkie"
+placement = "prop"
+size = [0.0346, 0.2200, 0.0194]
+y_offset = -0.0432
+collider = "box"
+# 1236 tris, from source/props/Post-Apocaliptic-Pack/Gear/WalkieTalkie/BigWalkieTalkie/BigWalkietalkie.fbx
+
+[[prefab]]
+id = "apocalypse.blood_pack"
+role = "pickup"
+mesh = "blood_pack.obj"
+material = "Builtin/Apocalypse/ApocalypseBloodPack"
+placement = "prop"
+size = [0.0338, 0.2000, 0.0938]
+y_offset = -0.0779
+collider = "box"
+# 268 tris, from source/props/Post-Apocaliptic-Pack/Medicines/BloodPack/BloodPack.fbx
+
+[[prefab]]
+id = "apocalypse.bottle"
+role = "pickup"
+mesh = "bottle.obj"
+material = "Builtin/Apocalypse/ApocalypseBottle02"
+placement = "prop"
+size = [0.0821, 0.3000, 0.0434]
+y_offset = -0.0062
+collider = "box"
+# 419 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Molotovs/Bottle2/Bottle.fbx
+
+[[prefab]]
+id = "apocalypse.bottle_03"
+role = "pickup"
+mesh = "bottle_03.obj"
+material = "Builtin/Apocalypse/ApocalypseWhisky"
+placement = "prop"
+size = [0.0957, 0.3000, 0.0957]
+y_offset = -0.1150
+collider = "box"
+# 556 tris, from source/props/Post-Apocaliptic-Pack/Food/Alcohols/Whisky/Bottle3.fbx
+
+[[prefab]]
+id = "apocalypse.bottle_04"
+role = "pickup"
+mesh = "bottle_04.obj"
+material = "Builtin/Apocalypse/ApocalypseWine"
+placement = "prop"
+size = [0.0839, 0.3000, 0.0839]
+y_offset = -0.0351
+collider = "box"
+# 284 tris, from source/props/Post-Apocaliptic-Pack/Food/Alcohols/Wine/Bottle4.fbx
+
+[[prefab]]
+id = "apocalypse.bread"
+role = "pickup"
+mesh = "bread.obj"
+material = "Builtin/Apocalypse/ApocalypseBread"
+placement = "prop"
+size = [0.0150, 0.1266, 0.2400]
+y_offset = -0.0389
+collider = "box"
+# 268 tris, from source/props/Post-Apocaliptic-Pack/Food/Bread/Bread.fbx
+
+[[prefab]]
+id = "apocalypse.bread_end"
+role = "pickup"
+mesh = "bread_end.obj"
+material = "Builtin/Apocalypse/ApocalypseBread"
+placement = "prop"
+size = [0.1489, 0.1266, 0.2400]
+y_offset = -0.0389
+collider = "box"
+# 608 tris, from source/props/Post-Apocaliptic-Pack/Food/Bread/BreadEnd/BreadEnd.fbx
+
+[[prefab]]
+id = "apocalypse.breakable_pill"
+role = "pickup"
+mesh = "breakable_pill.obj"
+material = "Builtin/Apocalypse/ApocalypseBreakablePill"
+placement = "prop"
+size = [0.0336, 0.0200, 0.0900]
+y_offset = -0.0100
+collider = "box"
+# 28 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Pills/BreakablePill/BreakablePill.fbx
+
+[[prefab]]
+id = "apocalypse.butelka"
+role = "pickup"
+mesh = "butelka.obj"
+material = "Builtin/Apocalypse/ApocalypseSyrup"
+placement = "prop"
+size = [0.1060, 0.2800, 0.1060]
+y_offset = -0.0356
+collider = "box"
+# 520 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Syrup/Butelka.fbx
+
+[[prefab]]
+id = "apocalypse.case"
+role = "pickup"
+mesh = "case.obj"
+material = "Builtin/Apocalypse/ApocalypseWeaponCase"
+placement = "prop"
+size = [0.2756, 0.1859, 0.3500]
+y_offset = -0.0388
+collider = "box"
+# 2000 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/WeaponCase/case.fbx
+
+[[prefab]]
+id = "apocalypse.crowbar_02"
+role = "pickup"
+mesh = "crowbar_02.obj"
+material = "Builtin/Apocalypse/ApocalypseCrowbar02"
+placement = "prop"
+size = [0.0485, 0.9000, 0.2691]
+y_offset = -0.4476
+collider = "box"
+# 168 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Crowbar/Crowbar2/Crowbar2.fbx
+
+[[prefab]]
+id = "apocalypse.crowbars"
+role = "pickup"
+mesh = "crowbars.obj"
+material = "Builtin/Apocalypse/ApocalypseCrowbar"
+placement = "prop"
+size = [0.0345, 0.9000, 0.1520]
+y_offset = 0.0586
+collider = "box"
+# 252 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Crowbar/Crowbar/Crowbars.fbx
+
+[[prefab]]
+id = "apocalypse.flashlight"
+role = "pickup"
+mesh = "flashlight.obj"
+placement = "prop"
+size = [0.2200, 0.0837, 0.0837]
+y_offset = -0.0449
+collider = "box"
+# 278 tris, from source/props/Post-Apocaliptic-Pack/Gear/Flashlights/Standard Flashlight/flashlight.fbx
+
+[[prefab]]
+id = "apocalypse.gas_mask"
+role = "pickup"
+mesh = "gas_mask.obj"
+material = "Builtin/Apocalypse/ApocalypseGasMask03"
+placement = "prop"
+size = [0.2164, 0.2232, 0.2800]
+y_offset = -0.0940
+collider = "box"
+# 848 tris, from source/props/Post-Apocaliptic-Pack/Gear/GasMasks/GasMask3/GasMask.fbx
+
+[[prefab]]
+id = "apocalypse.gas_mask_01"
+role = "pickup"
+mesh = "gas_mask_01.obj"
+material = "Builtin/Apocalypse/ApocalypseGasMask01"
+placement = "prop"
+size = [0.2586, 0.2800, 0.1691]
+y_offset = -0.1398
+collider = "box"
+# 608 tris, from source/props/Post-Apocaliptic-Pack/Gear/GasMasks/GasMask1/GasMask1.fbx
+
+[[prefab]]
+id = "apocalypse.gas_mask_02"
+role = "pickup"
+mesh = "gas_mask_02.obj"
+material = "Builtin/Apocalypse/ApocalypseGasMask02"
+placement = "prop"
+size = [0.2800, 0.2671, 0.1940]
+y_offset = -0.1373
+collider = "box"
+# 916 tris, from source/props/Post-Apocaliptic-Pack/Gear/GasMasks/GasMask2/GasMask2.fbx
+
+[[prefab]]
+id = "apocalypse.gwo_dzie"
+role = "pickup"
+mesh = "gwo_dzie.obj"
+material = "Builtin/Apocalypse/ApocalypseNails"
+placement = "prop"
+size = [0.1802, 0.1020, 0.2500]
+y_offset = 0.0565
+collider = "box"
+# 500 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Nails/gwo½dzie.fbx
+
+[[prefab]]
+id = "apocalypse.hand_torch_02"
+role = "pickup"
+mesh = "hand_torch_02.obj"
+material = "Builtin/Apocalypse/ApocalypseCrankFlashlight02"
+placement = "prop"
+size = [0.0453, 0.1875, 0.2000]
+y_offset = -0.0521
+collider = "box"
+# 464 tris, from source/props/Post-Apocaliptic-Pack/Gear/Flashlights/Crank Flashlight 2/HandTorch2.fbx
+
+[[prefab]]
+id = "apocalypse.hand_torch_03"
+role = "pickup"
+mesh = "hand_torch_03.obj"
+material = "Builtin/Apocalypse/ApocalypseCrankFlashlight01"
+placement = "prop"
+size = [0.0639, 0.1066, 0.2000]
+y_offset = -0.0355
+collider = "box"
+# 684 tris, from source/props/Post-Apocaliptic-Pack/Gear/Flashlights/Crank Flashlight 1/HandTorch3.fbx
+
+[[prefab]]
+id = "apocalypse.handflashlight"
+role = "pickup"
+mesh = "handflashlight.obj"
+material = "Builtin/Apocalypse/ApocalypseIndustrialFlashlight"
+placement = "prop"
+size = [0.2200, 0.1743, 0.1316]
+y_offset = -0.0720
+collider = "box"
+# 338 tris, from source/props/Post-Apocaliptic-Pack/Gear/Flashlights/Industrial Flashlight/handflashlight.fbx
+
+[[prefab]]
+id = "apocalypse.health_pack"
+role = "pickup"
+mesh = "health_pack.obj"
+material = "Builtin/Apocalypse/ApocalypseHealthPack01"
+placement = "prop"
+size = [0.1375, 0.2016, 0.2500]
+y_offset = -0.0823
+collider = "box"
+# 584 tris, from source/props/Post-Apocaliptic-Pack/Medicines/FirstAidKit/HealthPack 1/HealthPack.fbx
+
+[[prefab]]
+id = "apocalypse.health_pack_02"
+role = "pickup"
+mesh = "health_pack_02.obj"
+material = "Builtin/Apocalypse/ApocalypseHealthPack02"
+placement = "prop"
+size = [0.2500, 0.1723, 0.1175]
+y_offset = -0.1087
+collider = "box"
+# 288 tris, from source/props/Post-Apocaliptic-Pack/Medicines/FirstAidKit/HealthPack 2/HealthPack2.fbx
+
+[[prefab]]
+id = "apocalypse.heavy_crowbar"
+role = "pickup"
+mesh = "heavy_crowbar.obj"
+material = "Builtin/Apocalypse/ApocalypseHeavyCrowbar"
+placement = "prop"
+size = [0.0577, 0.9000, 0.2099]
+y_offset = -0.5197
+collider = "box"
+# 480 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Crowbar/HeavyCrowbar/HeavyCrowbar.fbx
+
+[[prefab]]
+id = "apocalypse.kanister10l"
+role = "pickup"
+mesh = "kanister10l.obj"
+material = "Builtin/Apocalypse/ApocalypseCanister01"
+placement = "prop"
+size = [0.1476, 0.4200, 0.2603]
+y_offset = -0.0443
+collider = "box"
+# 476 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Canisters/Canister 1/kanister10l.fbx
+
+[[prefab]]
+id = "apocalypse.kanisternieskon"
+role = "pickup"
+mesh = "kanisternieskon.obj"
+material = "Builtin/Apocalypse/ApocalypseCanister02"
+placement = "prop"
+size = [0.0827, 0.4200, 0.2249]
+y_offset = -0.1522
+collider = "box"
+# 364 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Canisters/Canister 2/kanisternieskon.fbx
+
+[[prefab]]
+id = "apocalypse.karta"
+role = "pickup"
+mesh = "karta.obj"
+material = "Builtin/Apocalypse/ApocalypsePngimgComCreditCardPng204"
+placement = "prop"
+size = [0.0595, 0.0028, 0.0900]
+y_offset = -0.0014
+collider = "box"
+# 52 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Card/Karta.fbx
+
+[[prefab]]
+id = "apocalypse.konserwa"
+role = "pickup"
+mesh = "konserwa.obj"
+material = "Builtin/Apocalypse/ApocalypseFoodCan"
+placement = "prop"
+size = [0.1100, 0.0498, 0.1100]
+y_offset = -0.0187
+collider = "box"
+# 240 tris, from source/props/Post-Apocaliptic-Pack/Food/FoodCan/konserwa.fbx
+
+[[prefab]]
+id = "apocalypse.kroplowka"
+role = "pickup"
+mesh = "kroplowka.obj"
+material = "Builtin/Apocalypse/ApocalypseDrip"
+placement = "prop"
+size = [0.0871, 0.3000, 0.0871]
+y_offset = -0.0510
+collider = "box"
+# 568 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Drip/kroplowka.fbx
+
+[[prefab]]
+id = "apocalypse.lighter"
+role = "pickup"
+mesh = "lighter.obj"
+material = "Builtin/Apocalypse/ApocalypseLighter"
+placement = "prop"
+size = [0.0544, 0.0800, 0.0160]
+y_offset = -0.0201
+collider = "box"
+# 164 tris, from source/props/Post-Apocaliptic-Pack/Gear/Lighter/Lighter.fbx
+
+[[prefab]]
+id = "apocalypse.line_01"
+role = "pickup"
+mesh = "line_01.obj"
+material = "Builtin/Apocalypse/ApocalypseLine"
+placement = "prop"
+size = [0.2203, 0.0593, 0.2500]
+y_offset = -0.0268
+collider = "box"
+# 411 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Line/line1.fbx
+
+[[prefab]]
+id = "apocalypse.lockpick"
+role = "pickup"
+mesh = "lockpick.obj"
+material = "Builtin/Apocalypse/ApocalypseLockpick"
+placement = "prop"
+size = [0.0159, 0.1200, 0.0124]
+y_offset = -0.0349
+collider = "box"
+# 634 tris, from source/props/Post-Apocaliptic-Pack/Gear/LockPick/Lockpick/lockpick.fbx
+
+[[prefab]]
+id = "apocalypse.long_battery"
+role = "pickup"
+mesh = "long_battery.obj"
+material = "Builtin/Apocalypse/ApocalypseLongBattery"
+placement = "prop"
+size = [0.1000, 0.0916, 0.0397]
+y_offset = -0.0412
+collider = "box"
+# 180 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Baterries/LongBattery/LongBattery.fbx
+
+[[prefab]]
+id = "apocalypse.machete"
+role = "pickup"
+mesh = "machete.obj"
+placement = "prop"
+size = [0.0315, 0.0684, 0.5500]
+y_offset = -0.0294
+collider = "box"
+# 210 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Machetes/Machete/Machete.fbx
+
+[[prefab]]
+id = "apocalypse.machete_02"
+role = "pickup"
+mesh = "machete_02.obj"
+placement = "prop"
+size = [0.0431, 0.1260, 0.5500]
+y_offset = -0.0431
+collider = "box"
+# 451 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Machetes/Machete2/Machete2.fbx
+
+[[prefab]]
+id = "apocalypse.machete_03"
+role = "pickup"
+mesh = "machete_03.obj"
+placement = "prop"
+size = [0.0431, 0.1575, 0.5500]
+y_offset = -0.0428
+collider = "box"
+# 453 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Machetes/Machete3/Machete3.fbx
+
+[[prefab]]
+id = "apocalypse.militaryflashlight"
+role = "pickup"
+mesh = "militaryflashlight.obj"
+material = "Builtin/Apocalypse/ApocalypseMilitaryFlashlight"
+placement = "prop"
+size = [0.0505, 0.2200, 0.0940]
+y_offset = -0.0769
+collider = "box"
+# 544 tris, from source/props/Post-Apocaliptic-Pack/Gear/Flashlights/MilitaryFlashlight/Militaryflashlight.fbx
+
+[[prefab]]
+id = "apocalypse.mre"
+role = "pickup"
+mesh = "mre.obj"
+material = "Builtin/Apocalypse/ApocalypseMre"
+placement = "prop"
+size = [0.0611, 0.2000, 0.1346]
+y_offset = 0.0067
+collider = "box"
+# 96 tris, from source/props/Post-Apocaliptic-Pack/Food/MRE/MRE.fbx
+
+[[prefab]]
+id = "apocalypse.n_09_v"
+role = "pickup"
+mesh = "n_09_v.obj"
+placement = "prop"
+size = [0.1510, 0.2500, 0.0971]
+y_offset = -0.0991
+collider = "box"
+# 374 tris, from source/props/Post-Apocaliptic-Pack/Utility Items/Baterries/9VBattery/9V.fbx
+
+[[prefab]]
+id = "apocalypse.nail_bat"
+role = "pickup"
+mesh = "nail_bat.obj"
+material = "Builtin/Apocalypse/ApocalypseNailBat"
+placement = "prop"
+size = [0.2211, 0.8500, 0.1833]
+y_offset = 0.0121
+collider = "box"
+# 2868 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/NailBat/NailBat.fbx
+
+[[prefab]]
+id = "apocalypse.pill"
+role = "pickup"
+mesh = "pill.obj"
+material = "Builtin/Apocalypse/ApocalypseTwoColoredPill"
+placement = "prop"
+size = [0.0443, 0.0443, 0.0900]
+y_offset = -0.0222
+collider = "box"
+# 60 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Pills/TwoColoredPill/Pill.fbx
+
+[[prefab]]
+id = "apocalypse.pill_pack"
+role = "pickup"
+mesh = "pill_pack.obj"
+material = "Builtin/Apocalypse/ApocalypsePillPack"
+placement = "prop"
+size = [0.0595, 0.0053, 0.0900]
+y_offset = -0.0014
+collider = "box"
+# 472 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Pills/PillPack/PillPack.fbx
+
+[[prefab]]
+id = "apocalypse.pojemniknatabsy"
+role = "pickup"
+mesh = "pojemniknatabsy.obj"
+material = "Builtin/Apocalypse/ApocalypsePillBottle"
+placement = "prop"
+size = [0.0944, 0.1000, 0.0944]
+y_offset = -0.0412
+collider = "box"
+# 232 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Pills/PillBottle/pojemniknatabsy.fbx
+
+[[prefab]]
+id = "apocalypse.regulated_crowbar"
+role = "pickup"
+mesh = "regulated_crowbar.obj"
+material = "Builtin/Apocalypse/ApocalypseRegulatedCrowbar"
+placement = "prop"
+size = [0.0561, 0.9000, 0.1586]
+y_offset = -0.3896
+collider = "box"
+# 744 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Crowbar/RegulatedCrowbar/RegulatedCrowbar.fbx
+
+[[prefab]]
+id = "apocalypse.saw"
+role = "pickup"
+mesh = "saw.obj"
+material = "Builtin/Apocalypse/ApocalypseHandSaw"
+placement = "prop"
+size = [0.0115, 0.1537, 0.5000]
+y_offset = 0.0011
+collider = "box"
+# 1784 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Saws/HandSaw/Saw.fbx
+
+[[prefab]]
+id = "apocalypse.saw_02"
+role = "pickup"
+mesh = "saw_02.obj"
+material = "Builtin/Apocalypse/ApocalypseSaw"
+placement = "prop"
+size = [0.0102, 0.1219, 0.5000]
+y_offset = -0.0541
+collider = "box"
+# 1840 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Saws/Saw/Saw.fbx
+
+[[prefab]]
+id = "apocalypse.scissors_01"
+role = "pickup"
+mesh = "scissors_01.obj"
+material = "Builtin/Apocalypse/ApocalypseScissors"
+placement = "prop"
+size = [0.0111, 0.2000, 0.0848]
+y_offset = -0.0580
+collider = "box"
+# 484 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Scissors/Scissors1.fbx
+
+[[prefab]]
+id = "apocalypse.siekierastara"
+role = "pickup"
+mesh = "siekierastara.obj"
+material = "Builtin/Apocalypse/ApocalypseAxe"
+placement = "prop"
+size = [0.0517, 0.7000, 0.1603]
+y_offset = -0.3881
+collider = "box"
+# 272 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Axes/Axe/siekierastara.fbx
+
+[[prefab]]
+id = "apocalypse.syrienge_02"
+role = "pickup"
+mesh = "syrienge_02.obj"
+material = "Builtin/Apocalypse/ApocalypseSyrienge02"
+placement = "prop"
+size = [0.0394, 0.1500, 0.0226]
+y_offset = -0.0760
+collider = "box"
+# 768 tris, from source/props/Post-Apocaliptic-Pack/Medicines/Syringes/Syrienge2/Syrienge2.fbx
+
+[[prefab]]
+id = "apocalypse.walkietalkie_01"
+role = "pickup"
+mesh = "walkietalkie_01.obj"
+material = "Builtin/Apocalypse/ApocalypseWalkietalkie01"
+placement = "prop"
+size = [0.0360, 0.2200, 0.0645]
+y_offset = 0.0137
+collider = "box"
+# 1164 tris, from source/props/Post-Apocaliptic-Pack/Gear/WalkieTalkie/Walkietalkie1/Walkietalkie1.fbx
+
+[[prefab]]
+id = "apocalypse.water"
+role = "pickup"
+mesh = "water.obj"
+material = "Builtin/Apocalypse/ApocalypseWater"
+placement = "prop"
+size = [0.0848, 0.2600, 0.0848]
+y_offset = -0.0625
+collider = "box"
+# 604 tris, from source/props/Post-Apocaliptic-Pack/Food/Water/Water.fbx
+
+[[prefab]]
+id = "apocalypse.zwyklasiekiera"
+role = "pickup"
+mesh = "zwyklasiekiera.obj"
+material = "Builtin/Apocalypse/ApocalypseFirefighterAxe"
+placement = "prop"
+size = [0.0609, 0.7000, 0.2792]
+y_offset = 0.0449
+collider = "box"
+# 332 tris, from source/props/Post-Apocaliptic-Pack/Tools&Weapons/Axes/FirefighterAxe/zwyklasiekiera.fbx
+

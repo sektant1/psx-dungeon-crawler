@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "3d0a618fd2c259e1"
+type = "texture"
+name = "Apocalypse Water Albedo"
+tags = ["apocalypse"]

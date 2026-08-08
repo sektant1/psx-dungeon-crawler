@@ -355,6 +355,16 @@ if(BUILD_TESTING)
                                                     EnTT::EnTT)
   add_test(NAME player_weapon COMMAND player_weapon_tests)
 
+  # Ballistics: cartridges, drag, penetration and wind. Pure functions over
+  # authored data, so this needs no renderer, no physics and no GPU.
+  add_executable(ammunition_tests game/tests/AmmunitionTests.cpp
+                                  game/src/Ammunition.cpp)
+  target_include_directories(ammunition_tests
+                             PRIVATE game/src engine/include third_party)
+  target_link_libraries(ammunition_tests PRIVATE eng_toml eng_core glm::glm
+                                                 EnTT::EnTT)
+  add_test(NAME ammunition COMMAND ammunition_tests)
+
   # Sprite viewmodel layer rules. Header-only validation, so this needs no
   # renderer and no GPU -- which is the point of keeping it inline.
   eng_add_test(sprite_viewmodel
@@ -1075,6 +1085,7 @@ if(BUILD_TESTING)
   target_include_directories(damage_types_tests PRIVATE game/tests)
   target_include_directories(enemy_library_tests PRIVATE game/tests)
   target_include_directories(player_weapon_tests PRIVATE game/tests)
+  target_include_directories(ammunition_tests PRIVATE game/tests)
   target_include_directories(showcase_visibility_tests PRIVATE game/tests)
   target_include_directories(level_resource_tests PRIVATE game/tests)
   target_include_directories(blood_system_tests PRIVATE game/tests)

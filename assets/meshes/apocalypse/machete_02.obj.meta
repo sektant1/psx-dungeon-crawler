@@ -1,0 +1,6 @@
+# Resource database record. Written by tools/import_asset_pack.py -- re-running regenerates it.
+schema = 1
+guid = "b3fbef715bd9aa9b"
+type = "mesh"
+name = "Machete 02"
+tags = ["apocalypse"]

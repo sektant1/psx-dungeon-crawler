@@ -50,6 +50,9 @@ enum class MaterialShader {
 // Text id -> family, for the material parser. Unknown ids fall back to Lit and
 // are reported, so a typo shows up at load rather than as a wrongly drawn mesh.
 MaterialShader materialShaderFromName(const std::string& id, bool& known);
+// The family's canonical id, for tools that display which shader draws a
+// material. Not an exact inverse: several ids share MaterialShader::Other.
+const char* materialShaderId(MaterialShader shader);
 
 struct Material {
     std::string name;
@@ -99,6 +102,15 @@ public:
     // actually lives. Public because sprites resolve their own texture the same
     // way materials do, and neither should reimplement the search order.
     std::filesystem::path texturePath(const std::string& name) const;
+
+    // Re-resolve and re-upload one material's texture after its `textureName`
+    // has been changed in place. Public because retexturing is a supported
+    // operation now (Renderer::setMaterialTexture) rather than something only
+    // the parser does.
+    void refreshTexture(RenderCore& core, Material& material)
+    {
+        uploadTexture(core, material);
+    }
 
 private:
     bool parse(RenderCore& core, const std::filesystem::path& path);

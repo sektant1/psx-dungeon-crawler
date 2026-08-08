@@ -1,6 +1,0 @@
-Source: Armored Core
-Platform: PSX
-Rip and cleanup by: DrDoctor
-Notes: 
--Some assets may scaled too big compared to other assets. This has something to do with how the game engine renders objects at a certain distance from the player.
--This asset is presented as-is in-game, I can only guess it was made early in the game's development and Fromsoft never cleaned it up. A special "corrected" is included in a sub folder
